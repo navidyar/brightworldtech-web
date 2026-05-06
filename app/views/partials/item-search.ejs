@@ -1,0 +1,26 @@
+<section>
+  <h2>Items</h2>
+
+  <form id="search-form" class="search-form" hx-get="/items/table" hx-target="#items-container" hx-swap="innerHTML">
+    <input type="hidden" id="page-input" name="page" value="1" />
+
+    <label for="search-input">Search and Sort</label>
+    <input type="text" id="search-input" name="search" placeholder="Type something like Dell or Laptop" />
+    <select id="sort-select" name="sort">
+      <option value="newest">Newest First</option>
+      <option value="oldest">Oldest First</option>
+      <option value="name_asc">Name A to Z</option>
+      <option value="name_desc">Name Z to A</option>
+      <option value="price_asc">Price Low to High</option>
+      <option value="price_desc">Price High to Low</option>
+      <option value="quantity_asc">Quantity Low to High</option>
+      <option value="quantity_desc">Quantity High to Low</option>
+    </select>
+    <button type="submit">Apply</button>
+    <button type="button" id="clear-search">Clear</button>
+  </form>
+
+  <div id="items-container" hx-get="/items/table" hx-trigger="load, item-saved from:body" hx-swap="innerHTML">
+    Loading items...
+  </div>
+</section>

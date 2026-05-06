@@ -1,0 +1,77 @@
+services:
+  app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: bwtdallas-app
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: ${PORT}
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT}
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+    networks:
+      - proxy
+      - bwtdallas-dbnet
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.bwtdallas-app-web.rule=Host(`bwtdallas.com`) || Host(`www.bwtdallas.com`)
+      - traefik.http.routers.bwtdallas-app-web.entrypoints=https
+      - traefik.http.routers.bwtdallas-app-web.tls=true
+      - traefik.http.routers.bwtdallas-app-web.tls.certresolver=cloudflare
+      - traefik.http.services.bwtdallas-app-web.loadbalancer.server.port=3000
+
+  mysql:
+    image: mysql:8.0
+    container_name: bwtdallas-mysql
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+    ports:
+      - "127.0.0.1:3306:3306"
+    networks:
+      - bwtdallas-dbnet
+
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: bwtdallas-phpmyadmin
+    restart: unless-stopped
+    depends_on:
+      - mysql
+    environment:
+      PMA_HOST: ${DB_HOST}
+      PMA_PORT: ${DB_PORT}
+      PMA_ABSOLUTE_URI: https://pma.bwtdallas.com/
+      UPLOAD_LIMIT: 256M
+    networks:
+      - proxy
+      - bwtdallas-dbnet
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.bwtdallas-pma.rule=Host(`pma.bwtdallas.com`)
+      - traefik.http.routers.bwtdallas-pma.entrypoints=https
+      - traefik.http.routers.bwtdallas-pma.tls=true
+      - traefik.http.routers.bwtdallas-pma.tls.certresolver=cloudflare
+      - traefik.http.services.bwtdallas-pma.loadbalancer.server.port=80
+
+networks:
+  proxy:
+    external: true
+  bwtdallas-dbnet:
+    driver: bridge

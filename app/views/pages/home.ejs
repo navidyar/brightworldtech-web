@@ -1,0 +1,80 @@
+<%- include('../partials/layout-start', { pageTitle: 'BWTDallas Dashboard' }) %>
+
+<header class="page-header">
+  <h1>BWTDallas Dashboard</h1>
+  <p>This is the starter home page for your Express + EJS + HTMX app.</p>
+</header>
+
+<section>
+  <h2>Inventory Summary</h2>
+
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h3>Total Items</h3>
+      <p><%= stats.total_items %></p>
+    </div>
+
+    <div class="stat-card">
+      <h3>Total Quantity</h3>
+      <p><%= stats.total_quantity %></p>
+    </div>
+
+    <div class="stat-card">
+      <h3>Total Categories</h3>
+      <p><%= stats.total_categories %></p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Category Summary</h2>
+
+  <% if (!categorySummary.length) { %>
+    <div class="detail-card">
+      <p>No category summary available.</p>
+    </div>
+  <% } else { %>
+    <div class="category-summary-list">
+      <% categorySummary.forEach((row) => { %>
+        <div class="category-summary-card">
+          <h3><%= row.category %></h3>
+          <p><strong>Items:</strong> <%= row.item_count %></p>
+          <p><strong>Total Quantity:</strong> <%= row.total_quantity %></p>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</section>
+
+<section>
+  <h2>Recent Items</h2>
+
+  <% if (!recentItems.length) { %>
+    <div class="detail-card">
+      <p>No recent items found.</p>
+    </div>
+  <% } else { %>
+    <div class="recent-items-list">
+      <% recentItems.forEach((item) => { %>
+        <a class="recent-item-card" href="/items/<%= item.id %>">
+          <h3><%= item.name %></h3>
+          <p><strong>Category:</strong> <%= item.category %></p>
+          <p><strong>Quantity:</strong> <%= item.quantity %></p>
+          <p><strong>Price:</strong> <%= formatPrice(item.price) %></p>
+        </a>
+      <% }) %>
+    </div>
+  <% } %>
+</section>
+
+<section>
+  <h2>Quick Links</h2>
+  <div class="dashboard-links">
+    <a class="dashboard-card" href="/items">
+      <h3>Items</h3>
+      <p>View, search, add, edit, and delete inventory items.</p>
+    </a>
+  </div>
+</section>
+
+<%- include('../partials/layout-end') %>

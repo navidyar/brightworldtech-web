@@ -1,0 +1,299 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 2rem;
+  background: #f7f7f7;
+  color: #222;
+}
+
+main {
+  max-width: 1000px;
+  margin: 0 auto;
+  background: #fff;
+  padding: 2rem;
+  border-radius: 8px;
+}
+
+h1, h2 {
+  margin-top: 0;
+}
+
+a {
+  color: #0056b3;
+}
+
+.item-form,
+.search-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.form-row {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 220px;
+}
+
+.form-row label,
+.search-form label {
+  font-weight: bold;
+  margin-bottom: 0.35rem;
+}
+
+.form-row input,
+.search-form input {
+  padding: 0.6rem;
+}
+
+.form-actions {
+  width: 100%;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.form-actions button,
+.search-form button,
+.edit-button,
+.delete-button {
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+}
+
+.secondary-button {
+  background: #eee;
+}
+
+#form-status,
+#items-status {
+  margin-bottom: 1rem;
+  font-weight: bold;
+}
+
+.items-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.items-table th,
+.items-table td {
+  border: 1px solid #ddd;
+  padding: 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.items-table th {
+  background: #f0f0f0;
+}
+
+.actions-cell {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.error-box {
+  padding: 1rem;
+  border: 1px solid #cc0000;
+  background: #fff3f3;
+  color: #990000;
+  border-radius: 6px;
+}
+
+.success-box {
+  padding: 1rem;
+  border: 1px solid #0a7a32;
+  background: #eefcf2;
+  color: #0a7a32;
+  border-radius: 6px;
+}
+
+.fragment-status {
+  margin-bottom: 1rem;
+  font-weight: bold;
+}
+
+.page-header {
+  margin-bottom: 2rem;
+}
+
+.page-header p {
+  margin-bottom: 0;
+}
+
+section + section {
+  margin-top: 2rem;
+}
+
+.detail-card {
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.detail-actions {
+  margin-top: 1rem;
+}
+
+.secondary-link {
+  display: inline-block;
+  padding: 0.6rem 1rem;
+  background: #eee;
+  color: #222;
+  text-decoration: none;
+  border-radius: 6px;
+}
+
+.site-nav {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.site-nav a {
+  text-decoration: none;
+  padding: 0.6rem 1rem;
+  background: #eee;
+  color: #222;
+  border-radius: 6px;
+}
+
+.dashboard-links {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.dashboard-card {
+  display: block;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+  color: #222;
+  text-decoration: none;
+  min-width: 260px;
+}
+
+.dashboard-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.dashboard-card p {
+  margin: 0;
+}
+
+.error-page-message {
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.stats-grid {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.stat-card {
+  min-width: 180px;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.stat-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.stat-card p {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: bold;
+}
+
+.recent-items-list {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.recent-item-card {
+  display: block;
+  min-width: 240px;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+  color: #222;
+  text-decoration: none;
+}
+
+.recent-item-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.recent-item-card p {
+  margin: 0.25rem 0;
+}
+
+.category-summary-list {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+
+.category-summary-card {
+  min-width: 220px;
+  padding: 1rem;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.category-summary-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.category-summary-card p {
+  margin: 0.25rem 0;
+}
+  
+.search-form select {
+  padding: 0.6rem;
+}
+
+.search-form select {
+  padding: 0.6rem;
+}
+
+.pagination-controls {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  margin-top: 1rem;
+}
+
+.pagination-controls button {
+  padding: 0.6rem 1rem;
+  cursor: pointer;
+}
+
+.field-error {
+  margin-top: 0.35rem;
+  color: #b00020;
+  font-size: 0.9rem;
+}

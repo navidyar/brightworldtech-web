@@ -1,0 +1,21 @@
+<%- include('../partials/layout-start', { pageTitle: `Item #${item.id} - ${item.name}` }) %>
+
+<section>
+  <h2>Item Details</h2>
+
+  <div class="detail-card">
+    <p><strong>ID:</strong> <%= item.id %></p>
+    <p><strong>Name:</strong> <%= item.name %></p>
+    <p><strong>Category:</strong> <%= item.category %></p>
+    <p><strong>Quantity:</strong> <%= item.quantity %></p>
+    <p><strong>Price:</strong> <%= formatPrice(item.price) %></p>
+    <p><strong>Created:</strong> <%= item.created_at %></p>
+    <p><strong>Updated:</strong> <%= item.updated_at %></p>
+  </div>
+
+  <div class="detail-actions">
+    <a href="/items" class="secondary-link">Back to Items</a>
+  </div>
+</section>
+
+<%- include('../partials/layout-end') %>
