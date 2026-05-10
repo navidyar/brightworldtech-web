@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const pageController = require('../controllers/pageController');
+const portalController = require('../controllers/portalController');
 const itemController = require('../controllers/itemController');
 
-router.get('/', pageController.renderHomePage);
+router.get('/', portalController.renderPortalHome);
+router.get('/portals/:portal', portalController.renderPortalPage);
+router.get('/api/portals/summary', portalController.getPortalSummaryApi);
 
 router.get('/items', itemController.renderItemsPage);
 router.get('/items/form', itemController.renderItemFormFragment);

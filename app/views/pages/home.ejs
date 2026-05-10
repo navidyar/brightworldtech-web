@@ -1,80 +1,59 @@
-<%- include('../partials/layout-start', { pageTitle: 'BWTDallas Dashboard' }) %>
+<%- include('../partials/layout-start', { pageTitle: 'BWTDallas Portal Hub' }) %>
 
-<header class="page-header">
-  <h1>BWTDallas Dashboard</h1>
-  <p>This is the starter home page for your Express + EJS + HTMX app.</p>
+<header class="page-header hero-header">
+  <p class="eyebrow">Bright World Tech operations</p>
+  <h1>BWTDallas Portal Hub</h1>
+  <p>Create department-specific portals that read from the same MySQL database while showing each team only the views and actions they need.</p>
 </header>
 
 <section>
-  <h2>Inventory Summary</h2>
-
+  <h2>Database Snapshot</h2>
   <div class="stats-grid">
     <div class="stat-card">
-      <h3>Total Items</h3>
-      <p><%= stats.total_items %></p>
+      <h3>Employees</h3>
+      <p><%= summary.employees %></p>
+      <span>Total employee records</span>
     </div>
-
     <div class="stat-card">
-      <h3>Total Quantity</h3>
-      <p><%= stats.total_quantity %></p>
+      <h3>Active Techs</h3>
+      <p><%= summary.activeTechnicians %></p>
+      <span>Role contains “tech”</span>
     </div>
-
     <div class="stat-card">
-      <h3>Total Categories</h3>
-      <p><%= stats.total_categories %></p>
+      <h3>Units</h3>
+      <p><%= summary.units %></p>
+      <span>Tracked devices</span>
+    </div>
+    <div class="stat-card">
+      <h3>Inventory Qty</h3>
+      <p><%= summary.inventoryQuantity %></p>
+      <span>Warehouse inventory count</span>
     </div>
   </div>
 </section>
 
 <section>
-  <h2>Category Summary</h2>
-
-  <% if (!categorySummary.length) { %>
-    <div class="detail-card">
-      <p>No category summary available.</p>
-    </div>
-  <% } else { %>
-    <div class="category-summary-list">
-      <% categorySummary.forEach((row) => { %>
-        <div class="category-summary-card">
-          <h3><%= row.category %></h3>
-          <p><strong>Items:</strong> <%= row.item_count %></p>
-          <p><strong>Total Quantity:</strong> <%= row.total_quantity %></p>
-        </div>
-      <% }) %>
-    </div>
-  <% } %>
-</section>
-
-<section>
-  <h2>Recent Items</h2>
-
-  <% if (!recentItems.length) { %>
-    <div class="detail-card">
-      <p>No recent items found.</p>
-    </div>
-  <% } else { %>
-    <div class="recent-items-list">
-      <% recentItems.forEach((item) => { %>
-        <a class="recent-item-card" href="/items/<%= item.id %>">
-          <h3><%= item.name %></h3>
-          <p><strong>Category:</strong> <%= item.category %></p>
-          <p><strong>Quantity:</strong> <%= item.quantity %></p>
-          <p><strong>Price:</strong> <%= formatPrice(item.price) %></p>
-        </a>
-      <% }) %>
-    </div>
-  <% } %>
-</section>
-
-<section>
-  <h2>Quick Links</h2>
-  <div class="dashboard-links">
-    <a class="dashboard-card" href="/items">
-      <h3>Items</h3>
-      <p>View, search, add, edit, and delete inventory items.</p>
-    </a>
+  <h2>Department Portals</h2>
+  <div class="portal-grid">
+    <% portals.forEach((portal) => { %>
+      <a class="portal-card" href="/portals/<%= portal.slug %>">
+        <span class="eyebrow"><%= portal.eyebrow %></span>
+        <h3><%= portal.title %></h3>
+        <p><%= portal.summary %></p>
+        <strong><%= portal.primaryMetric %></strong>
+      </a>
+    <% }) %>
   </div>
+</section>
+
+<section class="schema-note">
+  <h2>Recommended Build Direction</h2>
+  <p>The pasted item list can stay as a throwaway test, but the application shell is now oriented around your planned operational schema: employees, locations, lots, projects, units, technician assignments, inventory, and configurable statuses.</p>
+  <ul>
+    <li>Use role-based access so management, tech, warehouse, and sales users each get the right default dashboard.</li>
+    <li>Add event/history tables for unit status changes, inventory movements, sales reservations, and technician work logs so charts are based on auditable activity.</li>
+    <li>Keep shared lookup values in config tables so statuses and dropdowns can change without code deployments.</li>
+  </ul>
 </section>
 
 <%- include('../partials/layout-end') %>

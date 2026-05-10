@@ -30,30 +30,42 @@ test('GET /api/health returns healthy JSON', async () => {
   assert.equal(json.app, 'ok');
 });
 
-test('GET /items returns HTML page', async () => {
-  const { response, text } = await getText('/items');
+test('GET / returns portal hub HTML page', async () => {
+  const { response, text } = await getText('/');
 
   assert.equal(response.status, 200);
-  assert.match(text, /BWTDallas Items App/i);
+  assert.match(text, /BWTDallas Portal Hub/i);
+  assert.match(text, /Management Portal/i);
+  assert.match(text, /Warehouse Portal/i);
 });
 
-test('GET /items/table returns fragment HTML', async () => {
-  const { response, text } = await getText('/items/table');
+test('GET each department portal returns HTML page', async () => {
+  const portals = ['management', 'tech', 'warehouse', 'sales'];
 
-  assert.equal(response.status, 200);
-  assert.ok(
-    text.includes('items-fragment') ||
-    text.includes('<table') ||
-    text.includes('No items found'),
-    'Expected items fragment HTML'
-  );
+  for (const portal of portals) {
+    const { response, text } = await getText(`/portals/${portal}`);
+
+    assert.equal(response.status, 200);
+    assert.match(text, /Portal/i);
+    assert.match(text, /Core Metrics/i);
+  }
 });
 
-test('GET /api/items returns JSON array', async () => {
-  const { response, json } = await getJson('/api/items');
+test('GET /api/portals/summary returns JSON summary object', async () => {
+  const { response, json } = await getJson('/api/portals/summary');
 
   assert.equal(response.status, 200);
-  assert.ok(Array.isArray(json), 'Expected /api/items to return an array');
+  assert.equal(typeof json, 'object');
+  assert.ok(Object.hasOwn(json, 'employees'));
+  assert.ok(Object.hasOwn(json, 'units'));
+  assert.ok(Object.hasOwn(json, 'inventoryQuantity'));
+});
+
+test('GET missing portal returns 404 page', async () => {
+  const { response, text } = await getText('/portals/not-a-real-portal');
+
+  assert.equal(response.status, 404);
+  assert.match(text, /404|Page Not Found/i);
 });
 
 test('GET missing route returns 404 page', async () => {
@@ -61,93 +73,4 @@ test('GET missing route returns 404 page', async () => {
 
   assert.equal(response.status, 404);
   assert.match(text, /404|Page Not Found/i);
-});
-
-test('GET /items/:id works when at least one item exists', async () => {
-  const { response, json } = await getJson('/api/items');
-
-  assert.equal(response.status, 200);
-  assert.ok(Array.isArray(json), 'Expected /api/items to return an array');
-
-  if (json.length === 0) {
-    return;
-  }
-
-  const firstItem = json[0];
-  const details = await getText(`/items/${firstItem.id}`);
-
-  assert.equal(details.response.status, 200);
-  assert.match(details.text, /Item Details/i);
-});
-
-test('GET /items/table with search query returns successfully', async () => {
-  const { response, text } = await getText('/items/table?search=Dell');
-
-  assert.equal(response.status, 200);
-  assert.ok(
-    text.includes('items-fragment') ||
-    text.includes('No items found') ||
-    text.includes('<table'),
-    'Expected searchable items fragment HTML'
-  );
-});
-
-test('GET /items/table with sort query returns successfully', async () => {
-  const { response, text } = await getText('/items/table?sort=price_desc');
-
-  assert.equal(response.status, 200);
-  assert.ok(
-    text.includes('items-fragment') ||
-    text.includes('No items found') ||
-    text.includes('<table'),
-    'Expected sortable items fragment HTML'
-  );
-});
-
-test('GET /items/table with pagination query returns successfully', async () => {
-  const { response, text } = await getText('/items/table?page=2');
-
-  assert.equal(response.status, 200);
-  assert.ok(
-    text.includes('Page') ||
-    text.includes('No items found') ||
-    text.includes('<table'),
-    'Expected paginated items fragment HTML'
-  );
-});
-
-test('GET /items/table with search + sort + page works together', async () => {
-  const { response, text } = await getText('/items/table?search=Dell&sort=name_asc&page=1');
-
-  assert.equal(response.status, 200);
-  assert.ok(
-    text.includes('items-fragment') ||
-    text.includes('No items found') ||
-    text.includes('<table'),
-    'Expected combined filter fragment HTML'
-  );
-});
-
-test('GET /items/table with invalid page does not crash', async () => {
-  const { response, text } = await getText('/items/table?page=not-a-number');
-
-  assert.equal(response.status, 200);
-  assert.ok(
-    text.includes('items-fragment') ||
-    text.includes('No items found') ||
-    text.includes('<table'),
-    'Expected safe fallback for invalid page input'
-  );
-});
-
-test('GET /items/table with out-of-range page does not crash', async () => {
-  const { response, text } = await getText('/items/table?page=99999');
-
-  assert.equal(response.status, 200);
-  assert.ok(
-    text.includes('items-fragment') ||
-    text.includes('No items found') ||
-    text.includes('<table'),
-    'Expected safe fallback for large page input'
-  );
 });

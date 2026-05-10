@@ -1,0 +1,29 @@
+<div class="snapshot-panel">
+  <h3>Recent Units</h3>
+  <% if (!rows.length) { %>
+    <p class="muted">No recent units are available yet.</p>
+  <% } else { %>
+    <div class="table-wrap">
+      <table class="items-table">
+        <thead>
+          <tr>
+            <th>Serial</th>
+            <th>Type</th>
+            <th>Model</th>
+            <th>Color</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% rows.forEach((row) => { %>
+            <tr>
+              <td><%= row.unit_serial || `Unit #${row.id}` %></td>
+              <td><%= row.unit_type || 'Unknown' %></td>
+              <td><%= row.model_number || 'Unknown' %></td>
+              <td><%= row.color || 'Unknown' %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  <% } %>
+</div>

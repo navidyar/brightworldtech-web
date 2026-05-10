@@ -1,0 +1,120 @@
+<%- include('../partials/layout-start', { pageTitle: portal.title }) %>
+
+<header class="page-header hero-header">
+  <p class="eyebrow"><%= portal.eyebrow %></p>
+  <h1><%= portal.title %></h1>
+  <p><%= portal.summary %></p>
+</header>
+
+<section>
+  <h2>Core Metrics</h2>
+  <div class="stats-grid">
+    <div class="stat-card">
+      <h3>Employees</h3>
+      <p><%= snapshot.summary.employees %></p>
+    </div>
+    <div class="stat-card">
+      <h3>Projects</h3>
+      <p><%= snapshot.summary.projects %></p>
+    </div>
+    <div class="stat-card">
+      <h3>Units</h3>
+      <p><%= snapshot.summary.units %></p>
+    </div>
+    <div class="stat-card">
+      <h3>Inventory Qty</h3>
+      <p><%= snapshot.summary.inventoryQuantity %></p>
+    </div>
+  </div>
+</section>
+
+<section class="portal-layout">
+  <div class="detail-card">
+    <h2>Primary Workflow</h2>
+    <ul class="check-list">
+      <% portal.actions.forEach((action) => { %>
+        <li><%= action %></li>
+      <% }) %>
+    </ul>
+  </div>
+
+  <div class="detail-card">
+    <h2>Data Sources</h2>
+    <div class="pill-list">
+      <% portal.tables.forEach((table) => { %>
+        <span><%= table %></span>
+      <% }) %>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Current View</h2>
+
+  <% if (portal.slug === 'management') { %>
+    <%- include('../partials/portal-snapshot-list', {
+      title: 'Technician Workload',
+      rows: snapshot.technicianWorkload,
+      emptyText: 'No technician assignments are available yet.',
+      labelKey: 'name',
+      valueKey: 'assignedUnits',
+      valueLabel: 'assigned units'
+    }) %>
+    <%- include('../partials/portal-snapshot-list', {
+      title: 'Project Unit Mix',
+      rows: snapshot.projectMix,
+      emptyText: 'No projects are available yet.',
+      labelKey: 'name',
+      valueKey: 'unitCount',
+      valueLabel: 'units'
+    }) %>
+  <% } else if (portal.slug === 'tech') { %>
+    <%- include('../partials/portal-snapshot-list', {
+      title: 'iCloud Status Mix',
+      rows: snapshot.statusMix,
+      emptyText: 'No unit statuses are available yet.',
+      labelKey: 'label',
+      valueKey: 'value',
+      valueLabel: 'units'
+    }) %>
+    <%- include('../partials/portal-assignment-list', { rows: snapshot.recentAssignments }) %>
+  <% } else if (portal.slug === 'warehouse') { %>
+    <%- include('../partials/portal-snapshot-list', {
+      title: 'Inventory by Location',
+      rows: snapshot.locationInventory,
+      emptyText: 'No location inventory is available yet.',
+      labelKey: 'name',
+      valueKey: 'quantity',
+      valueLabel: 'units'
+    }) %>
+    <%- include('../partials/portal-snapshot-list', {
+      title: 'Inventory by Vendor',
+      rows: snapshot.vendorInventory,
+      emptyText: 'No vendor inventory is available yet.',
+      labelKey: 'label',
+      valueKey: 'value',
+      valueLabel: 'units'
+    }) %>
+  <% } else if (portal.slug === 'sales') { %>
+    <%- include('../partials/portal-snapshot-list', {
+      title: 'Sellable Unit Type Mix',
+      rows: snapshot.sellableMix,
+      emptyText: 'No sellable units are available yet.',
+      labelKey: 'label',
+      valueKey: 'value',
+      valueLabel: 'units'
+    }) %>
+    <%- include('../partials/portal-unit-list', { rows: snapshot.recentUnits }) %>
+  <% } %>
+</section>
+
+<section class="schema-note">
+  <h2>Expansion Ideas</h2>
+  <ul>
+    <% portal.enhancements.forEach((enhancement) => { %>
+      <li><%= enhancement %></li>
+    <% }) %>
+  </ul>
+</section>
+
+<%- include('../partials/layout-end') %>
