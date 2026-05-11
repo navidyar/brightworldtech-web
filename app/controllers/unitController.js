@@ -1,4 +1,4 @@
-const itemModel = require('../models/itemModel');
+const unitModel = require('../models/unitModel');
 const { getEmptyFormValues, parsePositiveInteger, renderItemForm } = require('../helpers/formHelpers');
 const { validateItemForm } = require('../helpers/itemValidation');
 
@@ -13,40 +13,83 @@ function normalizeRequestedPageSize(value) {
   return parsed;
 }
 
-async function renderItemsPage(req, res) {
+function renderUnitForm(res, {
+  statusCode = 200,
+  formMode = 'create',
+  formValues = getEmptyFormValues(),
+  fieldErrors = {},
+  formMessage = null,
+  triggerEvent = null
+} = {}) {
+  if (triggerEvent) {
+    res.set('HX-Trigger', triggerEvent);
+  }
+
+  return res.status(statusCode).render('fragments/unit-form', {
+    formMode,
+    formValues,
+    fieldErrors,
+    formMessage
+  });
+}
+
+async function renderUnitsPage(req, res) {
   try {
-    const categories = await itemModel.getDistinctCategories();
+    const categories = await unitModel.getDistinctCategories();
 
-    const currentFilters = {
-      search: (req.query.search || '').trim(),
-      category: (req.query.category || '').trim(),
-      sort: (req.query.sort || 'newest').trim(),
-      page: parsePositiveInteger(req.query.page) || 1,
-      pageSize: normalizeRequestedPageSize(req.query.pageSize)
-    };
-
-    res.render('pages/items', {
-      categories,
-      currentFilters
+    res.render('pages/units', {
+      categories
     });
   } catch (error) {
-    console.error('Error rendering items page:', error);
+    console.error('Error rendering units page:', error);
     res.status(500).render('pages/error', {
-      message: 'Failed to render the items page.'
+      message: 'Failed to render the units page.'
     });
   }
 }
 
-async function renderItemFormFragment(req, res) {
+async function renderUnitFormFragment(req, res) {
   try {
-    return renderItemForm(res);
+    const id = req.query.id ? parsePositiveInteger(req.query.id) : null;
+
+    if (!id) {
+      return renderUnitForm(res);
+    }
+
+    const unit = await unitModel.getUnitById(id);
+
+    if (!unit) {
+      return renderUnitForm(res, {
+        statusCode: 404,
+        formMode: 'create',
+        formValues: getEmptyFormValues(),
+        fieldErrors: {},
+        formMessage: {
+          type: 'error',
+          text: 'Unit not found.'
+        }
+      });
+    }
+
+    return renderUnitForm(res, {
+      formMode: 'edit',
+      formValues: {
+        item_id: String(unit.id),
+        name: unit.name || '',
+        category: unit.category || '',
+        quantity: unit.quantity ?? '',
+        price: unit.price ?? ''
+      },
+      fieldErrors: {},
+      formMessage: null
+    });
   } catch (error) {
-    console.error('Error rendering item form fragment:', error);
-    res.status(500).send('<div class="error-box">Failed to load form.</div>');
+    console.error('Error rendering unit form fragment:', error);
+    return res.status(500).send('<div class="error-box">Failed to load unit form.</div>');
   }
 }
 
-async function renderItemDetailsPage(req, res) {
+async function renderUnitDetailsPage(req, res) {
   try {
     const id = parsePositiveInteger(req.params.id);
 
@@ -54,81 +97,52 @@ async function renderItemDetailsPage(req, res) {
       return res.status(404).render('pages/404');
     }
 
-    const item = await itemModel.getItemById(id);
+    const unit = await unitModel.getUnitById(id);
 
-    if (!item) {
+    if (!unit) {
       return res.status(404).render('pages/404');
     }
 
-    res.render('pages/item-details', {
-      item
+    res.render('pages/unit-details', {
+      unit
     });
   } catch (error) {
-    console.error('Error rendering item details page:', error);
+    console.error('Error rendering unit details page:', error);
     res.status(500).render('pages/error', {
-      message: 'Failed to render the item details page.'
+      message: 'Failed to render the unit details page.'
     });
   }
 }
 
-async function listItems(req, res) {
+async function listUnits(req, res) {
   try {
     const search = (req.query.search || '').trim();
     const sort = (req.query.sort || 'newest').trim();
     const category = (req.query.category || '').trim();
 
-    const rows = await itemModel.getAllItems(search, sort, category);
+    const rows = await unitModel.getAllUnits(search, sort, category);
 
     res.json(rows);
   } catch (error) {
-    console.error('Error fetching items:', error);
+    console.error('Error fetching units:', error);
     res.status(500).json({
-      error: 'Failed to fetch items'
+      error: 'Failed to fetch units'
     });
   }
 }
 
-async function listItemsFragment(req, res) {
+async function listUnitsFragment(req, res) {
   try {
-    const isHtmxRequest = req.get('HX-Request') === 'true';
-
-    if (!isHtmxRequest) {
-      const params = new URLSearchParams();
-
-      if (req.query.search) {
-        params.set('search', String(req.query.search).trim());
-      }
-
-      if (req.query.category) {
-        params.set('category', String(req.query.category).trim());
-      }
-
-      if (req.query.sort) {
-        params.set('sort', String(req.query.sort).trim());
-      }
-
-      if (req.query.page) {
-        params.set('page', String(req.query.page).trim());
-      }
-
-      if (req.query.pageSize) {
-        params.set('pageSize', String(req.query.pageSize).trim());
-      }
-
-      const queryString = params.toString();
-      return res.redirect(queryString ? `/items?${queryString}` : '/items');
-    }
-
     const search = (req.query.search || '').trim();
     const sort = (req.query.sort || 'newest').trim();
     const category = (req.query.category || '').trim();
     const page = parsePositiveInteger(req.query.page) || 1;
     const pageSize = normalizeRequestedPageSize(req.query.pageSize);
 
-    const result = await itemModel.getItemsPage(search, sort, page, pageSize, category);
+    const result = await unitModel.getUnitsPage(search, sort, page, pageSize, category);
 
-    res.render('fragments/items-table', {
-      items: result.rows,
+    res.render('fragments/units-table', {
+      units: result.rows,
       searchTerm: search,
       sort,
       category,
@@ -138,16 +152,16 @@ async function listItemsFragment(req, res) {
       totalCount: result.totalCount
     });
   } catch (error) {
-    console.error('Error fetching items fragment:', error);
+    console.error('Error fetching units fragment:', error);
     res.status(500).send(`
       <div class="error-box">
-        <p>Failed to load items.</p>
+        <p>Failed to load units.</p>
       </div>
     `);
   }
 }
 
-async function submitItemForm(req, res) {
+async function submitUnitForm(req, res) {
   try {
     const validation = validateItemForm(req.body);
     const id = validation.formValues.item_id
@@ -157,7 +171,7 @@ async function submitItemForm(req, res) {
     const formMode = id ? 'edit' : 'create';
 
     if (validation.hasErrors) {
-      return renderItemForm(res, {
+      return renderUnitForm(res, {
         statusCode: 400,
         formMode,
         formValues: validation.formValues,
@@ -170,20 +184,20 @@ async function submitItemForm(req, res) {
     }
 
     if (validation.formValues.item_id && !id) {
-      return renderItemForm(res, {
+      return renderUnitForm(res, {
         statusCode: 400,
         formMode: 'edit',
         formValues: validation.formValues,
         fieldErrors: {},
         formMessage: {
           type: 'error',
-          text: 'Valid item id is required.'
+          text: 'Valid unit id is required.'
         }
       });
     }
 
     if (id) {
-      const result = await itemModel.updateItem(id, {
+      const result = await unitModel.updateUnit(id, {
         name: validation.formValues.name,
         category: validation.formValues.category,
         quantity: validation.quantityNumber,
@@ -191,120 +205,85 @@ async function submitItemForm(req, res) {
       });
 
       if (result.affectedRows === 0) {
-        return renderItemForm(res, {
+        return renderUnitForm(res, {
           statusCode: 404,
           formMode: 'edit',
           formValues: validation.formValues,
           fieldErrors: {},
           formMessage: {
             type: 'error',
-            text: 'Item not found.'
+            text: 'Unit not found.'
           }
         });
       }
 
-      return renderItemForm(res, {
+      return renderUnitForm(res, {
         formMode: 'create',
         formValues: getEmptyFormValues(),
         fieldErrors: {},
         formMessage: {
           type: 'success',
-          text: 'Item updated successfully.'
+          text: 'Unit updated successfully.'
         },
-        triggerEvent: 'item-saved'
+        triggerEvent: 'unit-saved'
       });
     }
 
-    await itemModel.createItem({
+    await unitModel.createUnit({
       name: validation.formValues.name,
       category: validation.formValues.category,
       quantity: validation.quantityNumber,
       price: validation.priceNumber
     });
 
-    return renderItemForm(res, {
+    return renderUnitForm(res, {
       formMode: 'create',
       formValues: getEmptyFormValues(),
       fieldErrors: {},
       formMessage: {
         type: 'success',
-        text: 'Item created successfully.'
+        text: 'Unit created successfully.'
       },
-      triggerEvent: 'item-saved'
+      triggerEvent: 'unit-saved'
     });
   } catch (error) {
-    console.error('Error submitting item form:', error);
-    return renderItemForm(res, {
+    console.error('Error submitting unit form:', error);
+    return renderUnitForm(res, {
       statusCode: 500,
       formMode: 'create',
       formValues: getEmptyFormValues(),
       fieldErrors: {},
       formMessage: {
         type: 'error',
-        text: 'Failed to save item.'
+        text: 'Failed to save unit.'
       }
     });
   }
 }
 
-async function deleteItemHtmx(req, res) {
+async function deleteUnitHtmx(req, res) {
   try {
     const id = parsePositiveInteger(req.params.id);
 
     if (!id) {
-      return renderItemForm(res, {
-        statusCode: 400,
-        formMode: 'create',
-        formValues: getEmptyFormValues(),
-        fieldErrors: {},
-        formMessage: {
-          type: 'error',
-          text: 'Valid item id is required.'
-        }
-      });
+      return res.status(400).send('<div class="error-box">Valid unit id is required.</div>');
     }
 
-    const result = await itemModel.deleteItem(id);
+    const result = await unitModel.deleteUnit(id);
 
     if (result.affectedRows === 0) {
-      return renderItemForm(res, {
-        statusCode: 404,
-        formMode: 'create',
-        formValues: getEmptyFormValues(),
-        fieldErrors: {},
-        formMessage: {
-          type: 'error',
-          text: 'Item not found.'
-        }
-      });
+      return res.status(404).send('<div class="error-box">Unit not found.</div>');
     }
 
-    return renderItemForm(res, {
-      formMode: 'create',
-      formValues: getEmptyFormValues(),
-      fieldErrors: {},
-      formMessage: {
-        type: 'success',
-        text: 'Item deleted successfully.'
-      },
-      triggerEvent: 'item-saved'
-    });
+    res.set('HX-Trigger', 'unit-saved');
+    return res.send('<div class="success-box">Unit deleted successfully.</div>');
   } catch (error) {
-    console.error('Error deleting item:', error);
-    return renderItemForm(res, {
-      statusCode: 500,
-      formMode: 'create',
-      formValues: getEmptyFormValues(),
-      fieldErrors: {},
-      formMessage: {
-        type: 'error',
-        text: 'Failed to delete item.'
-      }
-    });
+    console.error('Error deleting unit:', error);
+    return res.status(500).send('<div class="error-box">Failed to delete unit.</div>');
   }
 }
 
-async function createItem(req, res) {
+async function createUnit(req, res) {
   try {
     const name = (req.body.name || '').trim();
     const category = (req.body.category || '').trim();
@@ -329,7 +308,7 @@ async function createItem(req, res) {
       });
     }
 
-    const result = await itemModel.createItem({
+    const result = await unitModel.createUnit({
       name,
       category,
       quantity,
@@ -337,18 +316,18 @@ async function createItem(req, res) {
     });
 
     res.status(201).json({
-      message: 'Item created successfully.',
+      message: 'Unit created successfully.',
       id: result.insertId
     });
   } catch (error) {
-    console.error('Error creating item:', error);
+    console.error('Error creating unit:', error);
     res.status(500).json({
-      error: 'Failed to create item'
+      error: 'Failed to create unit'
     });
   }
 }
 
-async function updateItem(req, res) {
+async function updateUnit(req, res) {
   try {
     const id = parsePositiveInteger(req.params.id);
     const name = (req.body.name || '').trim();
@@ -358,7 +337,7 @@ async function updateItem(req, res) {
 
     if (!id) {
       return res.status(400).json({
-        error: 'Valid item id is required.'
+        error: 'Valid unit id is required.'
       });
     }
 
@@ -380,7 +359,7 @@ async function updateItem(req, res) {
       });
     }
 
-    const result = await itemModel.updateItem(id, {
+    const result = await unitModel.updateUnit(id, {
       name,
       category,
       quantity,
@@ -389,59 +368,59 @@ async function updateItem(req, res) {
 
     if (result.affectedRows === 0) {
       return res.status(404).json({
-        error: 'Item not found.'
+        error: 'Unit not found.'
       });
     }
 
     res.json({
-      message: 'Item updated successfully.'
+      message: 'Unit updated successfully.'
     });
   } catch (error) {
-    console.error('Error updating item:', error);
+    console.error('Error updating unit:', error);
     res.status(500).json({
-      error: 'Failed to update item'
+      error: 'Failed to update unit'
     });
   }
 }
 
-async function deleteItem(req, res) {
+async function deleteUnit(req, res) {
   try {
     const id = parsePositiveInteger(req.params.id);
 
     if (!id) {
       return res.status(400).json({
-        error: 'Valid item id is required.'
+        error: 'Valid unit id is required.'
       });
     }
 
-    const result = await itemModel.deleteItem(id);
+    const result = await unitModel.deleteUnit(id);
 
     if (result.affectedRows === 0) {
       return res.status(404).json({
-        error: 'Item not found.'
+        error: 'Unit not found.'
       });
     }
 
     res.json({
-      message: 'Item deleted successfully.'
+      message: 'Unit deleted successfully.'
     });
   } catch (error) {
-    console.error('Error deleting item:', error);
+    console.error('Error deleting unit:', error);
     res.status(500).json({
-      error: 'Failed to delete item'
+      error: 'Failed to delete unit'
     });
   }
 }
 
 module.exports = {
-  renderItemsPage,
-  renderItemFormFragment,
-  renderItemDetailsPage,
-  listItems,
-  listItemsFragment,
-  submitItemForm,
-  deleteItemHtmx,
-  createItem,
-  updateItem,
-  deleteItem
+  renderUnitsPage,
+  renderUnitFormFragment,
+  renderUnitDetailsPage,
+  listUnits,
+  listUnitsFragment,
+  submitUnitForm,
+  deleteUnitHtmx,
+  createUnit,
+  updateUnit,
+  deleteUnit
 };

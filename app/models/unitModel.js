@@ -20,7 +20,7 @@ function normalizePageSize(pageSize) {
   return allowed.includes(pageSize) ? pageSize : 5;
 }
 
-function buildItemsWhereClause(search = '', category = '') {
+function buildUnitsWhereClause(search = '', category = '') {
   const conditions = [];
   const params = [];
 
@@ -41,8 +41,8 @@ function buildItemsWhereClause(search = '', category = '') {
   };
 }
 
-async function getAllItems(search = '', sort = 'newest', category = '') {
-  const { whereSql, params } = buildItemsWhereClause(search, category);
+async function getAllUnits(search = '', sort = 'newest', category = '') {
+  const { whereSql, params } = buildUnitsWhereClause(search, category);
 
   const sql = `
     SELECT
@@ -62,12 +62,12 @@ async function getAllItems(search = '', sort = 'newest', category = '') {
   return rows;
 }
 
-async function getItemsPage(search = '', sort = 'newest', page = 1, pageSize = 5, category = '') {
+async function getUnitsPage(search = '', sort = 'newest', page = 1, pageSize = 5, category = '') {
   const safePageSize = normalizePageSize(
     Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 5
   );
 
-  const { whereSql, params } = buildItemsWhereClause(search, category);
+  const { whereSql, params } = buildUnitsWhereClause(search, category);
 
   const countSql = `
     SELECT COUNT(*) AS total_count
@@ -113,7 +113,7 @@ async function getItemsPage(search = '', sort = 'newest', page = 1, pageSize = 5
   };
 }
 
-async function getItemById(id) {
+async function getUnitById(id) {
   const [rows] = await pool.execute(
     `
     SELECT
@@ -132,6 +132,56 @@ async function getItemById(id) {
   );
 
   return rows[0] || null;
+}
+
+async function getDistinctCategories() {
+  const [rows] = await pool.execute(
+    `
+    SELECT DISTINCT category
+    FROM items
+    WHERE category IS NOT NULL AND category <> ''
+    ORDER BY category ASC
+    `
+  );
+
+  return rows.map((row) => row.category);
+}
+
+async function createUnit({ name, category, quantity, price }) {
+  const [result] = await pool.execute(
+    `
+    INSERT INTO items (name, category, quantity, price)
+    VALUES (?, ?, ?, ?)
+    `,
+    [name, category, quantity, price]
+  );
+
+  return result;
+}
+
+async function updateUnit(id, { name, category, quantity, price }) {
+  const [result] = await pool.execute(
+    `
+    UPDATE items
+    SET name = ?, category = ?, quantity = ?, price = ?
+    WHERE id = ?
+    `,
+    [name, category, quantity, price, id]
+  );
+
+  return result;
+}
+
+async function deleteUnit(id) {
+  const [result] = await pool.execute(
+    `
+    DELETE FROM items
+    WHERE id = ?
+    `,
+    [id]
+  );
+
+  return result;
 }
 
 async function getDashboardStats() {
@@ -185,65 +235,15 @@ async function getCategorySummary() {
   return rows;
 }
 
-async function getDistinctCategories() {
-  const [rows] = await pool.execute(
-    `
-    SELECT DISTINCT category
-    FROM items
-    WHERE category IS NOT NULL AND category <> ''
-    ORDER BY category ASC
-    `
-  );
-
-  return rows.map((row) => row.category);
-}
-
-async function createItem({ name, category, quantity, price }) {
-  const [result] = await pool.execute(
-    `
-    INSERT INTO items (name, category, quantity, price)
-    VALUES (?, ?, ?, ?)
-    `,
-    [name, category, quantity, price]
-  );
-
-  return result;
-}
-
-async function updateItem(id, { name, category, quantity, price }) {
-  const [result] = await pool.execute(
-    `
-    UPDATE items
-    SET name = ?, category = ?, quantity = ?, price = ?
-    WHERE id = ?
-    `,
-    [name, category, quantity, price, id]
-  );
-
-  return result;
-}
-
-async function deleteItem(id) {
-  const [result] = await pool.execute(
-    `
-    DELETE FROM items
-    WHERE id = ?
-    `,
-    [id]
-  );
-
-  return result;
-}
-
 module.exports = {
-  getAllItems,
-  getItemsPage,
-  getItemById,
+  getAllUnits,
+  getUnitsPage,
+  getUnitById,
   getDashboardStats,
   getRecentItems,
   getCategorySummary,
   getDistinctCategories,
-  createItem,
-  updateItem,
-  deleteItem
+  createUnit,
+  updateUnit,
+  deleteUnit
 };

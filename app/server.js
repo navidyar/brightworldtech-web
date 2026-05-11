@@ -2,7 +2,7 @@ require('dotenv').config();
 
 const path = require('path');
 const express = require('express');
-const itemsRoute = require('./routes/items');
+const unitsRoute = require('./routes/units');
 const { escapeHtml, formatPrice } = require('./views/partials/helpers');
 
 const app = express();
@@ -17,6 +17,8 @@ app.locals.formatPrice = formatPrice;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Static files must come before the route catch-all.
+// This allows /css/style.css, /js/app.js, and /images/bwt-logo.png to load.
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/health', (req, res) => {
@@ -26,7 +28,7 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-app.use(itemsRoute);
+app.use(unitsRoute);
 
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);

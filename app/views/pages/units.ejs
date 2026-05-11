@@ -1,0 +1,15 @@
+<%- include('../partials/layout-start', {
+  pageTitle: 'Bright World Technologies Tech',
+  topbarTitle: 'Tech Units',
+  activeNav: 'tech'
+}) %>
+
+<%- include('../partials/page-header') %>
+
+<div class="page-stack">
+  <%- include('../partials/unit-search', { categories }) %>
+</div>
+
+<%- include('../partials/unit-modal') %>
+
+<%- include('../partials/layout-end') %>

@@ -1,4 +1,36 @@
-<nav class="site-nav">
-  <a href="/">Home</a>
-  <a href="/items">Items</a>
-</nav>
+<% const currentNav = typeof activeNav !== 'undefined' ? activeNav : ''; %>
+
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <a href="/" class="brand-logo-card">
+      <img src="/images/bwt-logo.webp" alt="Bright World Technologies" class="brand-logo" />
+    </a>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a href="/" class="sidebar-link <%= currentNav === 'portal' ? 'active' : '' %>">
+      <span class="sidebar-icon">⌂</span>
+      <span>Portal Hub</span>
+    </a>
+
+    <a href="#" class="sidebar-link <%= currentNav === 'management' ? 'active' : '' %>">
+      <span class="sidebar-icon">◎</span>
+      <span>Management</span>
+    </a>
+
+    <a href="/units" class="sidebar-link <%= currentNav === 'tech' ? 'active' : '' %>">
+      <span class="sidebar-icon">▣</span>
+      <span>Tech</span>
+    </a>
+
+    <a href="#" class="sidebar-link <%= currentNav === 'warehouse' ? 'active' : '' %>">
+      <span class="sidebar-icon">◇</span>
+      <span>Warehouse</span>
+    </a>
+
+    <a href="#" class="sidebar-link <%= currentNav === 'sales' ? 'active' : '' %>">
+      <span class="sidebar-icon">◈</span>
+      <span>Sales</span>
+    </a>
+  </nav>
+</aside>

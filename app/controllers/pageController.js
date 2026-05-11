@@ -1,10 +1,10 @@
-const itemModel = require('../models/itemModel');
+const unitModel = require('../models/unitModel');
 
 async function renderHomePage(req, res) {
   try {
-    const stats = await itemModel.getDashboardStats();
-    const recentItems = await itemModel.getRecentItems(5);
-    const categorySummary = await itemModel.getCategorySummary();
+    const stats = await unitModel.getDashboardStats();
+    const recentItems = await unitModel.getRecentItems(5);
+    const categorySummary = await unitModel.getCategorySummary();
 
     res.render('pages/home', {
       stats,

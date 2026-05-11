@@ -2,5 +2,10 @@
 <html lang="en">
   <%- include('./head', { pageTitle }) %>
   <body>
-    <main>
-      <%- include('./nav') %>
+    <div class="app-shell">
+      <%- include('./nav', { activeNav: typeof activeNav !== 'undefined' ? activeNav : '' }) %>
+
+      <div class="app-main">
+        <%- include('./topbar', { topbarTitle: typeof topbarTitle !== 'undefined' ? topbarTitle : pageTitle }) %>
+
+        <main class="content-shell">

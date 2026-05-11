@@ -1,4 +1,8 @@
-<%- include('../partials/layout-start', { pageTitle: 'BWTDallas Dashboard' }) %>
+<%- include('../partials/layout-start', {
+  pageTitle: 'BWTDallas Dashboard',
+  topbarTitle: 'Portal Hub',
+  activeNav: 'portal'
+}) %>
 
 <header class="page-header">
   <h1>BWTDallas Dashboard</h1>
@@ -10,7 +14,7 @@
 
   <div class="stats-grid">
     <div class="stat-card">
-      <h3>Total Items</h3>
+      <h3>Total units</h3>
       <p><%= stats.total_items %></p>
     </div>
 
@@ -38,7 +42,7 @@
       <% categorySummary.forEach((row) => { %>
         <div class="category-summary-card">
           <h3><%= row.category %></h3>
-          <p><strong>Items:</strong> <%= row.item_count %></p>
+          <p><strong>Units:</strong> <%= row.item_count %></p>
           <p><strong>Total Quantity:</strong> <%= row.total_quantity %></p>
         </div>
       <% }) %>
@@ -47,20 +51,20 @@
 </section>
 
 <section>
-  <h2>Recent Items</h2>
+  <h2>Recent units</h2>
 
   <% if (!recentItems.length) { %>
     <div class="detail-card">
-      <p>No recent items found.</p>
+      <p>No recent units found.</p>
     </div>
   <% } else { %>
     <div class="recent-items-list">
-      <% recentItems.forEach((item) => { %>
-        <a class="recent-item-card" href="/items/<%= item.id %>">
-          <h3><%= item.name %></h3>
-          <p><strong>Category:</strong> <%= item.category %></p>
-          <p><strong>Quantity:</strong> <%= item.quantity %></p>
-          <p><strong>Price:</strong> <%= formatPrice(item.price) %></p>
+      <% recentItems.forEach((unit) => { %>
+        <a class="recent-item-card" href="/units/<%= unit.id %>">
+          <h3><%= unit.name %></h3>
+          <p><strong>Category:</strong> <%= unit.category %></p>
+          <p><strong>Quantity:</strong> <%= unit.quantity %></p>
+          <p><strong>Price:</strong> <%= formatPrice(unit.price) %></p>
         </a>
       <% }) %>
     </div>
@@ -70,9 +74,9 @@
 <section>
   <h2>Quick Links</h2>
   <div class="dashboard-links">
-    <a class="dashboard-card" href="/items">
-      <h3>Items</h3>
-      <p>View, search, add, edit, and delete inventory items.</p>
+    <a class="dashboard-card" href="/units">
+      <h3>Tech</h3>
+      <p>View, search, add, edit, and delete technology units.</p>
     </a>
   </div>
 </section>

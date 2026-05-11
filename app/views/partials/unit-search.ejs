@@ -1,0 +1,70 @@
+<section class="content-card filter-card">
+  <div class="card-header">
+    <div>
+      <p class="section-kicker">Tech Unit Registry</p>
+      <h2>Search & Manage</h2>
+      <p class="card-subtitle">Search, filter, sort, and manage technology units.</p>
+    </div>
+
+    <button type="button" class="primary-button" data-open-modal="unit-modal" data-form-url="/units/form">
+      + Add Unit
+    </button>
+  </div>
+
+  <form id="search-form" class="search-form" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML">
+    <input type="hidden" id="page-input" name="page" value="1" />
+
+    <div class="filter-control search-control">
+      <label for="search-input">Search</label>
+      <div class="input-with-icon">
+        <input type="text" id="search-input" name="search" placeholder="Search by unit name or category..." />
+        <span>⌕</span>
+      </div>
+    </div>
+
+    <div class="filter-control">
+      <label for="category-select">Category</label>
+      <select id="category-select" name="category">
+        <option value="">All Categories</option>
+        <% categories.forEach((category) => { %>
+          <option value="<%= category %>"><%= category %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="filter-control">
+      <label for="sort-select">Sort By</label>
+      <select id="sort-select" name="sort">
+        <option value="newest">Newest First</option>
+        <option value="oldest">Oldest First</option>
+        <option value="name_asc">Name A to Z</option>
+        <option value="name_desc">Name Z to A</option>
+        <option value="price_asc">Price Low to High</option>
+        <option value="price_desc">Price High to Low</option>
+        <option value="quantity_asc">Quantity Low to High</option>
+        <option value="quantity_desc">Quantity High to Low</option>
+      </select>
+    </div>
+
+    <div class="filter-control">
+      <label for="page-size-select">Per Page</label>
+      <select id="page-size-select" name="pageSize">
+        <option value="5">5 per page</option>
+        <option value="10">10 per page</option>
+        <option value="25">25 per page</option>
+        <option value="50">50 per page</option>
+      </select>
+    </div>
+
+    <div class="filter-actions">
+      <button type="submit" class="primary-button">Apply</button>
+      <button type="button" id="clear-search" class="secondary-button">Clear</button>
+    </div>
+  </form>
+</section>
+
+<div id="units-container" hx-get="/units/table" hx-trigger="load, unit-saved from:body" hx-swap="innerHTML">
+  <section class="content-card">
+    <div class="loading-state">Loading units...</div>
+  </section>
+</div>

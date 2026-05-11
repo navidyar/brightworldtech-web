@@ -1,0 +1,55 @@
+<%- include('../partials/layout-start', {
+  pageTitle: `Unit #${unit.id} - ${unit.name}`,
+  topbarTitle: 'Tech Units',
+  activeNav: 'tech'
+}) %>
+
+<section class="content-card">
+  <div class="card-header">
+    <div>
+      <p class="section-kicker">Unit Details</p>
+      <h2><%= unit.name %></h2>
+    </div>
+
+    <a href="/units" class="secondary-link">Back to Units</a>
+  </div>
+
+  <div class="detail-grid">
+    <div class="detail-field">
+      <span>ID</span>
+      <strong><%= unit.id %></strong>
+    </div>
+
+    <div class="detail-field">
+      <span>Unit Name</span>
+      <strong><%= unit.name %></strong>
+    </div>
+
+    <div class="detail-field">
+      <span>Category</span>
+      <strong><%= unit.category %></strong>
+    </div>
+
+    <div class="detail-field">
+      <span>Quantity</span>
+      <strong><%= unit.quantity %></strong>
+    </div>
+
+    <div class="detail-field">
+      <span>Price</span>
+      <strong><%= formatPrice(unit.price) %></strong>
+    </div>
+
+    <div class="detail-field">
+      <span>Created</span>
+      <strong><%= unit.created_at %></strong>
+    </div>
+
+    <div class="detail-field">
+      <span>Updated</span>
+      <strong><%= unit.updated_at %></strong>
+    </div>
+  </div>
+</section>
+
+<%- include('../partials/layout-end') %>
