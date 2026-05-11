@@ -33,19 +33,33 @@ function resetFormState() {
 
 document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('search-input');
+  const categorySelect = document.getElementById('category-select');
   const sortSelect = document.getElementById('sort-select');
+  const pageSizeSelect = document.getElementById('page-size-select');
   const clearButton = document.getElementById('clear-search');
   const itemsContainer = document.getElementById('items-container');
 
   clearButton.addEventListener('click', () => {
     searchInput.value = '';
+    categorySelect.value = '';
     sortSelect.value = 'newest';
+    pageSizeSelect.value = '5';
     resetPageToFirst();
     refreshItemsTable();
     searchInput.focus();
   });
 
+  categorySelect.addEventListener('change', () => {
+    resetPageToFirst();
+    refreshItemsTable();
+  });
+
   sortSelect.addEventListener('change', () => {
+    resetPageToFirst();
+    refreshItemsTable();
+  });
+
+  pageSizeSelect.addEventListener('change', () => {
     resetPageToFirst();
     refreshItemsTable();
   });

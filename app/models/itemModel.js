@@ -1,7 +1,5 @@
-const pool = require('../db/itemPool');
+const pool = require('../db/pool');
 
-
-// Helper function to get ORDER BY clause based on sort parameter
 function getOrderByClause(sort = '') {
   const sortMap = {
     newest: 'ORDER BY created_at DESC, id DESC',
@@ -17,28 +15,34 @@ function getOrderByClause(sort = '') {
   return sortMap[sort] || sortMap.newest;
 }
 
+function normalizePageSize(pageSize) {
+  const allowed = [5, 10, 25, 50];
+  return allowed.includes(pageSize) ? pageSize : 5;
+}
 
-// Helper function to build WHERE clause for search
-function buildItemsWhereClause(search = '') {
-  if (!search) {
-    return {
-      whereSql: '',
-      params: []
-    };
+function buildItemsWhereClause(search = '', category = '') {
+  const conditions = [];
+  const params = [];
+
+  if (search) {
+    const likeValue = `%${search}%`;
+    conditions.push('(name LIKE ? OR category LIKE ?)');
+    params.push(likeValue, likeValue);
   }
 
-  const likeValue = `%${search}%`;
+  if (category) {
+    conditions.push('category = ?');
+    params.push(category);
+  }
 
   return {
-    whereSql: 'WHERE name LIKE ? OR category LIKE ?',
-    params: [likeValue, likeValue]
+    whereSql: conditions.length ? `WHERE ${conditions.join(' AND ')}` : '',
+    params
   };
 }
 
-
-// Function to get all items with optional search and sorting
-async function getAllItems(search = '', sort = 'newest') {
-  const { whereSql, params } = buildItemsWhereClause(search);
+async function getAllItems(search = '', sort = 'newest', category = '') {
+  const { whereSql, params } = buildItemsWhereClause(search, category);
 
   const sql = `
     SELECT
@@ -58,12 +62,12 @@ async function getAllItems(search = '', sort = 'newest') {
   return rows;
 }
 
+async function getItemsPage(search = '', sort = 'newest', page = 1, pageSize = 5, category = '') {
+  const safePageSize = normalizePageSize(
+    Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 5
+  );
 
-// Function to get paginated items with search and sorting
-async function getItemsPage(search = '', sort = 'newest', page = 1, pageSize = 5) {
-  const safePageSize = Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 5;
-
-  const { whereSql, params } = buildItemsWhereClause(search);
+  const { whereSql, params } = buildItemsWhereClause(search, category);
 
   const countSql = `
     SELECT COUNT(*) AS total_count
@@ -109,8 +113,6 @@ async function getItemsPage(search = '', sort = 'newest', page = 1, pageSize = 5
   };
 }
 
-
-// Function to get a single item by ID
 async function getItemById(id) {
   const [rows] = await pool.execute(
     `
@@ -132,7 +134,6 @@ async function getItemById(id) {
   return rows[0] || null;
 }
 
-// Additional functions for dashboard stats and summaries
 async function getDashboardStats() {
   const [rows] = await pool.execute(
     `
@@ -147,8 +148,6 @@ async function getDashboardStats() {
   return rows[0];
 }
 
-
-// Function to get recent items for dashboard
 async function getRecentItems(limit = 5) {
   const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 5;
 
@@ -170,8 +169,6 @@ async function getRecentItems(limit = 5) {
   return rows;
 }
 
-
-// Function to get category summary for dashboard
 async function getCategorySummary() {
   const [rows] = await pool.execute(
     `
@@ -188,8 +185,19 @@ async function getCategorySummary() {
   return rows;
 }
 
+async function getDistinctCategories() {
+  const [rows] = await pool.execute(
+    `
+    SELECT DISTINCT category
+    FROM items
+    WHERE category IS NOT NULL AND category <> ''
+    ORDER BY category ASC
+    `
+  );
 
-// Function to create a new item
+  return rows.map((row) => row.category);
+}
+
 async function createItem({ name, category, quantity, price }) {
   const [result] = await pool.execute(
     `
@@ -202,8 +210,6 @@ async function createItem({ name, category, quantity, price }) {
   return result;
 }
 
-
-// Function to update an existing item
 async function updateItem(id, { name, category, quantity, price }) {
   const [result] = await pool.execute(
     `
@@ -217,8 +223,6 @@ async function updateItem(id, { name, category, quantity, price }) {
   return result;
 }
 
-
-// Function to delete an existing item
 async function deleteItem(id) {
   const [result] = await pool.execute(
     `
@@ -238,6 +242,7 @@ module.exports = {
   getDashboardStats,
   getRecentItems,
   getCategorySummary,
+  getDistinctCategories,
   createItem,
   updateItem,
   deleteItem

@@ -2,9 +2,33 @@ const itemModel = require('../models/itemModel');
 const { getEmptyFormValues, parsePositiveInteger, renderItemForm } = require('../helpers/formHelpers');
 const { validateItemForm } = require('../helpers/itemValidation');
 
+function normalizeRequestedPageSize(value) {
+  const parsed = parsePositiveInteger(value);
+  const allowed = [5, 10, 25, 50];
+
+  if (!parsed || !allowed.includes(parsed)) {
+    return 5;
+  }
+
+  return parsed;
+}
+
 async function renderItemsPage(req, res) {
   try {
-    res.render('pages/items');
+    const categories = await itemModel.getDistinctCategories();
+
+    const currentFilters = {
+      search: (req.query.search || '').trim(),
+      category: (req.query.category || '').trim(),
+      sort: (req.query.sort || 'newest').trim(),
+      page: parsePositiveInteger(req.query.page) || 1,
+      pageSize: normalizeRequestedPageSize(req.query.pageSize)
+    };
+
+    res.render('pages/items', {
+      categories,
+      currentFilters
+    });
   } catch (error) {
     console.error('Error rendering items page:', error);
     res.status(500).render('pages/error', {
@@ -51,7 +75,9 @@ async function listItems(req, res) {
   try {
     const search = (req.query.search || '').trim();
     const sort = (req.query.sort || 'newest').trim();
-    const rows = await itemModel.getAllItems(search, sort);
+    const category = (req.query.category || '').trim();
+
+    const rows = await itemModel.getAllItems(search, sort, category);
 
     res.json(rows);
   } catch (error) {
@@ -64,17 +90,50 @@ async function listItems(req, res) {
 
 async function listItemsFragment(req, res) {
   try {
+    const isHtmxRequest = req.get('HX-Request') === 'true';
+
+    if (!isHtmxRequest) {
+      const params = new URLSearchParams();
+
+      if (req.query.search) {
+        params.set('search', String(req.query.search).trim());
+      }
+
+      if (req.query.category) {
+        params.set('category', String(req.query.category).trim());
+      }
+
+      if (req.query.sort) {
+        params.set('sort', String(req.query.sort).trim());
+      }
+
+      if (req.query.page) {
+        params.set('page', String(req.query.page).trim());
+      }
+
+      if (req.query.pageSize) {
+        params.set('pageSize', String(req.query.pageSize).trim());
+      }
+
+      const queryString = params.toString();
+      return res.redirect(queryString ? `/items?${queryString}` : '/items');
+    }
+
     const search = (req.query.search || '').trim();
     const sort = (req.query.sort || 'newest').trim();
+    const category = (req.query.category || '').trim();
     const page = parsePositiveInteger(req.query.page) || 1;
+    const pageSize = normalizeRequestedPageSize(req.query.pageSize);
 
-    const result = await itemModel.getItemsPage(search, sort, page, 5);
+    const result = await itemModel.getItemsPage(search, sort, page, pageSize, category);
 
     res.render('fragments/items-table', {
       items: result.rows,
       searchTerm: search,
       sort,
+      category,
       page: result.page,
+      pageSize: result.pageSize,
       totalPages: result.totalPages,
       totalCount: result.totalCount
     });
