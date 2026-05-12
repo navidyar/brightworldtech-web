@@ -1,12 +1,16 @@
-<%- include('../partials/layout-start', { pageTitle: 'Application Error' }) %>
+<%- include('../partials/layout-start', {
+  pageTitle: 'Application Error',
+  topbarTitle: 'Application Error',
+  activeNav: ''
+}) %>
 
-<section>
+<section class="content-card">
   <h2>Something went wrong</h2>
   <p><%= message || 'An unexpected error occurred.' %></p>
 
   <div class="detail-actions">
     <a href="/" class="secondary-link">Go Home</a>
-    <a href="/items" class="secondary-link">View Items</a>
+    <a href="/units" class="secondary-link">View Units</a>
   </div>
 </section>
 

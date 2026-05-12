@@ -1,6 +1,6 @@
-function getEmptyFormValues() {
+function getEmptyUnitFormValues() {
   return {
-    item_id: '',
+    unit_id: '',
     name: '',
     category: '',
     quantity: '',
@@ -18,10 +18,10 @@ function parsePositiveInteger(value) {
   return parsed;
 }
 
-function renderItemForm(res, {
+function renderUnitForm(res, {
   statusCode = 200,
   formMode = 'create',
-  formValues = getEmptyFormValues(),
+  formValues = getEmptyUnitFormValues(),
   fieldErrors = {},
   formMessage = null,
   triggerEvent = null
@@ -30,7 +30,7 @@ function renderItemForm(res, {
     res.set('HX-Trigger', triggerEvent);
   }
 
-  return res.status(statusCode).render('fragments/item-form', {
+  return res.status(statusCode).render('fragments/unit-form', {
     formMode,
     formValues,
     fieldErrors,
@@ -39,7 +39,7 @@ function renderItemForm(res, {
 }
 
 module.exports = {
-  getEmptyFormValues,
+  getEmptyUnitFormValues,
   parsePositiveInteger,
-  renderItemForm
+  renderUnitForm
 };

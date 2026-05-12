@@ -3,12 +3,12 @@ const unitModel = require('../models/unitModel');
 async function renderHomePage(req, res) {
   try {
     const stats = await unitModel.getDashboardStats();
-    const recentItems = await unitModel.getRecentItems(5);
+    const recentUnits = await unitModel.getRecentUnits(5);
     const categorySummary = await unitModel.getCategorySummary();
 
     res.render('pages/home', {
       stats,
-      recentItems,
+      recentUnits,
       categorySummary
     });
   } catch (error) {

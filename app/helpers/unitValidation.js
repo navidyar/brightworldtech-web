@@ -1,6 +1,6 @@
-function validateItemForm(body) {
+function validateUnitForm(body) {
   const formValues = {
-    item_id: (body.item_id || '').trim(),
+    unit_id: (body.unit_id || body.item_id || '').trim(),
     name: (body.name || '').trim(),
     category: (body.category || '').trim(),
     quantity: (body.quantity ?? '').toString().trim(),
@@ -10,7 +10,7 @@ function validateItemForm(body) {
   const fieldErrors = {};
 
   if (!formValues.name) {
-    fieldErrors.name = 'Name is required.';
+    fieldErrors.name = 'Unit name is required.';
   }
 
   if (!formValues.category) {
@@ -43,5 +43,5 @@ function validateItemForm(body) {
 }
 
 module.exports = {
-  validateItemForm
+  validateUnitForm
 };

@@ -2,7 +2,7 @@
   <div class="modal-header">
     <div>
       <p class="section-kicker">Tech Unit</p>
-      <h2 id="unit-modal-title"><%= formMode === 'edit' ? `Edit Unit #${formValues.item_id}` : 'Add Unit' %></h2>
+      <h2 id="unit-modal-title"><%= formMode === 'edit' ? `Edit Unit #${formValues.unit_id}` : 'Add Unit' %></h2>
     </div>
 
     <button type="button" class="modal-close-button" data-close-modal="unit-modal">×</button>
@@ -15,7 +15,7 @@
   <% } %>
 
   <form id="unit-form" class="unit-form" hx-post="/units/form" hx-target="#unit-form-section" hx-swap="outerHTML">
-    <input type="hidden" id="unit-id" name="item_id" value="<%= formValues.item_id || '' %>" />
+    <input type="hidden" id="unit-id" name="unit_id" value="<%= formValues.unit_id || '' %>" />
 
     <div class="form-row">
       <label for="name">Unit Name</label>

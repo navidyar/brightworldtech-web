@@ -5,6 +5,18 @@ const unitController = require('../controllers/unitController');
 
 router.get('/', pageController.renderHomePage);
 
+router.get('/items', (req, res) => {
+  res.redirect(301, '/units');
+});
+
+router.get('/items/table', (req, res) => {
+  res.redirect(301, '/units/table');
+});
+
+router.get('/api/items', (req, res) => {
+  res.redirect(301, '/api/units');
+});
+
 router.get('/units', unitController.renderUnitsPage);
 router.get('/units/form', unitController.renderUnitFormFragment);
 router.get('/units/table', unitController.listUnitsFragment);

@@ -17,8 +17,6 @@ app.locals.formatPrice = formatPrice;
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Static files must come before the route catch-all.
-// This allows /css/style.css, /js/app.js, and /images/bwt-logo.png to load.
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/api/health', (req, res) => {

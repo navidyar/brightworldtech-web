@@ -6,7 +6,7 @@
 
 <header class="page-header">
   <h1>BWTDallas Dashboard</h1>
-  <p>This is the starter home page for your Express + EJS + HTMX app.</p>
+  <p>Portal overview for Bright World Technologies operations.</p>
 </header>
 
 <section>
@@ -14,8 +14,8 @@
 
   <div class="stats-grid">
     <div class="stat-card">
-      <h3>Total units</h3>
-      <p><%= stats.total_items %></p>
+      <h3>Total Units</h3>
+      <p><%= stats.total_units %></p>
     </div>
 
     <div class="stat-card">
@@ -42,7 +42,7 @@
       <% categorySummary.forEach((row) => { %>
         <div class="category-summary-card">
           <h3><%= row.category %></h3>
-          <p><strong>Units:</strong> <%= row.item_count %></p>
+          <p><strong>Units:</strong> <%= row.unit_count %></p>
           <p><strong>Total Quantity:</strong> <%= row.total_quantity %></p>
         </div>
       <% }) %>
@@ -51,16 +51,16 @@
 </section>
 
 <section>
-  <h2>Recent units</h2>
+  <h2>Recent Units</h2>
 
-  <% if (!recentItems.length) { %>
+  <% if (!recentUnits.length) { %>
     <div class="detail-card">
       <p>No recent units found.</p>
     </div>
   <% } else { %>
-    <div class="recent-items-list">
-      <% recentItems.forEach((unit) => { %>
-        <a class="recent-item-card" href="/units/<%= unit.id %>">
+    <div class="recent-units-list">
+      <% recentUnits.forEach((unit) => { %>
+        <a class="recent-unit-card" href="/units/<%= unit.id %>">
           <h3><%= unit.name %></h3>
           <p><strong>Category:</strong> <%= unit.category %></p>
           <p><strong>Quantity:</strong> <%= unit.quantity %></p>

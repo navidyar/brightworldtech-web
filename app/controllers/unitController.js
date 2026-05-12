@@ -1,6 +1,6 @@
 const unitModel = require('../models/unitModel');
-const { getEmptyFormValues, parsePositiveInteger, renderItemForm } = require('../helpers/formHelpers');
-const { validateItemForm } = require('../helpers/itemValidation');
+const { getEmptyUnitFormValues, parsePositiveInteger } = require('../helpers/formHelpers');
+const { validateUnitForm } = require('../helpers/unitValidation');
 
 function normalizeRequestedPageSize(value) {
   const parsed = parsePositiveInteger(value);
@@ -16,7 +16,7 @@ function normalizeRequestedPageSize(value) {
 function renderUnitForm(res, {
   statusCode = 200,
   formMode = 'create',
-  formValues = getEmptyFormValues(),
+  formValues = getEmptyUnitFormValues(),
   fieldErrors = {},
   formMessage = null,
   triggerEvent = null
@@ -74,7 +74,7 @@ async function renderUnitFormFragment(req, res) {
     return renderUnitForm(res, {
       formMode: 'edit',
       formValues: {
-        item_id: String(unit.id),
+        unit_id: String(unit.id),
         name: unit.name || '',
         category: unit.category || '',
         quantity: unit.quantity ?? '',
@@ -163,9 +163,9 @@ async function listUnitsFragment(req, res) {
 
 async function submitUnitForm(req, res) {
   try {
-    const validation = validateItemForm(req.body);
-    const id = validation.formValues.item_id
-      ? parsePositiveInteger(validation.formValues.item_id)
+    const validation = validateUnitForm(req.body);
+    const id = validation.formValues.unit_id
+      ? parsePositiveInteger(validation.formValues.unit_id)
       : null;
 
     const formMode = id ? 'edit' : 'create';
@@ -183,7 +183,7 @@ async function submitUnitForm(req, res) {
       });
     }
 
-    if (validation.formValues.item_id && !id) {
+    if (validation.formValues.unit_id && !id) {
       return renderUnitForm(res, {
         statusCode: 400,
         formMode: 'edit',

@@ -188,7 +188,7 @@ async function getDashboardStats() {
   const [rows] = await pool.execute(
     `
     SELECT
-      COUNT(*) AS total_items,
+      COUNT(*) AS total_units,
       COALESCE(SUM(quantity), 0) AS total_quantity,
       COUNT(DISTINCT category) AS total_categories
     FROM items
@@ -198,7 +198,7 @@ async function getDashboardStats() {
   return rows[0];
 }
 
-async function getRecentItems(limit = 5) {
+async function getRecentUnits(limit = 5) {
   const safeLimit = Number.isInteger(limit) && limit > 0 ? limit : 5;
 
   const [rows] = await pool.execute(
@@ -224,7 +224,7 @@ async function getCategorySummary() {
     `
     SELECT
       category,
-      COUNT(*) AS item_count,
+      COUNT(*) AS unit_count,
       COALESCE(SUM(quantity), 0) AS total_quantity
     FROM items
     GROUP BY category
@@ -240,7 +240,7 @@ module.exports = {
   getUnitsPage,
   getUnitById,
   getDashboardStats,
-  getRecentItems,
+  getRecentUnits,
   getCategorySummary,
   getDistinctCategories,
   createUnit,

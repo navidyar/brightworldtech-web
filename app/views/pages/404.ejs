@@ -1,12 +1,16 @@
-<%- include('../partials/layout-start', { pageTitle: 'Page Not Found' }) %>
+<%- include('../partials/layout-start', {
+  pageTitle: 'Page Not Found',
+  topbarTitle: 'Page Not Found',
+  activeNav: ''
+}) %>
 
-<section>
+<section class="content-card">
   <h2>404 - Page Not Found</h2>
   <p>The page you requested could not be found.</p>
 
   <div class="detail-actions">
     <a href="/" class="secondary-link">Go Home</a>
-    <a href="/items" class="secondary-link">View Items</a>
+    <a href="/units" class="secondary-link">View Units</a>
   </div>
 </section>
 
