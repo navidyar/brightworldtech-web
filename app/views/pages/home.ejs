@@ -6,9 +6,8 @@
 
 <header class="dashboard-hero">
   <div>
-    <p class="section-kicker">Operational Overview</p>
     <h2>Dashboard</h2>
-    <p>Overview for technology units, categories, quantities, and inventory activity.</p>
+    <p class="section-kicker">Operational Overview</p>
   </div>
 </header>
 
@@ -69,15 +68,14 @@
   <article class="content-card dashboard-chart-card">
     <div class="card-header">
       <div>
-        <p class="section-kicker">Category Breakdown</p>
         <h2>Units by Category</h2>
+        <p class="section-kicker">Category Breakdown</p>
       </div>
     </div>
 
     <% if (!categorySummary.length) { %>
       <div class="empty-state">
         <h3>No category data</h3>
-        <p>Add units to populate this chart.</p>
       </div>
     <% } else { %>
       <div class="pie-chart-layout">
@@ -104,15 +102,14 @@
   <article class="content-card dashboard-chart-card">
     <div class="card-header">
       <div>
-        <p class="section-kicker">Quantity Breakdown</p>
         <h2>Quantity by Category</h2>
+        <p class="section-kicker">Quantity Breakdown</p>
       </div>
     </div>
 
     <% if (!categorySummary.length) { %>
       <div class="empty-state">
         <h3>No quantity data</h3>
-        <p>Add units to populate this chart.</p>
       </div>
     <% } else { %>
       <div class="pie-chart-layout">
@@ -140,15 +137,14 @@
 <section class="content-card">
   <div class="card-header">
     <div>
-      <p class="section-kicker">Category Summary</p>
       <h2>Inventory Categories</h2>
+      <p class="section-kicker">Category Summary</p>
     </div>
   </div>
 
   <% if (!categorySummary.length) { %>
     <div class="empty-state">
       <h3>No category summary available</h3>
-      <p>Add units to begin seeing grouped category totals.</p>
     </div>
   <% } else { %>
     <div class="category-summary-list">

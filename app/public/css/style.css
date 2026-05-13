@@ -180,6 +180,11 @@ a {
   font-weight: 700;
 }
 
+h2 + .section-kicker {
+  margin-top: 6px;
+  margin-bottom: 0;
+}
+
 .menu-button {
   border: 0;
   background: transparent;
@@ -280,7 +285,7 @@ a {
 
 .search-form {
   display: grid;
-  grid-template-columns: minmax(260px, 2fr) minmax(180px, 1fr) minmax(180px, 1fr) minmax(170px, 0.8fr) auto;
+  grid-template-columns: minmax(260px, 2fr) minmax(180px, 1fr) minmax(170px, 0.8fr) auto;
   gap: 18px;
   align-items: end;
 }
@@ -433,6 +438,33 @@ a {
 
 .units-table tbody tr:hover {
   background: #f8fbff;
+}
+
+.sort-header {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 800;
+  text-align: left;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.sort-header:hover {
+  color: var(--primary);
+}
+
+.sort-header.active {
+  color: var(--primary-dark);
+}
+
+.sort-header span {
+  font-size: 0.72rem;
 }
 
 .unit-link {

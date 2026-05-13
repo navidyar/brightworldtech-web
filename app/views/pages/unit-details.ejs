@@ -1,14 +1,14 @@
 <%- include('../partials/layout-start', {
   pageTitle: `Unit #${unit.id} - ${unit.name}`,
-  topbarTitle: 'Tech Units',
+  topbarTitle: 'Tech Portal',
   activeNav: 'tech'
 }) %>
 
 <section class="content-card">
   <div class="card-header">
     <div>
-      <p class="section-kicker">Unit Details</p>
       <h2><%= unit.name %></h2>
+      <p class="section-kicker">Unit Details</p>
     </div>
 
     <a href="/units" class="secondary-link">Back to Units</a>

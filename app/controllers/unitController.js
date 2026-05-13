@@ -61,7 +61,7 @@ async function renderUnitFormFragment(req, res) {
       return renderUnitForm(res, {
         statusCode: 404,
         formMode: 'create',
-        formValues: getEmptyFormValues(),
+        formValues: getEmptyUnitFormValues(),
         fieldErrors: {},
         formMessage: {
           type: 'error',
@@ -116,7 +116,7 @@ async function renderUnitDetailsPage(req, res) {
 async function listUnits(req, res) {
   try {
     const search = (req.query.search || '').trim();
-    const sort = (req.query.sort || 'newest').trim();
+    const sort = (req.query.sort || 'created_at_desc').trim();
     const category = (req.query.category || '').trim();
 
     const rows = await unitModel.getAllUnits(search, sort, category);
@@ -133,7 +133,7 @@ async function listUnits(req, res) {
 async function listUnitsFragment(req, res) {
   try {
     const search = (req.query.search || '').trim();
-    const sort = (req.query.sort || 'newest').trim();
+    const sort = (req.query.sort || 'created_at_desc').trim();
     const category = (req.query.category || '').trim();
     const page = parsePositiveInteger(req.query.page) || 1;
     const pageSize = normalizeRequestedPageSize(req.query.pageSize);
@@ -216,7 +216,6 @@ async function submitUnitForm(req, res) {
         });
       }
 
-    // Unit updated successfully
       res.set('HX-Redirect', '/units');
       return res.status(204).send();
     }
@@ -228,16 +227,14 @@ async function submitUnitForm(req, res) {
       price: validation.priceNumber
     });
 
-    // Unit created successfully
     res.set('HX-Redirect', '/units');
     return res.status(204).send();
-    
   } catch (error) {
     console.error('Error submitting unit form:', error);
     return renderUnitForm(res, {
       statusCode: 500,
       formMode: 'create',
-      formValues: getEmptyFormValues(),
+      formValues: getEmptyUnitFormValues(),
       fieldErrors: {},
       formMessage: {
         type: 'error',
@@ -261,8 +258,8 @@ async function deleteUnitHtmx(req, res) {
       return res.status(404).send('<div class="error-box">Unit not found.</div>');
     }
 
-    res.set('HX-Trigger', 'unit-saved');
-    return res.send('<div class="success-box">Unit deleted successfully.</div>');
+    res.set('HX-Refresh', 'true');
+    return res.status(204).send();
   } catch (error) {
     console.error('Error deleting unit:', error);
     return res.status(500).send('<div class="error-box">Failed to delete unit.</div>');

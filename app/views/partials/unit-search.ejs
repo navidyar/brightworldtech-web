@@ -1,9 +1,8 @@
 <section class="content-card filter-card">
   <div class="card-header">
     <div>
-      <p class="section-kicker">Controls</p>
       <h2>Search & Manage</h2>
-      <p class="card-subtitle">Filter, sort, and manage unit records.</p>
+      <p class="section-kicker">Controls</p>
     </div>
 
     <button type="button" class="primary-button" data-open-modal="unit-modal" data-form-url="/units/form">
@@ -13,6 +12,7 @@
 
   <form id="search-form" class="search-form" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML">
     <input type="hidden" id="page-input" name="page" value="1" />
+    <input type="hidden" id="sort-select" name="sort" value="created_at_desc" />
 
     <div class="filter-control search-control">
       <label for="search-input">Search</label>
@@ -29,20 +29,6 @@
         <% categories.forEach((category) => { %>
           <option value="<%= category %>"><%= category %></option>
         <% }) %>
-      </select>
-    </div>
-
-    <div class="filter-control">
-      <label for="sort-select">Sort By</label>
-      <select id="sort-select" name="sort">
-        <option value="newest">Newest First</option>
-        <option value="oldest">Oldest First</option>
-        <option value="name_asc">Name A to Z</option>
-        <option value="name_desc">Name Z to A</option>
-        <option value="price_asc">Price Low to High</option>
-        <option value="price_desc">Price High to Low</option>
-        <option value="quantity_asc">Quantity Low to High</option>
-        <option value="quantity_desc">Quantity High to Low</option>
       </select>
     </div>
 

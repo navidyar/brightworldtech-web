@@ -1,8 +1,34 @@
+<%
+  function getNextSort(columnKey) {
+    if (sort === `${columnKey}_asc`) {
+      return `${columnKey}_desc`;
+    }
+
+    return `${columnKey}_asc`;
+  }
+
+  function getSortArrow(columnKey) {
+    if (sort === `${columnKey}_asc`) {
+      return '▲';
+    }
+
+    if (sort === `${columnKey}_desc`) {
+      return '▼';
+    }
+
+    return '';
+  }
+
+  function isSortedColumn(columnKey) {
+    return sort === `${columnKey}_asc` || sort === `${columnKey}_desc`;
+  }
+%>
+
 <section class="content-card table-card">
   <div class="table-toolbar">
     <div>
-      <p class="section-kicker">Results</p>
       <h2>Registry</h2>
+      <p class="section-kicker">Results</p>
     </div>
 
     <div class="fragment-status">
@@ -23,15 +49,48 @@
       <table class="units-table">
         <thead>
           <tr>
-            <th>ID</th>
-            <th>Unit Name</th>
-            <th>Category</th>
-            <th>Quantity</th>
-            <th>Price</th>
-            <th>Created</th>
-            <th>Actions</th>
+            <th>
+              <button type="button" class="sort-header <%= isSortedColumn('id') ? 'active' : '' %>" data-sort-value="<%= getNextSort('id') %>">
+                ID <span><%= getSortArrow('id') %></span>
+              </button>
+            </th>
+
+            <th>
+              <button type="button" class="sort-header <%= isSortedColumn('name') ? 'active' : '' %>" data-sort-value="<%= getNextSort('name') %>">
+                Unit Name <span><%= getSortArrow('name') %></span>
+              </button>
+            </th>
+
+            <th>
+              <button type="button" class="sort-header <%= isSortedColumn('category') ? 'active' : '' %>" data-sort-value="<%= getNextSort('category') %>">
+                Category <span><%= getSortArrow('category') %></span>
+              </button>
+            </th>
+
+            <th>
+              <button type="button" class="sort-header <%= isSortedColumn('quantity') ? 'active' : '' %>" data-sort-value="<%= getNextSort('quantity') %>">
+                Quantity <span><%= getSortArrow('quantity') %></span>
+              </button>
+            </th>
+
+            <th>
+              <button type="button" class="sort-header <%= isSortedColumn('price') ? 'active' : '' %>" data-sort-value="<%= getNextSort('price') %>">
+                Price <span><%= getSortArrow('price') %></span>
+              </button>
+            </th>
+
+            <th>
+              <button type="button" class="sort-header <%= isSortedColumn('created_at') ? 'active' : '' %>" data-sort-value="<%= getNextSort('created_at') %>">
+                Created <span><%= getSortArrow('created_at') %></span>
+              </button>
+            </th>
+
+            <th>
+              Actions
+            </th>
           </tr>
         </thead>
+
         <tbody>
           <% units.forEach((unit) => { %>
             <tr>

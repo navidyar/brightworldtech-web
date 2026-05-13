@@ -4,15 +4,27 @@ function getOrderByClause(sort = '') {
   const sortMap = {
     newest: 'ORDER BY created_at DESC, id DESC',
     oldest: 'ORDER BY created_at ASC, id ASC',
+
+    id_asc: 'ORDER BY id ASC',
+    id_desc: 'ORDER BY id DESC',
+
     name_asc: 'ORDER BY name ASC, id ASC',
     name_desc: 'ORDER BY name DESC, id DESC',
+
+    category_asc: 'ORDER BY category ASC, name ASC, id ASC',
+    category_desc: 'ORDER BY category DESC, name ASC, id ASC',
+
+    quantity_asc: 'ORDER BY quantity ASC, id ASC',
+    quantity_desc: 'ORDER BY quantity DESC, id DESC',
+
     price_asc: 'ORDER BY price ASC, id ASC',
     price_desc: 'ORDER BY price DESC, id DESC',
-    quantity_asc: 'ORDER BY quantity ASC, id ASC',
-    quantity_desc: 'ORDER BY quantity DESC, id DESC'
+
+    created_at_asc: 'ORDER BY created_at ASC, id ASC',
+    created_at_desc: 'ORDER BY created_at DESC, id DESC'
   };
 
-  return sortMap[sort] || sortMap.newest;
+  return sortMap[sort] || sortMap.created_at_desc;
 }
 
 function normalizePageSize(pageSize) {
