@@ -87,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       if (pageSizeSelect) {
-        pageSizeSelect.value = '5';
+        pageSizeSelect.value = '50';
       }
 
       resetPageToFirst();

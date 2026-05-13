@@ -1,8 +1,8 @@
 <section class="content-card table-card">
   <div class="table-toolbar">
     <div>
-      <p class="section-kicker">Technology Units</p>
-      <h2>Registry Results</h2>
+      <p class="section-kicker">Results</p>
+      <h2>Registry</h2>
     </div>
 
     <div class="fragment-status">
@@ -13,7 +13,7 @@
           No units found.
         <% } %>
       <% } else { %>
-        Showing page <%= page %> of <%= totalPages %> · <%= totalCount %> unit(s) · <%= pageSize %> per page
+        Showing page <%= page %> of <%= totalPages %> · <%= totalCount %> unit(s) · <%= pageSize === 'all' ? 'All records' : `${pageSize} per page` %>
       <% } %>
     </div>
   </div>
@@ -55,20 +55,68 @@
 
     <div class="pagination-bar">
       <div class="pagination-summary">
-        Showing <%= units.length %> row(s) on this page
+        Showing <%= units.length %> row(s) on this page · Page <%= page %> of <%= totalPages %>
       </div>
 
-      <div class="pagination-controls">
-        <button type="button" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML" hx-include="#search-form" hx-vals='{"page": <%= page - 1 %>}' <%= page <= 1 ? 'disabled' : '' %>>
-          Previous
-        </button>
+      <% if (totalPages > 1) { %>
+        <div class="pagination-controls">
+          <button type="button" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML" hx-include="#search-form" hx-vals='{"page": 1}' <%= page <= 1 ? 'disabled' : '' %>>
+            First
+          </button>
 
-        <span class="page-pill active"><%= page %></span>
+          <button type="button" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML" hx-include="#search-form" hx-vals='{"page": <%= page - 1 %>}' <%= page <= 1 ? 'disabled' : '' %>>
+            Previous
+          </button>
 
-        <button type="button" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML" hx-include="#search-form" hx-vals='{"page": <%= page + 1 %>}' <%= page >= totalPages ? 'disabled' : '' %>>
-          Next
-        </button>
-      </div>
+          <% 
+            const pageWindow = 2;
+            const startPage = Math.max(1, page - pageWindow);
+            const endPage = Math.min(totalPages, page + pageWindow);
+          %>
+
+          <% if (startPage > 1) { %>
+            <button type="button" class="page-pill" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML" hx-include="#search-form" hx-vals='{"page": 1}'>
+              1
+            </button>
+
+            <% if (startPage > 2) { %>
+              <span class="pagination-ellipsis">...</span>
+            <% } %>
+          <% } %>
+
+          <% for (let pageNumber = startPage; pageNumber <= endPage; pageNumber++) { %>
+            <% if (pageNumber === page) { %>
+              <span class="page-pill active"><%= pageNumber %></span>
+            <% } else { %>
+              <button type="button" class="page-pill" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML" hx-include="#search-form" hx-vals='{"page": <%= pageNumber %>}'>
+                <%= pageNumber %>
+              </button>
+            <% } %>
+          <% } %>
+
+          <% if (endPage < totalPages) { %>
+            <% if (endPage < totalPages - 1) { %>
+              <span class="pagination-ellipsis">...</span>
+            <% } %>
+
+            <button type="button" class="page-pill" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML" hx-include="#search-form" hx-vals='{"page": <%= totalPages %>}'>
+              <%= totalPages %>
+            </button>
+          <% } %>
+
+          <button type="button" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML" hx-include="#search-form" hx-vals='{"page": <%= page + 1 %>}' <%= page >= totalPages ? 'disabled' : '' %>>
+            Next
+          </button>
+
+          <button type="button" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML" hx-include="#search-form" hx-vals='{"page": <%= totalPages %>}' <%= page >= totalPages ? 'disabled' : '' %>>
+            Last
+          </button>
+        </div>
+      <% } else { %>
+        <div class="pagination-controls">
+          <span class="page-pill active">1</span>
+        </div>
+      <% } %>
     </div>
   <% } else { %>
     <div class="empty-state">

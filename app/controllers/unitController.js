@@ -3,11 +3,15 @@ const { getEmptyUnitFormValues, parsePositiveInteger } = require('../helpers/for
 const { validateUnitForm } = require('../helpers/unitValidation');
 
 function normalizeRequestedPageSize(value) {
+  if (value === 'all') {
+    return 'all';
+  }
+
   const parsed = parsePositiveInteger(value);
-  const allowed = [5, 10, 25, 50];
+  const allowed = [50, 100, 300, 500, 1000];
 
   if (!parsed || !allowed.includes(parsed)) {
-    return 5;
+    return 50;
   }
 
   return parsed;

@@ -1,9 +1,9 @@
 <section class="content-card filter-card">
   <div class="card-header">
     <div>
-      <p class="section-kicker">Tech Unit Registry</p>
+      <p class="section-kicker">Controls</p>
       <h2>Search & Manage</h2>
-      <p class="card-subtitle">Search, filter, sort, and manage technology units.</p>
+      <p class="card-subtitle">Filter, sort, and manage unit records.</p>
     </div>
 
     <button type="button" class="primary-button" data-open-modal="unit-modal" data-form-url="/units/form">
@@ -49,10 +49,12 @@
     <div class="filter-control">
       <label for="page-size-select">Per Page</label>
       <select id="page-size-select" name="pageSize">
-        <option value="5">5 per page</option>
-        <option value="10">10 per page</option>
-        <option value="25">25 per page</option>
-        <option value="50">50 per page</option>
+        <option value="50" selected>50 per page</option>
+        <option value="100">100 per page</option>
+        <option value="300">300 per page</option>
+        <option value="500">500 per page</option>
+        <option value="1000">1000 per page</option>
+        <option value="all">All</option>
       </select>
     </div>
 

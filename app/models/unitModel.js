@@ -16,8 +16,12 @@ function getOrderByClause(sort = '') {
 }
 
 function normalizePageSize(pageSize) {
-  const allowed = [5, 10, 25, 50];
-  return allowed.includes(pageSize) ? pageSize : 5;
+  if (pageSize === 'all') {
+    return 'all';
+  }
+
+  const allowed = [50, 100, 300, 500, 1000];
+  return allowed.includes(pageSize) ? pageSize : 50;
 }
 
 function buildUnitsWhereClause(search = '', category = '') {
@@ -62,10 +66,8 @@ async function getAllUnits(search = '', sort = 'newest', category = '') {
   return rows;
 }
 
-async function getUnitsPage(search = '', sort = 'newest', page = 1, pageSize = 5, category = '') {
-  const safePageSize = normalizePageSize(
-    Number.isInteger(pageSize) && pageSize > 0 ? pageSize : 5
-  );
+async function getUnitsPage(search = '', sort = 'newest', page = 1, pageSize = 50, category = '') {
+  const safePageSize = normalizePageSize(pageSize);
 
   const { whereSql, params } = buildUnitsWhereClause(search, category);
 
@@ -77,6 +79,33 @@ async function getUnitsPage(search = '', sort = 'newest', page = 1, pageSize = 5
 
   const [countRows] = await pool.execute(countSql, params);
   const totalCount = Number(countRows[0].total_count || 0);
+
+  if (safePageSize === 'all') {
+    const dataSql = `
+      SELECT
+        id,
+        name,
+        category,
+        quantity,
+        price,
+        created_at,
+        updated_at
+      FROM items
+      ${whereSql}
+      ${getOrderByClause(sort)}
+    `;
+
+    const [rows] = await pool.execute(dataSql, params);
+
+    return {
+      rows,
+      totalCount,
+      page: 1,
+      pageSize: 'all',
+      totalPages: 1
+    };
+  }
+
   const totalPages = Math.max(1, Math.ceil(totalCount / safePageSize));
 
   let safePage = Number.isInteger(page) && page > 0 ? page : 1;
