@@ -1,41 +1,154 @@
 <%- include('../partials/layout-start', {
-  pageTitle: 'BWTDallas Dashboard',
+  pageTitle: 'Portal Hub',
   topbarTitle: 'Portal Hub',
   activeNav: 'portal'
 }) %>
 
-<header class="page-header">
-  <h1>BWTDallas Dashboard</h1>
-  <p>Portal overview for Bright World Technologies operations.</p>
+<header class="dashboard-hero">
+  <div>
+    <p class="section-kicker">Bright World Technologies</p>
+    <h2>Portal Hub</h2>
+    <p>Operational overview for technology units, categories, quantities, and inventory activity.</p>
+  </div>
 </header>
 
-<section>
-  <h2>Inventory Summary</h2>
+<section class="dashboard-grid">
+  <article class="dashboard-stat-card">
+    <p>Total Units</p>
+    <strong><%= stats.total_units %></strong>
+  </article>
 
-  <div class="stats-grid">
-    <div class="stat-card">
-      <h3>Total Units</h3>
-      <p><%= stats.total_units %></p>
-    </div>
+  <article class="dashboard-stat-card">
+    <p>Total Quantity</p>
+    <strong><%= stats.total_quantity %></strong>
+  </article>
 
-    <div class="stat-card">
-      <h3>Total Quantity</h3>
-      <p><%= stats.total_quantity %></p>
-    </div>
-
-    <div class="stat-card">
-      <h3>Total Categories</h3>
-      <p><%= stats.total_categories %></p>
-    </div>
-  </div>
+  <article class="dashboard-stat-card">
+    <p>Total Categories</p>
+    <strong><%= stats.total_categories %></strong>
+  </article>
 </section>
 
-<section>
-  <h2>Category Summary</h2>
+<%
+  const chartColors = [
+    '#0b78c8',
+    '#ff8a00',
+    '#16a34a',
+    '#7c3aed',
+    '#dc2626',
+    '#0891b2',
+    '#ca8a04',
+    '#be185d',
+    '#475569',
+    '#2563eb'
+  ];
+
+  const totalUnitCount = categorySummary.reduce((sum, row) => sum + Number(row.unit_count || 0), 0);
+  const totalQuantityCount = categorySummary.reduce((sum, row) => sum + Number(row.total_quantity || 0), 0);
+
+  function buildPieGradient(rows, valueKey, totalValue) {
+    if (!rows.length || totalValue <= 0) {
+      return '#e5e7eb 0deg 360deg';
+    }
+
+    let currentDegree = 0;
+
+    return rows.map((row, index) => {
+      const value = Number(row[valueKey] || 0);
+      const degrees = (value / totalValue) * 360;
+      const startDegree = currentDegree;
+      const endDegree = currentDegree + degrees;
+      currentDegree = endDegree;
+
+      return `${chartColors[index % chartColors.length]} ${startDegree.toFixed(2)}deg ${endDegree.toFixed(2)}deg`;
+    }).join(', ');
+  }
+%>
+
+<section class="dashboard-chart-grid">
+  <article class="content-card dashboard-chart-card">
+    <div class="card-header">
+      <div>
+        <p class="section-kicker">Category Breakdown</p>
+        <h2>Units by Category</h2>
+      </div>
+    </div>
+
+    <% if (!categorySummary.length) { %>
+      <div class="empty-state">
+        <h3>No category data</h3>
+        <p>Add units to populate this chart.</p>
+      </div>
+    <% } else { %>
+      <div class="pie-chart-layout">
+        <div class="pie-chart" style="background: conic-gradient(<%= buildPieGradient(categorySummary, 'unit_count', totalUnitCount) %>);">
+          <div class="pie-chart-center">
+            <strong><%= totalUnitCount %></strong>
+            <span>units</span>
+          </div>
+        </div>
+
+        <div class="chart-legend">
+          <% categorySummary.forEach((row, index) => { %>
+            <div class="legend-row">
+              <span class="legend-color" style="background: <%= chartColors[index % chartColors.length] %>;"></span>
+              <span class="legend-label"><%= row.category %></span>
+              <strong><%= row.unit_count %></strong>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+  </article>
+
+  <article class="content-card dashboard-chart-card">
+    <div class="card-header">
+      <div>
+        <p class="section-kicker">Quantity Breakdown</p>
+        <h2>Quantity by Category</h2>
+      </div>
+    </div>
+
+    <% if (!categorySummary.length) { %>
+      <div class="empty-state">
+        <h3>No quantity data</h3>
+        <p>Add units to populate this chart.</p>
+      </div>
+    <% } else { %>
+      <div class="pie-chart-layout">
+        <div class="pie-chart" style="background: conic-gradient(<%= buildPieGradient(categorySummary, 'total_quantity', totalQuantityCount) %>);">
+          <div class="pie-chart-center">
+            <strong><%= totalQuantityCount %></strong>
+            <span>quantity</span>
+          </div>
+        </div>
+
+        <div class="chart-legend">
+          <% categorySummary.forEach((row, index) => { %>
+            <div class="legend-row">
+              <span class="legend-color" style="background: <%= chartColors[index % chartColors.length] %>;"></span>
+              <span class="legend-label"><%= row.category %></span>
+              <strong><%= row.total_quantity %></strong>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+  </article>
+</section>
+
+<section class="content-card">
+  <div class="card-header">
+    <div>
+      <p class="section-kicker">Category Summary</p>
+      <h2>Inventory Categories</h2>
+    </div>
+  </div>
 
   <% if (!categorySummary.length) { %>
-    <div class="detail-card">
-      <p>No category summary available.</p>
+    <div class="empty-state">
+      <h3>No category summary available</h3>
+      <p>Add units to begin seeing grouped category totals.</p>
     </div>
   <% } else { %>
     <div class="category-summary-list">
@@ -48,37 +161,6 @@
       <% }) %>
     </div>
   <% } %>
-</section>
-
-<section>
-  <h2>Recent Units</h2>
-
-  <% if (!recentUnits.length) { %>
-    <div class="detail-card">
-      <p>No recent units found.</p>
-    </div>
-  <% } else { %>
-    <div class="recent-units-list">
-      <% recentUnits.forEach((unit) => { %>
-        <a class="recent-unit-card" href="/units/<%= unit.id %>">
-          <h3><%= unit.name %></h3>
-          <p><strong>Category:</strong> <%= unit.category %></p>
-          <p><strong>Quantity:</strong> <%= unit.quantity %></p>
-          <p><strong>Price:</strong> <%= formatPrice(unit.price) %></p>
-        </a>
-      <% }) %>
-    </div>
-  <% } %>
-</section>
-
-<section>
-  <h2>Quick Links</h2>
-  <div class="dashboard-links">
-    <a class="dashboard-card" href="/units">
-      <h3>Tech</h3>
-      <p>View, search, add, edit, and delete technology units.</p>
-    </a>
-  </div>
 </section>
 
 <%- include('../partials/layout-end') %>
