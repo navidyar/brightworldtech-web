@@ -30,30 +30,30 @@ test('GET /api/health returns healthy JSON', async () => {
   assert.equal(json.app, 'ok');
 });
 
-test('GET /items returns HTML page', async () => {
-  const { response, text } = await getText('/items');
+test('GET /units returns HTML page', async () => {
+  const { response, text } = await getText('/units');
 
   assert.equal(response.status, 200);
   assert.match(text, /BWTDallas Items App/i);
 });
 
-test('GET /items/table returns fragment HTML', async () => {
-  const { response, text } = await getText('/items/table');
+test('GET /units/table returns fragment HTML', async () => {
+  const { response, text } = await getText('/units/table');
 
   assert.equal(response.status, 200);
   assert.ok(
-    text.includes('items-fragment') ||
+    text.includes('units-fragment') ||
     text.includes('<table') ||
-    text.includes('No items found'),
-    'Expected items fragment HTML'
+    text.includes('No units found'),
+    'Expected units fragment HTML'
   );
 });
 
-test('GET /api/items returns JSON array', async () => {
-  const { response, json } = await getJson('/api/items');
+test('GET /api/units returns JSON array', async () => {
+  const { response, json } = await getJson('/api/units');
 
   assert.equal(response.status, 200);
-  assert.ok(Array.isArray(json), 'Expected /api/items to return an array');
+  assert.ok(Array.isArray(json), 'Expected /api/units to return an array');
 });
 
 test('GET missing route returns 404 page', async () => {
@@ -63,90 +63,90 @@ test('GET missing route returns 404 page', async () => {
   assert.match(text, /404|Page Not Found/i);
 });
 
-test('GET /items/:id works when at least one item exists', async () => {
-  const { response, json } = await getJson('/api/items');
+test('GET /units/:id works when at least one unit exists', async () => {
+  const { response, json } = await getJson('/api/units');
 
   assert.equal(response.status, 200);
-  assert.ok(Array.isArray(json), 'Expected /api/items to return an array');
+  assert.ok(Array.isArray(json), 'Expected /api/units to return an array');
 
   if (json.length === 0) {
     return;
   }
 
   const firstItem = json[0];
-  const details = await getText(`/items/${firstItem.id}`);
+  const details = await getText(`/units/${firstItem.id}`);
 
   assert.equal(details.response.status, 200);
   assert.match(details.text, /Item Details/i);
 });
 
-test('GET /items/table with search query returns successfully', async () => {
-  const { response, text } = await getText('/items/table?search=Dell');
+test('GET /units/table with search query returns successfully', async () => {
+  const { response, text } = await getText('/units/table?search=Dell');
 
   assert.equal(response.status, 200);
   assert.ok(
-    text.includes('items-fragment') ||
-    text.includes('No items found') ||
+    text.includes('units-fragment') ||
+    text.includes('No units found') ||
     text.includes('<table'),
-    'Expected searchable items fragment HTML'
+    'Expected searchable units fragment HTML'
   );
 });
 
-test('GET /items/table with sort query returns successfully', async () => {
-  const { response, text } = await getText('/items/table?sort=price_desc');
+test('GET /units/table with sort query returns successfully', async () => {
+  const { response, text } = await getText('/units/table?sort=price_desc');
 
   assert.equal(response.status, 200);
   assert.ok(
-    text.includes('items-fragment') ||
-    text.includes('No items found') ||
+    text.includes('units-fragment') ||
+    text.includes('No units found') ||
     text.includes('<table'),
-    'Expected sortable items fragment HTML'
+    'Expected sortable units fragment HTML'
   );
 });
 
-test('GET /items/table with pagination query returns successfully', async () => {
-  const { response, text } = await getText('/items/table?page=2');
+test('GET /units/table with pagination query returns successfully', async () => {
+  const { response, text } = await getText('/units/table?page=2');
 
   assert.equal(response.status, 200);
   assert.ok(
     text.includes('Page') ||
-    text.includes('No items found') ||
+    text.includes('No units found') ||
     text.includes('<table'),
-    'Expected paginated items fragment HTML'
+    'Expected paginated units fragment HTML'
   );
 });
 
-test('GET /items/table with search + sort + page works together', async () => {
-  const { response, text } = await getText('/items/table?search=Dell&sort=name_asc&page=1');
+test('GET /units/table with search + sort + page works together', async () => {
+  const { response, text } = await getText('/units/table?search=Dell&sort=name_asc&page=1');
 
   assert.equal(response.status, 200);
   assert.ok(
-    text.includes('items-fragment') ||
-    text.includes('No items found') ||
+    text.includes('units-fragment') ||
+    text.includes('No units found') ||
     text.includes('<table'),
     'Expected combined filter fragment HTML'
   );
 });
 
-test('GET /items/table with invalid page does not crash', async () => {
-  const { response, text } = await getText('/items/table?page=not-a-number');
+test('GET /units/table with invalid page does not crash', async () => {
+  const { response, text } = await getText('/units/table?page=not-a-number');
 
   assert.equal(response.status, 200);
   assert.ok(
-    text.includes('items-fragment') ||
-    text.includes('No items found') ||
+    text.includes('units-fragment') ||
+    text.includes('No units found') ||
     text.includes('<table'),
     'Expected safe fallback for invalid page input'
   );
 });
 
-test('GET /items/table with out-of-range page does not crash', async () => {
-  const { response, text } = await getText('/items/table?page=99999');
+test('GET /units/table with out-of-range page does not crash', async () => {
+  const { response, text } = await getText('/units/table?page=99999');
 
   assert.equal(response.status, 200);
   assert.ok(
-    text.includes('items-fragment') ||
-    text.includes('No items found') ||
+    text.includes('units-fragment') ||
+    text.includes('No units found') ||
     text.includes('<table'),
     'Expected safe fallback for large page input'
   );

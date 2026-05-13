@@ -1,6 +1,6 @@
 function validateUnitForm(body) {
   const formValues = {
-    unit_id: (body.unit_id || body.item_id || '').trim(),
+    unit_id: (body.unit_id || '').trim(),
     name: (body.name || '').trim(),
     category: (body.category || '').trim(),
     quantity: (body.quantity ?? '').toString().trim(),

@@ -60,6 +60,11 @@ function loadModalForm(button) {
   });
 }
 
+function handleSuccessfulUnitSave() {
+  closeModal('unit-modal');
+  refreshUnitsTable();
+}
+
 document.addEventListener('DOMContentLoaded', () => {
   const searchInput = document.getElementById('search-input');
   const categorySelect = document.getElementById('category-select');
@@ -144,8 +149,50 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.body.addEventListener('unit-saved', () => {
-    closeModal('unit-modal');
-    refreshUnitsTable();
+    handleSuccessfulUnitSave();
+  });
+
+  document.addEventListener('unit-saved', () => {
+    handleSuccessfulUnitSave();
+  });
+
+  document.body.addEventListener('htmx:beforeRequest', (event) => {
+    const form = event.target.closest ? event.target.closest('#unit-form') : null;
+
+    if (!form) {
+      return;
+    }
+
+    const submitButton = form.querySelector('button[type="submit"]');
+
+    if (submitButton) {
+      submitButton.disabled = true;
+      submitButton.dataset.originalText = submitButton.textContent;
+      submitButton.textContent = 'Saving...';
+    }
+  });
+
+  document.body.addEventListener('htmx:afterRequest', (event) => {
+    const requestElement = event.detail && event.detail.elt;
+    const isUnitFormRequest = requestElement && requestElement.id === 'unit-form';
+
+    if (!isUnitFormRequest) {
+      return;
+    }
+
+    const status = event.detail.xhr.status;
+
+    if (status >= 200 && status < 300) {
+      handleSuccessfulUnitSave();
+      return;
+    }
+
+    const submitButton = document.querySelector('#unit-form button[type="submit"]');
+
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.textContent = submitButton.dataset.originalText || 'Save';
+    }
   });
 
   document.addEventListener('keydown', (event) => {

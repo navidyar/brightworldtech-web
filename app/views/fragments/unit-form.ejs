@@ -14,7 +14,7 @@
     </div>
   <% } %>
 
-  <form id="unit-form" class="unit-form" hx-post="/units/form" hx-target="#unit-form-section" hx-swap="outerHTML">
+  <form id="unit-form" class="unit-form" hx-post="/units/form" hx-target="#unit-form-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']">
     <input type="hidden" id="unit-id" name="unit_id" value="<%= formValues.unit_id || '' %>" />
 
     <div class="form-row">

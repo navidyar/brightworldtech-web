@@ -18,13 +18,8 @@ function renderUnitForm(res, {
   formMode = 'create',
   formValues = getEmptyUnitFormValues(),
   fieldErrors = {},
-  formMessage = null,
-  triggerEvent = null
+  formMessage = null
 } = {}) {
-  if (triggerEvent) {
-    res.set('HX-Trigger', triggerEvent);
-  }
-
   return res.status(statusCode).render('fragments/unit-form', {
     formMode,
     formValues,
@@ -217,16 +212,9 @@ async function submitUnitForm(req, res) {
         });
       }
 
-      return renderUnitForm(res, {
-        formMode: 'create',
-        formValues: getEmptyFormValues(),
-        fieldErrors: {},
-        formMessage: {
-          type: 'success',
-          text: 'Unit updated successfully.'
-        },
-        triggerEvent: 'unit-saved'
-      });
+    // Unit updated successfully
+      res.set('HX-Redirect', '/units');
+      return res.status(204).send();
     }
 
     await unitModel.createUnit({
@@ -236,16 +224,10 @@ async function submitUnitForm(req, res) {
       price: validation.priceNumber
     });
 
-    return renderUnitForm(res, {
-      formMode: 'create',
-      formValues: getEmptyFormValues(),
-      fieldErrors: {},
-      formMessage: {
-        type: 'success',
-        text: 'Unit created successfully.'
-      },
-      triggerEvent: 'unit-saved'
-    });
+    // Unit created successfully
+    res.set('HX-Redirect', '/units');
+    return res.status(204).send();
+    
   } catch (error) {
     console.error('Error submitting unit form:', error);
     return renderUnitForm(res, {
