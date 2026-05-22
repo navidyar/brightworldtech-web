@@ -1,0 +1,57 @@
+<section id="unit-form-section">
+  <div class="modal-header">
+    <div>
+      <h2 id="unit-modal-title"><%= formMode === 'edit' ? `Edit Unit #${formValues.unit_id}` : 'Add Unit' %></h2>
+      <p class="section-kicker">Tech Unit</p>
+    </div>
+
+    <button type="button" class="modal-close-button" data-close-modal="unit-modal">×</button>
+  </div>
+
+  <% if (formMessage) { %>
+    <div class="<%= formMessage.type === 'error' ? 'error-box' : 'success-box' %>">
+      <%= formMessage.text %>
+    </div>
+  <% } %>
+
+  <form id="unit-form" class="unit-form" hx-post="/units/form" hx-target="#unit-form-section" hx-swap="outerHTML" hx-disabled-elt="button[type='submit']">
+    <input type="hidden" id="unit-id" name="unit_id" value="<%= formValues.unit_id || '' %>" />
+
+    <div class="form-row">
+      <label for="name">Unit Name</label>
+      <input type="text" id="name" name="name" value="<%= formValues.name || '' %>" required />
+      <% if (fieldErrors.name) { %>
+        <div class="field-error"><%= fieldErrors.name %></div>
+      <% } %>
+    </div>
+
+    <div class="form-row">
+      <label for="category">Category</label>
+      <input type="text" id="category" name="category" value="<%= formValues.category || '' %>" required />
+      <% if (fieldErrors.category) { %>
+        <div class="field-error"><%= fieldErrors.category %></div>
+      <% } %>
+    </div>
+
+    <div class="form-row">
+      <label for="quantity">Quantity</label>
+      <input type="number" id="quantity" name="quantity" min="0" value="<%= formValues.quantity ?? '' %>" required />
+      <% if (fieldErrors.quantity) { %>
+        <div class="field-error"><%= fieldErrors.quantity %></div>
+      <% } %>
+    </div>
+
+    <div class="form-row">
+      <label for="price">Price</label>
+      <input type="number" id="price" name="price" min="0" step="0.01" value="<%= formValues.price ?? '' %>" required />
+      <% if (fieldErrors.price) { %>
+        <div class="field-error"><%= fieldErrors.price %></div>
+      <% } %>
+    </div>
+
+    <div class="modal-actions">
+      <button type="button" class="secondary-button" data-close-modal="unit-modal">Cancel</button>
+      <button type="submit" id="save-button" class="primary-button"><%= formMode === 'edit' ? 'Update Unit' : 'Add Unit' %></button>
+    </div>
+  </form>
+</section>

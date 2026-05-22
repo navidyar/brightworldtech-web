@@ -1,0 +1,58 @@
+<section class="content-card filter-card">
+  <div class="card-header">
+    <div>
+      <h2>Search & Manage</h2>
+      <p class="section-kicker">Controls</p>
+    </div>
+
+    <button type="button" class="primary-button" data-open-modal="unit-modal" data-form-url="/units/form">
+      + Add Unit
+    </button>
+  </div>
+
+  <form id="search-form" class="search-form" hx-get="/units/table" hx-target="#units-container" hx-swap="innerHTML">
+    <input type="hidden" id="page-input" name="page" value="1" />
+    <input type="hidden" id="sort-select" name="sort" value="created_at_desc" />
+
+    <div class="filter-control search-control">
+      <label for="search-input">Search</label>
+      <div class="input-with-icon">
+        <input type="text" id="search-input" name="search" placeholder="Search by unit name or category..." />
+        <span>⌕</span>
+      </div>
+    </div>
+
+    <div class="filter-control">
+      <label for="category-select">Category</label>
+      <select id="category-select" name="category">
+        <option value="">All Categories</option>
+        <% categories.forEach((category) => { %>
+          <option value="<%= category %>"><%= category %></option>
+        <% }) %>
+      </select>
+    </div>
+
+    <div class="filter-control">
+      <label for="page-size-select">Per Page</label>
+      <select id="page-size-select" name="pageSize">
+        <option value="50" selected>50 per page</option>
+        <option value="100">100 per page</option>
+        <option value="300">300 per page</option>
+        <option value="500">500 per page</option>
+        <option value="1000">1000 per page</option>
+        <option value="all">All</option>
+      </select>
+    </div>
+
+    <div class="filter-actions">
+      <button type="submit" class="primary-button">Apply</button>
+      <button type="button" id="clear-search" class="secondary-button">Clear</button>
+    </div>
+  </form>
+</section>
+
+<div id="units-container" hx-get="/units/table" hx-trigger="load, unit-saved from:body" hx-swap="innerHTML">
+  <section class="content-card">
+    <div class="loading-state">Loading units...</div>
+  </section>
+</div>

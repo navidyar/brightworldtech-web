@@ -1,0 +1,162 @@
+<%- include('../partials/layout-start', {
+  pageTitle: 'Dashboard',
+  topbarTitle: 'Dashboard',
+  activeNav: 'portal'
+}) %>
+
+<header class="dashboard-hero">
+  <div>
+    <h2>Dashboard</h2>
+    <p class="section-kicker">Operational Overview</p>
+  </div>
+</header>
+
+<section class="dashboard-grid">
+  <article class="dashboard-stat-card">
+    <p>Total Units</p>
+    <strong><%= stats.total_units %></strong>
+  </article>
+
+  <article class="dashboard-stat-card">
+    <p>Total Quantity</p>
+    <strong><%= stats.total_quantity %></strong>
+  </article>
+
+  <article class="dashboard-stat-card">
+    <p>Total Categories</p>
+    <strong><%= stats.total_categories %></strong>
+  </article>
+</section>
+
+<%
+  const chartColors = [
+    '#0b78c8',
+    '#ff8a00',
+    '#16a34a',
+    '#7c3aed',
+    '#dc2626',
+    '#0891b2',
+    '#ca8a04',
+    '#be185d',
+    '#475569',
+    '#2563eb'
+  ];
+
+  const totalUnitCount = categorySummary.reduce((sum, row) => sum + Number(row.unit_count || 0), 0);
+  const totalQuantityCount = categorySummary.reduce((sum, row) => sum + Number(row.total_quantity || 0), 0);
+
+  function buildPieGradient(rows, valueKey, totalValue) {
+    if (!rows.length || totalValue <= 0) {
+      return '#e5e7eb 0deg 360deg';
+    }
+
+    let currentDegree = 0;
+
+    return rows.map((row, index) => {
+      const value = Number(row[valueKey] || 0);
+      const degrees = (value / totalValue) * 360;
+      const startDegree = currentDegree;
+      const endDegree = currentDegree + degrees;
+      currentDegree = endDegree;
+
+      return `${chartColors[index % chartColors.length]} ${startDegree.toFixed(2)}deg ${endDegree.toFixed(2)}deg`;
+    }).join(', ');
+  }
+%>
+
+<section class="dashboard-chart-grid">
+  <article class="content-card dashboard-chart-card">
+    <div class="card-header">
+      <div>
+        <h2>Units by Category</h2>
+        <p class="section-kicker">Category Breakdown</p>
+      </div>
+    </div>
+
+    <% if (!categorySummary.length) { %>
+      <div class="empty-state">
+        <h3>No category data</h3>
+      </div>
+    <% } else { %>
+      <div class="pie-chart-layout">
+        <div class="pie-chart" style="background: conic-gradient(<%= buildPieGradient(categorySummary, 'unit_count', totalUnitCount) %>);">
+          <div class="pie-chart-center">
+            <strong><%= totalUnitCount %></strong>
+            <span>units</span>
+          </div>
+        </div>
+
+        <div class="chart-legend">
+          <% categorySummary.forEach((row, index) => { %>
+            <div class="legend-row">
+              <span class="legend-color" style="background: <%= chartColors[index % chartColors.length] %>;"></span>
+              <span class="legend-label"><%= row.category %></span>
+              <strong><%= row.unit_count %></strong>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+  </article>
+
+  <article class="content-card dashboard-chart-card">
+    <div class="card-header">
+      <div>
+        <h2>Quantity by Category</h2>
+        <p class="section-kicker">Quantity Breakdown</p>
+      </div>
+    </div>
+
+    <% if (!categorySummary.length) { %>
+      <div class="empty-state">
+        <h3>No quantity data</h3>
+      </div>
+    <% } else { %>
+      <div class="pie-chart-layout">
+        <div class="pie-chart" style="background: conic-gradient(<%= buildPieGradient(categorySummary, 'total_quantity', totalQuantityCount) %>);">
+          <div class="pie-chart-center">
+            <strong><%= totalQuantityCount %></strong>
+            <span>quantity</span>
+          </div>
+        </div>
+
+        <div class="chart-legend">
+          <% categorySummary.forEach((row, index) => { %>
+            <div class="legend-row">
+              <span class="legend-color" style="background: <%= chartColors[index % chartColors.length] %>;"></span>
+              <span class="legend-label"><%= row.category %></span>
+              <strong><%= row.total_quantity %></strong>
+            </div>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+  </article>
+</section>
+
+<section class="content-card">
+  <div class="card-header">
+    <div>
+      <h2>Inventory Categories</h2>
+      <p class="section-kicker">Category Summary</p>
+    </div>
+  </div>
+
+  <% if (!categorySummary.length) { %>
+    <div class="empty-state">
+      <h3>No category summary available</h3>
+    </div>
+  <% } else { %>
+    <div class="category-summary-list">
+      <% categorySummary.forEach((row) => { %>
+        <div class="category-summary-card">
+          <h3><%= row.category %></h3>
+          <p><strong>Units:</strong> <%= row.unit_count %></p>
+          <p><strong>Total Quantity:</strong> <%= row.total_quantity %></p>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</section>
+
+<%- include('../partials/layout-end') %>

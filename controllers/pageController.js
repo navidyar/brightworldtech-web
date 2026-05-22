@@ -1,0 +1,36 @@
+const unitModel = require('../models/unitModel');
+
+async function renderHomePage(req, res) {
+  try {
+    const stats = await unitModel.getDashboardStats();
+    const recentUnits = await unitModel.getRecentUnits(5);
+    const categorySummary = await unitModel.getCategorySummary();
+
+    res.render('pages/home', {
+      stats,
+      recentUnits,
+      categorySummary
+    });
+  } catch (error) {
+    console.error('Error rendering home page:', error);
+    res.status(500).render('pages/error', {
+      message: 'Failed to render the home page.'
+    });
+  }
+}
+
+async function renderNotFoundPage(req, res) {
+  res.status(404).render('pages/404');
+}
+
+async function renderErrorPage(req, res) {
+  res.status(500).render('pages/error', {
+    message: 'An unexpected error occurred.'
+  });
+}
+
+module.exports = {
+  renderHomePage,
+  renderNotFoundPage,
+  renderErrorPage
+};
