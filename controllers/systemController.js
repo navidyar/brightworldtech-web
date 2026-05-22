@@ -5,7 +5,8 @@ async function renderHomePage(req, res, next) {
     const status = await systemModel.getFoundationStatus();
 
     res.render('pages/home', {
-      pageTitle: 'Foundation Check',
+      pageTitle: 'Dashboard',
+      currentNav: 'dashboard',
       status
     });
   } catch (error) {
@@ -19,6 +20,7 @@ async function renderDatabasePage(req, res, next) {
 
     res.render('pages/database-check', {
       pageTitle: 'Database Check',
+      currentNav: 'database',
       status
     });
   } catch (error) {
@@ -34,7 +36,8 @@ async function getHealth(req, res) {
     database: status.database.connected ? 'connected' : 'disconnected',
     schema: status.schema.ok ? 'ready' : 'incomplete',
     dbName: status.database.connectionInfo?.database_name || process.env.DB_NAME || null,
-    missingTables: status.schema.missingTables
+    missingTables: status.schema.missingTables,
+    missingViews: status.schema.missingViews || []
   });
 }
 

@@ -3,56 +3,111 @@
   <%- include('../partials/head', { pageTitle }) %>
 
   <body>
-    <main class="page-shell">
-      <section class="hero-card">
-        <p class="eyebrow">Step 1b</p>
-        <h1>BWTDallas Foundation Check</h1>
-        <p class="hero-copy">
-          The real Phase 1 application is running. This page confirms that Node, Express,
-          MySQL, and the initial schema are connected correctly.
-        </p>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
 
-        <div class="status-grid">
-          <article class="status-card <%= status.database.connected ? 'status-good' : 'status-bad' %>">
-            <p class="status-label">Database</p>
-            <h2><%= status.database.connected ? 'Connected' : 'Disconnected' %></h2>
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
 
-            <% if (status.database.connected) { %>
+        <main class="content-shell">
+          <section class="dashboard-hero">
+            <div>
+              <p class="eyebrow">Step 1d</p>
+              <h2>Authentication Foundation</h2>
               <p>
-                Database:
-                <strong><%= status.database.connectionInfo.database_name %></strong>
+                You are signed in. The app shell, protected routes, logout button,
+                and role-aware navigation are now active.
               </p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Logged in as</span>
+              <strong><%= currentUser.first_name %> <%= currentUser.last_name %></strong>
+            </div>
+          </section>
+
+          <section class="dashboard-grid">
+            <article class="dashboard-card">
+              <p class="card-label">Database</p>
+              <h3><%= status.database.connected ? 'Connected' : 'Disconnected' %></h3>
+
+              <% if (status.database.connected) { %>
+                <p>
+                  Using <strong><%= status.database.connectionInfo.database_name %></strong>
+                </p>
+              <% } else { %>
+                <p><%= status.database.error %></p>
+              <% } %>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Schema</p>
+              <h3><%= status.schema.ok ? 'Ready' : 'Needs Attention' %></h3>
               <p>
-                MySQL:
-                <strong><%= status.database.connectionInfo.mysql_version %></strong>
+                <strong><%= formatNumber(status.schema.tableCount) %></strong> tables
+                and <strong><%= formatNumber(status.schema.viewCount || 0) %></strong> views found.
               </p>
-            <% } else { %>
-              <p><%= status.database.error %></p>
-            <% } %>
-          </article>
+            </article>
 
-          <article class="status-card <%= status.schema.ok ? 'status-good' : 'status-warning' %>">
-            <p class="status-label">Schema</p>
-            <h2><%= status.schema.ok ? 'Ready' : 'Needs Attention' %></h2>
-            <p>
-              Tables found:
-              <strong><%= formatNumber(status.schema.tableCount) %></strong>
-            </p>
+            <article class="dashboard-card">
+              <p class="card-label">Current Roles</p>
+              <h3><%= currentRoles.length %></h3>
+              <p><%= currentRoles.join(', ') || 'No roles assigned' %></p>
+            </article>
+          </section>
 
-            <% if (!status.schema.ok && status.schema.missingTables.length > 0) { %>
-              <p>
-                Missing required tables:
-                <strong><%= status.schema.missingTables.length %></strong>
-              </p>
-            <% } %>
-          </article>
-        </div>
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Next Build Area</p>
+                <h2>Phase 1 App Shell</h2>
+              </div>
+            </div>
 
-        <div class="action-row">
-          <a class="primary-button" href="/database">View Database Check</a>
-          <a class="secondary-button" href="/api/health">View Health JSON</a>
-        </div>
-      </section>
-    </main>
+            <div class="workflow-list">
+              <div class="workflow-item complete">
+                <span></span>
+                <div>
+                  <strong>Step 1a</strong>
+                  <p>Docker, MySQL, Traefik, and blank app foundation.</p>
+                </div>
+              </div>
+
+              <div class="workflow-item complete">
+                <span></span>
+                <div>
+                  <strong>Step 1b</strong>
+                  <p>Database connection layer and schema verification.</p>
+                </div>
+              </div>
+
+              <div class="workflow-item active">
+                <span></span>
+                <div>
+                  <strong>Step 1c</strong>
+                  <p>Login, sessions, password setup links, and first admin user.</p>
+                </div>
+              </div>
+
+              <div class="workflow-item active">
+                <span></span>
+                <div>
+                  <strong>Step 1d</strong>
+                  <p>Protected Dashboard and logged-in layout shell.</p>
+                </div>
+              </div>
+
+              <div class="workflow-item">
+                <span></span>
+                <div>
+                  <strong>Step 1e</strong>
+                  <p>Management user creation and setup-link generation from the UI.</p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
   </body>
 </html>

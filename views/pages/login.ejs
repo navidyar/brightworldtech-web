@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body class="auth-body">
+    <main class="auth-shell">
+      <section class="auth-panel">
+        <div class="auth-brand">
+          <div class="auth-logo-mark">BWT</div>
+          <div>
+            <p class="auth-kicker">Bright World Technologies</p>
+            <h1>Sign In</h1>
+          </div>
+        </div>
+
+        <p class="auth-copy">
+          Enter your credentials to access the operations portal.
+        </p>
+
+        <% if (successMessage) { %>
+          <div class="message success"><%= successMessage %></div>
+        <% } %>
+
+        <% if (errorMessage) { %>
+          <div class="message error"><%= errorMessage %></div>
+        <% } %>
+
+        <form class="auth-form" method="post" action="/login">
+          <label class="form-field">
+            <span>Email Address</span>
+            <input
+              type="email"
+              name="email"
+              value="<%= formData.email %>"
+              autocomplete="email"
+              required
+            />
+          </label>
+
+          <label class="form-field">
+            <span>Password</span>
+            <input
+              type="password"
+              name="password"
+              autocomplete="current-password"
+              required
+            />
+          </label>
+
+          <button class="auth-submit" type="submit">Sign In</button>
+        </form>
+
+        <p class="auth-footnote">
+          Password setup links are created by Management or Admin users.
+        </p>
+      </section>
+    </main>
+  </body>
+</html>

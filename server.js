@@ -2,13 +2,22 @@ require('dotenv').config();
 
 const path = require('path');
 const express = require('express');
+const session = require('express-session');
 
+const authRoutes = require('./routes/auth');
 const systemRoutes = require('./routes/system');
+const { createSessionStore } = require('./models/sessionStore');
+const { loadCurrentUser } = require('./middleware/authMiddleware');
 const { escapeHtml, formatDateTime, formatNumber } = require('./views/partials/helpers');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+  throw new Error('SESSION_SECRET is required in production.');
+}
+
+app.set('trust proxy', 1);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
@@ -21,6 +30,26 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+app.use(
+  session({
+    name: 'bwtdallas.sid',
+    secret: process.env.SESSION_SECRET || 'development-only-change-me',
+    store: createSessionStore(),
+    resave: false,
+    saveUninitialized: false,
+    rolling: true,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 1000 * 60 * 60 * 8
+    }
+  })
+);
+
+app.use(loadCurrentUser);
+
+app.use(authRoutes);
 app.use(systemRoutes);
 
 app.use((req, res) => {

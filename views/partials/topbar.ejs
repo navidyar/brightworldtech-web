@@ -1,0 +1,29 @@
+<header class="topbar">
+  <div class="topbar-left">
+    <button type="button" class="menu-button" aria-label="Menu">☰</button>
+
+    <div>
+      <p class="topbar-kicker">Bright World Technologies</p>
+      <h1><%= pageTitle %></h1>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    <% if (currentUser) { %>
+      <div class="user-chip">
+        <span class="user-avatar">
+          <%= currentUser.first_name.charAt(0) %><%= currentUser.last_name.charAt(0) %>
+        </span>
+
+        <div>
+          <strong><%= currentUser.first_name %> <%= currentUser.last_name %></strong>
+          <p><%= currentRoles.join(', ') || 'user' %></p>
+        </div>
+      </div>
+
+      <form method="post" action="/logout">
+        <button type="submit" class="logout-button">Sign Out</button>
+      </form>
+    <% } %>
+  </div>
+</header>

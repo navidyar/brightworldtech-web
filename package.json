@@ -6,13 +6,17 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "create-admin-link": "node scripts/createAdminSetupLink.js",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage"
   },
   "dependencies": {
+    "argon2": "^0.41.1",
     "dotenv": "^16.4.7",
     "ejs": "^3.1.10",
     "express": "^5.1.0",
+    "express-mysql-session": "^3.0.3",
+    "express-session": "^1.18.1",
     "mysql2": "^3.11.5"
   }
 }

@@ -1,0 +1,45 @@
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <a href="/" class="brand-card">
+      <div class="brand-mark">BWT</div>
+      <div>
+        <p>Bright World</p>
+        <strong>Technologies</strong>
+      </div>
+    </a>
+  </div>
+
+  <nav class="sidebar-nav">
+    <a href="/" class="sidebar-link <%= currentNav === 'dashboard' ? 'active' : '' %>">
+      <span class="sidebar-icon">⌂</span>
+      <span>Dashboard</span>
+    </a>
+
+    <a href="#" class="sidebar-link">
+      <span class="sidebar-icon">◎</span>
+      <span>Management</span>
+    </a>
+
+    <a href="#" class="sidebar-link">
+      <span class="sidebar-icon">▣</span>
+      <span>Tech</span>
+    </a>
+
+    <a href="#" class="sidebar-link">
+      <span class="sidebar-icon">◇</span>
+      <span>Warehouse</span>
+    </a>
+
+    <a href="#" class="sidebar-link">
+      <span class="sidebar-icon">◈</span>
+      <span>Sales</span>
+    </a>
+
+    <% if (currentRoles.includes('admin') || currentRoles.includes('management')) { %>
+      <a href="/database" class="sidebar-link <%= currentNav === 'database' ? 'active' : '' %>">
+        <span class="sidebar-icon">⚙</span>
+        <span>Database Check</span>
+      </a>
+    <% } %>
+  </nav>
+</aside>
