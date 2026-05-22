@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body>
+    <main class="page-shell">
+      <section class="content-card">
+        <div class="content-header">
+          <div>
+            <p class="eyebrow">Step 1b</p>
+            <h1>Database Check</h1>
+          </div>
+
+          <a class="secondary-button" href="/">Back</a>
+        </div>
+
+        <div class="status-grid compact">
+          <article class="status-card <%= status.database.connected ? 'status-good' : 'status-bad' %>">
+            <p class="status-label">Connection</p>
+            <h2><%= status.database.connected ? 'Connected' : 'Failed' %></h2>
+
+            <% if (status.database.connected) { %>
+              <p><strong><%= status.database.connectionInfo.database_name %></strong></p>
+              <p><%= status.database.connectionInfo.mysql_version %></p>
+            <% } else { %>
+              <p><%= status.database.error %></p>
+            <% } %>
+          </article>
+
+          <article class="status-card <%= status.schema.ok ? 'status-good' : 'status-warning' %>">
+            <p class="status-label">Required Tables</p>
+            <h2><%= status.schema.ok ? 'Complete' : 'Incomplete' %></h2>
+            <p><%= formatNumber(status.schema.tableCount) %> tables found.</p>
+          </article>
+        </div>
+
+        <h2 class="section-title">Summary Counts</h2>
+
+        <div class="table-card">
+          <table>
+            <thead>
+              <tr>
+                <th>Table</th>
+                <th>Rows</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% status.schema.summaryCounts.forEach((table) => { %>
+                <tr>
+                  <td><%= table.tableName %></td>
+                  <td><%= table.rowCount === null ? 'Missing' : formatNumber(table.rowCount) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 class="section-title">Required Table Status</h2>
+
+        <div class="table-card">
+          <table>
+            <thead>
+              <tr>
+                <th>Required Table</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% status.schema.requiredTables.forEach((table) => { %>
+                <tr>
+                  <td><%= table.tableName %></td>
+                  <td>
+                    <% if (table.exists) { %>
+                      <span class="pill good">Found</span>
+                    <% } else { %>
+                      <span class="pill bad">Missing</span>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

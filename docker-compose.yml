@@ -1,6 +1,6 @@
 services:
   app:
-    container_name: bwtdallas-app0
+    container_name: bwtdallas-app
     build:
       context: .
       dockerfile: Dockerfile
@@ -20,20 +20,20 @@ services:
       DB_PASSWORD: ${DB_PASSWORD}
     networks:
       - proxy
-      - app0-dbnet
+      - app-dbnet
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
-      - "traefik.http.routers.bwtdallas-app0-web.rule=Host(`app0.bwtdallas.com`)"
-      - "traefik.http.routers.bwtdallas-app0-web.entrypoints=https"
-      - "traefik.http.routers.bwtdallas-app0-web.tls=true"
-      - "traefik.http.routers.bwtdallas-app0-web.tls.certresolver=cloudflare"
-      - "traefik.http.routers.bwtdallas-app0-web.service=bwtdallas-app0-web"
-      - "traefik.http.services.bwtdallas-app0-web.loadbalancer.server.port=3000"
+      - "traefik.http.routers.bwtdallas-app-web.rule=Host(`bwtdallas.com`) || Host(`www.bwtdallas.com`)"
+      - "traefik.http.routers.bwtdallas-app-web.entrypoints=https"
+      - "traefik.http.routers.bwtdallas-app-web.tls=true"
+      - "traefik.http.routers.bwtdallas-app-web.tls.certresolver=cloudflare"
+      - "traefik.http.routers.bwtdallas-app-web.service=bwtdallas-app-web"
+      - "traefik.http.services.bwtdallas-app-web.loadbalancer.server.port=3000"
 
   mysql:
     image: mysql:8.0
-    container_name: bwtdallas-mysql-app0
+    container_name: bwtdallas-mysql-app
     restart: unless-stopped
     env_file:
       - .env
@@ -46,7 +46,7 @@ services:
       - ./mysql/data:/var/lib/mysql
       - ./sql:/docker-entrypoint-initdb.d:ro
     networks:
-      app0-dbnet:
+      app-dbnet:
         aliases:
           - bwtdallas-mysql
     healthcheck:
@@ -58,7 +58,7 @@ services:
 
   phpmyadmin:
     image: phpmyadmin:latest
-    container_name: bwtdallas-phpmyadmin-app0
+    container_name: bwtdallas-phpmyadmin-app
     restart: unless-stopped
     depends_on:
       mysql:
@@ -66,25 +66,25 @@ services:
     environment:
       PMA_HOST: ${DB_HOST}
       PMA_PORT: ${DB_PORT}
-      PMA_ABSOLUTE_URI: https://pma-app0.bwtdallas.com/
+      PMA_ABSOLUTE_URI: https://pma.bwtdallas.com/
       UPLOAD_LIMIT: 256M
     networks:
       - proxy
-      - app0-dbnet
+      - app-dbnet
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
-      - "traefik.http.routers.bwtdallas-pma-app0.rule=Host(`pma-app0.bwtdallas.com`)"
-      - "traefik.http.routers.bwtdallas-pma-app0.entrypoints=https"
-      - "traefik.http.routers.bwtdallas-pma-app0.tls=true"
-      - "traefik.http.routers.bwtdallas-pma-app0.tls.certresolver=cloudflare"
-      - "traefik.http.routers.bwtdallas-pma-app0.service=bwtdallas-pma-app0"
-      - "traefik.http.services.bwtdallas-pma-app0.loadbalancer.server.port=80"
+      - "traefik.http.routers.bwtdallas-pma-app.rule=Host(`pma.bwtdallas.com`)"
+      - "traefik.http.routers.bwtdallas-pma-app.entrypoints=https"
+      - "traefik.http.routers.bwtdallas-pma-app.tls=true"
+      - "traefik.http.routers.bwtdallas-pma-app.tls.certresolver=cloudflare"
+      - "traefik.http.routers.bwtdallas-pma-app.service=bwtdallas-pma-app"
+      - "traefik.http.services.bwtdallas-pma-app.loadbalancer.server.port=80"
 
 networks:
   proxy:
     external: true
 
-  app0-dbnet:
-    name: bwtdallas-app0-dbnet
+  app-dbnet:
+    name: bwtdallas-app-dbnet
     driver: bridge

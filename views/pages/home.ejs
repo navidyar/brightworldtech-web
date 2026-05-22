@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body>
+    <main class="page-shell">
+      <section class="hero-card">
+        <p class="eyebrow">Step 1b</p>
+        <h1>BWTDallas Foundation Check</h1>
+        <p class="hero-copy">
+          The real Phase 1 application is running. This page confirms that Node, Express,
+          MySQL, and the initial schema are connected correctly.
+        </p>
+
+        <div class="status-grid">
+          <article class="status-card <%= status.database.connected ? 'status-good' : 'status-bad' %>">
+            <p class="status-label">Database</p>
+            <h2><%= status.database.connected ? 'Connected' : 'Disconnected' %></h2>
+
+            <% if (status.database.connected) { %>
+              <p>
+                Database:
+                <strong><%= status.database.connectionInfo.database_name %></strong>
+              </p>
+              <p>
+                MySQL:
+                <strong><%= status.database.connectionInfo.mysql_version %></strong>
+              </p>
+            <% } else { %>
+              <p><%= status.database.error %></p>
+            <% } %>
+          </article>
+
+          <article class="status-card <%= status.schema.ok ? 'status-good' : 'status-warning' %>">
+            <p class="status-label">Schema</p>
+            <h2><%= status.schema.ok ? 'Ready' : 'Needs Attention' %></h2>
+            <p>
+              Tables found:
+              <strong><%= formatNumber(status.schema.tableCount) %></strong>
+            </p>
+
+            <% if (!status.schema.ok && status.schema.missingTables.length > 0) { %>
+              <p>
+                Missing required tables:
+                <strong><%= status.schema.missingTables.length %></strong>
+              </p>
+            <% } %>
+          </article>
+        </div>
+
+        <div class="action-row">
+          <a class="primary-button" href="/database">View Database Check</a>
+          <a class="secondary-button" href="/api/health">View Health JSON</a>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

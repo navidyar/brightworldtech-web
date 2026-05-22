@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body>
+    <main class="page-shell">
+      <section class="content-card narrow">
+        <p class="eyebrow">404</p>
+        <h1>Page Not Found</h1>
+        <p>The requested path could not be found:</p>
+        <pre><%= requestedPath %></pre>
+        <a class="primary-button" href="/">Go Home</a>
+      </section>
+    </main>
+  </body>
+</html>

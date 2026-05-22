@@ -1,17 +1,18 @@
 {
   "name": "bwtdallas-app",
   "version": "1.0.0",
-  "description": "Beginner Node + MySQL app for bwtdallas.com",
+  "description": "Bright World Technologies internal operations portal",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "dev": "node server.js",
     "test": "node --test",
     "test:coverage": "node --test --experimental-test-coverage"
   },
   "dependencies": {
-    "dotenv": "^16.4.0",
-    "ejs": "^5.0.2",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
     "express": "^5.1.0",
-    "mysql2": "^3.0.0"
+    "mysql2": "^3.11.5"
   }
 }
