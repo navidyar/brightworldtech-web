@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="dashboard-hero accent-green">
+            <div>
+              <p class="eyebrow">Step 2c.1</p>
+              <h2>Create Lot</h2>
+              <p>
+                Create a Management-controlled lot that techs can later select when adding units.
+                Requirement rules will be added in the next step.
+              </p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Mode</span>
+              <strong>Basic Lot</strong>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Management</p>
+                <h2>Lot Details</h2>
+              </div>
+
+              <a class="secondary-button" href="/management/lots">Back to Lots</a>
+            </div>
+
+            <% if (errorMessages.length > 0) { %>
+              <div class="message error">
+                <% errorMessages.forEach((errorMessage) => { %>
+                  <p><%= errorMessage %></p>
+                <% }) %>
+              </div>
+            <% } %>
+
+            <% if (formOptions.capabilities.hasLotType && formOptions.lotTypes.length === 0) { %>
+              <div class="message error">
+                <p>
+                  The lots table expects a lot type, but no lot type config values were found.
+                  Check the config category for <code>lot_types</code>.
+                </p>
+              </div>
+            <% } %>
+
+            <form class="app-form" method="post" action="/management/lots">
+              <div class="form-section">
+                <div class="form-section-header">
+                  <div>
+                    <p class="eyebrow">Identity</p>
+                    <h3>Lot Identity</h3>
+                  </div>
+                  <p>Name, type, and optional parent lot.</p>
+                </div>
+
+                <div class="form-grid">
+                  <label class="form-field">
+                    <span>Lot Name</span>
+                    <input
+                      type="text"
+                      name="lotName"
+                      value="<%= formData.lotName %>"
+                      maxlength="120"
+                      placeholder="Example: Dell Latitude 5400 - Customer Lot"
+                      required
+                    />
+                  </label>
+
+                  <% if (formOptions.capabilities.hasParentLotId) { %>
+                    <label class="form-field">
+                      <span>Parent Lot</span>
+                      <select name="parentLotId">
+                        <option value="">No parent lot</option>
+                        <% formOptions.parentLots.forEach((lot) => { %>
+                          <option value="<%= lot.lot_id %>" <%= String(formData.parentLotId) === String(lot.lot_id) ? 'selected' : '' %>>
+                            <%= lot.lot_name %><%= lot.lot_code ? ` (${lot.lot_code})` : '' %>
+                          </option>
+                        <% }) %>
+                      </select>
+                    </label>
+                  <% } %>
+
+                  <% if (formOptions.capabilities.hasLotType) { %>
+                    <label class="form-field">
+                      <span>Lot Type</span>
+                      <select name="lotTypeConfigValueId" required>
+                        <option value="">Select lot type</option>
+                        <% formOptions.lotTypes.forEach((lotType) => { %>
+                          <option value="<%= lotType.config_value_id %>" <%= String(formData.lotTypeConfigValueId) === String(lotType.config_value_id) ? 'selected' : '' %>>
+                            <%= lotType.label || lotType.code %>
+                          </option>
+                        <% }) %>
+                      </select>
+                    </label>
+                  <% } %>
+
+                  <% if (formOptions.capabilities.hasDefaultGrade) { %>
+                    <label class="form-field">
+                      <span>Default Grade</span>
+                      <select name="defaultGradeConfigValueId">
+                        <option value="">No default grade</option>
+                        <% formOptions.grades.forEach((grade) => { %>
+                          <option value="<%= grade.config_value_id %>" <%= String(formData.defaultGradeConfigValueId) === String(grade.config_value_id) ? 'selected' : '' %>>
+                            <%= grade.label || grade.code %>
+                          </option>
+                        <% }) %>
+                      </select>
+                    </label>
+                  <% } %>
+                </div>
+              </div>
+
+              <% if (formOptions.capabilities.hasUnitAmountGoal || formOptions.capabilities.hasDeadline || formOptions.capabilities.hasLabelFormat) { %>
+                <div class="form-section">
+                  <div class="form-section-header">
+                    <div>
+                      <p class="eyebrow">Planning</p>
+                      <h3>Lot Planning</h3>
+                    </div>
+                    <p>Goal, deadline, and label format.</p>
+                  </div>
+
+                  <% if (formOptions.capabilities.hasUnitAmountGoal) { %>
+                    <label class="checkbox-card" for="hasUnlimitedGoal">
+                      <input
+                        id="hasUnlimitedGoal"
+                        type="checkbox"
+                        name="hasUnlimitedGoal"
+                        value="1"
+                        data-toggle-target="#unitAmountGoalField"
+                        <%= formData.hasUnlimitedGoal === '1' ? 'checked' : '' %>
+                      />
+
+                      <span>
+                        <strong>Unlimited / Open Lot</strong>
+                        <small>
+                          Use this for mixed lots such as As-Is, Export, Refurbisher, or open receiving lots
+                          where Management does not want a strict unit amount goal.
+                        </small>
+                      </span>
+                    </label>
+                  <% } %>
+
+                  <div class="form-grid">
+                    <% if (formOptions.capabilities.hasUnitAmountGoal) { %>
+                      <label class="form-field" id="unitAmountGoalField">
+                        <span>Unit Amount Goal</span>
+                        <input
+                          id="unitAmountGoalInput"
+                          type="number"
+                          name="unitAmountGoal"
+                          value="<%= formData.unitAmountGoal %>"
+                          min="1"
+                          step="1"
+                          placeholder="Example: 100"
+                        />
+                      </label>
+                    <% } %>
+
+                    <% if (formOptions.capabilities.hasDeadline) { %>
+                      <label class="form-field">
+                        <span>Deadline</span>
+                        <input
+                          type="date"
+                          name="deadline"
+                          value="<%= formData.deadline %>"
+                        />
+                      </label>
+                    <% } %>
+
+                    <% if (formOptions.capabilities.hasLabelFormat) { %>
+                      <label class="form-field">
+                        <span>Label Format</span>
+                        <input
+                          type="text"
+                          name="labelFormat"
+                          value="<%= formData.labelFormat %>"
+                          maxlength="120"
+                          placeholder="Example: Standard BWT Laptop Label"
+                        />
+                      </label>
+                    <% } %>
+                  </div>
+                </div>
+              <% } %>
+
+              <% if (formOptions.capabilities.hasObjectives || formOptions.capabilities.hasNotes) { %>
+                <div class="form-section">
+                  <div class="form-section-header">
+                    <div>
+                      <p class="eyebrow">Notes</p>
+                      <h3>Instructions</h3>
+                    </div>
+                    <p>Internal guidance for Management, Leads, and future Tech workflows.</p>
+                  </div>
+
+                  <div class="form-grid single-column">
+                    <% if (formOptions.capabilities.hasObjectives) { %>
+                      <label class="form-field">
+                        <span>Objectives</span>
+                        <textarea
+                          name="objectives"
+                          rows="4"
+                          placeholder="Describe what this lot is intended to accomplish."
+                        ><%= formData.objectives %></textarea>
+                      </label>
+                    <% } %>
+
+                    <% if (formOptions.capabilities.hasNotes) { %>
+                      <label class="form-field">
+                        <span>Notes</span>
+                        <textarea
+                          name="notes"
+                          rows="4"
+                          placeholder="Internal notes for Management or Leads."
+                        ><%= formData.notes %></textarea>
+                      </label>
+                    <% } %>
+                  </div>
+                </div>
+              <% } %>
+
+              <div class="form-actions">
+                <button type="submit" class="primary-button">Create Lot</button>
+                <a class="secondary-button" href="/management/lots">Cancel</a>
+              </div>
+            </form>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <script src="/js/lot-form.js"></script>
+  </body>
+</html>

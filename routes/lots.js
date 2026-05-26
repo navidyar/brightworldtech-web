@@ -5,6 +5,20 @@ const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const router = express.Router();
 
 router.get(
+  '/management/lots/new',
+  requireAuth,
+  requireRole(['admin', 'management']),
+  lotController.renderNewLotPage
+);
+
+router.post(
+  '/management/lots',
+  requireAuth,
+  requireRole(['admin', 'management']),
+  lotController.createLot
+);
+
+router.get(
   '/management/lots',
   requireAuth,
   requireRole(['admin', 'management']),

@@ -4,16 +4,17 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
-Step 2b: Management Lots Browser.
+Step 2c.1: Create Lot Form Polish.
 
 This step adds:
 
-- Read-only Management Lots page
-- Lot summary cards
-- Lot unit counts
-- Lot requirement counts
-- Lot goal/progress display
-- Management sidebar link for Lots
+- Better Create Lot form layout
+- Styled form sections
+- Styled inputs, selects, and textareas
+- Styled Unlimited / Open Lot checkbox card
+- Browser-side hide/show behavior for Unit Amount Goal
+- Removed Create Lot from the left sidebar
+- Create Lot remains available as a button inside the Lots page
 
 ## Completed Steps
 
@@ -82,6 +83,60 @@ This step adds:
 - Requirement count display
 - Goal/progress display
 
+### Step 2c: Create Lot Form
+
+- Basic lot creation
+- Goal or unlimited lot option
+- Config-driven lot type and grade dropdowns
+- Parent lot support
+
+### Step 2c.1: Create Lot Form Polish
+
+- Better form styling
+- Unit Amount Goal hides when Unlimited / Open Lot is checked
+- Cleaner left sidebar
+
+## Next Directions
+
+### Step 2d: Lot Requirements Foundation
+
+Add requirement records for lots.
+
+Planned requirements:
+
+- RAM size
+- RAM type
+- SSD/storage size
+- SSD/storage type
+- CPU brand/model
+- Touchscreen rule
+- Unit type
+- Manufacturer
+- Model
+
+This should use `lot_requirements` instead of adding too many columns directly to `lots`.
+
+### Step 2e: Unit-to-Lot Validation
+
+When a unit is added or edited, compare the unit against the selected lot requirements.
+
+Possible validation results:
+
+- Accepted
+- Rejected by lot requirements
+- Open lot / no strict validation
+- Needs Management override
+
+### Step 2f: Lot Detail Page
+
+Create a single-lot detail page that shows:
+
+- Lot summary
+- Units inside the lot
+- Requirements attached to the lot
+- Progress toward goal
+- Actions like edit lot, add requirements, and eventually move units
+
 ## Important URLs
 
 ```text
@@ -91,5 +146,6 @@ https://bwtdallas.com/management/users
 https://bwtdallas.com/management/users/new
 https://bwtdallas.com/management/config
 https://bwtdallas.com/management/lots
+https://bwtdallas.com/management/lots/new
 https://bwtdallas.com/database
 https://bwtdallas.com/api/health

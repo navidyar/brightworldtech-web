@@ -12,7 +12,7 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-green">
             <div>
-              <p class="eyebrow">Step 2b</p>
+              <p class="eyebrow">Step 2c</p>
               <h2>Lots</h2>
               <p>
                 Review active and inactive lots, unit goals, current unit counts, requirements,
@@ -52,7 +52,15 @@
                 <p class="eyebrow">Management</p>
                 <h2>Lot Browser</h2>
               </div>
+
+              <a class="primary-button" href="/management/lots/new">Create Lot</a>
             </div>
+
+            <% if (successMessage) { %>
+              <div class="message success">
+                <%= successMessage %>
+              </div>
+            <% } %>
 
             <h2 class="section-title">Lots</h2>
 
@@ -137,7 +145,7 @@
             <div class="content-header">
               <div>
                 <p class="eyebrow">Next</p>
-                <h2>Step 2c Preview</h2>
+                <h2>Step 2d Preview</h2>
               </div>
             </div>
 
@@ -145,10 +153,10 @@
               <div class="workflow-item active">
                 <span></span>
                 <div>
-                  <strong>Create Lot form</strong>
+                  <strong>Lot requirements</strong>
                   <p>
-                    Next we can add a Management form for creating lots using config-driven dropdowns
-                    for lot type, default grade, model, unit type, CPU, RAM, storage, and label format.
+                    Next we can add requirement rules for make, model, unit type, processor,
+                    RAM, storage, grade, and strict/open lot behavior.
                   </p>
                 </div>
               </div>
@@ -156,10 +164,10 @@
               <div class="workflow-item slate">
                 <span></span>
                 <div>
-                  <strong>Requirement rules</strong>
+                  <strong>Strict vs open/mixed lots</strong>
                   <p>
-                    After basic lot creation works, we can add lot requirements so strict lots can validate units,
-                    while open/mixed lots can allow flexible configurations.
+                    Strict lots can validate units against requirements. Open/mixed lots can allow
+                    flexible configurations without Management approving every unit.
                   </p>
                 </div>
               </div>
