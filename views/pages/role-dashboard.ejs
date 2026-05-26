@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="dashboard-hero accent-<%= dashboard.accent %>">
+            <div>
+              <p class="eyebrow"><%= dashboard.kicker %></p>
+              <h2><%= dashboard.title %></h2>
+              <p><%= dashboard.description %></p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Dashboard Area</span>
+              <strong><%= dashboard.menuArea %></strong>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Placeholder</p>
+                <h2><%= dashboard.title %> Content</h2>
+              </div>
+            </div>
+
+            <div class="workflow-list">
+              <div class="workflow-item active">
+                <span></span>
+                <div>
+                  <strong>Access confirmed</strong>
+                  <p>
+                    Your current role allows access to this dashboard. We will add real metrics,
+                    charts, tables, and workflows here as each portal is built.
+                  </p>
+                </div>
+              </div>
+
+              <div class="workflow-item">
+                <span></span>
+                <div>
+                  <strong>Future content</strong>
+                  <p>
+                    This page is intentionally a placeholder so the navigation and permission
+                    structure is ready before the deeper portal work begins.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="action-row">
+              <a href="/" class="secondary-button">Back to Main Dashboard</a>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

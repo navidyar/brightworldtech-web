@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="dashboard-hero accent-green">
+            <div>
+              <p class="eyebrow">Step 2b</p>
+              <h2>Lots</h2>
+              <p>
+                Review active and inactive lots, unit goals, current unit counts, requirements,
+                default grades, deadlines, and label format information.
+              </p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Total Lots</span>
+              <strong><%= formatNumber(summary.lotCount) %></strong>
+            </div>
+          </section>
+
+          <section class="dashboard-grid">
+            <article class="dashboard-card">
+              <p class="card-label">Active Lots</p>
+              <h3><%= formatNumber(summary.activeLotCount) %></h3>
+              <p>Lots currently marked active.</p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Units in Lots</p>
+              <h3><%= formatNumber(summary.totalUnits) %></h3>
+              <p>Units currently connected to listed lots.</p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Requirements</p>
+              <h3><%= formatNumber(summary.totalRequirements) %></h3>
+              <p>Lot requirement records currently found.</p>
+            </article>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Management</p>
+                <h2>Lot Browser</h2>
+              </div>
+            </div>
+
+            <h2 class="section-title">Lots</h2>
+
+            <div class="table-card">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Lot</th>
+                    <th>Type</th>
+                    <th>Default Grade</th>
+                    <th>Units</th>
+                    <th>Goal</th>
+                    <th>Progress</th>
+                    <th>Requirements</th>
+                    <th>Deadline</th>
+                    <th>Status</th>
+                    <th>Label Format</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <% if (lots.length === 0) { %>
+                    <tr>
+                      <td colspan="10">No lots found.</td>
+                    </tr>
+                  <% } %>
+
+                  <% lots.forEach((lot) => { %>
+                    <tr>
+                      <td>
+                        <strong><%= lot.lot_name %></strong>
+                        <% if (lot.lot_code) { %>
+                          <br />
+                          <code><%= lot.lot_code %></code>
+                        <% } %>
+                      </td>
+
+                      <td><%= lot.lot_type_label || '—' %></td>
+                      <td><%= lot.default_grade_label || '—' %></td>
+                      <td><%= formatNumber(lot.unitCount) %></td>
+
+                      <td>
+                        <% if (lot.isUnlimited) { %>
+                          Unlimited
+                        <% } else { %>
+                          <%= formatNumber(lot.unitGoal) %>
+                        <% } %>
+                      </td>
+
+                      <td>
+                        <% if (lot.isUnlimited) { %>
+                          —
+                        <% } else { %>
+                          <%= formatNumber(lot.progressPercent) %>%
+                          <% if (lot.isFull) { %>
+                            <br />
+                            <span class="pill good">Full</span>
+                          <% } %>
+                        <% } %>
+                      </td>
+
+                      <td><%= formatNumber(lot.requirement_count) %></td>
+                      <td><%= formatDateTime(lot.deadline) %></td>
+
+                      <td>
+                        <% if (Number(lot.is_active) === 1) { %>
+                          <span class="pill good">Active</span>
+                        <% } else { %>
+                          <span class="pill bad">Inactive</span>
+                        <% } %>
+                      </td>
+
+                      <td><%= lot.label_format || '—' %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Next</p>
+                <h2>Step 2c Preview</h2>
+              </div>
+            </div>
+
+            <div class="workflow-list">
+              <div class="workflow-item active">
+                <span></span>
+                <div>
+                  <strong>Create Lot form</strong>
+                  <p>
+                    Next we can add a Management form for creating lots using config-driven dropdowns
+                    for lot type, default grade, model, unit type, CPU, RAM, storage, and label format.
+                  </p>
+                </div>
+              </div>
+
+              <div class="workflow-item slate">
+                <span></span>
+                <div>
+                  <strong>Requirement rules</strong>
+                  <p>
+                    After basic lot creation works, we can add lot requirements so strict lots can validate units,
+                    while open/mixed lots can allow flexible configurations.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

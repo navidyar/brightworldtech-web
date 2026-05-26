@@ -5,9 +5,14 @@ const express = require('express');
 const session = require('express-session');
 
 const authRoutes = require('./routes/auth');
+const dashboardRoutes = require('./routes/dashboard');
 const systemRoutes = require('./routes/system');
+const managementRoutes = require('./routes/management');
+const configRoutes = require('./routes/config');
+const lotRoutes = require('./routes/lots');
 const { createSessionStore } = require('./models/sessionStore');
 const { loadCurrentUser } = require('./middleware/authMiddleware');
+const { attachAccessLocals } = require('./middleware/accessMiddleware');
 const { escapeHtml, formatDateTime, formatNumber } = require('./views/partials/helpers');
 
 const app = express();
@@ -48,9 +53,14 @@ app.use(
 );
 
 app.use(loadCurrentUser);
+app.use(attachAccessLocals);
 
 app.use(authRoutes);
+app.use(dashboardRoutes);
 app.use(systemRoutes);
+app.use(managementRoutes);
+app.use(configRoutes);
+app.use(lotRoutes);
 
 app.use((req, res) => {
   res.status(404).render('pages/not-found', {

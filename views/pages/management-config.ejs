@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="dashboard-hero accent-slate">
+            <div>
+              <p class="eyebrow">Step 1h</p>
+              <h2>Config Values</h2>
+              <p>
+                Review the seeded configuration categories and selectable values that will power lots,
+                unit records, tech workflows, QC, statuses, roles, and future portal forms.
+              </p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Total Values</span>
+              <strong><%= formatNumber(summary.valueCount) %></strong>
+            </div>
+          </section>
+
+          <section class="dashboard-grid">
+            <article class="dashboard-card">
+              <p class="card-label">Categories</p>
+              <h3><%= formatNumber(summary.categoryCount) %></h3>
+              <p>Config groups found in the database.</p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Values</p>
+              <h3><%= formatNumber(summary.valueCount) %></h3>
+              <p>Selectable values available to the application.</p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Mode</p>
+              <h3>Read Only</h3>
+              <p>Editing will be added after we review the config structure.</p>
+            </article>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Management</p>
+                <h2>Configuration Categories</h2>
+              </div>
+            </div>
+
+            <div class="workflow-list">
+              <% if (categories.length === 0) { %>
+                <div class="workflow-item warning">
+                  <span></span>
+                  <div>
+                    <strong>No config categories found</strong>
+                    <p>The config tables exist, but no categories were returned.</p>
+                  </div>
+                </div>
+              <% } %>
+
+              <% categories.forEach((category) => { %>
+                <div class="workflow-item slate">
+                  <span></span>
+                  <div style="width: 100%;">
+                    <strong><%= category.label || category.code %></strong>
+                    <p>
+                      <code><%= category.code %></code>
+                      ·
+                      <%= category.values.length %> values
+                      <% if (!category.is_active) { %>
+                        · inactive
+                      <% } %>
+                    </p>
+
+                    <% if (category.description) { %>
+                      <p><%= category.description %></p>
+                    <% } %>
+
+                    <div class="table-card" style="margin-top: 14px;">
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>Label</th>
+                            <th>Code</th>
+                            <th>Status</th>
+                            <th>Description</th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          <% if (category.values.length === 0) { %>
+                            <tr>
+                              <td colspan="4">No values in this category.</td>
+                            </tr>
+                          <% } %>
+
+                          <% category.values.forEach((value) => { %>
+                            <tr>
+                              <td><%= value.label || value.code %></td>
+                              <td><code><%= value.code %></code></td>
+                              <td>
+                                <% if (value.is_active) { %>
+                                  <span class="pill good">Active</span>
+                                <% } else { %>
+                                  <span class="pill bad">Inactive</span>
+                                <% } %>
+                              </td>
+                              <td><%= value.description || '—' %></td>
+                            </tr>
+                          <% }) %>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              <% }) %>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

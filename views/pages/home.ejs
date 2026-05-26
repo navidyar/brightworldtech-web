@@ -12,11 +12,12 @@
         <main class="content-shell">
           <section class="dashboard-hero">
             <div>
-              <p class="eyebrow">Step 1d</p>
-              <h2>Authentication Foundation</h2>
+              <p class="eyebrow">Step 1f</p>
+              <h2>Role-Aware Dashboard Access</h2>
               <p>
-                You are signed in. The app shell, protected routes, logout button,
-                and role-aware navigation are now active.
+                Your navigation now supports submenus and role-based dashboard access.
+                Admin users can access every area. Management can access department dashboards
+                and operational menus except Admin-only tools.
               </p>
             </div>
 
@@ -59,8 +60,27 @@
           <section class="content-card">
             <div class="content-header">
               <div>
-                <p class="eyebrow">Next Build Area</p>
-                <h2>Phase 1 App Shell</h2>
+                <p class="eyebrow">Available Dashboards</p>
+                <h2>Your Dashboard Access</h2>
+              </div>
+            </div>
+
+            <div class="role-dashboard-grid">
+              <% getAccessibleDashboards().forEach((dashboard) => { %>
+                <a href="/dashboards/<%= dashboard.key %>" class="role-dashboard-card accent-<%= dashboard.accent %>">
+                  <p><%= dashboard.kicker %></p>
+                  <h3><%= dashboard.title %></h3>
+                  <span><%= dashboard.description %></span>
+                </a>
+              <% }) %>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Build Progress</p>
+                <h2>Phase 1 Foundation</h2>
               </div>
             </div>
 
@@ -81,7 +101,7 @@
                 </div>
               </div>
 
-              <div class="workflow-item active">
+              <div class="workflow-item complete">
                 <span></span>
                 <div>
                   <strong>Step 1c</strong>
@@ -89,7 +109,7 @@
                 </div>
               </div>
 
-              <div class="workflow-item active">
+              <div class="workflow-item complete">
                 <span></span>
                 <div>
                   <strong>Step 1d</strong>
@@ -97,11 +117,19 @@
                 </div>
               </div>
 
-              <div class="workflow-item">
+              <div class="workflow-item complete">
                 <span></span>
                 <div>
                   <strong>Step 1e</strong>
                   <p>Management user creation and setup-link generation from the UI.</p>
+                </div>
+              </div>
+
+              <div class="workflow-item active">
+                <span></span>
+                <div>
+                  <strong>Step 1f</strong>
+                  <p>Role-aware submenus, dashboard access rules, and improved visual status accents.</p>
                 </div>
               </div>
             </div>

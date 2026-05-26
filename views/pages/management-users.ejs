@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="dashboard-hero">
+            <div>
+              <p class="eyebrow">Step 1e</p>
+              <h2>User Management</h2>
+              <p>
+                Create users, assign roles, and generate one-time setup links for initial access or password resets.
+              </p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Access</span>
+              <strong>Admin / Management</strong>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Users</p>
+                <h2>Application Users</h2>
+              </div>
+
+              <a class="primary-button" href="/management/users/new">Create User</a>
+            </div>
+
+            <% if (successMessage) { %>
+              <div class="message success"><%= successMessage %></div>
+            <% } %>
+
+            <% if (errorMessages.length > 0) { %>
+              <div class="message error">
+                <% errorMessages.forEach((errorMessage) => { %>
+                  <p><%= errorMessage %></p>
+                <% }) %>
+              </div>
+            <% } %>
+
+            <div class="table-card" style="margin-top: 20px;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>Status</th>
+                    <th>Roles</th>
+                    <th>Password</th>
+                    <th>Last Login</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <% if (users.length === 0) { %>
+                    <tr>
+                      <td colspan="7">No users found.</td>
+                    </tr>
+                  <% } %>
+
+                  <% users.forEach((user) => { %>
+                    <tr>
+                      <td><%= user.first_name %> <%= user.last_name %></td>
+                      <td><%= user.email %></td>
+                      <td>
+                        <% if (user.account_status_code === 'active') { %>
+                          <span class="pill good">Active</span>
+                        <% } else { %>
+                          <span class="pill bad"><%= user.account_status_label || user.account_status_code || 'Unknown' %></span>
+                        <% } %>
+                      </td>
+                      <td><%= user.role_names || 'No roles' %></td>
+                      <td><%= user.has_password ? 'Created' : 'Pending setup' %></td>
+                      <td><%= formatDateTime(user.last_login_at) %></td>
+                      <td>
+                        <form method="post" action="/management/users/<%= user.user_id %>/setup-link">
+                          <button type="submit" class="logout-button">
+                            <%= user.has_password ? 'Reset Link' : 'Setup Link' %>
+                          </button>
+                        </form>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

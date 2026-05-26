@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Management</p>
+                <h2>Create User</h2>
+              </div>
+
+              <a class="secondary-button" href="/management/users">Back to Users</a>
+            </div>
+
+            <% if (errorMessages.length > 0) { %>
+              <div class="message error">
+                <% errorMessages.forEach((errorMessage) => { %>
+                  <p><%= errorMessage %></p>
+                <% }) %>
+              </div>
+            <% } %>
+
+            <form class="auth-form" method="post" action="/management/users">
+              <label class="form-field">
+                <span>First Name</span>
+                <input
+                  type="text"
+                  name="firstName"
+                  value="<%= formData.firstName %>"
+                  autocomplete="given-name"
+                  required
+                />
+              </label>
+
+              <label class="form-field">
+                <span>Last Name</span>
+                <input
+                  type="text"
+                  name="lastName"
+                  value="<%= formData.lastName %>"
+                  autocomplete="family-name"
+                  required
+                />
+              </label>
+
+              <label class="form-field">
+                <span>Email Address</span>
+                <input
+                  type="email"
+                  name="email"
+                  value="<%= formData.email %>"
+                  autocomplete="email"
+                  required
+                />
+              </label>
+
+              <div>
+                <p class="eyebrow" style="margin-top: 8px;">Roles</p>
+
+                <div class="workflow-list">
+                  <% roles.forEach((role) => { %>
+                    <label class="workflow-item <%= formData.roleCodes.includes(role.code) ? 'active' : '' %>">
+                      <input
+                        type="checkbox"
+                        name="roleCodes"
+                        value="<%= role.code %>"
+                        <%= formData.roleCodes.includes(role.code) ? 'checked' : '' %>
+                      />
+
+                      <div>
+                        <strong><%= role.name %></strong>
+                        <p><%= role.description || role.code %></p>
+                      </div>
+                    </label>
+                  <% }) %>
+                </div>
+              </div>
+
+              <div class="action-row">
+                <button type="submit" class="primary-button">Create User & Generate Setup Link</button>
+                <a class="secondary-button" href="/management/users">Cancel</a>
+              </div>
+            </form>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">One-Time Link</p>
+                <h2>Setup Link Created</h2>
+              </div>
+
+              <a class="secondary-button" href="/management/users">Back to Users</a>
+            </div>
+
+            <div class="message success">
+              <p>
+                A one-time
+                <strong><%= setupLink.linkTypeCode === 'password_reset' ? 'password reset' : 'initial setup' %></strong>
+                link was created for
+                <strong><%= user.first_name %> <%= user.last_name %></strong>.
+              </p>
+              <p>
+                It expires at <strong><%= formatDateTime(setupLink.expiresAt) %></strong>.
+              </p>
+            </div>
+
+            <h2 class="section-title">Copy This Link</h2>
+
+            <pre><%= setupLink.setupUrl %></pre>
+
+            <p style="color: var(--muted); line-height: 1.6;">
+              Send this link to the user through chat or email. The token is only shown here once.
+              If the user loses it, generate a new setup link from the users page.
+            </p>
+
+            <div class="action-row">
+              <a class="primary-button" href="/management/users">Done</a>
+              <a class="secondary-button" href="/management/users/new">Create Another User</a>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

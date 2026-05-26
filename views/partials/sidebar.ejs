@@ -15,27 +15,143 @@
       <span>Dashboard</span>
     </a>
 
-    <a href="#" class="sidebar-link">
-      <span class="sidebar-icon">◎</span>
-      <span>Management</span>
-    </a>
+    <details class="sidebar-group" open>
+      <summary>
+        <span class="sidebar-icon">▦</span>
+        <span>Role Dashboards</span>
+      </summary>
 
-    <a href="#" class="sidebar-link">
-      <span class="sidebar-icon">▣</span>
-      <span>Tech</span>
-    </a>
+      <div class="sidebar-subnav">
+        <% dashboardDefinitions.forEach((dashboard) => { %>
+          <% if (canAccessDashboard(dashboard.key)) { %>
+            <a href="/dashboards/<%= dashboard.key %>" class="sidebar-sublink <%= currentNav === `dashboard:${dashboard.key}` ? 'active' : '' %>">
+              <span class="submenu-dot <%= dashboard.accent %>"></span>
+              <span><%= dashboard.menuLabel %></span>
+            </a>
+          <% } %>
+        <% }) %>
+      </div>
+    </details>
 
-    <a href="#" class="sidebar-link">
-      <span class="sidebar-icon">◇</span>
-      <span>Warehouse</span>
-    </a>
+    <% if (canAccessMenuArea('admin')) { %>
+      <details class="sidebar-group">
+        <summary>
+          <span class="sidebar-icon">✦</span>
+          <span>Admin</span>
+        </summary>
 
-    <a href="#" class="sidebar-link">
-      <span class="sidebar-icon">◈</span>
-      <span>Sales</span>
-    </a>
+        <div class="sidebar-subnav">
+          <a href="/dashboards/admin" class="sidebar-sublink <%= currentNav === 'dashboard:admin' ? 'active' : '' %>">
+            <span class="submenu-dot purple"></span>
+            <span>Admin Dashboard</span>
+          </a>
+        </div>
+      </details>
+    <% } %>
 
-    <% if (currentRoles.includes('admin') || currentRoles.includes('management')) { %>
+    <% if (canAccessMenuArea('management')) { %>
+      <details class="sidebar-group" <%= currentNav === 'management' || currentNav === 'management-config' || currentNav === 'management-lots' ? 'open' : '' %>>
+        <summary>
+          <span class="sidebar-icon">◎</span>
+          <span>Management</span>
+        </summary>
+
+        <div class="sidebar-subnav">
+          <a href="/management/users" class="sidebar-sublink <%= currentNav === 'management' ? 'active' : '' %>">
+            <span class="submenu-dot blue"></span>
+            <span>Users</span>
+          </a>
+
+          <a href="/management/lots" class="sidebar-sublink <%= currentNav === 'management-lots' ? 'active' : '' %>">
+            <span class="submenu-dot green"></span>
+            <span>Lots</span>
+          </a>
+
+          <a href="/management/config" class="sidebar-sublink <%= currentNav === 'management-config' ? 'active' : '' %>">
+            <span class="submenu-dot slate"></span>
+            <span>Config Values</span>
+          </a>
+
+          <a href="/dashboards/management" class="sidebar-sublink <%= currentNav === 'dashboard:management' ? 'active' : '' %>">
+            <span class="submenu-dot blue"></span>
+            <span>Dashboard</span>
+          </a>
+        </div>
+      </details>
+    <% } %>
+
+    <% if (canAccessMenuArea('tech')) { %>
+      <details class="sidebar-group">
+        <summary>
+          <span class="sidebar-icon">▣</span>
+          <span>Tech</span>
+        </summary>
+
+        <div class="sidebar-subnav">
+          <% if (canAccessDashboard('tech-lead')) { %>
+            <a href="/dashboards/tech-lead" class="sidebar-sublink <%= currentNav === 'dashboard:tech-lead' ? 'active' : '' %>">
+              <span class="submenu-dot green"></span>
+              <span>Tech Lead Dashboard</span>
+            </a>
+          <% } %>
+
+          <% if (canAccessDashboard('tech')) { %>
+            <a href="/dashboards/tech" class="sidebar-sublink <%= currentNav === 'dashboard:tech' ? 'active' : '' %>">
+              <span class="submenu-dot green"></span>
+              <span>Tech Dashboard</span>
+            </a>
+          <% } %>
+
+          <% if (canAccessDashboard('qc')) { %>
+            <a href="/dashboards/qc" class="sidebar-sublink <%= currentNav === 'dashboard:qc' ? 'active' : '' %>">
+              <span class="submenu-dot yellow"></span>
+              <span>QC Dashboard</span>
+            </a>
+          <% } %>
+
+          <% if (canAccessDashboard('packing')) { %>
+            <a href="/dashboards/packing" class="sidebar-sublink <%= currentNav === 'dashboard:packing' ? 'active' : '' %>">
+              <span class="submenu-dot orange"></span>
+              <span>Packing Dashboard</span>
+            </a>
+          <% } %>
+        </div>
+      </details>
+    <% } %>
+
+    <% if (canAccessMenuArea('warehouse')) { %>
+      <details class="sidebar-group">
+        <summary>
+          <span class="sidebar-icon">◇</span>
+          <span>Warehouse</span>
+        </summary>
+
+        <div class="sidebar-subnav">
+          <a href="/dashboards/warehouse" class="sidebar-sublink <%= currentNav === 'dashboard:warehouse' ? 'active' : '' %>">
+            <span class="submenu-dot slate"></span>
+            <span>Warehouse Dashboard</span>
+          </a>
+        </div>
+      </details>
+    <% } %>
+
+    <% if (canAccessMenuArea('sales')) { %>
+      <details class="sidebar-group">
+        <summary>
+          <span class="sidebar-icon">◈</span>
+          <span>Sales</span>
+        </summary>
+
+        <div class="sidebar-subnav">
+          <a href="/dashboards/sales" class="sidebar-sublink <%= currentNav === 'dashboard:sales' ? 'active' : '' %>">
+            <span class="submenu-dot red"></span>
+            <span>Sales Dashboard</span>
+          </a>
+        </div>
+      </details>
+    <% } %>
+
+    <% if (canAccessMenuArea('database')) { %>
       <a href="/database" class="sidebar-link <%= currentNav === 'database' ? 'active' : '' %>">
         <span class="sidebar-icon">⚙</span>
         <span>Database Check</span>
