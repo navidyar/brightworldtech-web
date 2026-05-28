@@ -1,0 +1,48 @@
+.tech-filter-form {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(240px, 0.7fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin-top: 16px;
+}
+
+.tech-filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.tech-chip {
+  display: inline-flex;
+  margin: 2px 4px 2px 0;
+  padding: 4px 8px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 5px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+textarea {
+  resize: vertical;
+}
+
+@media (max-width: 980px) {
+  .tech-filter-form {
+    grid-template-columns: 1fr;
+  }
+
+  .tech-filter-actions {
+    justify-content: flex-start;
+  }
+}

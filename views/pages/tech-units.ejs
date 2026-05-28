@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <link rel="stylesheet" href="/css/tech.css" />
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="dashboard-hero accent-green">
+            <div>
+              <p class="eyebrow">Step 2i</p>
+              <h2>Tech Units</h2>
+              <p>
+                Create and edit unit records from the Tech workflow foundation.
+                Lot validation enforcement will be connected in a later step.
+              </p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Loaded</span>
+              <strong><%= formatNumber(result.units.length) %></strong>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Tech</p>
+                <h2>Unit Browser</h2>
+              </div>
+
+              <a class="primary-button" href="/tech/units/new">Create Unit</a>
+            </div>
+
+            <% if (successMessage) { %>
+              <div class="message success"><%= successMessage %></div>
+            <% } %>
+
+            <% if (!result.supported) { %>
+              <div class="message error">
+                <p><%= result.message %></p>
+              </div>
+            <% } else { %>
+              <form class="tech-filter-form" method="get" action="/tech/units">
+                <label class="form-field">
+                  <span>Search</span>
+                  <input
+                    type="search"
+                    name="search"
+                    value="<%= filters.search %>"
+                    placeholder="Asset tag, serial, BIOS serial, model"
+                  />
+                </label>
+
+                <label class="form-field">
+                  <span>Lot</span>
+                  <select name="lotId">
+                    <option value="">All lots</option>
+                    <% result.lots.forEach((lot) => { %>
+                      <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>>
+                        <%= lot.lot_name %>
+                        <% if (lot.lot_number) { %>
+                          - Lot #<%= lot.lot_number %>
+                        <% } %>
+                      </option>
+                    <% }) %>
+                  </select>
+                </label>
+
+                <div class="tech-filter-actions">
+                  <button class="primary-button" type="submit">Apply Filters</button>
+                  <a class="secondary-button" href="/tech/units">Clear</a>
+                </div>
+              </form>
+
+              <div class="table-card" style="margin-top: 18px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Unit</th>
+                      <th>Lot</th>
+                      <th>Identifiers</th>
+                      <th>Specs</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    <% if (result.units.length === 0) { %>
+                      <tr>
+                        <td colspan="5">No units found.</td>
+                      </tr>
+                    <% } %>
+
+                    <% result.units.forEach((unit) => { %>
+                      <tr>
+                        <td>
+                          <strong><%= unit.label %></strong>
+                          <% if (unit.unitId) { %>
+                            <br />
+                            <span class="table-muted-line">Unit ID <%= unit.unitId %></span>
+                          <% } %>
+                        </td>
+
+                        <td><%= unit.lotName %></td>
+
+                        <td>
+                          <% if (unit.identifiers.length === 0) { %>
+                            <span class="table-muted-line">No identifiers entered</span>
+                          <% } else { %>
+                            <% unit.identifiers.forEach((identifier) => { %>
+                              <span class="tech-chip"><%= identifier %></span>
+                            <% }) %>
+                          <% } %>
+                        </td>
+
+                        <td><%= unit.specSummary %></td>
+
+                        <td>
+                          <% if (unit.unitId) { %>
+                            <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/edit">Edit</a>
+                          <% } else { %>
+                            —
+                          <% } %>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+
+              <% if (result.units.length >= result.unitLimit) { %>
+                <div class="message error">
+                  <p>
+                    This view is limited to <%= formatNumber(result.unitLimit) %> units for safety.
+                    We can add pagination later.
+                  </p>
+                </div>
+              <% } %>
+            <% } %>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Next</p>
+                <h2>Step 2j Preview</h2>
+              </div>
+            </div>
+
+            <div class="workflow-list">
+              <div class="workflow-item active">
+                <span></span>
+                <div>
+                  <strong>Management override workflow</strong>
+                  <p>
+                    Next we can add override requests, approval tracking, and override reason history.
+                  </p>
+                </div>
+              </div>
+
+              <div class="workflow-item slate">
+                <span></span>
+                <div>
+                  <strong>Enforcement integration</strong>
+                  <p>
+                    After the override foundation exists, we can connect lot validation to unit save actions.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

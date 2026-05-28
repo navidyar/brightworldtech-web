@@ -70,17 +70,17 @@
     <% } %>
 
     <% if (canAccessMenuArea('tech')) { %>
-      <details class="sidebar-group">
+      <details class="sidebar-group" <%= currentNav === 'tech-units' ? 'open' : '' %>>
         <summary>
           <span class="sidebar-icon">▣</span>
           <span>Tech</span>
         </summary>
 
         <div class="sidebar-subnav">
-          <span class="sidebar-sublink sidebar-sublink-muted">
+          <a href="/tech/units" class="sidebar-sublink <%= currentNav === 'tech-units' ? 'active' : '' %>">
             <span class="submenu-dot green"></span>
-            <span>Tech tools planned</span>
-          </span>
+            <span>Units</span>
+          </a>
         </div>
       </details>
     <% } %>
