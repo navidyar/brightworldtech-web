@@ -12,6 +12,20 @@ router.get(
 );
 
 router.post(
+  '/management/lots/:lotId/requirements',
+  requireAuth,
+  requireRole(['admin', 'management']),
+  lotController.createLotRequirement
+);
+
+router.get(
+  '/management/lots/:lotId',
+  requireAuth,
+  requireRole(['admin', 'management']),
+  lotController.renderLotDetailPage
+);
+
+router.post(
   '/management/lots',
   requireAuth,
   requireRole(['admin', 'management']),

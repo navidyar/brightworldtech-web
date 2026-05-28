@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="dashboard-hero accent-blue">
+            <div>
+              <p class="eyebrow">Step 2d.4</p>
+              <h2>Dashboard</h2>
+              <p>
+                Select the dashboard area you want to view. Users with access to only one dashboard
+                will be sent directly to their dashboard instead of seeing this selection page.
+              </p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Available</span>
+              <strong><%= formatNumber(dashboards.length) %></strong>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Available Dashboards</p>
+                <h2>Dashboard Access</h2>
+              </div>
+            </div>
+
+            <% if (dashboards.length === 0) { %>
+              <div class="message error">
+                <p>No dashboards are currently available for your user account.</p>
+                <p>Ask an Admin or Management user to review your roles.</p>
+              </div>
+            <% } else { %>
+              <div class="table-card" style="margin-top: 14px;">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Dashboard</th>
+                      <th>Description</th>
+                      <th>Area</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    <% dashboards.forEach((dashboard) => { %>
+                      <tr>
+                        <td>
+                          <a href="/dashboards/<%= dashboard.key %>" class="unit-link">
+                            <strong><%= dashboard.title %></strong>
+                          </a>
+                        </td>
+
+                        <td><%= dashboard.description %></td>
+
+                        <td>
+                          <span class="pill good"><%= dashboard.key %></span>
+                        </td>
+
+                        <td>
+                          <a class="secondary-button" href="/dashboards/<%= dashboard.key %>">Open</a>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Design Note</p>
+                <h2>Dashboard Behavior</h2>
+              </div>
+            </div>
+
+            <div class="workflow-list">
+              <div class="workflow-item active">
+                <span></span>
+                <div>
+                  <strong>Single-dashboard users</strong>
+                  <p>
+                    Users with access to only one dashboard are redirected directly into that dashboard.
+                  </p>
+                </div>
+              </div>
+
+              <div class="workflow-item slate">
+                <span></span>
+                <div>
+                  <strong>Multi-dashboard users</strong>
+                  <p>
+                    Admin, Management, and other higher-access users can choose from all dashboards they can access.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

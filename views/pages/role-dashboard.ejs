@@ -12,53 +12,105 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-<%= dashboard.accent %>">
             <div>
-              <p class="eyebrow"><%= dashboard.kicker %></p>
+              <p class="eyebrow">Dashboard</p>
               <h2><%= dashboard.title %></h2>
               <p><%= dashboard.description %></p>
             </div>
 
             <div class="hero-badge">
-              <span>Dashboard Area</span>
-              <strong><%= dashboard.menuArea %></strong>
+              <span>Area</span>
+              <strong><%= dashboard.key %></strong>
             </div>
+          </section>
+
+          <section class="dashboard-grid">
+            <article class="dashboard-card">
+              <p class="card-label">Access</p>
+              <h3>Ready</h3>
+              <p>Your account has access to this dashboard.</p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Data</p>
+              <h3>Planned</h3>
+              <p>Live metrics will be connected as each workflow is built.</p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Status</p>
+              <h3>Foundation</h3>
+              <p>This is currently a dashboard placeholder for future role-specific data.</p>
+            </article>
           </section>
 
           <section class="content-card">
             <div class="content-header">
               <div>
-                <p class="eyebrow">Placeholder</p>
-                <h2><%= dashboard.title %> Content</h2>
+                <p class="eyebrow">Current Build</p>
+                <h2>Dashboard Foundation</h2>
               </div>
+
+              <% if (dashboard.key !== 'management') { %>
+                <a class="secondary-button" href="/">All Dashboards</a>
+              <% } %>
             </div>
 
             <div class="workflow-list">
               <div class="workflow-item active">
                 <span></span>
                 <div>
-                  <strong>Access confirmed</strong>
+                  <strong>Role-specific dashboard shell</strong>
                   <p>
-                    Your current role allows access to this dashboard. We will add real metrics,
-                    charts, tables, and workflows here as each portal is built.
+                    This page confirms routing and access for the <%= dashboard.title %>.
+                    The actual charts, productivity metrics, and operational data will be added after
+                    the related workflows produce real records.
                   </p>
                 </div>
               </div>
 
-              <div class="workflow-item">
+              <div class="workflow-item slate">
                 <span></span>
                 <div>
-                  <strong>Future content</strong>
+                  <strong>Future metrics</strong>
                   <p>
-                    This page is intentionally a placeholder so the navigation and permission
-                    structure is ready before the deeper portal work begins.
+                    This dashboard can eventually show filtered metrics, charts, status counts,
+                    productivity totals, and department-specific operational summaries.
                   </p>
                 </div>
               </div>
             </div>
-
-            <div class="action-row">
-              <a href="/" class="secondary-button">Back to Main Dashboard</a>
-            </div>
           </section>
+
+          <% if (dashboard.key === 'management') { %>
+            <section class="content-card">
+              <div class="content-header">
+                <div>
+                  <p class="eyebrow">Management Shortcuts</p>
+                  <h2>Current Tools</h2>
+                </div>
+              </div>
+
+              <div class="workflow-list">
+                <a class="role-dashboard-card accent-blue" href="/management/users">
+                  <p>Management</p>
+                  <h3>Users</h3>
+                  <span>Create users, assign roles, and generate setup links.</span>
+                </a>
+
+                <a class="role-dashboard-card accent-green" href="/management/lots">
+                  <p>Management</p>
+                  <h3>Lots</h3>
+                  <span>Review lots, create lots, and manage lot requirements.</span>
+                </a>
+
+                <a class="role-dashboard-card accent-slate" href="/management/config">
+                  <p>Management</p>
+                  <h3>Config Values</h3>
+                  <span>Review selectable values used across the application.</span>
+                </a>
+              </div>
+            </section>
+          <% } %>
         </main>
       </div>
     </div>

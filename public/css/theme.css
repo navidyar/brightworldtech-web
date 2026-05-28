@@ -1,0 +1,338 @@
+:root {
+  --theme-toggle-bg: #ffffff;
+  --theme-toggle-text: #1e3a8a;
+  --theme-toggle-border: #dbe3ef;
+  --theme-toggle-hover: #f5f9ff;
+}
+
+/* Theme toggle */
+
+.theme-toggle {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 13px;
+  border: 1px solid var(--theme-toggle-border);
+  border-radius: 999px;
+  color: var(--theme-toggle-text);
+  background: var(--theme-toggle-bg);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 850;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    transform 160ms ease;
+}
+
+.theme-toggle:hover {
+  background: var(--theme-toggle-hover);
+  transform: translateY(-1px);
+}
+
+.theme-toggle-icon {
+  width: 16px;
+  text-align: center;
+}
+
+.theme-toggle small {
+  display: none;
+}
+
+/* ==========================================================
+   HYBRID MODE
+   Dark navigation, light main work area.
+   ========================================================== */
+
+html[data-theme="hybrid"] {
+  color-scheme: light;
+
+  --page-bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-soft: #f8fafc;
+  --text: #172033;
+  --muted: #64748b;
+  --muted-2: #94a3b8;
+  --line: #d8dee8;
+  --line-soft: #e8edf4;
+  --row-hover: #f5f8fc;
+
+  --blue: #315f9c;
+  --blue-dark: #1f3f70;
+  --blue-soft: #eef3f9;
+
+  --green: #15803d;
+  --green-bg: #f4fbf6;
+
+  --yellow: #b45309;
+  --yellow-bg: #fffaf0;
+
+  --orange: #c2410c;
+  --orange-bg: #fff8f2;
+
+  --red: #b91c1c;
+  --red-bg: #fff7f7;
+
+  --purple: #7c3aed;
+  --purple-bg: #faf7ff;
+
+  --slate: #475569;
+  --slate-bg: #f7f9fc;
+}
+
+html[data-theme="hybrid"],
+html[data-theme="hybrid"] body {
+  background: var(--page-bg);
+  color: var(--text);
+}
+
+/* Hybrid navigation */
+
+html[data-theme="hybrid"] .sidebar {
+  border-right-color: #2e3440;
+  background: linear-gradient(180deg, #252a31 0%, #1f2329 100%);
+}
+
+html[data-theme="hybrid"] .sidebar-brand {
+  border-color: #2e3440;
+}
+
+html[data-theme="hybrid"] .brand-card {
+  border-color: #3b424d;
+  background: #2a2f37;
+}
+
+html[data-theme="hybrid"] .brand-card p {
+  color: #b6c7dd;
+}
+
+html[data-theme="hybrid"] .brand-card strong {
+  color: #f3f5f8;
+}
+
+html[data-theme="hybrid"] .brand-mark {
+  border-color: rgba(182, 199, 221, 0.24);
+  color: #eef4ff;
+  background: #343b46;
+}
+
+html[data-theme="hybrid"] .sidebar-group[open],
+html[data-theme="hybrid"] .sidebar-subnav {
+  border-color: #39404b;
+  background: rgba(42, 47, 55, 0.82);
+}
+
+html[data-theme="hybrid"] .sidebar-link,
+html[data-theme="hybrid"] .sidebar-group summary,
+html[data-theme="hybrid"] .sidebar-sublink {
+  color: #dde2e9;
+}
+
+html[data-theme="hybrid"] .sidebar-link:hover,
+html[data-theme="hybrid"] .sidebar-link.active,
+html[data-theme="hybrid"] .sidebar-group summary:hover,
+html[data-theme="hybrid"] .sidebar-group[open] summary,
+html[data-theme="hybrid"] .sidebar-sublink.active {
+  border-color: rgba(182, 199, 221, 0.28);
+  color: #ffffff;
+  background: #343b46;
+}
+
+html[data-theme="hybrid"] .sidebar-sublink:hover {
+  border-color: #454c57;
+  color: #ffffff;
+  background: #3a414d;
+}
+
+html[data-theme="hybrid"] .sidebar-icon {
+  color: #b6c7dd;
+}
+
+/* Hybrid topbar */
+
+html[data-theme="hybrid"] .topbar {
+  border-bottom-color: #2e3440;
+  background: #252a31;
+}
+
+html[data-theme="hybrid"] .topbar-kicker {
+  color: #b6c7dd;
+}
+
+html[data-theme="hybrid"] .topbar h1 {
+  color: #f3f5f8;
+}
+
+html[data-theme="hybrid"] .user-chip,
+html[data-theme="hybrid"] .logout-button {
+  border-color: #3b424d;
+  background: #2a2f37;
+}
+
+html[data-theme="hybrid"] .user-chip strong {
+  color: #f3f5f8;
+}
+
+html[data-theme="hybrid"] .user-chip p {
+  color: #c5cbd4;
+}
+
+html[data-theme="hybrid"] .logout-button {
+  color: #eef4ff;
+}
+
+html[data-theme="hybrid"] .logout-button:hover {
+  background: #3a414d;
+}
+
+html[data-theme="hybrid"] .theme-toggle {
+  border-color: #3b424d;
+  color: #f3f5f8;
+  background: #2a2f37;
+}
+
+html[data-theme="hybrid"] .theme-toggle:hover {
+  background: #3a414d;
+}
+
+/* Hybrid main content */
+
+html[data-theme="hybrid"] .dashboard-hero {
+  border-bottom-color: var(--line);
+}
+
+html[data-theme="hybrid"] .content-card,
+html[data-theme="hybrid"] .dashboard-card,
+html[data-theme="hybrid"] .status-card,
+html[data-theme="hybrid"] .form-section,
+html[data-theme="hybrid"] .table-card,
+html[data-theme="hybrid"] .hero-badge,
+html[data-theme="hybrid"] .auth-panel {
+  border-color: var(--line);
+  background: var(--surface);
+}
+
+html[data-theme="hybrid"] .dashboard-hero h2,
+html[data-theme="hybrid"] .content-header h2,
+html[data-theme="hybrid"] .section-title,
+html[data-theme="hybrid"] .dashboard-card h3,
+html[data-theme="hybrid"] .status-card h2,
+html[data-theme="hybrid"] .role-dashboard-card h3,
+html[data-theme="hybrid"] .form-section-header h3,
+html[data-theme="hybrid"] .workflow-item strong,
+html[data-theme="hybrid"] .checkbox-card strong {
+  color: var(--text);
+}
+
+html[data-theme="hybrid"] .dashboard-hero p,
+html[data-theme="hybrid"] .dashboard-card p,
+html[data-theme="hybrid"] .status-card p,
+html[data-theme="hybrid"] .role-dashboard-card span,
+html[data-theme="hybrid"] .workflow-item p,
+html[data-theme="hybrid"] .form-section-header p,
+html[data-theme="hybrid"] .checkbox-card small,
+html[data-theme="hybrid"] .auth-copy,
+html[data-theme="hybrid"] .auth-footnote {
+  color: var(--muted);
+}
+
+/* Hybrid tables */
+
+html[data-theme="hybrid"] table {
+  color: var(--text);
+}
+
+html[data-theme="hybrid"] th {
+  border-bottom-color: var(--line);
+  color: #475569;
+  background: #f8fafc;
+}
+
+html[data-theme="hybrid"] td {
+  border-bottom-color: var(--line-soft);
+  color: #334155;
+}
+
+html[data-theme="hybrid"] tbody tr:hover td {
+  background: var(--row-hover);
+}
+
+html[data-theme="hybrid"] td code,
+html[data-theme="hybrid"] code {
+  color: #334155;
+}
+
+/* Hybrid forms */
+
+html[data-theme="hybrid"] .form-field span {
+  color: #334155;
+}
+
+html[data-theme="hybrid"] .form-field input,
+html[data-theme="hybrid"] .form-field select,
+html[data-theme="hybrid"] .form-field textarea {
+  border-color: var(--line);
+  color: var(--text);
+  background-color: #ffffff;
+}
+
+html[data-theme="hybrid"] .form-field select {
+  background:
+    linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+    linear-gradient(135deg, var(--muted) 50%, transparent 50%),
+    #ffffff;
+  background-position:
+    calc(100% - 20px) 17px,
+    calc(100% - 14px) 17px,
+    0 0;
+  background-size:
+    6px 6px,
+    6px 6px,
+    100% 100%;
+  background-repeat: no-repeat;
+}
+
+html[data-theme="hybrid"] .form-field input:focus,
+html[data-theme="hybrid"] .form-field select:focus,
+html[data-theme="hybrid"] .form-field textarea:focus {
+  border-color: rgba(49, 95, 156, 0.45);
+  box-shadow: 0 0 0 3px rgba(49, 95, 156, 0.09);
+}
+
+/* Hybrid buttons */
+
+html[data-theme="hybrid"] .primary-button,
+html[data-theme="hybrid"] .auth-submit {
+  border-color: #315f9c;
+  color: #ffffff;
+  background: #315f9c;
+  box-shadow: 0 8px 18px rgba(49, 95, 156, 0.14);
+}
+
+html[data-theme="hybrid"] .primary-button:hover,
+html[data-theme="hybrid"] .auth-submit:hover {
+  background: #244e85;
+}
+
+html[data-theme="hybrid"] .secondary-button {
+  border-color: var(--line);
+  color: var(--blue-dark);
+  background: #ffffff;
+}
+
+html[data-theme="hybrid"] .secondary-button:hover {
+  border-color: rgba(49, 95, 156, 0.25);
+  background: var(--blue-soft);
+}
+
+/* Hybrid auth/error support */
+
+html[data-theme="hybrid"] .auth-body,
+html[data-theme="hybrid"] .error-page-body {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(49, 95, 156, 0.08), transparent 28rem),
+    linear-gradient(135deg, #eef1f5 0%, #ffffff 100%);
+}

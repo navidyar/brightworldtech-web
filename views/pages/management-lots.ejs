@@ -1,8 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
+  <link rel="stylesheet" href="/css/lots.css" />
 
   <body>
+    <%
+      const lotsById = new Map();
+      const childLotsByParentId = new Map();
+
+      lots.forEach((lot) => {
+        lotsById.set(String(lot.lot_id), lot);
+      });
+
+      lots.forEach((lot) => {
+        const parentId = lot.parent_lot_id ? String(lot.parent_lot_id) : '';
+
+        if (parentId && lotsById.has(parentId)) {
+          if (!childLotsByParentId.has(parentId)) {
+            childLotsByParentId.set(parentId, []);
+          }
+
+          childLotsByParentId.get(parentId).push(lot);
+        }
+      });
+
+      function sortLotsByName(a, b) {
+        return String(a.lot_name || '').localeCompare(String(b.lot_name || ''), undefined, {
+          numeric: true,
+          sensitivity: 'base'
+        });
+      }
+
+      const rootLots = lots
+        .filter((lot) => {
+          const parentId = lot.parent_lot_id ? String(lot.parent_lot_id) : '';
+          return !parentId || !lotsById.has(parentId);
+        })
+        .sort(sortLotsByName);
+
+      const orderedLots = [];
+      const visitedLotIds = new Set();
+
+      function addLotAndChildren(lot, level) {
+        const lotId = String(lot.lot_id);
+
+        if (visitedLotIds.has(lotId)) {
+          return;
+        }
+
+        visitedLotIds.add(lotId);
+
+        orderedLots.push({
+          ...lot,
+          hierarchyLevel: level
+        });
+
+        const childLots = (childLotsByParentId.get(lotId) || []).slice().sort(sortLotsByName);
+
+        childLots.forEach((childLot) => {
+          addLotAndChildren(childLot, level + 1);
+        });
+      }
+
+      rootLots.forEach((rootLot) => {
+        addLotAndChildren(rootLot, 0);
+      });
+
+      lots.forEach((lot) => {
+        if (!visitedLotIds.has(String(lot.lot_id))) {
+          addLotAndChildren(lot, 0);
+        }
+      });
+
+      function getChildLots(lot) {
+        return childLotsByParentId.get(String(lot.lot_id)) || [];
+      }
+
+      function getParentLot(lot) {
+        if (!lot.parent_lot_id) {
+          return null;
+        }
+
+        return lotsById.get(String(lot.parent_lot_id)) || null;
+      }
+    %>
+
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 
@@ -12,11 +94,11 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-green">
             <div>
-              <p class="eyebrow">Step 2c</p>
+              <p class="eyebrow">Step 2d.3a</p>
               <h2>Lots</h2>
               <p>
-                Review active and inactive lots, unit goals, current unit counts, requirements,
-                default grades, deadlines, and label format information.
+                Review lots in parent/child order without using a separate tree panel.
+                Parent lots, sub-lots, unit goals, requirements, and statuses are shown in one compact browser.
               </p>
             </div>
 
@@ -62,6 +144,11 @@
               </div>
             <% } %>
 
+            <div class="lot-browser-note">
+              <strong>Hierarchy view:</strong>
+              Parent lots appear first. Sub-lots are indented underneath their parent using the arrow marker.
+            </div>
+
             <h2 class="section-title">Lots</h2>
 
             <div class="table-card">
@@ -78,24 +165,66 @@
                     <th>Deadline</th>
                     <th>Status</th>
                     <th>Label Format</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
 
                 <tbody>
-                  <% if (lots.length === 0) { %>
+                  <% if (orderedLots.length === 0) { %>
                     <tr>
-                      <td colspan="10">No lots found.</td>
+                      <td colspan="11">No lots found.</td>
                     </tr>
                   <% } %>
 
-                  <% lots.forEach((lot) => { %>
-                    <tr>
-                      <td>
-                        <strong><%= lot.lot_name %></strong>
-                        <% if (lot.lot_code) { %>
-                          <br />
-                          <code><%= lot.lot_code %></code>
-                        <% } %>
+                  <% orderedLots.forEach((lot) => { %>
+                    <%
+                      const parentLot = getParentLot(lot);
+                      const childLots = getChildLots(lot);
+                      const hierarchyLevel = Math.min(Number(lot.hierarchyLevel || 0), 6);
+                    %>
+
+                    <tr class="<%= hierarchyLevel > 0 ? 'lot-child-row' : 'lot-parent-row' %>">
+                      <td class="lot-hierarchy-cell" style="--lot-level: <%= hierarchyLevel %>;">
+                        <div class="lot-hierarchy-wrap">
+                          <% if (hierarchyLevel > 0) { %>
+                            <span class="lot-hierarchy-arrow">↳</span>
+                          <% } else if (childLots.length > 0) { %>
+                            <span class="lot-hierarchy-parent-dot"></span>
+                          <% } else { %>
+                            <span class="lot-hierarchy-spacer"></span>
+                          <% } %>
+
+                          <div class="lot-hierarchy-main">
+                            <a href="/management/lots/<%= lot.lot_id %>" class="unit-link">
+                              <strong><%= lot.lot_name %></strong>
+                            </a>
+
+                            <% if (lot.lot_number) { %>
+                              <span class="lot-number-badge">Lot #<%= lot.lot_number %></span>
+                            <% } %>
+
+                            <% if (lot.lot_code) { %>
+                              <br />
+                              <code><%= lot.lot_code %></code>
+                            <% } %>
+
+                            <% if (parentLot) { %>
+                              <br />
+                              <span class="table-muted-line">
+                                Parent:
+                                <a href="/management/lots/<%= parentLot.lot_id %>"><%= parentLot.lot_name %></a>
+                              </span>
+                            <% } else if (childLots.length > 0) { %>
+                              <br />
+                              <span class="table-muted-line">
+                                Parent lot · <%= childLots.length %> child lot<%= childLots.length === 1 ? '' : 's' %>
+                              </span>
+                            <% } else { %>
+                              <br />
+                              <span class="table-muted-line">No parent lot</span>
+                            <% } %>
+                          </div>
+                        </div>
                       </td>
 
                       <td><%= lot.lot_type_label || '—' %></td>
@@ -134,6 +263,10 @@
                       </td>
 
                       <td><%= lot.label_format || '—' %></td>
+
+                      <td>
+                        <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>">View</a>
+                      </td>
                     </tr>
                   <% }) %>
                 </tbody>
@@ -145,7 +278,7 @@
             <div class="content-header">
               <div>
                 <p class="eyebrow">Next</p>
-                <h2>Step 2d Preview</h2>
+                <h2>Step 2e Preview</h2>
               </div>
             </div>
 
@@ -153,10 +286,10 @@
               <div class="workflow-item active">
                 <span></span>
                 <div>
-                  <strong>Lot requirements</strong>
+                  <strong>Unit-to-lot validation</strong>
                   <p>
-                    Next we can add requirement rules for make, model, unit type, processor,
-                    RAM, storage, grade, and strict/open lot behavior.
+                    Next we can compare unit data against these lot requirements and show whether
+                    a unit is accepted, rejected by lot requirements, or needs Management override.
                   </p>
                 </div>
               </div>
@@ -164,10 +297,10 @@
               <div class="workflow-item slate">
                 <span></span>
                 <div>
-                  <strong>Strict vs open/mixed lots</strong>
+                  <strong>Standardized requirement dropdowns</strong>
                   <p>
-                    Strict lots can validate units against requirements. Open/mixed lots can allow
-                    flexible configurations without Management approving every unit.
+                    After the first validation flow works, we can replace text-only requirement values
+                    with dropdowns for RAM, SSD, CPU, manufacturers, models, and touchscreen.
                   </p>
                 </div>
               </div>

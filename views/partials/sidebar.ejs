@@ -1,3 +1,15 @@
+<%
+  const accessibleDashboards =
+    Array.isArray(dashboardDefinitions)
+      ? dashboardDefinitions.filter((dashboard) => canAccessDashboard(dashboard.key))
+      : [];
+
+  const dashboardHref =
+    accessibleDashboards.length === 1
+      ? `/dashboards/${accessibleDashboards[0].key}`
+      : '/';
+%>
+
 <aside class="sidebar">
   <div class="sidebar-brand">
     <a href="/" class="brand-card">
@@ -10,28 +22,10 @@
   </div>
 
   <nav class="sidebar-nav">
-    <a href="/" class="sidebar-link <%= currentNav === 'dashboard' ? 'active' : '' %>">
+    <a href="<%= dashboardHref %>" class="sidebar-link <%= currentNav === 'dashboard' || String(currentNav || '').startsWith('dashboard:') ? 'active' : '' %>">
       <span class="sidebar-icon">⌂</span>
       <span>Dashboard</span>
     </a>
-
-    <details class="sidebar-group" open>
-      <summary>
-        <span class="sidebar-icon">▦</span>
-        <span>Role Dashboards</span>
-      </summary>
-
-      <div class="sidebar-subnav">
-        <% dashboardDefinitions.forEach((dashboard) => { %>
-          <% if (canAccessDashboard(dashboard.key)) { %>
-            <a href="/dashboards/<%= dashboard.key %>" class="sidebar-sublink <%= currentNav === `dashboard:${dashboard.key}` ? 'active' : '' %>">
-              <span class="submenu-dot <%= dashboard.accent %>"></span>
-              <span><%= dashboard.menuLabel %></span>
-            </a>
-          <% } %>
-        <% }) %>
-      </div>
-    </details>
 
     <% if (canAccessMenuArea('admin')) { %>
       <details class="sidebar-group">
@@ -41,10 +35,10 @@
         </summary>
 
         <div class="sidebar-subnav">
-          <a href="/dashboards/admin" class="sidebar-sublink <%= currentNav === 'dashboard:admin' ? 'active' : '' %>">
+          <span class="sidebar-sublink sidebar-sublink-muted">
             <span class="submenu-dot purple"></span>
-            <span>Admin Dashboard</span>
-          </a>
+            <span>Admin tools planned</span>
+          </span>
         </div>
       </details>
     <% } %>
@@ -71,11 +65,6 @@
             <span class="submenu-dot slate"></span>
             <span>Config Values</span>
           </a>
-
-          <a href="/dashboards/management" class="sidebar-sublink <%= currentNav === 'dashboard:management' ? 'active' : '' %>">
-            <span class="submenu-dot blue"></span>
-            <span>Dashboard</span>
-          </a>
         </div>
       </details>
     <% } %>
@@ -88,33 +77,10 @@
         </summary>
 
         <div class="sidebar-subnav">
-          <% if (canAccessDashboard('tech-lead')) { %>
-            <a href="/dashboards/tech-lead" class="sidebar-sublink <%= currentNav === 'dashboard:tech-lead' ? 'active' : '' %>">
-              <span class="submenu-dot green"></span>
-              <span>Tech Lead Dashboard</span>
-            </a>
-          <% } %>
-
-          <% if (canAccessDashboard('tech')) { %>
-            <a href="/dashboards/tech" class="sidebar-sublink <%= currentNav === 'dashboard:tech' ? 'active' : '' %>">
-              <span class="submenu-dot green"></span>
-              <span>Tech Dashboard</span>
-            </a>
-          <% } %>
-
-          <% if (canAccessDashboard('qc')) { %>
-            <a href="/dashboards/qc" class="sidebar-sublink <%= currentNav === 'dashboard:qc' ? 'active' : '' %>">
-              <span class="submenu-dot yellow"></span>
-              <span>QC Dashboard</span>
-            </a>
-          <% } %>
-
-          <% if (canAccessDashboard('packing')) { %>
-            <a href="/dashboards/packing" class="sidebar-sublink <%= currentNav === 'dashboard:packing' ? 'active' : '' %>">
-              <span class="submenu-dot orange"></span>
-              <span>Packing Dashboard</span>
-            </a>
-          <% } %>
+          <span class="sidebar-sublink sidebar-sublink-muted">
+            <span class="submenu-dot green"></span>
+            <span>Tech tools planned</span>
+          </span>
         </div>
       </details>
     <% } %>
@@ -127,10 +93,10 @@
         </summary>
 
         <div class="sidebar-subnav">
-          <a href="/dashboards/warehouse" class="sidebar-sublink <%= currentNav === 'dashboard:warehouse' ? 'active' : '' %>">
+          <span class="sidebar-sublink sidebar-sublink-muted">
             <span class="submenu-dot slate"></span>
-            <span>Warehouse Dashboard</span>
-          </a>
+            <span>Warehouse tools planned</span>
+          </span>
         </div>
       </details>
     <% } %>
@@ -143,10 +109,10 @@
         </summary>
 
         <div class="sidebar-subnav">
-          <a href="/dashboards/sales" class="sidebar-sublink <%= currentNav === 'dashboard:sales' ? 'active' : '' %>">
+          <span class="sidebar-sublink sidebar-sublink-muted">
             <span class="submenu-dot red"></span>
-            <span>Sales Dashboard</span>
-          </a>
+            <span>Sales tools planned</span>
+          </span>
         </div>
       </details>
     <% } %>

@@ -2,7 +2,32 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <title><%= pageTitle ? `${pageTitle} | BWTDallas` : 'BWTDallas' %></title>
+  <title><%= pageTitle ? `${pageTitle} | BWTDallas App` : 'BWTDallas App' %></title>
+
+  <script>
+    (function () {
+      const storageKey = 'bwtdallas-theme';
+      const savedTheme = localStorage.getItem(storageKey);
+
+      let theme = 'hybrid';
+
+      if (savedTheme === 'light' || savedTheme === 'hybrid') {
+        theme = savedTheme;
+      }
+
+      if (savedTheme === 'dark' || savedTheme === 'dim') {
+        theme = 'hybrid';
+        localStorage.setItem(storageKey, theme);
+      }
+
+      document.documentElement.setAttribute('data-theme', theme);
+      document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'light';
+    })();
+  </script>
 
   <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/theme.css" />
+
+  <script defer src="/js/theme.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" crossorigin="anonymous"></script>
 </head>

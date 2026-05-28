@@ -86,6 +86,17 @@ function generateLotCode(lotName) {
   return `${normalizedName}-${datePart}-${randomPart}`;
 }
 
+async function generateNextLotNumber() {
+  const [rows] = await pool.query(`
+    SELECT
+      COALESCE(MAX(CAST(lot_number AS UNSIGNED)), 1000) + 1 AS next_lot_number
+    FROM lots
+    WHERE lot_number REGEXP '^[0-9]+$'
+  `);
+
+  return String(rows[0]?.next_lot_number || 1001);
+}
+
 async function listConfigValuesForFirstExistingCategory(candidateCategoryCodes) {
   const categoryColumns = await getColumnSet('config_categories');
   const valueColumns = await getColumnSet('config_values');
@@ -144,6 +155,89 @@ async function listConfigValuesForFirstExistingCategory(candidateCategoryCodes) 
   };
 }
 
+async function findConfigValueIdByCode(candidateCategoryCodes, valueCode) {
+  const normalizedValueCode = String(valueCode || '').trim();
+
+  if (!normalizedValueCode) {
+    return null;
+  }
+
+  const placeholders = candidateCategoryCodes.map(() => '?').join(', ');
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        cv.config_value_id
+      FROM config_values cv
+      JOIN config_categories cc
+        ON cc.config_category_id = cv.config_category_id
+      WHERE cc.code IN (${placeholders})
+        AND cv.code = ?
+      ORDER BY FIELD(cc.code, ${placeholders})
+      LIMIT 1
+    `,
+    [...candidateCategoryCodes, normalizedValueCode, ...candidateCategoryCodes]
+  );
+
+  return rows[0]?.config_value_id || null;
+}
+
+async function findPreferredConfigValueId(candidateCategoryCodes, preferredValueCodes) {
+  const valueColumns = await getColumnSet('config_values');
+  const categoryPlaceholders = candidateCategoryCodes.map(() => '?').join(', ');
+  const categoryOrderPlaceholders = candidateCategoryCodes.map(() => '?').join(', ');
+  const activeFilter = hasColumn(valueColumns, 'is_active') ? 'AND cv.is_active = 1' : '';
+
+  const preferredCaseLines = preferredValueCodes
+    .map((valueCode, index) => `WHEN cv.code = ? THEN ${index + 1}`)
+    .join('\n          ');
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        cv.config_value_id,
+        cv.code
+      FROM config_values cv
+      JOIN config_categories cc
+        ON cc.config_category_id = cv.config_category_id
+      WHERE cc.code IN (${categoryPlaceholders})
+        ${activeFilter}
+      ORDER BY
+        FIELD(cc.code, ${categoryOrderPlaceholders}),
+        CASE
+          ${preferredCaseLines}
+          ELSE 999
+        END,
+        cv.config_value_id
+      LIMIT 1
+    `,
+    [...candidateCategoryCodes, ...candidateCategoryCodes, ...preferredValueCodes]
+  );
+
+  return rows[0]?.config_value_id || null;
+}
+
+async function getDefaultLotStatusConfigValueId() {
+  return findPreferredConfigValueId(
+    ['lot_statuses', 'lot_status'],
+    ['active', 'open', 'created', 'new', 'pending']
+  );
+}
+
+async function getDefaultRequirementPolicyConfigValueId(hasUnlimitedGoal) {
+  if (hasUnlimitedGoal) {
+    return findPreferredConfigValueId(
+      ['requirement_policies', 'requirement_policy', 'lot_requirement_policies', 'lot_requirement_policy'],
+      ['open', 'mixed', 'no_requirements', 'none', 'flexible', 'not_strict', 'strict']
+    );
+  }
+
+  return findPreferredConfigValueId(
+    ['requirement_policies', 'requirement_policy', 'lot_requirement_policies', 'lot_requirement_policy'],
+    ['strict', 'required', 'enforced', 'validate', 'open', 'mixed']
+  );
+}
+
 async function listParentLotOptions() {
   const lotColumns = await getColumnSet('lots');
 
@@ -158,7 +252,7 @@ async function listParentLotOptions() {
   const lotCodeSelect = selectExpression(
     'l',
     lotColumns,
-    ['lot_code', 'code'],
+    ['lot_code', 'code', 'lot_number'],
     'lot_code',
     'NULL'
   );
@@ -191,6 +285,9 @@ async function getLotSchemaCapabilities() {
   return {
     hasParentLotId: hasColumn(lotColumns, 'parent_lot_id'),
     hasLotType: hasColumn(lotColumns, 'lot_type_config_value_id'),
+    hasLotStatus: hasColumn(lotColumns, 'lot_status_config_value_id'),
+    hasRequirementPolicy: hasColumn(lotColumns, 'requirement_policy_config_value_id'),
+    hasLotNumber: hasColumn(lotColumns, 'lot_number'),
     hasDefaultGrade: hasColumn(lotColumns, 'default_grade_config_value_id'),
     hasUnitAmountGoal: Boolean(pickColumn(lotColumns, ['unit_amount_goal', 'unit_goal', 'quantity_goal', 'target_unit_count'])),
     hasDeadline: Boolean(pickColumn(lotColumns, ['deadline', 'deadline_date', 'due_date'])),
@@ -229,6 +326,8 @@ async function listLots() {
   const lotRequirementColumns = await getColumnSet('lot_requirements');
 
   const hasLotType = hasColumn(lotColumns, 'lot_type_config_value_id');
+  const hasLotStatus = hasColumn(lotColumns, 'lot_status_config_value_id');
+  const hasRequirementPolicy = hasColumn(lotColumns, 'requirement_policy_config_value_id');
   const hasDefaultGrade = hasColumn(lotColumns, 'default_grade_config_value_id');
   const hasUnitsLotId = hasColumn(unitColumns, 'lot_id');
   const hasRequirementsLotId = hasColumn(lotRequirementColumns, 'lot_id');
@@ -241,10 +340,18 @@ async function listLots() {
     "CONCAT('Lot #', l.lot_id)"
   );
 
+  const lotNumberSelect = selectExpression(
+    'l',
+    lotColumns,
+    ['lot_number'],
+    'lot_number',
+    'NULL'
+  );
+
   const lotCodeSelect = selectExpression(
     'l',
     lotColumns,
-    ['lot_code', 'code'],
+    ['lot_code', 'code', 'lot_number'],
     'lot_code',
     'NULL'
   );
@@ -328,6 +435,20 @@ async function listLots() {
     `
     : '';
 
+  const lotStatusJoin = hasLotStatus
+    ? `
+      LEFT JOIN config_values lot_status
+        ON lot_status.config_value_id = l.lot_status_config_value_id
+    `
+    : '';
+
+  const requirementPolicyJoin = hasRequirementPolicy
+    ? `
+      LEFT JOIN config_values requirement_policy
+        ON requirement_policy.config_value_id = l.requirement_policy_config_value_id
+    `
+    : '';
+
   const defaultGradeJoin = hasDefaultGrade
     ? `
       LEFT JOIN config_values default_grade
@@ -365,6 +486,22 @@ async function listLots() {
     ? 'COALESCE(lot_type.label, lot_type.code) AS lot_type_label'
     : 'NULL AS lot_type_label';
 
+  const lotStatusLabelSelect = hasLotStatus
+    ? 'COALESCE(lot_status.label, lot_status.code) AS lot_status_label'
+    : 'NULL AS lot_status_label';
+
+  const lotStatusCodeSelect = hasLotStatus
+    ? 'lot_status.code AS lot_status_code'
+    : 'NULL AS lot_status_code';
+
+  const requirementPolicyLabelSelect = hasRequirementPolicy
+    ? 'COALESCE(requirement_policy.label, requirement_policy.code) AS requirement_policy_label'
+    : 'NULL AS requirement_policy_label';
+
+  const requirementPolicyCodeSelect = hasRequirementPolicy
+    ? 'requirement_policy.code AS requirement_policy_code'
+    : 'NULL AS requirement_policy_code';
+
   const defaultGradeLabelSelect = hasDefaultGrade
     ? 'COALESCE(default_grade.label, default_grade.code) AS default_grade_label'
     : 'NULL AS default_grade_label';
@@ -386,8 +523,13 @@ async function listLots() {
       l.lot_id,
       ${parentLotIdSelect},
       ${lotNameSelect},
+      ${lotNumberSelect},
       ${lotCodeSelect},
       ${lotTypeLabelSelect},
+      ${lotStatusLabelSelect},
+      ${lotStatusCodeSelect},
+      ${requirementPolicyLabelSelect},
+      ${requirementPolicyCodeSelect},
       ${defaultGradeLabelSelect},
       ${unitGoalSelect},
       ${deadlineSelect},
@@ -401,6 +543,8 @@ async function listLots() {
       ${requirementCountSelect}
     FROM lots l
     ${lotTypeJoin}
+    ${lotStatusJoin}
+    ${requirementPolicyJoin}
     ${defaultGradeJoin}
     ${unitCountJoin}
     ${requirementCountJoin}
@@ -416,6 +560,11 @@ async function listLots() {
       ...progress
     };
   });
+}
+
+async function getLotById(lotId) {
+  const lots = await listLots();
+  return lots.find((lot) => Number(lot.lot_id) === Number(lotId)) || null;
 }
 
 async function getLotSummary() {
@@ -477,10 +626,40 @@ async function createLot(formData, currentUserId) {
   const notes = String(formData.notes || '').trim() || null;
   const labelFormat = String(formData.labelFormat || '').trim() || null;
 
+  if (hasColumn(lotColumns, 'lot_number')) {
+    const nextLotNumber = await generateNextLotNumber();
+    addColumn('lot_number', nextLotNumber);
+  }
+
   addFirstAvailableColumn(['lot_name', 'name', 'title'], lotName);
   addFirstAvailableColumn(['lot_code', 'code'], lotCode);
   addColumn('parent_lot_id', parentLotId);
   addColumn('lot_type_config_value_id', lotTypeConfigValueId);
+
+  if (hasColumn(lotColumns, 'lot_status_config_value_id')) {
+    const lotStatusConfigValueId = await getDefaultLotStatusConfigValueId();
+
+    if (!lotStatusConfigValueId) {
+      throw new Error(
+        'Cannot create lot because lots.lot_status_config_value_id is required, but no config value was found in lot_statuses or lot_status. Add a config value such as active, open, created, new, or pending.'
+      );
+    }
+
+    addColumn('lot_status_config_value_id', lotStatusConfigValueId);
+  }
+
+  if (hasColumn(lotColumns, 'requirement_policy_config_value_id')) {
+    const requirementPolicyConfigValueId = await getDefaultRequirementPolicyConfigValueId(hasUnlimitedGoal);
+
+    if (!requirementPolicyConfigValueId) {
+      throw new Error(
+        'Cannot create lot because lots.requirement_policy_config_value_id is required, but no config value was found in requirement_policies, requirement_policy, lot_requirement_policies, or lot_requirement_policy. Add a config value such as strict, open, mixed, no_requirements, or none.'
+      );
+    }
+
+    addColumn('requirement_policy_config_value_id', requirementPolicyConfigValueId);
+  }
+
   addFirstAvailableColumn(['unit_amount_goal', 'unit_goal', 'quantity_goal', 'target_unit_count'], unitAmountGoal);
   addColumn('default_grade_config_value_id', defaultGradeConfigValueId);
   addFirstAvailableColumn(['deadline', 'deadline_date', 'due_date'], deadline);
@@ -509,10 +688,282 @@ async function createLot(formData, currentUserId) {
   };
 }
 
+async function listLotRequirements(lotId) {
+  const requirementColumns = await getColumnSet('lot_requirements');
+
+  if (!hasColumn(requirementColumns, 'lot_id')) {
+    return [];
+  }
+
+  const hasRequirementTypeConfigValueId = hasColumn(requirementColumns, 'requirement_type_config_value_id');
+  const hasRequiredConfigValueId = hasColumn(requirementColumns, 'required_config_value_id');
+
+  const requirementIdColumn = pickColumn(requirementColumns, ['lot_requirement_id', 'requirement_id', 'id']);
+
+  const requirementIdSelect = selectExpression(
+    'lr',
+    requirementColumns,
+    ['lot_requirement_id', 'requirement_id', 'id'],
+    'lot_requirement_id',
+    'NULL'
+  );
+
+  const requirementKeyColumn = pickColumn(requirementColumns, [
+    'requirement_key',
+    'requirement_code',
+    'field_name',
+    'requirement_type_code'
+  ]);
+
+  const requirementKeySelect = hasRequirementTypeConfigValueId
+    ? `
+      COALESCE(
+        requirement_type.code,
+        ${requirementKeyColumn ? `lr.\`${requirementKeyColumn}\`` : 'NULL'}
+      ) AS requirement_key
+    `
+    : selectExpression(
+      'lr',
+      requirementColumns,
+      ['requirement_key', 'requirement_code', 'field_name', 'requirement_type_code'],
+      'requirement_key',
+      'NULL'
+    );
+
+  const operatorSelect = selectExpression(
+    'lr',
+    requirementColumns,
+    ['operator_code', 'comparison_operator', 'operator'],
+    'operator_code',
+    "'equals'"
+  );
+
+  const textValueColumn = pickColumn(requirementColumns, [
+    'required_value_text',
+    'value_text',
+    'required_text',
+    'text_value',
+    'requirement_value',
+    'value'
+  ]);
+
+  const numberValueColumn = pickColumn(requirementColumns, [
+    'required_value_number',
+    'value_number',
+    'required_number',
+    'number_value'
+  ]);
+
+  const requiredValueExpressionParts = [];
+
+  if (hasRequiredConfigValueId) {
+    requiredValueExpressionParts.push('required_value.label');
+    requiredValueExpressionParts.push('required_value.code');
+  }
+
+  if (textValueColumn) {
+    requiredValueExpressionParts.push(`lr.\`${textValueColumn}\``);
+  }
+
+  if (numberValueColumn) {
+    requiredValueExpressionParts.push(`CAST(lr.\`${numberValueColumn}\` AS CHAR)`);
+  }
+
+  requiredValueExpressionParts.push('NULL');
+
+  const requiredValueSelect = `COALESCE(${requiredValueExpressionParts.join(', ')}) AS required_value`;
+
+  const isRequiredSelect = selectExpression(
+    'lr',
+    requirementColumns,
+    ['is_required'],
+    'is_required',
+    '1'
+  );
+
+  const isActiveSelect = selectExpression(
+    'lr',
+    requirementColumns,
+    ['is_active'],
+    'is_active',
+    '1'
+  );
+
+  const notesSelect = selectExpression(
+    'lr',
+    requirementColumns,
+    ['notes', 'note'],
+    'notes',
+    'NULL'
+  );
+
+  const createdAtSelect = selectExpression(
+    'lr',
+    requirementColumns,
+    ['created_at'],
+    'created_at',
+    'NULL'
+  );
+
+  const requirementTypeJoin = hasRequirementTypeConfigValueId
+    ? `
+      LEFT JOIN config_values requirement_type
+        ON requirement_type.config_value_id = lr.requirement_type_config_value_id
+    `
+    : '';
+
+  const requiredValueJoin = hasRequiredConfigValueId
+    ? `
+      LEFT JOIN config_values required_value
+        ON required_value.config_value_id = lr.required_config_value_id
+    `
+    : '';
+
+  let orderExpression = '1';
+
+  if (hasColumn(requirementColumns, 'sort_order') && requirementIdColumn) {
+    orderExpression = `lr.sort_order, lr.\`${requirementIdColumn}\``;
+  } else if (hasColumn(requirementColumns, 'sort_order')) {
+    orderExpression = 'lr.sort_order';
+  } else if (hasColumn(requirementColumns, 'created_at')) {
+    orderExpression = 'lr.created_at DESC';
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        ${requirementIdSelect},
+        lr.lot_id,
+        ${requirementKeySelect},
+        ${operatorSelect},
+        ${requiredValueSelect},
+        ${isRequiredSelect},
+        ${isActiveSelect},
+        ${notesSelect},
+        ${createdAtSelect}
+      FROM lot_requirements lr
+      ${requirementTypeJoin}
+      ${requiredValueJoin}
+      WHERE lr.lot_id = ?
+      ORDER BY ${orderExpression}
+    `,
+    [lotId]
+  );
+
+  return rows;
+}
+
+async function createLotRequirement(lotId, formData, currentUserId) {
+  const requirementColumns = await getColumnSet('lot_requirements');
+
+  const columns = [];
+  const placeholders = [];
+  const values = [];
+
+  function addColumn(columnName, value) {
+    if (!hasColumn(requirementColumns, columnName)) {
+      return false;
+    }
+
+    columns.push(`\`${columnName}\``);
+    placeholders.push('?');
+    values.push(value);
+
+    return true;
+  }
+
+  function addFirstAvailableColumn(candidateColumns, value) {
+    const columnName = pickColumn(requirementColumns, candidateColumns);
+
+    if (!columnName) {
+      return false;
+    }
+
+    return addColumn(columnName, value);
+  }
+
+  const requirementKey = String(formData.requirementKey || '').trim();
+  const operatorCode = String(formData.operatorCode || 'equals').trim();
+  const requiredValue = String(formData.requiredValue || '').trim();
+  const notes = String(formData.notes || '').trim() || null;
+  const requiredValueAsNumber = Number(requiredValue);
+
+  addColumn('lot_id', Number(lotId));
+
+  const addedRequirementKey = addFirstAvailableColumn(
+    ['requirement_key', 'requirement_code', 'field_name', 'requirement_type_code'],
+    requirementKey
+  );
+
+  if (hasColumn(requirementColumns, 'requirement_type_config_value_id')) {
+    const requirementTypeConfigValueId = await findConfigValueIdByCode(
+      ['lot_requirement_types', 'requirement_types'],
+      requirementKey
+    );
+
+    if (requirementTypeConfigValueId) {
+      addColumn('requirement_type_config_value_id', requirementTypeConfigValueId);
+    } else if (!addedRequirementKey) {
+      throw new Error(
+        'The lot_requirements table expects requirement_type_config_value_id, but no matching config value was found. Add lot requirement type config values or add a text requirement_key column.'
+      );
+    }
+  } else if (!addedRequirementKey) {
+    throw new Error(
+      'The lot_requirements table does not have a compatible requirement key column. Expected one of: requirement_key, requirement_code, field_name, requirement_type_code.'
+    );
+  }
+
+  addFirstAvailableColumn(['operator_code', 'comparison_operator', 'operator'], operatorCode);
+
+  const addedTextValue = addFirstAvailableColumn(
+    ['required_value_text', 'value_text', 'required_text', 'text_value', 'requirement_value', 'value'],
+    requiredValue
+  );
+
+  if (!Number.isNaN(requiredValueAsNumber)) {
+    addFirstAvailableColumn(
+      ['required_value_number', 'value_number', 'required_number', 'number_value'],
+      requiredValueAsNumber
+    );
+  }
+
+  if (!addedTextValue && Number.isNaN(requiredValueAsNumber)) {
+    throw new Error(
+      'The lot_requirements table does not have a compatible text value column. Expected one of: required_value_text, value_text, required_text, text_value, requirement_value, value.'
+    );
+  }
+
+  addColumn('is_required', 1);
+  addColumn('is_active', 1);
+  addFirstAvailableColumn(['notes', 'note'], notes);
+  addColumn('created_by_user_id', currentUserId || null);
+  addColumn('updated_by_user_id', currentUserId || null);
+
+  if (columns.length === 0) {
+    throw new Error('No compatible lot requirement columns were found.');
+  }
+
+  const [result] = await pool.query(
+    `
+      INSERT INTO lot_requirements (${columns.join(', ')})
+      VALUES (${placeholders.join(', ')})
+    `,
+    values
+  );
+
+  return {
+    lotRequirementId: result.insertId
+  };
+}
+
 module.exports = {
   listLots,
+  getLotById,
   getLotSummary,
   getLotFormOptions,
   getLotSchemaCapabilities,
-  createLot
+  createLot,
+  listLotRequirements,
+  createLotRequirement
 };

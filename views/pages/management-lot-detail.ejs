@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <link rel="stylesheet" href="/css/lots.css" />
+  <script defer src="/js/lot-requirements.js"></script>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="dashboard-hero accent-green">
+            <div>
+              <p class="eyebrow">Step 2f</p>
+              <h2><%= lot.lot_name %></h2>
+              <p>
+                Manage lot requirements using standardized dropdown values where available,
+                then preview whether units in this lot match the required specifications.
+              </p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Requirements</span>
+              <strong><%= formatNumber(requirements.length) %></strong>
+            </div>
+          </section>
+
+          <section class="dashboard-grid">
+            <article class="dashboard-card">
+              <p class="card-label">Lot Type</p>
+              <h3><%= lot.lot_type_label || '—' %></h3>
+              <p>
+                <% if (lot.lot_number) { %>
+                  Lot #<%= lot.lot_number %>
+                <% } else if (lot.lot_code) { %>
+                  <%= lot.lot_code %>
+                <% } else { %>
+                  No lot number found.
+                <% } %>
+              </p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Units</p>
+              <h3><%= formatNumber(lot.unitCount) %></h3>
+              <p>
+                <% if (lot.isUnlimited) { %>
+                  Open / unlimited lot.
+                <% } else { %>
+                  Goal: <%= formatNumber(lot.unitGoal) %> units.
+                <% } %>
+              </p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Progress</p>
+              <h3>
+                <% if (lot.isUnlimited) { %>
+                  Open
+                <% } else { %>
+                  <%= formatNumber(lot.progressPercent) %>%
+                <% } %>
+              </h3>
+              <p>
+                <% if (lot.isFull) { %>
+                  This lot has reached its unit goal.
+                <% } else { %>
+                  This lot can still accept more units.
+                <% } %>
+              </p>
+            </article>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Validation</p>
+                <h2>Unit-to-Lot Validation Preview</h2>
+              </div>
+
+              <a class="secondary-button" href="/management/lots">Back to Lots</a>
+            </div>
+
+            <div class="validation-note">
+              <strong>Read-only preview:</strong>
+              <%= validationReport.message %>
+            </div>
+
+            <div class="validation-summary-grid">
+              <article class="validation-summary-card accepted">
+                <span>Accepted</span>
+                <strong><%= formatNumber(validationReport.acceptedCount) %></strong>
+              </article>
+
+              <article class="validation-summary-card rejected">
+                <span>Rejected</span>
+                <strong><%= formatNumber(validationReport.rejectedCount) %></strong>
+              </article>
+
+              <article class="validation-summary-card review">
+                <span>Needs Review</span>
+                <strong><%= formatNumber(validationReport.needsReviewCount) %></strong>
+              </article>
+
+              <article class="validation-summary-card open">
+                <span>Open</span>
+                <strong><%= formatNumber(validationReport.openCount) %></strong>
+              </article>
+            </div>
+
+            <% if (!validationReport.supported) { %>
+              <div class="message error">
+                <p><%= validationReport.message %></p>
+              </div>
+            <% } else if (validationReport.unitsChecked === 0) { %>
+              <div class="message success">
+                <p>No units are currently assigned to this lot, so there is nothing to validate yet.</p>
+              </div>
+            <% } else { %>
+              <div class="table-card validation-table-card">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Unit</th>
+                      <th>Result</th>
+                      <th>Validation Details</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    <% validationReport.units.forEach((unit) => { %>
+                      <tr>
+                        <td>
+                          <strong><%= unit.label %></strong>
+                          <br />
+                          <span class="table-muted-line"><%= unit.subLabel %></span>
+                        </td>
+
+                        <td>
+                          <span class="validation-badge <%= unit.status %>">
+                            <%= unit.statusLabel %>
+                          </span>
+                        </td>
+
+                        <td>
+                          <% if (validationReport.requirementCount === 0) { %>
+                            <span class="table-muted-line">
+                              No active requirements exist for this lot.
+                            </span>
+                          <% } else if (unit.failedChecks.length === 0 && unit.reviewChecks.length === 0) { %>
+                            <span class="table-muted-line">
+                              All active requirements passed.
+                            </span>
+                          <% } else { %>
+                            <div class="validation-check-list">
+                              <% unit.failedChecks.slice(0, 4).forEach((check) => { %>
+                                <div class="validation-check rejected">
+                                  <strong><%= check.requirementKey %></strong>
+                                  <span><%= check.message %></span>
+                                </div>
+                              <% }) %>
+
+                              <% unit.reviewChecks.slice(0, 4).forEach((check) => { %>
+                                <div class="validation-check review">
+                                  <strong><%= check.requirementKey %></strong>
+                                  <span><%= check.message %></span>
+                                </div>
+                              <% }) %>
+                            </div>
+                          <% } %>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+
+              <% if (validationReport.unitsChecked >= validationReport.unitLimit) { %>
+                <div class="message error">
+                  <p>
+                    Validation is currently limited to the first <%= formatNumber(validationReport.unitLimit) %> units
+                    for safety. We can add pagination later if needed.
+                  </p>
+                </div>
+              <% } %>
+            <% } %>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Requirements</p>
+                <h2>Lot Requirement Rules</h2>
+              </div>
+            </div>
+
+            <% if (successMessage) { %>
+              <div class="message success">
+                <%= successMessage %>
+              </div>
+            <% } %>
+
+            <% if (errorMessages.length > 0) { %>
+              <div class="message error">
+                <% errorMessages.forEach((errorMessage) => { %>
+                  <p><%= errorMessage %></p>
+                <% }) %>
+              </div>
+            <% } %>
+
+            <div class="table-card" style="margin-top: 20px;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Requirement</th>
+                    <th>Rule</th>
+                    <th>Required Value</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <% if (requirements.length === 0) { %>
+                    <tr>
+                      <td colspan="5">No requirements have been added to this lot yet.</td>
+                    </tr>
+                  <% } %>
+
+                  <% requirements.forEach((requirement) => { %>
+                    <tr>
+                      <td><%= requirement.requirement_key || '—' %></td>
+                      <td><%= requirement.operator_code || 'equals' %></td>
+                      <td><%= requirement.required_value || '—' %></td>
+                      <td>
+                        <% if (Number(requirement.is_active) === 1) { %>
+                          <span class="pill good">Active</span>
+                        <% } else { %>
+                          <span class="pill bad">Inactive</span>
+                        <% } %>
+                      </td>
+                      <td><%= requirement.notes || '—' %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Add Requirement</p>
+                <h2>New Requirement Rule</h2>
+              </div>
+            </div>
+
+            <script type="application/json" id="requirement-value-options-json"><%- JSON.stringify(requirementValueOptionsByKey).replace(/</g, '\\u003c') %></script>
+
+            <form class="app-form" method="post" action="/management/lots/<%= lot.lot_id %>/requirements" data-requirement-form>
+              <div class="form-section">
+                <div class="form-section-header">
+                  <div>
+                    <p class="eyebrow">Rule</p>
+                    <h3>Requirement Details</h3>
+                  </div>
+                  <p>
+                    Choose a requirement field first. If standardized config values exist,
+                    the required value field becomes a dropdown.
+                  </p>
+                </div>
+
+                <div class="form-grid">
+                  <label class="form-field">
+                    <span>Requirement Field</span>
+                    <select name="requirementKey" required data-requirement-key>
+                      <option value="">Select requirement</option>
+                      <% requirementFieldOptions.forEach((option) => { %>
+                        <option value="<%= option.value %>" <%= requirementFormData.requirementKey === option.value ? 'selected' : '' %>>
+                          <%= option.label %>
+                        </option>
+                      <% }) %>
+                    </select>
+                    <small class="field-hint" data-requirement-field-hint>
+                      Select a field to see whether standardized values are available.
+                    </small>
+                  </label>
+
+                  <label class="form-field">
+                    <span>Rule</span>
+                    <select name="operatorCode" required>
+                      <% operatorOptions.forEach((option) => { %>
+                        <option value="<%= option.value %>" <%= requirementFormData.operatorCode === option.value ? 'selected' : '' %>>
+                          <%= option.label %>
+                        </option>
+                      <% }) %>
+                    </select>
+                  </label>
+
+                  <label class="form-field" data-required-value-select-wrap hidden>
+                    <span>Required Value</span>
+                    <select name="requiredValue" data-required-value-select disabled>
+                      <option value="">Select value</option>
+                    </select>
+                    <small class="field-hint" data-required-value-select-hint>
+                      Values are loaded from config values.
+                    </small>
+                  </label>
+
+                  <label class="form-field" data-required-value-text-wrap>
+                    <span>Required Value</span>
+                    <input
+                      type="text"
+                      name="requiredValue"
+                      value="<%= requirementFormData.requiredValue %>"
+                      maxlength="120"
+                      placeholder="Example: 16GB, DDR4, 512GB, i5-8365U, yes, no"
+                      required
+                      data-required-value-text
+                    />
+                    <small class="field-hint">
+                      Free text is used when no standardized dropdown exists yet.
+                    </small>
+                  </label>
+
+                  <label class="form-field">
+                    <span>Notes</span>
+                    <input
+                      type="text"
+                      name="notes"
+                      value="<%= requirementFormData.notes %>"
+                      maxlength="500"
+                      placeholder="Optional internal note"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-actions">
+                <button type="submit" class="primary-button">Add Requirement</button>
+                <a class="secondary-button" href="/management/lots">Back to Lots</a>
+              </div>
+            </form>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Next</p>
+                <h2>Step 2f.1 Preview</h2>
+              </div>
+            </div>
+
+            <div class="workflow-list">
+              <div class="workflow-item active">
+                <span></span>
+                <div>
+                  <strong>Password reset and setup-link copy button</strong>
+                  <p>
+                    Next we can add reset links for existing users, improve browser autocomplete,
+                    and add a copy icon/button so Admin or Management users can copy setup/reset URLs quickly.
+                  </p>
+                </div>
+              </div>
+
+              <div class="workflow-item slate">
+                <span></span>
+                <div>
+                  <strong>Lot detail improvements</strong>
+                  <p>
+                    After that, we can improve lot detail pages with better unit lists,
+                    requirement pass/fail summaries, and relationship breadcrumbs.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

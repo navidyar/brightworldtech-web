@@ -1,15 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle }) %>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= pageTitle || 'Page Not Found' %> | BWTDallas App</title>
 
-  <body>
-    <main class="page-shell">
-      <section class="content-card narrow">
-        <p class="eyebrow">404</p>
-        <h1>Page Not Found</h1>
-        <p>The requested path could not be found:</p>
-        <pre><%= requestedPath %></pre>
-        <a class="primary-button" href="/">Go Home</a>
+    <script>
+      (function () {
+        const storageKey = 'bwtdallas-theme';
+        const savedTheme = localStorage.getItem(storageKey);
+
+        let theme = 'hybrid';
+
+        if (savedTheme === 'light' || savedTheme === 'hybrid') {
+          theme = savedTheme;
+        }
+
+        if (savedTheme === 'dark' || savedTheme === 'dim') {
+          theme = 'hybrid';
+          localStorage.setItem(storageKey, theme);
+        }
+
+        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'light';
+      })();
+    </script>
+
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/theme.css" />
+    <link rel="stylesheet" href="/css/error-pages.css" />
+
+    <script defer src="/js/theme.js"></script>
+  </head>
+
+  <body class="error-page-body">
+    <%
+      const safeRequestedPath =
+        typeof requestedPath !== 'undefined' && requestedPath
+          ? requestedPath
+          : '';
+    %>
+
+    <main class="error-page-shell">
+      <section class="error-page-panel">
+        <p class="error-page-kicker">Page Not Found</p>
+
+        <h1>This page does not exist.</h1>
+
+        <p>
+          The page may have moved, the URL may be incorrect, or the route has not been built yet.
+        </p>
+
+        <% if (safeRequestedPath) { %>
+          <div class="error-page-meta">
+            Requested path: <code><%= safeRequestedPath %></code>
+          </div>
+        <% } else { %>
+          <div class="error-page-meta">
+            Error 404 · No matching route was found.
+          </div>
+        <% } %>
+
+        <div class="error-page-actions">
+          <a class="primary-button" href="/">Back to Dashboard</a>
+          <a class="secondary-button" href="/management/lots">Back to Lots</a>
+        </div>
       </section>
     </main>
   </body>

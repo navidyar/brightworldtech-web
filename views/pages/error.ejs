@@ -1,19 +1,79 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle }) %>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title><%= pageTitle || 'Application Error' %> | BWTDallas App</title>
 
-  <body>
-    <main class="page-shell">
-      <section class="content-card narrow">
-        <p class="eyebrow">500</p>
-        <h1>Application Error</h1>
-        <p><%= message %></p>
+    <script>
+      (function () {
+        const storageKey = 'bwtdallas-theme';
+        const savedTheme = localStorage.getItem(storageKey);
 
-        <% if (error) { %>
-          <pre><%= error.stack || error.message %></pre>
+        let theme = 'hybrid';
+
+        if (savedTheme === 'light' || savedTheme === 'hybrid') {
+          theme = savedTheme;
+        }
+
+        if (savedTheme === 'dark' || savedTheme === 'dim') {
+          theme = 'hybrid';
+          localStorage.setItem(storageKey, theme);
+        }
+
+        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'light';
+      })();
+    </script>
+
+    <link rel="stylesheet" href="/css/style.css" />
+    <link rel="stylesheet" href="/css/theme.css" />
+    <link rel="stylesheet" href="/css/error-pages.css" />
+
+    <script defer src="/js/theme.js"></script>
+  </head>
+
+  <body class="error-page-body">
+    <%
+      const safeMessage =
+        typeof message !== 'undefined' && message
+          ? message
+          : 'Something went wrong while processing your request.';
+
+      const safeError =
+        typeof error !== 'undefined' && error
+          ? error
+          : null;
+
+      const errorDetails =
+        safeError
+          ? safeError.stack || safeError.message || String(safeError)
+          : null;
+    %>
+
+    <main class="error-page-shell">
+      <section class="error-page-panel">
+        <p class="error-page-kicker">Application Error</p>
+
+        <h1>Something went wrong.</h1>
+
+        <p><%= safeMessage %></p>
+
+        <div class="error-page-meta">
+          Error 500 · The app is running, but this request could not be completed.
+        </div>
+
+        <div class="error-page-actions">
+          <a class="primary-button" href="/">Back to Dashboard</a>
+          <a class="secondary-button" href="/management/lots">Back to Lots</a>
+        </div>
+
+        <% if (errorDetails) { %>
+          <details class="error-page-details">
+            <summary>Developer details</summary>
+            <pre><%= errorDetails %></pre>
+          </details>
         <% } %>
-
-        <a class="primary-button" href="/">Go Home</a>
       </section>
     </main>
   </body>
