@@ -12,19 +12,32 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell">
+          <nav class="lot-breadcrumbs" aria-label="Lot breadcrumb">
+            <a href="/management/lots">Lots</a>
+
+            <% lotRelationships.breadcrumbs.forEach((breadcrumbLot, index) => { %>
+              <span aria-hidden="true">›</span>
+
+              <% if (index === lotRelationships.breadcrumbs.length - 1) { %>
+                <strong><%= breadcrumbLot.lot_name %></strong>
+              <% } else { %>
+                <a href="/management/lots/<%= breadcrumbLot.lot_id %>"><%= breadcrumbLot.lot_name %></a>
+              <% } %>
+            <% }) %>
+          </nav>
+
           <section class="dashboard-hero accent-green">
             <div>
-              <p class="eyebrow">Step 2f</p>
+              <p class="eyebrow">Step 2h</p>
               <h2><%= lot.lot_name %></h2>
               <p>
-                Manage lot requirements using standardized dropdown values where available,
-                then preview whether units in this lot match the required specifications.
+                Review this lot’s relationship, requirements, validation results, and enforcement decisions.
               </p>
             </div>
 
             <div class="hero-badge">
-              <span>Requirements</span>
-              <strong><%= formatNumber(requirements.length) %></strong>
+              <span>Enforcement</span>
+              <strong><%= enforcementSummary.policyLabel %></strong>
             </div>
           </section>
 
@@ -77,11 +90,170 @@
           <section class="content-card">
             <div class="content-header">
               <div>
-                <p class="eyebrow">Validation</p>
-                <h2>Unit-to-Lot Validation Preview</h2>
+                <p class="eyebrow">Enforcement</p>
+                <h2>Requirement Enforcement Preview</h2>
               </div>
 
               <a class="secondary-button" href="/management/lots">Back to Lots</a>
+            </div>
+
+            <div class="enforcement-banner <%= enforcementSummary.policyStatus %>">
+              <div>
+                <span><%= enforcementSummary.enforcementModeLabel %></span>
+                <strong><%= enforcementSummary.policyLabel %></strong>
+                <p><%= enforcementSummary.policyMessage %></p>
+              </div>
+            </div>
+
+            <div class="validation-note">
+              <strong>Important:</strong>
+              <%= enforcementSummary.enforcementModeMessage %>
+            </div>
+
+            <div class="enforcement-summary-grid">
+              <article class="enforcement-summary-card allowed">
+                <span>Would Allow</span>
+                <strong><%= formatNumber(enforcementSummary.allowedCount) %></strong>
+              </article>
+
+              <article class="enforcement-summary-card blocked">
+                <span>Would Block</span>
+                <strong><%= formatNumber(enforcementSummary.blockedCount) %></strong>
+              </article>
+
+              <article class="enforcement-summary-card review">
+                <span>Needs Review</span>
+                <strong><%= formatNumber(enforcementSummary.reviewCount) %></strong>
+              </article>
+
+              <article class="enforcement-summary-card override">
+                <span>Override Needed</span>
+                <strong><%= formatNumber(enforcementSummary.overrideRequiredCount) %></strong>
+              </article>
+            </div>
+
+            <% if (enforcementSummary.unitDecisions.length > 0) { %>
+              <h2 class="section-title">Unit Enforcement Decisions</h2>
+
+              <div class="table-card validation-table-card">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Unit</th>
+                      <th>Validation</th>
+                      <th>Decision</th>
+                      <th>Override</th>
+                      <th>Reason</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    <% enforcementSummary.unitDecisions.forEach((unitDecision) => { %>
+                      <tr>
+                        <td>
+                          <strong><%= unitDecision.label %></strong>
+                          <br />
+                          <span class="table-muted-line"><%= unitDecision.subLabel %></span>
+                        </td>
+
+                        <td>
+                          <span class="validation-badge <%= unitDecision.validationStatus %>">
+                            <%= unitDecision.validationStatusLabel %>
+                          </span>
+                        </td>
+
+                        <td>
+                          <span class="enforcement-badge <%= unitDecision.decision %>">
+                            <%= unitDecision.decisionLabel %>
+                          </span>
+                        </td>
+
+                        <td>
+                          <% if (unitDecision.requiresOverride) { %>
+                            <span class="pill bad">Required</span>
+                          <% } else { %>
+                            <span class="pill good">Not needed</span>
+                          <% } %>
+                        </td>
+
+                        <td><%= unitDecision.message %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } else { %>
+              <div class="message success">
+                <p>No unit enforcement decisions are available yet because this lot currently has no units to check.</p>
+              </div>
+            <% } %>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Relationship</p>
+                <h2>Lot Context</h2>
+              </div>
+            </div>
+
+            <div class="lot-context-grid">
+              <article class="lot-context-card">
+                <span>Parent Lot</span>
+
+                <% if (lotRelationships.parentLot) { %>
+                  <strong>
+                    <a href="/management/lots/<%= lotRelationships.parentLot.lot_id %>">
+                      <%= lotRelationships.parentLot.lot_name %>
+                    </a>
+                  </strong>
+                  <small>
+                    This lot is a child/sub-lot under the parent shown above.
+                  </small>
+                <% } else { %>
+                  <strong>No parent</strong>
+                  <small>This is a top-level parent lot.</small>
+                <% } %>
+              </article>
+
+              <article class="lot-context-card">
+                <span>Child Lots</span>
+                <strong><%= formatNumber(lotRelationships.directChildLots.length) %></strong>
+                <small>Direct sub-lots under this lot.</small>
+              </article>
+
+              <article class="lot-context-card">
+                <span>Sibling Lots</span>
+                <strong><%= formatNumber(lotRelationships.siblingLots.length) %></strong>
+                <small>Other lots under the same parent.</small>
+              </article>
+            </div>
+
+            <% if (lotRelationships.directChildLots.length > 0) { %>
+              <h2 class="section-title">Direct Child Lots</h2>
+
+              <div class="compact-lot-list">
+                <% lotRelationships.directChildLots.forEach((childLot) => { %>
+                  <a href="/management/lots/<%= childLot.lot_id %>" class="compact-lot-item">
+                    <strong><%= childLot.lot_name %></strong>
+                    <span>
+                      <%= childLot.lot_type_label || 'No type' %>
+                      <% if (childLot.lot_number) { %>
+                        · Lot #<%= childLot.lot_number %>
+                      <% } %>
+                    </span>
+                  </a>
+                <% }) %>
+              </div>
+            <% } %>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Validation</p>
+                <h2>Unit-to-Lot Validation Summary</h2>
+              </div>
             </div>
 
             <div class="validation-note">
@@ -111,71 +283,121 @@
               </article>
             </div>
 
+            <% if (requirementValidationSummary.length > 0) { %>
+              <h2 class="section-title">Requirement Pass / Fail Summary</h2>
+
+              <div class="table-card validation-table-card">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Requirement</th>
+                      <th>Rule</th>
+                      <th>Required Value</th>
+                      <th>Passed</th>
+                      <th>Rejected</th>
+                      <th>Needs Review</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    <% requirementValidationSummary.forEach((summaryRow) => { %>
+                      <tr>
+                        <td>
+                          <strong><%= summaryRow.requirementLabel %></strong>
+                          <% if (summaryRow.notes) { %>
+                            <br />
+                            <span class="table-muted-line"><%= summaryRow.notes %></span>
+                          <% } %>
+                        </td>
+                        <td><%= summaryRow.operatorLabel %></td>
+                        <td><%= summaryRow.requiredValue || '—' %></td>
+                        <td><span class="validation-mini-count accepted"><%= formatNumber(summaryRow.acceptedCount) %></span></td>
+                        <td><span class="validation-mini-count rejected"><%= formatNumber(summaryRow.rejectedCount) %></span></td>
+                        <td><span class="validation-mini-count review"><%= formatNumber(summaryRow.needsReviewCount) %></span></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            <% } %>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Units</p>
+                <h2>Units Inside This Lot</h2>
+              </div>
+            </div>
+
             <% if (!validationReport.supported) { %>
               <div class="message error">
                 <p><%= validationReport.message %></p>
               </div>
             <% } else if (validationReport.unitsChecked === 0) { %>
               <div class="message success">
-                <p>No units are currently assigned to this lot, so there is nothing to validate yet.</p>
+                <p>No units are currently assigned to this lot.</p>
               </div>
             <% } else { %>
-              <div class="table-card validation-table-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Unit</th>
-                      <th>Result</th>
-                      <th>Validation Details</th>
-                    </tr>
-                  </thead>
+              <div class="unit-validation-list">
+                <% validationReport.units.forEach((unit) => { %>
+                  <details class="unit-validation-item">
+                    <summary>
+                      <span class="unit-validation-main">
+                        <strong><%= unit.label %></strong>
+                        <small><%= unit.subLabel %></small>
+                      </span>
 
-                  <tbody>
-                    <% validationReport.units.forEach((unit) => { %>
-                      <tr>
-                        <td>
-                          <strong><%= unit.label %></strong>
-                          <br />
-                          <span class="table-muted-line"><%= unit.subLabel %></span>
-                        </td>
+                      <span class="validation-badge <%= unit.status %>">
+                        <%= unit.statusLabel %>
+                      </span>
+                    </summary>
 
-                        <td>
-                          <span class="validation-badge <%= unit.status %>">
-                            <%= unit.statusLabel %>
-                          </span>
-                        </td>
+                    <% if (validationReport.requirementCount === 0) { %>
+                      <div class="unit-validation-empty">
+                        No active requirements exist for this lot.
+                      </div>
+                    <% } else { %>
+                      <div class="table-card unit-check-table">
+                        <table>
+                          <thead>
+                            <tr>
+                              <th>Requirement</th>
+                              <th>Rule</th>
+                              <th>Required</th>
+                              <th>Actual</th>
+                              <th>Result</th>
+                              <th>Notes</th>
+                            </tr>
+                          </thead>
 
-                        <td>
-                          <% if (validationReport.requirementCount === 0) { %>
-                            <span class="table-muted-line">
-                              No active requirements exist for this lot.
-                            </span>
-                          <% } else if (unit.failedChecks.length === 0 && unit.reviewChecks.length === 0) { %>
-                            <span class="table-muted-line">
-                              All active requirements passed.
-                            </span>
-                          <% } else { %>
-                            <div class="validation-check-list">
-                              <% unit.failedChecks.slice(0, 4).forEach((check) => { %>
-                                <div class="validation-check rejected">
-                                  <strong><%= check.requirementKey %></strong>
-                                  <span><%= check.message %></span>
-                                </div>
-                              <% }) %>
-
-                              <% unit.reviewChecks.slice(0, 4).forEach((check) => { %>
-                                <div class="validation-check review">
-                                  <strong><%= check.requirementKey %></strong>
-                                  <span><%= check.message %></span>
-                                </div>
-                              <% }) %>
-                            </div>
-                          <% } %>
-                        </td>
-                      </tr>
-                    <% }) %>
-                  </tbody>
-                </table>
+                          <tbody>
+                            <% unit.checks.forEach((check) => { %>
+                              <tr>
+                                <td><%= check.requirementKey %></td>
+                                <td><%= check.operatorCode %></td>
+                                <td><%= check.requiredValue || '—' %></td>
+                                <td>
+                                  <%= check.actualValue || '—' %>
+                                  <% if (check.sourceColumn && check.sourceColumn !== '—') { %>
+                                    <br />
+                                    <span class="table-muted-line">Column: <%= check.sourceColumn %></span>
+                                  <% } %>
+                                </td>
+                                <td>
+                                  <span class="validation-badge <%= check.status %>">
+                                    <%= check.statusLabel %>
+                                  </span>
+                                </td>
+                                <td><%= check.message %></td>
+                              </tr>
+                            <% }) %>
+                          </tbody>
+                        </table>
+                      </div>
+                    <% } %>
+                  </details>
+                <% }) %>
               </div>
 
               <% if (validationReport.unitsChecked >= validationReport.unitLimit) { %>
@@ -350,7 +572,7 @@
             <div class="content-header">
               <div>
                 <p class="eyebrow">Next</p>
-                <h2>Step 2f.1 Preview</h2>
+                <h2>Step 2i Preview</h2>
               </div>
             </div>
 
@@ -358,10 +580,10 @@
               <div class="workflow-item active">
                 <span></span>
                 <div>
-                  <strong>Password reset and setup-link copy button</strong>
+                  <strong>Tech unit creation/editing foundation</strong>
                   <p>
-                    Next we can add reset links for existing users, improve browser autocomplete,
-                    and add a copy icon/button so Admin or Management users can copy setup/reset URLs quickly.
+                    Next we can start the Tech workflow where users create or edit units and see lot validation
+                    feedback before saving.
                   </p>
                 </div>
               </div>
@@ -369,10 +591,9 @@
               <div class="workflow-item slate">
                 <span></span>
                 <div>
-                  <strong>Lot detail improvements</strong>
+                  <strong>Management override workflow</strong>
                   <p>
-                    After that, we can improve lot detail pages with better unit lists,
-                    requirement pass/fail summaries, and relationship breadcrumbs.
+                    After unit creation is connected, we can add override request and approval tracking.
                   </p>
                 </div>
               </div>

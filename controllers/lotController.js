@@ -1,5 +1,6 @@
 const lotModel = require('../models/lotModel');
 const lotValidationModel = require('../models/lotValidationModel');
+const lotEnforcementModel = require('../models/lotEnforcementModel');
 const requirementOptionModel = require('../models/requirementOptionModel');
 
 const requirementFieldOptions = [
@@ -218,6 +219,144 @@ function validateRequirementForm(formData) {
   return errors;
 }
 
+function sortLotsByName(a, b) {
+  return String(a.lot_name || '').localeCompare(String(b.lot_name || ''), undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  });
+}
+
+function buildLotRelationshipData(lot, lots) {
+  const lotsById = new Map();
+
+  lots.forEach((listedLot) => {
+    lotsById.set(String(listedLot.lot_id), listedLot);
+  });
+
+  lotsById.set(String(lot.lot_id), lot);
+
+  const parentLot = lot.parent_lot_id
+    ? lotsById.get(String(lot.parent_lot_id)) || null
+    : null;
+
+  const directChildLots = lots
+    .filter((listedLot) => String(listedLot.parent_lot_id || '') === String(lot.lot_id))
+    .sort(sortLotsByName);
+
+  const breadcrumbs = [];
+  const visitedLotIds = new Set();
+  let currentLot = lot;
+  let guardCount = 0;
+
+  while (currentLot && guardCount < 25) {
+    const currentLotId = String(currentLot.lot_id);
+
+    if (visitedLotIds.has(currentLotId)) {
+      break;
+    }
+
+    visitedLotIds.add(currentLotId);
+    breadcrumbs.unshift(currentLot);
+
+    currentLot = currentLot.parent_lot_id
+      ? lotsById.get(String(currentLot.parent_lot_id)) || null
+      : null;
+
+    guardCount += 1;
+  }
+
+  const siblingLots = parentLot
+    ? lots
+        .filter((listedLot) => (
+          String(listedLot.parent_lot_id || '') === String(parentLot.lot_id) &&
+          String(listedLot.lot_id) !== String(lot.lot_id)
+        ))
+        .sort(sortLotsByName)
+    : [];
+
+  return {
+    parentLot,
+    directChildLots,
+    siblingLots,
+    breadcrumbs
+  };
+}
+
+function getRequirementDisplayLabel(requirementKey) {
+  const option = requirementFieldOptions.find((fieldOption) => fieldOption.value === requirementKey);
+
+  return option ? option.label : requirementKey;
+}
+
+function getOperatorDisplayLabel(operatorCode) {
+  const option = operatorOptions.find((operatorOption) => operatorOption.value === operatorCode);
+
+  return option ? option.label : operatorCode;
+}
+
+function buildRequirementValidationSummary(requirements, validationReport) {
+  const activeRequirements = requirements.filter((requirement) => Number(requirement.is_active) === 1);
+
+  return activeRequirements.map((requirement) => {
+    const requirementKey = String(requirement.requirement_key || '').trim();
+    const operatorCode = String(requirement.operator_code || 'equals').trim();
+    const requiredValue = String(requirement.required_value || '').trim();
+
+    const matchingChecks = validationReport.units.flatMap((unit) => {
+      return unit.checks
+        .filter((check) => (
+          String(check.requirementKey || '') === requirementKey &&
+          String(check.operatorCode || 'equals') === operatorCode &&
+          String(check.requiredValue || '') === requiredValue
+        ))
+        .map((check) => ({
+          ...check,
+          unitLabel: unit.label,
+          unitStatus: unit.status
+        }));
+    });
+
+    return {
+      requirementKey,
+      requirementLabel: getRequirementDisplayLabel(requirementKey),
+      operatorCode,
+      operatorLabel: getOperatorDisplayLabel(operatorCode),
+      requiredValue,
+      notes: requirement.notes || '',
+      totalCount: matchingChecks.length,
+      acceptedCount: matchingChecks.filter((check) => check.status === 'accepted').length,
+      rejectedCount: matchingChecks.filter((check) => check.status === 'rejected').length,
+      needsReviewCount: matchingChecks.filter((check) => check.status === 'needs_review').length
+    };
+  });
+}
+
+async function getLotDetailViewData(lotId) {
+  const lot = await lotModel.getLotById(lotId);
+
+  if (!lot) {
+    return null;
+  }
+
+  const lots = await lotModel.listLots();
+  const requirements = await lotModel.listLotRequirements(lotId);
+  const validationReport = await lotValidationModel.buildLotValidationReport(lotId);
+  const enforcementSummary = lotEnforcementModel.buildLotEnforcementSummary(validationReport);
+  const requirementValueOptionsByKey = await getRequirementValueOptionsByKey();
+  const lotRelationships = buildLotRelationshipData(lot, lots);
+  const requirementValidationSummary = buildRequirementValidationSummary(requirements, validationReport);
+
+  return {
+    lot,
+    requirements,
+    validationReport,
+    enforcementSummary,
+    requirementValueOptionsByKey,
+    lotRelationships,
+    requirementValidationSummary
+  };
+}
+
 async function renderLotsPage(req, res, next) {
   try {
     const lots = await lotModel.listLots();
@@ -286,28 +425,21 @@ async function renderLotDetailPage(req, res, next) {
       });
     }
 
-    const lot = await lotModel.getLotById(lotId);
+    const lotDetailViewData = await getLotDetailViewData(lotId);
 
-    if (!lot) {
+    if (!lotDetailViewData) {
       return res.status(404).render('pages/not-found', {
         pageTitle: 'Lot Not Found',
         requestedPath: req.originalUrl
       });
     }
 
-    const requirements = await lotModel.listLotRequirements(lotId);
-    const validationReport = await lotValidationModel.buildLotValidationReport(lotId);
-    const requirementValueOptionsByKey = await getRequirementValueOptionsByKey();
-
     return res.render('pages/management-lot-detail', {
-      pageTitle: lot.lot_name,
+      pageTitle: lotDetailViewData.lot.lot_name,
       currentNav: 'management-lots',
-      lot,
-      requirements,
-      validationReport,
+      ...lotDetailViewData,
       requirementFieldOptions,
       operatorOptions,
-      requirementValueOptionsByKey,
       requirementFormData: getBlankRequirementFormData(),
       errorMessages: [],
       successMessage: req.query.requirementCreated === '1'
@@ -330,9 +462,9 @@ async function createLotRequirement(req, res, next) {
       });
     }
 
-    const lot = await lotModel.getLotById(lotId);
+    const lotDetailViewData = await getLotDetailViewData(lotId);
 
-    if (!lot) {
+    if (!lotDetailViewData) {
       return res.status(404).render('pages/not-found', {
         pageTitle: 'Lot Not Found',
         requestedPath: req.originalUrl
@@ -341,20 +473,14 @@ async function createLotRequirement(req, res, next) {
 
     const requirementFormData = getRequirementFormDataFromRequest(req);
     const errorMessages = validateRequirementForm(requirementFormData);
-    const requirements = await lotModel.listLotRequirements(lotId);
-    const validationReport = await lotValidationModel.buildLotValidationReport(lotId);
-    const requirementValueOptionsByKey = await getRequirementValueOptionsByKey();
 
     if (errorMessages.length > 0) {
       return res.status(400).render('pages/management-lot-detail', {
-        pageTitle: lot.lot_name,
+        pageTitle: lotDetailViewData.lot.lot_name,
         currentNav: 'management-lots',
-        lot,
-        requirements,
-        validationReport,
+        ...lotDetailViewData,
         requirementFieldOptions,
         operatorOptions,
-        requirementValueOptionsByKey,
         requirementFormData,
         errorMessages,
         successMessage: null
