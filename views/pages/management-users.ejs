@@ -12,10 +12,10 @@
         <main class="content-shell">
           <section class="dashboard-hero">
             <div>
-              <p class="eyebrow">Step 1e</p>
+              <p class="eyebrow">Step 2f.1</p>
               <h2>User Management</h2>
               <p>
-                Create users, assign roles, and generate one-time setup links for initial access or password resets.
+                Create users, assign roles, and generate one-time setup or reset links for account access.
               </p>
             </div>
 
@@ -85,7 +85,7 @@
                       <td>
                         <form method="post" action="/management/users/<%= user.user_id %>/setup-link">
                           <button type="submit" class="logout-button">
-                            <%= user.has_password ? 'Reset Link' : 'Setup Link' %>
+                            <%= user.has_password ? 'Generate Reset Link' : 'Generate Setup Link' %>
                           </button>
                         </form>
                       </td>
@@ -93,6 +93,37 @@
                   <% }) %>
                 </tbody>
               </table>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Account Recovery</p>
+                <h2>How Reset Links Work</h2>
+              </div>
+            </div>
+
+            <div class="workflow-list">
+              <div class="workflow-item active">
+                <span></span>
+                <div>
+                  <strong>Initial setup links</strong>
+                  <p>
+                    Users without passwords receive a one-time setup link so they can create their first password.
+                  </p>
+                </div>
+              </div>
+
+              <div class="workflow-item slate">
+                <span></span>
+                <div>
+                  <strong>Password reset links</strong>
+                  <p>
+                    Users who already have passwords receive a one-time reset link so they can set a new password.
+                  </p>
+                </div>
+              </div>
             </div>
           </section>
         </main>

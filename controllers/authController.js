@@ -24,13 +24,23 @@ function validatePassword(password, confirmPassword) {
   return errors;
 }
 
+function getLoginSuccessMessage(req) {
+  if (req.query.setup === 'complete') {
+    return 'Password created successfully. You can now sign in.';
+  }
+
+  if (req.query.password === 'reset') {
+    return 'Password reset successfully. You can now sign in.';
+  }
+
+  return null;
+}
+
 function renderLogin(req, res) {
   res.render('pages/login', {
     pageTitle: 'Sign In',
     errorMessage: null,
-    successMessage: req.query.setup === 'complete'
-      ? 'Password created successfully. You can now sign in.'
-      : null,
+    successMessage: getLoginSuccessMessage(req),
     formData: {
       email: ''
     }
@@ -110,7 +120,7 @@ async function renderSetupPassword(req, res, next) {
     const link = token ? await authModel.getValidPasswordLink(tokenHash) : null;
 
     res.render('pages/setup-password', {
-      pageTitle: 'Set Password',
+      pageTitle: link && link.link_type_code === 'password_reset' ? 'Reset Password' : 'Set Password',
       token,
       link,
       errorMessages: [],
@@ -135,7 +145,7 @@ async function setupPassword(req, res, next) {
         pageTitle: 'Set Password',
         token: '',
         link: null,
-        errorMessages: ['This setup link is invalid, expired, used, or revoked.'],
+        errorMessages: ['This password link is invalid, expired, used, or revoked.'],
         successMessage: null
       });
     }
@@ -144,7 +154,7 @@ async function setupPassword(req, res, next) {
 
     if (validationErrors.length > 0) {
       return res.status(400).render('pages/setup-password', {
-        pageTitle: 'Set Password',
+        pageTitle: link.link_type_code === 'password_reset' ? 'Reset Password' : 'Set Password',
         token,
         link,
         errorMessages: validationErrors,
@@ -161,6 +171,10 @@ async function setupPassword(req, res, next) {
       userId: link.user_id,
       passwordHash
     });
+
+    if (link.link_type_code === 'password_reset') {
+      return res.redirect('/login?password=reset');
+    }
 
     return res.redirect('/login?setup=complete');
   } catch (error) {

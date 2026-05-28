@@ -28,14 +28,14 @@
               </div>
             <% } %>
 
-            <form class="auth-form" method="post" action="/management/users">
+            <form class="auth-form" method="post" action="/management/users" autocomplete="off">
               <label class="form-field">
                 <span>First Name</span>
                 <input
                   type="text"
                   name="firstName"
                   value="<%= formData.firstName %>"
-                  autocomplete="given-name"
+                  autocomplete="off"
                   required
                 />
               </label>
@@ -46,7 +46,7 @@
                   type="text"
                   name="lastName"
                   value="<%= formData.lastName %>"
-                  autocomplete="family-name"
+                  autocomplete="off"
                   required
                 />
               </label>
@@ -57,7 +57,9 @@
                   type="email"
                   name="email"
                   value="<%= formData.email %>"
-                  autocomplete="email"
+                  autocomplete="off"
+                  inputmode="email"
+                  spellcheck="false"
                   required
                 />
               </label>

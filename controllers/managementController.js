@@ -54,7 +54,8 @@ async function createSetupLinkForUser(user, createdByUserId = null) {
   const expiresInHours = Number(process.env.PASSWORD_SETUP_EXPIRES_HOURS || 24);
   const expiresAt = addHours(new Date(), expiresInHours);
 
-  const linkTypeCode = user.has_password ? 'password_reset' : 'initial_password_setup';
+  const hasExistingPassword = user.has_password === true || Number(user.has_password) === 1;
+  const linkTypeCode = hasExistingPassword ? 'password_reset' : 'initial_password_setup';
 
   await authModel.createPasswordLink({
     userId: user.user_id,
@@ -67,7 +68,11 @@ async function createSetupLinkForUser(user, createdByUserId = null) {
   return {
     setupUrl: `${getBaseUrl()}/setup-password?token=${token}`,
     expiresAt,
-    linkTypeCode
+    expiresInHours,
+    linkTypeCode,
+    isResetLink: linkTypeCode === 'password_reset',
+    linkLabel: linkTypeCode === 'password_reset' ? 'Password Reset Link' : 'Initial Setup Link',
+    actionLabel: linkTypeCode === 'password_reset' ? 'Reset Password' : 'Set Password'
   };
 }
 
@@ -159,7 +164,7 @@ async function createUser(req, res, next) {
     );
 
     return res.render('pages/management-setup-link', {
-      pageTitle: 'Setup Link Created',
+      pageTitle: setupLink.linkLabel,
       currentNav: 'management',
       user,
       setupLink
@@ -194,7 +199,7 @@ async function createSetupLinkForExistingUser(req, res, next) {
     const setupLink = await createSetupLinkForUser(user, req.currentUser.user_id);
 
     return res.render('pages/management-setup-link', {
-      pageTitle: 'Setup Link Created',
+      pageTitle: setupLink.linkLabel,
       currentNav: 'management',
       user,
       setupLink

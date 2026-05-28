@@ -1,6 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
+  <link rel="stylesheet" href="/css/copy-link.css" />
+  <script defer src="/js/copy-link.js"></script>
 
   <body>
     <div class="app-shell">
@@ -10,40 +12,141 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell">
+          <section class="dashboard-hero">
+            <div>
+              <p class="eyebrow">Step 2f.1</p>
+              <h2><%= setupLink.linkLabel %> Created</h2>
+              <p>
+                Copy this one-time URL before leaving the page. The full token is only shown here immediately after generation.
+              </p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Expires</span>
+              <strong><%= formatDateTime(setupLink.expiresAt) %></strong>
+            </div>
+          </section>
+
           <section class="content-card">
             <div class="content-header">
               <div>
-                <p class="eyebrow">One-Time Link</p>
-                <h2>Setup Link Created</h2>
+                <p class="eyebrow">User</p>
+                <h2><%= user.first_name %> <%= user.last_name %></h2>
               </div>
 
               <a class="secondary-button" href="/management/users">Back to Users</a>
             </div>
 
-            <div class="message success">
-              <p>
-                A one-time
-                <strong><%= setupLink.linkTypeCode === 'password_reset' ? 'password reset' : 'initial setup' %></strong>
-                link was created for
-                <strong><%= user.first_name %> <%= user.last_name %></strong>.
-              </p>
-              <p>
-                It expires at <strong><%= formatDateTime(setupLink.expiresAt) %></strong>.
-              </p>
+            <div class="copy-link-user-card">
+              <div>
+                <span>Name</span>
+                <strong><%= user.first_name %> <%= user.last_name %></strong>
+              </div>
+
+              <div>
+                <span>Email</span>
+                <strong><%= user.email %></strong>
+              </div>
+
+              <div>
+                <span>Link Type</span>
+                <strong><%= setupLink.linkLabel %></strong>
+              </div>
+
+              <div>
+                <span>Action</span>
+                <strong><%= setupLink.actionLabel %></strong>
+              </div>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Copy Link</p>
+                <h2>One-Time Password URL</h2>
+              </div>
             </div>
 
-            <h2 class="section-title">Copy This Link</h2>
+            <div class="message success">
+              <% if (setupLink.isResetLink) { %>
+                A password reset link was created for this existing user.
+              <% } else { %>
+                An initial password setup link was created for this new or pending user.
+              <% } %>
+            </div>
 
-            <pre><%= setupLink.setupUrl %></pre>
+            <div class="copy-url-panel">
+              <label class="form-field">
+                <span><%= setupLink.linkLabel %></span>
+                <div class="copy-url-row">
+                  <input
+                    class="copy-url-input"
+                    type="text"
+                    value="<%= setupLink.setupUrl %>"
+                    readonly
+                    autocomplete="off"
+                    spellcheck="false"
+                    data-copy-url-input
+                  />
 
-            <p style="color: var(--muted); line-height: 1.6;">
-              Send this link to the user through chat or email. The token is only shown here once.
-              If the user loses it, generate a new setup link from the users page.
-            </p>
+                  <button
+                    type="button"
+                    class="copy-url-button"
+                    data-copy-button
+                    data-copy-text="<%= setupLink.setupUrl %>"
+                  >
+                    <span aria-hidden="true">⧉</span>
+                    <span data-copy-button-label>Copy</span>
+                  </button>
+                </div>
+              </label>
 
-            <div class="action-row">
-              <a class="primary-button" href="/management/users">Done</a>
-              <a class="secondary-button" href="/management/users/new">Create Another User</a>
+              <p class="copy-url-note">
+                This link expires in approximately <%= setupLink.expiresInHours %> hour<%= Number(setupLink.expiresInHours) === 1 ? '' : 's' %>.
+                Generating another link for this same user revokes the previous unused link of the same type.
+              </p>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Security Notes</p>
+                <h2>How This Link Works</h2>
+              </div>
+            </div>
+
+            <div class="workflow-list">
+              <div class="workflow-item active">
+                <span></span>
+                <div>
+                  <strong>One-time use</strong>
+                  <p>
+                    After the user creates or resets their password, this link is marked as used and cannot be reused.
+                  </p>
+                </div>
+              </div>
+
+              <div class="workflow-item slate">
+                <span></span>
+                <div>
+                  <strong>Token is not stored directly</strong>
+                  <p>
+                    The database stores a hash of the token, not the raw URL token shown on this page.
+                  </p>
+                </div>
+              </div>
+
+              <div class="workflow-item warning">
+                <span></span>
+                <div>
+                  <strong>Send carefully</strong>
+                  <p>
+                    Only share this link with the intended user through an approved internal communication method.
+                  </p>
+                </div>
+              </div>
             </div>
           </section>
         </main>
