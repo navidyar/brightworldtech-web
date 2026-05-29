@@ -1,0 +1,89 @@
+<% if (!result.supported) { %>
+  <div class="message error">
+    <p><%= result.message %></p>
+    <p>Save and run <strong>sql/2026-05-step-2j-override-requests.sql</strong>, then rebuild/restart the app.</p>
+  </div>
+<% } else { %>
+  <div class="table-card management-table-card">
+    <table>
+      <thead>
+        <tr>
+          <th>Request</th>
+          <th>Unit / Lot</th>
+          <th>Validation</th>
+          <th>Reason</th>
+          <th>Requested By</th>
+          <th>Review</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <% if (result.requests.length === 0) { %>
+          <tr>
+            <td colspan="6">No override requests found.</td>
+          </tr>
+        <% } %>
+
+        <% result.requests.forEach((request) => { %>
+          <tr>
+            <td>
+              <strong>#<%= request.unitOverrideRequestId %></strong>
+              <br />
+              <span class="pill <%= request.statusClass === 'warn' ? '' : request.statusClass %>"><%= request.statusLabel %></span>
+              <br />
+              <span class="table-muted-line"><%= request.requestType %></span>
+            </td>
+
+            <td>
+              <strong><%= request.unitLabel %></strong>
+              <br />
+              <span class="table-muted-line"><%= request.lotName %></span>
+            </td>
+
+            <td>
+              <strong><%= request.decisionLabel %></strong>
+              <br />
+              <span class="table-muted-line"><%= request.validationLabel %></span>
+            </td>
+
+            <td>
+              <p class="management-request-reason"><%= request.reason || 'No reason entered.' %></p>
+
+              <% if (request.reviewNotes) { %>
+                <p class="management-review-note"><strong>Review note:</strong> <%= request.reviewNotes %></p>
+              <% } %>
+            </td>
+
+            <td>
+              <strong><%= request.requestedByName %></strong>
+              <br />
+              <span class="table-muted-line"><%= request.createdAt ? formatDateTime(request.createdAt) : '—' %></span>
+            </td>
+
+            <td>
+              <% if (request.isPending) { %>
+                <div class="management-review-actions">
+                  <form method="post" action="/management/overrides/<%= request.unitOverrideRequestId %>/approve">
+                    <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                    <input class="management-review-input" type="text" name="reviewNotes" placeholder="Optional review note" maxlength="500" autocomplete="off" />
+                    <button class="primary-button" type="submit">Approve</button>
+                  </form>
+
+                  <form method="post" action="/management/overrides/<%= request.unitOverrideRequestId %>/deny">
+                    <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                    <input class="management-review-input" type="text" name="reviewNotes" placeholder="Optional denial note" maxlength="500" autocomplete="off" />
+                    <button class="secondary-button" type="submit">Deny</button>
+                  </form>
+                </div>
+              <% } else { %>
+                <strong><%= request.reviewedByName || 'Reviewed' %></strong>
+                <br />
+                <span class="table-muted-line"><%= request.reviewedAt ? formatDateTime(request.reviewedAt) : '—' %></span>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+<% } %>

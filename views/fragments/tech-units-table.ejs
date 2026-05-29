@@ -1,0 +1,214 @@
+<div class="table-card tech-table-card">
+  <table class="tech-units-table">
+    <thead>
+      <tr>
+        <th>Unit</th>
+        <th>Lot</th>
+        <th>Status</th>
+        <th>Category</th>
+        <th>Specs</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      <% if (result.units.length === 0) { %>
+        <tr>
+          <td colspan="6">No units found.</td>
+        </tr>
+      <% } %>
+
+      <% result.units.forEach((unit) => { %>
+        <tr class="tech-summary-row">
+          <td>
+            <button
+              type="button"
+              class="tech-unit-toggle"
+              data-unit-detail-toggle
+              data-target="tech-unit-detail-<%= unit.unitId %>"
+              aria-expanded="false"
+              aria-controls="tech-unit-detail-<%= unit.unitId %>"
+            >
+              <span class="tech-unit-toggle-icon" aria-hidden="true">▸</span>
+              <span>
+                <strong><%= unit.label %></strong>
+                <% if (unit.unitId) { %>
+                  <small>Unit ID <%= unit.unitId %></small>
+                <% } %>
+              </span>
+            </button>
+          </td>
+
+          <td><%= unit.lotName %></td>
+
+          <td>
+            <span class="tech-chip"><%= unit.statusLabel %></span>
+          </td>
+
+          <td><%= unit.categoryLabel %></td>
+
+          <td><%= unit.specSummary %></td>
+
+          <td>
+            <% if (unit.unitId) { %>
+              <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">
+                Edit
+              </a>
+            <% } else { %>
+              —
+            <% } %>
+          </td>
+        </tr>
+
+        <tr class="tech-detail-row" id="tech-unit-detail-<%= unit.unitId %>" hidden>
+          <td colspan="6">
+            <div class="tech-detail-offset">
+              <div class="tech-detail-panel">
+                <div class="tech-detail-header">
+                  <div class="tech-detail-title">
+                    <strong>Additional Details</strong>
+                    <span>Expanded information for this unit record.</span>
+                  </div>
+
+                  <div class="tech-detail-status">
+                    <span class="tech-chip"><%= unit.statusLabel %></span>
+                    <span class="tech-chip"><%= unit.categoryLabel %></span>
+                  </div>
+                </div>
+
+                <div class="tech-detail-layout">
+                  <section class="tech-detail-section">
+                    <h3>Identity</h3>
+
+                    <dl class="tech-detail-list">
+                      <div>
+                        <dt>Unit ID</dt>
+                        <dd><%= unit.unitId || '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Lot</dt>
+                        <dd><%= unit.lotName || '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Status</dt>
+                        <dd><%= unit.statusLabel || '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Category</dt>
+                        <dd><%= unit.categoryLabel || '—' %></dd>
+                      </div>
+                    </dl>
+                  </section>
+
+                  <section class="tech-detail-section">
+                    <h3>Hardware</h3>
+
+                    <dl class="tech-detail-list">
+                      <div>
+                        <dt>Manufacturer</dt>
+                        <dd><%= unit.manufacturerLabel || '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Model</dt>
+                        <dd><%= unit.modelLabel || '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Processor</dt>
+                        <dd><%= unit.processorLabel || '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Processor Speed</dt>
+                        <dd><%= unit.processorSpeedGhz ? `${unit.processorSpeedGhz}GHz` : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>RAM</dt>
+                        <dd>
+                          <% if (unit.ramGb || unit.ramTypeLabel !== '—') { %>
+                            <%= unit.ramGb ? `${unit.ramGb}GB` : '' %>
+                            <%= unit.ramTypeLabel !== '—' ? unit.ramTypeLabel : '' %>
+                          <% } else { %>
+                            —
+                          <% } %>
+                        </dd>
+                      </div>
+
+                      <div>
+                        <dt>Storage</dt>
+                        <dd>
+                          <% if (unit.storageGb || unit.storageTypeLabel !== '—') { %>
+                            <%= unit.storageGb ? `${unit.storageGb}GB` : '' %>
+                            <%= unit.storageTypeLabel !== '—' ? unit.storageTypeLabel : '' %>
+                          <% } else { %>
+                            —
+                          <% } %>
+                        </dd>
+                      </div>
+                    </dl>
+                  </section>
+
+                  <section class="tech-detail-section">
+                    <h3>Workflow</h3>
+
+                    <dl class="tech-detail-list">
+                      <div>
+                        <dt>Operating System</dt>
+                        <dd><%= unit.operatingSystemLabel || '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Created</dt>
+                        <dd><%= unit.createdAt ? formatDateTime(unit.createdAt) : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Updated</dt>
+                        <dd><%= unit.updatedAt ? formatDateTime(unit.updatedAt) : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Completed</dt>
+                        <dd><%= unit.completedAt ? formatDateTime(unit.completedAt) : '—' %></dd>
+                      </div>
+                    </dl>
+                  </section>
+                </div>
+
+                <section class="tech-notes-section">
+                  <h3>Notes</h3>
+
+                  <div class="tech-notes-grid">
+                    <div class="tech-note-block">
+                      <strong>Hardware Notes</strong>
+                      <p><%= unit.hardwareNotes || 'No hardware notes entered.' %></p>
+                    </div>
+
+                    <div class="tech-note-block">
+                      <strong>Cosmetic Notes</strong>
+                      <p><%= unit.cosmeticNotes || 'No cosmetic notes entered.' %></p>
+                    </div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</div>
+
+<% if (result.units.length >= result.unitLimit) { %>
+  <div class="message error">
+    <p>
+      This view is limited to <%= formatNumber(result.unitLimit) %> units for safety.
+      We can add pagination later.
+    </p>
+  </div>
+<% } %>

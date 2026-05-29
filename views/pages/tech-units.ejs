@@ -1,7 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
+  <link rel="stylesheet" href="/css/modal.css" />
   <link rel="stylesheet" href="/css/tech.css" />
+  <script defer src="/js/modal.js"></script>
+  <script defer src="/js/tech-units.js"></script>
+  <script defer src="/js/tech-unit-form.js"></script>
 
   <body>
     <div class="app-shell">
@@ -13,17 +17,16 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-green">
             <div>
-              <p class="eyebrow">Step 2i</p>
+              <p class="eyebrow">Step 2i.5</p>
               <h2>Tech Units</h2>
               <p>
-                Create and edit unit records from the Tech workflow foundation.
-                Lot validation enforcement will be connected in a later step.
+                Create, edit, search, and review unit records. Units can only be assigned to lots that do not have child lots.
               </p>
             </div>
 
             <div class="hero-badge">
               <span>Loaded</span>
-              <strong><%= formatNumber(result.units.length) %></strong>
+              <strong><%= result.supported ? formatNumber(result.units.length) : '—' %></strong>
             </div>
           </section>
 
@@ -34,7 +37,9 @@
                 <h2>Unit Browser</h2>
               </div>
 
-              <a class="primary-button" href="/tech/units/new">Create Unit</a>
+              <a class="primary-button" href="/tech/units/new" hx-get="/tech/units/new/modal" hx-target="#modal-root" hx-swap="innerHTML">
+                Create Unit
+              </a>
             </div>
 
             <% if (successMessage) { %>
@@ -53,14 +58,17 @@
                     type="search"
                     name="search"
                     value="<%= filters.search %>"
-                    placeholder="Asset tag, serial, BIOS serial, model"
+                    placeholder="Asset tag, model, processor, status, notes"
                   />
+                  <small class="field-hint">
+                    Search works with or without the <%= result.assetTagPrefix || 'BWT' %> prefix.
+                  </small>
                 </label>
 
                 <label class="form-field">
-                  <span>Lot</span>
+                  <span>Assignable Lot</span>
                   <select name="lotId">
-                    <option value="">All lots</option>
+                    <option value="">All assignable lots</option>
                     <% result.lots.forEach((lot) => { %>
                       <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>>
                         <%= lot.lot_name %>
@@ -70,6 +78,9 @@
                       </option>
                     <% }) %>
                   </select>
+                  <small class="field-hint">
+                    Lots with child lots are containers and are not assignable.
+                  </small>
                 </label>
 
                 <div class="tech-filter-actions">
@@ -78,70 +89,11 @@
                 </div>
               </form>
 
-              <div class="table-card" style="margin-top: 18px;">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Unit</th>
-                      <th>Lot</th>
-                      <th>Identifiers</th>
-                      <th>Specs</th>
-                      <th>Actions</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    <% if (result.units.length === 0) { %>
-                      <tr>
-                        <td colspan="5">No units found.</td>
-                      </tr>
-                    <% } %>
-
-                    <% result.units.forEach((unit) => { %>
-                      <tr>
-                        <td>
-                          <strong><%= unit.label %></strong>
-                          <% if (unit.unitId) { %>
-                            <br />
-                            <span class="table-muted-line">Unit ID <%= unit.unitId %></span>
-                          <% } %>
-                        </td>
-
-                        <td><%= unit.lotName %></td>
-
-                        <td>
-                          <% if (unit.identifiers.length === 0) { %>
-                            <span class="table-muted-line">No identifiers entered</span>
-                          <% } else { %>
-                            <% unit.identifiers.forEach((identifier) => { %>
-                              <span class="tech-chip"><%= identifier %></span>
-                            <% }) %>
-                          <% } %>
-                        </td>
-
-                        <td><%= unit.specSummary %></td>
-
-                        <td>
-                          <% if (unit.unitId) { %>
-                            <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/edit">Edit</a>
-                          <% } else { %>
-                            —
-                          <% } %>
-                        </td>
-                      </tr>
-                    <% }) %>
-                  </tbody>
-                </table>
-              </div>
-
-              <% if (result.units.length >= result.unitLimit) { %>
-                <div class="message error">
-                  <p>
-                    This view is limited to <%= formatNumber(result.unitLimit) %> units for safety.
-                    We can add pagination later.
-                  </p>
+              <div class="tech-table-shell" id="tech-units-list" hx-get="<%= tableUrl %>" hx-trigger="load, unit-saved from:body" hx-swap="innerHTML">
+                <div class="tech-loading-card">
+                  Loading units...
                 </div>
-              <% } %>
+              </div>
             <% } %>
           </section>
 
@@ -176,6 +128,8 @@
             </div>
           </section>
         </main>
+
+        <div id="modal-root"></div>
       </div>
     </div>
   </body>

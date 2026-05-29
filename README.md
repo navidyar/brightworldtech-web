@@ -4,23 +4,25 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
-Step 2i: Tech Unit Creation / Editing Foundation.
+Step 2i.5: Global Table/Form Contrast + Assignable Lots + Professional Unit Details.
 
-This step adds the first Tech unit workflow:
+This step improves visual clarity and lot assignment behavior.
 
-- Tech Unit Browser
-- Create Unit page
-- Edit Unit page
-- Dynamic mapping to existing `units` table columns
-- Lot assignment support when `units.lot_id` exists
-- Standardized dropdowns when matching config values exist
-- Manual fallback text fields when config values are not available yet
+## Changes Added
 
-Routes added:
+- Global table contrast through `public/css/work-area.css`
+- Global form contrast through `public/css/work-area.css`
+- Tech Units filter alignment fixed
+- Unit lot selection changed to assignable lots
+- Expanded unit detail panel redesigned into a compact professional layout
+
+## Assignable Lot Rule
+
+A lot is assignable only when it does not have child lots.
+
+Example:
 
 ```text
-GET  /tech/units
-GET  /tech/units/new
-POST /tech/units
-GET  /tech/units/:unitId/edit
-POST /tech/units/:unitId
+Customer Lot
+├── Dell Lot
+└── HP Lot

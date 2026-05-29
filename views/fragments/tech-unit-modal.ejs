@@ -1,0 +1,27 @@
+<%
+  const isEditMode = mode === 'edit';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel tech-unit-modal" role="dialog" aria-modal="true" aria-labelledby="tech-unit-modal-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Tech Unit</p>
+        <h2 id="tech-unit-modal-title"><%= isEditMode ? 'Edit Unit' : 'Create Unit' %></h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <%- include('./tech-unit-form', {
+        mode,
+        formAction,
+        formOptions,
+        formData,
+        errorMessages,
+        isModal: true
+      }) %>
+    </div>
+  </section>
+</div>

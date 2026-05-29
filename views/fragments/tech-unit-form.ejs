@@ -1,0 +1,293 @@
+<%
+  const isEditMode = mode === 'edit';
+  const htmxAttrs = isModal ? `hx-post="${formAction}" hx-target="#modal-root" hx-swap="innerHTML"` : '';
+
+  function selected(currentValue, optionValue) {
+    return String(currentValue || '') === String(optionValue || '') ? 'selected' : '';
+  }
+%>
+
+<% if (!formOptions.supported) { %>
+  <div class="message error">
+    <p><%= formOptions.message %></p>
+  </div>
+<% } %>
+
+<% if (errorMessages.length > 0) { %>
+  <div class="message error">
+    <% errorMessages.forEach((errorMessage) => { %>
+      <p><%= errorMessage %></p>
+    <% }) %>
+  </div>
+<% } %>
+
+<form class="app-form tech-unit-form" method="post" action="<%= formAction %>" data-tech-unit-form <%- htmxAttrs %>>
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Required</p>
+        <h3>Required Unit Fields</h3>
+      </div>
+      <p>
+        Asset tag is shown with the <%= formOptions.assetTagPrefix || 'BWT' %> prefix in the app.
+        Only the numeric asset number is stored in the database. Units can only be assigned to lots without child lots.
+      </p>
+    </div>
+
+    <div class="form-grid">
+      <label class="form-field">
+        <span>Asset Tag</span>
+        <input
+          type="text"
+          name="assetTag"
+          value="<%= formData.assetTag %>"
+          placeholder="<%= isEditMode ? '' : `${formOptions.assetTagPrefix || 'BWT'}2300001 or blank for auto-generate` %>"
+          autocomplete="off"
+          spellcheck="false"
+          <%= isEditMode ? 'disabled' : '' %>
+        />
+        <small class="field-hint">
+          You can enter <%= formOptions.assetTagPrefix || 'BWT' %>2300001 or 2300001. The prefix is removed before saving.
+        </small>
+      </label>
+
+      <label class="form-field">
+        <span>Assignable Lot</span>
+        <select name="lotId" required>
+          <option value="">Select assignable lot</option>
+          <% formOptions.lots.forEach((lot) => { %>
+            <option value="<%= lot.lot_id %>" <%= selected(formData.lotId, lot.lot_id) %>>
+              <%= lot.lot_name %>
+              <% if (lot.lot_number) { %>
+                - Lot #<%= lot.lot_number %>
+              <% } %>
+            </option>
+          <% }) %>
+        </select>
+        <small class="field-hint">
+          Lots with child lots are containers and cannot receive units directly.
+        </small>
+      </label>
+
+      <label class="form-field">
+        <span>Unit Category</span>
+        <select name="unitCategoryConfigValueId" required data-unit-category-select>
+          <option value="">Select category</option>
+          <% formOptions.unitCategories.forEach((category) => { %>
+            <option value="<%= category.id %>" <%= selected(formData.unitCategoryConfigValueId, category.id) %>>
+              <%= category.label %>
+            </option>
+          <% }) %>
+        </select>
+        <small class="field-hint">
+          Required. Selecting a model can auto-fill this if the model has a category.
+        </small>
+      </label>
+
+      <label class="form-field">
+        <span>Unit Status</span>
+        <select name="currentUnitStatusConfigValueId" required>
+          <option value="">Select status</option>
+          <% formOptions.unitStatuses.forEach((status) => { %>
+            <option value="<%= status.id %>" <%= selected(formData.currentUnitStatusConfigValueId, status.id) %>>
+              <%= status.label %>
+            </option>
+          <% }) %>
+        </select>
+        <small class="field-hint">Required. New units default to Received when that status exists.</small>
+      </label>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Model</p>
+        <h3>Manufacturer and Model</h3>
+      </div>
+      <p>
+        The model dropdown filters by selected manufacturer and unit category.
+        Choosing a model can auto-fill both fields.
+      </p>
+    </div>
+
+    <div class="form-grid">
+      <label class="form-field">
+        <span>Manufacturer</span>
+        <select name="manufacturerId" data-manufacturer-select>
+          <option value="">Select manufacturer</option>
+          <% formOptions.manufacturers.forEach((manufacturer) => { %>
+            <option value="<%= manufacturer.id %>" <%= selected(formData.manufacturerId, manufacturer.id) %>>
+              <%= manufacturer.label %>
+            </option>
+          <% }) %>
+        </select>
+        <small class="field-hint">
+          Selecting a manufacturer filters the model dropdown.
+        </small>
+      </label>
+
+      <label class="form-field">
+        <span>Unit Model</span>
+        <select name="unitModelId" data-unit-model-select>
+          <option value="">Select model</option>
+          <% formOptions.unitModels.forEach((unitModel) => { %>
+            <option
+              value="<%= unitModel.id %>"
+              data-manufacturer-id="<%= unitModel.manufacturerId || '' %>"
+              data-category-id="<%= unitModel.unitCategoryConfigValueId || '' %>"
+              <%= selected(formData.unitModelId, unitModel.id) %>
+            >
+              <%= unitModel.label %>
+            </option>
+          <% }) %>
+        </select>
+        <small class="field-hint" data-unit-model-hint>
+          Models can be filtered by manufacturer and category.
+        </small>
+      </label>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Hardware</p>
+        <h3>Hardware Details</h3>
+      </div>
+      <p>
+        Choosing a processor model can auto-fill processor speed if that value exists.
+      </p>
+    </div>
+
+    <div class="form-grid">
+      <label class="form-field">
+        <span>Processor Model</span>
+        <select name="processorModelId" data-processor-model-select>
+          <option value="">Select processor</option>
+          <% formOptions.processorModels.forEach((processorModel) => { %>
+            <option
+              value="<%= processorModel.id %>"
+              data-base-speed-ghz="<%= processorModel.baseSpeedGhz || '' %>"
+              <%= selected(formData.processorModelId, processorModel.id) %>
+            >
+              <%= processorModel.label %>
+            </option>
+          <% }) %>
+        </select>
+        <small class="field-hint">
+          Processor speed can auto-fill from this selection.
+        </small>
+      </label>
+
+      <label class="form-field">
+        <span>Processor Speed GHz</span>
+        <input
+          type="number"
+          name="processorSpeedGhz"
+          value="<%= formData.processorSpeedGhz %>"
+          min="0"
+          step="0.01"
+          placeholder="Example: 2.40"
+          data-processor-speed-input
+        />
+      </label>
+
+      <label class="form-field">
+        <span>RAM GB</span>
+        <input
+          type="number"
+          name="ramGb"
+          value="<%= formData.ramGb %>"
+          min="1"
+          step="1"
+          placeholder="Example: 16"
+        />
+      </label>
+
+      <label class="form-field">
+        <span>RAM Type</span>
+        <select name="ramTypeConfigValueId">
+          <option value="">Select RAM type</option>
+          <% formOptions.ramTypes.forEach((ramType) => { %>
+            <option value="<%= ramType.id %>" <%= selected(formData.ramTypeConfigValueId, ramType.id) %>>
+              <%= ramType.label %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>Storage GB</span>
+        <input
+          type="number"
+          name="storageGb"
+          value="<%= formData.storageGb %>"
+          min="1"
+          step="1"
+          placeholder="Example: 256"
+        />
+      </label>
+
+      <label class="form-field">
+        <span>Storage Type</span>
+        <select name="storageTypeConfigValueId">
+          <option value="">Select storage type</option>
+          <% formOptions.storageTypes.forEach((storageType) => { %>
+            <option value="<%= storageType.id %>" <%= selected(formData.storageTypeConfigValueId, storageType.id) %>>
+              <%= storageType.label %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>Operating System</span>
+        <select name="operatingSystemConfigValueId">
+          <option value="">Select OS</option>
+          <% formOptions.operatingSystems.forEach((operatingSystem) => { %>
+            <option value="<%= operatingSystem.id %>" <%= selected(formData.operatingSystemConfigValueId, operatingSystem.id) %>>
+              <%= operatingSystem.label %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Notes</p>
+        <h3>Tech Notes</h3>
+      </div>
+      <p>
+        Hardware and cosmetic notes are separate because QC will eventually grade them separately.
+      </p>
+    </div>
+
+    <div class="form-grid">
+      <label class="form-field">
+        <span>Hardware Notes</span>
+        <textarea name="hardwareNotes" rows="4" maxlength="1000"><%= formData.hardwareNotes %></textarea>
+      </label>
+
+      <label class="form-field">
+        <span>Cosmetic Notes</span>
+        <textarea name="cosmeticNotes" rows="4" maxlength="1000"><%= formData.cosmeticNotes %></textarea>
+      </label>
+    </div>
+  </div>
+
+  <div class="form-actions">
+    <button class="primary-button" type="submit">
+      <%= isEditMode ? 'Update Unit' : 'Create Unit' %>
+    </button>
+
+    <% if (isModal) { %>
+      <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+    <% } else { %>
+      <a class="secondary-button" href="/tech/units">Cancel</a>
+    <% } %>
+  </div>
+</form>

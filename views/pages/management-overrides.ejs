@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <link rel="stylesheet" href="/css/management.css" />
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="dashboard-hero accent-green">
+            <div>
+              <p class="eyebrow">Step 2j</p>
+              <h2>Override Requests</h2>
+              <p>
+                Review unit requirement override requests. This is the approval foundation before enforcement is connected to Tech unit saves.
+              </p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Showing</span>
+              <strong><%= result.supported ? result.statusFilter : 'Setup' %></strong>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Management</p>
+                <h2>Override Review Queue</h2>
+              </div>
+            </div>
+
+            <% if (successMessage) { %>
+              <div class="message success"><%= successMessage %></div>
+            <% } %>
+
+            <% if (errorMessages.length > 0) { %>
+              <div class="message error">
+                <% errorMessages.forEach((errorMessage) => { %>
+                  <p><%= errorMessage %></p>
+                <% }) %>
+              </div>
+            <% } %>
+
+            <nav class="management-tabs" aria-label="Override request filters">
+              <a href="/management/overrides?status=pending" class="management-tab <%= statusFilter === 'pending' ? 'active' : '' %>">Pending</a>
+              <a href="/management/overrides?status=approved" class="management-tab <%= statusFilter === 'approved' ? 'active' : '' %>">Approved</a>
+              <a href="/management/overrides?status=denied" class="management-tab <%= statusFilter === 'denied' ? 'active' : '' %>">Denied</a>
+              <a href="/management/overrides?status=all" class="management-tab <%= statusFilter === 'all' ? 'active' : '' %>">All</a>
+            </nav>
+
+            <%- include('../fragments/override-request-table', { result, statusFilter }) %>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Next</p>
+                <h2>Step 2k Preview</h2>
+              </div>
+            </div>
+
+            <div class="workflow-list">
+              <div class="workflow-item active">
+                <span></span>
+                <div>
+                  <strong>Connect override requests to Tech saves</strong>
+                  <p>
+                    Step 2k can use approved override requests when validation says a unit is rejected or needs review.
+                  </p>
+                </div>
+              </div>
+
+              <div class="workflow-item slate">
+                <span></span>
+                <div>
+                  <strong>Store the exact validation details</strong>
+                  <p>
+                    The request details JSON column is ready for failed checks, requirement messages, and enforcement decisions.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

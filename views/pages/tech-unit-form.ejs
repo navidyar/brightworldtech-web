@@ -2,35 +2,11 @@
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
   <link rel="stylesheet" href="/css/tech.css" />
+  <script defer src="/js/tech-unit-form.js"></script>
 
   <body>
     <%
       const isEditMode = mode === 'edit';
-
-      function fieldTarget(fieldName) {
-        return formOptions.fieldTargets[fieldName] || {};
-      }
-
-      function optionSetForRequirement(requirementKey) {
-        return formOptions.requirementValueOptionsByKey[requirementKey] || {
-          type: 'text',
-          options: []
-        };
-      }
-
-      function optionValueFor(fieldName, option) {
-        const target = fieldTarget(fieldName);
-
-        if (target.isConfigValueColumn && option.configValueId) {
-          return String(option.configValueId);
-        }
-
-        return String(option.value || option.label || '');
-      }
-
-      function isSelected(fieldName, option) {
-        return String(formData[fieldName] || '') === optionValueFor(fieldName, option);
-      }
     %>
 
     <div class="app-shell">
@@ -42,10 +18,10 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-green">
             <div>
-              <p class="eyebrow">Step 2i</p>
+              <p class="eyebrow">Step 2i.4</p>
               <h2><%= isEditMode ? 'Edit Unit' : 'Create Unit' %></h2>
               <p>
-                Capture core unit information for the Tech workflow. Requirement enforcement will be connected after the override workflow foundation.
+                This is the full-page fallback. The normal Tech Units page uses a modal create/edit flow.
               </p>
             </div>
 
@@ -65,165 +41,14 @@
               <a class="secondary-button" href="/tech/units">Back to Units</a>
             </div>
 
-            <% if (!formOptions.supported) { %>
-              <div class="message error">
-                <p><%= formOptions.message %></p>
-              </div>
-            <% } %>
-
-            <% if (errorMessages.length > 0) { %>
-              <div class="message error">
-                <% errorMessages.forEach((errorMessage) => { %>
-                  <p><%= errorMessage %></p>
-                <% }) %>
-              </div>
-            <% } %>
-
-            <form class="app-form" method="post" action="<%= formAction %>">
-              <div class="form-section">
-                <div class="form-section-header">
-                  <div>
-                    <p class="eyebrow">Lot</p>
-                    <h3>Lot Assignment</h3>
-                  </div>
-                  <p>
-                    Choose the lot this unit belongs to. Later this selection will trigger enforcement warnings before save.
-                  </p>
-                </div>
-
-                <div class="form-grid">
-                  <label class="form-field">
-                    <span>Lot</span>
-                    <select name="lotId" <%= formOptions.hasLotId ? 'required' : 'disabled' %>>
-                      <option value="">Select lot</option>
-                      <% formOptions.lots.forEach((lot) => { %>
-                        <option value="<%= lot.lot_id %>" <%= String(formData.lotId) === String(lot.lot_id) ? 'selected' : '' %>>
-                          <%= lot.lot_name %>
-                          <% if (lot.lot_number) { %>
-                            - Lot #<%= lot.lot_number %>
-                          <% } %>
-                        </option>
-                      <% }) %>
-                    </select>
-                    <small class="field-hint">
-                      <% if (formOptions.hasLotId) { %>
-                        This will save to the units.lot_id column.
-                      <% } else { %>
-                        The units table does not have a lot_id column yet.
-                      <% } %>
-                    </small>
-                  </label>
-                </div>
-              </div>
-
-              <div class="form-section">
-                <div class="form-section-header">
-                  <div>
-                    <p class="eyebrow">Identifiers</p>
-                    <h3>Unit Identity</h3>
-                  </div>
-                  <p>
-                    Enter at least one useful identifier. BIOS serial and unit serial can differ.
-                  </p>
-                </div>
-
-                <div class="form-grid">
-                  <label class="form-field">
-                    <span>Asset Tag</span>
-                    <input type="text" name="assetTag" value="<%= formData.assetTag %>" maxlength="120" <%= fieldTarget('assetTag').isSupported ? '' : 'disabled' %> />
-                    <small class="field-hint"><%= fieldTarget('assetTag').columnName || 'No matching column found yet.' %></small>
-                  </label>
-
-                  <label class="form-field">
-                    <span>Unit Serial Number</span>
-                    <input type="text" name="serialNumber" value="<%= formData.serialNumber %>" maxlength="120" <%= fieldTarget('serialNumber').isSupported ? '' : 'disabled' %> />
-                    <small class="field-hint"><%= fieldTarget('serialNumber').columnName || 'No matching column found yet.' %></small>
-                  </label>
-
-                  <label class="form-field">
-                    <span>BIOS Serial Number</span>
-                    <input type="text" name="biosSerialNumber" value="<%= formData.biosSerialNumber %>" maxlength="120" <%= fieldTarget('biosSerialNumber').isSupported ? '' : 'disabled' %> />
-                    <small class="field-hint"><%= fieldTarget('biosSerialNumber').columnName || 'No matching column found yet.' %></small>
-                  </label>
-                </div>
-              </div>
-
-              <div class="form-section">
-                <div class="form-section-header">
-                  <div>
-                    <p class="eyebrow">Specs</p>
-                    <h3>Hardware Details</h3>
-                  </div>
-                  <p>
-                    These fields support standardized dropdowns when matching config values exist.
-                  </p>
-                </div>
-
-                <div class="form-grid">
-                  <% ['unitType', 'manufacturer', 'model', 'ramSize', 'ramType', 'storageSize', 'storageType', 'processorBrand', 'processorModel', 'touchscreen'].forEach((fieldName) => { %>
-                    <%
-                      const target = fieldTarget(fieldName);
-                      const fieldDefinition = formOptions.fieldDefinitions.find((field) => field.name === fieldName);
-                      const optionSet = fieldDefinition && fieldDefinition.requirementKey
-                        ? optionSetForRequirement(fieldDefinition.requirementKey)
-                        : { type: 'text', options: [] };
-                      const hasSelectOptions = optionSet.type === 'select' && optionSet.options.length > 0;
-                    %>
-
-                    <label class="form-field">
-                      <span><%= fieldDefinition.label %></span>
-
-                      <% if (target.isSupported && hasSelectOptions) { %>
-                        <select name="<%= fieldName %>">
-                          <option value="">Select value</option>
-                          <% optionSet.options.forEach((option) => { %>
-                            <option value="<%= optionValueFor(fieldName, option) %>" <%= isSelected(fieldName, option) ? 'selected' : '' %>>
-                              <%= option.label || option.value %>
-                            </option>
-                          <% }) %>
-                        </select>
-                      <% } else { %>
-                        <input type="text" name="<%= fieldName %>" value="<%= formData[fieldName] %>" maxlength="160" <%= target.isSupported ? '' : 'disabled' %> />
-                      <% } %>
-
-                      <small class="field-hint">
-                        <% if (target.isSupported) { %>
-                          Saves to <%= target.columnName %>.
-                        <% } else { %>
-                          No matching unit column found yet.
-                        <% } %>
-                      </small>
-                    </label>
-                  <% }) %>
-                </div>
-              </div>
-
-              <div class="form-section">
-                <div class="form-section-header">
-                  <div>
-                    <p class="eyebrow">Notes</p>
-                    <h3>Tech Notes</h3>
-                  </div>
-                  <p>
-                    Use this for temporary internal notes until detailed work-session tracking is added.
-                  </p>
-                </div>
-
-                <label class="form-field">
-                  <span>Notes</span>
-                  <textarea name="notes" rows="4" maxlength="1000" <%= fieldTarget('notes').isSupported ? '' : 'disabled' %>><%= formData.notes %></textarea>
-                  <small class="field-hint"><%= fieldTarget('notes').columnName || 'No matching notes column found yet.' %></small>
-                </label>
-              </div>
-
-              <div class="form-actions">
-                <button class="primary-button" type="submit">
-                  <%= isEditMode ? 'Update Unit' : 'Create Unit' %>
-                </button>
-
-                <a class="secondary-button" href="/tech/units">Cancel</a>
-              </div>
-            </form>
+            <%- include('../fragments/tech-unit-form', {
+              mode,
+              formAction,
+              formOptions,
+              formData,
+              errorMessages,
+              isModal: false
+            }) %>
           </section>
         </main>
       </div>
