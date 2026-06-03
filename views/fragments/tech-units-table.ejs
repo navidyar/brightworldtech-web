@@ -70,9 +70,17 @@
                     <span>Expanded information for this unit record.</span>
                   </div>
 
-                  <div class="tech-detail-status">
-                    <span class="tech-chip"><%= unit.statusLabel %></span>
-                    <span class="tech-chip"><%= unit.categoryLabel %></span>
+                  <div class="tech-detail-actions">
+                    <div class="tech-detail-status">
+                      <span class="tech-chip"><%= unit.statusLabel %></span>
+                      <span class="tech-chip"><%= unit.categoryLabel %></span>
+                    </div>
+
+                    <% if (unit.unitId) { %>
+                      <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/override/modal" hx-get="/tech/units/<%= unit.unitId %>/override/modal" hx-target="#modal-root" hx-swap="innerHTML">
+                        Request Override
+                      </a>
+                    <% } %>
                   </div>
                 </div>
 
@@ -179,6 +187,70 @@
                     </dl>
                   </section>
                 </div>
+
+                <% if (unit.latestOverride) { %>
+                  <section class="tech-override-history-section">
+                    <h3>Latest Override History</h3>
+
+                    <dl class="tech-override-history-list">
+                      <div>
+                        <dt>Request Status</dt>
+                        <dd>
+                          <span class="tech-chip"><%= unit.latestOverride.statusLabel %></span>
+                        </dd>
+                      </div>
+
+                      <div>
+                        <dt>Request Type</dt>
+                        <dd><%= unit.latestOverride.requestTypeLabel %></dd>
+                      </div>
+
+                      <div>
+                        <dt>System Check</dt>
+                        <dd><%= unit.latestOverride.validationLabel %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Decision</dt>
+                        <dd><%= unit.latestOverride.decisionLabel %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Requested By</dt>
+                        <dd>
+                          <%= unit.latestOverride.requestedByName %>
+                          <% if (unit.latestOverride.createdAt) { %>
+                            · <%= formatDateTime(unit.latestOverride.createdAt) %>
+                          <% } %>
+                        </dd>
+                      </div>
+
+                      <div>
+                        <dt>Requested Reason</dt>
+                        <dd><%= unit.latestOverride.reason || 'No requester reason entered.' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Reviewed By</dt>
+                        <dd>
+                          <% if (unit.latestOverride.reviewedByName) { %>
+                            <%= unit.latestOverride.reviewedByName %>
+                            <% if (unit.latestOverride.reviewedAt) { %>
+                              · <%= formatDateTime(unit.latestOverride.reviewedAt) %>
+                            <% } %>
+                          <% } else { %>
+                            Pending Management review
+                          <% } %>
+                        </dd>
+                      </div>
+
+                      <div>
+                        <dt>Management Reason</dt>
+                        <dd><%= unit.latestOverride.reviewNotes || 'No Management decision note entered yet.' %></dd>
+                      </div>
+                    </dl>
+                  </section>
+                <% } %>
 
                 <section class="tech-notes-section">
                   <h3>Notes</h3>

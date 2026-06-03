@@ -119,6 +119,18 @@ function getStatusClass(status) {
   return 'warn';
 }
 
+function getRequestTypeLabel(requestType) {
+  if (requestType === 'manual_tech_override_request') {
+    return 'Manual Tech Request';
+  }
+
+  if (requestType === 'lot_requirement_override') {
+    return 'Requirement Override';
+  }
+
+  return requestType || 'Override Request';
+}
+
 function getValidationLabel(status) {
   if (status === 'accepted') {
     return 'Accepted';
@@ -134,6 +146,10 @@ function getValidationLabel(status) {
 
   if (status === 'open') {
     return 'Open';
+  }
+
+  if (status === 'not_checked') {
+    return 'Not validated yet';
   }
 
   return status || 'Not captured yet';
@@ -156,6 +172,10 @@ function getDecisionLabel(decision) {
     return 'Needs Review';
   }
 
+  if (decision === 'manual_request') {
+    return 'Awaiting Management Review';
+  }
+
   return decision || 'Not captured yet';
 }
 
@@ -172,6 +192,7 @@ function mapOverrideRequest(row, lotMap) {
     unitAssetTag,
     unitLabel: unitAssetTag || (row.unit_id ? `Unit #${row.unit_id}` : 'No unit selected'),
     requestType: row.request_type || 'lot_requirement_override',
+    requestTypeLabel: getRequestTypeLabel(row.request_type),
     requestStatus: row.request_status || 'pending',
     validationStatus: row.validation_status || null,
     enforcementDecision: row.enforcement_decision || null,
@@ -279,6 +300,78 @@ async function listOverrideRequests(options = {}) {
   };
 }
 
+async function getLatestOverrideRequestMapForUnits(unitIds) {
+  const exists = await overrideTableExists();
+  const safeUnitIds = Array.from(
+    new Set(
+      (unitIds || [])
+        .map((unitId) => Number(unitId))
+        .filter((unitId) => Number.isInteger(unitId) && unitId > 0)
+    )
+  );
+
+  if (!exists || safeUnitIds.length === 0) {
+    return new Map();
+  }
+
+  const placeholders = safeUnitIds.map(() => '?').join(', ');
+  const lotMap = await getLotNameMap();
+
+  const [rows] = await pool.query(
+    `
+      SELECT *
+      FROM (
+        SELECT
+          r.unit_override_request_id,
+          r.unit_id,
+          r.lot_id,
+          r.request_type,
+          r.request_status,
+          r.validation_status,
+          r.enforcement_decision,
+          r.reason,
+          r.request_details,
+          r.requested_by_user_id,
+          r.reviewed_by_user_id,
+          r.review_notes,
+          r.reviewed_at,
+          r.expires_at,
+          r.created_at,
+          r.updated_at,
+          u.asset_number,
+          requested_by.first_name AS requested_by_first_name,
+          requested_by.last_name AS requested_by_last_name,
+          requested_by.email AS requested_by_email,
+          reviewed_by.first_name AS reviewed_by_first_name,
+          reviewed_by.last_name AS reviewed_by_last_name,
+          reviewed_by.email AS reviewed_by_email,
+          ROW_NUMBER() OVER (
+            PARTITION BY r.unit_id
+            ORDER BY r.created_at DESC, r.unit_override_request_id DESC
+          ) AS row_rank
+        FROM unit_override_requests r
+        LEFT JOIN units u
+          ON u.unit_id = r.unit_id
+        LEFT JOIN users requested_by
+          ON requested_by.user_id = r.requested_by_user_id
+        LEFT JOIN users reviewed_by
+          ON reviewed_by.user_id = r.reviewed_by_user_id
+        WHERE r.unit_id IN (${placeholders})
+      ) ranked_requests
+      WHERE row_rank = 1
+    `,
+    safeUnitIds
+  );
+
+  const requestMap = new Map();
+
+  rows.forEach((row) => {
+    requestMap.set(Number(row.unit_id), mapOverrideRequest(row, lotMap));
+  });
+
+  return requestMap;
+}
+
 async function getOverrideRequestById(overrideRequestId) {
   const exists = await overrideTableExists();
 
@@ -334,6 +427,44 @@ async function getOverrideRequestById(overrideRequestId) {
   );
 
   return rows[0] ? mapOverrideRequest(rows[0], lotMap) : null;
+}
+
+async function getPendingOverrideRequestForUnit({ unitId, lotId }) {
+  const exists = await overrideTableExists();
+
+  if (!exists) {
+    return null;
+  }
+
+  const normalizedUnitId = normalizeOptionalInteger(unitId);
+  const normalizedLotId = normalizeOptionalInteger(lotId);
+
+  if (!normalizedUnitId) {
+    return null;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        unit_override_request_id,
+        unit_id,
+        lot_id,
+        request_status,
+        created_at
+      FROM unit_override_requests
+      WHERE unit_id = ?
+        AND request_status = 'pending'
+        AND (
+          lot_id = ?
+          OR (? IS NULL AND lot_id IS NULL)
+        )
+      ORDER BY created_at DESC, unit_override_request_id DESC
+      LIMIT 1
+    `,
+    [normalizedUnitId, normalizedLotId, normalizedLotId]
+  );
+
+  return rows[0] || null;
 }
 
 async function createOverrideRequest({
@@ -446,7 +577,9 @@ async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, review
 module.exports = {
   overrideTableExists,
   listOverrideRequests,
+  getLatestOverrideRequestMapForUnits,
   getOverrideRequestById,
+  getPendingOverrideRequestForUnit,
   createOverrideRequest,
   approveOverrideRequest,
   denyOverrideRequest

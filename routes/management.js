@@ -126,6 +126,27 @@ router.post(
   techController.createTechUnit
 );
 
+/*
+  Tech override routes
+
+  Route order note:
+  Keep these before other /tech/units/:unitId routes.
+*/
+
+router.get(
+  '/tech/units/:unitId/override/modal',
+  requireAuth,
+  requireRole(techRoles),
+  overrideController.renderTechOverrideRequestModal
+);
+
+router.post(
+  '/tech/units/:unitId/override',
+  requireAuth,
+  requireRole(techRoles),
+  overrideController.createTechOverrideRequest
+);
+
 router.get(
   '/tech/units/:unitId/edit/modal',
   requireAuth,

@@ -1,0 +1,123 @@
+<%
+  const canViewManagementOverrides =
+    typeof canAccessMenuArea === 'function' && canAccessMenuArea('management');
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel tech-override-modal" role="dialog" aria-modal="true" aria-labelledby="tech-override-title">
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">Override Request</p>
+        <h2 id="tech-override-title">Request Management Override</h2>
+      </div>
+
+      <button type="button" class="modal-close" data-modal-close aria-label="Close modal">×</button>
+    </div>
+
+    <div class="modal-body">
+      <% if (successMessage) { %>
+        <div class="message success">
+          <p><%= successMessage %></p>
+        </div>
+
+        <div class="tech-override-summary">
+          <dl>
+            <div>
+              <dt>Unit</dt>
+              <dd><%= unitLabel %></dd>
+            </div>
+
+            <div>
+              <dt>Lot</dt>
+              <dd><%= lotLabel %></dd>
+            </div>
+
+            <div>
+              <dt>Status</dt>
+              <dd>Pending Management Review</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="primary-button" data-modal-close>Done</button>
+
+          <% if (canViewManagementOverrides) { %>
+            <a class="secondary-button" href="/management/overrides">View Overrides</a>
+          <% } %>
+        </div>
+      <% } else { %>
+        <% if (errorMessages.length > 0) { %>
+          <div class="message error">
+            <% errorMessages.forEach((errorMessage) => { %>
+              <p><%= errorMessage %></p>
+            <% }) %>
+          </div>
+        <% } %>
+
+        <div class="tech-override-summary">
+          <dl>
+            <div>
+              <dt>Unit</dt>
+              <dd><%= unitLabel %></dd>
+            </div>
+
+            <div>
+              <dt>Lot</dt>
+              <dd><%= lotLabel %></dd>
+            </div>
+          </dl>
+        </div>
+
+        <% if (existingPendingRequest) { %>
+          <div class="message error">
+            <p>
+              Override request #<%= existingPendingRequest.unitOverrideRequestId %> is already pending for this unit.
+              Management must approve or deny it before another request can be created.
+            </p>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="primary-button" data-modal-close>Close</button>
+
+            <% if (canViewManagementOverrides) { %>
+              <a class="secondary-button" href="/management/overrides">View Overrides</a>
+            <% } %>
+          </div>
+        <% } else if (supported) { %>
+          <form
+            class="app-form tech-override-form"
+            method="post"
+            action="/tech/units/<%= unit.unit_id %>/override"
+            hx-post="/tech/units/<%= unit.unit_id %>/override"
+            hx-target="#modal-root"
+            hx-swap="innerHTML"
+          >
+            <label class="form-field">
+              <span>Reason for Override</span>
+              <textarea
+                name="reason"
+                rows="5"
+                maxlength="1000"
+                required
+                placeholder="Explain why this unit should be accepted or reviewed by Management."
+              ><%= formData.reason %></textarea>
+              <small class="field-hint">
+                Minimum 10 characters. This is sent to Management for approval or denial.
+              </small>
+            </label>
+
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Send Override Request</button>
+              <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            </div>
+          </form>
+        <% } else { %>
+          <div class="form-actions">
+            <button type="button" class="primary-button" data-modal-close>Close</button>
+          </div>
+        <% } %>
+      <% } %>
+    </div>
+  </section>
+</div>

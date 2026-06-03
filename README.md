@@ -4,25 +4,30 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
-Step 2i.5: Global Table/Form Contrast + Assignable Lots + Professional Unit Details.
+Step 2j.2: Tech-Side Request Override Flow.
 
-This step improves visual clarity and lot assignment behavior.
+This step lets Tech users create manual override requests from the Tech Units page.
 
-## Changes Added
+## What Step 2j.2 Adds
 
-- Global table contrast through `public/css/work-area.css`
-- Global form contrast through `public/css/work-area.css`
-- Tech Units filter alignment fixed
-- Unit lot selection changed to assignable lots
-- Expanded unit detail panel redesigned into a compact professional layout
+- Request Override button inside each unit's expanded detail menu
+- Override request modal
+- Reason validation
+- Duplicate pending request prevention
+- Management override queue integration
+- Manual override request records in `unit_override_requests`
 
-## Assignable Lot Rule
-
-A lot is assignable only when it does not have child lots.
-
-Example:
+## Override Flow
 
 ```text
-Customer Lot
-├── Dell Lot
-└── HP Lot
+Tech user opens Tech Units
+↓
+Expands a unit row
+↓
+Clicks Request Override
+↓
+Enters reason
+↓
+Request is sent to Management
+↓
+Management reviews it from /management/overrides

@@ -31,7 +31,7 @@
               <br />
               <span class="pill <%= request.statusClass === 'warn' ? '' : request.statusClass %>"><%= request.statusLabel %></span>
               <br />
-              <span class="table-muted-line"><%= request.requestType %></span>
+              <span class="table-muted-line"><%= request.requestTypeLabel || request.requestType %></span>
             </td>
 
             <td>
@@ -65,13 +65,13 @@
                 <div class="management-review-actions">
                   <form method="post" action="/management/overrides/<%= request.unitOverrideRequestId %>/approve">
                     <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
-                    <input class="management-review-input" type="text" name="reviewNotes" placeholder="Optional review note" maxlength="500" autocomplete="off" />
+                    <input class="management-review-input" type="text" name="reviewNotes" placeholder="Optional approval reason" maxlength="500" autocomplete="off" />
                     <button class="primary-button" type="submit">Approve</button>
                   </form>
 
                   <form method="post" action="/management/overrides/<%= request.unitOverrideRequestId %>/deny">
                     <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
-                    <input class="management-review-input" type="text" name="reviewNotes" placeholder="Optional denial note" maxlength="500" autocomplete="off" />
+                    <input class="management-review-input" type="text" name="reviewNotes" placeholder="Optional denial reason" maxlength="500" autocomplete="off" />
                     <button class="secondary-button" type="submit">Deny</button>
                   </form>
                 </div>

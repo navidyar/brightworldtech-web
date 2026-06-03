@@ -1,4 +1,5 @@
 const techUnitModel = require('../models/techUnitModel');
+const overrideRequestModel = require('../models/overrideRequestModel');
 
 function buildTechUnitsTableUrl(filters) {
   const params = new URLSearchParams();
@@ -20,6 +21,30 @@ function getFiltersFromRequest(req) {
   return {
     search: String(req.query.search || '').trim(),
     lotId: String(req.query.lotId || '').trim()
+  };
+}
+
+async function attachLatestOverrideHistory(result) {
+  if (!result || !result.supported || !Array.isArray(result.units) || result.units.length === 0) {
+    return result;
+  }
+
+  const unitIds = result.units
+    .map((unit) => Number(unit.unitId))
+    .filter((unitId) => Number.isInteger(unitId) && unitId > 0);
+
+  if (unitIds.length === 0) {
+    return result;
+  }
+
+  const latestOverrideMap = await overrideRequestModel.getLatestOverrideRequestMapForUnits(unitIds);
+
+  return {
+    ...result,
+    units: result.units.map((unit) => ({
+      ...unit,
+      latestOverride: latestOverrideMap.get(Number(unit.unitId)) || null
+    }))
   };
 }
 
@@ -136,7 +161,8 @@ async function getBlankFormDataWithDefaults() {
 async function renderTechUnitsPage(req, res, next) {
   try {
     const filters = getFiltersFromRequest(req);
-    const result = await techUnitModel.listTechUnits(filters);
+    const rawResult = await techUnitModel.listTechUnits(filters);
+    const result = await attachLatestOverrideHistory(rawResult);
 
     return res.render('pages/tech-units', {
       pageTitle: 'Tech Units',
@@ -158,7 +184,8 @@ async function renderTechUnitsPage(req, res, next) {
 async function renderTechUnitsTable(req, res, next) {
   try {
     const filters = getFiltersFromRequest(req);
-    const result = await techUnitModel.listTechUnits(filters);
+    const rawResult = await techUnitModel.listTechUnits(filters);
+    const result = await attachLatestOverrideHistory(rawResult);
 
     return res.render('fragments/tech-units-table', {
       result,
