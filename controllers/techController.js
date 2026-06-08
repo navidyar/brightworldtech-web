@@ -1,5 +1,6 @@
 const techUnitModel = require('../models/techUnitModel');
 const overrideRequestModel = require('../models/overrideRequestModel');
+const unitExpandedDetailModel = require('../models/unitExpandedDetailModel');
 
 function buildTechUnitsTableUrl(filters) {
   const params = new URLSearchParams();
@@ -46,6 +47,38 @@ async function attachLatestOverrideHistory(result) {
       latestOverride: latestOverrideMap.get(Number(unit.unitId)) || null
     }))
   };
+}
+
+
+async function attachExpandedUnitDetails(result) {
+  if (!result || !result.supported || !Array.isArray(result.units) || result.units.length === 0) {
+    return result;
+  }
+
+  const unitIds = result.units
+    .map((unit) => Number(unit.unitId))
+    .filter((unitId) => Number.isInteger(unitId) && unitId > 0);
+
+  if (unitIds.length === 0) {
+    return result;
+  }
+
+  const expandedDetailMap = await unitExpandedDetailModel.listExpandedDetailsForUnits(unitIds);
+
+  return {
+    ...result,
+    units: result.units.map((unit) => ({
+      ...unit,
+      expandedDetails: expandedDetailMap.get(Number(unit.unitId)) || null
+    }))
+  };
+}
+
+async function buildTechUnitsResult(filters) {
+  const rawResult = await techUnitModel.listTechUnits(filters);
+  const resultWithOverrides = await attachLatestOverrideHistory(rawResult);
+
+  return attachExpandedUnitDetails(resultWithOverrides);
 }
 
 function getUnitFormDataFromRequest(req) {
@@ -161,8 +194,7 @@ async function getBlankFormDataWithDefaults() {
 async function renderTechUnitsPage(req, res, next) {
   try {
     const filters = getFiltersFromRequest(req);
-    const rawResult = await techUnitModel.listTechUnits(filters);
-    const result = await attachLatestOverrideHistory(rawResult);
+    const result = await buildTechUnitsResult(filters);
 
     return res.render('pages/tech-units', {
       pageTitle: 'Tech Units',
@@ -184,8 +216,7 @@ async function renderTechUnitsPage(req, res, next) {
 async function renderTechUnitsTable(req, res, next) {
   try {
     const filters = getFiltersFromRequest(req);
-    const rawResult = await techUnitModel.listTechUnits(filters);
-    const result = await attachLatestOverrideHistory(rawResult);
+    const result = await buildTechUnitsResult(filters);
 
     return res.render('fragments/tech-units-table', {
       result,

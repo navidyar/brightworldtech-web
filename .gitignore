@@ -1,6 +1,7 @@
+backup/
+
 # Dependencies
 node_modules/
-backup/
 
 # MyFiles
 package-lock.json

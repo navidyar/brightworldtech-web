@@ -612,6 +612,8 @@ async function listTechUnits(filters = {}) {
     listProcessorModels()
   ]);
 
+  const unitIdentifiersTableIsReady = await tableExists('unit_identifiers');
+
   const unitCategoryMap = mapById(unitCategories);
   const unitStatusMap = mapById(unitStatuses);
   const ramTypeMap = mapById(ramTypes);
@@ -635,6 +637,7 @@ async function listTechUnits(filters = {}) {
 
   if (filters.search) {
     const normalizedSearchAssetNumber = normalizeAssetTagInput(filters.search);
+    const normalizedIdentifierSearch = compactAssetTagValue(filters.search);
     const searchParts = [
       'CAST(u.asset_number AS CHAR) LIKE ?',
       'CAST(u.unit_id AS CHAR) LIKE ?',
@@ -664,6 +667,21 @@ async function listTechUnits(filters = {}) {
       `%${filters.search}%`,
       `%${filters.search}%`
     );
+
+    if (unitIdentifiersTableIsReady) {
+      searchParts.push(`
+        EXISTS (
+          SELECT 1
+          FROM unit_identifiers ui_search
+          WHERE ui_search.unit_id = u.unit_id
+            AND (
+              ui_search.identifier_value LIKE ?
+              OR ui_search.normalized_value LIKE ?
+            )
+        )
+      `);
+      params.push(`%${filters.search}%`, `%${normalizedIdentifierSearch}%`);
+    }
 
     if (normalizedSearchAssetNumber) {
       searchParts.unshift('u.asset_number = ?');

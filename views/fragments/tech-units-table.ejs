@@ -1,3 +1,35 @@
+<%
+  function sourceLabel(sourceCode) {
+    const normalizedSource = String(sourceCode || '').trim();
+
+    if (!normalizedSource) {
+      return 'Unknown Source';
+    }
+
+    if (normalizedSource === 'scantool') {
+      return 'ScanTool';
+    }
+
+    return normalizedSource
+      .split('_')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+
+  function formatGb(value) {
+    return value ? `${formatNumber(value)}GB` : '—';
+  }
+
+  function formatMhz(value) {
+    return value ? `${formatNumber(value)}MHz` : '';
+  }
+
+  function formatVram(value) {
+    return value ? `${formatNumber(value)}MB VRAM` : '';
+  }
+%>
+
 <div class="table-card tech-table-card">
   <table class="tech-units-table">
     <thead>
@@ -19,6 +51,20 @@
       <% } %>
 
       <% result.units.forEach((unit) => { %>
+        <%
+          const expanded = unit.expandedDetails || {};
+          const identifiers = Array.isArray(expanded.identifiers) ? expanded.identifiers : [];
+          const specifications = expanded.specifications || null;
+          const currentGrade = expanded.currentGrade || null;
+          const memoryModules = Array.isArray(expanded.memoryModules) ? expanded.memoryModules : [];
+          const storageDevices = Array.isArray(expanded.storageDevices) ? expanded.storageDevices : [];
+          const cellularModules = Array.isArray(expanded.cellularModules) ? expanded.cellularModules : [];
+          const graphicsAdapters = Array.isArray(expanded.graphicsAdapters) ? expanded.graphicsAdapters : [];
+          const cosmeticIssues = Array.isArray(expanded.cosmeticIssues) ? expanded.cosmeticIssues : [];
+          const hardwareIssues = Array.isArray(expanded.hardwareIssues) ? expanded.hardwareIssues : [];
+          const comments = Array.isArray(expanded.comments) ? expanded.comments : [];
+        %>
+
         <tr class="tech-summary-row">
           <td>
             <button
@@ -74,6 +120,9 @@
                     <div class="tech-detail-status">
                       <span class="tech-chip"><%= unit.statusLabel %></span>
                       <span class="tech-chip"><%= unit.categoryLabel %></span>
+                      <% if (currentGrade) { %>
+                        <span class="tech-chip">Grade <%= currentGrade.gradeLabel %></span>
+                      <% } %>
                     </div>
 
                     <% if (unit.unitId) { %>
@@ -83,6 +132,16 @@
                     <% } %>
                   </div>
                 </div>
+
+                <% if (expanded.schemaReady === false) { %>
+                  <div class="message error">
+                    <p>Expanded Step 3a tables were not detected. Run the Step 3a database migration before using expanded unit details.</p>
+                  </div>
+                <% } else if (!expanded.hasAnyExpandedData) { %>
+                  <div class="message success">
+                    <p>Expanded unit tables are ready. No detailed RAM, storage, cellular, GPU, issue, grade, or comment records have been added for this unit yet.</p>
+                  </div>
+                <% } %>
 
                 <div class="tech-detail-layout">
                   <section class="tech-detail-section">
@@ -112,6 +171,58 @@
                   </section>
 
                   <section class="tech-detail-section">
+                    <h3>Identifiers</h3>
+
+                    <% if (identifiers.length > 0) { %>
+                      <dl class="tech-detail-list">
+                        <% identifiers.forEach((identifier) => { %>
+                          <div>
+                            <dt><%= identifier.typeLabel %></dt>
+                            <dd>
+                              <%= identifier.value || '—' %>
+                              <% if (identifier.isPrimary) { %>
+                                <span class="tech-chip">Primary</span>
+                              <% } %>
+                            </dd>
+                          </div>
+                        <% }) %>
+                      </dl>
+                    <% } else { %>
+                      <p class="field-hint">No serial or BIOS identifier rows have been recorded yet.</p>
+                    <% } %>
+                  </section>
+
+                  <section class="tech-detail-section">
+                    <h3>Overall Grade</h3>
+
+                    <dl class="tech-detail-list">
+                      <div>
+                        <dt>Grade</dt>
+                        <dd><%= currentGrade ? currentGrade.gradeLabel : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Source</dt>
+                        <dd><%= currentGrade ? sourceLabel(currentGrade.sourceCode) : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Assessed</dt>
+                        <dd><%= currentGrade && currentGrade.assessedAt ? formatDateTime(currentGrade.assessedAt) : '—' %></dd>
+                      </div>
+
+                      <% if (currentGrade && currentGrade.notes) { %>
+                        <div>
+                          <dt>Notes</dt>
+                          <dd><%= currentGrade.notes %></dd>
+                        </div>
+                      <% } %>
+                    </dl>
+                  </section>
+                </div>
+
+                <div class="tech-detail-layout">
+                  <section class="tech-detail-section">
                     <h3>Hardware</h3>
 
                     <dl class="tech-detail-list">
@@ -134,29 +245,66 @@
                         <dt>Processor Speed</dt>
                         <dd><%= unit.processorSpeedGhz ? `${unit.processorSpeedGhz}GHz` : '—' %></dd>
                       </div>
+                    </dl>
+                  </section>
 
+                  <section class="tech-detail-section">
+                    <h3>System Checks</h3>
+
+                    <dl class="tech-detail-list">
                       <div>
-                        <dt>RAM</dt>
-                        <dd>
-                          <% if (unit.ramGb || unit.ramTypeLabel !== '—') { %>
-                            <%= unit.ramGb ? `${unit.ramGb}GB` : '' %>
-                            <%= unit.ramTypeLabel !== '—' ? unit.ramTypeLabel : '' %>
-                          <% } else { %>
-                            —
-                          <% } %>
-                        </dd>
+                        <dt>Operating System</dt>
+                        <dd><%= unit.operatingSystemLabel || '—' %></dd>
                       </div>
 
                       <div>
-                        <dt>Storage</dt>
-                        <dd>
-                          <% if (unit.storageGb || unit.storageTypeLabel !== '—') { %>
-                            <%= unit.storageGb ? `${unit.storageGb}GB` : '' %>
-                            <%= unit.storageTypeLabel !== '—' ? unit.storageTypeLabel : '' %>
-                          <% } else { %>
-                            —
-                          <% } %>
-                        </dd>
+                        <dt>BIOS Version</dt>
+                        <dd><%= specifications && specifications.biosVersion ? specifications.biosVersion : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>OS Build</dt>
+                        <dd><%= specifications && specifications.osBuild ? specifications.osBuild : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Absolute Status</dt>
+                        <dd><%= specifications ? specifications.absoluteStatusLabel : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Camera</dt>
+                        <dd><%= specifications ? specifications.physicalCameraStatusLabel : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Touchscreen</dt>
+                        <dd><%= specifications ? specifications.touchscreenStatusLabel : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Keyboard</dt>
+                        <dd><%= specifications ? specifications.keyboardLanguageLabel : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Diagnostics</dt>
+                        <dd><%= specifications ? specifications.completeDiagnosticsStatusLabel : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Virus Check</dt>
+                        <dd><%= specifications ? specifications.virusCheckStatusLabel : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Driver Check</dt>
+                        <dd><%= specifications ? specifications.driverCheckStatusLabel : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Skinned</dt>
+                        <dd><%= specifications ? specifications.skinnedStatusLabel : '—' %></dd>
                       </div>
                     </dl>
                   </section>
@@ -165,11 +313,6 @@
                     <h3>Workflow</h3>
 
                     <dl class="tech-detail-list">
-                      <div>
-                        <dt>Operating System</dt>
-                        <dd><%= unit.operatingSystemLabel || '—' %></dd>
-                      </div>
-
                       <div>
                         <dt>Created</dt>
                         <dd><%= unit.createdAt ? formatDateTime(unit.createdAt) : '—' %></dd>
@@ -187,6 +330,208 @@
                     </dl>
                   </section>
                 </div>
+
+                <section class="tech-notes-section">
+                  <h3>Current RAM Modules</h3>
+
+                  <% if (memoryModules.length > 0) { %>
+                    <p class="field-hint">Current RAM Total: <strong><%= formatGb(expanded.memoryTotalGb) %></strong></p>
+
+                    <div class="tech-detail-layout">
+                      <% memoryModules.forEach((memoryModule) => { %>
+                        <section class="tech-detail-section">
+                          <dl class="tech-detail-list">
+                            <div>
+                              <dt>Slot</dt>
+                              <dd><%= memoryModule.slotLabel %></dd>
+                            </div>
+                            <div>
+                              <dt>Size / Type</dt>
+                              <dd><%= formatGb(memoryModule.sizeGb) %> <%= memoryModule.ramTypeLabel || '' %></dd>
+                            </div>
+                            <div>
+                              <dt>Speed</dt>
+                              <dd><%= formatMhz(memoryModule.speedMhz) || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>Serial</dt>
+                              <dd><%= memoryModule.serialNumber || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>Source</dt>
+                              <dd><%= sourceLabel(memoryModule.sourceCode) %></dd>
+                            </div>
+                          </dl>
+                        </section>
+                      <% }) %>
+                    </div>
+                  <% } else { %>
+                    <p class="field-hint">No detailed RAM module rows yet. Legacy RAM display: <%= unit.ramGb ? `${unit.ramGb}GB ${unit.ramTypeLabel !== '—' ? unit.ramTypeLabel : ''}` : '—' %></p>
+                  <% } %>
+                </section>
+
+                <section class="tech-notes-section">
+                  <h3>Current Storage Devices</h3>
+
+                  <% if (storageDevices.length > 0) { %>
+                    <p class="field-hint">Current Storage Total: <strong><%= formatGb(expanded.storageTotalGb) %></strong></p>
+
+                    <div class="tech-detail-layout">
+                      <% storageDevices.forEach((storageDevice) => { %>
+                        <section class="tech-detail-section">
+                          <dl class="tech-detail-list">
+                            <div>
+                              <dt>Slot</dt>
+                              <dd><%= storageDevice.slotLabel %></dd>
+                            </div>
+                            <div>
+                              <dt>Size / Type</dt>
+                              <dd><%= formatGb(storageDevice.sizeGb) %> <%= storageDevice.storageTypeLabel || '' %></dd>
+                            </div>
+                            <div>
+                              <dt>Model</dt>
+                              <dd><%= storageDevice.modelNumber || storageDevice.manufacturerName || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>Serial</dt>
+                              <dd><%= storageDevice.serialNumber || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>Wipe Status</dt>
+                              <dd><%= storageDevice.wipeStatusLabel || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>Source</dt>
+                              <dd><%= sourceLabel(storageDevice.sourceCode) %></dd>
+                            </div>
+                          </dl>
+                        </section>
+                      <% }) %>
+                    </div>
+                  <% } else { %>
+                    <p class="field-hint">No detailed storage device rows yet. Legacy storage display: <%= unit.storageGb ? `${unit.storageGb}GB ${unit.storageTypeLabel !== '—' ? unit.storageTypeLabel : ''}` : '—' %></p>
+                  <% } %>
+                </section>
+
+                <section class="tech-notes-section">
+                  <h3>Cellular / WWAN</h3>
+                  <p class="field-hint">Deep cellular module and band details should be populated by ScanTool. Manual unit forms should not edit ScanTool-only band details.</p>
+
+                  <% if (cellularModules.length > 0) { %>
+                    <div class="tech-detail-layout">
+                      <% cellularModules.forEach((cellularModule) => { %>
+                        <section class="tech-detail-section">
+                          <dl class="tech-detail-list">
+                            <div>
+                              <dt>Status</dt>
+                              <dd><%= cellularModule.wwanStatusLabel %></dd>
+                            </div>
+                            <div>
+                              <dt>Module</dt>
+                              <dd><%= [cellularModule.moduleManufacturer, cellularModule.moduleModel].filter(Boolean).join(' ') || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>IMEI</dt>
+                              <dd><%= cellularModule.imei || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>Networks</dt>
+                              <dd><%= cellularModule.supportedNetworksText || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>Bands</dt>
+                              <dd><%= cellularModule.bandSummary || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>Carriers</dt>
+                              <dd><%= cellularModule.supportedCarriersText || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>Source</dt>
+                              <dd><%= sourceLabel(cellularModule.sourceCode) %></dd>
+                            </div>
+                          </dl>
+                        </section>
+                      <% }) %>
+                    </div>
+                  <% } else { %>
+                    <p class="field-hint">No current cellular / WWAN module details recorded yet.</p>
+                  <% } %>
+                </section>
+
+                <section class="tech-notes-section">
+                  <h3>Graphics</h3>
+
+                  <% if (graphicsAdapters.length > 0) { %>
+                    <div class="tech-detail-layout">
+                      <% graphicsAdapters.forEach((graphicsAdapter) => { %>
+                        <section class="tech-detail-section">
+                          <dl class="tech-detail-list">
+                            <div>
+                              <dt>Type</dt>
+                              <dd><%= graphicsAdapter.gpuTypeLabel %></dd>
+                            </div>
+                            <div>
+                              <dt>Model</dt>
+                              <dd><%= graphicsAdapter.gpuModel || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>VRAM</dt>
+                              <dd><%= formatVram(graphicsAdapter.vramMb) || '—' %></dd>
+                            </div>
+                            <div>
+                              <dt>Source</dt>
+                              <dd><%= sourceLabel(graphicsAdapter.sourceCode) %></dd>
+                            </div>
+                          </dl>
+                        </section>
+                      <% }) %>
+                    </div>
+                  <% } else { %>
+                    <p class="field-hint">No graphics adapter rows recorded yet.</p>
+                  <% } %>
+                </section>
+
+                <% if (cosmeticIssues.length > 0 || hardwareIssues.length > 0) { %>
+                  <section class="tech-notes-section">
+                    <h3>Issue Details</h3>
+
+                    <div class="tech-notes-grid">
+                      <div class="tech-note-block">
+                        <strong>Cosmetic Issues</strong>
+
+                        <% if (cosmeticIssues.length > 0) { %>
+                          <% cosmeticIssues.forEach((issue) => { %>
+                            <p>
+                              <strong><%= issue.issueLabel %></strong>
+                              <% if (issue.severityLabel) { %> · <%= issue.severityLabel %><% } %>
+                              <% if (issue.locationLabel) { %> · <%= issue.locationLabel %><% } %>
+                              <% if (issue.issueRemark) { %><br /><%= issue.issueRemark %><% } %>
+                            </p>
+                          <% }) %>
+                        <% } else { %>
+                          <p>No cosmetic issues recorded.</p>
+                        <% } %>
+                      </div>
+
+                      <div class="tech-note-block">
+                        <strong>Hardware Issues</strong>
+
+                        <% if (hardwareIssues.length > 0) { %>
+                          <% hardwareIssues.forEach((issue) => { %>
+                            <p>
+                              <strong><%= issue.issueLabel %></strong>
+                              <% if (issue.locationLabel) { %> · <%= issue.locationLabel %><% } %>
+                              <% if (issue.issueRemark) { %><br /><%= issue.issueRemark %><% } %>
+                            </p>
+                          <% }) %>
+                        <% } else { %>
+                          <p>No hardware issues recorded.</p>
+                        <% } %>
+                      </div>
+                    </div>
+                  </section>
+                <% } %>
 
                 <% if (unit.latestOverride) { %>
                   <section class="tech-override-history-section">
@@ -267,6 +612,27 @@
                     </div>
                   </div>
                 </section>
+
+                <% if (comments.length > 0) { %>
+                  <section class="tech-notes-section">
+                    <h3>Comment History</h3>
+
+                    <div class="tech-notes-grid">
+                      <% comments.forEach((comment) => { %>
+                        <div class="tech-note-block">
+                          <strong><%= comment.noteTypeLabel %></strong>
+                          <p><%= comment.commentText %></p>
+                          <p>
+                            <%= comment.createdByName || sourceLabel(comment.sourceCode) %>
+                            <% if (comment.createdAt) { %>
+                              · <%= formatDateTime(comment.createdAt) %>
+                            <% } %>
+                          </p>
+                        </div>
+                      <% }) %>
+                    </div>
+                  </section>
+                <% } %>
               </div>
             </div>
           </td>
