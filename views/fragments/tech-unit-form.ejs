@@ -25,12 +25,12 @@
   <div class="form-section">
     <div class="form-section-header">
       <div>
-        <p class="eyebrow">Required</p>
-        <h3>Required Unit Fields</h3>
+        <p class="eyebrow">Identity</p>
+        <h3>Unit Identity</h3>
       </div>
       <p>
-        Asset tag is shown with the <%= formOptions.assetTagPrefix || 'BWT' %> prefix in the app.
-        Only the numeric asset number is stored in the database. Units can only be assigned to lots without child lots.
+        These fields help identify the physical unit and prevent duplicate records. Asset tags are the strongest match;
+        unit serial and BIOS serial are used when an asset tag is missing, removed, or not yet attached.
       </p>
     </div>
 
@@ -47,7 +47,7 @@
           <%= isEditMode ? 'disabled' : '' %>
         />
         <small class="field-hint">
-          You can enter <%= formOptions.assetTagPrefix || 'BWT' %>2300001 or 2300001. The prefix is removed before saving.
+          Enter <%= formOptions.assetTagPrefix || 'BWT' %>2300001 or 2300001. Leave blank on create to auto-generate the next asset tag.
         </small>
       </label>
 
@@ -63,7 +63,7 @@
           maxlength="150"
         />
         <small class="field-hint">
-          Used for duplicate detection when the asset tag is missing or unavailable.
+          Usually copied from the device label or chassis. This is used for duplicate detection.
         </small>
       </label>
 
@@ -79,10 +79,25 @@
           maxlength="150"
         />
         <small class="field-hint">
-          BIOS serial improves confidence when matching a unit that already exists.
+          BIOS serial is a stronger confirmation than the physical serial alone.
         </small>
       </label>
+    </div>
+  </div>
 
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Assignment</p>
+        <h3>Lot and Workflow Status</h3>
+      </div>
+      <p>
+        Assign the unit to the child lot the tech is working on. Parent/container lots are not assignable.
+        If an existing unit is confirmed during duplicate matching, changing the lot records a lot-movement history entry.
+      </p>
+    </div>
+
+    <div class="form-grid">
       <label class="form-field">
         <span>Assignable Lot</span>
         <select name="lotId" required>
@@ -138,8 +153,8 @@
         <h3>Manufacturer and Model</h3>
       </div>
       <p>
+        Model selection is separated from identity so techs can first confirm the physical unit, then record the make/model details.
         The model dropdown filters by selected manufacturer and unit category.
-        Choosing a model can auto-fill both fields.
       </p>
     </div>
 
@@ -184,11 +199,12 @@
   <div class="form-section">
     <div class="form-section-header">
       <div>
-        <p class="eyebrow">Hardware</p>
-        <h3>Hardware Details</h3>
+        <p class="eyebrow">CPU</p>
+        <h3>Processor Information</h3>
       </div>
       <p>
-        Choosing a processor model can auto-fill processor speed if that value exists.
+        CPU details are used as a secondary confidence check when matching a unit by serial number.
+        The expected display format is CPU manufacturer, CPU model, and speed.
       </p>
     </div>
 
@@ -208,7 +224,7 @@
           <% }) %>
         </select>
         <small class="field-hint">
-          Processor speed can auto-fill from this selection.
+          Choosing a processor can auto-fill speed if the base speed exists in the processor list.
         </small>
       </label>
 
@@ -223,8 +239,25 @@
           placeholder="Example: 2.40"
           data-processor-speed-input
         />
+        <small class="field-hint">
+          Store the numeric speed only. The frontend displays it with GHz.
+        </small>
       </label>
+    </div>
+  </div>
 
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Memory and Storage</p>
+        <h3>Current Summary Fields</h3>
+      </div>
+      <p>
+        These are temporary summary fields for the current CRUD flow. Step 3e will move RAM and storage into individual module/device rows while still displaying totals in the frontend.
+      </p>
+    </div>
+
+    <div class="form-grid">
       <label class="form-field">
         <span>RAM GB</span>
         <input
@@ -235,6 +268,9 @@
           step="1"
           placeholder="Example: 16"
         />
+        <small class="field-hint">
+          Current total RAM summary. Individual RAM modules come in Step 3e.
+        </small>
       </label>
 
       <label class="form-field">
@@ -247,6 +283,9 @@
             </option>
           <% }) %>
         </select>
+        <small class="field-hint">
+          Current RAM type summary. Mixed modules will be handled through module rows.
+        </small>
       </label>
 
       <label class="form-field">
@@ -259,6 +298,9 @@
           step="1"
           placeholder="Example: 256"
         />
+        <small class="field-hint">
+          Current storage summary. Individual storage devices come in Step 3e.
+        </small>
       </label>
 
       <label class="form-field">
@@ -271,8 +313,25 @@
             </option>
           <% }) %>
         </select>
+        <small class="field-hint">
+          Current storage type summary. Multiple drives will be handled through device rows.
+        </small>
       </label>
+    </div>
+  </div>
 
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Operating System</p>
+        <h3>OS Summary</h3>
+      </div>
+      <p>
+        Operating system is kept separate from hardware because ELS intake may stop before OS installation, while full refurb lots may require OS details later.
+      </p>
+    </div>
+
+    <div class="form-grid">
       <label class="form-field">
         <span>Operating System</span>
         <select name="operatingSystemConfigValueId">
@@ -283,6 +342,9 @@
             </option>
           <% }) %>
         </select>
+        <small class="field-hint">
+          OS build and diagnostics fields will be added after the expanded form foundation is ready.
+        </small>
       </label>
     </div>
   </div>
@@ -290,11 +352,45 @@
   <div class="form-section">
     <div class="form-section-header">
       <div>
-        <p class="eyebrow">Notes</p>
-        <h3>Tech Notes</h3>
+        <p class="eyebrow">Expanded Data</p>
+        <h3>Upcoming Structured Fields</h3>
       </div>
       <p>
-        Hardware and cosmetic notes are separate because QC will eventually grade them separately.
+        This section documents where the next unit-data groups will appear. ScanTool-only values will not become normal editable fields unless we explicitly allow edits later.
+      </p>
+    </div>
+
+    <div class="workflow-list">
+      <div class="workflow-item slate">
+        <span></span>
+        <div>
+          <strong>ScanTool-only specifications</strong>
+          <p>
+            LTE/WWAN details, supported networks, bands, firmware-level module details, some BIOS values, and other deep hardware values will be displayed when ScanTool sends them.
+          </p>
+        </div>
+      </div>
+
+      <div class="workflow-item slate">
+        <span></span>
+        <div>
+          <strong>Manual expanded details</strong>
+          <p>
+            RAM modules, storage devices, graphics adapters, hardware issues, cosmetic issues, overall unit grade, and comments will be added in the next form steps.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Notes</p>
+        <h3>Current Notes</h3>
+      </div>
+      <p>
+        These notes remain available for the current workflow. Step 3f will add structured hardware and cosmetic issue rows with dropdowns, custom issue text, locations, severity where needed, and remarks.
       </p>
     </div>
 
@@ -302,11 +398,17 @@
       <label class="form-field">
         <span>Hardware Notes</span>
         <textarea name="hardwareNotes" rows="4" maxlength="1000"><%= formData.hardwareNotes %></textarea>
+        <small class="field-hint">
+          Use this for current hardware notes until structured hardware issue rows are added.
+        </small>
       </label>
 
       <label class="form-field">
         <span>Cosmetic Notes</span>
         <textarea name="cosmeticNotes" rows="4" maxlength="1000"><%= formData.cosmeticNotes %></textarea>
+        <small class="field-hint">
+          Use this for current cosmetic notes until structured cosmetic issue rows are added.
+        </small>
       </label>
     </div>
   </div>
