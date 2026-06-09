@@ -350,6 +350,10 @@
                               <dd><%= formatGb(memoryModule.sizeGb) %> <%= memoryModule.ramTypeLabel || '' %></dd>
                             </div>
                             <div>
+                              <dt>Install Type</dt>
+                              <dd><%= memoryModule.memoryInstallTypeLabel || 'Removable Module' %></dd>
+                            </div>
+                            <div>
                               <dt>Speed</dt>
                               <dd><%= formatMhz(memoryModule.speedMhz) || '—' %></dd>
                             </div>

@@ -18,6 +18,8 @@
     'storageGb',
     'storageTypeConfigValueId',
     'operatingSystemConfigValueId',
+    'generalCommentTypeConfigValueId',
+    'generalCommentText',
     'hardwareNotes',
     'cosmeticNotes'
   ];
@@ -26,6 +28,14 @@
     return formData && formData[fieldName] !== undefined && formData[fieldName] !== null
       ? String(formData[fieldName])
       : '';
+  }
+
+  function getFormRows(fieldName) {
+    return formData && Array.isArray(formData[fieldName]) ? formData[fieldName] : [];
+  }
+
+  function getRowValue(row, fieldName) {
+    return row && row[fieldName] !== undefined && row[fieldName] !== null ? String(row[fieldName]) : '';
   }
 
   function getMatchUnitLabel(match) {
@@ -126,6 +136,44 @@
                 <form method="post" action="/tech/units/<%= match.unitId %>/use-existing/modal" hx-post="/tech/units/<%= match.unitId %>/use-existing/modal" hx-target="#modal-root" hx-swap="innerHTML" style="margin-top: 12px;">
                   <% hiddenFields.forEach((fieldName) => { %>
                     <input type="hidden" name="<%= fieldName %>" value="<%= getFormValue(fieldName) %>" />
+                  <% }) %>
+
+                  <% getFormRows('memoryModules').forEach((moduleRow, index) => { %>
+                    <input type="hidden" name="memoryModules[<%= index %>][slotLabel]" value="<%= getRowValue(moduleRow, 'slotLabel') %>" />
+                    <input type="hidden" name="memoryModules[<%= index %>][sizeGb]" value="<%= getRowValue(moduleRow, 'sizeGb') %>" />
+                    <input type="hidden" name="memoryModules[<%= index %>][ramTypeConfigValueId]" value="<%= getRowValue(moduleRow, 'ramTypeConfigValueId') %>" />
+                    <input type="hidden" name="memoryModules[<%= index %>][memoryInstallTypeCode]" value="<%= getRowValue(moduleRow, 'memoryInstallTypeCode') || 'removable_module' %>" />
+                    <input type="hidden" name="memoryModules[<%= index %>][speedMhz]" value="<%= getRowValue(moduleRow, 'speedMhz') %>" />
+                    <input type="hidden" name="memoryModules[<%= index %>][manufacturerName]" value="<%= getRowValue(moduleRow, 'manufacturerName') %>" />
+                    <input type="hidden" name="memoryModules[<%= index %>][partNumber]" value="<%= getRowValue(moduleRow, 'partNumber') %>" />
+                    <input type="hidden" name="memoryModules[<%= index %>][serialNumber]" value="<%= getRowValue(moduleRow, 'serialNumber') %>" />
+                    <input type="hidden" name="memoryModules[<%= index %>][changeNotes]" value="<%= getRowValue(moduleRow, 'changeNotes') %>" />
+                  <% }) %>
+
+                  <% getFormRows('storageDevices').forEach((deviceRow, index) => { %>
+                    <input type="hidden" name="storageDevices[<%= index %>][slotLabel]" value="<%= getRowValue(deviceRow, 'slotLabel') %>" />
+                    <input type="hidden" name="storageDevices[<%= index %>][sizeGb]" value="<%= getRowValue(deviceRow, 'sizeGb') %>" />
+                    <input type="hidden" name="storageDevices[<%= index %>][storageTypeConfigValueId]" value="<%= getRowValue(deviceRow, 'storageTypeConfigValueId') %>" />
+                    <input type="hidden" name="storageDevices[<%= index %>][manufacturerName]" value="<%= getRowValue(deviceRow, 'manufacturerName') %>" />
+                    <input type="hidden" name="storageDevices[<%= index %>][modelNumber]" value="<%= getRowValue(deviceRow, 'modelNumber') %>" />
+                    <input type="hidden" name="storageDevices[<%= index %>][serialNumber]" value="<%= getRowValue(deviceRow, 'serialNumber') %>" />
+                    <input type="hidden" name="storageDevices[<%= index %>][firmwareVersion]" value="<%= getRowValue(deviceRow, 'firmwareVersion') %>" />
+                    <input type="hidden" name="storageDevices[<%= index %>][wipeStatusConfigValueId]" value="<%= getRowValue(deviceRow, 'wipeStatusConfigValueId') %>" />
+                    <input type="hidden" name="storageDevices[<%= index %>][changeNotes]" value="<%= getRowValue(deviceRow, 'changeNotes') %>" />
+                  <% }) %>
+
+                  <% getFormRows('cosmeticIssues').forEach((issueRow, index) => { %>
+                    <input type="hidden" name="cosmeticIssues[<%= index %>][issueTypeConfigValueId]" value="<%= getRowValue(issueRow, 'issueTypeConfigValueId') %>" />
+                    <input type="hidden" name="cosmeticIssues[<%= index %>][severityConfigValueId]" value="<%= getRowValue(issueRow, 'severityConfigValueId') %>" />
+                    <input type="hidden" name="cosmeticIssues[<%= index %>][locationConfigValueId]" value="<%= getRowValue(issueRow, 'locationConfigValueId') %>" />
+                    <input type="hidden" name="cosmeticIssues[<%= index %>][issueRemark]" value="<%= getRowValue(issueRow, 'issueRemark') %>" />
+                  <% }) %>
+
+                  <% getFormRows('hardwareIssues').forEach((issueRow, index) => { %>
+                    <input type="hidden" name="hardwareIssues[<%= index %>][issueTypeConfigValueId]" value="<%= getRowValue(issueRow, 'issueTypeConfigValueId') %>" />
+                    <input type="hidden" name="hardwareIssues[<%= index %>][customIssueLabel]" value="<%= getRowValue(issueRow, 'customIssueLabel') %>" />
+                    <input type="hidden" name="hardwareIssues[<%= index %>][locationConfigValueId]" value="<%= getRowValue(issueRow, 'locationConfigValueId') %>" />
+                    <input type="hidden" name="hardwareIssues[<%= index %>][issueRemark]" value="<%= getRowValue(issueRow, 'issueRemark') %>" />
                   <% }) %>
 
                   <button class="primary-button" type="submit">Use Existing Unit</button>

@@ -4,6 +4,16 @@ const lotModel = require('./lotModel');
 const UNIT_LIMIT = 100;
 const ASSET_NUMBER_START = 2300000;
 
+const MEMORY_INSTALL_TYPE_OPTIONS = [
+  { code: 'removable_module', label: 'Removable Module' },
+  { code: 'integrated_soldered', label: 'Integrated / Soldered' },
+  { code: 'unknown', label: 'Unknown' }
+];
+
+const DEFAULT_MEMORY_INSTALL_TYPE_CODE = 'removable_module';
+
+const VALID_MEMORY_INSTALL_TYPE_CODES = new Set(MEMORY_INSTALL_TYPE_OPTIONS.map((option) => option.code));
+
 function escapeIdentifier(identifier) {
   return `\`${String(identifier).replace(/`/g, '``')}\``;
 }
@@ -72,7 +82,9 @@ async function getTableColumns(tableName) {
     'manufacturers',
     'unit_models',
     'processor_models',
-    'unit_identifiers'
+    'unit_identifiers',
+    'unit_memory_modules',
+    'unit_storage_devices'
   ];
 
   if (!allowedTables.includes(tableName)) {
@@ -434,6 +446,158 @@ function normalizeText(value) {
   return trimmed || null;
 }
 
+function normalizeOptionalString(value, maxLength = 255) {
+  const normalized = normalizeText(value);
+
+  if (!normalized) {
+    return '';
+  }
+
+  return normalized.slice(0, maxLength);
+}
+
+function normalizeMemoryInstallTypeCode(value) {
+  const normalized = String(value || '').trim();
+
+  return VALID_MEMORY_INSTALL_TYPE_CODES.has(normalized)
+    ? normalized
+    : DEFAULT_MEMORY_INSTALL_TYPE_CODE;
+}
+
+function normalizeModuleRows(rows) {
+  if (!rows) {
+    return [];
+  }
+
+  if (Array.isArray(rows)) {
+    return rows.filter((row) => row && typeof row === 'object');
+  }
+
+  if (typeof rows === 'object') {
+    return Object.keys(rows)
+      .sort((a, b) => Number(a) - Number(b))
+      .map((key) => rows[key])
+      .filter((row) => row && typeof row === 'object');
+  }
+
+  return [];
+}
+
+function normalizeMemoryModuleRow(row, index = 0) {
+  const normalized = {
+    slotLabel: normalizeOptionalString(row.slotLabel, 80),
+    sizeGb: normalizeOptionalInteger(row.sizeGb),
+    ramTypeConfigValueId: normalizeOptionalInteger(row.ramTypeConfigValueId),
+    memoryInstallTypeCode: normalizeMemoryInstallTypeCode(row.memoryInstallTypeCode),
+    speedMhz: normalizeOptionalInteger(row.speedMhz),
+    manufacturerName: normalizeOptionalString(row.manufacturerName, 120),
+    partNumber: normalizeOptionalString(row.partNumber, 120),
+    serialNumber: normalizeOptionalString(row.serialNumber, 120),
+    changeNotes: normalizeOptionalString(row.changeNotes, 500)
+  };
+
+  const hasAnyValue = Boolean(
+    normalized.sizeGb ||
+      normalized.ramTypeConfigValueId ||
+      normalized.speedMhz ||
+      normalized.manufacturerName ||
+      normalized.partNumber ||
+      normalized.serialNumber ||
+      normalized.changeNotes
+  );
+
+  if (!hasAnyValue) {
+    return null;
+  }
+
+  return {
+    ...normalized,
+    slotLabel: normalized.slotLabel || `RAM Slot ${index + 1}`
+  };
+}
+
+function normalizeStorageDeviceRow(row, index = 0) {
+  const normalized = {
+    slotLabel: normalizeOptionalString(row.slotLabel, 80),
+    sizeGb: normalizeOptionalInteger(row.sizeGb),
+    storageTypeConfigValueId: normalizeOptionalInteger(row.storageTypeConfigValueId),
+    manufacturerName: normalizeOptionalString(row.manufacturerName, 120),
+    modelNumber: normalizeOptionalString(row.modelNumber, 120),
+    serialNumber: normalizeOptionalString(row.serialNumber, 120),
+    firmwareVersion: normalizeOptionalString(row.firmwareVersion, 120),
+    wipeStatusConfigValueId: normalizeOptionalInteger(row.wipeStatusConfigValueId),
+    changeNotes: normalizeOptionalString(row.changeNotes, 500)
+  };
+
+  const hasAnyValue = Boolean(
+    normalized.sizeGb ||
+      normalized.storageTypeConfigValueId ||
+      normalized.manufacturerName ||
+      normalized.modelNumber ||
+      normalized.serialNumber ||
+      normalized.firmwareVersion ||
+      normalized.wipeStatusConfigValueId ||
+      normalized.changeNotes
+  );
+
+  if (!hasAnyValue) {
+    return null;
+  }
+
+  return {
+    ...normalized,
+    slotLabel: normalized.slotLabel || `Drive ${index + 1}`
+  };
+}
+
+function getNormalizedMemoryModules(formData) {
+  return normalizeModuleRows(formData.memoryModules)
+    .map((row, index) => normalizeMemoryModuleRow(row, index))
+    .filter(Boolean);
+}
+
+function getNormalizedStorageDevices(formData) {
+  return normalizeModuleRows(formData.storageDevices)
+    .map((row, index) => normalizeStorageDeviceRow(row, index))
+    .filter(Boolean);
+}
+
+function sumModuleSizeGb(rows) {
+  return rows.reduce((sum, row) => sum + Number(row.sizeGb || 0), 0);
+}
+
+function getBlankMemoryModuleRows() {
+  return [
+    {
+      slotLabel: 'Slot 1',
+      sizeGb: '',
+      ramTypeConfigValueId: '',
+      memoryInstallTypeCode: DEFAULT_MEMORY_INSTALL_TYPE_CODE,
+      speedMhz: '',
+      manufacturerName: '',
+      partNumber: '',
+      serialNumber: '',
+      changeNotes: ''
+    }
+  ];
+}
+
+function getBlankStorageDeviceRows() {
+  return [
+    {
+      slotLabel: 'Drive 1',
+      sizeGb: '',
+      storageTypeConfigValueId: '',
+      manufacturerName: '',
+      modelNumber: '',
+      serialNumber: '',
+      firmwareVersion: '',
+      wipeStatusConfigValueId: '',
+      changeNotes: ''
+    }
+  ];
+}
+
 function normalizeIdentifierText(value) {
   const trimmed = String(value || '').trim().replace(/\s+/g, ' ');
 
@@ -507,6 +671,7 @@ async function getTechUnitFormOptions() {
     unitStatuses,
     ramTypes,
     storageTypes,
+    storageWipeStatuses,
     operatingSystems,
     manufacturers,
     unitModels,
@@ -516,6 +681,7 @@ async function getTechUnitFormOptions() {
     listConfigValuesByCategoryCodes(['unit_statuses', 'unit_status', 'current_unit_statuses', 'current_unit_status']),
     listConfigValuesByCategoryCodes(['ram_types', 'ram_type']),
     listConfigValuesByCategoryCodes(['storage_types', 'storage_type', 'ssd_types', 'ssd_type']),
+    listConfigValuesByCategoryCodes(['storage_wipe_statuses', 'storage_wipe_status', 'wipe_statuses', 'wipe_status']),
     listConfigValuesByCategoryCodes(['operating_systems', 'operating_system']),
     listManufacturers(),
     listUnitModels(),
@@ -535,8 +701,10 @@ async function getTechUnitFormOptions() {
     unitCategories,
     unitStatuses,
     defaultUnitStatusId: receivedStatus ? String(receivedStatus.id) : '',
+    memoryInstallTypes: MEMORY_INSTALL_TYPE_OPTIONS,
     ramTypes,
     storageTypes,
+    storageWipeStatuses,
     operatingSystems,
     manufacturers,
     unitModels,
@@ -561,6 +729,8 @@ function getBlankUnitFormData(formOptions = null) {
     storageGb: '',
     storageTypeConfigValueId: '',
     operatingSystemConfigValueId: '',
+    memoryModules: getBlankMemoryModuleRows(),
+    storageDevices: getBlankStorageDeviceRows(),
     hardwareNotes: '',
     cosmeticNotes: ''
   };
@@ -584,6 +754,100 @@ async function getUnitById(unitId) {
   );
 
   return rows[0] || null;
+}
+
+async function listCurrentMemoryModulesForUnit(unitId) {
+  const columns = await getTableColumns('unit_memory_modules');
+
+  if (columns.size === 0) {
+    return getBlankMemoryModuleRows();
+  }
+
+  const memoryInstallTypeSelect = hasColumn(columns, 'memory_install_type_code')
+    ? 'memory_install_type_code'
+    : `'${DEFAULT_MEMORY_INSTALL_TYPE_CODE}' AS memory_install_type_code`;
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        unit_memory_module_id,
+        slot_label,
+        size_gb,
+        ram_type_config_value_id,
+        ${memoryInstallTypeSelect},
+        speed_mhz,
+        manufacturer_name,
+        part_number,
+        serial_number,
+        change_notes
+      FROM unit_memory_modules
+      WHERE unit_id = ?
+        AND is_current = 1
+      ORDER BY slot_label, unit_memory_module_id
+    `,
+    [unitId]
+  );
+
+  if (rows.length === 0) {
+    return getBlankMemoryModuleRows();
+  }
+
+  return rows.map((row) => ({
+    slotLabel: row.slot_label || '',
+    sizeGb: row.size_gb !== null && row.size_gb !== undefined ? String(row.size_gb) : '',
+    ramTypeConfigValueId: row.ram_type_config_value_id ? String(row.ram_type_config_value_id) : '',
+    memoryInstallTypeCode: normalizeMemoryInstallTypeCode(row.memory_install_type_code),
+    speedMhz: row.speed_mhz !== null && row.speed_mhz !== undefined ? String(row.speed_mhz) : '',
+    manufacturerName: row.manufacturer_name || '',
+    partNumber: row.part_number || '',
+    serialNumber: row.serial_number || '',
+    changeNotes: row.change_notes || ''
+  }));
+}
+
+async function listCurrentStorageDevicesForUnit(unitId) {
+  const exists = await tableExists('unit_storage_devices');
+
+  if (!exists) {
+    return getBlankStorageDeviceRows();
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        unit_storage_device_id,
+        slot_label,
+        storage_type_config_value_id,
+        size_gb,
+        manufacturer_name,
+        model_number,
+        serial_number,
+        firmware_version,
+        wipe_status_config_value_id,
+        change_notes
+      FROM unit_storage_devices
+      WHERE unit_id = ?
+        AND is_current = 1
+      ORDER BY slot_label, unit_storage_device_id
+    `,
+    [unitId]
+  );
+
+  if (rows.length === 0) {
+    return getBlankStorageDeviceRows();
+  }
+
+  return rows.map((row) => ({
+    slotLabel: row.slot_label || '',
+    sizeGb: row.size_gb !== null && row.size_gb !== undefined ? String(row.size_gb) : '',
+    storageTypeConfigValueId: row.storage_type_config_value_id ? String(row.storage_type_config_value_id) : '',
+    manufacturerName: row.manufacturer_name || '',
+    modelNumber: row.model_number || '',
+    serialNumber: row.serial_number || '',
+    firmwareVersion: row.firmware_version || '',
+    wipeStatusConfigValueId: row.wipe_status_config_value_id ? String(row.wipe_status_config_value_id) : '',
+    changeNotes: row.change_notes || ''
+  }));
 }
 
 async function getUnitIdentifierValue(unitId, typeCode) {
@@ -620,8 +884,17 @@ async function getUnitFormDataById(unitId, formOptions = null) {
     return null;
   }
 
-  const unitSerialNumber = await getUnitIdentifierValue(unitId, 'unit_serial_number');
-  const biosSerialNumber = await getUnitIdentifierValue(unitId, 'bios_serial_number');
+  const [
+    unitSerialNumber,
+    biosSerialNumber,
+    memoryModules,
+    storageDevices
+  ] = await Promise.all([
+    getUnitIdentifierValue(unitId, 'unit_serial_number'),
+    getUnitIdentifierValue(unitId, 'bios_serial_number'),
+    listCurrentMemoryModulesForUnit(unitId),
+    listCurrentStorageDevicesForUnit(unitId)
+  ]);
 
   return {
     assetTag: unit.asset_number ? getDisplayAssetTag(unit.asset_number) : '',
@@ -643,6 +916,8 @@ async function getUnitFormDataById(unitId, formOptions = null) {
     storageGb: unit.storage_gb !== null && unit.storage_gb !== undefined ? String(unit.storage_gb) : '',
     storageTypeConfigValueId: unit.storage_type_config_value_id ? String(unit.storage_type_config_value_id) : '',
     operatingSystemConfigValueId: unit.operating_system_config_value_id ? String(unit.operating_system_config_value_id) : '',
+    memoryModules,
+    storageDevices,
     hardwareNotes: unit.hardware_notes || '',
     cosmeticNotes: unit.cosmetic_notes || ''
   };
@@ -1147,6 +1422,148 @@ async function saveUnitIdentifiers(connection, unitId, formData, assetNumber) {
   }
 }
 
+function addColumnValueIfPresent(columns, values, tableColumns, columnName, value) {
+  if (!hasColumn(tableColumns, columnName)) {
+    return;
+  }
+
+  columns.push(columnName);
+  values.push(value);
+}
+
+async function deactivateCurrentRows(connection, tableName, unitId) {
+  const tableColumns = await getTableColumns(tableName);
+
+  if (tableColumns.size === 0 || !hasColumn(tableColumns, 'unit_id')) {
+    return tableColumns;
+  }
+
+  if (hasColumn(tableColumns, 'is_current')) {
+    const removedAtSql = hasColumn(tableColumns, 'removed_at')
+      ? ', removed_at = COALESCE(removed_at, NOW())'
+      : '';
+
+    await connection.query(
+      `
+        UPDATE ${escapeIdentifier(tableName)}
+        SET is_current = 0${removedAtSql}
+        WHERE unit_id = ?
+          AND is_current = 1
+      `,
+      [unitId]
+    );
+  } else {
+    await connection.query(
+      `
+        DELETE FROM ${escapeIdentifier(tableName)}
+        WHERE unit_id = ?
+      `,
+      [unitId]
+    );
+  }
+
+  return tableColumns;
+}
+
+async function insertCurrentMemoryModule(connection, tableColumns, unitId, moduleRow, currentUserId) {
+  const columns = [];
+  const values = [];
+
+  addColumnValueIfPresent(columns, values, tableColumns, 'unit_id', unitId);
+  addColumnValueIfPresent(columns, values, tableColumns, 'slot_label', moduleRow.slotLabel);
+  addColumnValueIfPresent(columns, values, tableColumns, 'size_gb', moduleRow.sizeGb);
+  addColumnValueIfPresent(columns, values, tableColumns, 'ram_type_config_value_id', moduleRow.ramTypeConfigValueId);
+  addColumnValueIfPresent(columns, values, tableColumns, 'memory_install_type_code', moduleRow.memoryInstallTypeCode || DEFAULT_MEMORY_INSTALL_TYPE_CODE);
+  addColumnValueIfPresent(columns, values, tableColumns, 'speed_mhz', moduleRow.speedMhz);
+  addColumnValueIfPresent(columns, values, tableColumns, 'manufacturer_name', moduleRow.manufacturerName || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'part_number', moduleRow.partNumber || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'serial_number', moduleRow.serialNumber || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'is_current', 1);
+  addColumnValueIfPresent(columns, values, tableColumns, 'installed_at', new Date());
+  addColumnValueIfPresent(columns, values, tableColumns, 'change_notes', moduleRow.changeNotes || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'source_code', 'tech_edit');
+  addColumnValueIfPresent(columns, values, tableColumns, 'changed_by_user_id', currentUserId || null);
+
+  if (columns.length === 0) {
+    return;
+  }
+
+  await connection.query(
+    `
+      INSERT INTO unit_memory_modules (${columns.map(escapeIdentifier).join(', ')})
+      VALUES (${columns.map(() => '?').join(', ')})
+    `,
+    values
+  );
+}
+
+async function insertCurrentStorageDevice(connection, tableColumns, unitId, deviceRow, currentUserId) {
+  const columns = [];
+  const values = [];
+
+  addColumnValueIfPresent(columns, values, tableColumns, 'unit_id', unitId);
+  addColumnValueIfPresent(columns, values, tableColumns, 'slot_label', deviceRow.slotLabel);
+  addColumnValueIfPresent(columns, values, tableColumns, 'storage_type_config_value_id', deviceRow.storageTypeConfigValueId);
+  addColumnValueIfPresent(columns, values, tableColumns, 'size_gb', deviceRow.sizeGb);
+  addColumnValueIfPresent(columns, values, tableColumns, 'manufacturer_name', deviceRow.manufacturerName || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'model_number', deviceRow.modelNumber || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'serial_number', deviceRow.serialNumber || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'firmware_version', deviceRow.firmwareVersion || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'wipe_status_config_value_id', deviceRow.wipeStatusConfigValueId);
+  addColumnValueIfPresent(columns, values, tableColumns, 'is_current', 1);
+  addColumnValueIfPresent(columns, values, tableColumns, 'installed_at', new Date());
+  addColumnValueIfPresent(columns, values, tableColumns, 'change_notes', deviceRow.changeNotes || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'source_code', 'tech_edit');
+  addColumnValueIfPresent(columns, values, tableColumns, 'changed_by_user_id', currentUserId || null);
+
+  if (columns.length === 0) {
+    return;
+  }
+
+  await connection.query(
+    `
+      INSERT INTO unit_storage_devices (${columns.map(escapeIdentifier).join(', ')})
+      VALUES (${columns.map(() => '?').join(', ')})
+    `,
+    values
+  );
+}
+
+async function saveUnitMemoryModules(connection, unitId, formData, currentUserId) {
+  const exists = await tableExists('unit_memory_modules');
+
+  if (!exists) {
+    return;
+  }
+
+  const memoryModules = getNormalizedMemoryModules(formData);
+  const tableColumns = await deactivateCurrentRows(connection, 'unit_memory_modules', unitId);
+
+  for (const moduleRow of memoryModules) {
+    await insertCurrentMemoryModule(connection, tableColumns, unitId, moduleRow, currentUserId);
+  }
+}
+
+async function saveUnitStorageDevices(connection, unitId, formData, currentUserId) {
+  const exists = await tableExists('unit_storage_devices');
+
+  if (!exists) {
+    return;
+  }
+
+  const storageDevices = getNormalizedStorageDevices(formData);
+  const tableColumns = await deactivateCurrentRows(connection, 'unit_storage_devices', unitId);
+
+  for (const deviceRow of storageDevices) {
+    await insertCurrentStorageDevice(connection, tableColumns, unitId, deviceRow, currentUserId);
+  }
+}
+
+async function saveUnitModuleRows(connection, unitId, formData, currentUserId) {
+  await saveUnitMemoryModules(connection, unitId, formData, currentUserId);
+  await saveUnitStorageDevices(connection, unitId, formData, currentUserId);
+}
+
 function buildWritePayload(formData, currentUserId, mode, assetNumber) {
   const columns = [];
   const values = [];
@@ -1174,9 +1591,14 @@ function buildWritePayload(formData, currentUserId, mode, assetNumber) {
   addColumn('unit_model_id', normalizeOptionalInteger(formData.unitModelId));
   addColumn('processor_model_id', normalizeOptionalInteger(formData.processorModelId));
   addColumn('processor_speed_ghz', normalizeOptionalDecimal(formData.processorSpeedGhz));
-  addColumn('ram_gb', normalizeOptionalInteger(formData.ramGb));
+  const normalizedMemoryModules = getNormalizedMemoryModules(formData);
+  const normalizedStorageDevices = getNormalizedStorageDevices(formData);
+  const memoryTotalGb = normalizedMemoryModules.length > 0 ? sumModuleSizeGb(normalizedMemoryModules) : normalizeOptionalInteger(formData.ramGb);
+  const storageTotalGb = normalizedStorageDevices.length > 0 ? sumModuleSizeGb(normalizedStorageDevices) : normalizeOptionalInteger(formData.storageGb);
+
+  addColumn('ram_gb', memoryTotalGb || null);
   addColumn('ram_type_config_value_id', normalizeOptionalInteger(formData.ramTypeConfigValueId));
-  addColumn('storage_gb', normalizeOptionalInteger(formData.storageGb));
+  addColumn('storage_gb', storageTotalGb || null);
   addColumn('storage_type_config_value_id', normalizeOptionalInteger(formData.storageTypeConfigValueId));
   addColumn('operating_system_config_value_id', normalizeOptionalInteger(formData.operatingSystemConfigValueId));
   addColumn('hardware_notes', normalizeText(formData.hardwareNotes));
@@ -1223,6 +1645,7 @@ async function createTechUnit(formData, currentUserId) {
     const unitId = result.insertId;
 
     await saveUnitIdentifiers(connection, unitId, formData, assetNumber);
+    await saveUnitModuleRows(connection, unitId, formData, currentUserId);
 
     await connection.commit();
 
@@ -1318,6 +1741,7 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
     );
 
     await saveUnitIdentifiers(connection, unitId, formData, unit.asset_number);
+    await saveUnitModuleRows(connection, unitId, formData, currentUserId);
 
     if (lotChanged && options.recordLotHistory !== false) {
       await recordUnitLotHistory(connection, {

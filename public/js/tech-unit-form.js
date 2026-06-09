@@ -139,6 +139,153 @@
     }
   }
 
+  function getModuleRows(form, rowType) {
+    return Array.from(form.querySelectorAll(`[data-module-row="${rowType}"]`));
+  }
+
+  function getCollectionNameForRowType(rowType) {
+    if (rowType === 'memory') {
+      return 'memoryModules';
+    }
+
+    if (rowType === 'storage') {
+      return 'storageDevices';
+    }
+
+    if (rowType === 'cosmeticIssue') {
+      return 'cosmeticIssues';
+    }
+
+    if (rowType === 'hardwareIssue') {
+      return 'hardwareIssues';
+    }
+
+    return '';
+  }
+
+  function replaceIndexInName(name, rowType, index) {
+    if (!name) {
+      return name;
+    }
+
+    const prefix = getCollectionNameForRowType(rowType);
+
+    if (!prefix) {
+      return name;
+    }
+
+    const pattern = new RegExp(`${prefix}\[[^\]]+\]`);
+
+    return name.replace(pattern, `${prefix}[${index}]`);
+  }
+
+  function renumberModuleRows(form, rowType) {
+    const rows = getModuleRows(form, rowType);
+
+    rows.forEach((row, index) => {
+      const displayNumber = index + 1;
+      const display = row.querySelector('[data-module-display-number]');
+
+      if (display) {
+        display.textContent = String(displayNumber);
+      }
+
+      row.querySelectorAll('[name]').forEach((field) => {
+        field.name = replaceIndexInName(field.name, rowType, index);
+      });
+    });
+  }
+
+  function updateModuleTotals(form) {
+    const memoryTotal = Array.from(form.querySelectorAll('[data-memory-size-input]')).reduce((sum, input) => {
+      const value = Number(input.value || 0);
+
+      return Number.isFinite(value) && value > 0 ? sum + value : sum;
+    }, 0);
+
+    const storageTotal = Array.from(form.querySelectorAll('[data-storage-size-input]')).reduce((sum, input) => {
+      const value = Number(input.value || 0);
+
+      return Number.isFinite(value) && value > 0 ? sum + value : sum;
+    }, 0);
+
+    const memoryInput = form.querySelector('[data-memory-total-input]');
+    const storageInput = form.querySelector('[data-storage-total-input]');
+    const memoryDisplay = form.querySelector('[data-memory-total-display]');
+    const storageDisplay = form.querySelector('[data-storage-total-display]');
+
+    if (memoryInput) {
+      memoryInput.value = memoryTotal > 0 ? String(memoryTotal) : '';
+    }
+
+    if (storageInput) {
+      storageInput.value = storageTotal > 0 ? String(storageTotal) : '';
+    }
+
+    if (memoryDisplay) {
+      memoryDisplay.textContent = String(memoryTotal || 0);
+    }
+
+    if (storageDisplay) {
+      storageDisplay.textContent = String(storageTotal || 0);
+    }
+  }
+
+  function addModuleRow(form, rowType) {
+    const list = form.querySelector(`[data-module-list="${rowType}"]`);
+    const template = form.querySelector(`template[data-module-template="${rowType}"]`);
+
+    if (!list || !template) {
+      return;
+    }
+
+    const rows = getModuleRows(form, rowType);
+    const index = rows.length;
+    const displayNumber = index + 1;
+    const html = template.innerHTML
+      .replaceAll('__INDEX__', String(index))
+      .replaceAll('__DISPLAY__', String(displayNumber));
+
+    const holder = document.createElement('div');
+    holder.innerHTML = html.trim();
+
+    const row = holder.firstElementChild;
+
+    if (row) {
+      list.appendChild(row);
+    }
+
+    renumberModuleRows(form, rowType);
+    updateModuleTotals(form);
+  }
+
+  function removeModuleRow(button) {
+    const row = button.closest('[data-module-row]');
+    const form = getFormFromElement(button);
+
+    if (!row || !form) {
+      return;
+    }
+
+    const rowType = row.getAttribute('data-module-row');
+    const rows = getModuleRows(form, rowType);
+
+    if (rows.length <= 1) {
+      row.querySelectorAll('input, select, textarea').forEach((field) => {
+        if (field.tagName === 'SELECT') {
+          field.selectedIndex = 0;
+        } else {
+          field.value = '';
+        }
+      });
+    } else {
+      row.remove();
+    }
+
+    renumberModuleRows(form, rowType);
+    updateModuleTotals(form);
+  }
+
   function initializeForm(form) {
     if (!form || form.getAttribute('data-tech-unit-form-initialized') === 'true') {
       return;
@@ -146,6 +293,9 @@
 
     form.setAttribute('data-tech-unit-form-initialized', 'true');
     updateUnitModelFilter(form, true);
+    renumberModuleRows(form, 'memory');
+    renumberModuleRows(form, 'storage');
+    updateModuleTotals(form);
 
     const processorSpeedInput = form.querySelector('[data-processor-speed-input]');
 
@@ -184,6 +334,14 @@
     if (processorSelect) {
       const form = getFormFromElement(processorSelect);
       applySelectedProcessorMetadata(form, false);
+      return;
+    }
+
+    const moduleField = event.target.closest('[data-memory-size-input], [data-storage-size-input]');
+
+    if (moduleField) {
+      const form = getFormFromElement(moduleField);
+      updateModuleTotals(form);
     }
   });
 
@@ -192,6 +350,30 @@
 
     if (speedInput) {
       speedInput.setAttribute('data-auto-filled', 'false');
+    }
+
+    const moduleSizeInput = event.target.closest('[data-memory-size-input], [data-storage-size-input]');
+
+    if (moduleSizeInput) {
+      const form = getFormFromElement(moduleSizeInput);
+      updateModuleTotals(form);
+    }
+  });
+
+  document.addEventListener('click', (event) => {
+    const addButton = event.target.closest('[data-add-module-row]');
+
+    if (addButton) {
+      const form = getFormFromElement(addButton);
+      const rowType = addButton.getAttribute('data-add-module-row');
+      addModuleRow(form, rowType);
+      return;
+    }
+
+    const removeButton = event.target.closest('[data-remove-module-row]');
+
+    if (removeButton) {
+      removeModuleRow(removeButton);
     }
   });
 

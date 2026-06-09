@@ -1,9 +1,56 @@
 <%
   const isEditMode = mode === 'edit';
   const htmxAttrs = isModal ? `hx-post="${formAction}" hx-target="#modal-root" hx-swap="innerHTML"` : '';
+  const memoryInstallTypes = Array.isArray(formOptions.memoryInstallTypes) && formOptions.memoryInstallTypes.length > 0
+    ? formOptions.memoryInstallTypes
+    : [
+        { code: 'removable_module', label: 'Removable Module' },
+        { code: 'integrated_soldered', label: 'Integrated / Soldered' },
+        { code: 'unknown', label: 'Unknown' }
+      ];
+  const memoryRows = Array.isArray(formData.memoryModules) && formData.memoryModules.length > 0
+    ? formData.memoryModules
+    : [{ slotLabel: 'Slot 1', sizeGb: '', ramTypeConfigValueId: '', memoryInstallTypeCode: 'removable_module', speedMhz: '', manufacturerName: '', partNumber: '', serialNumber: '', changeNotes: '' }];
+  const storageRows = Array.isArray(formData.storageDevices) && formData.storageDevices.length > 0
+    ? formData.storageDevices
+    : [{ slotLabel: 'Drive 1', sizeGb: '', storageTypeConfigValueId: '', manufacturerName: '', modelNumber: '', serialNumber: '', firmwareVersion: '', wipeStatusConfigValueId: '', changeNotes: '' }];
+  const cosmeticIssueTypes = Array.isArray(formOptions.cosmeticIssueTypes) ? formOptions.cosmeticIssueTypes : [];
+  const hardwareIssueTypes = Array.isArray(formOptions.hardwareIssueTypes) ? formOptions.hardwareIssueTypes : [];
+  const issueLocations = Array.isArray(formOptions.issueLocations) ? formOptions.issueLocations : [];
+  const issueSeverities = Array.isArray(formOptions.issueSeverities) ? formOptions.issueSeverities : [];
+  const commentTypes = Array.isArray(formOptions.commentTypes) ? formOptions.commentTypes : [];
+  const cosmeticIssueRows = Array.isArray(formData.cosmeticIssues) && formData.cosmeticIssues.length > 0
+    ? formData.cosmeticIssues
+    : [{ issueTypeConfigValueId: '', severityConfigValueId: '', locationConfigValueId: '', issueRemark: '' }];
+  const hardwareIssueRows = Array.isArray(formData.hardwareIssues) && formData.hardwareIssues.length > 0
+    ? formData.hardwareIssues
+    : [{ issueTypeConfigValueId: '', customIssueLabel: '', locationConfigValueId: '', issueRemark: '' }];
+  const selectedCommentTypeConfigValueId = formData.generalCommentTypeConfigValueId || formOptions.defaultCommentTypeConfigValueId || '';
 
   function selected(currentValue, optionValue) {
     return String(currentValue || '') === String(optionValue || '') ? 'selected' : '';
+  }
+
+  function selectedInstallType(currentValue, optionCode) {
+    const safeCurrentValue = currentValue || 'removable_module';
+
+    return String(safeCurrentValue) === String(optionCode || '') ? 'selected' : '';
+  }
+
+  function memoryTotalGb() {
+    return memoryRows.reduce((sum, row) => {
+      const value = Number(row.sizeGb || 0);
+
+      return Number.isFinite(value) && value > 0 ? sum + value : sum;
+    }, 0);
+  }
+
+  function storageTotalGb() {
+    return storageRows.reduce((sum, row) => {
+      const value = Number(row.sizeGb || 0);
+
+      return Number.isFinite(value) && value > 0 ? sum + value : sum;
+    }, 0);
   }
 %>
 
@@ -22,6 +69,9 @@
 <% } %>
 
 <form class="app-form tech-unit-form" method="post" action="<%= formAction %>" data-tech-unit-form <%- htmxAttrs %>>
+  <input type="hidden" name="ramGb" value="<%= memoryTotalGb() || formData.ramGb || '' %>" data-memory-total-input />
+  <input type="hidden" name="storageGb" value="<%= storageTotalGb() || formData.storageGb || '' %>" data-storage-total-input />
+
   <div class="form-section">
     <div class="form-section-header">
       <div>
@@ -249,74 +299,182 @@
   <div class="form-section">
     <div class="form-section-header">
       <div>
-        <p class="eyebrow">Memory and Storage</p>
-        <h3>Current Summary Fields</h3>
+        <p class="eyebrow">Memory</p>
+        <h3>RAM Modules</h3>
       </div>
       <p>
-        These are temporary summary fields for the current CRUD flow. Step 3e will move RAM and storage into individual module/device rows while still displaying totals in the frontend.
+        Record each installed RAM module separately. The total RAM value is calculated from the module rows and saved back to the unit summary.
       </p>
     </div>
 
-    <div class="form-grid">
-      <label class="form-field">
-        <span>RAM GB</span>
-        <input
-          type="number"
-          name="ramGb"
-          value="<%= formData.ramGb %>"
-          min="1"
-          step="1"
-          placeholder="Example: 16"
-        />
-        <small class="field-hint">
-          Current total RAM summary. Individual RAM modules come in Step 3e.
-        </small>
-      </label>
+    <div class="workflow-list" data-module-list="memory">
+      <% memoryRows.forEach((moduleRow, index) => { %>
+        <article class="workflow-item slate" data-module-row="memory">
+          <span></span>
+          <div style="width: 100%;">
+            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+              <div>
+                <strong>RAM Module <span data-module-display-number><%= index + 1 %></span></strong>
+                <p>Slot, size, type, speed, and module identifiers.</p>
+              </div>
+              <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+            </div>
 
-      <label class="form-field">
-        <span>RAM Type</span>
-        <select name="ramTypeConfigValueId">
-          <option value="">Select RAM type</option>
-          <% formOptions.ramTypes.forEach((ramType) => { %>
-            <option value="<%= ramType.id %>" <%= selected(formData.ramTypeConfigValueId, ramType.id) %>>
-              <%= ramType.label %>
-            </option>
-          <% }) %>
-        </select>
-        <small class="field-hint">
-          Current RAM type summary. Mixed modules will be handled through module rows.
-        </small>
-      </label>
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Slot Label</span>
+                <input type="text" name="memoryModules[<%= index %>][slotLabel]" value="<%= moduleRow.slotLabel || '' %>" placeholder="Slot 1" maxlength="80" data-module-field />
+              </label>
 
-      <label class="form-field">
-        <span>Storage GB</span>
-        <input
-          type="number"
-          name="storageGb"
-          value="<%= formData.storageGb %>"
-          min="1"
-          step="1"
-          placeholder="Example: 256"
-        />
-        <small class="field-hint">
-          Current storage summary. Individual storage devices come in Step 3e.
-        </small>
-      </label>
+              <label class="form-field">
+                <span>Size GB</span>
+                <input type="number" name="memoryModules[<%= index %>][sizeGb]" value="<%= moduleRow.sizeGb || '' %>" min="1" step="1" placeholder="Example: 8" data-memory-size-input data-module-field />
+              </label>
 
-      <label class="form-field">
-        <span>Storage Type</span>
-        <select name="storageTypeConfigValueId">
-          <option value="">Select storage type</option>
-          <% formOptions.storageTypes.forEach((storageType) => { %>
-            <option value="<%= storageType.id %>" <%= selected(formData.storageTypeConfigValueId, storageType.id) %>>
-              <%= storageType.label %>
-            </option>
-          <% }) %>
-        </select>
-        <small class="field-hint">
-          Current storage type summary. Multiple drives will be handled through device rows.
-        </small>
-      </label>
+              <label class="form-field">
+                <span>RAM Type</span>
+                <select name="memoryModules[<%= index %>][ramTypeConfigValueId]" data-module-field>
+                  <option value="">Select RAM type</option>
+                  <% formOptions.ramTypes.forEach((ramType) => { %>
+                    <option value="<%= ramType.id %>" <%= selected(moduleRow.ramTypeConfigValueId, ramType.id) %>><%= ramType.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Install Type</span>
+                <select name="memoryModules[<%= index %>][memoryInstallTypeCode]" data-module-field>
+                  <% memoryInstallTypes.forEach((installType) => { %>
+                    <option value="<%= installType.code %>" <%= selectedInstallType(moduleRow.memoryInstallTypeCode, installType.code) %>><%= installType.label %></option>
+                  <% }) %>
+                </select>
+                <small class="field-hint">Defaults to removable. Use integrated/soldered when RAM cannot be removed.</small>
+              </label>
+
+              <label class="form-field">
+                <span>Speed MHz</span>
+                <input type="number" name="memoryModules[<%= index %>][speedMhz]" value="<%= moduleRow.speedMhz || '' %>" min="1" step="1" placeholder="Example: 3200" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Module Manufacturer</span>
+                <input type="text" name="memoryModules[<%= index %>][manufacturerName]" value="<%= moduleRow.manufacturerName || '' %>" maxlength="120" placeholder="Example: Samsung" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Part Number</span>
+                <input type="text" name="memoryModules[<%= index %>][partNumber]" value="<%= moduleRow.partNumber || '' %>" maxlength="120" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Serial Number</span>
+                <input type="text" name="memoryModules[<%= index %>][serialNumber]" value="<%= moduleRow.serialNumber || '' %>" maxlength="120" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Change Notes</span>
+                <input type="text" name="memoryModules[<%= index %>][changeNotes]" value="<%= moduleRow.changeNotes || '' %>" maxlength="500" placeholder="Installed, replaced, upgraded, downgraded, etc." data-module-field />
+              </label>
+            </div>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+
+    <div class="form-actions" style="margin-top: 12px;">
+      <button type="button" class="secondary-button" data-add-module-row="memory">+ Add RAM Module</button>
+      <span class="field-hint">Total RAM: <strong data-memory-total-display><%= memoryTotalGb() || formData.ramGb || 0 %></strong>GB</span>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Storage</p>
+        <h3>Storage Devices</h3>
+      </div>
+      <p>
+        Record each installed storage device separately. Previous current devices are preserved as history when the saved current set changes.
+      </p>
+    </div>
+
+    <div class="workflow-list" data-module-list="storage">
+      <% storageRows.forEach((deviceRow, index) => { %>
+        <article class="workflow-item slate" data-module-row="storage">
+          <span></span>
+          <div style="width: 100%;">
+            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+              <div>
+                <strong>Storage Device <span data-module-display-number><%= index + 1 %></span></strong>
+                <p>Drive slot, size, type, model, serial, firmware, and wipe status.</p>
+              </div>
+              <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+            </div>
+
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Slot Label</span>
+                <input type="text" name="storageDevices[<%= index %>][slotLabel]" value="<%= deviceRow.slotLabel || '' %>" placeholder="Drive 1" maxlength="80" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Size GB</span>
+                <input type="number" name="storageDevices[<%= index %>][sizeGb]" value="<%= deviceRow.sizeGb || '' %>" min="1" step="1" placeholder="Example: 256" data-storage-size-input data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Storage Type</span>
+                <select name="storageDevices[<%= index %>][storageTypeConfigValueId]" data-module-field>
+                  <option value="">Select storage type</option>
+                  <% formOptions.storageTypes.forEach((storageType) => { %>
+                    <option value="<%= storageType.id %>" <%= selected(deviceRow.storageTypeConfigValueId, storageType.id) %>><%= storageType.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Wipe Status</span>
+                <select name="storageDevices[<%= index %>][wipeStatusConfigValueId]" data-module-field>
+                  <option value="">Select wipe status</option>
+                  <% (formOptions.storageWipeStatuses || []).forEach((wipeStatus) => { %>
+                    <option value="<%= wipeStatus.id %>" <%= selected(deviceRow.wipeStatusConfigValueId, wipeStatus.id) %>><%= wipeStatus.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Drive Manufacturer</span>
+                <input type="text" name="storageDevices[<%= index %>][manufacturerName]" value="<%= deviceRow.manufacturerName || '' %>" maxlength="120" placeholder="Example: Samsung" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Model Number</span>
+                <input type="text" name="storageDevices[<%= index %>][modelNumber]" value="<%= deviceRow.modelNumber || '' %>" maxlength="120" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Serial Number</span>
+                <input type="text" name="storageDevices[<%= index %>][serialNumber]" value="<%= deviceRow.serialNumber || '' %>" maxlength="120" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Firmware Version</span>
+                <input type="text" name="storageDevices[<%= index %>][firmwareVersion]" value="<%= deviceRow.firmwareVersion || '' %>" maxlength="120" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Change Notes</span>
+                <input type="text" name="storageDevices[<%= index %>][changeNotes]" value="<%= deviceRow.changeNotes || '' %>" maxlength="500" placeholder="Installed, replaced, upgraded, downgraded, wiped, etc." data-module-field />
+              </label>
+            </div>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+
+    <div class="form-actions" style="margin-top: 12px;">
+      <button type="button" class="secondary-button" data-add-module-row="storage">+ Add Storage Device</button>
+      <span class="field-hint">Total Storage: <strong data-storage-total-display><%= storageTotalGb() || formData.storageGb || 0 %></strong>GB</span>
     </div>
   </div>
 
@@ -352,34 +510,178 @@
   <div class="form-section">
     <div class="form-section-header">
       <div>
-        <p class="eyebrow">Expanded Data</p>
-        <h3>Upcoming Structured Fields</h3>
+        <p class="eyebrow">Cosmetic Issues</p>
+        <h3>Cosmetic Issue Rows</h3>
       </div>
       <p>
-        This section documents where the next unit-data groups will appear. ScanTool-only values will not become normal editable fields unless we explicitly allow edits later.
+        Add each cosmetic issue as its own row with an issue type, severity, location, and optional remarks. These rows are saved as the current cosmetic issue list while older rows remain in database history.
       </p>
     </div>
 
-    <div class="workflow-list">
-      <div class="workflow-item slate">
-        <span></span>
-        <div>
-          <strong>ScanTool-only specifications</strong>
-          <p>
-            LTE/WWAN details, supported networks, bands, firmware-level module details, some BIOS values, and other deep hardware values will be displayed when ScanTool sends them.
-          </p>
-        </div>
+    <% if (cosmeticIssueTypes.length === 0 || issueSeverities.length === 0 || issueLocations.length === 0) { %>
+      <div class="message error">
+        <p>Cosmetic issue options are not ready yet. Run the Step 3f SQL migration to seed issue types, severities, and locations.</p>
       </div>
+    <% } %>
 
-      <div class="workflow-item slate">
-        <span></span>
-        <div>
-          <strong>Manual expanded details</strong>
-          <p>
-            RAM modules, storage devices, graphics adapters, hardware issues, cosmetic issues, overall unit grade, and comments will be added in the next form steps.
-          </p>
-        </div>
+    <div class="workflow-list" data-module-list="cosmeticIssue">
+      <% cosmeticIssueRows.forEach((issueRow, index) => { %>
+        <article class="workflow-item slate" data-module-row="cosmeticIssue">
+          <span></span>
+          <div style="width: 100%;">
+            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+              <div>
+                <strong>Cosmetic Issue <span data-module-display-number><%= index + 1 %></span></strong>
+                <p>Issue type, severity, location, and remarks.</p>
+              </div>
+              <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+            </div>
+
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Issue Type</span>
+                <select name="cosmeticIssues[<%= index %>][issueTypeConfigValueId]" data-module-field>
+                  <option value="">Select cosmetic issue</option>
+                  <% cosmeticIssueTypes.forEach((issueType) => { %>
+                    <option value="<%= issueType.id %>" <%= selected(issueRow.issueTypeConfigValueId, issueType.id) %>><%= issueType.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Severity</span>
+                <select name="cosmeticIssues[<%= index %>][severityConfigValueId]" data-module-field>
+                  <option value="">Select severity</option>
+                  <% issueSeverities.forEach((severity) => { %>
+                    <option value="<%= severity.id %>" <%= selected(issueRow.severityConfigValueId, severity.id) %>><%= severity.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Location</span>
+                <select name="cosmeticIssues[<%= index %>][locationConfigValueId]" data-module-field>
+                  <option value="">Select location</option>
+                  <% issueLocations.forEach((location) => { %>
+                    <option value="<%= location.id %>" <%= selected(issueRow.locationConfigValueId, location.id) %>><%= location.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Remarks</span>
+                <input type="text" name="cosmeticIssues[<%= index %>][issueRemark]" value="<%= issueRow.issueRemark || '' %>" maxlength="500" placeholder="Short note explaining the issue" data-module-field />
+              </label>
+            </div>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+
+    <div class="form-actions" style="margin-top: 12px;">
+      <button type="button" class="secondary-button" data-add-module-row="cosmeticIssue">+ Add Cosmetic Issue</button>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Hardware Issues</p>
+        <h3>Hardware Issue Rows</h3>
       </div>
+      <p>
+        Add hardware failures as structured rows. Hardware issues can use a configured issue type or a custom issue name when the exact failure is not configured yet.
+      </p>
+    </div>
+
+    <% if (hardwareIssueTypes.length === 0 || issueLocations.length === 0) { %>
+      <div class="message error">
+        <p>Hardware issue options are not ready yet. Run the Step 3f SQL migration to seed hardware issue types and locations.</p>
+      </div>
+    <% } %>
+
+    <div class="workflow-list" data-module-list="hardwareIssue">
+      <% hardwareIssueRows.forEach((issueRow, index) => { %>
+        <article class="workflow-item slate" data-module-row="hardwareIssue">
+          <span></span>
+          <div style="width: 100%;">
+            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+              <div>
+                <strong>Hardware Issue <span data-module-display-number><%= index + 1 %></span></strong>
+                <p>Configured issue or custom issue, location, and remarks.</p>
+              </div>
+              <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+            </div>
+
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Configured Issue</span>
+                <select name="hardwareIssues[<%= index %>][issueTypeConfigValueId]" data-module-field>
+                  <option value="">Select configured issue</option>
+                  <% hardwareIssueTypes.forEach((issueType) => { %>
+                    <option value="<%= issueType.id %>" <%= selected(issueRow.issueTypeConfigValueId, issueType.id) %>><%= issueType.label %></option>
+                  <% }) %>
+                </select>
+                <small class="field-hint">Use this when the issue exists in the configured list.</small>
+              </label>
+
+              <label class="form-field">
+                <span>Custom Issue</span>
+                <input type="text" name="hardwareIssues[<%= index %>][customIssueLabel]" value="<%= issueRow.customIssueLabel || '' %>" maxlength="120" placeholder="Example: Cannot install OS" data-module-field />
+                <small class="field-hint">Use this when the issue is not configured yet.</small>
+              </label>
+
+              <label class="form-field">
+                <span>Location</span>
+                <select name="hardwareIssues[<%= index %>][locationConfigValueId]" data-module-field>
+                  <option value="">Select location</option>
+                  <% issueLocations.forEach((location) => { %>
+                    <option value="<%= location.id %>" <%= selected(issueRow.locationConfigValueId, location.id) %>><%= location.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Remarks</span>
+                <input type="text" name="hardwareIssues[<%= index %>][issueRemark]" value="<%= issueRow.issueRemark || '' %>" maxlength="500" placeholder="Short note explaining the issue" data-module-field />
+              </label>
+            </div>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+
+    <div class="form-actions" style="margin-top: 12px;">
+      <button type="button" class="secondary-button" data-add-module-row="hardwareIssue">+ Add Hardware Issue</button>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Comments</p>
+        <h3>Add General Comment</h3>
+      </div>
+      <p>
+        General comments are appended as history. Existing comments stay visible in the expanded unit mini-menu and are not overwritten by this field.
+      </p>
+    </div>
+
+    <div class="form-grid">
+      <label class="form-field">
+        <span>Comment Type</span>
+        <select name="generalCommentTypeConfigValueId">
+          <option value="">Select comment type</option>
+          <% commentTypes.forEach((commentType) => { %>
+            <option value="<%= commentType.id %>" <%= selected(selectedCommentTypeConfigValueId, commentType.id) %>><%= commentType.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>New Comment</span>
+        <textarea name="generalCommentText" rows="4" maxlength="2000" placeholder="Add a new general comment. Leave blank if no new comment is needed."><%= formData.generalCommentText || '' %></textarea>
+      </label>
     </div>
   </div>
 
@@ -412,6 +714,102 @@
       </label>
     </div>
   </div>
+
+  <template data-module-template="cosmeticIssue">
+    <article class="workflow-item slate" data-module-row="cosmeticIssue">
+      <span></span>
+      <div style="width: 100%;">
+        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+          <div>
+            <strong>Cosmetic Issue <span data-module-display-number>__DISPLAY__</span></strong>
+            <p>Issue type, severity, location, and remarks.</p>
+          </div>
+          <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+        </div>
+        <div class="form-grid">
+          <label class="form-field"><span>Issue Type</span><select name="cosmeticIssues[__INDEX__][issueTypeConfigValueId]" data-module-field><option value="">Select cosmetic issue</option><% cosmeticIssueTypes.forEach((issueType) => { %><option value="<%= issueType.id %>"><%= issueType.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Severity</span><select name="cosmeticIssues[__INDEX__][severityConfigValueId]" data-module-field><option value="">Select severity</option><% issueSeverities.forEach((severity) => { %><option value="<%= severity.id %>"><%= severity.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Location</span><select name="cosmeticIssues[__INDEX__][locationConfigValueId]" data-module-field><option value="">Select location</option><% issueLocations.forEach((location) => { %><option value="<%= location.id %>"><%= location.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Remarks</span><input type="text" name="cosmeticIssues[__INDEX__][issueRemark]" maxlength="500" placeholder="Short note explaining the issue" data-module-field /></label>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <template data-module-template="hardwareIssue">
+    <article class="workflow-item slate" data-module-row="hardwareIssue">
+      <span></span>
+      <div style="width: 100%;">
+        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+          <div>
+            <strong>Hardware Issue <span data-module-display-number>__DISPLAY__</span></strong>
+            <p>Configured issue or custom issue, location, and remarks.</p>
+          </div>
+          <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+        </div>
+        <div class="form-grid">
+          <label class="form-field"><span>Configured Issue</span><select name="hardwareIssues[__INDEX__][issueTypeConfigValueId]" data-module-field><option value="">Select configured issue</option><% hardwareIssueTypes.forEach((issueType) => { %><option value="<%= issueType.id %>"><%= issueType.label %></option><% }) %></select><small class="field-hint">Use this when the issue exists in the configured list.</small></label>
+          <label class="form-field"><span>Custom Issue</span><input type="text" name="hardwareIssues[__INDEX__][customIssueLabel]" maxlength="120" placeholder="Example: Cannot install OS" data-module-field /><small class="field-hint">Use this when the issue is not configured yet.</small></label>
+          <label class="form-field"><span>Location</span><select name="hardwareIssues[__INDEX__][locationConfigValueId]" data-module-field><option value="">Select location</option><% issueLocations.forEach((location) => { %><option value="<%= location.id %>"><%= location.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Remarks</span><input type="text" name="hardwareIssues[__INDEX__][issueRemark]" maxlength="500" placeholder="Short note explaining the issue" data-module-field /></label>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <template data-module-template="memory">
+    <article class="workflow-item slate" data-module-row="memory">
+      <span></span>
+      <div style="width: 100%;">
+        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+          <div>
+            <strong>RAM Module <span data-module-display-number>__DISPLAY__</span></strong>
+            <p>Slot, size, type, speed, and module identifiers.</p>
+          </div>
+          <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+        </div>
+
+        <div class="form-grid">
+          <label class="form-field"><span>Slot Label</span><input type="text" name="memoryModules[__INDEX__][slotLabel]" value="Slot __DISPLAY__" placeholder="Slot 1" maxlength="80" data-module-field /></label>
+          <label class="form-field"><span>Size GB</span><input type="number" name="memoryModules[__INDEX__][sizeGb]" min="1" step="1" placeholder="Example: 8" data-memory-size-input data-module-field /></label>
+          <label class="form-field"><span>RAM Type</span><select name="memoryModules[__INDEX__][ramTypeConfigValueId]" data-module-field><option value="">Select RAM type</option><% formOptions.ramTypes.forEach((ramType) => { %><option value="<%= ramType.id %>"><%= ramType.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Install Type</span><select name="memoryModules[__INDEX__][memoryInstallTypeCode]" data-module-field><% memoryInstallTypes.forEach((installType) => { %><option value="<%= installType.code %>" <%= installType.code === 'removable_module' ? 'selected' : '' %>><%= installType.label %></option><% }) %></select><small class="field-hint">Defaults to removable.</small></label>
+          <label class="form-field"><span>Speed MHz</span><input type="number" name="memoryModules[__INDEX__][speedMhz]" min="1" step="1" placeholder="Example: 3200" data-module-field /></label>
+          <label class="form-field"><span>Module Manufacturer</span><input type="text" name="memoryModules[__INDEX__][manufacturerName]" maxlength="120" placeholder="Example: Samsung" data-module-field /></label>
+          <label class="form-field"><span>Part Number</span><input type="text" name="memoryModules[__INDEX__][partNumber]" maxlength="120" data-module-field /></label>
+          <label class="form-field"><span>Serial Number</span><input type="text" name="memoryModules[__INDEX__][serialNumber]" maxlength="120" data-module-field /></label>
+          <label class="form-field"><span>Change Notes</span><input type="text" name="memoryModules[__INDEX__][changeNotes]" maxlength="500" placeholder="Installed, replaced, upgraded, downgraded, etc." data-module-field /></label>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <template data-module-template="storage">
+    <article class="workflow-item slate" data-module-row="storage">
+      <span></span>
+      <div style="width: 100%;">
+        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+          <div>
+            <strong>Storage Device <span data-module-display-number>__DISPLAY__</span></strong>
+            <p>Drive slot, size, type, model, serial, firmware, and wipe status.</p>
+          </div>
+          <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+        </div>
+
+        <div class="form-grid">
+          <label class="form-field"><span>Slot Label</span><input type="text" name="storageDevices[__INDEX__][slotLabel]" value="Drive __DISPLAY__" placeholder="Drive 1" maxlength="80" data-module-field /></label>
+          <label class="form-field"><span>Size GB</span><input type="number" name="storageDevices[__INDEX__][sizeGb]" min="1" step="1" placeholder="Example: 256" data-storage-size-input data-module-field /></label>
+          <label class="form-field"><span>Storage Type</span><select name="storageDevices[__INDEX__][storageTypeConfigValueId]" data-module-field><option value="">Select storage type</option><% formOptions.storageTypes.forEach((storageType) => { %><option value="<%= storageType.id %>"><%= storageType.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Wipe Status</span><select name="storageDevices[__INDEX__][wipeStatusConfigValueId]" data-module-field><option value="">Select wipe status</option><% (formOptions.storageWipeStatuses || []).forEach((wipeStatus) => { %><option value="<%= wipeStatus.id %>"><%= wipeStatus.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Drive Manufacturer</span><input type="text" name="storageDevices[__INDEX__][manufacturerName]" maxlength="120" placeholder="Example: Samsung" data-module-field /></label>
+          <label class="form-field"><span>Model Number</span><input type="text" name="storageDevices[__INDEX__][modelNumber]" maxlength="120" data-module-field /></label>
+          <label class="form-field"><span>Serial Number</span><input type="text" name="storageDevices[__INDEX__][serialNumber]" maxlength="120" data-module-field /></label>
+          <label class="form-field"><span>Firmware Version</span><input type="text" name="storageDevices[__INDEX__][firmwareVersion]" maxlength="120" data-module-field /></label>
+          <label class="form-field"><span>Change Notes</span><input type="text" name="storageDevices[__INDEX__][changeNotes]" maxlength="500" placeholder="Installed, replaced, upgraded, downgraded, wiped, etc." data-module-field /></label>
+        </div>
+      </div>
+    </article>
+  </template>
 
   <div class="form-actions">
     <button class="primary-button" type="submit">

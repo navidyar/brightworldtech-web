@@ -1,5 +1,4 @@
 const { pool } = require('./db');
-
 const EXPANDED_TABLES = [
   'unit_identifiers',
   'unit_specifications',
@@ -13,7 +12,6 @@ const EXPANDED_TABLES = [
   'unit_issue_entries',
   'unit_comments'
 ];
-
 function normalizeUnitIds(unitIds) {
   return Array.from(
     new Set(
@@ -23,11 +21,9 @@ function normalizeUnitIds(unitIds) {
     )
   );
 }
-
 function buildPlaceholders(values) {
   return values.map(() => '?').join(', ');
 }
-
 function createEmptyDetails() {
   return {
     schemaReady: false,
@@ -47,58 +43,56 @@ function createEmptyDetails() {
     comments: []
   };
 }
-
 function createDetailsMap(unitIds) {
   const detailsMap = new Map();
-
   unitIds.forEach((unitId) => {
     detailsMap.set(Number(unitId), createEmptyDetails());
   });
-
   return detailsMap;
 }
-
 function markHasData(details) {
   if (details) {
     details.hasAnyExpandedData = true;
   }
 }
-
 function addToUnitList(detailsMap, unitId, key, value) {
   const details = detailsMap.get(Number(unitId));
-
   if (!details || !Array.isArray(details[key])) {
     return;
   }
-
   details[key].push(value);
   markHasData(details);
 }
-
 function setForUnit(detailsMap, unitId, key, value) {
   const details = detailsMap.get(Number(unitId));
-
   if (!details) {
     return;
   }
-
   details[key] = value;
   markHasData(details);
 }
-
 function getPersonName(row, prefix) {
   const firstName = row[`${prefix}_first_name`];
   const lastName = row[`${prefix}_last_name`];
   const email = row[`${prefix}_email`];
   const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
-
   return fullName || email || '';
 }
-
 function labelOrDash(value) {
   return value || '—';
 }
 
+function getMemoryInstallTypeLabel(value) {
+  if (value === 'integrated_soldered') {
+    return 'Integrated / Soldered';
+  }
+
+  if (value === 'unknown') {
+    return 'Unknown';
+  }
+
+  return 'Removable Module';
+}
 async function getExistingExpandedTables() {
   const [rows] = await pool.query(
     `
@@ -109,15 +103,12 @@ async function getExistingExpandedTables() {
     `,
     EXPANDED_TABLES
   );
-
   return new Set(rows.map((row) => row.table_name));
 }
-
 async function attachIdentifiers(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_identifiers')) {
     return;
   }
-
   const [rows] = await pool.query(
     `
       SELECT
@@ -136,7 +127,6 @@ async function attachIdentifiers(detailsMap, unitIds, existingTables) {
     `,
     unitIds
   );
-
   rows.forEach((row) => {
     addToUnitList(detailsMap, row.unit_id, 'identifiers', {
       typeCode: row.identifier_type_code || '',
@@ -148,12 +138,10 @@ async function attachIdentifiers(detailsMap, unitIds, existingTables) {
     });
   });
 }
-
 async function attachSpecifications(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_specifications')) {
     return;
   }
-
   const [rows] = await pool.query(
     `
       SELECT
@@ -201,7 +189,6 @@ async function attachSpecifications(detailsMap, unitIds, existingTables) {
     `,
     unitIds
   );
-
   rows.forEach((row) => {
     setForUnit(detailsMap, row.unit_id, 'specifications', {
       biosVersion: row.bios_version || '',
@@ -221,12 +208,10 @@ async function attachSpecifications(detailsMap, unitIds, existingTables) {
     });
   });
 }
-
 async function attachFieldSources(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_field_sources')) {
     return;
   }
-
   const [rows] = await pool.query(
     `
       SELECT
@@ -246,7 +231,6 @@ async function attachFieldSources(detailsMap, unitIds, existingTables) {
     `,
     unitIds
   );
-
   rows.forEach((row) => {
     addToUnitList(detailsMap, row.unit_id, 'fieldSources', {
       fieldKey: row.field_key,
@@ -257,12 +241,10 @@ async function attachFieldSources(detailsMap, unitIds, existingTables) {
     });
   });
 }
-
 async function attachCurrentGrades(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_grade_assessments')) {
     return;
   }
-
   const [rows] = await pool.query(
     `
       SELECT *
@@ -295,7 +277,6 @@ async function attachCurrentGrades(detailsMap, unitIds, existingTables) {
     `,
     unitIds
   );
-
   rows.forEach((row) => {
     setForUnit(detailsMap, row.unit_id, 'currentGrade', {
       gradeCode: row.grade_code || '',
@@ -307,12 +288,10 @@ async function attachCurrentGrades(detailsMap, unitIds, existingTables) {
     });
   });
 }
-
 async function attachMemoryModules(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_memory_modules')) {
     return;
   }
-
   const [rows] = await pool.query(
     `
       SELECT
@@ -320,6 +299,7 @@ async function attachMemoryModules(detailsMap, unitIds, existingTables) {
         umm.slot_label,
         umm.size_gb,
         ram_type.label AS ram_type_label,
+        COALESCE(umm.memory_install_type_code, 'removable_module') AS memory_install_type_code,
         umm.speed_mhz,
         umm.manufacturer_name,
         umm.part_number,
@@ -346,19 +326,18 @@ async function attachMemoryModules(detailsMap, unitIds, existingTables) {
     `,
     unitIds
   );
-
   rows.forEach((row) => {
     const sizeGb = row.size_gb ? Number(row.size_gb) : 0;
     const details = detailsMap.get(Number(row.unit_id));
-
     if (details) {
       details.memoryTotalGb += sizeGb;
     }
-
     addToUnitList(detailsMap, row.unit_id, 'memoryModules', {
       slotLabel: row.slot_label || 'Slot',
       sizeGb: row.size_gb || '',
       ramTypeLabel: row.ram_type_label || '',
+      memoryInstallTypeCode: row.memory_install_type_code || 'removable_module',
+      memoryInstallTypeLabel: getMemoryInstallTypeLabel(row.memory_install_type_code),
       speedMhz: row.speed_mhz || '',
       manufacturerName: row.manufacturer_name || '',
       partNumber: row.part_number || '',
@@ -372,12 +351,10 @@ async function attachMemoryModules(detailsMap, unitIds, existingTables) {
     });
   });
 }
-
 async function attachStorageDevices(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_storage_devices')) {
     return;
   }
-
   const [rows] = await pool.query(
     `
       SELECT
@@ -420,15 +397,12 @@ async function attachStorageDevices(detailsMap, unitIds, existingTables) {
     `,
     unitIds
   );
-
   rows.forEach((row) => {
     const sizeGb = row.size_gb ? Number(row.size_gb) : 0;
     const details = detailsMap.get(Number(row.unit_id));
-
     if (details) {
       details.storageTotalGb += sizeGb;
     }
-
     addToUnitList(detailsMap, row.unit_id, 'storageDevices', {
       slotLabel: row.slot_label || 'Drive',
       storageTypeLabel: row.storage_type_label || '',
@@ -449,12 +423,10 @@ async function attachStorageDevices(detailsMap, unitIds, existingTables) {
     });
   });
 }
-
 async function attachCellularModules(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_cellular_modules')) {
     return;
   }
-
   const [rows] = await pool.query(
     `
       SELECT
@@ -489,10 +461,8 @@ async function attachCellularModules(detailsMap, unitIds, existingTables) {
     `,
     unitIds
   );
-
   const modulesById = new Map();
   const moduleIds = [];
-
   rows.forEach((row) => {
     const module = {
       unitCellularModuleId: Number(row.unit_cellular_module_id),
@@ -512,16 +482,13 @@ async function attachCellularModules(detailsMap, unitIds, existingTables) {
       installedAt: row.installed_at,
       removedAt: row.removed_at
     };
-
     moduleIds.push(Number(row.unit_cellular_module_id));
     modulesById.set(Number(row.unit_cellular_module_id), module);
     addToUnitList(detailsMap, row.unit_id, 'cellularModules', module);
   });
-
   if (!existingTables.has('unit_cellular_module_bands') || moduleIds.length === 0) {
     return;
   }
-
   const [bandRows] = await pool.query(
     `
       SELECT
@@ -540,14 +507,11 @@ async function attachCellularModules(detailsMap, unitIds, existingTables) {
     `,
     moduleIds
   );
-
   bandRows.forEach((row) => {
     const module = modulesById.get(Number(row.unit_cellular_module_id));
-
     if (!module) {
       return;
     }
-
     module.bands.push({
       networkTypeLabel: row.network_type_label || row.network_type_code || 'Network',
       bandCode: row.band_code,
@@ -556,17 +520,14 @@ async function attachCellularModules(detailsMap, unitIds, existingTables) {
       sourceCode: row.source_code || ''
     });
   });
-
   modulesById.forEach((module) => {
     module.bandSummary = module.bands.map((band) => band.bandCode).filter(Boolean).join(', ');
   });
 }
-
 async function attachGraphicsAdapters(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_graphics_adapters')) {
     return;
   }
-
   const [rows] = await pool.query(
     `
       SELECT
@@ -597,7 +558,6 @@ async function attachGraphicsAdapters(detailsMap, unitIds, existingTables) {
     `,
     unitIds
   );
-
   rows.forEach((row) => {
     addToUnitList(detailsMap, row.unit_id, 'graphicsAdapters', {
       gpuTypeLabel: row.gpu_type_label || '—',
@@ -611,12 +571,10 @@ async function attachGraphicsAdapters(detailsMap, unitIds, existingTables) {
     });
   });
 }
-
 async function attachIssueEntries(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_issue_entries')) {
     return;
   }
-
   const [rows] = await pool.query(
     `
       SELECT
@@ -653,7 +611,6 @@ async function attachIssueEntries(detailsMap, unitIds, existingTables) {
     `,
     unitIds
   );
-
   rows.forEach((row) => {
     const issue = {
       issueArea: row.issue_area,
@@ -669,7 +626,6 @@ async function attachIssueEntries(detailsMap, unitIds, existingTables) {
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
-
     if (row.issue_area === 'hardware') {
       addToUnitList(detailsMap, row.unit_id, 'hardwareIssues', issue);
     } else {
@@ -677,12 +633,10 @@ async function attachIssueEntries(detailsMap, unitIds, existingTables) {
     }
   });
 }
-
 async function attachComments(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_comments')) {
     return;
   }
-
   const [rows] = await pool.query(
     `
       SELECT *
@@ -714,7 +668,6 @@ async function attachComments(detailsMap, unitIds, existingTables) {
     `,
     unitIds
   );
-
   rows.forEach((row) => {
     addToUnitList(detailsMap, row.unit_id, 'comments', {
       noteTypeLabel: row.note_type_label || row.note_type_code || 'Comment',
@@ -725,22 +678,17 @@ async function attachComments(detailsMap, unitIds, existingTables) {
     });
   });
 }
-
 async function listExpandedDetailsForUnits(unitIds) {
   const safeUnitIds = normalizeUnitIds(unitIds);
   const detailsMap = createDetailsMap(safeUnitIds);
-
   if (safeUnitIds.length === 0) {
     return detailsMap;
   }
-
   const existingTables = await getExistingExpandedTables();
   const hasAnyExpandedTable = EXPANDED_TABLES.some((tableName) => existingTables.has(tableName));
-
   detailsMap.forEach((details) => {
     details.schemaReady = hasAnyExpandedTable;
   });
-
   await attachIdentifiers(detailsMap, safeUnitIds, existingTables);
   await attachSpecifications(detailsMap, safeUnitIds, existingTables);
   await attachFieldSources(detailsMap, safeUnitIds, existingTables);
@@ -751,10 +699,8 @@ async function listExpandedDetailsForUnits(unitIds) {
   await attachGraphicsAdapters(detailsMap, safeUnitIds, existingTables);
   await attachIssueEntries(detailsMap, safeUnitIds, existingTables);
   await attachComments(detailsMap, safeUnitIds, existingTables);
-
   return detailsMap;
 }
-
 module.exports = {
   listExpandedDetailsForUnits
 };

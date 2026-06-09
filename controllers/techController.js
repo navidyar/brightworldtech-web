@@ -1,6 +1,15 @@
 const techUnitModel = require('../models/techUnitModel');
 const overrideRequestModel = require('../models/overrideRequestModel');
 const unitExpandedDetailModel = require('../models/unitExpandedDetailModel');
+const unitIssueEntryModel = require('../models/unitIssueEntryModel');
+
+const VALID_MEMORY_INSTALL_TYPE_CODES = new Set([
+  'removable_module',
+  'integrated_soldered',
+  'unknown'
+]);
+
+const DEFAULT_MEMORY_INSTALL_TYPE_CODE = 'removable_module';
 
 function buildTechUnitsTableUrl(filters) {
   const params = new URLSearchParams();
@@ -81,7 +90,124 @@ async function buildTechUnitsResult(filters) {
   return attachExpandedUnitDetails(resultWithOverrides);
 }
 
+function normalizeModuleRowsFromBody(value) {
+  if (!value) {
+    return [];
+  }
+
+  if (Array.isArray(value)) {
+    return value.filter((row) => row && typeof row === 'object');
+  }
+
+  if (typeof value === 'object') {
+    return Object.keys(value)
+      .sort((a, b) => Number(a) - Number(b))
+      .map((key) => value[key])
+      .filter((row) => row && typeof row === 'object');
+  }
+
+  return [];
+}
+
+function normalizeModuleField(value) {
+  return String(value || '').trim();
+}
+
+function normalizeMemoryInstallTypeCode(value) {
+  const normalized = normalizeModuleField(value);
+
+  return VALID_MEMORY_INSTALL_TYPE_CODES.has(normalized)
+    ? normalized
+    : DEFAULT_MEMORY_INSTALL_TYPE_CODE;
+}
+
+function getMemoryModulesFromRequest(req) {
+  return normalizeModuleRowsFromBody(req.body.memoryModules).map((row) => ({
+    slotLabel: normalizeModuleField(row.slotLabel),
+    sizeGb: normalizeModuleField(row.sizeGb),
+    ramTypeConfigValueId: normalizeModuleField(row.ramTypeConfigValueId),
+    memoryInstallTypeCode: normalizeMemoryInstallTypeCode(row.memoryInstallTypeCode),
+    speedMhz: normalizeModuleField(row.speedMhz),
+    manufacturerName: normalizeModuleField(row.manufacturerName),
+    partNumber: normalizeModuleField(row.partNumber),
+    serialNumber: normalizeModuleField(row.serialNumber),
+    changeNotes: normalizeModuleField(row.changeNotes)
+  }));
+}
+
+function getStorageDevicesFromRequest(req) {
+  return normalizeModuleRowsFromBody(req.body.storageDevices).map((row) => ({
+    slotLabel: normalizeModuleField(row.slotLabel),
+    sizeGb: normalizeModuleField(row.sizeGb),
+    storageTypeConfigValueId: normalizeModuleField(row.storageTypeConfigValueId),
+    manufacturerName: normalizeModuleField(row.manufacturerName),
+    modelNumber: normalizeModuleField(row.modelNumber),
+    serialNumber: normalizeModuleField(row.serialNumber),
+    firmwareVersion: normalizeModuleField(row.firmwareVersion),
+    wipeStatusConfigValueId: normalizeModuleField(row.wipeStatusConfigValueId),
+    changeNotes: normalizeModuleField(row.changeNotes)
+  }));
+}
+
+function getIssueRowsFromBody(value) {
+  return normalizeModuleRowsFromBody(value);
+}
+
+function getCosmeticIssuesFromRequest(req) {
+  return getIssueRowsFromBody(req.body.cosmeticIssues).map((row) => ({
+    issueTypeConfigValueId: normalizeModuleField(row.issueTypeConfigValueId),
+    severityConfigValueId: normalizeModuleField(row.severityConfigValueId),
+    locationConfigValueId: normalizeModuleField(row.locationConfigValueId),
+    issueRemark: normalizeModuleField(row.issueRemark)
+  }));
+}
+
+function getHardwareIssuesFromRequest(req) {
+  return getIssueRowsFromBody(req.body.hardwareIssues).map((row) => ({
+    issueTypeConfigValueId: normalizeModuleField(row.issueTypeConfigValueId),
+    customIssueLabel: normalizeModuleField(row.customIssueLabel),
+    locationConfigValueId: normalizeModuleField(row.locationConfigValueId),
+    issueRemark: normalizeModuleField(row.issueRemark)
+  }));
+}
+
+function getIssueDetailsFromRequest(req) {
+  return {
+    cosmeticIssues: getCosmeticIssuesFromRequest(req),
+    hardwareIssues: getHardwareIssuesFromRequest(req),
+    generalCommentTypeConfigValueId: normalizeModuleField(req.body.generalCommentTypeConfigValueId),
+    generalCommentText: normalizeModuleField(req.body.generalCommentText)
+  };
+}
+
+
+function getPositiveIntegerOrBlank(value) {
+  const trimmed = String(value || '').trim();
+
+  if (!trimmed) {
+    return '';
+  }
+
+  const parsed = Number(trimmed);
+
+  return Number.isInteger(parsed) && parsed > 0 ? String(parsed) : trimmed;
+}
+
+function getModuleTotalGb(rows) {
+  return rows.reduce((sum, row) => {
+    const parsed = Number(row.sizeGb);
+
+    return Number.isFinite(parsed) && parsed > 0 ? sum + parsed : sum;
+  }, 0);
+}
+
 function getUnitFormDataFromRequest(req) {
+  const memoryModules = getMemoryModulesFromRequest(req);
+  const storageDevices = getStorageDevicesFromRequest(req);
+  const memoryTotalGb = getModuleTotalGb(memoryModules);
+  const storageTotalGb = getModuleTotalGb(storageDevices);
+  const issueDetails = getIssueDetailsFromRequest(req);
+
   return {
     assetTag: String(req.body.assetTag || '').trim(),
     unitSerialNumber: String(req.body.unitSerialNumber || '').trim(),
@@ -93,11 +219,17 @@ function getUnitFormDataFromRequest(req) {
     unitModelId: String(req.body.unitModelId || '').trim(),
     processorModelId: String(req.body.processorModelId || '').trim(),
     processorSpeedGhz: String(req.body.processorSpeedGhz || '').trim(),
-    ramGb: String(req.body.ramGb || '').trim(),
+    ramGb: memoryTotalGb > 0 ? String(memoryTotalGb) : String(req.body.ramGb || '').trim(),
     ramTypeConfigValueId: String(req.body.ramTypeConfigValueId || '').trim(),
-    storageGb: String(req.body.storageGb || '').trim(),
+    storageGb: storageTotalGb > 0 ? String(storageTotalGb) : String(req.body.storageGb || '').trim(),
     storageTypeConfigValueId: String(req.body.storageTypeConfigValueId || '').trim(),
     operatingSystemConfigValueId: String(req.body.operatingSystemConfigValueId || '').trim(),
+    memoryModules,
+    storageDevices,
+    cosmeticIssues: issueDetails.cosmeticIssues,
+    hardwareIssues: issueDetails.hardwareIssues,
+    generalCommentTypeConfigValueId: issueDetails.generalCommentTypeConfigValueId,
+    generalCommentText: issueDetails.generalCommentText,
     hardwareNotes: String(req.body.hardwareNotes || '').trim(),
     cosmeticNotes: String(req.body.cosmeticNotes || '').trim()
   };
@@ -121,6 +253,173 @@ function isPositiveOrZeroNumber(value) {
 
 function isAssignableLotId(lotId, formOptions) {
   return formOptions.lots.some((lot) => String(lot.lot_id) === String(lotId));
+}
+
+function moduleRowHasAnyValue(row, ignoredFields = []) {
+  const ignored = new Set(ignoredFields);
+
+  return Object.entries(row || {}).some(([key, value]) => {
+    if (ignored.has(key)) {
+      return false;
+    }
+
+    return String(value || '').trim();
+  });
+}
+
+function validateMemoryModules(formData) {
+  const errors = [];
+
+  (formData.memoryModules || []).forEach((moduleRow, index) => {
+    if (!moduleRowHasAnyValue(moduleRow, ['slotLabel', 'memoryInstallTypeCode'])) {
+      return;
+    }
+
+    const rowLabel = `RAM module ${index + 1}`;
+
+    if (!moduleRow.sizeGb || !isPositiveInteger(moduleRow.sizeGb)) {
+      errors.push(`${rowLabel} requires a valid positive RAM size.`);
+    }
+
+    if (moduleRow.ramTypeConfigValueId && !isPositiveInteger(moduleRow.ramTypeConfigValueId)) {
+      errors.push(`${rowLabel} has an invalid RAM type.`);
+    }
+
+    if (!VALID_MEMORY_INSTALL_TYPE_CODES.has(moduleRow.memoryInstallTypeCode || DEFAULT_MEMORY_INSTALL_TYPE_CODE)) {
+      errors.push(`${rowLabel} has an invalid RAM install type.`);
+    }
+
+    if (moduleRow.speedMhz && !isPositiveInteger(moduleRow.speedMhz)) {
+      errors.push(`${rowLabel} speed must be a positive whole number.`);
+    }
+
+    if (moduleRow.slotLabel.length > 80) {
+      errors.push(`${rowLabel} slot label must be 80 characters or fewer.`);
+    }
+
+    if (moduleRow.manufacturerName.length > 120 || moduleRow.partNumber.length > 120 || moduleRow.serialNumber.length > 120) {
+      errors.push(`${rowLabel} manufacturer, part number, and serial number must each be 120 characters or fewer.`);
+    }
+
+    if (moduleRow.changeNotes.length > 500) {
+      errors.push(`${rowLabel} notes must be 500 characters or fewer.`);
+    }
+  });
+
+  return errors;
+}
+
+function validateStorageDevices(formData) {
+  const errors = [];
+
+  (formData.storageDevices || []).forEach((deviceRow, index) => {
+    if (!moduleRowHasAnyValue(deviceRow, ['slotLabel'])) {
+      return;
+    }
+
+    const rowLabel = `Storage device ${index + 1}`;
+
+    if (!deviceRow.sizeGb || !isPositiveInteger(deviceRow.sizeGb)) {
+      errors.push(`${rowLabel} requires a valid positive storage size.`);
+    }
+
+    if (deviceRow.storageTypeConfigValueId && !isPositiveInteger(deviceRow.storageTypeConfigValueId)) {
+      errors.push(`${rowLabel} has an invalid storage type.`);
+    }
+
+    if (deviceRow.wipeStatusConfigValueId && !isPositiveInteger(deviceRow.wipeStatusConfigValueId)) {
+      errors.push(`${rowLabel} has an invalid wipe status.`);
+    }
+
+    if (deviceRow.slotLabel.length > 80) {
+      errors.push(`${rowLabel} slot label must be 80 characters or fewer.`);
+    }
+
+    if (
+      deviceRow.manufacturerName.length > 120 ||
+      deviceRow.modelNumber.length > 120 ||
+      deviceRow.serialNumber.length > 120 ||
+      deviceRow.firmwareVersion.length > 120
+    ) {
+      errors.push(`${rowLabel} manufacturer, model, serial, and firmware fields must each be 120 characters or fewer.`);
+    }
+
+    if (deviceRow.changeNotes.length > 500) {
+      errors.push(`${rowLabel} notes must be 500 characters or fewer.`);
+    }
+  });
+
+  return errors;
+}
+
+function issueRowHasAnyValue(row) {
+  return Object.values(row || {}).some((value) => String(value || '').trim());
+}
+
+function validateIssueDetails(formData) {
+  const errors = [];
+
+  (formData.cosmeticIssues || []).forEach((issueRow, index) => {
+    if (!issueRowHasAnyValue(issueRow)) {
+      return;
+    }
+
+    const rowLabel = `Cosmetic issue ${index + 1}`;
+
+    if (!issueRow.issueTypeConfigValueId || !isPositiveInteger(issueRow.issueTypeConfigValueId)) {
+      errors.push(`${rowLabel} requires a valid issue type.`);
+    }
+
+    if (!issueRow.severityConfigValueId || !isPositiveInteger(issueRow.severityConfigValueId)) {
+      errors.push(`${rowLabel} requires a valid severity.`);
+    }
+
+    if (!issueRow.locationConfigValueId || !isPositiveInteger(issueRow.locationConfigValueId)) {
+      errors.push(`${rowLabel} requires a valid location.`);
+    }
+
+    if (issueRow.issueRemark.length > 500) {
+      errors.push(`${rowLabel} remarks must be 500 characters or fewer.`);
+    }
+  });
+
+  (formData.hardwareIssues || []).forEach((issueRow, index) => {
+    if (!issueRowHasAnyValue(issueRow)) {
+      return;
+    }
+
+    const rowLabel = `Hardware issue ${index + 1}`;
+
+    if (issueRow.issueTypeConfigValueId && !isPositiveInteger(issueRow.issueTypeConfigValueId)) {
+      errors.push(`${rowLabel} has an invalid configured issue type.`);
+    }
+
+    if (!issueRow.issueTypeConfigValueId && !issueRow.customIssueLabel) {
+      errors.push(`${rowLabel} requires either a configured issue type or a custom issue.`);
+    }
+
+    if (issueRow.customIssueLabel.length > 120) {
+      errors.push(`${rowLabel} custom issue must be 120 characters or fewer.`);
+    }
+
+    if (issueRow.locationConfigValueId && !isPositiveInteger(issueRow.locationConfigValueId)) {
+      errors.push(`${rowLabel} has an invalid location.`);
+    }
+
+    if (issueRow.issueRemark.length > 500) {
+      errors.push(`${rowLabel} remarks must be 500 characters or fewer.`);
+    }
+  });
+
+  if (formData.generalCommentTypeConfigValueId && !isPositiveInteger(formData.generalCommentTypeConfigValueId)) {
+    errors.push('General comment type is invalid.');
+  }
+
+  if (formData.generalCommentText && formData.generalCommentText.length > 2000) {
+    errors.push('General comment must be 2000 characters or fewer.');
+  }
+
+  return errors;
 }
 
 function validateUnitForm(formData, formOptions, mode) {
@@ -177,6 +476,10 @@ function validateUnitForm(formData, formOptions, mode) {
     errors.push('Cosmetic notes must be 1000 characters or fewer.');
   }
 
+  errors.push(...validateMemoryModules(formData));
+  errors.push(...validateStorageDevices(formData));
+  errors.push(...validateIssueDetails(formData));
+
   return errors;
 }
 
@@ -215,12 +518,58 @@ async function renderDuplicateUnitModal(res, { formOptions, formData, duplicateM
   });
 }
 
-async function getBlankFormDataWithDefaults() {
+async function getTechUnitFormOptionsWithIssues() {
   const formOptions = await techUnitModel.getTechUnitFormOptions();
+  const issueFormOptions = await unitIssueEntryModel.getIssueFormOptions();
+
+  return {
+    ...formOptions,
+    ...issueFormOptions
+  };
+}
+
+async function buildEditFormData(unitId, formOptions) {
+  const unitFormData = await techUnitModel.getUnitFormDataById(unitId, formOptions);
+
+  if (!unitFormData) {
+    return null;
+  }
+
+  const issueFormData = await unitIssueEntryModel.getIssueFormDataByUnitId(unitId);
+
+  return {
+    ...unitFormData,
+    ...issueFormData,
+    generalCommentTypeConfigValueId: issueFormData.generalCommentTypeConfigValueId || formOptions.defaultCommentTypeConfigValueId || '',
+    generalCommentText: ''
+  };
+}
+
+async function saveIssueDetailsIfPossible(unitId, formData, currentUserId) {
+  const safeUnitId = Number(unitId);
+
+  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0) {
+    return;
+  }
+
+  await unitIssueEntryModel.saveIssueDetailsForUnit({
+    unitId: safeUnitId,
+    formData,
+    currentUserId
+  });
+}
+
+async function getBlankFormDataWithDefaults() {
+  const formOptions = await getTechUnitFormOptionsWithIssues();
 
   return {
     formOptions,
-    formData: techUnitModel.getBlankUnitFormData(formOptions)
+    formData: {
+      ...techUnitModel.getBlankUnitFormData(formOptions),
+      ...unitIssueEntryModel.getBlankIssueFormData(),
+      generalCommentTypeConfigValueId: formOptions.defaultCommentTypeConfigValueId || '',
+      generalCommentText: ''
+    }
   };
 }
 
@@ -297,7 +646,7 @@ async function renderNewTechUnitModal(req, res, next) {
 
 async function createTechUnit(req, res, next) {
   try {
-    const formOptions = await techUnitModel.getTechUnitFormOptions();
+    const formOptions = await getTechUnitFormOptionsWithIssues();
     const formData = getUnitFormDataFromRequest(req);
     const errorMessages = validateUnitForm(formData, formOptions, 'create');
 
@@ -314,7 +663,8 @@ async function createTechUnit(req, res, next) {
     }
 
     try {
-      await techUnitModel.createTechUnit(formData, req.currentUser.user_id);
+      const savedUnitId = await techUnitModel.createTechUnit(formData, req.currentUser.user_id);
+      await saveIssueDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
     } catch (saveError) {
       const friendlyError = getFriendlySaveError(saveError, formOptions);
 
@@ -341,7 +691,7 @@ async function createTechUnit(req, res, next) {
 
 async function createTechUnitModal(req, res, next) {
   try {
-    const formOptions = await techUnitModel.getTechUnitFormOptions();
+    const formOptions = await getTechUnitFormOptionsWithIssues();
     const formData = getUnitFormDataFromRequest(req);
     const errorMessages = validateUnitForm(formData, formOptions, 'create');
 
@@ -357,7 +707,8 @@ async function createTechUnitModal(req, res, next) {
     }
 
     try {
-      await techUnitModel.createTechUnit(formData, req.currentUser.user_id);
+      const savedUnitId = await techUnitModel.createTechUnit(formData, req.currentUser.user_id);
+      await saveIssueDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
     } catch (saveError) {
       if (isDuplicateIdentifierError(saveError)) {
         return renderDuplicateUnitModal(res, {
@@ -412,14 +763,21 @@ async function useExistingTechUnitModal(req, res, next) {
           processorModels: [],
           ramTypes: [],
           storageTypes: [],
-          operatingSystems: []
+          storageWipeStatuses: [],
+          operatingSystems: [],
+          cosmeticIssueTypes: [],
+          hardwareIssueTypes: [],
+          issueLocations: [],
+          issueSeverities: [],
+          commentTypes: [],
+          defaultCommentTypeConfigValueId: ''
         },
         formData: techUnitModel.getBlankUnitFormData(),
         errorMessages: ['The selected unit ID is invalid.']
       });
     }
 
-    const formOptions = await techUnitModel.getTechUnitFormOptions();
+    const formOptions = await getTechUnitFormOptionsWithIssues();
     const formData = getUnitFormDataFromRequest(req);
     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
 
@@ -434,6 +792,7 @@ async function useExistingTechUnitModal(req, res, next) {
 
     try {
       await techUnitModel.useExistingTechUnit(unitId, formData, req.currentUser.user_id);
+      await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
     } catch (saveError) {
       if (isDuplicateIdentifierError(saveError)) {
         return renderDuplicateUnitModal(res, {
@@ -476,8 +835,8 @@ async function renderEditTechUnitPage(req, res, next) {
       });
     }
 
-    const formOptions = await techUnitModel.getTechUnitFormOptions();
-    const formData = await techUnitModel.getUnitFormDataById(unitId, formOptions);
+    const formOptions = await getTechUnitFormOptionsWithIssues();
+    const formData = await buildEditFormData(unitId, formOptions);
 
     if (!formData) {
       return res.status(404).render('pages/not-found', {
@@ -521,15 +880,22 @@ async function renderEditTechUnitModal(req, res, next) {
           processorModels: [],
           ramTypes: [],
           storageTypes: [],
-          operatingSystems: []
+          storageWipeStatuses: [],
+          operatingSystems: [],
+          cosmeticIssueTypes: [],
+          hardwareIssueTypes: [],
+          issueLocations: [],
+          issueSeverities: [],
+          commentTypes: [],
+          defaultCommentTypeConfigValueId: ''
         },
         formData: techUnitModel.getBlankUnitFormData(),
         errorMessages: ['The selected unit ID is invalid.']
       });
     }
 
-    const formOptions = await techUnitModel.getTechUnitFormOptions();
-    const formData = await techUnitModel.getUnitFormDataById(unitId, formOptions);
+    const formOptions = await getTechUnitFormOptionsWithIssues();
+    const formData = await buildEditFormData(unitId, formOptions);
 
     if (!formData) {
       return res.status(404).render('fragments/tech-unit-modal', {
@@ -566,7 +932,7 @@ async function updateTechUnit(req, res, next) {
       });
     }
 
-    const formOptions = await techUnitModel.getTechUnitFormOptions();
+    const formOptions = await getTechUnitFormOptionsWithIssues();
     const formData = getUnitFormDataFromRequest(req);
     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
 
@@ -584,6 +950,7 @@ async function updateTechUnit(req, res, next) {
 
     try {
       await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id);
+    await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
     } catch (saveError) {
       const friendlyError = getFriendlySaveError(saveError, formOptions);
 
@@ -629,14 +996,21 @@ async function updateTechUnitModal(req, res, next) {
           processorModels: [],
           ramTypes: [],
           storageTypes: [],
-          operatingSystems: []
+          storageWipeStatuses: [],
+          operatingSystems: [],
+          cosmeticIssueTypes: [],
+          hardwareIssueTypes: [],
+          issueLocations: [],
+          issueSeverities: [],
+          commentTypes: [],
+          defaultCommentTypeConfigValueId: ''
         },
         formData: techUnitModel.getBlankUnitFormData(),
         errorMessages: ['The selected unit ID is invalid.']
       });
     }
 
-    const formOptions = await techUnitModel.getTechUnitFormOptions();
+    const formOptions = await getTechUnitFormOptionsWithIssues();
     const formData = getUnitFormDataFromRequest(req);
     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
 
@@ -653,6 +1027,7 @@ async function updateTechUnitModal(req, res, next) {
 
     try {
       await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id);
+    await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
     } catch (saveError) {
       const friendlyError = getFriendlySaveError(saveError, formOptions);
 
