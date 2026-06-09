@@ -1,0 +1,141 @@
+<%
+  const safeMatches = Array.isArray(duplicateMatches) ? duplicateMatches : [];
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+
+  const hiddenFields = [
+    'assetTag',
+    'unitSerialNumber',
+    'biosSerialNumber',
+    'lotId',
+    'unitCategoryConfigValueId',
+    'currentUnitStatusConfigValueId',
+    'manufacturerId',
+    'unitModelId',
+    'processorModelId',
+    'processorSpeedGhz',
+    'ramGb',
+    'ramTypeConfigValueId',
+    'storageGb',
+    'storageTypeConfigValueId',
+    'operatingSystemConfigValueId',
+    'hardwareNotes',
+    'cosmeticNotes'
+  ];
+
+  function getFormValue(fieldName) {
+    return formData && formData[fieldName] !== undefined && formData[fieldName] !== null
+      ? String(formData[fieldName])
+      : '';
+  }
+
+  function getMatchUnitLabel(match) {
+    if (!match) {
+      return 'Unknown Unit';
+    }
+
+    return match.assetTag || `Unit #${match.unitId}`;
+  }
+
+  function getMatchLotLabel(match) {
+    if (!match) {
+      return 'Unknown lot';
+    }
+
+    if (match.lotName) {
+      return match.lotName;
+    }
+
+    if (match.lotId) {
+      return `Lot ID ${match.lotId}`;
+    }
+
+    return 'No lot recorded';
+  }
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel tech-unit-modal" role="dialog" aria-modal="true" aria-labelledby="tech-duplicate-modal-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Duplicate Check</p>
+        <h2 id="tech-duplicate-modal-title">Possible Existing Unit Found</h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <div class="message error">
+        <p>
+          This unit may already exist. Review the match below before creating another unit record.
+        </p>
+        <p>
+          If this is the same physical unit, use the existing record. The unit will be updated with the submitted values and moved to the selected lot if the lot changed.
+        </p>
+      </div>
+
+      <% if (safeMatches.length === 0) { %>
+        <div class="message error">
+          <p>No duplicate match details were available. Close this window and search for the unit manually.</p>
+        </div>
+      <% } else { %>
+        <div class="workflow-list">
+          <% safeMatches.forEach((match) => { %>
+            <article class="workflow-item warning">
+              <span></span>
+              <div style="width: 100%;">
+                <strong><%= getMatchUnitLabel(match) %></strong>
+                <p>
+                  Matched by <%= match.identifierTypeLabel || 'identifier' %>:
+                  <strong><%= match.identifierValue || match.normalizedValue || '—' %></strong>
+                </p>
+                <p><%= getMatchLotLabel(match) %></p>
+
+                <div class="tech-override-summary" style="margin-top: 12px;">
+                  <dl>
+                    <div>
+                      <dt>Unit Serial</dt>
+                      <dd><%= match.unitSerialNumber || '—' %></dd>
+                    </div>
+
+                    <div>
+                      <dt>BIOS Serial</dt>
+                      <dd><%= match.biosSerialNumber || '—' %></dd>
+                    </div>
+
+                    <div>
+                      <dt>Model</dt>
+                      <dd><%= match.modelSummary || '—' %></dd>
+                    </div>
+
+                    <div>
+                      <dt>CPU</dt>
+                      <dd><%= match.cpuSummary || '—' %></dd>
+                    </div>
+                  </dl>
+                </div>
+
+                <form method="post" action="/tech/units/<%= match.unitId %>/use-existing/modal" hx-post="/tech/units/<%= match.unitId %>/use-existing/modal" hx-target="#modal-root" hx-swap="innerHTML" style="margin-top: 12px;">
+                  <% hiddenFields.forEach((fieldName) => { %>
+                    <input type="hidden" name="<%= fieldName %>" value="<%= getFormValue(fieldName) %>" />
+                  <% }) %>
+
+                  <button class="primary-button" type="submit">Use Existing Unit</button>
+                  <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+                </form>
+              </div>
+            </article>
+          <% }) %>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

@@ -71,7 +71,8 @@ async function getTableColumns(tableName) {
     'config_values',
     'manufacturers',
     'unit_models',
-    'processor_models'
+    'processor_models',
+    'unit_identifiers'
   ];
 
   if (!allowedTables.includes(tableName)) {
@@ -433,6 +434,60 @@ function normalizeText(value) {
   return trimmed || null;
 }
 
+function normalizeIdentifierText(value) {
+  const trimmed = String(value || '').trim().replace(/\s+/g, ' ');
+
+  return trimmed || null;
+}
+
+function normalizeIdentifierComparableValue(value) {
+  const normalized = String(value || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, '');
+
+  return normalized || null;
+}
+
+function buildIdentifierEntries(formData, assetNumber = null) {
+  const entries = [];
+
+  if (assetNumber) {
+    entries.push({
+      typeCode: 'asset_tag',
+      value: String(assetNumber),
+      normalizedValue: String(assetNumber),
+      isPrimary: true
+    });
+  }
+
+  const unitSerialNumber = normalizeIdentifierText(formData.unitSerialNumber);
+  const normalizedUnitSerialNumber = normalizeIdentifierComparableValue(unitSerialNumber);
+
+  if (unitSerialNumber && normalizedUnitSerialNumber) {
+    entries.push({
+      typeCode: 'unit_serial_number',
+      value: unitSerialNumber,
+      normalizedValue: normalizedUnitSerialNumber,
+      isPrimary: false
+    });
+  }
+
+  const biosSerialNumber = normalizeIdentifierText(formData.biosSerialNumber);
+  const normalizedBiosSerialNumber = normalizeIdentifierComparableValue(biosSerialNumber);
+
+  if (biosSerialNumber && normalizedBiosSerialNumber) {
+    entries.push({
+      typeCode: 'bios_serial_number',
+      value: biosSerialNumber,
+      normalizedValue: normalizedBiosSerialNumber,
+      isPrimary: false
+    });
+  }
+
+  return entries;
+}
+
 function mapById(items) {
   const map = new Map();
 
@@ -492,6 +547,8 @@ async function getTechUnitFormOptions() {
 function getBlankUnitFormData(formOptions = null) {
   return {
     assetTag: '',
+    unitSerialNumber: '',
+    biosSerialNumber: '',
     lotId: '',
     unitCategoryConfigValueId: '',
     currentUnitStatusConfigValueId: formOptions ? formOptions.defaultUnitStatusId : '',
@@ -529,6 +586,33 @@ async function getUnitById(unitId) {
   return rows[0] || null;
 }
 
+async function getUnitIdentifierValue(unitId, typeCode) {
+  const exists = await tableExists('unit_identifiers');
+
+  if (!exists) {
+    return '';
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT ui.identifier_value
+      FROM unit_identifiers ui
+      JOIN config_values cv
+        ON cv.config_value_id = ui.identifier_type_config_value_id
+      JOIN config_categories cc
+        ON cc.config_category_id = cv.config_category_id
+      WHERE ui.unit_id = ?
+        AND cc.code = 'unit_identifier_types'
+        AND cv.code = ?
+      ORDER BY ui.is_primary DESC, ui.unit_identifier_id DESC
+      LIMIT 1
+    `,
+    [unitId, typeCode]
+  );
+
+  return rows[0]?.identifier_value || '';
+}
+
 async function getUnitFormDataById(unitId, formOptions = null) {
   const unit = await getUnitById(unitId);
 
@@ -536,8 +620,13 @@ async function getUnitFormDataById(unitId, formOptions = null) {
     return null;
   }
 
+  const unitSerialNumber = await getUnitIdentifierValue(unitId, 'unit_serial_number');
+  const biosSerialNumber = await getUnitIdentifierValue(unitId, 'bios_serial_number');
+
   return {
     assetTag: unit.asset_number ? getDisplayAssetTag(unit.asset_number) : '',
+    unitSerialNumber,
+    biosSerialNumber,
     lotId: unit.lot_id ? String(unit.lot_id) : '',
     unitCategoryConfigValueId: unit.unit_category_config_value_id ? String(unit.unit_category_config_value_id) : '',
     currentUnitStatusConfigValueId: unit.current_unit_status_config_value_id
@@ -703,6 +792,8 @@ async function listTechUnits(filters = {}) {
         ON um.unit_model_id = u.unit_model_id
       LEFT JOIN processor_models pm
         ON pm.processor_model_id = u.processor_model_id
+      LEFT JOIN processor_brands pb
+        ON pb.processor_brand_id = pm.processor_brand_id
       LEFT JOIN config_values cv_category
         ON cv_category.config_value_id = u.unit_category_config_value_id
       LEFT JOIN config_values cv_status
@@ -779,6 +870,283 @@ async function listTechUnits(filters = {}) {
   };
 }
 
+async function getIdentifierTypeId(typeCode, connection = pool) {
+  const [rows] = await connection.query(
+    `
+      SELECT cv.config_value_id
+      FROM config_values cv
+      JOIN config_categories cc
+        ON cc.config_category_id = cv.config_category_id
+      WHERE cc.code = 'unit_identifier_types'
+        AND cv.code = ?
+      LIMIT 1
+    `,
+    [typeCode]
+  );
+
+  return rows[0]?.config_value_id || null;
+}
+
+async function getIdentifierTypeMap(connection = pool) {
+  const [rows] = await connection.query(
+    `
+      SELECT
+        cv.code,
+        cv.config_value_id
+      FROM config_values cv
+      JOIN config_categories cc
+        ON cc.config_category_id = cv.config_category_id
+      WHERE cc.code = 'unit_identifier_types'
+        AND cv.code IN ('asset_tag', 'unit_serial_number', 'bios_serial_number')
+    `
+  );
+
+  const typeMap = new Map();
+
+  rows.forEach((row) => {
+    typeMap.set(row.code, Number(row.config_value_id));
+  });
+
+  return typeMap;
+}
+
+function getDuplicateUnitMessage(matches, assetTagPrefix = getAssetTagPrefix()) {
+  const matchList = Array.isArray(matches) ? matches : [];
+
+  if (matchList.length === 0) {
+    return 'A matching unit already exists. Search for the existing unit before creating a new one.';
+  }
+
+  const firstMatch = matchList[0];
+  const identifierLabel = firstMatch.identifierTypeLabel || 'Identifier';
+  const identifierValue = firstMatch.identifierValue || firstMatch.normalizedValue || 'matching value';
+  const unitLabel = firstMatch.assetNumber
+    ? getDisplayAssetTag(firstMatch.assetNumber)
+    : `Unit #${firstMatch.unitId}`;
+
+  if (firstMatch.identifierTypeCode === 'asset_tag') {
+    return `That ${assetTagPrefix} asset tag already belongs to ${unitLabel}. Search for and update the existing unit instead of creating a duplicate.`;
+  }
+
+  return `${identifierLabel} ${identifierValue} already belongs to ${unitLabel}. Search for and update the existing unit instead of creating a duplicate.`;
+}
+
+function createDuplicateIdentifierError(matches) {
+  const error = new Error(getDuplicateUnitMessage(matches));
+  error.code = 'BWT_DUPLICATE_IDENTIFIER';
+  error.duplicateMatches = matches;
+
+  return error;
+}
+
+async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitId = null, connection = pool) {
+  const exists = await tableExists('unit_identifiers');
+
+  if (!exists || identifierEntries.length === 0) {
+    return [];
+  }
+
+  const typeMap = await getIdentifierTypeMap(connection);
+  const clauses = [];
+  const params = [];
+
+  identifierEntries.forEach((entry) => {
+    const typeId = typeMap.get(entry.typeCode);
+
+    if (!typeId || !entry.normalizedValue) {
+      return;
+    }
+
+    clauses.push('(ui.identifier_type_config_value_id = ? AND ui.normalized_value = ?)');
+    params.push(typeId, entry.normalizedValue);
+  });
+
+  if (clauses.length === 0) {
+    return [];
+  }
+
+  let excludeSql = '';
+
+  if (excludeUnitId) {
+    excludeSql = 'AND ui.unit_id <> ?';
+    params.push(Number(excludeUnitId));
+  }
+
+  const [rows] = await connection.query(
+    `
+      SELECT
+        ui.unit_identifier_id,
+        ui.unit_id,
+        ui.identifier_value,
+        ui.normalized_value,
+        cv.code AS identifier_type_code,
+        cv.label AS identifier_type_label,
+        u.asset_number,
+        u.lot_id,
+        NULL AS lot_name,
+        (
+          SELECT ui_unit_serial.identifier_value
+          FROM unit_identifiers ui_unit_serial
+          JOIN config_values cv_unit_serial
+            ON cv_unit_serial.config_value_id = ui_unit_serial.identifier_type_config_value_id
+          JOIN config_categories cc_unit_serial
+            ON cc_unit_serial.config_category_id = cv_unit_serial.config_category_id
+          WHERE ui_unit_serial.unit_id = u.unit_id
+            AND cc_unit_serial.code = 'unit_identifier_types'
+            AND cv_unit_serial.code = 'unit_serial_number'
+          ORDER BY ui_unit_serial.unit_identifier_id DESC
+          LIMIT 1
+        ) AS unit_serial_number,
+        (
+          SELECT ui_bios_serial.identifier_value
+          FROM unit_identifiers ui_bios_serial
+          JOIN config_values cv_bios_serial
+            ON cv_bios_serial.config_value_id = ui_bios_serial.identifier_type_config_value_id
+          JOIN config_categories cc_bios_serial
+            ON cc_bios_serial.config_category_id = cv_bios_serial.config_category_id
+          WHERE ui_bios_serial.unit_id = u.unit_id
+            AND cc_bios_serial.code = 'unit_identifier_types'
+            AND cv_bios_serial.code = 'bios_serial_number'
+          ORDER BY ui_bios_serial.unit_identifier_id DESC
+          LIMIT 1
+        ) AS bios_serial_number,
+        m.name AS manufacturer_label,
+        um.model_name AS model_label,
+        pb.name AS processor_brand_label,
+        pm.model_code AS processor_label,
+        u.processor_speed_ghz
+      FROM unit_identifiers ui
+      JOIN config_values cv
+        ON cv.config_value_id = ui.identifier_type_config_value_id
+      JOIN units u
+        ON u.unit_id = ui.unit_id
+      LEFT JOIN lots l
+        ON l.lot_id = u.lot_id
+      LEFT JOIN manufacturers m
+        ON m.manufacturer_id = u.manufacturer_id
+      LEFT JOIN unit_models um
+        ON um.unit_model_id = u.unit_model_id
+      LEFT JOIN processor_models pm
+        ON pm.processor_model_id = u.processor_model_id
+      LEFT JOIN processor_brands pb
+        ON pb.processor_brand_id = pm.processor_brand_id
+      WHERE (${clauses.join(' OR ')})
+        ${excludeSql}
+      ORDER BY
+        CASE cv.code
+          WHEN 'asset_tag' THEN 10
+          WHEN 'bios_serial_number' THEN 20
+          WHEN 'unit_serial_number' THEN 30
+          ELSE 999
+        END,
+        ui.unit_identifier_id DESC
+      LIMIT 10
+    `,
+    params
+  );
+
+  return rows.map((row) => {
+    const cpuNameParts = [
+      row.processor_brand_label,
+      row.processor_label
+    ].filter(Boolean);
+
+    const cpuSummary = [
+      cpuNameParts.join(' ').trim(),
+      row.processor_speed_ghz ? `@ ${row.processor_speed_ghz}GHz` : ''
+    ].filter(Boolean).join(' ');
+
+    const modelParts = [
+      row.manufacturer_label,
+      row.model_label
+    ].filter(Boolean);
+
+    return {
+      unitIdentifierId: Number(row.unit_identifier_id),
+      unitId: Number(row.unit_id),
+      identifierValue: row.identifier_value,
+      normalizedValue: row.normalized_value,
+      identifierTypeCode: row.identifier_type_code,
+      identifierTypeLabel: row.identifier_type_label,
+      assetNumber: row.asset_number ? Number(row.asset_number) : null,
+      assetTag: row.asset_number ? getDisplayAssetTag(row.asset_number) : '',
+      lotId: row.lot_id ? Number(row.lot_id) : null,
+      lotName: row.lot_name || '',
+      unitSerialNumber: row.unit_serial_number || '',
+      biosSerialNumber: row.bios_serial_number || '',
+      manufacturerLabel: row.manufacturer_label || '',
+      modelLabel: row.model_label || '',
+      processorBrandLabel: row.processor_brand_label || '',
+      processorLabel: row.processor_label || '',
+      processorSpeedGhz: row.processor_speed_ghz || '',
+      modelSummary: modelParts.length > 0 ? modelParts.join(' · ') : '',
+      cpuSummary
+    };
+  });
+}
+
+async function findDuplicateUnitsForForm(formData, options = {}) {
+  const suppliedAssetNumber = normalizeAssetTagInput(formData.assetTag);
+  const identifierEntries = buildIdentifierEntries(formData, suppliedAssetNumber);
+
+  return findDuplicateUnitsFromIdentifiers(identifierEntries, options.excludeUnitId || null);
+}
+
+async function saveUnitIdentifier(connection, unitId, typeMap, entry) {
+  const identifierTypeId = typeMap.get(entry.typeCode);
+
+  if (!identifierTypeId || !entry.value || !entry.normalizedValue) {
+    return;
+  }
+
+  await connection.query(
+    `
+      INSERT INTO unit_identifiers (
+        unit_id,
+        identifier_type_config_value_id,
+        identifier_value,
+        normalized_value,
+        is_primary
+      )
+      VALUES (?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        identifier_value = IF(unit_id = VALUES(unit_id), VALUES(identifier_value), identifier_value),
+        is_primary = IF(unit_id = VALUES(unit_id), VALUES(is_primary), is_primary)
+    `,
+    [unitId, identifierTypeId, entry.value, entry.normalizedValue, entry.isPrimary ? 1 : 0]
+  );
+}
+
+async function saveUnitIdentifiers(connection, unitId, formData, assetNumber) {
+  const exists = await tableExists('unit_identifiers');
+
+  if (!exists) {
+    return;
+  }
+
+  const typeMap = await getIdentifierTypeMap(connection);
+  const serialTypeIds = ['unit_serial_number', 'bios_serial_number']
+    .map((typeCode) => typeMap.get(typeCode))
+    .filter(Boolean);
+
+  if (serialTypeIds.length > 0) {
+    await connection.query(
+      `
+        DELETE FROM unit_identifiers
+        WHERE unit_id = ?
+          AND identifier_type_config_value_id IN (${serialTypeIds.map(() => '?').join(', ')})
+      `,
+      [unitId, ...serialTypeIds]
+    );
+  }
+
+  const identifierEntries = buildIdentifierEntries(formData, assetNumber);
+
+  for (const entry of identifierEntries) {
+    await saveUnitIdentifier(connection, unitId, typeMap, entry);
+  }
+}
+
 function buildWritePayload(formData, currentUserId, mode, assetNumber) {
   const columns = [];
   const values = [];
@@ -829,43 +1197,166 @@ async function createTechUnit(formData, currentUserId) {
 
   const suppliedAssetNumber = normalizeAssetTagInput(formData.assetTag);
   const assetNumber = suppliedAssetNumber || await generateNextAssetNumber();
+  const duplicateMatches = await findDuplicateUnitsFromIdentifiers(buildIdentifierEntries(formData, assetNumber));
 
-  const payload = buildWritePayload(formData, currentUserId, 'create', assetNumber);
+  if (duplicateMatches.length > 0) {
+    throw createDuplicateIdentifierError(duplicateMatches);
+  }
 
-  const placeholders = payload.columns.map(() => '?').join(', ');
-  const columnSql = payload.columns.map(escapeIdentifier).join(', ');
+  const connection = await pool.getConnection();
 
-  const [result] = await pool.query(
-    `
-      INSERT INTO units (${columnSql})
-      VALUES (${placeholders})
-    `,
-    payload.values
-  );
+  try {
+    await connection.beginTransaction();
 
-  return result.insertId;
+    const payload = buildWritePayload(formData, currentUserId, 'create', assetNumber);
+    const placeholders = payload.columns.map(() => '?').join(', ');
+    const columnSql = payload.columns.map(escapeIdentifier).join(', ');
+
+    const [result] = await connection.query(
+      `
+        INSERT INTO units (${columnSql})
+        VALUES (${placeholders})
+      `,
+      payload.values
+    );
+
+    const unitId = result.insertId;
+
+    await saveUnitIdentifiers(connection, unitId, formData, assetNumber);
+
+    await connection.commit();
+
+    return unitId;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
-async function updateTechUnit(unitId, formData, currentUserId) {
+async function recordUnitLotHistory(connection, { unitId, fromLotId, toLotId, movedByUserId, notes = null }) {
+  const exists = await tableExists('unit_lot_history');
+
+  if (!exists) {
+    return;
+  }
+
+  const normalizedUnitId = normalizeRequiredInteger(unitId);
+  const normalizedToLotId = normalizeRequiredInteger(toLotId);
+  const normalizedUserId = normalizeRequiredInteger(movedByUserId);
+
+  if (!normalizedUnitId || !normalizedToLotId || !normalizedUserId) {
+    return;
+  }
+
+  const normalizedFromLotId = normalizeOptionalInteger(fromLotId);
+  const normalizedNotes = normalizeText(notes);
+
+  await connection.query(
+    `
+      INSERT INTO unit_lot_history (
+        unit_id,
+        from_lot_id,
+        to_lot_id,
+        moved_by_user_id,
+        notes
+      )
+      VALUES (?, ?, ?, ?, ?)
+    `,
+    [
+      normalizedUnitId,
+      normalizedFromLotId,
+      normalizedToLotId,
+      normalizedUserId,
+      normalizedNotes
+    ]
+  );
+}
+
+async function updateExistingTechUnit(unitId, formData, currentUserId, options = {}) {
   const state = await getUnitTableState();
 
   if (!state.exists || !state.primaryKeyColumn) {
     throw new Error('The units table or primary key column was not found.');
   }
 
-  const payload = buildWritePayload(formData, currentUserId, 'update', null);
+  const unit = await getUnitById(unitId);
 
-  const setSql = payload.columns.map((columnName) => `${escapeIdentifier(columnName)} = ?`).join(', ');
+  if (!unit) {
+    throw new Error('The selected unit could not be found.');
+  }
 
-  await pool.query(
-    `
-      UPDATE units
-      SET ${setSql}
-      WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
-      LIMIT 1
-    `,
-    [...payload.values, unitId]
+  const duplicateMatches = await findDuplicateUnitsFromIdentifiers(
+    buildIdentifierEntries(formData, unit.asset_number),
+    unitId
   );
+
+  if (duplicateMatches.length > 0) {
+    throw createDuplicateIdentifierError(duplicateMatches);
+  }
+
+  const connection = await pool.getConnection();
+  const nextLotId = normalizeRequiredInteger(formData.lotId);
+  const previousLotId = normalizeOptionalInteger(unit.lot_id);
+  const lotChanged = Boolean(nextLotId && previousLotId && Number(nextLotId) !== Number(previousLotId));
+
+  try {
+    await connection.beginTransaction();
+
+    const payload = buildWritePayload(formData, currentUserId, 'update', null);
+    const setSql = payload.columns.map((columnName) => `${escapeIdentifier(columnName)} = ?`).join(', ');
+
+    await connection.query(
+      `
+        UPDATE units
+        SET ${setSql}
+        WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
+        LIMIT 1
+      `,
+      [...payload.values, unitId]
+    );
+
+    await saveUnitIdentifiers(connection, unitId, formData, unit.asset_number);
+
+    if (lotChanged && options.recordLotHistory !== false) {
+      await recordUnitLotHistory(connection, {
+        unitId,
+        fromLotId: previousLotId,
+        toLotId: nextLotId,
+        movedByUserId: currentUserId,
+        notes: options.lotMoveNotes || 'Unit moved while updating an existing unit record.'
+      });
+    }
+
+    await connection.commit();
+
+    return {
+      unitId: Number(unitId),
+      previousLotId,
+      nextLotId,
+      lotChanged
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function updateTechUnit(unitId, formData, currentUserId) {
+  return updateExistingTechUnit(unitId, formData, currentUserId, {
+    recordLotHistory: true,
+    lotMoveNotes: 'Unit lot changed from the Tech Unit edit form.'
+  });
+}
+
+async function useExistingTechUnit(unitId, formData, currentUserId) {
+  return updateExistingTechUnit(unitId, formData, currentUserId, {
+    recordLotHistory: true,
+    lotMoveNotes: 'Duplicate detection confirmed this was an existing unit; unit record was updated instead of creating a duplicate.'
+  });
 }
 
 module.exports = {
@@ -873,8 +1364,11 @@ module.exports = {
   getTechUnitFormOptions,
   getUnitFormDataById,
   listTechUnits,
+  findDuplicateUnitsForForm,
+  getDuplicateUnitMessage,
   createTechUnit,
   updateTechUnit,
+  useExistingTechUnit,
   getUnitById,
   getAssetTagPrefix,
   getDisplayAssetTag,

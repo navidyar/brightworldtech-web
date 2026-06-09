@@ -127,6 +127,20 @@ router.post(
 );
 
 /*
+  Tech duplicate confirmation routes
+
+  Route order note:
+  Keep this before other /tech/units/:unitId routes.
+*/
+
+router.post(
+  '/tech/units/:unitId/use-existing/modal',
+  requireAuth,
+  requireRole(techRoles),
+  techController.useExistingTechUnitModal
+);
+
+/*
   Tech override routes
 
   Route order note:

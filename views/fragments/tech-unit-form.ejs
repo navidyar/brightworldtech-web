@@ -52,6 +52,38 @@
       </label>
 
       <label class="form-field">
+        <span>Unit Serial Number</span>
+        <input
+          type="text"
+          name="unitSerialNumber"
+          value="<%= formData.unitSerialNumber %>"
+          placeholder="Physical serial from the unit"
+          autocomplete="off"
+          spellcheck="false"
+          maxlength="150"
+        />
+        <small class="field-hint">
+          Used for duplicate detection when the asset tag is missing or unavailable.
+        </small>
+      </label>
+
+      <label class="form-field">
+        <span>BIOS Serial Number</span>
+        <input
+          type="text"
+          name="biosSerialNumber"
+          value="<%= formData.biosSerialNumber %>"
+          placeholder="Serial reported by BIOS or ScanTool"
+          autocomplete="off"
+          spellcheck="false"
+          maxlength="150"
+        />
+        <small class="field-hint">
+          BIOS serial improves confidence when matching a unit that already exists.
+        </small>
+      </label>
+
+      <label class="form-field">
         <span>Assignable Lot</span>
         <select name="lotId" required>
           <option value="">Select assignable lot</option>

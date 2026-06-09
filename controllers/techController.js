@@ -84,6 +84,8 @@ async function buildTechUnitsResult(filters) {
 function getUnitFormDataFromRequest(req) {
   return {
     assetTag: String(req.body.assetTag || '').trim(),
+    unitSerialNumber: String(req.body.unitSerialNumber || '').trim(),
+    biosSerialNumber: String(req.body.biosSerialNumber || '').trim(),
     lotId: String(req.body.lotId || '').trim(),
     unitCategoryConfigValueId: String(req.body.unitCategoryConfigValueId || '').trim(),
     currentUnitStatusConfigValueId: String(req.body.currentUnitStatusConfigValueId || '').trim(),
@@ -147,6 +149,14 @@ function validateUnitForm(formData, formOptions, mode) {
     errors.push(`Asset tag must be a positive number with or without the ${formOptions.assetTagPrefix} prefix.`);
   }
 
+  if (formData.unitSerialNumber.length > 150) {
+    errors.push('Unit serial number must be 150 characters or fewer.');
+  }
+
+  if (formData.biosSerialNumber.length > 150) {
+    errors.push('BIOS serial number must be 150 characters or fewer.');
+  }
+
   if (formData.ramGb && !isPositiveInteger(formData.ramGb)) {
     errors.push('RAM GB must be a positive whole number.');
   }
@@ -171,8 +181,12 @@ function validateUnitForm(formData, formOptions, mode) {
 }
 
 function getFriendlySaveError(error, formOptions) {
+  if (error && error.code === 'BWT_DUPLICATE_IDENTIFIER') {
+    return techUnitModel.getDuplicateUnitMessage(error.duplicateMatches, formOptions.assetTagPrefix);
+  }
+
   if (error && error.code === 'ER_DUP_ENTRY') {
-    return `That asset tag already exists. Enter a different ${formOptions.assetTagPrefix} asset tag or leave the field blank to auto-generate the next available number.`;
+    return `That asset tag or identifier already exists. Search for the existing unit before creating a duplicate.`;
   }
 
   if (error && error.code === 'ER_NO_REFERENCED_ROW_2') {
@@ -180,6 +194,25 @@ function getFriendlySaveError(error, formOptions) {
   }
 
   return null;
+}
+
+
+function isDuplicateIdentifierError(error) {
+  return Boolean(error && error.code === 'BWT_DUPLICATE_IDENTIFIER' && Array.isArray(error.duplicateMatches));
+}
+
+function getDuplicateMatches(error) {
+  return isDuplicateIdentifierError(error) ? error.duplicateMatches : [];
+}
+
+async function renderDuplicateUnitModal(res, { formOptions, formData, duplicateMatches, errorMessages = [] }) {
+  return res.render('fragments/tech-unit-duplicate-modal', {
+    pageTitle: 'Possible Existing Unit Found',
+    formOptions,
+    formData,
+    duplicateMatches,
+    errorMessages
+  });
 }
 
 async function getBlankFormDataWithDefaults() {
@@ -326,6 +359,15 @@ async function createTechUnitModal(req, res, next) {
     try {
       await techUnitModel.createTechUnit(formData, req.currentUser.user_id);
     } catch (saveError) {
+      if (isDuplicateIdentifierError(saveError)) {
+        return renderDuplicateUnitModal(res, {
+          formOptions,
+          formData,
+          duplicateMatches: getDuplicateMatches(saveError),
+          errorMessages: []
+        });
+      }
+
       const friendlyError = getFriendlySaveError(saveError, formOptions);
 
       if (friendlyError) {
@@ -335,6 +377,80 @@ async function createTechUnitModal(req, res, next) {
           formAction: '/tech/units/modal',
           formOptions,
           formData,
+          errorMessages: [friendlyError]
+        });
+      }
+
+      throw saveError;
+    }
+
+    res.set('HX-Trigger', 'unit-saved');
+    return res.send('');
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function useExistingTechUnitModal(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render('fragments/tech-unit-modal', {
+        pageTitle: 'Unit Not Found',
+        mode: 'create',
+        formAction: '/tech/units/modal',
+        formOptions: {
+          supported: false,
+          message: 'The selected unit ID is invalid.',
+          assetTagPrefix: techUnitModel.getAssetTagPrefix(),
+          lots: [],
+          unitCategories: [],
+          unitStatuses: [],
+          manufacturers: [],
+          unitModels: [],
+          processorModels: [],
+          ramTypes: [],
+          storageTypes: [],
+          operatingSystems: []
+        },
+        formData: techUnitModel.getBlankUnitFormData(),
+        errorMessages: ['The selected unit ID is invalid.']
+      });
+    }
+
+    const formOptions = await techUnitModel.getTechUnitFormOptions();
+    const formData = getUnitFormDataFromRequest(req);
+    const errorMessages = validateUnitForm(formData, formOptions, 'edit');
+
+    if (errorMessages.length > 0) {
+      return renderDuplicateUnitModal(res, {
+        formOptions,
+        formData,
+        duplicateMatches: [],
+        errorMessages
+      });
+    }
+
+    try {
+      await techUnitModel.useExistingTechUnit(unitId, formData, req.currentUser.user_id);
+    } catch (saveError) {
+      if (isDuplicateIdentifierError(saveError)) {
+        return renderDuplicateUnitModal(res, {
+          formOptions,
+          formData,
+          duplicateMatches: getDuplicateMatches(saveError),
+          errorMessages: ['Another matching unit was found while updating the existing unit. Review the matches before continuing.']
+        });
+      }
+
+      const friendlyError = getFriendlySaveError(saveError, formOptions);
+
+      if (friendlyError) {
+        return renderDuplicateUnitModal(res, {
+          formOptions,
+          formData,
+          duplicateMatches: [],
           errorMessages: [friendlyError]
         });
       }
@@ -466,7 +582,25 @@ async function updateTechUnit(req, res, next) {
       });
     }
 
-    await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id);
+    try {
+      await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id);
+    } catch (saveError) {
+      const friendlyError = getFriendlySaveError(saveError, formOptions);
+
+      if (friendlyError) {
+        return res.status(400).render('pages/tech-unit-form', {
+          pageTitle: 'Edit Unit',
+          currentNav: 'tech-units',
+          mode: 'edit',
+          formAction: `/tech/units/${unitId}`,
+          formOptions,
+          formData,
+          errorMessages: [friendlyError]
+        });
+      }
+
+      throw saveError;
+    }
 
     return res.redirect('/tech/units?updated=1');
   } catch (error) {
@@ -517,7 +651,24 @@ async function updateTechUnitModal(req, res, next) {
       });
     }
 
-    await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id);
+    try {
+      await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id);
+    } catch (saveError) {
+      const friendlyError = getFriendlySaveError(saveError, formOptions);
+
+      if (friendlyError) {
+        return res.render('fragments/tech-unit-modal', {
+          pageTitle: 'Edit Unit',
+          mode: 'edit',
+          formAction: `/tech/units/${unitId}/modal`,
+          formOptions,
+          formData,
+          errorMessages: [friendlyError]
+        });
+      }
+
+      throw saveError;
+    }
 
     res.set('HX-Trigger', 'unit-saved');
     return res.send('');
@@ -533,6 +684,7 @@ module.exports = {
   renderNewTechUnitModal,
   createTechUnit,
   createTechUnitModal,
+  useExistingTechUnitModal,
   renderEditTechUnitPage,
   renderEditTechUnitModal,
   updateTechUnit,
