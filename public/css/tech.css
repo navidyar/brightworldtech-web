@@ -390,3 +390,2610 @@ textarea {
     gap: 2px;
   }
 }
+/* Step 3i mini-menu refresh: denser professional card layout with subtle section accents. */
+.tech-detail-offset {
+  padding: 8px 14px 12px 48px;
+}
+
+.tech-detail-panel {
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, var(--blue) 24%);
+  border-left: 4px solid color-mix(in srgb, var(--blue) 62%, var(--line) 38%);
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, var(--blue-soft) 6%), var(--surface) 52%),
+    var(--surface);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.065);
+}
+
+.tech-detail-header {
+  align-items: center;
+  padding: 0 2px 10px;
+  margin-bottom: 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 82%, var(--blue-soft) 18%);
+}
+
+.tech-detail-title strong {
+  font-size: 1rem;
+}
+
+.tech-detail-title span {
+  max-width: 760px;
+}
+
+.tech-detail-layout {
+  grid-template-columns: repeat(auto-fit, minmax(245px, 1fr));
+  gap: 10px;
+  margin-top: 10px;
+  align-items: stretch;
+}
+
+.tech-detail-section,
+.tech-notes-section,
+.tech-override-history-section {
+  --section-tint: color-mix(in srgb, var(--surface-soft) 90%, var(--blue-soft) 10%);
+  --section-accent: color-mix(in srgb, var(--blue) 46%, var(--line) 54%);
+  min-width: 0;
+  padding: 10px 11px;
+  border: 1px solid color-mix(in srgb, var(--line-soft) 82%, var(--section-accent) 18%);
+  border-left: 4px solid var(--section-accent);
+  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--section-tint) 62%, var(--surface) 38%), var(--surface) 82%);
+  box-shadow: 0 7px 18px rgba(15, 23, 42, 0.035);
+}
+
+.tech-detail-section h3,
+.tech-override-history-section h3,
+.tech-notes-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+  font-size: 0.72rem;
+}
+
+.tech-detail-section h3::before,
+.tech-override-history-section h3::before,
+.tech-notes-section h3::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--section-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--section-accent) 14%, transparent);
+}
+
+.tech-detail-list,
+.tech-override-history-list {
+  border-top: 0;
+  gap: 3px;
+}
+
+.tech-detail-list div,
+.tech-override-history-list div {
+  grid-template-columns: minmax(104px, 0.38fr) minmax(0, 1fr);
+  gap: 9px;
+  padding: 5px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 84%, var(--section-accent) 16%);
+}
+
+.tech-detail-list div:last-child,
+.tech-override-history-list div:last-child {
+  border-bottom: 0;
+}
+
+.tech-detail-list dt,
+.tech-override-history-list dt {
+  font-size: 0.7rem;
+  letter-spacing: 0.01em;
+}
+
+.tech-detail-list dd,
+.tech-override-history-list dd {
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.tech-notes-section,
+.tech-override-history-section {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--line-soft) 72%, var(--section-accent) 28%);
+}
+
+.tech-notes-section > .tech-detail-layout {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px;
+}
+
+.tech-notes-grid {
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.tech-note-block {
+  padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, var(--line-soft) 84%, var(--section-accent) 16%);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 88%, var(--section-tint) 12%);
+}
+
+.tech-note-block strong {
+  margin-bottom: 5px;
+  font-size: 0.7rem;
+}
+
+.tech-note-block p {
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.tech-chip {
+  border-color: color-mix(in srgb, var(--line-soft) 70%, var(--blue) 30%);
+  color: color-mix(in srgb, var(--text) 58%, var(--blue) 42%);
+  background: color-mix(in srgb, var(--surface-soft) 78%, var(--blue-soft) 22%);
+}
+
+.tech-detail-section--identity {
+  --section-tint: #eef6ff;
+  --section-accent: #8fb7df;
+}
+
+.tech-detail-section--identifiers {
+  --section-tint: #f2f7ec;
+  --section-accent: #9abf86;
+}
+
+.tech-detail-section--grade {
+  --section-tint: #fff7e8;
+  --section-accent: #d4ad63;
+}
+
+.tech-detail-section--hardware,
+.tech-detail-section--memory-module,
+.tech-detail-section--storage-device {
+  --section-tint: #f4f3ff;
+  --section-accent: #aaa0d6;
+}
+
+.tech-detail-section--checks {
+  --section-tint: #edf8f5;
+  --section-accent: #83bcae;
+}
+
+.tech-detail-section--workflow,
+.tech-detail-section--sources {
+  --section-tint: #f6f7fb;
+  --section-accent: #9ca8bd;
+}
+
+.tech-detail-section--cellular-module,
+.tech-detail-section--graphics-adapter {
+  --section-tint: #eef7fb;
+  --section-accent: #86b6c7;
+}
+
+.tech-notes-section--memory {
+  --section-tint: #f4f3ff;
+  --section-accent: #aaa0d6;
+}
+
+.tech-notes-section--storage {
+  --section-tint: #eef6ff;
+  --section-accent: #8fb7df;
+}
+
+.tech-notes-section--cellular {
+  --section-tint: #eef7fb;
+  --section-accent: #86b6c7;
+}
+
+.tech-notes-section--graphics {
+  --section-tint: #f0f8f3;
+  --section-accent: #8ebc9d;
+}
+
+.tech-notes-section--issues {
+  --section-tint: #fff1ef;
+  --section-accent: #d79a8e;
+}
+
+.tech-notes-section--override {
+  --section-tint: #fff8e9;
+  --section-accent: #d5b26f;
+}
+
+.tech-notes-section--notes,
+.tech-notes-section--comments {
+  --section-tint: #f5f7fb;
+  --section-accent: #9aa8bd;
+}
+
+@media (max-width: 720px) {
+  .tech-detail-offset {
+    padding: 8px 10px 12px 24px;
+  }
+
+  .tech-detail-panel {
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .tech-detail-section,
+  .tech-notes-section,
+  .tech-override-history-section {
+    padding: 9px 10px;
+  }
+}
+
+/* Step 3i.1 professional refinement: remove heavy slivers/bubbles and use restrained executive section styling. */
+.tech-detail-offset {
+  padding: 8px 14px 12px 42px;
+}
+
+.tech-detail-panel {
+  border: 1px solid color-mix(in srgb, var(--line) 82%, var(--blue) 18%);
+  border-left: 1px solid color-mix(in srgb, var(--line) 82%, var(--blue) 18%);
+  border-radius: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 97%, var(--blue-soft) 3%), var(--surface) 44%);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.055);
+}
+
+.tech-detail-header {
+  margin-bottom: 8px;
+  padding: 0 2px 9px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 88%, var(--blue-soft) 12%);
+}
+
+.tech-detail-status {
+  gap: 6px;
+}
+
+.tech-detail-layout {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 9px;
+}
+
+.tech-detail-section,
+.tech-notes-section,
+.tech-override-history-section {
+  --section-tint: color-mix(in srgb, var(--surface-soft) 92%, var(--blue-soft) 8%);
+  --section-accent: color-mix(in srgb, var(--blue) 38%, var(--line) 62%);
+  padding: 9px 10px 10px;
+  border: 1px solid color-mix(in srgb, var(--line-soft) 88%, var(--section-accent) 12%);
+  border-left: 1px solid color-mix(in srgb, var(--line-soft) 88%, var(--section-accent) 12%);
+  border-top: 3px solid color-mix(in srgb, var(--section-accent) 72%, var(--surface) 28%);
+  border-radius: 12px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--section-tint) 42%, var(--surface) 58%), var(--surface) 70%);
+  box-shadow: 0 5px 14px rgba(15, 23, 42, 0.028);
+}
+
+.tech-detail-section h3,
+.tech-override-history-section h3,
+.tech-notes-section h3 {
+  display: block;
+  margin: 0 0 6px;
+  color: color-mix(in srgb, var(--text) 82%, var(--section-accent) 18%);
+  font-size: 0.71rem;
+  font-weight: 900;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.tech-detail-section h3::before,
+.tech-override-history-section h3::before,
+.tech-notes-section h3::before {
+  display: none;
+  content: none;
+}
+
+.tech-detail-list,
+.tech-override-history-list {
+  gap: 0;
+}
+
+.tech-detail-list div,
+.tech-override-history-list div {
+  grid-template-columns: minmax(112px, 0.42fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 5px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line-soft) 92%, var(--section-accent) 8%);
+}
+
+.tech-detail-list div:nth-child(even),
+.tech-override-history-list div:nth-child(even) {
+  background: color-mix(in srgb, var(--section-tint) 18%, transparent);
+  margin-left: -4px;
+  margin-right: -4px;
+  padding-left: 4px;
+  padding-right: 4px;
+  border-radius: 6px;
+}
+
+.tech-detail-list dt,
+.tech-override-history-list dt {
+  color: color-mix(in srgb, var(--muted) 88%, var(--text) 12%);
+  font-size: 0.695rem;
+  font-weight: 850;
+}
+
+.tech-detail-list dd,
+.tech-override-history-list dd {
+  font-size: 0.795rem;
+  line-height: 1.34;
+}
+
+.tech-chip {
+  padding: 3px 7px;
+  border-radius: 6px;
+  border-color: color-mix(in srgb, var(--line-soft) 84%, var(--blue) 16%);
+  color: color-mix(in srgb, var(--text) 76%, var(--blue) 24%);
+  background: color-mix(in srgb, var(--surface-soft) 86%, var(--blue-soft) 14%);
+  box-shadow: none;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.tech-detail-status .tech-chip {
+  background: color-mix(in srgb, var(--surface) 74%, var(--blue-soft) 26%);
+}
+
+.tech-detail-list .tech-chip,
+.tech-override-history-list .tech-chip {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.tech-notes-section,
+.tech-override-history-section {
+  margin-top: 9px;
+  padding-top: 9px;
+}
+
+.tech-note-block {
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 92%, var(--section-tint) 8%);
+}
+
+.tech-detail-section--identity {
+  --section-tint: #f5f9fd;
+  --section-accent: #8daecc;
+}
+
+.tech-detail-section--identifiers {
+  --section-tint: #f6faf3;
+  --section-accent: #94b884;
+}
+
+.tech-detail-section--grade {
+  --section-tint: #fffaf0;
+  --section-accent: #caa85e;
+}
+
+.tech-detail-section--hardware,
+.tech-detail-section--memory-module,
+.tech-detail-section--storage-device {
+  --section-tint: #f7f6fd;
+  --section-accent: #9f98c8;
+}
+
+.tech-detail-section--checks {
+  --section-tint: #f4fbf9;
+  --section-accent: #78afa4;
+}
+
+.tech-detail-section--workflow,
+.tech-detail-section--sources {
+  --section-tint: #f7f8fb;
+  --section-accent: #99a4b6;
+}
+
+.tech-detail-section--cellular-module,
+.tech-detail-section--graphics-adapter {
+  --section-tint: #f4fafc;
+  --section-accent: #80adbd;
+}
+
+.tech-notes-section--memory,
+.tech-notes-section--storage,
+.tech-notes-section--cellular,
+.tech-notes-section--graphics,
+.tech-notes-section--issues,
+.tech-notes-section--override,
+.tech-notes-section--notes,
+.tech-notes-section--comments {
+  --section-accent: #9aa8bd;
+}
+
+@media (max-width: 720px) {
+  .tech-detail-offset {
+    padding: 8px 10px 12px 18px;
+  }
+
+  .tech-detail-layout {
+    gap: 8px;
+  }
+
+  .tech-detail-list div,
+  .tech-override-history-list div {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Step 3i.2 canvas contrast refinement: improve section separation through the mini-menu background, not stronger pastel colors. */
+.tech-detail-panel {
+  border-color: color-mix(in srgb, var(--line) 76%, var(--blue) 24%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-soft) 88%, var(--blue-soft) 12%), color-mix(in srgb, var(--surface-soft) 94%, var(--blue-soft) 6%));
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+}
+
+.tech-detail-header {
+  padding: 0 2px 10px;
+  margin-bottom: 10px;
+  border-bottom-color: color-mix(in srgb, var(--line) 74%, var(--blue) 26%);
+}
+
+.tech-detail-layout {
+  gap: 10px;
+}
+
+.tech-detail-section,
+.tech-notes-section,
+.tech-override-history-section {
+  border: 1px solid color-mix(in srgb, var(--line) 82%, var(--section-accent) 18%);
+  border-top: 2px solid color-mix(in srgb, var(--section-accent) 58%, var(--line) 42%);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--surface) 94%, var(--section-tint) 6%) 0, color-mix(in srgb, var(--surface) 97%, var(--section-tint) 3%) 34px, var(--surface) 34px);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.045);
+}
+
+.tech-detail-section h3,
+.tech-override-history-section h3,
+.tech-notes-section h3 {
+  color: color-mix(in srgb, var(--text) 88%, var(--section-accent) 12%);
+}
+
+.tech-detail-list div,
+.tech-override-history-list div {
+  border-bottom-color: color-mix(in srgb, var(--line) 88%, var(--section-accent) 12%);
+}
+
+.tech-detail-list div:nth-child(even),
+.tech-override-history-list div:nth-child(even) {
+  background: color-mix(in srgb, var(--surface-soft) 60%, var(--surface) 40%);
+}
+
+.tech-note-block {
+  border-color: color-mix(in srgb, var(--line) 84%, var(--section-accent) 16%);
+  background: color-mix(in srgb, var(--surface) 94%, var(--surface-soft) 6%);
+}
+
+.tech-chip {
+  border-color: color-mix(in srgb, var(--line) 82%, var(--blue) 18%);
+  background: color-mix(in srgb, var(--surface) 82%, var(--surface-soft) 18%);
+}
+
+@media (max-width: 720px) {
+  .tech-detail-panel {
+    background: color-mix(in srgb, var(--surface-soft) 92%, var(--blue-soft) 8%);
+  }
+}
+
+/* Step 3i.3 flat contrast refinement: slightly stronger canvas contrast with flat pastel accents, no gradients. */
+.tech-detail-panel {
+  border-color: color-mix(in srgb, var(--line) 82%, #8ea0b5 18%);
+  background: #edf2f7;
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.08);
+}
+
+.tech-detail-header {
+  border-color: color-mix(in srgb, var(--line) 86%, #8ea0b5 14%);
+  background: #ffffff;
+}
+
+.tech-detail-layout {
+  gap: 12px;
+}
+
+.tech-detail-section,
+.tech-notes-section,
+.tech-override-history-section {
+  border: 1px solid color-mix(in srgb, var(--line) 74%, var(--section-accent) 26%);
+  border-top: 2px solid color-mix(in srgb, var(--section-accent) 62%, var(--line) 38%);
+  background: color-mix(in srgb, var(--surface) 86%, var(--section-tint) 14%);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.045);
+}
+
+.tech-detail-section h3,
+.tech-override-history-section h3,
+.tech-notes-section h3 {
+  color: color-mix(in srgb, var(--text) 86%, var(--section-accent) 14%);
+}
+
+.tech-detail-list,
+.tech-notes-section .workflow-list,
+.tech-override-history-section .workflow-list {
+  background: rgba(255, 255, 255, 0.72);
+  border-color: color-mix(in srgb, var(--line) 78%, var(--section-accent) 22%);
+}
+
+.tech-detail-list div,
+.tech-notes-section .workflow-item,
+.tech-override-history-section .workflow-item {
+  border-bottom-color: color-mix(in srgb, var(--line) 80%, var(--section-accent) 20%);
+}
+
+.tech-detail-list div:nth-child(even),
+.tech-notes-section .workflow-item:nth-child(even),
+.tech-override-history-section .workflow-item:nth-child(even) {
+  background: color-mix(in srgb, var(--section-tint) 24%, #ffffff 76%);
+}
+
+.tech-detail-status .tech-chip,
+.tech-detail-list .tech-chip,
+.tech-unit-detail-comment-chip {
+  border-color: color-mix(in srgb, var(--line) 74%, var(--section-accent) 26%);
+  background: color-mix(in srgb, #ffffff 82%, var(--section-tint) 18%);
+}
+
+@media (max-width: 760px) {
+  .tech-detail-panel {
+    background: #f1f5f9;
+  }
+}
+
+/* Step 3i.4 refined flat contrast: stronger canvas separation and one-shade-bolder pastel accents, still no gradients. */
+.tech-table-shell {
+  border-color: color-mix(in srgb, var(--line) 60%, var(--blue) 40%);
+  background: #dfe7f0;
+}
+
+.tech-table-card {
+  border-color: color-mix(in srgb, var(--line) 62%, var(--blue) 38%);
+  background: #ffffff;
+  box-shadow: 0 12px 30px rgba(15, 23, 42, 0.06);
+}
+
+.tech-summary-row td {
+  border-top-color: #dfe7f0;
+}
+
+.tech-detail-row td {
+  background: #d8e3ee;
+  border-bottom-color: color-mix(in srgb, var(--line) 62%, var(--blue) 38%);
+}
+
+.tech-detail-panel {
+  border-color: color-mix(in srgb, var(--line) 58%, var(--blue) 42%);
+  background: #f8fafc;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.085);
+}
+
+.tech-detail-header {
+  border-bottom-color: color-mix(in srgb, var(--line) 70%, var(--blue) 30%);
+}
+
+.tech-detail-section,
+.tech-notes-section,
+.tech-override-history-section {
+  --section-tint: color-mix(in srgb, var(--surface-soft) 82%, var(--section-accent) 18%);
+  border: 1px solid color-mix(in srgb, var(--line) 66%, var(--section-accent) 34%);
+  border-top: 2px solid color-mix(in srgb, var(--section-accent) 70%, var(--line) 30%);
+  background: color-mix(in srgb, #ffffff 76%, var(--section-tint) 24%);
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.048);
+}
+
+.tech-detail-section h3,
+.tech-override-history-section h3,
+.tech-notes-section h3 {
+  color: color-mix(in srgb, var(--text) 82%, var(--section-accent) 18%);
+}
+
+.tech-detail-list,
+.tech-override-history-list {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: color-mix(in srgb, var(--line) 70%, var(--section-accent) 30%);
+}
+
+.tech-detail-list div,
+.tech-override-history-list div {
+  border-bottom-color: color-mix(in srgb, var(--line) 72%, var(--section-accent) 28%);
+}
+
+.tech-detail-list div:nth-child(even),
+.tech-override-history-list div:nth-child(even) {
+  background: color-mix(in srgb, var(--section-tint) 30%, #ffffff 70%);
+}
+
+.tech-chip {
+  border-color: color-mix(in srgb, var(--line) 64%, var(--blue) 36%);
+  background: color-mix(in srgb, #ffffff 64%, var(--surface-soft) 36%);
+}
+
+.tech-note-block {
+  border-color: color-mix(in srgb, var(--line) 68%, var(--section-accent) 32%);
+  background: color-mix(in srgb, #ffffff 74%, var(--section-tint) 26%);
+}
+
+.tech-detail-section--identity {
+  --section-accent: #7fa4c2;
+}
+
+.tech-detail-section--identifiers {
+  --section-accent: #86ab75;
+}
+
+.tech-detail-section--grade {
+  --section-accent: #c49d4f;
+}
+
+.tech-detail-section--hardware,
+.tech-detail-section--memory-module,
+.tech-detail-section--storage-device {
+  --section-accent: #9289bf;
+}
+
+.tech-detail-section--checks {
+  --section-accent: #67a99c;
+}
+
+.tech-detail-section--workflow,
+.tech-detail-section--sources {
+  --section-accent: #8794a8;
+}
+
+.tech-detail-section--cellular-module,
+.tech-detail-section--graphics-adapter {
+  --section-accent: #70a3b6;
+}
+
+.tech-override-history-section {
+  --section-accent: #8794a8;
+}
+
+.tech-notes-section {
+  --section-accent: #9a8cc5;
+}
+
+@media (max-width: 720px) {
+  .tech-table-shell {
+    background: #e5ecf4;
+  }
+
+  .tech-detail-row td {
+    background: #e0e9f2;
+  }
+}
+
+/* Step 3i.7 table/header border refinement: keep rounded header top corners, flatten lower/table nesting. */
+.tech-table-shell {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.tech-table-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow-x: auto;
+}
+
+.tech-units-table {
+  border-left: 1px solid color-mix(in srgb, var(--line) 58%, var(--blue) 42%);
+  border-right: 1px solid color-mix(in srgb, var(--line) 58%, var(--blue) 42%);
+  border-radius: 12px 12px 0 0;
+}
+
+.tech-units-table thead th {
+  border-top: 1px solid color-mix(in srgb, var(--line) 58%, var(--blue) 42%);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 58%, var(--blue) 42%);
+  background: color-mix(in srgb, var(--surface-soft) 72%, var(--blue-soft) 28%);
+}
+
+.tech-units-table thead th:first-child {
+  border-top-left-radius: 12px;
+}
+
+.tech-units-table thead th:last-child {
+  border-top-right-radius: 12px;
+}
+
+.tech-summary-row td:first-child,
+.tech-detail-row td:first-child {
+  border-left: 0;
+}
+
+.tech-summary-row td:last-child,
+.tech-detail-row td:last-child {
+  border-right: 0;
+}
+
+.tech-summary-row td {
+  border-top: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 74%, var(--blue) 26%);
+}
+
+.tech-summary-row + .tech-summary-row td {
+  border-top: 0;
+}
+
+.tech-detail-row td {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 64%, var(--blue) 36%);
+}
+
+.tech-detail-offset {
+  padding: 10px 14px 14px 38px;
+}
+
+.tech-detail-panel {
+  border: 0;
+  border-left: 3px solid color-mix(in srgb, var(--blue) 52%, var(--line) 48%);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 10px 0 4px 14px;
+}
+
+.tech-detail-header {
+  padding: 0 0 10px;
+  background: transparent;
+}
+
+@media (max-width: 720px) {
+  .tech-units-table {
+    border-radius: 10px 10px 0 0;
+  }
+
+  .tech-units-table thead th:first-child {
+    border-top-left-radius: 10px;
+  }
+
+  .tech-units-table thead th:last-child {
+    border-top-right-radius: 10px;
+  }
+
+  .tech-detail-offset {
+    padding: 9px 10px 13px 24px;
+  }
+
+  .tech-detail-panel {
+    padding-left: 12px;
+  }
+}
+
+/* Step 3i.8 table bottom border + stronger mini-menu card borders and clearer color rotation. */
+.tech-units-table {
+  border-left: 1px solid color-mix(in srgb, var(--line) 54%, var(--blue) 46%);
+  border-right: 1px solid color-mix(in srgb, var(--line) 54%, var(--blue) 46%);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 54%, var(--blue) 46%);
+  border-radius: 12px 12px 0 0;
+}
+
+.tech-units-table thead th {
+  border-top: 1px solid color-mix(in srgb, var(--line) 54%, var(--blue) 46%);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 54%, var(--blue) 46%);
+}
+
+.tech-summary-row:last-of-type td,
+.tech-detail-row:last-of-type td {
+  border-bottom-color: color-mix(in srgb, var(--line) 54%, var(--blue) 46%);
+}
+
+.tech-detail-section,
+.tech-notes-section,
+.tech-override-history-section {
+  border: 1px solid color-mix(in srgb, var(--line) 58%, var(--section-accent) 42%);
+  border-top: 3px solid color-mix(in srgb, var(--section-accent) 74%, var(--line) 26%);
+  background: color-mix(in srgb, #ffffff 72%, var(--section-tint) 28%);
+  box-shadow: 0 7px 16px rgba(15, 23, 42, 0.044);
+}
+
+.tech-detail-list,
+.tech-override-history-list,
+.tech-notes-section .workflow-list,
+.tech-override-history-section .workflow-list {
+  border-color: color-mix(in srgb, var(--line) 62%, var(--section-accent) 38%);
+}
+
+.tech-detail-list div,
+.tech-override-history-list div,
+.tech-notes-section .workflow-item,
+.tech-override-history-section .workflow-item {
+  border-bottom-color: color-mix(in srgb, var(--line) 64%, var(--section-accent) 36%);
+}
+
+.tech-detail-list div:nth-child(even),
+.tech-override-history-list div:nth-child(even),
+.tech-notes-section .workflow-item:nth-child(even),
+.tech-override-history-section .workflow-item:nth-child(even) {
+  background: color-mix(in srgb, var(--section-tint) 31%, #ffffff 69%);
+}
+
+.tech-note-block,
+.tech-unit-detail-comment-chip,
+.tech-detail-status .tech-chip,
+.tech-detail-list .tech-chip {
+  border-color: color-mix(in srgb, var(--line) 60%, var(--section-accent) 40%);
+}
+
+.tech-detail-section--identity {
+  --section-tint: #edf6ff;
+  --section-accent: #7fa4c2;
+}
+
+.tech-detail-section--identifiers {
+  --section-tint: #f0f8ea;
+  --section-accent: #86ab75;
+}
+
+.tech-detail-section--grade {
+  --section-tint: #fff5df;
+  --section-accent: #c49d4f;
+}
+
+.tech-detail-section--hardware {
+  --section-tint: #fff0eb;
+  --section-accent: #b97f6c;
+}
+
+.tech-detail-section--memory-module,
+.tech-notes-section.tech-notes-section--memory {
+  --section-tint: #f4f2ff;
+  --section-accent: #8a82bd;
+}
+
+.tech-detail-section--storage-device,
+.tech-notes-section.tech-notes-section--storage {
+  --section-tint: #eef6ff;
+  --section-accent: #789fca;
+}
+
+.tech-detail-section--checks {
+  --section-tint: #ecfaf6;
+  --section-accent: #67a99c;
+}
+
+.tech-detail-section--workflow {
+  --section-tint: #f2f5f9;
+  --section-accent: #8794a8;
+}
+
+.tech-detail-section--sources {
+  --section-tint: #f1f4ff;
+  --section-accent: #7f8fb7;
+}
+
+.tech-detail-section--cellular-module,
+.tech-notes-section.tech-notes-section--cellular {
+  --section-tint: #eef9fc;
+  --section-accent: #70a3b6;
+}
+
+.tech-detail-section--graphics-adapter,
+.tech-notes-section.tech-notes-section--graphics {
+  --section-tint: #edf8f1;
+  --section-accent: #72aa82;
+}
+
+.tech-notes-section.tech-notes-section--issues {
+  --section-tint: #fff0ef;
+  --section-accent: #c98278;
+}
+
+.tech-override-history-section.tech-notes-section--override,
+.tech-notes-section.tech-notes-section--override {
+  --section-tint: #fff6e4;
+  --section-accent: #c9a052;
+}
+
+.tech-notes-section.tech-notes-section--notes {
+  --section-tint: #f3f6fa;
+  --section-accent: #8290a7;
+}
+
+.tech-notes-section.tech-notes-section--comments {
+  --section-tint: #f3f5ff;
+  --section-accent: #7f8fb7;
+}
+
+@media (max-width: 720px) {
+  .tech-units-table {
+    border-radius: 10px 10px 0 0;
+  }
+
+  .tech-detail-section,
+  .tech-notes-section,
+  .tech-override-history-section {
+    border-top-width: 3px;
+  }
+}
+
+/* Step 3i.9 table full border radius refinement: keep the table border complete with rounded bottom corners. */
+.tech-units-table {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.tech-units-table tbody tr:last-child td:first-child {
+  border-bottom-left-radius: 12px;
+}
+
+.tech-units-table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 12px;
+}
+
+@media (max-width: 720px) {
+  .tech-units-table {
+    border-radius: 10px;
+  }
+
+  .tech-units-table tbody tr:last-child td:first-child {
+    border-bottom-left-radius: 10px;
+  }
+
+  .tech-units-table tbody tr:last-child td:last-child {
+    border-bottom-right-radius: 10px;
+  }
+}
+
+/* Step 3i.10 add/edit unit form refinement: align form sections with the selected mini-menu design. */
+.tech-unit-form {
+  display: grid;
+  gap: 14px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.tech-unit-form .form-section {
+  --form-section-tint: #edf6ff;
+  --form-section-accent: #7fa4c2;
+  padding: 14px 16px 16px;
+  border: 1px solid color-mix(in srgb, var(--line) 58%, var(--form-section-accent) 42%);
+  border-top: 3px solid color-mix(in srgb, var(--form-section-accent) 74%, var(--line) 26%);
+  border-radius: 12px;
+  background: color-mix(in srgb, #ffffff 72%, var(--form-section-tint) 28%);
+  box-shadow: 0 7px 16px rgba(15, 23, 42, 0.04);
+}
+
+.tech-unit-form .form-section:nth-of-type(1) {
+  --form-section-tint: #edf6ff;
+  --form-section-accent: #7fa4c2;
+}
+
+.tech-unit-form .form-section:nth-of-type(2) {
+  --form-section-tint: #f0f8ea;
+  --form-section-accent: #86ab75;
+}
+
+.tech-unit-form .form-section:nth-of-type(3) {
+  --form-section-tint: #fff0eb;
+  --form-section-accent: #b97f6c;
+}
+
+.tech-unit-form .form-section:nth-of-type(4) {
+  --form-section-tint: #fff5df;
+  --form-section-accent: #c49d4f;
+}
+
+.tech-unit-form .form-section:nth-of-type(5) {
+  --form-section-tint: #f4f2ff;
+  --form-section-accent: #8a82bd;
+}
+
+.tech-unit-form .form-section:nth-of-type(6) {
+  --form-section-tint: #eef6ff;
+  --form-section-accent: #789fca;
+}
+
+.tech-unit-form .form-section:nth-of-type(7) {
+  --form-section-tint: #ecfaf6;
+  --form-section-accent: #67a99c;
+}
+
+.tech-unit-form .form-section:nth-of-type(8) {
+  --form-section-tint: #eef9fc;
+  --form-section-accent: #70a3b6;
+}
+
+.tech-unit-form .form-section:nth-of-type(9) {
+  --form-section-tint: #edf8f1;
+  --form-section-accent: #72aa82;
+}
+
+.tech-unit-form .form-section:nth-of-type(10) {
+  --form-section-tint: #fff0ef;
+  --form-section-accent: #c98278;
+}
+
+.tech-unit-form .form-section:nth-of-type(11) {
+  --form-section-tint: #f3f6fa;
+  --form-section-accent: #8290a7;
+}
+
+.tech-unit-form .form-section:nth-of-type(12) {
+  --form-section-tint: #f3f5ff;
+  --form-section-accent: #7f8fb7;
+}
+
+.tech-unit-form .form-section-header {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.38fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+  margin: 0 0 14px;
+  padding: 0 0 11px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 68%, var(--form-section-accent) 32%);
+}
+
+.tech-unit-form .form-section-header h3 {
+  margin: 2px 0 0;
+  color: color-mix(in srgb, var(--text) 84%, var(--form-section-accent) 16%);
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+
+.tech-unit-form .form-section-header .eyebrow {
+  margin: 0;
+  color: color-mix(in srgb, var(--text) 58%, var(--form-section-accent) 42%);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.tech-unit-form .form-section-header > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.tech-unit-form .form-grid {
+  gap: 13px;
+}
+
+.tech-unit-form .form-field {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.tech-unit-form .form-field > span {
+  color: color-mix(in srgb, var(--text) 82%, var(--form-section-accent) 18%);
+  font-size: 0.74rem;
+  font-weight: 850;
+}
+
+.tech-unit-form input,
+.tech-unit-form select,
+.tech-unit-form textarea {
+  border-color: color-mix(in srgb, var(--line) 66%, var(--form-section-accent) 34%);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.tech-unit-form input:focus,
+.tech-unit-form select:focus,
+.tech-unit-form textarea:focus {
+  border-color: color-mix(in srgb, var(--form-section-accent) 78%, var(--blue) 22%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--form-section-accent) 16%, transparent);
+  outline: none;
+}
+
+.tech-unit-form input:disabled,
+.tech-unit-form select:disabled,
+.tech-unit-form textarea:disabled {
+  color: color-mix(in srgb, var(--muted) 86%, var(--text) 14%);
+  background: color-mix(in srgb, #ffffff 58%, var(--form-section-tint) 42%);
+}
+
+.tech-unit-form .field-hint {
+  color: color-mix(in srgb, var(--muted) 86%, var(--form-section-accent) 14%);
+}
+
+.tech-unit-form .workflow-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.tech-unit-form .workflow-item {
+  border: 1px solid color-mix(in srgb, var(--line) 62%, var(--form-section-accent) 38%);
+  border-radius: 10px;
+  background: color-mix(in srgb, #ffffff 78%, var(--form-section-tint) 22%);
+  box-shadow: none;
+}
+
+.tech-unit-form .workflow-item > span:first-child {
+  background: color-mix(in srgb, var(--form-section-accent) 76%, var(--line) 24%);
+}
+
+.tech-unit-form .workflow-item:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 70%, var(--form-section-tint) 30%);
+}
+
+.tech-unit-form .content-header {
+  border-bottom-color: color-mix(in srgb, var(--line) 70%, var(--form-section-accent) 30%);
+}
+
+.tech-unit-form .content-header strong {
+  color: color-mix(in srgb, var(--text) 84%, var(--form-section-accent) 16%);
+}
+
+.tech-unit-form .content-header p {
+  color: var(--muted);
+}
+
+.tech-unit-form .message {
+  border-color: color-mix(in srgb, var(--line) 62%, var(--form-section-accent) 38%);
+  background: color-mix(in srgb, #ffffff 72%, var(--form-section-tint) 28%);
+}
+
+.tech-unit-form .form-actions {
+  margin-top: 2px;
+  padding: 14px 0 0;
+  border-top: 1px solid color-mix(in srgb, var(--line) 76%, var(--blue) 24%);
+}
+
+@media (max-width: 860px) {
+  .tech-unit-form .form-section-header {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
+@media (max-width: 720px) {
+  .tech-unit-form .form-section {
+    padding: 12px 12px 14px;
+    border-radius: 10px;
+  }
+
+  .tech-unit-form .workflow-item {
+    border-radius: 9px;
+  }
+}
+
+/* Step 3i.11 add/edit form section contrast: match unit table border strength while keeping a restrained business style. */
+.tech-unit-form .form-section {
+  border: 1px solid color-mix(in srgb, var(--line) 34%, var(--form-section-accent) 66%);
+  border-top-width: 4px;
+  border-top-color: color-mix(in srgb, var(--form-section-accent) 84%, var(--line) 16%);
+  background: color-mix(in srgb, #ffffff 66%, var(--form-section-tint) 34%);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.055);
+}
+
+.tech-unit-form .form-section-header {
+  border-bottom-color: color-mix(in srgb, var(--line) 48%, var(--form-section-accent) 52%);
+}
+
+.tech-unit-form .workflow-item,
+.tech-unit-form .message,
+.tech-unit-form .duplicate-review-card {
+  border-color: color-mix(in srgb, var(--line) 46%, var(--form-section-accent) 54%);
+}
+
+.tech-unit-form .form-field input,
+.tech-unit-form .form-field select,
+.tech-unit-form .form-field textarea {
+  border-color: color-mix(in srgb, var(--line) 52%, var(--form-section-accent) 48%);
+}
+
+.tech-unit-form .form-field input:focus,
+.tech-unit-form .form-field select:focus,
+.tech-unit-form .form-field textarea:focus {
+  border-color: color-mix(in srgb, var(--form-section-accent) 86%, var(--blue) 14%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--form-section-accent) 18%, transparent);
+}
+
+/* Step 3i.12 add/edit form section stronger borders: clearer section contrast without heavy borders. */
+.tech-unit-form .form-section {
+  border-color: color-mix(in srgb, var(--line) 18%, var(--form-section-accent) 82%);
+  border-top-width: 5px;
+  border-top-color: color-mix(in srgb, var(--form-section-accent) 92%, var(--text) 8%);
+  background: color-mix(in srgb, #ffffff 62%, var(--form-section-tint) 38%);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.065);
+}
+
+.tech-unit-form .form-section-header {
+  border-bottom-color: color-mix(in srgb, var(--line) 34%, var(--form-section-accent) 66%);
+}
+
+.tech-unit-form .form-section-header h3 {
+  color: color-mix(in srgb, var(--text) 78%, var(--form-section-accent) 22%);
+}
+
+.tech-unit-form .form-section-header .eyebrow {
+  color: color-mix(in srgb, var(--text) 46%, var(--form-section-accent) 54%);
+}
+
+.tech-unit-form .workflow-item,
+.tech-unit-form .message,
+.tech-unit-form .duplicate-review-card {
+  border-color: color-mix(in srgb, var(--line) 28%, var(--form-section-accent) 72%);
+}
+
+.tech-unit-form .workflow-item > span:first-child {
+  background: color-mix(in srgb, var(--form-section-accent) 88%, var(--text) 12%);
+}
+
+.tech-unit-form .content-header {
+  border-bottom-color: color-mix(in srgb, var(--line) 46%, var(--form-section-accent) 54%);
+}
+
+.tech-unit-form .form-field input,
+.tech-unit-form .form-field select,
+.tech-unit-form .form-field textarea {
+  border-color: color-mix(in srgb, var(--line) 36%, var(--form-section-accent) 64%);
+}
+
+.tech-unit-form .form-field input:hover,
+.tech-unit-form .form-field select:hover,
+.tech-unit-form .form-field textarea:hover {
+  border-color: color-mix(in srgb, var(--line) 22%, var(--form-section-accent) 78%);
+}
+
+.tech-unit-form .form-field input:focus,
+.tech-unit-form .form-field select:focus,
+.tech-unit-form .form-field textarea:focus {
+  border-color: color-mix(in srgb, var(--form-section-accent) 92%, var(--blue) 8%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--form-section-accent) 20%, transparent);
+}
+
+/* Step 3i.13 add/edit form outer-section refinement: emphasize the main form section containers, not the nested row containers. */
+.tech-unit-form .form-section {
+  border: 1px solid color-mix(in srgb, var(--line) 12%, var(--form-section-accent) 88%);
+  border-top-width: 7px;
+  border-top-color: color-mix(in srgb, var(--form-section-accent) 94%, var(--text) 6%);
+  background: color-mix(in srgb, #ffffff 60%, var(--form-section-tint) 40%);
+  box-shadow: 0 11px 22px rgba(15, 23, 42, 0.07);
+}
+
+.tech-unit-form .form-section-header {
+  padding-bottom: 12px;
+  border-bottom-color: color-mix(in srgb, var(--line) 28%, var(--form-section-accent) 72%);
+}
+
+.tech-unit-form .form-section-header h3 {
+  color: color-mix(in srgb, var(--text) 76%, var(--form-section-accent) 24%);
+}
+
+.tech-unit-form .form-section-header .eyebrow {
+  color: color-mix(in srgb, var(--text) 42%, var(--form-section-accent) 58%);
+}
+
+.tech-unit-form .workflow-item,
+.tech-unit-form .message,
+.tech-unit-form .duplicate-review-card {
+  border-color: color-mix(in srgb, var(--line) 66%, var(--form-section-accent) 34%);
+  background: color-mix(in srgb, #ffffff 82%, var(--form-section-tint) 18%);
+}
+
+.tech-unit-form .workflow-item:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 76%, var(--form-section-tint) 24%);
+}
+
+.tech-unit-form .workflow-item > span:first-child {
+  background: color-mix(in srgb, var(--form-section-accent) 70%, var(--line) 30%);
+}
+
+.tech-unit-form .content-header {
+  border-bottom-color: color-mix(in srgb, var(--line) 68%, var(--form-section-accent) 32%);
+}
+
+.tech-unit-form .form-field input,
+.tech-unit-form .form-field select,
+.tech-unit-form .form-field textarea {
+  border-color: color-mix(in srgb, var(--line) 44%, var(--form-section-accent) 56%);
+}
+
+.tech-unit-form .form-field input:hover,
+.tech-unit-form .form-field select:hover,
+.tech-unit-form .form-field textarea:hover {
+  border-color: color-mix(in srgb, var(--line) 30%, var(--form-section-accent) 70%);
+}
+
+/* Step 3i.19 form sliver height refinement: reduce only the add/edit form section top strip by 25%. */
+.app-form.tech-unit-form > .form-section {
+  position: relative;
+  overflow: hidden;
+  padding-top: 22px;
+  border: 1px solid color-mix(in srgb, var(--line) 18%, var(--form-section-accent) 82%) !important;
+  border-top: 0 !important;
+  border-radius: 14px;
+  background: color-mix(in srgb, #ffffff 54%, var(--form-section-tint) 46%) !important;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.075);
+}
+
+.app-form.tech-unit-form > .form-section::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 7.5px;
+  background: color-mix(in srgb, var(--form-section-accent) 92%, var(--text) 8%);
+}
+
+.app-form.tech-unit-form > .form-section > .form-section-header {
+  padding-bottom: 13px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 30%, var(--form-section-accent) 70%) !important;
+}
+
+.app-form.tech-unit-form > .form-section > .form-section-header h3 {
+  color: color-mix(in srgb, var(--text) 72%, var(--form-section-accent) 28%);
+}
+
+.app-form.tech-unit-form > .form-section > .form-section-header .eyebrow {
+  color: color-mix(in srgb, var(--text) 38%, var(--form-section-accent) 62%);
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(1) {
+  --form-section-tint: #e8f3ff;
+  --form-section-accent: #5f8fb9;
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(2) {
+  --form-section-tint: #edf8e7;
+  --form-section-accent: #719f5d;
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(3) {
+  --form-section-tint: #fff0e9;
+  --form-section-accent: #aa6d58;
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(4) {
+  --form-section-tint: #fff3db;
+  --form-section-accent: #b68a35;
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(5) {
+  --form-section-tint: #f0edff;
+  --form-section-accent: #736bb0;
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(6) {
+  --form-section-tint: #eaf4ff;
+  --form-section-accent: #608bbd;
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(7) {
+  --form-section-tint: #e8faf4;
+  --form-section-accent: #549b8c;
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(8) {
+  --form-section-tint: #eaf8fc;
+  --form-section-accent: #5b98ad;
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(9) {
+  --form-section-tint: #ebf8ef;
+  --form-section-accent: #5f9a6d;
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(10) {
+  --form-section-tint: #fff0ee;
+  --form-section-accent: #b86f63;
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(11) {
+  --form-section-tint: #f0f5fa;
+  --form-section-accent: #6f8098;
+}
+
+.app-form.tech-unit-form > .form-section:nth-of-type(12) {
+  --form-section-tint: #eef1ff;
+  --form-section-accent: #6c7ca8;
+}
+
+.app-form.tech-unit-form > .form-section .workflow-item,
+.app-form.tech-unit-form > .form-section .message,
+.app-form.tech-unit-form > .form-section .duplicate-review-card {
+  border-color: color-mix(in srgb, var(--line) 64%, var(--form-section-accent) 36%);
+  background: color-mix(in srgb, #ffffff 84%, var(--form-section-tint) 16%);
+}
+
+.app-form.tech-unit-form > .form-section .workflow-item > span:first-child {
+  background: color-mix(in srgb, var(--form-section-accent) 66%, var(--line) 34%);
+}
+
+@media (max-width: 720px) {
+  .app-form.tech-unit-form > .form-section {
+    padding-top: 18px;
+    border-radius: 11px;
+  }
+
+  .app-form.tech-unit-form > .form-section::before {
+    height: 8px;
+  }
+}
+
+/* Step 3i.15 form section balance: soften main section accents and flatten nested row containers. */
+.app-form.tech-unit-form > .form-section {
+  padding-top: 20px;
+  border-color: color-mix(in srgb, var(--line) 24%, var(--form-section-accent) 76%) !important;
+  background: color-mix(in srgb, #ffffff 58%, var(--form-section-tint) 42%) !important;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.055);
+}
+
+.app-form.tech-unit-form > .form-section::before {
+  height: 7.5px;
+  background: color-mix(in srgb, var(--form-section-accent) 84%, var(--text) 16%);
+}
+
+.app-form.tech-unit-form > .form-section > .form-section-header {
+  border-bottom-color: color-mix(in srgb, var(--line) 36%, var(--form-section-accent) 64%) !important;
+}
+
+.app-form.tech-unit-form > .form-section > .form-section-header h3 {
+  color: color-mix(in srgb, var(--text) 76%, var(--form-section-accent) 24%);
+}
+
+.app-form.tech-unit-form > .form-section > .form-section-header .eyebrow {
+  color: color-mix(in srgb, var(--text) 44%, var(--form-section-accent) 56%);
+}
+
+.app-form.tech-unit-form > .form-section .workflow-list {
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 62%, var(--form-section-accent) 38%);
+  border-radius: 10px;
+  background: color-mix(in srgb, #ffffff 74%, var(--form-section-tint) 26%);
+}
+
+.app-form.tech-unit-form > .form-section .workflow-item {
+  border: 0 !important;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 66%, var(--form-section-accent) 34%) !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.app-form.tech-unit-form > .form-section .workflow-item:last-child {
+  border-bottom: 0 !important;
+}
+
+.app-form.tech-unit-form > .form-section .workflow-item:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 68%, var(--form-section-tint) 32%) !important;
+}
+
+.app-form.tech-unit-form > .form-section .workflow-item > span:first-child {
+  display: none;
+}
+
+.app-form.tech-unit-form > .form-section .workflow-item > div {
+  width: 100%;
+}
+
+.app-form.tech-unit-form > .form-section .content-header {
+  border-bottom-color: color-mix(in srgb, var(--line) 74%, var(--form-section-accent) 26%);
+}
+
+.app-form.tech-unit-form > .form-section .message,
+.app-form.tech-unit-form > .form-section .duplicate-review-card {
+  border-color: color-mix(in srgb, var(--line) 58%, var(--form-section-accent) 42%);
+  background: color-mix(in srgb, #ffffff 72%, var(--form-section-tint) 28%);
+}
+
+@media (max-width: 720px) {
+  .app-form.tech-unit-form > .form-section {
+    padding-top: 18px;
+  }
+
+  .app-form.tech-unit-form > .form-section::before {
+    height: 6px;
+  }
+}
+
+/* Step 3i.16 form cleanup: slightly soften form section fill while preserving section borders and top strips. */
+.app-form.tech-unit-form > .form-section {
+  background: color-mix(in srgb, #ffffff 64%, var(--form-section-tint) 36%) !important;
+}
+
+.app-form.tech-unit-form > .form-section .workflow-list {
+  background: color-mix(in srgb, #ffffff 80%, var(--form-section-tint) 20%);
+}
+
+.app-form.tech-unit-form > .form-section .workflow-item:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 74%, var(--form-section-tint) 26%) !important;
+}
+
+.app-form.tech-unit-form > .form-section .message,
+.app-form.tech-unit-form > .form-section .duplicate-review-card {
+  background: color-mix(in srgb, #ffffff 78%, var(--form-section-tint) 22%);
+}
+
+.app-form.tech-unit-form .form-field-wide {
+  grid-column: 1 / -1;
+}
+
+/* Step 3i.17 mini-menu color alignment: bring expanded mini-menu section colors closer to the add/edit form contrast. */
+.tech-detail-section,
+.tech-notes-section,
+.tech-override-history-section {
+  border-color: color-mix(in srgb, var(--line) 52%, var(--section-accent) 48%) !important;
+  border-top-color: color-mix(in srgb, var(--section-accent) 82%, var(--line) 18%) !important;
+  background: color-mix(in srgb, #ffffff 64%, var(--section-tint) 36%) !important;
+  box-shadow: 0 7px 16px rgba(15, 23, 42, 0.048);
+}
+
+.tech-detail-section h3,
+.tech-override-history-section h3,
+.tech-notes-section h3 {
+  color: color-mix(in srgb, var(--text) 76%, var(--section-accent) 24%);
+}
+
+.tech-detail-list,
+.tech-override-history-list,
+.tech-notes-section .workflow-list,
+.tech-override-history-section .workflow-list {
+  border-color: color-mix(in srgb, var(--line) 56%, var(--section-accent) 44%) !important;
+  background: color-mix(in srgb, #ffffff 78%, var(--section-tint) 22%);
+}
+
+.tech-detail-list div,
+.tech-override-history-list div,
+.tech-notes-section .workflow-item,
+.tech-override-history-section .workflow-item {
+  border-bottom-color: color-mix(in srgb, var(--line) 60%, var(--section-accent) 40%) !important;
+}
+
+.tech-detail-list div:nth-child(even),
+.tech-override-history-list div:nth-child(even),
+.tech-notes-section .workflow-item:nth-child(even),
+.tech-override-history-section .workflow-item:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 70%, var(--section-tint) 30%) !important;
+}
+
+.tech-note-block,
+.tech-unit-detail-comment-chip,
+.tech-detail-status .tech-chip,
+.tech-detail-list .tech-chip {
+  border-color: color-mix(in srgb, var(--line) 54%, var(--section-accent) 46%) !important;
+  background: color-mix(in srgb, #ffffff 70%, var(--section-tint) 30%);
+}
+
+.tech-detail-section--identity {
+  --section-tint: #edf6ff;
+  --section-accent: #7fa4c2;
+}
+
+.tech-detail-section--identifiers {
+  --section-tint: #f0f8ea;
+  --section-accent: #86ab75;
+}
+
+.tech-detail-section--grade {
+  --section-tint: #fff5df;
+  --section-accent: #c49d4f;
+}
+
+.tech-detail-section--hardware {
+  --section-tint: #fff0eb;
+  --section-accent: #b97f6c;
+}
+
+.tech-detail-section--memory-module,
+.tech-notes-section.tech-notes-section--memory {
+  --section-tint: #f4f2ff;
+  --section-accent: #8a82bd;
+}
+
+.tech-detail-section--storage-device,
+.tech-notes-section.tech-notes-section--storage {
+  --section-tint: #eef6ff;
+  --section-accent: #789fca;
+}
+
+.tech-detail-section--checks {
+  --section-tint: #ecfaf6;
+  --section-accent: #67a99c;
+}
+
+.tech-detail-section--workflow {
+  --section-tint: #f3f6fa;
+  --section-accent: #8290a7;
+}
+
+.tech-detail-section--sources {
+  --section-tint: #f3f5ff;
+  --section-accent: #7f8fb7;
+}
+
+.tech-detail-section--cellular-module,
+.tech-notes-section.tech-notes-section--cellular {
+  --section-tint: #eef9fc;
+  --section-accent: #70a3b6;
+}
+
+.tech-detail-section--graphics-adapter,
+.tech-notes-section.tech-notes-section--graphics {
+  --section-tint: #edf8f1;
+  --section-accent: #72aa82;
+}
+
+.tech-notes-section.tech-notes-section--issues {
+  --section-tint: #fff0ef;
+  --section-accent: #c98278;
+}
+
+.tech-override-history-section.tech-notes-section--override,
+.tech-notes-section.tech-notes-section--override {
+  --section-tint: #fff6e4;
+  --section-accent: #c9a052;
+}
+
+.tech-notes-section.tech-notes-section--notes {
+  --section-tint: #f3f6fa;
+  --section-accent: #8290a7;
+}
+
+.tech-notes-section.tech-notes-section--comments {
+  --section-tint: #f3f5ff;
+  --section-accent: #7f8fb7;
+}
+
+/* Step 3i.18 mini-menu sliver height refinement: double only the expanded mini-menu top strips. */
+.tech-detail-section,
+.tech-notes-section,
+.tech-override-history-section {
+  border-top-width: 6px !important;
+}
+
+@media (max-width: 760px) {
+  .tech-detail-section,
+  .tech-notes-section,
+  .tech-override-history-section {
+    border-top-width: 6px !important;
+  }
+}
+
+/* Step 3i.22 comment history audit trail: single-section list with compact metadata rows. */
+.tech-notes-section.tech-notes-section--comments {
+  overflow: hidden;
+}
+
+.tech-comment-history-list {
+  display: grid;
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--line) 54%, var(--section-accent) 46%);
+  border-radius: 11px;
+  background: color-mix(in srgb, #ffffff 70%, var(--section-tint) 30%);
+}
+
+.tech-comment-history-row {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 58%, var(--section-accent) 42%);
+  background: color-mix(in srgb, #ffffff 80%, var(--section-tint) 20%);
+}
+
+.tech-comment-history-row:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 66%, var(--section-tint) 34%);
+}
+
+.tech-comment-history-row:last-child {
+  border-bottom: 0;
+}
+
+.tech-comment-history-meta {
+  display: grid;
+  grid-template-columns: minmax(96px, 0.5fr) minmax(120px, 0.7fr) minmax(150px, 1fr);
+  gap: 10px;
+  align-items: center;
+  color: color-mix(in srgb, var(--muted) 78%, var(--text) 22%);
+  font-size: 0.74rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.tech-comment-type-label {
+  justify-self: start;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--line) 52%, var(--section-accent) 48%);
+  border-radius: 6px;
+  color: color-mix(in srgb, var(--text) 64%, var(--section-accent) 36%);
+  background: color-mix(in srgb, #ffffff 62%, var(--section-tint) 38%);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tech-comment-history-text {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.84rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .tech-comment-history-meta {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+/* Step 3i.23 comment history separators: make audit rows clearly separated without individual boxes. */
+.tech-comment-history-list {
+  border-color: color-mix(in srgb, var(--line) 36%, var(--section-accent) 64%) !important;
+}
+
+.tech-comment-history-row {
+  border-bottom: 0 !important;
+  position: relative;
+}
+
+.tech-comment-history-row + .tech-comment-history-row {
+  border-top: 1px solid color-mix(in srgb, var(--line) 32%, var(--section-accent) 68%) !important;
+}
+
+.tech-comment-history-row + .tech-comment-history-row::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: 12px;
+  right: 12px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.72);
+  pointer-events: none;
+}
+
+.tech-comment-history-meta {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 58%, transparent 42%);
+  padding-bottom: 6px;
+}
+
+.tech-comment-history-text {
+  padding-top: 1px;
+}
+
+/* Step 3i.24 comment history: remove the extra inner container to avoid the Russian-doll effect. */
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-list {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: color-mix(in srgb, #ffffff 78%, var(--section-tint) 22%) !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 64%, var(--section-tint) 36%) !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row:first-child {
+  border-top: 1px solid color-mix(in srgb, var(--line) 32%, var(--section-accent) 68%) !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row:last-child {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 32%, var(--section-accent) 68%) !important;
+}
+
+/* Step 3i.25 comment history: clearer row separation while keeping one flat list. */
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row {
+  border-top: 0 !important;
+  border-bottom: 1.5px solid color-mix(in srgb, var(--line) 18%, var(--section-accent) 82%) !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row + .tech-comment-history-row {
+  border-top: 0 !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row + .tech-comment-history-row::before {
+  display: none !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row:first-child {
+  border-top: 1.5px solid color-mix(in srgb, var(--line) 18%, var(--section-accent) 82%) !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row:last-child {
+  border-bottom: 1.5px solid color-mix(in srgb, var(--line) 18%, var(--section-accent) 82%) !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-meta {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 40%, var(--section-accent) 60%) !important;
+}
+
+/* Step 3i.26 comment history: strong separation between comment blocks, soft separation inside each block. */
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row {
+  border-bottom: 1.5px solid color-mix(in srgb, var(--line) 18%, var(--section-accent) 82%) !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row:first-child {
+  border-top: 1.5px solid color-mix(in srgb, var(--line) 18%, var(--section-accent) 82%) !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-row:last-child {
+  border-bottom: 1.5px solid color-mix(in srgb, var(--line) 18%, var(--section-accent) 82%) !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-meta {
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 54%, transparent 46%) !important;
+  padding-bottom: 6px !important;
+}
+
+.tech-notes-section.tech-notes-section--comments .tech-comment-history-text {
+  padding-top: 1px !important;
+}
+
+/* Step 3j history audit lists: RAM, storage, hardware issues, and grades. */
+.tech-notes-section--history {
+  --section-accent: #7f95b3;
+}
+
+.tech-notes-section--hardware-history {
+  --section-accent: #9d8fbf;
+}
+
+.tech-notes-section--memory-history {
+  --section-accent: #7ba68b;
+}
+
+.tech-notes-section--storage-history {
+  --section-accent: #7b9fbd;
+}
+
+.tech-notes-section--grade-history {
+  --section-accent: #c3a35c;
+}
+
+.tech-history-section-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+.tech-history-section-title h3 {
+  margin: 0;
+}
+
+.tech-history-section-title > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.tech-history-list {
+  display: grid;
+  gap: 0;
+}
+
+.tech-history-row {
+  position: relative;
+  padding: 12px 10px 13px;
+  background: rgba(255, 255, 255, 0.38);
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 44%, var(--section-accent) 56%);
+}
+
+.tech-history-row:first-child {
+  border-top: 1px solid color-mix(in srgb, var(--line) 44%, var(--section-accent) 56%);
+}
+
+.tech-history-row:nth-child(even) {
+  background: color-mix(in srgb, var(--section-tint) 34%, #ffffff 66%);
+}
+
+.tech-history-row:last-child {
+  border-bottom-color: color-mix(in srgb, var(--line) 40%, var(--section-accent) 60%);
+}
+
+.tech-history-meta {
+  display: grid;
+  grid-template-columns: minmax(74px, 0.5fr) minmax(180px, 1.5fr) minmax(120px, 0.9fr) minmax(150px, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding-bottom: 7px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 82%, var(--section-accent) 18%);
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 700;
+}
+
+.tech-history-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.tech-history-text {
+  margin: 8px 0 0;
+  color: var(--text);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.tech-history-status {
+  width: fit-content;
+  border: 1px solid color-mix(in srgb, var(--line) 58%, var(--section-accent) 42%);
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: color-mix(in srgb, #ffffff 58%, var(--section-tint) 42%);
+  color: color-mix(in srgb, var(--text) 76%, var(--section-accent) 24%);
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.tech-history-status.is-current {
+  border-color: color-mix(in srgb, #2f855a 46%, var(--line) 54%);
+  background: color-mix(in srgb, #dcfce7 58%, #ffffff 42%);
+  color: #276749;
+}
+
+.tech-history-status.is-prior {
+  border-color: color-mix(in srgb, var(--line) 68%, var(--muted) 32%);
+  background: color-mix(in srgb, #f1f5f9 72%, #ffffff 28%);
+  color: #64748b;
+}
+
+@media (max-width: 860px) {
+  .tech-history-section-title {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .tech-history-meta {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+}
+
+/* Step 3j.1 history toggles: keep history available but collapsed until requested. */
+.tech-history-disclosure {
+  display: block;
+}
+
+.tech-history-disclosure-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  list-style: none;
+  margin: 0;
+  user-select: none;
+}
+
+.tech-history-disclosure-summary::-webkit-details-marker {
+  display: none;
+}
+
+.tech-history-disclosure-summary::marker {
+  content: '';
+}
+
+.tech-history-disclosure-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px 10px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.tech-history-disclosure-heading {
+  color: color-mix(in srgb, var(--text) 76%, var(--section-accent) 24%);
+  font-size: 0.98rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+.tech-history-disclosure-count {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.tech-history-disclosure-link {
+  color: color-mix(in srgb, var(--section-accent) 86%, var(--text) 14%);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tech-history-disclosure-link:hover {
+  color: color-mix(in srgb, var(--section-accent) 68%, var(--text) 32%);
+}
+
+.tech-history-hide-label {
+  display: none;
+}
+
+.tech-history-disclosure[open] .tech-history-show-label {
+  display: none;
+}
+
+.tech-history-disclosure[open] .tech-history-hide-label {
+  display: inline;
+}
+
+.tech-history-disclosure > .tech-history-list {
+  margin-top: 12px;
+}
+
+.tech-history-disclosure:not([open]) {
+  padding-bottom: 16px;
+}
+
+@media (max-width: 720px) {
+  .tech-history-disclosure-summary {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+
+/* Step 3j.2 history refinement: show current records by default and collapse only prior records. */
+.tech-notes-section--history {
+  overflow: hidden;
+}
+
+.tech-history-section-title {
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.tech-history-section-title > div {
+  display: grid;
+  gap: 3px;
+}
+
+.tech-history-section-title > div > span {
+  color: color-mix(in srgb, var(--muted) 82%, var(--section-accent) 18%);
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tech-history-list {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.tech-history-list--current .tech-history-row:first-child,
+.tech-history-list--prior .tech-history-row:first-child {
+  border-top: 1px solid color-mix(in srgb, var(--line) 34%, var(--section-accent) 66%);
+}
+
+.tech-history-row {
+  margin: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: color-mix(in srgb, #ffffff 78%, var(--section-tint) 22%) !important;
+}
+
+.tech-history-row:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 66%, var(--section-tint) 34%) !important;
+}
+
+.tech-history-past-list {
+  margin-top: 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.tech-history-past-list > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin: 0 0 8px;
+  padding: 0;
+  color: color-mix(in srgb, var(--section-accent) 78%, var(--text) 22%);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.01em;
+  list-style: none;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  user-select: none;
+}
+
+.tech-history-past-list > summary::-webkit-details-marker {
+  display: none;
+}
+
+.tech-history-past-list > summary::marker {
+  content: '';
+}
+
+.tech-history-past-list > summary:hover {
+  color: color-mix(in srgb, var(--section-accent) 60%, var(--text) 40%);
+}
+
+.tech-history-past-list .tech-history-hide-label {
+  display: none;
+}
+
+.tech-history-past-list[open] .tech-history-show-label {
+  display: none;
+}
+
+.tech-history-past-list[open] .tech-history-hide-label {
+  display: inline;
+}
+
+.tech-history-disclosure,
+.tech-history-disclosure-summary,
+.tech-history-disclosure-title,
+.tech-history-disclosure-link {
+  all: unset;
+}
+
+.tech-notes-grid {
+  gap: 16px;
+}
+
+.tech-note-block {
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.tech-note-block + .tech-note-block {
+  padding-left: 16px !important;
+  border-left: 1px solid color-mix(in srgb, var(--line) 42%, var(--section-accent) 58%) !important;
+}
+
+@media (max-width: 760px) {
+  .tech-note-block + .tech-note-block {
+    padding-left: 0 !important;
+    padding-top: 12px !important;
+    border-left: 0 !important;
+    border-top: 1px solid color-mix(in srgb, var(--line) 42%, var(--section-accent) 58%) !important;
+  }
+}
+
+/* Step 3j.3 current module list cleanup: remove Russian-doll cards inside current RAM, storage, and graphics sections. */
+.tech-notes-section--memory > .tech-detail-layout,
+.tech-notes-section--storage > .tech-detail-layout,
+.tech-notes-section--graphics > .tech-detail-layout {
+  display: grid !important;
+  grid-template-columns: 1fr !important;
+  gap: 0 !important;
+  margin-top: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 34%, var(--section-accent) 66%);
+  background: transparent !important;
+}
+
+.tech-notes-section--memory > .tech-detail-layout > .tech-detail-section,
+.tech-notes-section--storage > .tech-detail-layout > .tech-detail-section,
+.tech-notes-section--graphics > .tech-detail-layout > .tech-detail-section {
+  border: 0 !important;
+  border-radius: 0 !important;
+  border-top-width: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  padding: 12px 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+.tech-notes-section--memory > .tech-detail-layout > .tech-detail-section + .tech-detail-section,
+.tech-notes-section--storage > .tech-detail-layout > .tech-detail-section + .tech-detail-section,
+.tech-notes-section--graphics > .tech-detail-layout > .tech-detail-section + .tech-detail-section {
+  border-top: 1px solid color-mix(in srgb, var(--line) 38%, var(--section-accent) 62%) !important;
+}
+
+.tech-notes-section--memory > .tech-detail-layout > .tech-detail-section::before,
+.tech-notes-section--storage > .tech-detail-layout > .tech-detail-section::before,
+.tech-notes-section--graphics > .tech-detail-layout > .tech-detail-section::before {
+  display: none !important;
+}
+
+.tech-notes-section--memory > .tech-detail-layout > .tech-detail-section > .tech-detail-list,
+.tech-notes-section--storage > .tech-detail-layout > .tech-detail-section > .tech-detail-list,
+.tech-notes-section--graphics > .tech-detail-layout > .tech-detail-section > .tech-detail-list {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+
+.tech-notes-section--memory > .tech-detail-layout > .tech-detail-section > .tech-detail-list > div,
+.tech-notes-section--storage > .tech-detail-layout > .tech-detail-section > .tech-detail-list > div,
+.tech-notes-section--graphics > .tech-detail-layout > .tech-detail-section > .tech-detail-list > div {
+  border-bottom-color: color-mix(in srgb, var(--line) 72%, var(--section-accent) 28%) !important;
+  background: transparent !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+.tech-notes-section--memory > .tech-detail-layout > .tech-detail-section > .tech-detail-list > div:nth-child(even),
+.tech-notes-section--storage > .tech-detail-layout > .tech-detail-section > .tech-detail-list > div:nth-child(even),
+.tech-notes-section--graphics > .tech-detail-layout > .tech-detail-section > .tech-detail-list > div:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 78%, var(--section-tint) 22%) !important;
+}
+
+/* Step 3j.4 lazy-loaded unit history panel: keep current details clean and load history on request. */
+.tech-detail-view-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+}
+
+.tech-detail-view-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 72%, var(--text) 28%);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 850;
+  letter-spacing: 0.01em;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.tech-detail-view-link:hover,
+.tech-detail-view-link:focus-visible {
+  color: var(--text);
+}
+
+.tech-detail-view-link.is-active {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.tech-unit-panel-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.tech-unit-panel-view[hidden] {
+  display: none !important;
+}
+
+.tech-history-panel-placeholder {
+  padding: 14px 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.tech-history-panel-placeholder p {
+  margin: 0;
+}
+
+.tech-unit-history-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.tech-unit-history-panel-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-end;
+  padding: 0 0 10px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 68%, var(--muted) 32%);
+}
+
+.tech-unit-history-panel-header > div {
+  display: grid;
+  gap: 3px;
+}
+
+.tech-unit-history-panel-header strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.tech-unit-history-panel-header span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 750;
+}
+
+.tech-unit-history-panel-header > span {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.tech-notes-section--cosmetic-history {
+  --section-accent: #c98278;
+}
+
+.tech-notes-section--override-history {
+  --section-accent: #c9a052;
+}
+
+.tech-unit-history-panel .tech-history-list {
+  margin-top: 0;
+}
+
+.tech-unit-history-panel .tech-history-row + .tech-history-row {
+  border-top: 0;
+}
+
+@media (max-width: 760px) {
+  .tech-detail-view-actions {
+    width: 100%;
+  }
+
+  .tech-unit-history-panel-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 6px;
+  }
+}
+
+/* Step 3j.5 summary column order: Specs, identifiers, Lot, Category, Actions. */
+.tech-unit-summary-toggle {
+  min-width: 280px;
+}
+
+.tech-unit-summary-spec strong {
+  line-height: 1.32;
+}
+
+.tech-unit-summary-identifiers {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  min-width: 250px;
+}
+
+.tech-unit-summary-identifiers > div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 8px;
+  align-items: baseline;
+}
+
+.tech-unit-summary-identifiers dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tech-unit-summary-identifiers dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.tech-units-table thead th:nth-child(1) {
+  width: 34%;
+}
+
+.tech-units-table thead th:nth-child(2) {
+  width: 30%;
+}
+
+.tech-units-table thead th:nth-child(5),
+.tech-summary-row td:nth-child(5) {
+  width: 1%;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .tech-unit-summary-toggle,
+  .tech-unit-summary-identifiers {
+    min-width: 0;
+  }
+
+  .tech-unit-summary-identifiers > div {
+    grid-template-columns: 1fr;
+    gap: 1px;
+  }
+}
+
+/* Step 3j.6 compact summary row interaction and identifiers. */
+.tech-summary-row[data-unit-summary-row] {
+  cursor: pointer;
+}
+
+.tech-summary-row[data-unit-summary-row] td {
+  vertical-align: middle;
+}
+
+.tech-summary-row[data-unit-summary-row] td:nth-child(5),
+.tech-summary-row[data-unit-summary-row] td:nth-child(5) * {
+  cursor: default;
+}
+
+.tech-summary-row[data-unit-summary-row] td:nth-child(5) a,
+.tech-summary-row[data-unit-summary-row] td:nth-child(5) button {
+  cursor: pointer;
+}
+
+.tech-unit-summary-toggle {
+  min-width: 240px;
+}
+
+.tech-unit-summary-spec strong {
+  font-size: 0.92rem;
+  line-height: 1.28;
+}
+
+.tech-unit-summary-spec small {
+  font-size: 0.74rem;
+}
+
+.tech-unit-summary-identifiers {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 3px 10px;
+  min-width: 0;
+  max-width: 340px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
+.tech-unit-summary-identifiers > div {
+  display: contents;
+}
+
+.tech-unit-summary-id-item {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.tech-unit-summary-id-item:not(:last-child)::after {
+  content: '·';
+  margin-left: 10px;
+  color: color-mix(in srgb, var(--muted) 64%, var(--line) 36%);
+  font-weight: 400;
+}
+
+.tech-unit-summary-id-label {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.tech-unit-summary-id-value {
+  min-width: 0;
+  max-width: 160px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .tech-unit-summary-toggle {
+    min-width: 0;
+  }
+
+  .tech-unit-summary-identifiers {
+    max-width: none;
+  }
+
+  .tech-unit-summary-id-item,
+  .tech-unit-summary-id-value {
+    white-space: normal;
+  }
+
+  .tech-unit-summary-id-value {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Step 3j.7 compact summary row: specs include lot/category/status, no visible unit id. */
+.tech-units-table thead th:nth-child(1) {
+  width: 54%;
+}
+
+.tech-units-table thead th:nth-child(2) {
+  width: 36%;
+}
+
+.tech-units-table thead th:nth-child(3),
+.tech-summary-row td:nth-child(3) {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.tech-summary-row[data-unit-summary-row] td:nth-child(3),
+.tech-summary-row[data-unit-summary-row] td:nth-child(3) * {
+  cursor: default;
+}
+
+.tech-summary-row[data-unit-summary-row] td:nth-child(3) a,
+.tech-summary-row[data-unit-summary-row] td:nth-child(3) button {
+  cursor: pointer;
+}
+
+.tech-unit-summary-toggle {
+  width: 100%;
+  min-width: 320px;
+}
+
+.tech-unit-summary-spec strong {
+  display: block;
+}
+
+.tech-unit-summary-spec small {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 0.73rem;
+  font-weight: 400;
+  line-height: 1.3;
+}
+
+.tech-unit-summary-identifiers {
+  max-width: 420px;
+}
+
+@media (max-width: 760px) {
+  .tech-unit-summary-toggle {
+    min-width: 0;
+  }
+}

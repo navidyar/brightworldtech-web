@@ -147,6 +147,14 @@ router.post(
   Keep these before other /tech/units/:unitId routes.
 */
 
+
+router.get(
+  '/tech/units/:unitId/history',
+  requireAuth,
+  requireRole(techRoles),
+  techController.renderTechUnitHistoryPanel
+);
+
 router.get(
   '/tech/units/:unitId/override/modal',
   requireAuth,

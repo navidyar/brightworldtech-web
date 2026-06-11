@@ -1,0 +1,270 @@
+<%
+  const safeHistoryDetails = historyDetails || {};
+  const safeOverrideHistory = overrideHistory || { supported: false, requests: [] };
+  const safeErrorMessages = Array.isArray(errorMessages) ? errorMessages : [];
+
+  const gradeHistory = Array.isArray(safeHistoryDetails.gradeHistory) ? safeHistoryDetails.gradeHistory : [];
+  const memoryHistory = Array.isArray(safeHistoryDetails.memoryHistory) ? safeHistoryDetails.memoryHistory : [];
+  const storageHistory = Array.isArray(safeHistoryDetails.storageHistory) ? safeHistoryDetails.storageHistory : [];
+  const hardwareIssueHistory = Array.isArray(safeHistoryDetails.hardwareIssueHistory) ? safeHistoryDetails.hardwareIssueHistory : [];
+  const cosmeticIssueHistory = Array.isArray(safeHistoryDetails.cosmeticIssueHistory) ? safeHistoryDetails.cosmeticIssueHistory : [];
+  const overrideRequests = Array.isArray(safeOverrideHistory.requests) ? safeOverrideHistory.requests : [];
+
+  const totalHistoryRows = gradeHistory.length
+    + memoryHistory.length
+    + storageHistory.length
+    + hardwareIssueHistory.length
+    + cosmeticIssueHistory.length
+    + overrideRequests.length;
+
+  function sourceLabel(sourceCode) {
+    const normalizedSource = String(sourceCode || '').trim();
+
+    if (!normalizedSource) {
+      return 'Unknown Source';
+    }
+
+    if (normalizedSource === 'scantool') {
+      return 'ScanTool';
+    }
+
+    return normalizedSource
+      .split('_')
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  }
+
+  function formatGb(value) {
+    return value ? `${formatNumber(value)}GB` : '—';
+  }
+
+  function formatMhz(value) {
+    return value ? `${formatNumber(value)}MHz` : '';
+  }
+
+  function rowDate(primaryDate, fallbackDate) {
+    return primaryDate ? formatDateTime(primaryDate) : (fallbackDate ? formatDateTime(fallbackDate) : 'No date recorded');
+  }
+%>
+
+<div class="tech-unit-history-panel">
+  <div class="tech-unit-history-panel-header">
+    <div>
+      <strong>Unit History</strong>
+      <span>Loaded from the server only when requested.</span>
+    </div>
+
+    <span><%= totalHistoryRows %> records</span>
+  </div>
+
+  <% if (safeErrorMessages.length > 0) { %>
+    <div class="message error">
+      <% safeErrorMessages.forEach((message) => { %>
+        <p><%= message %></p>
+      <% }) %>
+    </div>
+  <% } else if (safeHistoryDetails.schemaReady === false) { %>
+    <div class="message error">
+      <p>Expanded Step 3 tables were not detected. Run the required database migrations before using unit history.</p>
+    </div>
+  <% } else if (totalHistoryRows === 0) { %>
+    <div class="message success">
+      <p>No RAM, storage, grade, issue, or override history records have been saved for this unit yet.</p>
+    </div>
+  <% } %>
+
+  <% if (gradeHistory.length > 0) { %>
+    <section class="tech-notes-section tech-notes-section--history tech-notes-section--grade-history">
+      <div class="tech-history-section-title">
+        <div>
+          <h3>Grade History</h3>
+          <span><%= gradeHistory.length %> records</span>
+        </div>
+      </div>
+
+      <div class="tech-history-list">
+        <% gradeHistory.forEach((gradeRow) => { %>
+          <article class="tech-history-row">
+            <div class="tech-history-meta">
+              <span class="tech-history-status <%= gradeRow.isCurrent ? 'is-current' : 'is-prior' %>"><%= gradeRow.isCurrent ? 'Current' : 'Prior' %></span>
+              <span>Grade <%= gradeRow.gradeLabel || '—' %></span>
+              <span><%= gradeRow.assessedByName || sourceLabel(gradeRow.sourceCode) %></span>
+              <span><%= gradeRow.assessedAt ? formatDateTime(gradeRow.assessedAt) : 'No date recorded' %></span>
+            </div>
+            <div class="tech-history-summary">
+              <span>Source: <%= sourceLabel(gradeRow.sourceCode) %></span>
+            </div>
+            <% if (gradeRow.notes) { %>
+              <p class="tech-history-text"><%= gradeRow.notes %></p>
+            <% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+
+  <% if (memoryHistory.length > 0) { %>
+    <section class="tech-notes-section tech-notes-section--history tech-notes-section--memory-history">
+      <div class="tech-history-section-title">
+        <div>
+          <h3>RAM Configuration History</h3>
+          <span><%= memoryHistory.length %> records</span>
+        </div>
+      </div>
+
+      <div class="tech-history-list">
+        <% memoryHistory.forEach((memoryRow) => { %>
+          <article class="tech-history-row">
+            <div class="tech-history-meta">
+              <span class="tech-history-status <%= memoryRow.isCurrent ? 'is-current' : 'is-prior' %>"><%= memoryRow.isCurrent ? 'Current' : 'Prior' %></span>
+              <span><%= memoryRow.slotLabel || 'Slot' %> · <%= formatGb(memoryRow.sizeGb) %> <%= memoryRow.ramTypeLabel || '' %></span>
+              <span><%= memoryRow.changedByName || sourceLabel(memoryRow.sourceCode) %></span>
+              <span><%= rowDate(memoryRow.updatedAt, memoryRow.installedAt) %></span>
+            </div>
+            <div class="tech-history-summary">
+              <span><%= memoryRow.memoryInstallTypeLabel || 'Removable Module' %></span>
+              <% if (memoryRow.speedMhz) { %><span><%= formatMhz(memoryRow.speedMhz) %></span><% } %>
+              <% if (memoryRow.manufacturerName) { %><span><%= memoryRow.manufacturerName %></span><% } %>
+              <% if (memoryRow.partNumber) { %><span>Part: <%= memoryRow.partNumber %></span><% } %>
+              <% if (memoryRow.serialNumber) { %><span>Serial: <%= memoryRow.serialNumber %></span><% } %>
+              <span>Source: <%= sourceLabel(memoryRow.sourceCode) %></span>
+            </div>
+            <% if (memoryRow.changeReasonLabel || memoryRow.changeNotes) { %>
+              <p class="tech-history-text"><%= [memoryRow.changeReasonLabel, memoryRow.changeNotes].filter(Boolean).join(' · ') %></p>
+            <% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+
+  <% if (storageHistory.length > 0) { %>
+    <section class="tech-notes-section tech-notes-section--history tech-notes-section--storage-history">
+      <div class="tech-history-section-title">
+        <div>
+          <h3>Storage Configuration History</h3>
+          <span><%= storageHistory.length %> records</span>
+        </div>
+      </div>
+
+      <div class="tech-history-list">
+        <% storageHistory.forEach((storageRow) => { %>
+          <article class="tech-history-row">
+            <div class="tech-history-meta">
+              <span class="tech-history-status <%= storageRow.isCurrent ? 'is-current' : 'is-prior' %>"><%= storageRow.isCurrent ? 'Current' : 'Prior' %></span>
+              <span><%= storageRow.slotLabel || 'Drive' %> · <%= formatGb(storageRow.sizeGb) %> <%= storageRow.storageTypeLabel || '' %></span>
+              <span><%= storageRow.changedByName || sourceLabel(storageRow.sourceCode) %></span>
+              <span><%= rowDate(storageRow.updatedAt, storageRow.installedAt) %></span>
+            </div>
+            <div class="tech-history-summary">
+              <% if (storageRow.modelNumber || storageRow.manufacturerName) { %><span><%= storageRow.modelNumber || storageRow.manufacturerName %></span><% } %>
+              <% if (storageRow.serialNumber) { %><span>Serial: <%= storageRow.serialNumber %></span><% } %>
+              <% if (storageRow.firmwareVersion) { %><span>Firmware: <%= storageRow.firmwareVersion %></span><% } %>
+              <% if (storageRow.wipeStatusLabel) { %><span>Wipe: <%= storageRow.wipeStatusLabel %></span><% } %>
+              <span>Source: <%= sourceLabel(storageRow.sourceCode) %></span>
+            </div>
+            <% if (storageRow.changeReasonLabel || storageRow.changeNotes) { %>
+              <p class="tech-history-text"><%= [storageRow.changeReasonLabel, storageRow.changeNotes].filter(Boolean).join(' · ') %></p>
+            <% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+
+  <% if (hardwareIssueHistory.length > 0) { %>
+    <section class="tech-notes-section tech-notes-section--history tech-notes-section--hardware-history">
+      <div class="tech-history-section-title">
+        <div>
+          <h3>Hardware Issue History</h3>
+          <span><%= hardwareIssueHistory.length %> records</span>
+        </div>
+      </div>
+
+      <div class="tech-history-list">
+        <% hardwareIssueHistory.forEach((issue) => { %>
+          <article class="tech-history-row">
+            <div class="tech-history-meta">
+              <span class="tech-history-status <%= issue.isCurrent ? 'is-current' : 'is-prior' %>"><%= issue.isCurrent ? 'Current' : 'Prior' %></span>
+              <span><%= issue.issueLabel || 'Hardware Issue' %></span>
+              <span><%= issue.updatedByName || issue.createdByName || sourceLabel(issue.sourceCode) %></span>
+              <span><%= rowDate(issue.updatedAt, issue.createdAt) %></span>
+            </div>
+            <div class="tech-history-summary">
+              <% if (issue.locationLabel) { %><span>Location: <%= issue.locationLabel %></span><% } %>
+              <span>Source: <%= sourceLabel(issue.sourceCode) %></span>
+            </div>
+            <% if (issue.issueRemark) { %>
+              <p class="tech-history-text"><%= issue.issueRemark %></p>
+            <% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+
+  <% if (cosmeticIssueHistory.length > 0) { %>
+    <section class="tech-notes-section tech-notes-section--history tech-notes-section--cosmetic-history">
+      <div class="tech-history-section-title">
+        <div>
+          <h3>Cosmetic Issue History</h3>
+          <span><%= cosmeticIssueHistory.length %> records</span>
+        </div>
+      </div>
+
+      <div class="tech-history-list">
+        <% cosmeticIssueHistory.forEach((issue) => { %>
+          <article class="tech-history-row">
+            <div class="tech-history-meta">
+              <span class="tech-history-status <%= issue.isCurrent ? 'is-current' : 'is-prior' %>"><%= issue.isCurrent ? 'Current' : 'Prior' %></span>
+              <span><%= issue.issueLabel || 'Cosmetic Issue' %></span>
+              <span><%= issue.updatedByName || issue.createdByName || sourceLabel(issue.sourceCode) %></span>
+              <span><%= rowDate(issue.updatedAt, issue.createdAt) %></span>
+            </div>
+            <div class="tech-history-summary">
+              <% if (issue.severityLabel) { %><span>Severity: <%= issue.severityLabel %></span><% } %>
+              <% if (issue.locationLabel) { %><span>Location: <%= issue.locationLabel %></span><% } %>
+              <span>Source: <%= sourceLabel(issue.sourceCode) %></span>
+            </div>
+            <% if (issue.issueRemark) { %>
+              <p class="tech-history-text"><%= issue.issueRemark %></p>
+            <% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+
+  <% if (overrideRequests.length > 0) { %>
+    <section class="tech-notes-section tech-notes-section--history tech-notes-section--override-history">
+      <div class="tech-history-section-title">
+        <div>
+          <h3>Override Request History</h3>
+          <span><%= overrideRequests.length %> records</span>
+        </div>
+      </div>
+
+      <div class="tech-history-list">
+        <% overrideRequests.forEach((request) => { %>
+          <article class="tech-history-row">
+            <div class="tech-history-meta">
+              <span class="tech-chip <%= request.statusClass || '' %>"><%= request.statusLabel || 'Request' %></span>
+              <span><%= request.requestTypeLabel || 'Override Request' %></span>
+              <span><%= request.requestedByName || 'Unknown user' %></span>
+              <span><%= request.createdAt ? formatDateTime(request.createdAt) : 'No date recorded' %></span>
+            </div>
+            <div class="tech-history-summary">
+              <span>System Check: <%= request.validationLabel || 'Not captured yet' %></span>
+              <span>Decision: <%= request.decisionLabel || 'Not captured yet' %></span>
+              <% if (request.reviewedByName) { %><span>Reviewed by <%= request.reviewedByName %><% if (request.reviewedAt) { %> · <%= formatDateTime(request.reviewedAt) %><% } %></span><% } %>
+            </div>
+            <% if (request.reason || request.reviewNotes) { %>
+              <p class="tech-history-text"><%= [request.reason, request.reviewNotes].filter(Boolean).join(' · ') %></p>
+            <% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+</div>

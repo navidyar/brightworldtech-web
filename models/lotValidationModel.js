@@ -456,14 +456,14 @@ function getUnitDisplayName(unit, unitColumns, configValueMap) {
       return {
         unitId,
         label: value.displayValue,
-        subLabel: unitId ? `Unit ID ${unitId}` : 'Unit'
+        subLabel: 'Primary identifier'
       };
     }
   }
 
   return {
     unitId,
-    label: unitId ? `Unit #${unitId}` : 'Unknown Unit',
+    label: 'Unit without primary identifier',
     subLabel: 'No primary identifier found'
   };
 }

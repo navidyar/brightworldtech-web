@@ -160,6 +160,10 @@
       return 'hardwareIssues';
     }
 
+    if (rowType === 'graphicsAdapter') {
+      return 'graphicsAdapters';
+    }
+
     return '';
   }
 
@@ -174,7 +178,7 @@
       return name;
     }
 
-    const pattern = new RegExp(`${prefix}\[[^\]]+\]`);
+    const pattern = new RegExp(`${prefix}\\[[^\\]]+\\]`);
 
     return name.replace(pattern, `${prefix}[${index}]`);
   }

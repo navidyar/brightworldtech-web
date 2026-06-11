@@ -2,6 +2,7 @@ const techUnitModel = require('../models/techUnitModel');
 const overrideRequestModel = require('../models/overrideRequestModel');
 const unitExpandedDetailModel = require('../models/unitExpandedDetailModel');
 const unitIssueEntryModel = require('../models/unitIssueEntryModel');
+const unitExpandedFormModel = require('../models/unitExpandedFormModel');
 
 const VALID_MEMORY_INSTALL_TYPE_CODES = new Set([
   'removable_module',
@@ -85,9 +86,8 @@ async function attachExpandedUnitDetails(result) {
 
 async function buildTechUnitsResult(filters) {
   const rawResult = await techUnitModel.listTechUnits(filters);
-  const resultWithOverrides = await attachLatestOverrideHistory(rawResult);
 
-  return attachExpandedUnitDetails(resultWithOverrides);
+  return attachExpandedUnitDetails(rawResult);
 }
 
 function normalizeModuleRowsFromBody(value) {
@@ -181,6 +181,33 @@ function getIssueDetailsFromRequest(req) {
 }
 
 
+function getGraphicsAdaptersFromRequest(req) {
+  return normalizeModuleRowsFromBody(req.body.graphicsAdapters).map((row) => ({
+    gpuTypeConfigValueId: normalizeModuleField(row.gpuTypeConfigValueId),
+    gpuModel: normalizeModuleField(row.gpuModel),
+    vramMb: normalizeModuleField(row.vramMb)
+  }));
+}
+
+function getExpandedDetailsFromRequest(req) {
+  return {
+    overallGradeConfigValueId: normalizeModuleField(req.body.overallGradeConfigValueId),
+    overallGradeNotes: normalizeModuleField(req.body.overallGradeNotes),
+    biosVersion: normalizeModuleField(req.body.biosVersion),
+    osBuild: normalizeModuleField(req.body.osBuild),
+    absoluteStatusConfigValueId: normalizeModuleField(req.body.absoluteStatusConfigValueId),
+    physicalCameraStatusConfigValueId: normalizeModuleField(req.body.physicalCameraStatusConfigValueId),
+    touchscreenStatusConfigValueId: normalizeModuleField(req.body.touchscreenStatusConfigValueId),
+    keyboardLanguageConfigValueId: normalizeModuleField(req.body.keyboardLanguageConfigValueId),
+    completeDiagnosticsStatusConfigValueId: normalizeModuleField(req.body.completeDiagnosticsStatusConfigValueId),
+    virusCheckStatusConfigValueId: normalizeModuleField(req.body.virusCheckStatusConfigValueId),
+    driverCheckStatusConfigValueId: normalizeModuleField(req.body.driverCheckStatusConfigValueId),
+    skinnedStatusConfigValueId: normalizeModuleField(req.body.skinnedStatusConfigValueId),
+    graphicsAdapters: getGraphicsAdaptersFromRequest(req)
+  };
+}
+
+
 function getPositiveIntegerOrBlank(value) {
   const trimmed = String(value || '').trim();
 
@@ -207,6 +234,7 @@ function getUnitFormDataFromRequest(req) {
   const memoryTotalGb = getModuleTotalGb(memoryModules);
   const storageTotalGb = getModuleTotalGb(storageDevices);
   const issueDetails = getIssueDetailsFromRequest(req);
+  const expandedDetails = getExpandedDetailsFromRequest(req);
 
   return {
     assetTag: String(req.body.assetTag || '').trim(),
@@ -230,6 +258,19 @@ function getUnitFormDataFromRequest(req) {
     hardwareIssues: issueDetails.hardwareIssues,
     generalCommentTypeConfigValueId: issueDetails.generalCommentTypeConfigValueId,
     generalCommentText: issueDetails.generalCommentText,
+    overallGradeConfigValueId: expandedDetails.overallGradeConfigValueId,
+    overallGradeNotes: expandedDetails.overallGradeNotes,
+    biosVersion: expandedDetails.biosVersion,
+    osBuild: expandedDetails.osBuild,
+    absoluteStatusConfigValueId: expandedDetails.absoluteStatusConfigValueId,
+    physicalCameraStatusConfigValueId: expandedDetails.physicalCameraStatusConfigValueId,
+    touchscreenStatusConfigValueId: expandedDetails.touchscreenStatusConfigValueId,
+    keyboardLanguageConfigValueId: expandedDetails.keyboardLanguageConfigValueId,
+    completeDiagnosticsStatusConfigValueId: expandedDetails.completeDiagnosticsStatusConfigValueId,
+    virusCheckStatusConfigValueId: expandedDetails.virusCheckStatusConfigValueId,
+    driverCheckStatusConfigValueId: expandedDetails.driverCheckStatusConfigValueId,
+    skinnedStatusConfigValueId: expandedDetails.skinnedStatusConfigValueId,
+    graphicsAdapters: expandedDetails.graphicsAdapters,
     hardwareNotes: String(req.body.hardwareNotes || '').trim(),
     cosmeticNotes: String(req.body.cosmeticNotes || '').trim()
   };
@@ -422,6 +463,65 @@ function validateIssueDetails(formData) {
   return errors;
 }
 
+function validateExpandedDetails(formData) {
+  const errors = [];
+  const configFieldLabels = [
+    ['overallGradeConfigValueId', 'Overall Unit Grade'],
+    ['absoluteStatusConfigValueId', 'Absolute status'],
+    ['physicalCameraStatusConfigValueId', 'Physical camera status'],
+    ['touchscreenStatusConfigValueId', 'Touchscreen status'],
+    ['keyboardLanguageConfigValueId', 'Keyboard language'],
+    ['completeDiagnosticsStatusConfigValueId', 'Complete diagnostics status'],
+    ['virusCheckStatusConfigValueId', 'Virus check status'],
+    ['driverCheckStatusConfigValueId', 'Driver check status'],
+    ['skinnedStatusConfigValueId', 'Skinned status']
+  ];
+
+  configFieldLabels.forEach(([fieldName, label]) => {
+    if (formData[fieldName] && !isPositiveInteger(formData[fieldName])) {
+      errors.push(`${label} is invalid.`);
+    }
+  });
+
+  if (formData.overallGradeNotes && formData.overallGradeNotes.length > 500) {
+    errors.push('Overall grade notes must be 500 characters or fewer.');
+  }
+
+  if (formData.biosVersion && formData.biosVersion.length > 100) {
+    errors.push('BIOS version must be 100 characters or fewer.');
+  }
+
+  if (formData.osBuild && formData.osBuild.length > 100) {
+    errors.push('OS build must be 100 characters or fewer.');
+  }
+
+  (formData.graphicsAdapters || []).forEach((graphicsAdapter, index) => {
+    if (!moduleRowHasAnyValue(graphicsAdapter)) {
+      return;
+    }
+
+    const rowLabel = `Graphics adapter ${index + 1}`;
+
+    if (graphicsAdapter.gpuTypeConfigValueId && !isPositiveInteger(graphicsAdapter.gpuTypeConfigValueId)) {
+      errors.push(`${rowLabel} has an invalid GPU type.`);
+    }
+
+    if (graphicsAdapter.gpuModel.length > 150) {
+      errors.push(`${rowLabel} model must be 150 characters or fewer.`);
+    }
+
+    if (graphicsAdapter.vramMb) {
+      const parsedVram = Number(graphicsAdapter.vramMb);
+
+      if (!Number.isInteger(parsedVram) || parsedVram < 0) {
+        errors.push(`${rowLabel} VRAM must be a non-negative whole number of MB.`);
+      }
+    }
+  });
+
+  return errors;
+}
+
 function validateUnitForm(formData, formOptions, mode) {
   const errors = [];
 
@@ -479,6 +579,7 @@ function validateUnitForm(formData, formOptions, mode) {
   errors.push(...validateMemoryModules(formData));
   errors.push(...validateStorageDevices(formData));
   errors.push(...validateIssueDetails(formData));
+  errors.push(...validateExpandedDetails(formData));
 
   return errors;
 }
@@ -521,10 +622,12 @@ async function renderDuplicateUnitModal(res, { formOptions, formData, duplicateM
 async function getTechUnitFormOptionsWithIssues() {
   const formOptions = await techUnitModel.getTechUnitFormOptions();
   const issueFormOptions = await unitIssueEntryModel.getIssueFormOptions();
+  const expandedFormOptions = await unitExpandedFormModel.getExpandedFormOptions();
 
   return {
     ...formOptions,
-    ...issueFormOptions
+    ...issueFormOptions,
+    ...expandedFormOptions
   };
 }
 
@@ -536,10 +639,12 @@ async function buildEditFormData(unitId, formOptions) {
   }
 
   const issueFormData = await unitIssueEntryModel.getIssueFormDataByUnitId(unitId);
+  const expandedFormData = await unitExpandedFormModel.getExpandedFormDataByUnitId(unitId);
 
   return {
     ...unitFormData,
     ...issueFormData,
+    ...expandedFormData,
     generalCommentTypeConfigValueId: issueFormData.generalCommentTypeConfigValueId || formOptions.defaultCommentTypeConfigValueId || '',
     generalCommentText: ''
   };
@@ -559,6 +664,20 @@ async function saveIssueDetailsIfPossible(unitId, formData, currentUserId) {
   });
 }
 
+async function saveExpandedDetailsIfPossible(unitId, formData, currentUserId) {
+  const safeUnitId = Number(unitId);
+
+  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0) {
+    return;
+  }
+
+  await unitExpandedFormModel.saveExpandedDetailsForUnit({
+    unitId: safeUnitId,
+    formData,
+    currentUserId
+  });
+}
+
 async function getBlankFormDataWithDefaults() {
   const formOptions = await getTechUnitFormOptionsWithIssues();
 
@@ -567,6 +686,7 @@ async function getBlankFormDataWithDefaults() {
     formData: {
       ...techUnitModel.getBlankUnitFormData(formOptions),
       ...unitIssueEntryModel.getBlankIssueFormData(),
+      ...unitExpandedFormModel.getBlankExpandedFormData(),
       generalCommentTypeConfigValueId: formOptions.defaultCommentTypeConfigValueId || '',
       generalCommentText: ''
     }
@@ -603,6 +723,43 @@ async function renderTechUnitsTable(req, res, next) {
     return res.render('fragments/tech-units-table', {
       result,
       filters
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderTechUnitHistoryPanel(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render('fragments/tech-unit-history-panel', {
+        unitId: null,
+        historyDetails: {
+          schemaReady: false,
+          gradeHistory: [],
+          memoryHistory: [],
+          storageHistory: [],
+          hardwareIssueHistory: [],
+          cosmeticIssueHistory: []
+        },
+        overrideHistory: {
+          supported: false,
+          requests: []
+        },
+        errorMessages: ['The selected unit ID is invalid.']
+      });
+    }
+
+    const historyDetails = await unitExpandedDetailModel.getHistoryDetailsForUnit(unitId);
+    const overrideHistory = await overrideRequestModel.listOverrideRequestsForUnit(unitId, 25);
+
+    return res.render('fragments/tech-unit-history-panel', {
+      unitId,
+      historyDetails,
+      overrideHistory,
+      errorMessages: []
     });
   } catch (error) {
     next(error);
@@ -665,6 +822,7 @@ async function createTechUnit(req, res, next) {
     try {
       const savedUnitId = await techUnitModel.createTechUnit(formData, req.currentUser.user_id);
       await saveIssueDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
+      await saveExpandedDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
     } catch (saveError) {
       const friendlyError = getFriendlySaveError(saveError, formOptions);
 
@@ -709,6 +867,7 @@ async function createTechUnitModal(req, res, next) {
     try {
       const savedUnitId = await techUnitModel.createTechUnit(formData, req.currentUser.user_id);
       await saveIssueDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
+      await saveExpandedDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
     } catch (saveError) {
       if (isDuplicateIdentifierError(saveError)) {
         return renderDuplicateUnitModal(res, {
@@ -770,7 +929,17 @@ async function useExistingTechUnitModal(req, res, next) {
           issueLocations: [],
           issueSeverities: [],
           commentTypes: [],
-          defaultCommentTypeConfigValueId: ''
+          defaultCommentTypeConfigValueId: '',
+          overallGradeOptions: [],
+          absoluteStatusOptions: [],
+          physicalCameraStatusOptions: [],
+          touchscreenStatusOptions: [],
+          keyboardLanguageOptions: [],
+          diagnosticsStatusOptions: [],
+          virusCheckStatusOptions: [],
+          driverCheckStatusOptions: [],
+          skinnedStatusOptions: [],
+          gpuTypeOptions: []
         },
         formData: techUnitModel.getBlankUnitFormData(),
         errorMessages: ['The selected unit ID is invalid.']
@@ -793,6 +962,7 @@ async function useExistingTechUnitModal(req, res, next) {
     try {
       await techUnitModel.useExistingTechUnit(unitId, formData, req.currentUser.user_id);
       await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
+      await saveExpandedDetailsIfPossible(unitId, formData, req.currentUser.user_id);
     } catch (saveError) {
       if (isDuplicateIdentifierError(saveError)) {
         return renderDuplicateUnitModal(res, {
@@ -887,7 +1057,17 @@ async function renderEditTechUnitModal(req, res, next) {
           issueLocations: [],
           issueSeverities: [],
           commentTypes: [],
-          defaultCommentTypeConfigValueId: ''
+          defaultCommentTypeConfigValueId: '',
+          overallGradeOptions: [],
+          absoluteStatusOptions: [],
+          physicalCameraStatusOptions: [],
+          touchscreenStatusOptions: [],
+          keyboardLanguageOptions: [],
+          diagnosticsStatusOptions: [],
+          virusCheckStatusOptions: [],
+          driverCheckStatusOptions: [],
+          skinnedStatusOptions: [],
+          gpuTypeOptions: []
         },
         formData: techUnitModel.getBlankUnitFormData(),
         errorMessages: ['The selected unit ID is invalid.']
@@ -951,6 +1131,7 @@ async function updateTechUnit(req, res, next) {
     try {
       await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id);
     await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
+      await saveExpandedDetailsIfPossible(unitId, formData, req.currentUser.user_id);
     } catch (saveError) {
       const friendlyError = getFriendlySaveError(saveError, formOptions);
 
@@ -1003,7 +1184,17 @@ async function updateTechUnitModal(req, res, next) {
           issueLocations: [],
           issueSeverities: [],
           commentTypes: [],
-          defaultCommentTypeConfigValueId: ''
+          defaultCommentTypeConfigValueId: '',
+          overallGradeOptions: [],
+          absoluteStatusOptions: [],
+          physicalCameraStatusOptions: [],
+          touchscreenStatusOptions: [],
+          keyboardLanguageOptions: [],
+          diagnosticsStatusOptions: [],
+          virusCheckStatusOptions: [],
+          driverCheckStatusOptions: [],
+          skinnedStatusOptions: [],
+          gpuTypeOptions: []
         },
         formData: techUnitModel.getBlankUnitFormData(),
         errorMessages: ['The selected unit ID is invalid.']
@@ -1028,6 +1219,7 @@ async function updateTechUnitModal(req, res, next) {
     try {
       await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id);
     await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
+      await saveExpandedDetailsIfPossible(unitId, formData, req.currentUser.user_id);
     } catch (saveError) {
       const friendlyError = getFriendlySaveError(saveError, formOptions);
 
@@ -1055,6 +1247,7 @@ async function updateTechUnitModal(req, res, next) {
 module.exports = {
   renderTechUnitsPage,
   renderTechUnitsTable,
+  renderTechUnitHistoryPanel,
   renderNewTechUnitPage,
   renderNewTechUnitModal,
   createTechUnit,

@@ -1004,7 +1004,6 @@ async function listTechUnits(filters = {}) {
     const normalizedIdentifierSearch = compactAssetTagValue(filters.search);
     const searchParts = [
       'CAST(u.asset_number AS CHAR) LIKE ?',
-      'CAST(u.unit_id AS CHAR) LIKE ?',
       'u.hardware_notes LIKE ?',
       'u.cosmetic_notes LIKE ?',
       'm.name LIKE ?',
@@ -1019,7 +1018,6 @@ async function listTechUnits(filters = {}) {
 
     params.push(
       `%${normalizedSearchAssetNumber || filters.search}%`,
-      `%${filters.search}%`,
       `%${filters.search}%`,
       `%${filters.search}%`,
       `%${filters.search}%`,
@@ -1111,7 +1109,7 @@ async function listTechUnits(filters = {}) {
       unitId: row.unit_id,
       assetNumber: row.asset_number,
       assetTag,
-      label: assetTag || `Unit #${row.unit_id}`,
+      label: assetTag || 'No asset tag',
       lotId: row.lot_id,
       lotName: lot ? lot.lot_name : `Lot ID ${row.lot_id}`,
       statusLabel: configLabelById(unitStatusMap, row.current_unit_status_config_value_id, 'Unknown'),
@@ -1197,7 +1195,7 @@ function getDuplicateUnitMessage(matches, assetTagPrefix = getAssetTagPrefix()) 
   const identifierValue = firstMatch.identifierValue || firstMatch.normalizedValue || 'matching value';
   const unitLabel = firstMatch.assetNumber
     ? getDisplayAssetTag(firstMatch.assetNumber)
-    : `Unit #${firstMatch.unitId}`;
+    : 'the existing unit';
 
   if (firstMatch.identifierTypeCode === 'asset_tag') {
     return `That ${assetTagPrefix} asset tag already belongs to ${unitLabel}. Search for and update the existing unit instead of creating a duplicate.`;

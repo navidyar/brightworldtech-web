@@ -32,14 +32,19 @@ function createEmptyDetails() {
     specifications: null,
     fieldSources: [],
     currentGrade: null,
+    gradeHistory: [],
     memoryModules: [],
+    memoryHistory: [],
     memoryTotalGb: 0,
     storageDevices: [],
+    storageHistory: [],
     storageTotalGb: 0,
     cellularModules: [],
     graphicsAdapters: [],
     cosmeticIssues: [],
     hardwareIssues: [],
+    hardwareIssueHistory: [],
+    cosmeticIssueHistory: [],
     comments: []
   };
 }
@@ -633,6 +638,293 @@ async function attachIssueEntries(detailsMap, unitIds, existingTables) {
     }
   });
 }
+async function attachGradeHistory(detailsMap, unitIds, existingTables) {
+  if (!existingTables.has('unit_grade_assessments')) {
+    return;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT *
+      FROM (
+        SELECT
+          uga.unit_grade_assessment_id,
+          uga.unit_id,
+          uga.is_current,
+          uga.source_code,
+          uga.assessed_at,
+          uga.notes,
+          grade.code AS grade_code,
+          COALESCE(grade.label, grade.code) AS grade_label,
+          assessed_by.first_name AS assessed_by_first_name,
+          assessed_by.last_name AS assessed_by_last_name,
+          assessed_by.email AS assessed_by_email,
+          ROW_NUMBER() OVER (
+            PARTITION BY uga.unit_id
+            ORDER BY uga.assessed_at DESC, uga.unit_grade_assessment_id DESC
+          ) AS row_rank
+        FROM unit_grade_assessments uga
+        LEFT JOIN config_values grade
+          ON grade.config_value_id = uga.overall_grade_config_value_id
+        LEFT JOIN users assessed_by
+          ON assessed_by.user_id = uga.assessed_by_user_id
+        WHERE uga.unit_id IN (${buildPlaceholders(unitIds)})
+      ) ranked_grades
+      WHERE row_rank <= 25
+      ORDER BY unit_id, assessed_at DESC, unit_grade_assessment_id DESC
+    `,
+    unitIds
+  );
+
+  rows.forEach((row) => {
+    addToUnitList(detailsMap, row.unit_id, 'gradeHistory', {
+      gradeCode: row.grade_code || '',
+      gradeLabel: row.grade_label || '—',
+      isCurrent: Number(row.is_current) === 1,
+      sourceCode: row.source_code || '',
+      assessedByName: getPersonName(row, 'assessed_by'),
+      assessedAt: row.assessed_at,
+      notes: row.notes || ''
+    });
+  });
+}
+
+async function attachMemoryHistory(detailsMap, unitIds, existingTables) {
+  if (!existingTables.has('unit_memory_modules')) {
+    return;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT *
+      FROM (
+        SELECT
+          umm.unit_memory_module_id,
+          umm.unit_id,
+          umm.slot_label,
+          umm.size_gb,
+          ram_type.label AS ram_type_label,
+          COALESCE(umm.memory_install_type_code, 'removable_module') AS memory_install_type_code,
+          umm.speed_mhz,
+          umm.manufacturer_name,
+          umm.part_number,
+          umm.serial_number,
+          umm.is_current,
+          umm.installed_at,
+          umm.removed_at,
+          change_reason.label AS change_reason_label,
+          umm.change_notes,
+          umm.source_code,
+          umm.created_at,
+          umm.updated_at,
+          changed_by.first_name AS changed_by_first_name,
+          changed_by.last_name AS changed_by_last_name,
+          changed_by.email AS changed_by_email,
+          ROW_NUMBER() OVER (
+            PARTITION BY umm.unit_id
+            ORDER BY COALESCE(umm.updated_at, umm.installed_at, umm.created_at) DESC, umm.unit_memory_module_id DESC
+          ) AS row_rank
+        FROM unit_memory_modules umm
+        LEFT JOIN config_values ram_type
+          ON ram_type.config_value_id = umm.ram_type_config_value_id
+        LEFT JOIN config_values change_reason
+          ON change_reason.config_value_id = umm.change_reason_config_value_id
+        LEFT JOIN users changed_by
+          ON changed_by.user_id = umm.changed_by_user_id
+        WHERE umm.unit_id IN (${buildPlaceholders(unitIds)})
+      ) ranked_memory
+      WHERE row_rank <= 25
+      ORDER BY unit_id, COALESCE(updated_at, installed_at, created_at) DESC, unit_memory_module_id DESC
+    `,
+    unitIds
+  );
+
+  rows.forEach((row) => {
+    addToUnitList(detailsMap, row.unit_id, 'memoryHistory', {
+      slotLabel: row.slot_label || 'Slot',
+      sizeGb: row.size_gb || '',
+      ramTypeLabel: row.ram_type_label || '',
+      memoryInstallTypeCode: row.memory_install_type_code || 'removable_module',
+      memoryInstallTypeLabel: getMemoryInstallTypeLabel(row.memory_install_type_code),
+      speedMhz: row.speed_mhz || '',
+      manufacturerName: row.manufacturer_name || '',
+      partNumber: row.part_number || '',
+      serialNumber: row.serial_number || '',
+      isCurrent: Number(row.is_current) === 1,
+      sourceCode: row.source_code || '',
+      changedByName: getPersonName(row, 'changed_by'),
+      changeReasonLabel: row.change_reason_label || '',
+      changeNotes: row.change_notes || '',
+      installedAt: row.installed_at,
+      removedAt: row.removed_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    });
+  });
+}
+
+async function attachStorageHistory(detailsMap, unitIds, existingTables) {
+  if (!existingTables.has('unit_storage_devices')) {
+    return;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT *
+      FROM (
+        SELECT
+          usd.unit_storage_device_id,
+          usd.unit_id,
+          usd.slot_label,
+          storage_type.label AS storage_type_label,
+          usd.size_gb,
+          usd.manufacturer_name,
+          usd.model_number,
+          usd.serial_number,
+          usd.firmware_version,
+          wipe_status.label AS wipe_status_label,
+          wiped_by.first_name AS wiped_by_first_name,
+          wiped_by.last_name AS wiped_by_last_name,
+          wiped_by.email AS wiped_by_email,
+          usd.wiped_at,
+          usd.is_current,
+          usd.installed_at,
+          usd.removed_at,
+          change_reason.label AS change_reason_label,
+          usd.change_notes,
+          usd.source_code,
+          usd.created_at,
+          usd.updated_at,
+          changed_by.first_name AS changed_by_first_name,
+          changed_by.last_name AS changed_by_last_name,
+          changed_by.email AS changed_by_email,
+          ROW_NUMBER() OVER (
+            PARTITION BY usd.unit_id
+            ORDER BY COALESCE(usd.updated_at, usd.installed_at, usd.created_at) DESC, usd.unit_storage_device_id DESC
+          ) AS row_rank
+        FROM unit_storage_devices usd
+        LEFT JOIN config_values storage_type
+          ON storage_type.config_value_id = usd.storage_type_config_value_id
+        LEFT JOIN config_values wipe_status
+          ON wipe_status.config_value_id = usd.wipe_status_config_value_id
+        LEFT JOIN config_values change_reason
+          ON change_reason.config_value_id = usd.change_reason_config_value_id
+        LEFT JOIN users wiped_by
+          ON wiped_by.user_id = usd.wiped_by_user_id
+        LEFT JOIN users changed_by
+          ON changed_by.user_id = usd.changed_by_user_id
+        WHERE usd.unit_id IN (${buildPlaceholders(unitIds)})
+      ) ranked_storage
+      WHERE row_rank <= 25
+      ORDER BY unit_id, COALESCE(updated_at, installed_at, created_at) DESC, unit_storage_device_id DESC
+    `,
+    unitIds
+  );
+
+  rows.forEach((row) => {
+    addToUnitList(detailsMap, row.unit_id, 'storageHistory', {
+      slotLabel: row.slot_label || 'Drive',
+      storageTypeLabel: row.storage_type_label || '',
+      sizeGb: row.size_gb || '',
+      manufacturerName: row.manufacturer_name || '',
+      modelNumber: row.model_number || '',
+      serialNumber: row.serial_number || '',
+      firmwareVersion: row.firmware_version || '',
+      wipeStatusLabel: row.wipe_status_label || '—',
+      wipedByName: getPersonName(row, 'wiped_by'),
+      wipedAt: row.wiped_at,
+      isCurrent: Number(row.is_current) === 1,
+      sourceCode: row.source_code || '',
+      changedByName: getPersonName(row, 'changed_by'),
+      changeReasonLabel: row.change_reason_label || '',
+      changeNotes: row.change_notes || '',
+      installedAt: row.installed_at,
+      removedAt: row.removed_at,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    });
+  });
+}
+
+async function attachIssueHistory(detailsMap, unitIds, existingTables, issueArea, targetKey, fallbackLabel) {
+  if (!existingTables.has('unit_issue_entries')) {
+    return;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT *
+      FROM (
+        SELECT
+          uie.unit_issue_entry_id,
+          uie.unit_id,
+          uie.issue_area,
+          uie.is_current,
+          issue_type.label AS issue_type_label,
+          severity.label AS severity_label,
+          uie.custom_issue_label,
+          location.label AS location_label,
+          uie.issue_remark,
+          uie.source_code,
+          created_by.first_name AS created_by_first_name,
+          created_by.last_name AS created_by_last_name,
+          created_by.email AS created_by_email,
+          updated_by.first_name AS updated_by_first_name,
+          updated_by.last_name AS updated_by_last_name,
+          updated_by.email AS updated_by_email,
+          uie.created_at,
+          uie.updated_at,
+          ROW_NUMBER() OVER (
+            PARTITION BY uie.unit_id
+            ORDER BY COALESCE(uie.updated_at, uie.created_at) DESC, uie.unit_issue_entry_id DESC
+          ) AS row_rank
+        FROM unit_issue_entries uie
+        LEFT JOIN config_values issue_type
+          ON issue_type.config_value_id = uie.issue_type_config_value_id
+        LEFT JOIN config_values severity
+          ON severity.config_value_id = uie.severity_config_value_id
+        LEFT JOIN config_values location
+          ON location.config_value_id = uie.location_config_value_id
+        LEFT JOIN users created_by
+          ON created_by.user_id = uie.created_by_user_id
+        LEFT JOIN users updated_by
+          ON updated_by.user_id = uie.updated_by_user_id
+        WHERE uie.issue_area = ?
+          AND uie.unit_id IN (${buildPlaceholders(unitIds)})
+      ) ranked_issue_history
+      WHERE row_rank <= 25
+      ORDER BY unit_id, COALESCE(updated_at, created_at) DESC, unit_issue_entry_id DESC
+    `,
+    [issueArea, ...unitIds]
+  );
+
+  rows.forEach((row) => {
+    addToUnitList(detailsMap, row.unit_id, targetKey, {
+      issueArea: row.issue_area || issueArea,
+      issueLabel: row.custom_issue_label || row.issue_type_label || fallbackLabel,
+      configuredIssueLabel: row.issue_type_label || '',
+      customIssueLabel: row.custom_issue_label || '',
+      severityLabel: row.severity_label || '',
+      locationLabel: row.location_label || '',
+      issueRemark: row.issue_remark || '',
+      isCurrent: Number(row.is_current) === 1,
+      sourceCode: row.source_code || '',
+      createdByName: getPersonName(row, 'created_by'),
+      updatedByName: getPersonName(row, 'updated_by'),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    });
+  });
+}
+
+async function attachHardwareIssueHistory(detailsMap, unitIds, existingTables) {
+  return attachIssueHistory(detailsMap, unitIds, existingTables, 'hardware', 'hardwareIssueHistory', 'Hardware Issue');
+}
+
+async function attachCosmeticIssueHistory(detailsMap, unitIds, existingTables) {
+  return attachIssueHistory(detailsMap, unitIds, existingTables, 'cosmetic', 'cosmeticIssueHistory', 'Cosmetic Issue');
+}
+
 async function attachComments(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_comments')) {
     return;
@@ -663,7 +955,7 @@ async function attachComments(detailsMap, unitIds, existingTables) {
           ON created_by.user_id = uc.created_by_user_id
         WHERE uc.unit_id IN (${buildPlaceholders(unitIds)})
       ) ranked_comments
-      WHERE row_rank <= 5
+      WHERE row_rank <= 25
       ORDER BY unit_id, created_at DESC, unit_comment_id DESC
     `,
     unitIds
@@ -671,6 +963,7 @@ async function attachComments(detailsMap, unitIds, existingTables) {
   rows.forEach((row) => {
     addToUnitList(detailsMap, row.unit_id, 'comments', {
       noteTypeLabel: row.note_type_label || row.note_type_code || 'Comment',
+      noteTypeCode: row.note_type_code || '',
       commentText: row.comment_text || '',
       sourceCode: row.source_code || '',
       createdByName: getPersonName(row, 'created_by'),
@@ -701,6 +994,31 @@ async function listExpandedDetailsForUnits(unitIds) {
   await attachComments(detailsMap, safeUnitIds, existingTables);
   return detailsMap;
 }
+async function getHistoryDetailsForUnit(unitId) {
+  const safeUnitIds = normalizeUnitIds([unitId]);
+  const detailsMap = createDetailsMap(safeUnitIds);
+
+  if (safeUnitIds.length === 0) {
+    return createEmptyDetails();
+  }
+
+  const existingTables = await getExistingExpandedTables();
+  const hasAnyExpandedTable = EXPANDED_TABLES.some((tableName) => existingTables.has(tableName));
+
+  detailsMap.forEach((details) => {
+    details.schemaReady = hasAnyExpandedTable;
+  });
+
+  await attachGradeHistory(detailsMap, safeUnitIds, existingTables);
+  await attachMemoryHistory(detailsMap, safeUnitIds, existingTables);
+  await attachStorageHistory(detailsMap, safeUnitIds, existingTables);
+  await attachHardwareIssueHistory(detailsMap, safeUnitIds, existingTables);
+  await attachCosmeticIssueHistory(detailsMap, safeUnitIds, existingTables);
+
+  return detailsMap.get(safeUnitIds[0]) || createEmptyDetails();
+}
+
 module.exports = {
-  listExpandedDetailsForUnits
+  listExpandedDetailsForUnits,
+  getHistoryDetailsForUnit
 };

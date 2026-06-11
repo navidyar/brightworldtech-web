@@ -336,3 +336,7 @@ html[data-theme="hybrid"] .error-page-body {
     radial-gradient(circle at 15% 10%, rgba(49, 95, 156, 0.08), transparent 28rem),
     linear-gradient(135deg, #eef1f5 0%, #ffffff 100%);
 }
+/* Step 3j.2: the hybrid visual style is now the fixed default, so the toggle is hidden. */
+.theme-toggle {
+  display: none !important;
+}

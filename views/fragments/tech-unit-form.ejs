@@ -25,7 +25,28 @@
   const hardwareIssueRows = Array.isArray(formData.hardwareIssues) && formData.hardwareIssues.length > 0
     ? formData.hardwareIssues
     : [{ issueTypeConfigValueId: '', customIssueLabel: '', locationConfigValueId: '', issueRemark: '' }];
-  const selectedCommentTypeConfigValueId = formData.generalCommentTypeConfigValueId || formOptions.defaultCommentTypeConfigValueId || '';
+  const generalCommentType = commentTypes.find((commentType) => {
+    const normalizedCode = String(commentType.code || commentType.value || commentType.label || '').trim().toLowerCase();
+
+    return normalizedCode === 'general';
+  }) || null;
+  const generalCommentTypeConfigValueId = generalCommentType
+    ? generalCommentType.id
+    : (formOptions.defaultCommentTypeConfigValueId || '');
+  const overallGradeOptions = Array.isArray(formOptions.overallGradeOptions) ? formOptions.overallGradeOptions : [];
+  const absoluteStatusOptions = Array.isArray(formOptions.absoluteStatusOptions) ? formOptions.absoluteStatusOptions : [];
+  const physicalCameraStatusOptions = Array.isArray(formOptions.physicalCameraStatusOptions) ? formOptions.physicalCameraStatusOptions : [];
+  const touchscreenStatusOptions = Array.isArray(formOptions.touchscreenStatusOptions) ? formOptions.touchscreenStatusOptions : [];
+  const keyboardLanguageOptions = Array.isArray(formOptions.keyboardLanguageOptions) ? formOptions.keyboardLanguageOptions : [];
+  const diagnosticsStatusOptions = Array.isArray(formOptions.diagnosticsStatusOptions) ? formOptions.diagnosticsStatusOptions : [];
+  const virusCheckStatusOptions = Array.isArray(formOptions.virusCheckStatusOptions) ? formOptions.virusCheckStatusOptions : [];
+  const driverCheckStatusOptions = Array.isArray(formOptions.driverCheckStatusOptions) ? formOptions.driverCheckStatusOptions : [];
+  const skinnedStatusOptions = Array.isArray(formOptions.skinnedStatusOptions) ? formOptions.skinnedStatusOptions : [];
+  const gpuTypeOptions = Array.isArray(formOptions.gpuTypeOptions) ? formOptions.gpuTypeOptions : [];
+  const graphicsRows = Array.isArray(formData.graphicsAdapters) && formData.graphicsAdapters.length > 0
+    ? formData.graphicsAdapters
+    : [{ gpuTypeConfigValueId: '', gpuModel: '', vramMb: '' }];
+
 
   function selected(currentValue, optionValue) {
     return String(currentValue || '') === String(optionValue || '') ? 'selected' : '';
@@ -36,6 +57,7 @@
 
     return String(safeCurrentValue) === String(optionCode || '') ? 'selected' : '';
   }
+
 
   function memoryTotalGb() {
     return memoryRows.reduce((sum, row) => {
@@ -192,6 +214,42 @@
           <% }) %>
         </select>
         <small class="field-hint">Required. New units default to Received when that status exists.</small>
+      </label>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Grade</p>
+        <h3>Overall Unit Grade</h3>
+      </div>
+      <p>
+        Record the current overall unit grade for sales and disposition planning. This is saved as a current grade row while previous grade rows remain in grade history.
+      </p>
+    </div>
+
+    <% if (overallGradeOptions.length === 0) { %>
+      <div class="message error">
+        <p>Overall Unit Grade options are not ready yet. Run the Step 3g SQL migration to seed grade values.</p>
+      </div>
+    <% } %>
+
+    <div class="form-grid">
+      <label class="form-field">
+        <span>Overall Unit Grade</span>
+        <select name="overallGradeConfigValueId">
+          <option value="">Select grade</option>
+          <% overallGradeOptions.forEach((gradeOption) => { %>
+            <option value="<%= gradeOption.id %>" <%= selected(formData.overallGradeConfigValueId, gradeOption.id) %>><%= gradeOption.label %></option>
+          <% }) %>
+        </select>
+        <small class="field-hint">Allowed grades are A, B, C, D, and N/A.</small>
+      </label>
+
+      <label class="form-field">
+        <span>Grade Notes</span>
+        <input type="text" name="overallGradeNotes" value="<%= formData.overallGradeNotes || '' %>" maxlength="500" placeholder="Optional grade note" />
       </label>
     </div>
   </div>
@@ -501,9 +559,168 @@
           <% }) %>
         </select>
         <small class="field-hint">
-          OS build and diagnostics fields will be added after the expanded form foundation is ready.
+          OS build and diagnostics are now tracked in the Expanded Specifications section below.
         </small>
       </label>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Expanded Specifications</p>
+        <h3>BIOS, OS Build, and Status Fields</h3>
+      </div>
+      <p>
+        These fields hold manually editable expanded unit specification values. ScanTool-only cellular and band details stay visible in the expanded unit mini-menu.
+      </p>
+    </div>
+
+    <div class="form-grid">
+      <label class="form-field">
+        <span>BIOS Version</span>
+        <input type="text" name="biosVersion" value="<%= formData.biosVersion || '' %>" maxlength="100" placeholder="Example: 1.18.0" />
+      </label>
+
+      <label class="form-field">
+        <span>OS Build</span>
+        <input type="text" name="osBuild" value="<%= formData.osBuild || '' %>" maxlength="100" placeholder="Example: 23H2 / 22631" />
+      </label>
+
+      <label class="form-field">
+        <span>Absolute Status</span>
+        <select name="absoluteStatusConfigValueId">
+          <option value="">Select status</option>
+          <% absoluteStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.absoluteStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>Physical Camera</span>
+        <select name="physicalCameraStatusConfigValueId">
+          <option value="">Select status</option>
+          <% physicalCameraStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.physicalCameraStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>Touchscreen</span>
+        <select name="touchscreenStatusConfigValueId">
+          <option value="">Select status</option>
+          <% touchscreenStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.touchscreenStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>Keyboard Language</span>
+        <select name="keyboardLanguageConfigValueId">
+          <option value="">Select language</option>
+          <% keyboardLanguageOptions.forEach((languageOption) => { %>
+            <option value="<%= languageOption.id %>" <%= selected(formData.keyboardLanguageConfigValueId, languageOption.id) %>><%= languageOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>Complete Diagnostics</span>
+        <select name="completeDiagnosticsStatusConfigValueId">
+          <option value="">Select status</option>
+          <% diagnosticsStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.completeDiagnosticsStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>Virus Check</span>
+        <select name="virusCheckStatusConfigValueId">
+          <option value="">Select status</option>
+          <% virusCheckStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.virusCheckStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>Driver Check</span>
+        <select name="driverCheckStatusConfigValueId">
+          <option value="">Select status</option>
+          <% driverCheckStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.driverCheckStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field">
+        <span>Skinned</span>
+        <select name="skinnedStatusConfigValueId">
+          <option value="">Select status</option>
+          <% skinnedStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.skinnedStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Graphics</p>
+        <h3>Graphics Adapters</h3>
+      </div>
+      <p>
+        Record integrated or dedicated graphics adapters. Multiple rows are supported for units with both integrated and dedicated GPUs.
+      </p>
+    </div>
+
+    <div class="workflow-list" data-module-list="graphicsAdapter">
+      <% graphicsRows.forEach((graphicsAdapter, index) => { %>
+        <article class="workflow-item slate" data-module-row="graphicsAdapter">
+          <span></span>
+          <div style="width: 100%;">
+            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+              <div>
+                <strong>Graphics Adapter <span data-module-display-number><%= index + 1 %></span></strong>
+                <p>GPU type, model, and VRAM.</p>
+              </div>
+              <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+            </div>
+
+            <div class="form-grid">
+              <label class="form-field">
+                <span>GPU Type</span>
+                <select name="graphicsAdapters[<%= index %>][gpuTypeConfigValueId]" data-module-field>
+                  <option value="">Select GPU type</option>
+                  <% gpuTypeOptions.forEach((gpuType) => { %>
+                    <option value="<%= gpuType.id %>" <%= selected(graphicsAdapter.gpuTypeConfigValueId, gpuType.id) %>><%= gpuType.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>GPU Model</span>
+                <input type="text" name="graphicsAdapters[<%= index %>][gpuModel]" value="<%= graphicsAdapter.gpuModel || '' %>" maxlength="150" placeholder="Example: Intel UHD Graphics" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>VRAM MB</span>
+                <input type="number" name="graphicsAdapters[<%= index %>][vramMb]" value="<%= graphicsAdapter.vramMb || '' %>" min="0" step="1" placeholder="Example: 2048" data-module-field />
+              </label>
+            </div>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+
+    <div class="form-actions" style="margin-top: 12px;">
+      <button type="button" class="secondary-button" data-add-module-row="graphicsAdapter">+ Add Graphics Adapter</button>
     </div>
   </div>
 
@@ -667,53 +884,19 @@
       </p>
     </div>
 
-    <div class="form-grid">
-      <label class="form-field">
-        <span>Comment Type</span>
-        <select name="generalCommentTypeConfigValueId">
-          <option value="">Select comment type</option>
-          <% commentTypes.forEach((commentType) => { %>
-            <option value="<%= commentType.id %>" <%= selected(selectedCommentTypeConfigValueId, commentType.id) %>><%= commentType.label %></option>
-          <% }) %>
-        </select>
-      </label>
+    <input type="hidden" name="generalCommentTypeConfigValueId" value="<%= generalCommentTypeConfigValueId %>" />
 
-      <label class="form-field">
-        <span>New Comment</span>
+    <div class="form-grid">
+      <label class="form-field form-field-wide">
+        <span>General Comment</span>
         <textarea name="generalCommentText" rows="4" maxlength="2000" placeholder="Add a new general comment. Leave blank if no new comment is needed."><%= formData.generalCommentText || '' %></textarea>
+        <small class="field-hint">Hardware and cosmetic issue comments should be entered in their matching issue rows above.</small>
       </label>
     </div>
   </div>
 
-  <div class="form-section">
-    <div class="form-section-header">
-      <div>
-        <p class="eyebrow">Notes</p>
-        <h3>Current Notes</h3>
-      </div>
-      <p>
-        These notes remain available for the current workflow. Step 3f will add structured hardware and cosmetic issue rows with dropdowns, custom issue text, locations, severity where needed, and remarks.
-      </p>
-    </div>
-
-    <div class="form-grid">
-      <label class="form-field">
-        <span>Hardware Notes</span>
-        <textarea name="hardwareNotes" rows="4" maxlength="1000"><%= formData.hardwareNotes %></textarea>
-        <small class="field-hint">
-          Use this for current hardware notes until structured hardware issue rows are added.
-        </small>
-      </label>
-
-      <label class="form-field">
-        <span>Cosmetic Notes</span>
-        <textarea name="cosmeticNotes" rows="4" maxlength="1000"><%= formData.cosmeticNotes %></textarea>
-        <small class="field-hint">
-          Use this for current cosmetic notes until structured cosmetic issue rows are added.
-        </small>
-      </label>
-    </div>
-  </div>
+  <input type="hidden" name="hardwareNotes" value="<%= formData.hardwareNotes || '' %>" />
+  <input type="hidden" name="cosmeticNotes" value="<%= formData.cosmeticNotes || '' %>" />
 
   <template data-module-template="cosmeticIssue">
     <article class="workflow-item slate" data-module-row="cosmeticIssue">
@@ -752,6 +935,26 @@
           <label class="form-field"><span>Custom Issue</span><input type="text" name="hardwareIssues[__INDEX__][customIssueLabel]" maxlength="120" placeholder="Example: Cannot install OS" data-module-field /><small class="field-hint">Use this when the issue is not configured yet.</small></label>
           <label class="form-field"><span>Location</span><select name="hardwareIssues[__INDEX__][locationConfigValueId]" data-module-field><option value="">Select location</option><% issueLocations.forEach((location) => { %><option value="<%= location.id %>"><%= location.label %></option><% }) %></select></label>
           <label class="form-field"><span>Remarks</span><input type="text" name="hardwareIssues[__INDEX__][issueRemark]" maxlength="500" placeholder="Short note explaining the issue" data-module-field /></label>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <template data-module-template="graphicsAdapter">
+    <article class="workflow-item slate" data-module-row="graphicsAdapter">
+      <span></span>
+      <div style="width: 100%;">
+        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+          <div>
+            <strong>Graphics Adapter <span data-module-display-number>__DISPLAY__</span></strong>
+            <p>GPU type, model, and VRAM.</p>
+          </div>
+          <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+        </div>
+        <div class="form-grid">
+          <label class="form-field"><span>GPU Type</span><select name="graphicsAdapters[__INDEX__][gpuTypeConfigValueId]" data-module-field><option value="">Select GPU type</option><% gpuTypeOptions.forEach((gpuType) => { %><option value="<%= gpuType.id %>"><%= gpuType.label %></option><% }) %></select></label>
+          <label class="form-field"><span>GPU Model</span><input type="text" name="graphicsAdapters[__INDEX__][gpuModel]" maxlength="150" placeholder="Example: Intel UHD Graphics" data-module-field /></label>
+          <label class="form-field"><span>VRAM MB</span><input type="number" name="graphicsAdapters[__INDEX__][vramMb]" min="0" step="1" placeholder="Example: 2048" data-module-field /></label>
         </div>
       </div>
     </article>

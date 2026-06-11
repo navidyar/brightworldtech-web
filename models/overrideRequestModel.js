@@ -190,7 +190,7 @@ function mapOverrideRequest(row, lotMap) {
     lotId: row.lot_id ? Number(row.lot_id) : null,
     lotName: row.lot_id ? lotMap.get(Number(row.lot_id)) || `Lot ID ${row.lot_id}` : 'No lot selected',
     unitAssetTag,
-    unitLabel: unitAssetTag || (row.unit_id ? `Unit #${row.unit_id}` : 'No unit selected'),
+    unitLabel: unitAssetTag || 'No asset tag',
     requestType: row.request_type || 'lot_requirement_override',
     requestTypeLabel: getRequestTypeLabel(row.request_type),
     requestStatus: row.request_status || 'pending',
@@ -370,6 +370,69 @@ async function getLatestOverrideRequestMapForUnits(unitIds) {
   });
 
   return requestMap;
+}
+
+async function listOverrideRequestsForUnit(unitId, limit = 25) {
+  const exists = await overrideTableExists();
+  const normalizedUnitId = normalizeOptionalInteger(unitId);
+
+  if (!exists || !normalizedUnitId) {
+    return {
+      supported: exists,
+      requests: []
+    };
+  }
+
+  const safeLimit = Number.isInteger(Number(limit)) && Number(limit) > 0
+    ? Math.min(Number(limit), 100)
+    : 25;
+
+  const lotMap = await getLotNameMap();
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        r.unit_override_request_id,
+        r.unit_id,
+        r.lot_id,
+        r.request_type,
+        r.request_status,
+        r.validation_status,
+        r.enforcement_decision,
+        r.reason,
+        r.request_details,
+        r.requested_by_user_id,
+        r.reviewed_by_user_id,
+        r.review_notes,
+        r.reviewed_at,
+        r.expires_at,
+        r.created_at,
+        r.updated_at,
+        u.asset_number,
+        requested_by.first_name AS requested_by_first_name,
+        requested_by.last_name AS requested_by_last_name,
+        requested_by.email AS requested_by_email,
+        reviewed_by.first_name AS reviewed_by_first_name,
+        reviewed_by.last_name AS reviewed_by_last_name,
+        reviewed_by.email AS reviewed_by_email
+      FROM unit_override_requests r
+      LEFT JOIN units u
+        ON u.unit_id = r.unit_id
+      LEFT JOIN users requested_by
+        ON requested_by.user_id = r.requested_by_user_id
+      LEFT JOIN users reviewed_by
+        ON reviewed_by.user_id = r.reviewed_by_user_id
+      WHERE r.unit_id = ?
+      ORDER BY r.created_at DESC, r.unit_override_request_id DESC
+      LIMIT ?
+    `,
+    [normalizedUnitId, safeLimit]
+  );
+
+  return {
+    supported: true,
+    requests: rows.map((row) => mapOverrideRequest(row, lotMap))
+  };
 }
 
 async function getOverrideRequestById(overrideRequestId) {
@@ -578,6 +641,7 @@ module.exports = {
   overrideTableExists,
   listOverrideRequests,
   getLatestOverrideRequestMapForUnits,
+  listOverrideRequestsForUnit,
   getOverrideRequestById,
   getPendingOverrideRequestForUnit,
   createOverrideRequest,

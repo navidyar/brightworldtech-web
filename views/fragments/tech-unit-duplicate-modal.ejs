@@ -18,6 +18,18 @@
     'storageGb',
     'storageTypeConfigValueId',
     'operatingSystemConfigValueId',
+    'overallGradeConfigValueId',
+    'overallGradeNotes',
+    'biosVersion',
+    'osBuild',
+    'absoluteStatusConfigValueId',
+    'physicalCameraStatusConfigValueId',
+    'touchscreenStatusConfigValueId',
+    'keyboardLanguageConfigValueId',
+    'completeDiagnosticsStatusConfigValueId',
+    'virusCheckStatusConfigValueId',
+    'driverCheckStatusConfigValueId',
+    'skinnedStatusConfigValueId',
     'generalCommentTypeConfigValueId',
     'generalCommentText',
     'hardwareNotes',
@@ -43,7 +55,7 @@
       return 'Unknown Unit';
     }
 
-    return match.assetTag || `Unit #${match.unitId}`;
+    return match.assetTag || 'Existing unit without asset tag';
   }
 
   function getMatchLotLabel(match) {
@@ -174,6 +186,12 @@
                     <input type="hidden" name="hardwareIssues[<%= index %>][customIssueLabel]" value="<%= getRowValue(issueRow, 'customIssueLabel') %>" />
                     <input type="hidden" name="hardwareIssues[<%= index %>][locationConfigValueId]" value="<%= getRowValue(issueRow, 'locationConfigValueId') %>" />
                     <input type="hidden" name="hardwareIssues[<%= index %>][issueRemark]" value="<%= getRowValue(issueRow, 'issueRemark') %>" />
+                  <% }) %>
+
+                  <% getFormRows('graphicsAdapters').forEach((graphicsAdapter, index) => { %>
+                    <input type="hidden" name="graphicsAdapters[<%= index %>][gpuTypeConfigValueId]" value="<%= getRowValue(graphicsAdapter, 'gpuTypeConfigValueId') %>" />
+                    <input type="hidden" name="graphicsAdapters[<%= index %>][gpuModel]" value="<%= getRowValue(graphicsAdapter, 'gpuModel') %>" />
+                    <input type="hidden" name="graphicsAdapters[<%= index %>][vramMb]" value="<%= getRowValue(graphicsAdapter, 'vramMb') %>" />
                   <% }) %>
 
                   <button class="primary-button" type="submit">Use Existing Unit</button>

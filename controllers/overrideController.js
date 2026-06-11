@@ -61,7 +61,7 @@ function buildUnitLabel(unit) {
     return techUnitModel.getDisplayAssetTag(unit.asset_number);
   }
 
-  return `Unit #${unit.unit_id}`;
+  return 'Unit without asset tag';
 }
 
 async function getLotLabel(lotId) {
@@ -190,7 +190,7 @@ async function renderTechOverrideRequestModal(req, res, next) {
       return res.status(400).render('fragments/tech-override-request-modal', {
         pageTitle: 'Request Override',
         unit: null,
-        unitLabel: `Unit #${unitId}`,
+        unitLabel: 'Unit without asset tag',
         lotLabel: 'Unknown lot',
         existingPendingRequest: null,
         supported: false,
