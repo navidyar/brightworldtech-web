@@ -50,12 +50,52 @@
     return row && row[fieldName] !== undefined && row[fieldName] !== null ? String(row[fieldName]) : '';
   }
 
+  const assetTagPrefix = formOptions && formOptions.assetTagPrefix
+    ? String(formOptions.assetTagPrefix).trim().toUpperCase()
+    : 'BWT';
+
+  function displayAssetTag(value) {
+    const rawValue = String(value || '').trim();
+
+    if (!rawValue) {
+      return '';
+    }
+
+    const compactPrefix = assetTagPrefix.replace(/[\s-]+/g, '').toUpperCase();
+    const compactValue = rawValue.replace(/[\s-]+/g, '').toUpperCase();
+
+    if (compactValue.startsWith(compactPrefix)) {
+      const suffix = compactValue.slice(compactPrefix.length);
+      return suffix ? `${assetTagPrefix}${suffix}` : rawValue;
+    }
+
+    if (/^\d+$/.test(compactValue)) {
+      return `${assetTagPrefix}${compactValue}`;
+    }
+
+    return rawValue;
+  }
+
+  function getMatchIdentifierValue(match) {
+    if (!match) {
+      return '—';
+    }
+
+    const rawValue = match.identifierValue || match.normalizedValue || '';
+
+    if (match.identifierTypeCode === 'asset_tag') {
+      return displayAssetTag(rawValue) || '—';
+    }
+
+    return rawValue || '—';
+  }
+
   function getMatchUnitLabel(match) {
     if (!match) {
       return 'Unknown Unit';
     }
 
-    return match.assetTag || 'Existing unit without asset tag';
+    return displayAssetTag(match.assetTag || match.assetNumber) || 'Existing unit without asset tag';
   }
 
   function getMatchLotLabel(match) {
@@ -117,7 +157,7 @@
                 <strong><%= getMatchUnitLabel(match) %></strong>
                 <p>
                   Matched by <%= match.identifierTypeLabel || 'identifier' %>:
-                  <strong><%= match.identifierValue || match.normalizedValue || '—' %></strong>
+                  <strong><%= getMatchIdentifierValue(match) %></strong>
                 </p>
                 <p><%= getMatchLotLabel(match) %></p>
 

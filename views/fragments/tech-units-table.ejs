@@ -29,20 +29,107 @@
     return value ? `${formatNumber(value)}MB VRAM` : '';
   }
 
+  const assetTagPrefix = result && result.assetTagPrefix
+    ? String(result.assetTagPrefix).trim().toUpperCase()
+    : 'BWT';
+
   function identifierValue(identifiers, typeCode) {
     const safeIdentifiers = Array.isArray(identifiers) ? identifiers : [];
     const match = safeIdentifiers.find((identifier) => identifier.typeCode === typeCode);
 
     return match && match.value ? match.value : '';
   }
+
+  function displayAssetTag(value) {
+    const rawValue = String(value || '').trim();
+
+    if (!rawValue) {
+      return '';
+    }
+
+    const compactPrefix = assetTagPrefix.replace(/[\s-]+/g, '').toUpperCase();
+    const compactValue = rawValue.replace(/[\s-]+/g, '').toUpperCase();
+
+    if (compactValue.startsWith(compactPrefix)) {
+      const suffix = compactValue.slice(compactPrefix.length);
+      return suffix ? `${assetTagPrefix}${suffix}` : rawValue;
+    }
+
+    if (/^\d+$/.test(compactValue)) {
+      return `${assetTagPrefix}${compactValue}`;
+    }
+
+    return rawValue;
+  }
+
+  const currentUserRoles = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
+  const canDeleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+
+
+
+  const appDisplayTimeZone = 'America/Chicago';
+
+  function formatUnitCreatedDate(value) {
+    if (!value) {
+      return '—';
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return '—';
+    }
+
+    return new Intl.DateTimeFormat('en-US', {
+      month: '2-digit',
+      day: '2-digit',
+      year: 'numeric',
+      timeZone: appDisplayTimeZone
+    }).format(date);
+  }
+
+  function formatUnitCreatedTime(value) {
+    if (!value) {
+      return '';
+    }
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) {
+      return '';
+    }
+
+    return new Intl.DateTimeFormat('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true,
+      timeZone: appDisplayTimeZone
+    }).format(date);
+  }
+
+  function displayIdentifierValue(identifier) {
+    const safeIdentifier = identifier || {};
+    const rawValue = safeIdentifier.value || safeIdentifier.normalizedValue || '';
+
+    if (safeIdentifier.typeCode === 'asset_tag') {
+      return displayAssetTag(rawValue) || '—';
+    }
+
+    return rawValue || '—';
+  }
 %>
+
+<strong id="tech-units-loaded-count" hx-swap-oob="true"><%= result && result.units ? formatNumber(result.units.length) : '—' %></strong>
 
 <div class="table-card tech-table-card">
   <table class="tech-units-table">
     <thead>
       <tr>
         <th>Specs</th>
+        <th>Date</th>
+        <th>Tech User</th>
         <th>Asset Tag, BIOS Serial, Unit Serial</th>
+        <th>Grade</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -50,7 +137,7 @@
     <tbody>
       <% if (result.units.length === 0) { %>
         <tr>
-          <td colspan="3">No units found.</td>
+          <td colspan="6">No units found.</td>
         </tr>
       <% } %>
 
@@ -67,9 +154,14 @@
           const cosmeticIssues = Array.isArray(expanded.cosmeticIssues) ? expanded.cosmeticIssues : [];
           const hardwareIssues = Array.isArray(expanded.hardwareIssues) ? expanded.hardwareIssues : [];
           const comments = Array.isArray(expanded.comments) ? expanded.comments : [];
-          const assetTagValue = unit.assetTag || identifierValue(identifiers, 'asset_tag') || unit.label || '—';
+          const assetTagValue = displayAssetTag(unit.assetTag || identifierValue(identifiers, 'asset_tag')) || '—';
           const biosSerialValue = identifierValue(identifiers, 'bios_serial_number') || '—';
           const unitSerialValue = identifierValue(identifiers, 'unit_serial_number') || '—';
+          const currentGradeLabel = currentGrade && currentGrade.gradeLabel ? currentGrade.gradeLabel : '—';
+          const latestTech = expanded.latestTech || null;
+          const latestTechName = latestTech && latestTech.displayName ? latestTech.displayName : '';
+          const unitCreatedDate = formatUnitCreatedDate(unit.createdAt);
+          const unitCreatedTime = formatUnitCreatedTime(unit.createdAt);
         %>
 
         <tr class="tech-summary-row" data-unit-summary-row data-target="tech-unit-detail-<%= unit.unitId %>">
@@ -95,6 +187,19 @@
           </td>
 
           <td>
+            <span class="tech-unit-summary-created">
+              <span><%= unitCreatedDate %></span>
+              <% if (unitCreatedTime) { %>
+                <small><%= unitCreatedTime %></small>
+              <% } %>
+            </span>
+          </td>
+
+          <td>
+            <span class="tech-unit-summary-tech-user"><%= latestTechName || 'Needs Tech User' %></span>
+          </td>
+
+          <td>
             <div class="tech-unit-summary-identifiers" aria-label="Unit identifiers">
               <span class="tech-unit-summary-id-item">
                 <span class="tech-unit-summary-id-label">Asset</span>
@@ -112,10 +217,32 @@
           </td>
 
           <td>
+            <span class="tech-unit-summary-grade"><%= currentGradeLabel %></span>
+          </td>
+
+          <td>
             <% if (unit.unitId) { %>
-              <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" data-no-row-toggle>
-                Edit
-              </a>
+              <div class="tech-summary-actions">
+                <button type="button" class="secondary-button tech-history-action-button" data-unit-panel-button data-panel="history" data-target="tech-unit-detail-<%= unit.unitId %>" data-no-row-toggle hx-get="/tech/units/<%= unit.unitId %>/history" hx-target="#tech-unit-history-content-<%= unit.unitId %>" hx-swap="innerHTML">
+                  History
+                </button>
+                <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" data-no-row-toggle>
+                  Edit
+                </a>
+                <% if (canDeleteTechUnits) { %>
+                  <a
+                    class="secondary-button danger-button tech-delete-action-button"
+                    href="/tech/units/<%= unit.unitId %>/delete/modal"
+                    data-no-row-toggle
+                    data-delete-modal-trigger
+                    hx-get="/tech/units/<%= unit.unitId %>/delete/modal"
+                    hx-target="#modal-root"
+                    hx-swap="innerHTML"
+                  >
+                    Delete
+                  </a>
+                <% } %>
+              </div>
             <% } else { %>
               —
             <% } %>
@@ -123,7 +250,7 @@
         </tr>
 
         <tr class="tech-detail-row" id="tech-unit-detail-<%= unit.unitId %>" hidden>
-          <td colspan="3">
+          <td colspan="6">
             <div class="tech-detail-offset">
               <div class="tech-detail-panel" data-unit-detail-panel>
                 <div class="tech-detail-header">
@@ -134,7 +261,6 @@
 
                   <div class="tech-detail-actions">
                     <div class="tech-detail-status">
-                      <span class="tech-chip"><%= unit.statusLabel %></span>
                       <span class="tech-chip"><%= unit.categoryLabel %></span>
                       <% if (currentGrade) { %>
                         <span class="tech-chip">Grade <%= currentGrade.gradeLabel %></span>
@@ -142,11 +268,6 @@
                     </div>
 
                     <% if (unit.unitId) { %>
-                      <div class="tech-detail-view-actions" role="group" aria-label="Unit detail view">
-                        <button type="button" class="tech-detail-view-link is-active" data-unit-panel-button data-panel="details">Details</button>
-                        <button type="button" class="tech-detail-view-link" data-unit-panel-button data-panel="history" hx-get="/tech/units/<%= unit.unitId %>/history" hx-target="#tech-unit-history-content-<%= unit.unitId %>" hx-swap="innerHTML">History</button>
-                      </div>
-
                       <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/override/modal" hx-get="/tech/units/<%= unit.unitId %>/override/modal" hx-target="#modal-root" hx-swap="innerHTML">
                         Request Override
                       </a>
@@ -163,14 +284,15 @@
                   </div>
                 <% } else if (!expanded.hasAnyExpandedData) { %>
                   <div class="message success">
-                    <p>Expanded unit tables are ready. No detailed RAM, storage, cellular, GPU, issue, grade, or comment records have been added for this unit yet.</p>
+                    <p>Expanded unit tables are ready. No detailed memory, storage, cellular, GPU, issue, grade, or comment records have been added for this unit yet.</p>
                   </div>
                 <% } %>
 
-                <div class="tech-detail-layout">
-                  <section class="tech-detail-section">
+                <div class="tech-detail-layout tech-detail-layout--identity-grade">
+                  <section class="tech-detail-section tech-detail-section--identity tech-detail-section--identity-identifiers">
                     <h3>Identity</h3>
 
+                    <p class="tech-detail-subheading">Identity</p>
                     <dl class="tech-detail-list">
                       <div>
                         <dt>Lot</dt>
@@ -178,27 +300,19 @@
                       </div>
 
                       <div>
-                        <dt>Status</dt>
-                        <dd><%= unit.statusLabel || '—' %></dd>
-                      </div>
-
-                      <div>
                         <dt>Category</dt>
                         <dd><%= unit.categoryLabel || '—' %></dd>
                       </div>
                     </dl>
-                  </section>
 
-                  <section class="tech-detail-section">
-                    <h3>Identifiers</h3>
-
+                    <p class="tech-detail-subheading">Identifiers</p>
                     <% if (identifiers.length > 0) { %>
-                      <dl class="tech-detail-list">
+                      <dl class="tech-detail-list tech-detail-list--identifiers">
                         <% identifiers.forEach((identifier) => { %>
                           <div>
                             <dt><%= identifier.typeLabel %></dt>
                             <dd>
-                              <%= identifier.value || '—' %>
+                              <%= displayIdentifierValue(identifier) %>
                               <% if (identifier.isPrimary) { %>
                                 <span class="tech-chip">Primary</span>
                               <% } %>
@@ -211,7 +325,7 @@
                     <% } %>
                   </section>
 
-                  <section class="tech-detail-section">
+                  <section class="tech-detail-section tech-detail-section--grade">
                     <h3>Overall Grade</h3>
 
                     <dl class="tech-detail-list">
@@ -241,7 +355,7 @@
                 </div>
 
                 <div class="tech-detail-layout">
-                  <section class="tech-detail-section">
+                  <section class="tech-detail-section tech-detail-section--hardware">
                     <h3>Hardware</h3>
 
                     <dl class="tech-detail-list">
@@ -267,7 +381,7 @@
                     </dl>
                   </section>
 
-                  <section class="tech-detail-section">
+                  <section class="tech-detail-section tech-detail-section--checks">
                     <h3>System Checks</h3>
 
                     <dl class="tech-detail-list">
@@ -328,7 +442,7 @@
                     </dl>
                   </section>
 
-                  <section class="tech-detail-section">
+                  <section class="tech-detail-section tech-detail-section--workflow">
                     <h3>Workflow</h3>
 
                     <dl class="tech-detail-list">
@@ -350,15 +464,32 @@
                   </section>
                 </div>
 
-                <section class="tech-notes-section tech-notes-section--memory">
-                  <h3>Current RAM Modules</h3>
+                <div class="tech-module-pair-layout">
+                  <section class="tech-notes-section tech-notes-section--memory">
+                  <div class="tech-section-title-row">
+                    <h3>Current Memory Modules</h3>
+                    <% if (memoryModules.length > 0) { %>
+                      <details class="tech-inline-more-info">
+                        <summary>View More Info</summary>
+                        <div class="tech-inline-more-info-panel">
+                          <% memoryModules.forEach((memoryModule) => { %>
+                            <p>
+                              <strong><%= memoryModule.slotLabel || 'Slot' %></strong>
+                              <span>Speed: <%= formatMhz(memoryModule.speedMhz) || '—' %></span>
+                              <span>Serial: <%= memoryModule.serialNumber || '—' %></span>
+                            </p>
+                          <% }) %>
+                        </div>
+                      </details>
+                    <% } %>
+                  </div>
 
                   <% if (memoryModules.length > 0) { %>
-                    <p class="field-hint">Current RAM Total: <strong><%= formatGb(expanded.memoryTotalGb) %></strong></p>
+                    <p class="field-hint">Current Memory Total: <strong><%= formatGb(expanded.memoryTotalGb) %></strong></p>
 
-                    <div class="tech-detail-layout">
+                    <div class="tech-detail-layout tech-current-module-layout">
                       <% memoryModules.forEach((memoryModule) => { %>
-                        <section class="tech-detail-section">
+                          <section class="tech-detail-section tech-detail-section--memory-module">
                           <dl class="tech-detail-list">
                             <div>
                               <dt>Slot</dt>
@@ -369,12 +500,8 @@
                               <dd><%= formatGb(memoryModule.sizeGb) %> <%= memoryModule.ramTypeLabel || '' %></dd>
                             </div>
                             <div>
-                              <dt>Speed</dt>
-                              <dd><%= formatMhz(memoryModule.speedMhz) || '—' %></dd>
-                            </div>
-                            <div>
-                              <dt>Serial</dt>
-                              <dd><%= memoryModule.serialNumber || '—' %></dd>
+                              <dt>Install Type</dt>
+                              <dd><%= memoryModule.memoryInstallTypeLabel || 'Removable Module' %></dd>
                             </div>
                             <div>
                               <dt>Source</dt>
@@ -385,19 +512,19 @@
                       <% }) %>
                     </div>
                   <% } else { %>
-                    <p class="field-hint">No detailed RAM module rows yet. Legacy RAM display: <%= unit.ramGb ? `${unit.ramGb}GB ${unit.ramTypeLabel !== '—' ? unit.ramTypeLabel : ''}` : '—' %></p>
+                    <p class="field-hint">No detailed memory module rows yet. Legacy memory display: <%= unit.ramGb ? `${unit.ramGb}GB ${unit.ramTypeLabel !== '—' ? unit.ramTypeLabel : ''}` : '—' %></p>
                   <% } %>
-                </section>
+                  </section>
 
-                <section class="tech-notes-section tech-notes-section--storage">
+                  <section class="tech-notes-section tech-notes-section--storage">
                   <h3>Current Storage Devices</h3>
 
                   <% if (storageDevices.length > 0) { %>
                     <p class="field-hint">Current Storage Total: <strong><%= formatGb(expanded.storageTotalGb) %></strong></p>
 
-                    <div class="tech-detail-layout">
+                    <div class="tech-detail-layout tech-current-module-layout">
                       <% storageDevices.forEach((storageDevice) => { %>
-                        <section class="tech-detail-section">
+                          <section class="tech-detail-section tech-detail-section--storage-device">
                           <dl class="tech-detail-list">
                             <div>
                               <dt>Slot</dt>
@@ -430,16 +557,18 @@
                   <% } else { %>
                     <p class="field-hint">No detailed storage device rows yet. Legacy storage display: <%= unit.storageGb ? `${unit.storageGb}GB ${unit.storageTypeLabel !== '—' ? unit.storageTypeLabel : ''}` : '—' %></p>
                   <% } %>
-                </section>
+                  </section>
 
-                <section class="tech-notes-section">
+                </div>
+
+                <section class="tech-notes-section tech-notes-section--cellular">
                   <h3>Cellular / WWAN</h3>
                   <p class="field-hint">Deep cellular module and band details should be populated by ScanTool. Manual unit forms should not edit ScanTool-only band details.</p>
 
                   <% if (cellularModules.length > 0) { %>
                     <div class="tech-detail-layout">
                       <% cellularModules.forEach((cellularModule) => { %>
-                        <section class="tech-detail-section">
+                        <section class="tech-detail-section tech-detail-section--cellular-module">
                           <dl class="tech-detail-list">
                             <div>
                               <dt>Status</dt>
@@ -482,9 +611,9 @@
                   <h3>Graphics</h3>
 
                   <% if (graphicsAdapters.length > 0) { %>
-                    <div class="tech-detail-layout">
+                    <div class="tech-detail-layout tech-current-module-layout">
                       <% graphicsAdapters.forEach((graphicsAdapter) => { %>
-                        <section class="tech-detail-section">
+                        <section class="tech-detail-section tech-detail-section--graphics-adapter">
                           <dl class="tech-detail-list">
                             <div>
                               <dt>Type</dt>
@@ -512,7 +641,7 @@
                 </section>
 
                 <% if (cosmeticIssues.length > 0 || hardwareIssues.length > 0) { %>
-                  <section class="tech-notes-section">
+                  <section class="tech-notes-section tech-notes-section--issues">
                     <h3>Issue Details</h3>
 
                     <div class="tech-notes-grid">

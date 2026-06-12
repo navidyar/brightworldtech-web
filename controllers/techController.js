@@ -316,18 +316,18 @@ function validateMemoryModules(formData) {
       return;
     }
 
-    const rowLabel = `RAM module ${index + 1}`;
+    const rowLabel = `Memory module ${index + 1}`;
 
     if (!moduleRow.sizeGb || !isPositiveInteger(moduleRow.sizeGb)) {
-      errors.push(`${rowLabel} requires a valid positive RAM size.`);
+      errors.push(`${rowLabel} requires a valid positive memory size.`);
     }
 
     if (moduleRow.ramTypeConfigValueId && !isPositiveInteger(moduleRow.ramTypeConfigValueId)) {
-      errors.push(`${rowLabel} has an invalid RAM type.`);
+      errors.push(`${rowLabel} has an invalid memory type.`);
     }
 
     if (!VALID_MEMORY_INSTALL_TYPE_CODES.has(moduleRow.memoryInstallTypeCode || DEFAULT_MEMORY_INSTALL_TYPE_CODE)) {
-      errors.push(`${rowLabel} has an invalid RAM install type.`);
+      errors.push(`${rowLabel} has an invalid memory install type.`);
     }
 
     if (moduleRow.speedMhz && !isPositiveInteger(moduleRow.speedMhz)) {
@@ -557,7 +557,7 @@ function validateUnitForm(formData, formOptions, mode) {
   }
 
   if (formData.ramGb && !isPositiveInteger(formData.ramGb)) {
-    errors.push('RAM GB must be a positive whole number.');
+    errors.push('Memory total must be a positive whole number.');
   }
 
   if (formData.storageGb && !isPositiveInteger(formData.storageGb)) {
@@ -761,6 +761,78 @@ async function renderTechUnitHistoryPanel(req, res, next) {
       overrideHistory,
       errorMessages: []
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+
+async function renderDeleteTechUnitModal(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render('fragments/tech-unit-delete-modal', {
+        unit: null,
+        errorMessages: ['The selected unit ID is invalid.']
+      });
+    }
+
+    const unit = await techUnitModel.getTechUnitDeleteSummaryById(unitId);
+
+    if (!unit) {
+      return res.status(404).render('fragments/tech-unit-delete-modal', {
+        unit: null,
+        errorMessages: ['The selected unit could not be found. It may have already been deleted.']
+      });
+    }
+
+    return res.render('fragments/tech-unit-delete-modal', {
+      unit,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function deleteTechUnit(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render('fragments/tech-unit-delete-modal', {
+        unit: null,
+        errorMessages: ['The selected unit ID is invalid.']
+      });
+    }
+
+    const unit = await techUnitModel.getTechUnitDeleteSummaryById(unitId);
+
+    if (!unit) {
+      if (req.get('HX-Request') === 'true') {
+        res.set('HX-Trigger', 'unit-saved, unit-deleted');
+        return res.send('');
+      }
+
+      return res.redirect('/tech/units?deleted=1');
+    }
+
+    const deleted = await techUnitModel.deleteTechUnit(unitId);
+
+    if (!deleted) {
+      return res.status(400).render('fragments/tech-unit-delete-modal', {
+        unit,
+        errorMessages: ['The unit could not be deleted. Refresh the page and try again.']
+      });
+    }
+
+    if (req.get('HX-Request') === 'true') {
+      res.set('HX-Trigger', 'unit-saved, unit-deleted');
+      return res.send('');
+    }
+
+    return res.redirect('/tech/units?deleted=1');
   } catch (error) {
     next(error);
   }
@@ -1248,6 +1320,8 @@ module.exports = {
   renderTechUnitsPage,
   renderTechUnitsTable,
   renderTechUnitHistoryPanel,
+  renderDeleteTechUnitModal,
+  deleteTechUnit,
   renderNewTechUnitPage,
   renderNewTechUnitModal,
   createTechUnit,

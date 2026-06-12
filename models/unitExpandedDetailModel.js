@@ -45,7 +45,8 @@ function createEmptyDetails() {
     hardwareIssues: [],
     hardwareIssueHistory: [],
     cosmeticIssueHistory: [],
-    comments: []
+    comments: [],
+    latestTech: null
   };
 }
 function createDetailsMap(unitIds) {
@@ -83,8 +84,38 @@ function getPersonName(row, prefix) {
   const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
   return fullName || email || '';
 }
+function getPersonShortName(row, prefix) {
+  const firstName = String(row[`${prefix}_first_name`] || '').trim();
+  const lastName = String(row[`${prefix}_last_name`] || '').trim();
+  const email = String(row[`${prefix}_email`] || '').trim();
+
+  if (firstName && lastName) {
+    return `${firstName} ${lastName.charAt(0).toUpperCase()}.`;
+  }
+
+  if (firstName) {
+    return firstName;
+  }
+
+  if (lastName) {
+    return lastName;
+  }
+
+  return email;
+}
 function labelOrDash(value) {
   return value || '—';
+}
+
+function getOverallGradeLabel(value) {
+  const rawValue = String(value || '').trim();
+  const normalizedValue = rawValue.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+
+  if (['n_a', 'na', 'not_applicable', 'not_yet_graded'].includes(normalizedValue)) {
+    return 'Not Yet Graded';
+  }
+
+  return rawValue || '—';
 }
 
 function getMemoryInstallTypeLabel(value) {
@@ -285,7 +316,7 @@ async function attachCurrentGrades(detailsMap, unitIds, existingTables) {
   rows.forEach((row) => {
     setForUnit(detailsMap, row.unit_id, 'currentGrade', {
       gradeCode: row.grade_code || '',
-      gradeLabel: row.grade_label || '—',
+      gradeLabel: getOverallGradeLabel(row.grade_label),
       sourceCode: row.source_code || '',
       assessedByName: getPersonName(row, 'assessed_by'),
       assessedAt: row.assessed_at,
@@ -679,7 +710,7 @@ async function attachGradeHistory(detailsMap, unitIds, existingTables) {
   rows.forEach((row) => {
     addToUnitList(detailsMap, row.unit_id, 'gradeHistory', {
       gradeCode: row.grade_code || '',
-      gradeLabel: row.grade_label || '—',
+      gradeLabel: getOverallGradeLabel(row.grade_label),
       isCurrent: Number(row.is_current) === 1,
       sourceCode: row.source_code || '',
       assessedByName: getPersonName(row, 'assessed_by'),
@@ -971,6 +1002,175 @@ async function attachComments(detailsMap, unitIds, existingTables) {
     });
   });
 }
+async function attachLatestTechActivity(detailsMap, unitIds, existingTables) {
+  const activityQueries = [];
+  const params = [];
+
+  function addActivityQuery(tableName, sql, queryParams) {
+    if (!existingTables.has(tableName)) {
+      return;
+    }
+
+    activityQueries.push(sql);
+    params.push(...queryParams);
+  }
+
+  addActivityQuery(
+    'unit_specifications',
+    `
+      SELECT us.unit_id, us.updated_by_user_id AS user_id, COALESCE(us.updated_at, us.created_at) AS activity_at, us.unit_specification_id AS activity_id, 'Specifications' AS activity_label
+      FROM unit_specifications us
+      WHERE us.unit_id IN (${buildPlaceholders(unitIds)})
+        AND us.updated_by_user_id IS NOT NULL
+      UNION ALL
+      SELECT us.unit_id, us.created_by_user_id AS user_id, us.created_at AS activity_at, us.unit_specification_id AS activity_id, 'Specifications' AS activity_label
+      FROM unit_specifications us
+      WHERE us.unit_id IN (${buildPlaceholders(unitIds)})
+        AND us.created_by_user_id IS NOT NULL
+    `,
+    [...unitIds, ...unitIds]
+  );
+
+  addActivityQuery(
+    'unit_field_sources',
+    `
+      SELECT ufs.unit_id, ufs.updated_by_user_id AS user_id, ufs.updated_at AS activity_at, ufs.unit_field_source_id AS activity_id, 'Field Source' AS activity_label
+      FROM unit_field_sources ufs
+      WHERE ufs.unit_id IN (${buildPlaceholders(unitIds)})
+        AND ufs.updated_by_user_id IS NOT NULL
+    `,
+    unitIds
+  );
+
+  addActivityQuery(
+    'unit_grade_assessments',
+    `
+      SELECT uga.unit_id, uga.assessed_by_user_id AS user_id, uga.assessed_at AS activity_at, uga.unit_grade_assessment_id AS activity_id, 'Grade' AS activity_label
+      FROM unit_grade_assessments uga
+      WHERE uga.unit_id IN (${buildPlaceholders(unitIds)})
+        AND uga.assessed_by_user_id IS NOT NULL
+    `,
+    unitIds
+  );
+
+  addActivityQuery(
+    'unit_memory_modules',
+    `
+      SELECT umm.unit_id, umm.changed_by_user_id AS user_id, COALESCE(umm.updated_at, umm.installed_at, umm.created_at) AS activity_at, umm.unit_memory_module_id AS activity_id, 'Memory' AS activity_label
+      FROM unit_memory_modules umm
+      WHERE umm.unit_id IN (${buildPlaceholders(unitIds)})
+        AND umm.changed_by_user_id IS NOT NULL
+    `,
+    unitIds
+  );
+
+  addActivityQuery(
+    'unit_storage_devices',
+    `
+      SELECT usd.unit_id, usd.changed_by_user_id AS user_id, COALESCE(usd.updated_at, usd.installed_at, usd.created_at) AS activity_at, usd.unit_storage_device_id AS activity_id, 'Storage' AS activity_label
+      FROM unit_storage_devices usd
+      WHERE usd.unit_id IN (${buildPlaceholders(unitIds)})
+        AND usd.changed_by_user_id IS NOT NULL
+      UNION ALL
+      SELECT usd.unit_id, usd.wiped_by_user_id AS user_id, COALESCE(usd.wiped_at, usd.updated_at, usd.created_at) AS activity_at, usd.unit_storage_device_id AS activity_id, 'Storage Wipe' AS activity_label
+      FROM unit_storage_devices usd
+      WHERE usd.unit_id IN (${buildPlaceholders(unitIds)})
+        AND usd.wiped_by_user_id IS NOT NULL
+    `,
+    [...unitIds, ...unitIds]
+  );
+
+  addActivityQuery(
+    'unit_graphics_adapters',
+    `
+      SELECT uga.unit_id, uga.updated_by_user_id AS user_id, COALESCE(uga.updated_at, uga.created_at) AS activity_at, uga.unit_graphics_adapter_id AS activity_id, 'Graphics' AS activity_label
+      FROM unit_graphics_adapters uga
+      WHERE uga.unit_id IN (${buildPlaceholders(unitIds)})
+        AND uga.updated_by_user_id IS NOT NULL
+      UNION ALL
+      SELECT uga.unit_id, uga.created_by_user_id AS user_id, uga.created_at AS activity_at, uga.unit_graphics_adapter_id AS activity_id, 'Graphics' AS activity_label
+      FROM unit_graphics_adapters uga
+      WHERE uga.unit_id IN (${buildPlaceholders(unitIds)})
+        AND uga.created_by_user_id IS NOT NULL
+    `,
+    [...unitIds, ...unitIds]
+  );
+
+  addActivityQuery(
+    'unit_issue_entries',
+    `
+      SELECT uie.unit_id, uie.updated_by_user_id AS user_id, COALESCE(uie.updated_at, uie.created_at) AS activity_at, uie.unit_issue_entry_id AS activity_id, 'Issue' AS activity_label
+      FROM unit_issue_entries uie
+      WHERE uie.unit_id IN (${buildPlaceholders(unitIds)})
+        AND uie.updated_by_user_id IS NOT NULL
+      UNION ALL
+      SELECT uie.unit_id, uie.created_by_user_id AS user_id, uie.created_at AS activity_at, uie.unit_issue_entry_id AS activity_id, 'Issue' AS activity_label
+      FROM unit_issue_entries uie
+      WHERE uie.unit_id IN (${buildPlaceholders(unitIds)})
+        AND uie.created_by_user_id IS NOT NULL
+    `,
+    [...unitIds, ...unitIds]
+  );
+
+  addActivityQuery(
+    'unit_comments',
+    `
+      SELECT uc.unit_id, uc.created_by_user_id AS user_id, uc.created_at AS activity_at, uc.unit_comment_id AS activity_id, 'Comment' AS activity_label
+      FROM unit_comments uc
+      WHERE uc.unit_id IN (${buildPlaceholders(unitIds)})
+        AND uc.created_by_user_id IS NOT NULL
+    `,
+    unitIds
+  );
+
+  if (activityQueries.length === 0) {
+    return;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT *
+      FROM (
+        SELECT
+          activity.unit_id,
+          activity.activity_label,
+          activity.activity_at,
+          tech_user.first_name AS tech_user_first_name,
+          tech_user.last_name AS tech_user_last_name,
+          tech_user.email AS tech_user_email,
+          ROW_NUMBER() OVER (
+            PARTITION BY activity.unit_id
+            ORDER BY activity.activity_at DESC, activity.activity_id DESC
+          ) AS row_rank
+        FROM (
+          ${activityQueries.join('\n          UNION ALL\n')}
+        ) activity
+        LEFT JOIN users tech_user
+          ON tech_user.user_id = activity.user_id
+        WHERE activity.activity_at IS NOT NULL
+      ) ranked_activity
+      WHERE row_rank = 1
+    `,
+    params
+  );
+
+  rows.forEach((row) => {
+    const displayName = getPersonShortName(row, 'tech_user');
+    const fullName = getPersonName(row, 'tech_user');
+
+    if (!displayName && !fullName) {
+      return;
+    }
+
+    setForUnit(detailsMap, row.unit_id, 'latestTech', {
+      displayName: displayName || fullName,
+      fullName: fullName || displayName,
+      activityLabel: row.activity_label || '',
+      activityAt: row.activity_at
+    });
+  });
+}
+
 async function listExpandedDetailsForUnits(unitIds) {
   const safeUnitIds = normalizeUnitIds(unitIds);
   const detailsMap = createDetailsMap(safeUnitIds);
@@ -992,6 +1192,7 @@ async function listExpandedDetailsForUnits(unitIds) {
   await attachGraphicsAdapters(detailsMap, safeUnitIds, existingTables);
   await attachIssueEntries(detailsMap, safeUnitIds, existingTables);
   await attachComments(detailsMap, safeUnitIds, existingTables);
+  await attachLatestTechActivity(detailsMap, safeUnitIds, existingTables);
   return detailsMap;
 }
 async function getHistoryDetailsForUnit(unitId) {

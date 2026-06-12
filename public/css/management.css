@@ -79,3 +79,161 @@
     grid-template-columns: 1fr;
   }
 }
+.management-user-header {
+  gap: 16px;
+}
+
+.management-user-actions,
+.management-user-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.management-user-row-actions {
+  min-width: 260px;
+}
+
+.management-user-row-actions form {
+  margin: 0;
+}
+
+.management-users-table-card .secondary-button,
+.management-users-table-card button.secondary-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.management-users-table-card .danger-button,
+.management-users-table-card button.danger-button {
+  border-color: color-mix(in srgb, var(--red) 44%, var(--line) 56%);
+  color: var(--red);
+  background: color-mix(in srgb, var(--red-bg) 80%, #ffffff 20%);
+}
+
+.management-users-table-card .danger-button:hover,
+.management-users-table-card button.danger-button:hover {
+  border-color: color-mix(in srgb, var(--red) 65%, var(--line) 35%);
+  background: color-mix(in srgb, var(--red-bg) 66%, #ffffff 34%);
+}
+
+.management-user-self-note {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: var(--muted);
+  background: var(--surface-soft);
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.management-user-note {
+  margin-top: 14px;
+}
+
+@media (max-width: 900px) {
+  .management-user-actions,
+  .management-user-row-actions {
+    align-items: stretch;
+  }
+
+  .management-user-actions > *,
+  .management-user-row-actions form,
+  .management-user-row-actions button,
+  .management-user-row-actions .secondary-button {
+    width: 100%;
+  }
+}
+
+.management-user-modal {
+  width: min(720px, 100%);
+}
+
+.management-user-edit-form {
+  max-width: none;
+}
+
+.management-user-modal-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.management-user-modal-summary p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.management-user-modal-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.management-user-modal-roles-label {
+  margin-top: 8px;
+}
+
+.management-user-modal-roles {
+  gap: 8px;
+}
+
+.management-user-modal-roles .workflow-item {
+  padding: 10px 12px;
+}
+
+.management-user-confirm-copy {
+  display: grid;
+  gap: 8px;
+  margin-top: 14px;
+  color: var(--text);
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.management-user-confirm-copy p {
+  margin: 0;
+}
+
+.management-user-confirm-modal .action-row {
+  margin-top: 18px;
+}
+
+.management-user-row-actions > a.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+@media (max-width: 720px) {
+  .management-user-modal-summary {
+    align-items: stretch;
+  }
+
+  .management-user-modal-pills {
+    align-items: stretch;
+  }
+
+  .management-user-modal-pills .pill {
+    justify-content: center;
+  }
+}

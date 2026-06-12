@@ -17,6 +17,18 @@
     });
   }
 
+  function setSummaryToggleExpanded(targetId, isExpanded) {
+    if (!targetId) {
+      return;
+    }
+
+    document.querySelectorAll('[data-unit-detail-toggle]').forEach((button) => {
+      if (button.getAttribute('data-target') === targetId) {
+        button.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+      }
+    });
+  }
+
   function closeOtherRows(currentRow) {
     document.querySelectorAll('.tech-detail-row:not([hidden])').forEach((row) => {
       if (row !== currentRow) {
@@ -32,6 +44,17 @@
         button.setAttribute('aria-expanded', 'false');
       }
     });
+  }
+
+  function showDetailRow(detailRow, panelName) {
+    if (!detailRow) {
+      return;
+    }
+
+    closeOtherRows(detailRow);
+    detailRow.hidden = false;
+    setSummaryToggleExpanded(detailRow.id, true);
+    setPanel(detailRow, panelName || 'details');
   }
 
   function toggleDetailRow(toggle) {
@@ -69,14 +92,23 @@
     );
   }
 
+  function closeModalRoot() {
+    const modalRoot = document.getElementById('modal-root');
+
+    if (modalRoot) {
+      modalRoot.innerHTML = '';
+    }
+  }
+
   document.addEventListener('click', (event) => {
     const panelButton = event.target.closest('[data-unit-panel-button]');
 
     if (panelButton) {
-      const detailRow = panelButton.closest('.tech-detail-row');
+      const targetId = panelButton.getAttribute('data-target');
+      const detailRow = targetId ? document.getElementById(targetId) : panelButton.closest('.tech-detail-row');
       const panelName = panelButton.getAttribute('data-panel');
 
-      setPanel(detailRow, panelName);
+      showDetailRow(detailRow, panelName);
       return;
     }
 
@@ -97,6 +129,11 @@
   });
 
   document.body.addEventListener('unit-saved', () => {
+    closeOtherRows(null);
+  });
+
+  document.body.addEventListener('unit-deleted', () => {
+    closeModalRoot();
     closeOtherRows(null);
   });
 })();

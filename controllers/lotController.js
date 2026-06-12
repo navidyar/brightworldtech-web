@@ -21,12 +21,12 @@ const requirementFieldOptions = [
   },
   {
     value: 'ram_size',
-    label: 'RAM Size',
+    label: 'Memory Size',
     helpText: 'Example: 8GB, 16GB, 32GB'
   },
   {
     value: 'ram_type',
-    label: 'RAM Type',
+    label: 'Memory Type',
     helpText: 'Example: DDR4, DDR5, LPDDR4X'
   },
   {

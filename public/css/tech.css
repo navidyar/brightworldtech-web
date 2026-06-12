@@ -2997,3 +2997,819 @@ textarea {
     min-width: 0;
   }
 }
+
+/* Step 3k summary row: visible BWT asset tags, grade column, and row-level History action. */
+.tech-units-table {
+  min-width: 1080px;
+}
+
+.tech-units-table thead th:nth-child(1) {
+  width: 46%;
+}
+
+.tech-units-table thead th:nth-child(2) {
+  width: 32%;
+}
+
+.tech-units-table thead th:nth-child(3),
+.tech-summary-row td:nth-child(3) {
+  width: 9%;
+  white-space: nowrap;
+}
+
+.tech-units-table thead th:nth-child(4),
+.tech-summary-row td:nth-child(4) {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.tech-summary-row[data-unit-summary-row] td:nth-child(3),
+.tech-summary-row[data-unit-summary-row] td:nth-child(3) * {
+  cursor: pointer;
+}
+
+.tech-summary-row[data-unit-summary-row] td:nth-child(4),
+.tech-summary-row[data-unit-summary-row] td:nth-child(4) * {
+  cursor: default;
+}
+
+.tech-summary-row[data-unit-summary-row] td:nth-child(4) a,
+.tech-summary-row[data-unit-summary-row] td:nth-child(4) button {
+  cursor: pointer;
+}
+
+.tech-unit-summary-grade {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 34px;
+  padding: 3px 8px;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, #caa85e 24%);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--text) 78%, #9a6f19 22%);
+  background: color-mix(in srgb, var(--surface) 78%, #fff3cf 22%);
+  font-size: 0.76rem;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.tech-summary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: nowrap;
+}
+
+.tech-summary-actions .secondary-button,
+.tech-summary-actions button.secondary-button {
+  padding: 6px 10px;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.tech-history-action-button.is-active {
+  border-color: color-mix(in srgb, var(--blue) 54%, var(--line) 46%);
+  color: color-mix(in srgb, var(--text) 72%, var(--blue) 28%);
+  background: color-mix(in srgb, var(--surface) 76%, var(--blue-soft) 24%);
+}
+
+.tech-unit-history-panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.tech-unit-history-panel-actions .tech-detail-view-link {
+  padding: 4px 9px;
+}
+
+@media (max-width: 760px) {
+  .tech-summary-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .tech-units-table {
+    min-width: 980px;
+  }
+}
+
+/* Step 3k.2 multi-search, stronger mini-menu color, and RAM/storage side-by-side layout. */
+.tech-filter-form {
+  grid-template-columns: minmax(340px, 1.25fr) minmax(260px, 0.65fr) auto;
+}
+
+.tech-filter-search-field textarea {
+  min-height: 104px;
+  resize: vertical;
+  line-height: 1.35;
+}
+
+.tech-filter-search-field .field-hint {
+  max-width: 640px;
+}
+
+.tech-detail-section,
+.tech-notes-section,
+.tech-override-history-section {
+  border-color: color-mix(in srgb, var(--line) 24%, var(--section-accent) 76%) !important;
+  border-top-color: color-mix(in srgb, var(--section-accent) 84%, var(--text) 16%) !important;
+  background: color-mix(in srgb, #ffffff 58%, var(--section-tint) 42%) !important;
+}
+
+.tech-detail-list,
+.tech-override-history-list,
+.tech-notes-section .workflow-list,
+.tech-override-history-section .workflow-list {
+  border-color: color-mix(in srgb, var(--line) 46%, var(--section-accent) 54%) !important;
+  background: color-mix(in srgb, #ffffff 72%, var(--section-tint) 28%) !important;
+}
+
+.tech-detail-list div,
+.tech-override-history-list div,
+.tech-notes-section .workflow-item,
+.tech-override-history-section .workflow-item {
+  border-bottom-color: color-mix(in srgb, var(--line) 50%, var(--section-accent) 50%) !important;
+}
+
+.tech-detail-list div:nth-child(even),
+.tech-override-history-list div:nth-child(even),
+.tech-notes-section .workflow-item:nth-child(even),
+.tech-override-history-section .workflow-item:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 64%, var(--section-tint) 36%) !important;
+}
+
+.tech-detail-section--identity {
+  --section-tint: #e8f3ff;
+  --section-accent: #5f8fb9;
+}
+
+.tech-detail-section--identifiers {
+  --section-tint: #edf8e7;
+  --section-accent: #719f5d;
+}
+
+.tech-detail-section--grade {
+  --section-tint: #fff3db;
+  --section-accent: #b68a35;
+}
+
+.tech-detail-section--hardware {
+  --section-tint: #fff0e9;
+  --section-accent: #aa6d58;
+}
+
+.tech-detail-section--memory-module,
+.tech-notes-section.tech-notes-section--memory {
+  --section-tint: #f0edff;
+  --section-accent: #736bb0;
+}
+
+.tech-detail-section--storage-device,
+.tech-notes-section.tech-notes-section--storage {
+  --section-tint: #eaf4ff;
+  --section-accent: #608bbd;
+}
+
+.tech-detail-section--checks {
+  --section-tint: #e8faf4;
+  --section-accent: #549b8c;
+}
+
+.tech-detail-section--workflow,
+.tech-notes-section.tech-notes-section--notes {
+  --section-tint: #f0f5fa;
+  --section-accent: #6f8098;
+}
+
+.tech-detail-section--cellular-module,
+.tech-notes-section.tech-notes-section--cellular {
+  --section-tint: #eaf8fc;
+  --section-accent: #5b98ad;
+}
+
+.tech-detail-section--graphics-adapter,
+.tech-notes-section.tech-notes-section--graphics {
+  --section-tint: #ebf8ef;
+  --section-accent: #5f9a6d;
+}
+
+.tech-notes-section.tech-notes-section--issues,
+.tech-notes-section--cosmetic-history {
+  --section-tint: #fff0ee;
+  --section-accent: #b86f63;
+}
+
+.tech-notes-section.tech-notes-section--comments,
+.tech-detail-section--sources {
+  --section-tint: #eef1ff;
+  --section-accent: #6c7ca8;
+}
+
+.tech-module-pair-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
+  margin-top: 12px;
+}
+
+.tech-module-pair-layout > .tech-notes-section {
+  min-width: 0;
+  height: 100%;
+  margin-top: 0 !important;
+}
+
+.tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout,
+.tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout {
+  grid-template-columns: 1fr !important;
+}
+
+.tech-module-pair-layout .tech-detail-list div {
+  grid-template-columns: minmax(88px, 0.4fr) minmax(0, 1fr);
+}
+
+@media (max-width: 980px) {
+  .tech-filter-form {
+    grid-template-columns: 1fr;
+  }
+
+  .tech-filter-actions {
+    padding-top: 0;
+  }
+
+  .tech-module-pair-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Step 3k.3 privileged unit delete action and confirmation modal. */
+.tech-summary-actions .danger-button,
+.tech-summary-actions button.danger-button {
+  border-color: color-mix(in srgb, var(--red) 48%, var(--line) 52%);
+  color: color-mix(in srgb, var(--text) 64%, var(--red) 36%);
+  background: color-mix(in srgb, var(--surface) 74%, var(--red-bg) 26%);
+}
+
+.tech-summary-actions .danger-button:hover,
+.tech-summary-actions button.danger-button:hover {
+  border-color: color-mix(in srgb, var(--red) 64%, var(--line) 36%);
+  background: color-mix(in srgb, var(--surface) 62%, var(--red-bg) 38%);
+}
+
+.tech-delete-modal .modal-body {
+  display: grid;
+  gap: 16px;
+}
+
+.tech-delete-confirm-card {
+  border: 1px solid color-mix(in srgb, var(--red) 30%, var(--line) 70%);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface) 74%, var(--red-bg) 26%);
+  padding: 18px;
+}
+
+.tech-delete-warning {
+  margin: 0 0 14px;
+  color: color-mix(in srgb, var(--text) 72%, var(--red) 28%);
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+.tech-delete-summary-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.tech-delete-summary-list div {
+  display: grid;
+  grid-template-columns: minmax(95px, 0.35fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+  border-top: 1px solid color-mix(in srgb, var(--line) 78%, var(--red) 22%);
+  padding-top: 10px;
+}
+
+.tech-delete-summary-list div:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.tech-delete-summary-list dt {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tech-delete-summary-list dd {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.tech-delete-confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tech-delete-confirm-actions .danger-button {
+  border-color: color-mix(in srgb, var(--red) 58%, var(--line) 42%);
+  color: color-mix(in srgb, var(--text) 58%, var(--red) 42%);
+  background: color-mix(in srgb, var(--surface) 70%, var(--red-bg) 30%);
+}
+
+.tech-delete-confirm-actions .danger-button:hover {
+  border-color: color-mix(in srgb, var(--red) 72%, var(--line) 28%);
+  background: color-mix(in srgb, var(--surface) 58%, var(--red-bg) 42%);
+}
+
+@media (max-width: 640px) {
+  .tech-delete-summary-list div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .tech-delete-confirm-actions {
+    justify-content: stretch;
+  }
+
+  .tech-delete-confirm-actions .secondary-button {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+/* Step 3k.4 compact current module/device columns: show current RAM slots and storage devices side by side when space allows. */
+.tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout,
+.tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  align-items: stretch;
+  margin-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 34%, var(--section-accent) 66%);
+}
+
+.tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout > .tech-detail-section,
+.tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout > .tech-detail-section {
+  min-width: 0;
+  padding: 12px 12px 10px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+
+.tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout > .tech-detail-section:only-child,
+.tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout > .tech-detail-section:only-child {
+  grid-column: 1 / -1;
+}
+
+.tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout > .tech-detail-section:nth-child(n + 3),
+.tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout > .tech-detail-section:nth-child(n + 3) {
+  border-top: 1px solid color-mix(in srgb, var(--line) 38%, var(--section-accent) 62%) !important;
+}
+
+.tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout > .tech-detail-section:nth-child(even),
+.tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout > .tech-detail-section:nth-child(even) {
+  border-left: 1px solid color-mix(in srgb, var(--line) 38%, var(--section-accent) 62%) !important;
+}
+
+.tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout > .tech-detail-section::before,
+.tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout > .tech-detail-section::before {
+  display: none !important;
+}
+
+.tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout > .tech-detail-section > .tech-detail-list,
+.tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout > .tech-detail-section > .tech-detail-list {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+
+.tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout > .tech-detail-section > .tech-detail-list > div,
+.tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout > .tech-detail-section > .tech-detail-list > div {
+  grid-template-columns: minmax(72px, 0.38fr) minmax(0, 1fr);
+  column-gap: 8px;
+  padding: 6px 0 !important;
+  border-bottom-color: color-mix(in srgb, var(--line) 74%, var(--section-accent) 26%) !important;
+  background: transparent !important;
+}
+
+.tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout > .tech-detail-section > .tech-detail-list > div:nth-child(even),
+.tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout > .tech-detail-section > .tech-detail-list > div:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 78%, var(--section-tint) 22%) !important;
+}
+
+@media (max-width: 1240px) {
+  .tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout,
+  .tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout > .tech-detail-section:nth-child(even),
+  .tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout > .tech-detail-section:nth-child(even) {
+    border-left: 0 !important;
+  }
+
+  .tech-module-pair-layout .tech-notes-section--memory > .tech-detail-layout > .tech-detail-section + .tech-detail-section,
+  .tech-module-pair-layout .tech-notes-section--storage > .tech-detail-layout > .tech-detail-section + .tech-detail-section {
+    border-top: 1px solid color-mix(in srgb, var(--line) 38%, var(--section-accent) 62%) !important;
+  }
+}
+
+/* Step 3l.1 mini-menu consolidation and current module refinements. */
+.tech-detail-layout--identity-grade {
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 0.55fr);
+}
+
+.tech-detail-section--identity-identifiers .tech-detail-list + .tech-detail-subheading,
+.tech-detail-section--identity-identifiers .field-hint + .tech-detail-subheading {
+  margin-top: 14px;
+}
+
+.tech-detail-subheading {
+  margin: 12px 0 7px;
+  color: color-mix(in srgb, var(--text) 72%, var(--section-accent) 28%);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.tech-detail-section--identity-identifiers .tech-detail-list--identifiers {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tech-section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.tech-section-title-row h3 {
+  margin-bottom: 0 !important;
+}
+
+.tech-inline-more-info {
+  position: relative;
+}
+
+.tech-inline-more-info summary {
+  cursor: pointer;
+  color: color-mix(in srgb, var(--text) 58%, var(--section-accent) 42%);
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  list-style: none;
+}
+
+.tech-inline-more-info summary::-webkit-details-marker {
+  display: none;
+}
+
+.tech-inline-more-info-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  min-width: min(420px, 72vw);
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 35%, var(--section-accent) 65%);
+  border-radius: 14px;
+  background: color-mix(in srgb, #ffffff 62%, var(--section-tint) 38%);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, 0.16);
+}
+
+.tech-inline-more-info-panel p {
+  display: grid;
+  grid-template-columns: minmax(70px, 0.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  margin: 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 58%, var(--section-accent) 42%);
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+.tech-inline-more-info-panel p:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.tech-current-module-layout {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  align-items: stretch;
+  margin-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 34%, var(--section-accent) 66%);
+}
+
+.tech-current-module-layout > .tech-detail-section {
+  min-width: 0;
+  padding: 12px 12px 10px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+
+.tech-current-module-layout > .tech-detail-section:only-child {
+  grid-column: 1 / -1;
+}
+
+.tech-current-module-layout > .tech-detail-section:nth-child(n + 3) {
+  border-top: 1px solid color-mix(in srgb, var(--line) 38%, var(--section-accent) 62%) !important;
+}
+
+.tech-current-module-layout > .tech-detail-section:nth-child(even) {
+  border-left: 1px solid color-mix(in srgb, var(--line) 38%, var(--section-accent) 62%) !important;
+}
+
+.tech-current-module-layout > .tech-detail-section::before {
+  display: none !important;
+}
+
+.tech-current-module-layout > .tech-detail-section > .tech-detail-list {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+
+.tech-current-module-layout > .tech-detail-section > .tech-detail-list > div {
+  grid-template-columns: minmax(82px, 0.4fr) minmax(0, 1fr);
+  column-gap: 8px;
+  padding: 6px 0 !important;
+  border-bottom-color: color-mix(in srgb, var(--line) 74%, var(--section-accent) 26%) !important;
+  background: transparent !important;
+}
+
+.tech-current-module-layout > .tech-detail-section > .tech-detail-list > div:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 78%, var(--section-tint) 22%) !important;
+}
+
+@media (max-width: 1240px) {
+  .tech-detail-layout--identity-grade {
+    grid-template-columns: 1fr;
+  }
+
+  .tech-current-module-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .tech-current-module-layout > .tech-detail-section:nth-child(even) {
+    border-left: 0 !important;
+  }
+
+  .tech-current-module-layout > .tech-detail-section + .tech-detail-section {
+    border-top: 1px solid color-mix(in srgb, var(--line) 38%, var(--section-accent) 62%) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .tech-detail-section--identity-identifiers .tech-detail-list--identifiers,
+  .tech-inline-more-info-panel p {
+    grid-template-columns: 1fr;
+  }
+
+  .tech-inline-more-info-panel {
+    right: auto;
+    left: 0;
+  }
+}
+
+/* Step 3l.3 Unit Browser polish: graphics side-by-side, latest tech label, and grade option cleanup. */
+.tech-unit-summary-tech {
+  color: color-mix(in srgb, var(--text) 68%, var(--blue) 32%);
+  font-weight: 750;
+}
+
+.tech-notes-section--graphics > .tech-current-module-layout {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  gap: 0 !important;
+  align-items: stretch;
+  margin-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 34%, var(--section-accent) 66%);
+}
+
+.tech-notes-section--graphics > .tech-current-module-layout > .tech-detail-section {
+  min-width: 0;
+  padding: 12px 12px 10px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+
+.tech-notes-section--graphics > .tech-current-module-layout > .tech-detail-section:only-child {
+  grid-column: 1 / -1;
+}
+
+.tech-notes-section--graphics > .tech-current-module-layout > .tech-detail-section:nth-child(n + 3) {
+  border-top: 1px solid color-mix(in srgb, var(--line) 38%, var(--section-accent) 62%) !important;
+}
+
+.tech-notes-section--graphics > .tech-current-module-layout > .tech-detail-section:nth-child(even) {
+  border-left: 1px solid color-mix(in srgb, var(--line) 38%, var(--section-accent) 62%) !important;
+}
+
+.tech-notes-section--graphics > .tech-current-module-layout > .tech-detail-section + .tech-detail-section {
+  border-top: 0 !important;
+}
+
+.tech-notes-section--graphics > .tech-current-module-layout > .tech-detail-section::before {
+  display: none !important;
+}
+
+.tech-notes-section--graphics > .tech-current-module-layout > .tech-detail-section > .tech-detail-list {
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  overflow: visible !important;
+}
+
+.tech-notes-section--graphics > .tech-current-module-layout > .tech-detail-section > .tech-detail-list > div {
+  grid-template-columns: minmax(72px, 0.38fr) minmax(0, 1fr);
+  column-gap: 8px;
+  padding: 6px 0 !important;
+  border-bottom-color: color-mix(in srgb, var(--line) 74%, var(--section-accent) 26%) !important;
+  background: transparent !important;
+}
+
+.tech-notes-section--graphics > .tech-current-module-layout > .tech-detail-section > .tech-detail-list > div:nth-child(even) {
+  background: color-mix(in srgb, #ffffff 78%, var(--section-tint) 22%) !important;
+}
+
+@media (max-width: 760px) {
+  .tech-notes-section--graphics > .tech-current-module-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .tech-notes-section--graphics > .tech-current-module-layout > .tech-detail-section:nth-child(even) {
+    border-left: 0 !important;
+  }
+
+  .tech-notes-section--graphics > .tech-current-module-layout > .tech-detail-section + .tech-detail-section {
+    border-top: 1px solid color-mix(in srgb, var(--line) 38%, var(--section-accent) 62%) !important;
+  }
+}
+
+/* Step 3l.3.1 Unit Browser: separate Tech User column. */
+.tech-units-table {
+  min-width: 1180px;
+}
+
+.tech-units-table thead th:nth-child(1) {
+  width: 38%;
+}
+
+.tech-units-table thead th:nth-child(2),
+.tech-summary-row td:nth-child(2) {
+  width: 12%;
+  white-space: nowrap;
+}
+
+.tech-units-table thead th:nth-child(3) {
+  width: 31%;
+}
+
+.tech-units-table thead th:nth-child(4),
+.tech-summary-row td:nth-child(4) {
+  width: 8%;
+  white-space: nowrap;
+}
+
+.tech-units-table thead th:nth-child(5),
+.tech-summary-row td:nth-child(5) {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.tech-summary-row[data-unit-summary-row] td:nth-child(5),
+.tech-summary-row[data-unit-summary-row] td:nth-child(5) * {
+  cursor: default;
+}
+
+.tech-summary-row[data-unit-summary-row] td:nth-child(5) a,
+.tech-summary-row[data-unit-summary-row] td:nth-child(5) button {
+  cursor: pointer;
+}
+
+.tech-unit-summary-tech-user {
+  display: inline-flex;
+  align-items: center;
+  max-width: 160px;
+  color: color-mix(in srgb, var(--text) 74%, var(--blue) 26%);
+  font-size: 0.8rem;
+  font-weight: 750;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .tech-unit-summary-tech-user {
+    max-width: none;
+    white-space: normal;
+  }
+}
+
+
+/* Step 3l.3.3 Unit Browser: created date column between Specs and Tech User. */
+.tech-units-table {
+  min-width: 1260px;
+}
+
+.tech-units-table thead th:nth-child(1) {
+  width: 34%;
+}
+
+.tech-units-table thead th:nth-child(2),
+.tech-summary-row td:nth-child(2) {
+  width: 9%;
+  white-space: nowrap;
+}
+
+.tech-units-table thead th:nth-child(3),
+.tech-summary-row td:nth-child(3) {
+  width: 12%;
+  white-space: nowrap;
+}
+
+.tech-units-table thead th:nth-child(4) {
+  width: 29%;
+}
+
+.tech-units-table thead th:nth-child(5),
+.tech-summary-row td:nth-child(5) {
+  width: 7%;
+  white-space: nowrap;
+}
+
+.tech-units-table thead th:nth-child(6),
+.tech-summary-row td:nth-child(6) {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.tech-summary-row[data-unit-summary-row] td:nth-child(6),
+.tech-summary-row[data-unit-summary-row] td:nth-child(6) * {
+  cursor: default;
+}
+
+.tech-summary-row[data-unit-summary-row] td:nth-child(6) a,
+.tech-summary-row[data-unit-summary-row] td:nth-child(6) button {
+  cursor: pointer;
+}
+
+.tech-unit-summary-created {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 750;
+  line-height: 1.15;
+}
+
+.tech-unit-summary-created small {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+@media (max-width: 760px) {
+  .tech-unit-summary-created {
+    white-space: normal;
+  }
+}

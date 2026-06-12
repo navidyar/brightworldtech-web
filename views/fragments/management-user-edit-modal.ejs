@@ -1,0 +1,76 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeRoles = Array.isArray(roles) ? roles : [];
+  const safeFormData = formData || {};
+  const selectedRoles = Array.isArray(safeFormData.roleCodes) ? safeFormData.roleCodes : [];
+  const safeReturnPath = returnPath === 'inactive' ? 'inactive' : 'active';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel management-user-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-edit-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Management</p>
+        <h2 id="management-user-edit-title">Edit User</h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <form class="auth-form management-user-edit-form" method="post" action="/management/users/<%= user.user_id %>/edit/modal" hx-post="/management/users/<%= user.user_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" autocomplete="off">
+        <input type="hidden" name="returnPath" value="<%= safeReturnPath %>" />
+
+        <div class="management-user-modal-summary">
+          <span class="pill <%= user.is_active ? 'good' : 'bad' %>"><%= user.is_active ? 'Active Employee' : 'Inactive Employee' %></span>
+          <span class="pill <%= user.account_status_code === 'active' ? 'good' : 'bad' %>"><%= user.account_status_label || user.account_status_code || 'Unknown Account Status' %></span>
+        </div>
+
+        <label class="form-field">
+          <span>First Name</span>
+          <input type="text" name="firstName" value="<%= safeFormData.firstName || '' %>" autocomplete="off" required />
+        </label>
+
+        <label class="form-field">
+          <span>Last Name</span>
+          <input type="text" name="lastName" value="<%= safeFormData.lastName || '' %>" autocomplete="off" required />
+        </label>
+
+        <label class="form-field">
+          <span>Email Address</span>
+          <input type="email" name="email" value="<%= safeFormData.email || '' %>" autocomplete="off" inputmode="email" spellcheck="false" required />
+        </label>
+
+        <div>
+          <p class="eyebrow management-user-modal-roles-label">Roles</p>
+
+          <div class="workflow-list management-user-modal-roles">
+            <% safeRoles.forEach((role) => { %>
+              <label class="workflow-item <%= selectedRoles.includes(role.code) ? 'active' : '' %>">
+                <input type="checkbox" name="roleCodes" value="<%= role.code %>" <%= selectedRoles.includes(role.code) ? 'checked' : '' %> />
+
+                <div>
+                  <strong><%= role.name %></strong>
+                  <p><%= role.description || role.code %></p>
+                </div>
+              </label>
+            <% }) %>
+          </div>
+        </div>
+
+        <div class="action-row">
+          <button type="submit" class="primary-button">Save User Changes</button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

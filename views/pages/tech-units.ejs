@@ -26,7 +26,7 @@
 
             <div class="hero-badge">
               <span>Loaded</span>
-              <strong><%= result.supported ? formatNumber(result.units.length) : '—' %></strong>
+              <strong id="tech-units-loaded-count"><%= result.supported ? formatNumber(result.units.length) : '—' %></strong>
             </div>
           </section>
 
@@ -52,16 +52,15 @@
               </div>
             <% } else { %>
               <form class="tech-filter-form" method="get" action="/tech/units">
-                <label class="form-field">
+                <label class="form-field tech-filter-search-field">
                   <span>Search</span>
-                  <input
-                    type="search"
+                  <textarea
                     name="search"
-                    value="<%= filters.search %>"
-                    placeholder="Asset tag, model, processor, status, notes"
-                  />
+                    rows="4"
+                    placeholder="Scan or paste asset tags, BIOS serials, or unit serials — one per line"
+                  ><%= filters.search %></textarea>
                   <small class="field-hint">
-                    Search works with or without the <%= result.assetTagPrefix || 'BWT' %> prefix.
+                    Search one unit or several units at a time. Asset tags work with or without the <%= result.assetTagPrefix || 'BWT' %> prefix.
                   </small>
                 </label>
 

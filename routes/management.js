@@ -8,6 +8,7 @@ const router = express.Router();
 
 const managementRoles = ['admin', 'management'];
 const techRoles = ['admin', 'management', 'tech_lead', 'tech'];
+const techDeleteRoles = ['admin', 'management', 'tech_lead'];
 
 /*
   Management routes
@@ -18,6 +19,13 @@ router.get(
   requireAuth,
   requireRole(managementRoles),
   managementController.renderUsersPage
+);
+
+router.get(
+  '/management/users/inactive',
+  requireAuth,
+  requireRole(managementRoles),
+  managementController.renderInactiveUsersPage
 );
 
 router.get(
@@ -34,11 +42,68 @@ router.post(
   managementController.createUser
 );
 
+
+router.get(
+  '/management/users/:userId/edit/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  managementController.renderEditUserModal
+);
+
+router.post(
+  '/management/users/:userId/edit/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  managementController.updateUserModal
+);
+
+router.get(
+  '/management/users/:userId/deactivate/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  managementController.renderDeactivateUserModal
+);
+
+router.get(
+  '/management/users/:userId/reactivate/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  managementController.renderReactivateUserModal
+);
+
+router.get(
+  '/management/users/:userId/delete-pending/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  managementController.renderDeletePendingUserModal
+);
+
 router.post(
   '/management/users/:userId/setup-link',
   requireAuth,
   requireRole(managementRoles),
   managementController.createSetupLinkForExistingUser
+);
+
+router.post(
+  '/management/users/:userId/deactivate',
+  requireAuth,
+  requireRole(managementRoles),
+  managementController.deactivateUser
+);
+
+router.post(
+  '/management/users/:userId/reactivate',
+  requireAuth,
+  requireRole(managementRoles),
+  managementController.reactivateUser
+);
+
+router.post(
+  '/management/users/:userId/delete-pending',
+  requireAuth,
+  requireRole(managementRoles),
+  managementController.deletePendingSetupUser
 );
 
 /*
@@ -167,6 +232,20 @@ router.post(
   requireAuth,
   requireRole(techRoles),
   overrideController.createTechOverrideRequest
+);
+
+router.get(
+  '/tech/units/:unitId/delete/modal',
+  requireAuth,
+  requireRole(techDeleteRoles),
+  techController.renderDeleteTechUnitModal
+);
+
+router.post(
+  '/tech/units/:unitId/delete',
+  requireAuth,
+  requireRole(techDeleteRoles),
+  techController.deleteTechUnit
 );
 
 router.get(

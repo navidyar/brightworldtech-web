@@ -262,6 +262,7 @@ async function getValidPasswordLink(tokenHash) {
         AND upl.used_at IS NULL
         AND upl.revoked_at IS NULL
         AND upl.expires_at > NOW()
+        AND u.is_active = 1
       LIMIT 1
     `,
     [tokenHash]

@@ -55,7 +55,12 @@
       <span>Loaded from the server only when requested.</span>
     </div>
 
-    <span><%= totalHistoryRows %> records</span>
+    <div class="tech-unit-history-panel-actions">
+      <span><%= totalHistoryRows %> records</span>
+      <button type="button" class="tech-detail-view-link" data-unit-panel-button data-panel="details">
+        Back to Details
+      </button>
+    </div>
   </div>
 
   <% if (safeErrorMessages.length > 0) { %>
@@ -70,7 +75,7 @@
     </div>
   <% } else if (totalHistoryRows === 0) { %>
     <div class="message success">
-      <p>No RAM, storage, grade, issue, or override history records have been saved for this unit yet.</p>
+      <p>No memory, storage, grade, issue, or override history records have been saved for this unit yet.</p>
     </div>
   <% } %>
 
@@ -108,7 +113,7 @@
     <section class="tech-notes-section tech-notes-section--history tech-notes-section--memory-history">
       <div class="tech-history-section-title">
         <div>
-          <h3>RAM Configuration History</h3>
+          <h3>Memory Configuration History</h3>
           <span><%= memoryHistory.length %> records</span>
         </div>
       </div>

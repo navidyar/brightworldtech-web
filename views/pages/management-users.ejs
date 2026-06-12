@@ -1,6 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
+  <link rel="stylesheet" href="/css/modal.css" />
+  <link rel="stylesheet" href="/css/management.css" />
+  <script defer src="/js/modal.js"></script>
 
   <body>
     <div class="app-shell">
@@ -12,10 +15,12 @@
         <main class="content-shell">
           <section class="dashboard-hero">
             <div>
-              <p class="eyebrow">Step 2f.1</p>
-              <h2>User Management</h2>
+              <p class="eyebrow">Step 3l.3.2</p>
+              <h2><%= isInactiveView ? 'Inactive Users' : 'User Management' %></h2>
               <p>
-                Create users, assign roles, and generate one-time setup or reset links for account access.
+                <%= isInactiveView
+                  ? 'Review inactive users and reactivate returning employees without losing their work history.'
+                  : 'Create users, assign roles, generate setup links, edit user details, and deactivate employees without deleting their history.' %>
               </p>
             </div>
 
@@ -26,13 +31,20 @@
           </section>
 
           <section class="content-card">
-            <div class="content-header">
+            <div class="content-header management-user-header">
               <div>
-                <p class="eyebrow">Users</p>
-                <h2>Application Users</h2>
+                <p class="eyebrow"><%= isInactiveView ? 'Inactive Users' : 'Active Users' %></p>
+                <h2><%= isInactiveView ? 'Inactive Application Users' : 'Application Users' %></h2>
               </div>
 
-              <a class="primary-button" href="/management/users/new">Create User</a>
+              <div class="management-user-actions">
+                <% if (isInactiveView) { %>
+                  <a class="secondary-button" href="/management/users">Active Users (<%= userCounts.activeCount %>)</a>
+                <% } else { %>
+                  <a class="secondary-button" href="/management/users/inactive">List Inactive Users (<%= userCounts.inactiveCount %>)</a>
+                  <a class="primary-button" href="/management/users/new">Create User</a>
+                <% } %>
+              </div>
             </div>
 
             <% if (successMessage) { %>
@@ -47,13 +59,20 @@
               </div>
             <% } %>
 
-            <div class="table-card" style="margin-top: 20px;">
+            <% if (isInactiveView) { %>
+              <div class="message error management-user-note">
+                <p>Inactive users are hidden from the normal user list and cannot sign in. Their completed work, comments, grades, and unit history remain linked to their user record.</p>
+              </div>
+            <% } %>
+
+            <div class="table-card management-users-table-card" style="margin-top: 20px;">
               <table>
                 <thead>
                   <tr>
                     <th>Name</th>
                     <th>Email</th>
-                    <th>Status</th>
+                    <th>Employee</th>
+                    <th>Account</th>
                     <th>Roles</th>
                     <th>Password</th>
                     <th>Last Login</th>
@@ -64,14 +83,23 @@
                 <tbody>
                   <% if (users.length === 0) { %>
                     <tr>
-                      <td colspan="7">No users found.</td>
+                      <td colspan="8"><%= isInactiveView ? 'No inactive users found.' : 'No active users found.' %></td>
                     </tr>
                   <% } %>
 
                   <% users.forEach((user) => { %>
                     <tr>
-                      <td><%= user.first_name %> <%= user.last_name %></td>
+                      <td>
+                        <strong><%= user.first_name %> <%= user.last_name %></strong>
+                      </td>
                       <td><%= user.email %></td>
+                      <td>
+                        <% if (user.is_active) { %>
+                          <span class="pill good">Active</span>
+                        <% } else { %>
+                          <span class="pill bad">Inactive</span>
+                        <% } %>
+                      </td>
                       <td>
                         <% if (user.account_status_code === 'active') { %>
                           <span class="pill good">Active</span>
@@ -83,11 +111,33 @@
                       <td><%= user.has_password ? 'Created' : 'Pending setup' %></td>
                       <td><%= formatDateTime(user.last_login_at) %></td>
                       <td>
-                        <form method="post" action="/management/users/<%= user.user_id %>/setup-link">
-                          <button type="submit" class="logout-button">
-                            <%= user.has_password ? 'Generate Reset Link' : 'Generate Setup Link' %>
-                          </button>
-                        </form>
+                        <div class="management-user-row-actions">
+                          <a class="secondary-button" href="/management/users/<%= user.user_id %>/edit/modal?returnPath=<%= isInactiveView ? 'inactive' : 'active' %>" hx-get="/management/users/<%= user.user_id %>/edit/modal?returnPath=<%= isInactiveView ? 'inactive' : 'active' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+
+                          <% if (isInactiveView) { %>
+                            <a class="secondary-button" href="/management/users/<%= user.user_id %>/reactivate/modal?returnPath=inactive" hx-get="/management/users/<%= user.user_id %>/reactivate/modal?returnPath=inactive" hx-target="#modal-root" hx-swap="innerHTML">Reactivate</a>
+
+                            <% if (user.can_delete_pending_setup) { %>
+                              <a class="secondary-button danger-button" href="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=inactive" hx-get="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=inactive" hx-target="#modal-root" hx-swap="innerHTML">Delete Pending User</a>
+                            <% } %>
+                          <% } else { %>
+                            <form method="post" action="/management/users/<%= user.user_id %>/setup-link">
+                              <button type="submit" class="secondary-button">
+                                <%= user.has_password ? 'Generate Reset Link' : 'Generate Setup Link' %>
+                              </button>
+                            </form>
+
+                            <% if (Number(user.user_id) === Number(currentUserId)) { %>
+                              <span class="management-user-self-note">Current user</span>
+                            <% } else { %>
+                              <% if (user.can_delete_pending_setup) { %>
+                                <a class="secondary-button danger-button" href="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=active" hx-get="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=active" hx-target="#modal-root" hx-swap="innerHTML">Delete Pending User</a>
+                              <% } %>
+
+                              <a class="secondary-button danger-button" href="/management/users/<%= user.user_id %>/deactivate/modal?returnPath=active" hx-get="/management/users/<%= user.user_id %>/deactivate/modal?returnPath=active" hx-target="#modal-root" hx-swap="innerHTML">Deactivate</a>
+                            <% } %>
+                          <% } %>
+                        </div>
                       </td>
                     </tr>
                   <% }) %>
@@ -99,8 +149,8 @@
           <section class="content-card">
             <div class="content-header">
               <div>
-                <p class="eyebrow">Account Recovery</p>
-                <h2>How Reset Links Work</h2>
+                <p class="eyebrow">Employee History</p>
+                <h2>How Deactivation Works</h2>
               </div>
             </div>
 
@@ -108,9 +158,9 @@
               <div class="workflow-item active">
                 <span></span>
                 <div>
-                  <strong>Initial setup links</strong>
+                  <strong>Deactivate instead of deleting</strong>
                   <p>
-                    Users without passwords receive a one-time setup link so they can create their first password.
+                    Deactivated users are hidden from the normal users list and cannot sign in, but their work history stays attached to the same user record.
                   </p>
                 </div>
               </div>
@@ -118,15 +168,27 @@
               <div class="workflow-item slate">
                 <span></span>
                 <div>
-                  <strong>Password reset links</strong>
+                  <strong>Reactivate returning employees</strong>
                   <p>
-                    Users who already have passwords receive a one-time reset link so they can set a new password.
+                    Reactivating a user keeps the same account, roles, unit associations, comments, grades, and historical audit trail intact.
+                  </p>
+                </div>
+              </div>
+
+              <div class="workflow-item slate">
+                <span></span>
+                <div>
+                  <strong>Delete only unused pending setup accounts</strong>
+                  <p>
+                    Pending setup users with no password and no login history can be deleted when they were created by mistake. Any user with work history should be deactivated instead.
                   </p>
                 </div>
               </div>
             </div>
           </section>
         </main>
+
+        <div id="modal-root"></div>
       </div>
     </div>
   </body>

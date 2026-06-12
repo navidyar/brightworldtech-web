@@ -167,6 +167,42 @@ async function listConfigValuesByCategoryCodes(categoryCodes, connection = pool)
   }));
 }
 
+
+function normalizeGradeToken(value) {
+  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+}
+
+function isNotYetGradedToken(value) {
+  return ['n_a', 'na', 'not_applicable', 'not_yet_graded', 'not_graded', 'ungraded'].includes(normalizeGradeToken(value));
+}
+
+function normalizeOverallGradeOptions(options) {
+  const safeOptions = Array.isArray(options) ? options : [];
+  const seen = new Set();
+  const normalizedOptions = [];
+
+  safeOptions.forEach((option) => {
+    const isNotYetGraded = [option.code, option.value, option.label].some(isNotYetGradedToken);
+    const displayLabel = isNotYetGraded ? 'Not Yet Graded' : (option.label || option.code || option.value || '');
+    const displayKey = isNotYetGraded ? 'not_yet_graded' : normalizeGradeToken(displayLabel);
+    const fallbackKey = normalizeGradeToken(option.code || option.value || option.id || '');
+    const dedupeKey = displayKey || fallbackKey || String(option.id || '');
+
+    if (!dedupeKey || seen.has(dedupeKey)) {
+      return;
+    }
+
+    seen.add(dedupeKey);
+
+    normalizedOptions.push({
+      ...option,
+      label: displayLabel
+    });
+  });
+
+  return normalizedOptions;
+}
+
 function getBlankExpandedFormData() {
   return {
     overallGradeConfigValueId: '',
@@ -190,7 +226,7 @@ function getBlankExpandedFormData() {
 
 async function getExpandedFormOptions() {
   const [
-    overallGradeOptions,
+    rawOverallGradeOptions,
     absoluteStatusOptions,
     physicalCameraStatusOptions,
     touchscreenStatusOptions,
@@ -217,7 +253,7 @@ async function getExpandedFormOptions() {
     expandedOptionsSupported: await tableExists('unit_specifications'),
     gradeOptionsSupported: await tableExists('unit_grade_assessments'),
     graphicsOptionsSupported: await tableExists('unit_graphics_adapters'),
-    overallGradeOptions,
+    overallGradeOptions: normalizeOverallGradeOptions(rawOverallGradeOptions),
     absoluteStatusOptions,
     physicalCameraStatusOptions,
     touchscreenStatusOptions,

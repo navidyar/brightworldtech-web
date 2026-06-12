@@ -1,0 +1,107 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeReturnPath = returnPath === 'inactive' ? 'inactive' : 'active';
+
+  const userName = user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Selected User';
+
+  const configs = {
+    deactivate: {
+      eyebrow: 'Deactivate Employee',
+      title: 'Deactivate User?',
+      action: user ? `/management/users/${user.user_id}/deactivate` : '#',
+      buttonLabel: 'Deactivate User',
+      buttonClass: 'secondary-button danger-button',
+      message: 'This user will be hidden from the active users list and will not be able to sign in. Their unit work, comments, grades, and history will remain linked to their user record.',
+      warning: 'Use this when an employee leaves or should no longer access the application.'
+    },
+    reactivate: {
+      eyebrow: 'Reactivate Employee',
+      title: 'Reactivate User?',
+      action: user ? `/management/users/${user.user_id}/reactivate` : '#',
+      buttonLabel: 'Reactivate User',
+      buttonClass: 'primary-button',
+      message: 'This user will return to the active users list and can continue with the same account, roles, and history.',
+      warning: 'Reactivation does not create a new account. It keeps the existing account and all previous associations.'
+    },
+    'delete-pending': {
+      eyebrow: 'Delete Pending Setup User',
+      title: 'Delete Pending Setup User?',
+      action: user ? `/management/users/${user.user_id}/delete-pending` : '#',
+      buttonLabel: 'Delete Pending User',
+      buttonClass: 'secondary-button danger-button',
+      message: 'This permanently removes only an unused Pending Setup account. The delete will be blocked if the user has logged in, created a password, or is linked to application history.',
+      warning: 'Do not use this for employees who have worked in the system. Deactivate those users instead.'
+    },
+    error: {
+      eyebrow: 'User Action Blocked',
+      title: 'Action Cannot Continue',
+      action: '#',
+      buttonLabel: '',
+      buttonClass: 'secondary-button',
+      message: 'This user action cannot continue.',
+      warning: ''
+    }
+  };
+
+  const config = configs[actionType] || configs.error;
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel management-user-modal management-user-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-action-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow"><%= config.eyebrow %></p>
+        <h2 id="management-user-action-title"><%= config.title %></h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (user) { %>
+        <div class="management-user-modal-summary">
+          <div>
+            <p class="eyebrow">User</p>
+            <strong><%= userName %></strong>
+            <p><%= user.email %></p>
+          </div>
+
+          <div class="management-user-modal-pills">
+            <span class="pill <%= user.is_active ? 'good' : 'bad' %>"><%= user.is_active ? 'Active Employee' : 'Inactive Employee' %></span>
+            <span class="pill <%= user.account_status_code === 'active' ? 'good' : 'bad' %>"><%= user.account_status_label || user.account_status_code || 'Unknown Account Status' %></span>
+          </div>
+        </div>
+      <% } %>
+
+      <div class="management-user-confirm-copy">
+        <p><%= config.message %></p>
+        <% if (config.warning) { %>
+          <p><strong><%= config.warning %></strong></p>
+        <% } %>
+      </div>
+
+      <% if (actionType !== 'error' && user) { %>
+        <form method="post" action="<%= config.action %>" hx-post="<%= config.action %>" hx-target="#modal-root" hx-swap="innerHTML">
+          <input type="hidden" name="returnPath" value="<%= safeReturnPath %>" />
+
+          <div class="action-row">
+            <button type="submit" class="<%= config.buttonClass %>"><%= config.buttonLabel %></button>
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          </div>
+        </form>
+      <% } else { %>
+        <div class="action-row">
+          <button type="button" class="secondary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

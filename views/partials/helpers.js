@@ -11,6 +11,8 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
+const APP_DISPLAY_TIME_ZONE = 'America/Chicago';
+
 function formatDateTime(value) {
   if (!value) {
     return '—';
@@ -24,7 +26,8 @@ function formatDateTime(value) {
 
   return new Intl.DateTimeFormat('en-US', {
     dateStyle: 'medium',
-    timeStyle: 'short'
+    timeStyle: 'short',
+    timeZone: APP_DISPLAY_TIME_ZONE
   }).format(date);
 }
 

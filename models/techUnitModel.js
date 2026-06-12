@@ -2,6 +2,7 @@ const { pool } = require('./db');
 const lotModel = require('./lotModel');
 
 const UNIT_LIMIT = 100;
+const MAX_SEARCH_TERMS = 100;
 const ASSET_NUMBER_START = 2300000;
 
 const MEMORY_INSTALL_TYPE_OPTIONS = [
@@ -50,6 +51,33 @@ function normalizeAssetTagInput(value) {
   const parsed = Number(withoutPrefix);
 
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function getSearchTerms(value) {
+  const rawValue = String(value || '').trim();
+
+  if (!rawValue) {
+    return [];
+  }
+
+  const terms = rawValue
+    .split(/[\r\n\t,;]+/)
+    .map((term) => term.trim())
+    .filter(Boolean);
+
+  const dedupedTerms = [];
+  const seenTerms = new Set();
+
+  terms.forEach((term) => {
+    const key = compactAssetTagValue(term) || term.toUpperCase();
+
+    if (!seenTerms.has(key)) {
+      seenTerms.add(key);
+      dedupedTerms.push(term);
+    }
+  });
+
+  return dedupedTerms.slice(0, MAX_SEARCH_TERMS);
 }
 
 function getDisplayAssetTag(assetNumber) {
@@ -512,7 +540,7 @@ function normalizeMemoryModuleRow(row, index = 0) {
 
   return {
     ...normalized,
-    slotLabel: normalized.slotLabel || `RAM Slot ${index + 1}`
+    slotLabel: normalized.slotLabel || `Memory Slot ${index + 1}`
   };
 }
 
@@ -1000,57 +1028,72 @@ async function listTechUnits(filters = {}) {
   }
 
   if (filters.search) {
-    const normalizedSearchAssetNumber = normalizeAssetTagInput(filters.search);
-    const normalizedIdentifierSearch = compactAssetTagValue(filters.search);
-    const searchParts = [
-      'CAST(u.asset_number AS CHAR) LIKE ?',
-      'u.hardware_notes LIKE ?',
-      'u.cosmetic_notes LIKE ?',
-      'm.name LIKE ?',
-      'um.model_name LIKE ?',
-      'pm.model_code LIKE ?',
-      'cv_category.label LIKE ?',
-      'cv_status.label LIKE ?',
-      'cv_ram_type.label LIKE ?',
-      'cv_storage_type.label LIKE ?',
-      'cv_os.label LIKE ?'
-    ];
+    const searchTerms = getSearchTerms(filters.search);
+    const isMultiSearch = searchTerms.length > 1;
+    const searchGroups = [];
 
-    params.push(
-      `%${normalizedSearchAssetNumber || filters.search}%`,
-      `%${filters.search}%`,
-      `%${filters.search}%`,
-      `%${filters.search}%`,
-      `%${filters.search}%`,
-      `%${filters.search}%`,
-      `%${filters.search}%`,
-      `%${filters.search}%`,
-      `%${filters.search}%`,
-      `%${filters.search}%`,
-      `%${filters.search}%`
-    );
+    searchTerms.forEach((searchTerm) => {
+      const normalizedSearchAssetNumber = normalizeAssetTagInput(searchTerm);
+      const normalizedIdentifierSearch = compactAssetTagValue(searchTerm);
+      const searchParts = [];
+      const searchParams = [];
 
-    if (unitIdentifiersTableIsReady) {
-      searchParts.push(`
-        EXISTS (
-          SELECT 1
-          FROM unit_identifiers ui_search
-          WHERE ui_search.unit_id = u.unit_id
-            AND (
-              ui_search.identifier_value LIKE ?
-              OR ui_search.normalized_value LIKE ?
-            )
-        )
-      `);
-      params.push(`%${filters.search}%`, `%${normalizedIdentifierSearch}%`);
+      if (normalizedSearchAssetNumber) {
+        searchParts.push('u.asset_number = ?');
+        searchParams.push(normalizedSearchAssetNumber);
+      }
+
+      searchParts.push('CAST(u.asset_number AS CHAR) LIKE ?');
+      searchParams.push(`%${normalizedSearchAssetNumber || searchTerm}%`);
+
+      if (unitIdentifiersTableIsReady) {
+        searchParts.push(`
+          EXISTS (
+            SELECT 1
+            FROM unit_identifiers ui_search
+            WHERE ui_search.unit_id = u.unit_id
+              AND (
+                ui_search.identifier_value LIKE ?
+                OR ui_search.normalized_value LIKE ?
+              )
+          )
+        `);
+        searchParams.push(`%${searchTerm}%`, `%${normalizedIdentifierSearch}%`);
+      }
+
+      if (!isMultiSearch) {
+        searchParts.push(
+          'u.hardware_notes LIKE ?',
+          'u.cosmetic_notes LIKE ?',
+          'm.name LIKE ?',
+          'um.model_name LIKE ?',
+          'pm.model_code LIKE ?',
+          'cv_category.label LIKE ?',
+          'cv_ram_type.label LIKE ?',
+          'cv_storage_type.label LIKE ?',
+          'cv_os.label LIKE ?'
+        );
+
+        searchParams.push(
+          `%${searchTerm}%`,
+          `%${searchTerm}%`,
+          `%${searchTerm}%`,
+          `%${searchTerm}%`,
+          `%${searchTerm}%`,
+          `%${searchTerm}%`,
+          `%${searchTerm}%`,
+          `%${searchTerm}%`,
+          `%${searchTerm}%`
+        );
+      }
+
+      searchGroups.push(`(${searchParts.join(' OR ')})`);
+      params.push(...searchParams);
+    });
+
+    if (searchGroups.length > 0) {
+      where.push(`(${searchGroups.join(' OR ')})`);
     }
-
-    if (normalizedSearchAssetNumber) {
-      searchParts.unshift('u.asset_number = ?');
-      params.unshift(normalizedSearchAssetNumber);
-    }
-
-    where.push(`(${searchParts.join(' OR ')})`);
   }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
@@ -1099,7 +1142,7 @@ async function listTechUnits(filters = {}) {
       manufacturerLabel,
       modelLabel,
       processorLabel,
-      row.ram_gb ? `${row.ram_gb}GB RAM` : '',
+      row.ram_gb ? `${row.ram_gb}GB Memory` : '',
       ramTypeLabel,
       row.storage_gb ? `${row.storage_gb}GB Storage` : '',
       storageTypeLabel
@@ -1781,6 +1824,104 @@ async function useExistingTechUnit(unitId, formData, currentUserId) {
   });
 }
 
+
+async function getTechUnitDeleteSummaryById(unitId) {
+  const safeUnitId = Number(unitId);
+
+  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0) {
+    return null;
+  }
+
+  const state = await getUnitTableState();
+
+  if (!state.exists || !state.primaryKeyColumn) {
+    return null;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        u.unit_id,
+        u.asset_number,
+        l.name AS lot_name,
+        cv_category.label AS category_label,
+        m.name AS manufacturer_name,
+        um.model_name,
+        pm.model_code AS processor_model_code,
+        u.ram_gb,
+        u.storage_gb
+      FROM units u
+      LEFT JOIN lots l
+        ON l.lot_id = u.lot_id
+      LEFT JOIN config_values cv_category
+        ON cv_category.config_value_id = u.unit_category_config_value_id
+      LEFT JOIN manufacturers m
+        ON m.manufacturer_id = u.manufacturer_id
+      LEFT JOIN unit_models um
+        ON um.unit_model_id = u.unit_model_id
+      LEFT JOIN processor_models pm
+        ON pm.processor_model_id = u.processor_model_id
+      WHERE u.${escapeIdentifier(state.primaryKeyColumn)} = ?
+      LIMIT 1
+    `,
+    [safeUnitId]
+  );
+
+  const row = rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  const [unitSerialNumber, biosSerialNumber] = await Promise.all([
+    getUnitIdentifierValue(safeUnitId, 'unit_serial_number'),
+    getUnitIdentifierValue(safeUnitId, 'bios_serial_number')
+  ]);
+
+  const specParts = [
+    row.manufacturer_name,
+    row.model_name,
+    row.processor_model_code,
+    row.ram_gb ? `${row.ram_gb}GB Memory` : '',
+    row.storage_gb ? `${row.storage_gb}GB Storage` : ''
+  ].filter(Boolean);
+
+  return {
+    unitId: row.unit_id,
+    assetTag: row.asset_number ? getDisplayAssetTag(row.asset_number) : '',
+    unitSerialNumber: unitSerialNumber || '',
+    biosSerialNumber: biosSerialNumber || '',
+    lotName: row.lot_name || '',
+    categoryLabel: row.category_label || '',
+    specSummary: specParts.length > 0 ? specParts.join(' · ') : 'No specs entered yet'
+  };
+}
+
+async function deleteTechUnit(unitId) {
+  const safeUnitId = Number(unitId);
+
+  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0) {
+    return false;
+  }
+
+  const state = await getUnitTableState();
+
+  if (!state.exists || !state.primaryKeyColumn) {
+    return false;
+  }
+
+  const [result] = await pool.query(
+    `
+      DELETE FROM units
+      WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
+      LIMIT 1
+    `,
+    [safeUnitId]
+  );
+
+  return Number(result.affectedRows) > 0;
+}
+
 module.exports = {
   getBlankUnitFormData,
   getTechUnitFormOptions,
@@ -1792,6 +1933,8 @@ module.exports = {
   updateTechUnit,
   useExistingTechUnit,
   getUnitById,
+  getTechUnitDeleteSummaryById,
+  deleteTechUnit,
   getAssetTagPrefix,
   getDisplayAssetTag,
   normalizeAssetTagInput,
