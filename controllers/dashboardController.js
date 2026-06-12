@@ -1,3 +1,5 @@
+const dashboardModel = require('../models/dashboardModel');
+
 function formatDashboardTitle(key) {
   return String(key || '')
     .split('-')
@@ -49,6 +51,34 @@ function findDashboardByKey(res, dashboardKey) {
   return dashboardDefinitions.find((dashboard) => dashboard.key === dashboardKey) || null;
 }
 
+function getDashboardFilterConfig(dashboardKey = null) {
+  const isRoleDashboard = Boolean(dashboardKey);
+  const pageHref = isRoleDashboard ? `/dashboards/${encodeURIComponent(dashboardKey)}` : '/';
+
+  return {
+    pageHref,
+    summaryHref: isRoleDashboard
+      ? `/dashboards/${encodeURIComponent(dashboardKey)}/summary`
+      : '/dashboard/summary',
+    resetHref: pageHref
+  };
+}
+
+async function buildDashboardPayload(req, dashboardKey = null) {
+  const dashboardFilters = dashboardModel.normalizeDashboardFilters(req.query || {});
+  const [dashboardData, dashboardFilterOptions] = await Promise.all([
+    dashboardModel.getDashboardData(dashboardFilters),
+    dashboardModel.getDashboardFilterOptions()
+  ]);
+
+  return {
+    dashboardData,
+    dashboardFilters,
+    dashboardFilterOptions,
+    dashboardFilterConfig: getDashboardFilterConfig(dashboardKey)
+  };
+}
+
 async function renderDashboardHome(req, res, next) {
   try {
     const dashboards = getAccessibleDashboards(res);
@@ -57,11 +87,24 @@ async function renderDashboardHome(req, res, next) {
       return res.redirect(`/dashboards/${encodeURIComponent(dashboards[0].key)}`);
     }
 
+    const dashboardPayload = await buildDashboardPayload(req);
+
     return res.render('pages/dashboard', {
       pageTitle: 'Dashboard',
       currentNav: 'dashboard',
-      dashboards
+      dashboards,
+      ...dashboardPayload
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderDashboardSummary(req, res, next) {
+  try {
+    const dashboardPayload = await buildDashboardPayload(req);
+
+    return res.render('fragments/dashboard-live-region', dashboardPayload);
   } catch (error) {
     next(error);
   }
@@ -80,11 +123,42 @@ async function renderRoleDashboard(req, res, next) {
       });
     }
 
+    const dashboardPayload = await buildDashboardPayload(req, dashboard.key);
+
     return res.render('pages/role-dashboard', {
       pageTitle: dashboard.title,
       currentNav: `dashboard:${dashboard.key}`,
-      dashboard
+      dashboard,
+      ...dashboardPayload
     });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderRoleDashboardSummary(req, res, next) {
+  try {
+    const dashboardKey = String(req.params.dashboardKey || '').trim();
+    const dashboard = findDashboardByKey(res, dashboardKey);
+    const canAccessDashboard = res.locals.canAccessDashboard;
+
+    if (!dashboard || typeof canAccessDashboard !== 'function' || !canAccessDashboard(dashboard.key)) {
+      return res.status(404).render('fragments/dashboard-live-region', {
+        dashboardData: {},
+        dashboardFilters: dashboardModel.normalizeDashboardFilters({}),
+        dashboardFilterOptions: {
+          categories: [],
+          lots: [],
+          techUsers: []
+        },
+        dashboardFilterConfig: getDashboardFilterConfig(dashboardKey),
+        dashboardErrorMessage: 'This dashboard is not available for your account.'
+      });
+    }
+
+    const dashboardPayload = await buildDashboardPayload(req, dashboard.key);
+
+    return res.render('fragments/dashboard-live-region', dashboardPayload);
   } catch (error) {
     next(error);
   }
@@ -92,5 +166,7 @@ async function renderRoleDashboard(req, res, next) {
 
 module.exports = {
   renderDashboardHome,
-  renderRoleDashboard
+  renderDashboardSummary,
+  renderRoleDashboard,
+  renderRoleDashboardSummary
 };

@@ -1,0 +1,81 @@
+<%
+  const safeFilters = dashboardFilters || {};
+  const safeOptions = dashboardFilterOptions || {};
+  const safeConfig = dashboardFilterConfig || {};
+  const categories = Array.isArray(safeOptions.categories) ? safeOptions.categories : [];
+  const lots = Array.isArray(safeOptions.lots) ? safeOptions.lots : [];
+  const techUsers = Array.isArray(safeOptions.techUsers) ? safeOptions.techUsers : [];
+  const hasFilters = Boolean(
+    safeFilters.startDate
+    || safeFilters.endDate
+    || safeFilters.categoryId
+    || safeFilters.lotId
+    || safeFilters.techUserId
+  );
+%>
+
+<section class="content-card dashboard-filter-card">
+  <div class="content-header">
+    <div>
+      <p class="eyebrow">Dashboard Filters</p>
+      <h2>Filter Snapshot</h2>
+    </div>
+
+    <% if (hasFilters) { %>
+      <a class="secondary-button" href="<%= safeConfig.resetHref || '/' %>">Reset Filters</a>
+    <% } %>
+  </div>
+
+  <form class="dashboard-filter-form" method="get" action="<%= safeConfig.pageHref || '/' %>" hx-get="<%= safeConfig.summaryHref || '/dashboard/summary' %>" hx-target="#dashboard-live-region" hx-swap="outerHTML">
+    <label class="form-field">
+      <span>Start Date</span>
+      <input type="date" name="startDate" value="<%= safeFilters.startDate || '' %>" />
+    </label>
+
+    <label class="form-field">
+      <span>End Date</span>
+      <input type="date" name="endDate" value="<%= safeFilters.endDate || '' %>" />
+    </label>
+
+    <label class="form-field">
+      <span>Category</span>
+      <select name="categoryId">
+        <option value="">All Categories</option>
+        <% categories.forEach((category) => { %>
+          <option value="<%= category.value %>" <%= Number(safeFilters.categoryId || 0) === Number(category.value) ? 'selected' : '' %>><%= category.label %> (<%= formatNumber(category.count) %>)</option>
+        <% }) %>
+      </select>
+    </label>
+
+    <label class="form-field">
+      <span>Lot</span>
+      <select name="lotId">
+        <option value="">All Lots</option>
+        <% lots.forEach((lot) => { %>
+          <option value="<%= lot.value %>" <%= Number(safeFilters.lotId || 0) === Number(lot.value) ? 'selected' : '' %>><%= lot.label %> (<%= formatNumber(lot.count) %>)</option>
+        <% }) %>
+      </select>
+    </label>
+
+    <label class="form-field">
+      <span>Tech User</span>
+      <select name="techUserId">
+        <option value="">All Tech Users</option>
+        <% techUsers.forEach((techUser) => { %>
+          <option value="<%= techUser.value %>" <%= Number(safeFilters.techUserId || 0) === Number(techUser.value) ? 'selected' : '' %>><%= techUser.label %> (<%= formatNumber(techUser.count) %>)</option>
+        <% }) %>
+      </select>
+    </label>
+
+    <div class="dashboard-filter-actions">
+      <button type="submit" class="primary-button">Apply Filters</button>
+      <a class="secondary-button" href="<%= safeConfig.resetHref || '/' %>">Clear</a>
+    </div>
+  </form>
+
+  <% if (hasFilters) { %>
+    <p class="dashboard-filter-note">Dashboard metrics, charts, and breakdowns are currently filtered.</p>
+  <% } else { %>
+    <p class="dashboard-filter-note">Showing the full dashboard snapshot.</p>
+  <% } %>
+</section>

@@ -17,7 +17,7 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-green">
             <div>
-              <p class="eyebrow">Step 2i.5</p>
+              <p class="eyebrow">Step 4f</p>
               <h2>Tech Units</h2>
               <p>
                 Create, edit, search, and review unit records. Units can only be assigned to lots that do not have child lots.
@@ -51,36 +51,102 @@
                 <p><%= result.message %></p>
               </div>
             <% } else { %>
-              <form class="tech-filter-form" method="get" action="/tech/units">
-                <label class="form-field tech-filter-search-field">
-                  <span>Search</span>
-                  <textarea
-                    name="search"
-                    rows="4"
-                    placeholder="Scan or paste asset tags, BIOS serials, or unit serials — one per line"
-                  ><%= filters.search %></textarea>
-                  <small class="field-hint">
-                    Search one unit or several units at a time. Asset tags work with or without the <%= result.assetTagPrefix || 'BWT' %> prefix.
-                  </small>
-                </label>
+              <%
+                const unitCategoryOptions = Array.isArray(result.unitCategories) ? result.unitCategories : [];
+                const overallGradeOptions = Array.isArray(result.overallGradeOptions) ? result.overallGradeOptions : [];
+                const techUserOptions = Array.isArray(result.techUserOptions) ? result.techUserOptions : [];
+                const isLast24HourDrilldown = filters.createdWindow === '24h';
+              %>
+              <form class="tech-filter-form tech-filter-panel" method="get" action="/tech/units">
+                <div class="tech-filter-panel-header">
+                  <div>
+                    <p class="eyebrow">Search & Filters</p>
+                    <h3>Find Units</h3>
+                  </div>
 
-                <label class="form-field">
-                  <span>Assignable Lot</span>
-                  <select name="lotId">
-                    <option value="">All assignable lots</option>
-                    <% result.lots.forEach((lot) => { %>
-                      <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>>
-                        <%= lot.lot_name %>
-                        <% if (lot.lot_number) { %>
-                          - Lot #<%= lot.lot_number %>
-                        <% } %>
-                      </option>
-                    <% }) %>
-                  </select>
-                  <small class="field-hint">
-                    Lots with child lots are containers and are not assignable.
-                  </small>
-                </label>
+                  <% if (isLast24HourDrilldown || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
+                    <span class="tech-filter-active-pill">Filtered View</span>
+                  <% } else { %>
+                    <span class="tech-filter-active-pill tech-filter-active-pill--muted">Full View</span>
+                  <% } %>
+                </div>
+
+                <div class="tech-filter-layout">
+                  <label class="form-field tech-filter-search-field">
+                    <span>Search Units</span>
+                    <textarea name="search" rows="5" placeholder="Scan or paste asset tags, BIOS serials, or unit serials — one per line"><%= filters.search %></textarea>
+                    <small class="field-hint">
+                      Search one unit or several units at a time. Asset tags work with or without the <%= result.assetTagPrefix || 'BWT' %> prefix.
+                    </small>
+                  </label>
+
+                  <div class="tech-filter-grid" aria-label="Unit filters">
+                    <label class="form-field">
+                      <span>Assignable Lot</span>
+                      <select name="lotId">
+                        <option value="">All assignable lots</option>
+                        <% result.lots.forEach((lot) => { %>
+                          <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>>
+                            <%= lot.lot_name %>
+                            <% if (lot.lot_number) { %>
+                              - Lot #<%= lot.lot_number %>
+                            <% } %>
+                          </option>
+                        <% }) %>
+                      </select>
+                      <small class="field-hint">Lots with child lots are containers and are not assignable.</small>
+                    </label>
+
+                    <label class="form-field">
+                      <span>Category</span>
+                      <select name="categoryId">
+                        <option value="">All categories</option>
+                        <% unitCategoryOptions.forEach((category) => { %>
+                          <option value="<%= category.id %>" <%= String(filters.categoryId) === String(category.id) ? 'selected' : '' %>><%= category.label %></option>
+                        <% }) %>
+                      </select>
+                    </label>
+
+                    <label class="form-field">
+                      <span>Grade</span>
+                      <select name="gradeFilter">
+                        <option value="">All grades</option>
+                        <option value="current" <%= filters.gradeFilter === 'current' ? 'selected' : '' %>>Has current grade</option>
+                        <option value="needs" <%= filters.gradeFilter === 'needs' ? 'selected' : '' %>>Needs grade</option>
+                        <% overallGradeOptions.forEach((grade) => { %>
+                          <option value="grade:<%= grade.id %>" <%= filters.gradeFilter === `grade:${grade.id}` ? 'selected' : '' %>>Grade <%= grade.label %></option>
+                        <% }) %>
+                      </select>
+                    </label>
+
+                    <label class="form-field">
+                      <span>Tech User</span>
+                      <select name="techUserId">
+                        <option value="">All Tech Users</option>
+                        <% techUserOptions.forEach((techUser) => { %>
+                          <option value="<%= techUser.id %>" <%= String(filters.techUserId) === String(techUser.id) ? 'selected' : '' %>><%= techUser.label %> (<%= formatNumber(techUser.count) %>)</option>
+                        <% }) %>
+                      </select>
+                    </label>
+
+                    <label class="form-field">
+                      <span>Created Start</span>
+                      <input type="date" name="createdStartDate" value="<%= filters.createdStartDate || '' %>" />
+                    </label>
+
+                    <label class="form-field">
+                      <span>Created End</span>
+                      <input type="date" name="createdEndDate" value="<%= filters.createdEndDate || '' %>" />
+                    </label>
+                  </div>
+                </div>
+
+                <% if (isLast24HourDrilldown) { %>
+                  <input type="hidden" name="createdWindow" value="24h" />
+                  <div class="message success tech-filter-drilldown-note">
+                    <p>This Unit Browser view is filtered to records created in the last 24 hours.</p>
+                  </div>
+                <% } %>
 
                 <div class="tech-filter-actions">
                   <button class="primary-button" type="submit">Apply Filters</button>
@@ -99,8 +165,8 @@
           <section class="content-card">
             <div class="content-header">
               <div>
-                <p class="eyebrow">Next</p>
-                <h2>Step 2j Preview</h2>
+                <p class="eyebrow">Dashboard</p>
+                <h2>Step 4f Notes</h2>
               </div>
             </div>
 

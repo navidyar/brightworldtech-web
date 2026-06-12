@@ -12,95 +12,45 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-<%= dashboard.accent %>">
             <div>
-              <p class="eyebrow">Dashboard</p>
+              <p class="eyebrow">Step 4f</p>
               <h2><%= dashboard.title %></h2>
               <p><%= dashboard.description %></p>
             </div>
 
             <div class="hero-badge">
               <span>Area</span>
-              <strong><%= dashboard.key %></strong>
+              <strong><%= dashboard.menuLabel || dashboard.key %></strong>
             </div>
           </section>
 
-          <section class="dashboard-grid">
-            <article class="dashboard-card">
-              <p class="card-label">Access</p>
-              <h3>Ready</h3>
-              <p>Your account has access to this dashboard.</p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Data</p>
-              <h3>Planned</h3>
-              <p>Live metrics will be connected as each workflow is built.</p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Status</p>
-              <h3>Foundation</h3>
-              <p>This is currently a dashboard placeholder for future role-specific data.</p>
-            </article>
-          </section>
-
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Current Build</p>
-                <h2>Dashboard Foundation</h2>
-              </div>
-
-              <% if (dashboard.key !== 'management') { %>
-                <a class="secondary-button" href="/">All Dashboards</a>
-              <% } %>
-            </div>
-
-            <div class="workflow-list">
-              <div class="workflow-item active">
-                <span></span>
-                <div>
-                  <strong>Role-specific dashboard shell</strong>
-                  <p>
-                    This page confirms routing and access for the <%= dashboard.title %>.
-                    The actual charts, productivity metrics, and operational data will be added after
-                    the related workflows produce real records.
-                  </p>
-                </div>
-              </div>
-
-              <div class="workflow-item slate">
-                <span></span>
-                <div>
-                  <strong>Future metrics</strong>
-                  <p>
-                    This dashboard can eventually show filtered metrics, charts, status counts,
-                    productivity totals, and department-specific operational summaries.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
+          <%- include('../fragments/dashboard-live-region', { dashboardData, dashboardFilters, dashboardFilterOptions, dashboardFilterConfig }) %>
 
           <% if (dashboard.key === 'management') { %>
             <section class="content-card">
               <div class="content-header">
                 <div>
-                  <p class="eyebrow">Management Shortcuts</p>
-                  <h2>Current Tools</h2>
+                  <p class="eyebrow">Management Tools</p>
+                  <h2>Current Management Areas</h2>
                 </div>
               </div>
 
-              <div class="workflow-list">
+              <div class="dashboard-access-grid">
                 <a class="role-dashboard-card accent-blue" href="/management/users">
                   <p>Management</p>
                   <h3>Users</h3>
-                  <span>Create users, assign roles, and generate setup links.</span>
+                  <span>Create users, edit users, assign roles, deactivate employees, and manage pending setup accounts.</span>
                 </a>
 
                 <a class="role-dashboard-card accent-green" href="/management/lots">
                   <p>Management</p>
                   <h3>Lots</h3>
                   <span>Review lots, create lots, and manage lot requirements.</span>
+                </a>
+
+                <a class="role-dashboard-card accent-red" href="/management/overrides">
+                  <p>Management</p>
+                  <h3>Overrides</h3>
+                  <span>Review pending unit/lot override requests.</span>
                 </a>
 
                 <a class="role-dashboard-card accent-slate" href="/management/config">

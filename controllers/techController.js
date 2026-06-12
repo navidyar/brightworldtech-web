@@ -14,14 +14,22 @@ const DEFAULT_MEMORY_INSTALL_TYPE_CODE = 'removable_module';
 
 function buildTechUnitsTableUrl(filters) {
   const params = new URLSearchParams();
+  const passthroughKeys = [
+    'search',
+    'lotId',
+    'categoryId',
+    'gradeFilter',
+    'techUserId',
+    'createdStartDate',
+    'createdEndDate',
+    'createdWindow'
+  ];
 
-  if (filters.search) {
-    params.set('search', filters.search);
-  }
-
-  if (filters.lotId) {
-    params.set('lotId', filters.lotId);
-  }
+  passthroughKeys.forEach((key) => {
+    if (filters[key]) {
+      params.set(key, filters[key]);
+    }
+  });
 
   const queryString = params.toString();
 
@@ -31,7 +39,13 @@ function buildTechUnitsTableUrl(filters) {
 function getFiltersFromRequest(req) {
   return {
     search: String(req.query.search || '').trim(),
-    lotId: String(req.query.lotId || '').trim()
+    lotId: String(req.query.lotId || '').trim(),
+    categoryId: String(req.query.categoryId || '').trim(),
+    gradeFilter: String(req.query.gradeFilter || '').trim(),
+    techUserId: String(req.query.techUserId || '').trim(),
+    createdStartDate: String(req.query.createdStartDate || '').trim(),
+    createdEndDate: String(req.query.createdEndDate || '').trim(),
+    createdWindow: String(req.query.createdWindow || '').trim()
   };
 }
 

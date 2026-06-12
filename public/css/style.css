@@ -16,8 +16,8 @@
   --green: #15803d;
   --green-bg: #f4fbf6;
 
-  --yellow: #b45309;
-  --yellow-bg: #fffaf0;
+  --yellow: #9a6a45;
+  --yellow-bg: #fbf7f2;
 
   --orange: #c2410c;
   --orange-bg: #fff8f2;
@@ -1258,4 +1258,617 @@ pre {
   table {
     min-width: 820px;
   }
+}
+/* Step 4a dashboard foundation */
+.dashboard-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.dashboard-metric-grid--secondary {
+  margin-top: 12px;
+}
+
+.dashboard-metric-card {
+  --metric-accent: var(--slate);
+  --metric-bg: var(--slate-bg);
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid color-mix(in srgb, var(--line) 48%, var(--metric-accent) 52%);
+  border-top: 6px solid var(--metric-accent);
+  border-radius: 14px;
+  background: color-mix(in srgb, #ffffff 58%, var(--metric-bg) 42%);
+}
+
+.dashboard-metric-card h3 {
+  margin: 0;
+  font-size: clamp(1.45rem, 2vw, 2rem);
+  letter-spacing: -0.05em;
+}
+
+.dashboard-metric-card p:not(.card-label) {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.dashboard-metric-card--blue {
+  --metric-accent: var(--blue);
+  --metric-bg: var(--blue-soft);
+}
+
+.dashboard-metric-card--green {
+  --metric-accent: var(--green);
+  --metric-bg: var(--green-bg);
+}
+
+.dashboard-metric-card--purple {
+  --metric-accent: var(--purple);
+  --metric-bg: var(--purple-bg);
+}
+
+.dashboard-metric-card--orange {
+  --metric-accent: var(--orange);
+  --metric-bg: var(--orange-bg);
+}
+
+.dashboard-metric-card--yellow {
+  --metric-accent: var(--yellow);
+  --metric-bg: var(--yellow-bg);
+}
+
+.dashboard-metric-card--red {
+  --metric-accent: var(--red);
+  --metric-bg: var(--red-bg);
+}
+
+.dashboard-metric-card--slate {
+  --metric-accent: var(--slate);
+  --metric-bg: var(--slate-bg);
+}
+
+.dashboard-panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.dashboard-panel-card {
+  margin-top: 0;
+}
+
+.dashboard-breakdown-list {
+  display: grid;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.dashboard-breakdown-row {
+  display: grid;
+  gap: 7px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.dashboard-breakdown-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.dashboard-breakdown-row > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dashboard-breakdown-row strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.9rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-breakdown-row span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.dashboard-meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf2f7;
+}
+
+.dashboard-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(29, 78, 216, 0.75), rgba(21, 128, 61, 0.7));
+}
+
+.dashboard-empty-state {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.dashboard-chart-placeholder-card {
+  margin-top: 14px;
+}
+
+.dashboard-chart-placeholder-grid,
+.dashboard-access-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.dashboard-chart-placeholder {
+  display: grid;
+  min-height: 150px;
+  place-items: center;
+  padding: 18px;
+  border: 1px dashed color-mix(in srgb, var(--line) 45%, var(--blue) 55%);
+  border-radius: 14px;
+  background: color-mix(in srgb, #ffffff 64%, var(--blue-soft) 36%);
+  text-align: center;
+}
+
+.dashboard-chart-placeholder p {
+  margin: 0;
+  color: var(--text);
+  font-weight: 900;
+}
+
+.dashboard-chart-placeholder span {
+  display: inline-flex;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  color: var(--blue-dark);
+  background: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-metric-grid,
+  .dashboard-chart-placeholder-grid,
+  .dashboard-access-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 820px) {
+  .dashboard-metric-grid,
+  .dashboard-panel-grid,
+  .dashboard-chart-placeholder-grid,
+  .dashboard-access-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+:root {
+  --chart-orange: #c26a2e;
+  --chart-blue: #4f7fae;
+  --chart-purple: #7358a4;
+  --chart-red: #a85a5f;
+  --chart-teal: #4b8f8b;
+  --chart-slate: #64748b;
+  --chart-green: #5f8f6a;
+  --chart-brown: #9a6a45;
+  --chart-empty: #e5e7eb;
+}
+
+.dashboard-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.dashboard-chart-card {
+  min-height: 100%;
+}
+
+.dashboard-chart-card--wide {
+  grid-column: 1 / -1;
+}
+
+.dashboard-chart-shell {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  gap: 22px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.dashboard-chart-shell--wide {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.dashboard-donut {
+  display: grid;
+  place-items: center;
+  width: min(190px, 100%);
+  aspect-ratio: 1;
+  border-radius: 999px;
+  background: var(--chart-gradient, conic-gradient(var(--chart-empty) 0deg 360deg));
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.08);
+  justify-self: center;
+  position: relative;
+}
+
+.dashboard-donut::before {
+  content: '';
+  position: absolute;
+  inset: 28px;
+  border-radius: inherit;
+  background: var(--surface);
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.08);
+}
+
+.dashboard-donut > div {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  gap: 2px;
+  text-align: center;
+}
+
+.dashboard-donut strong {
+  color: var(--text);
+  font-size: clamp(1.35rem, 3vw, 2rem);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.dashboard-donut span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dashboard-chart-list {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dashboard-chart-list--wide {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 18px;
+}
+
+.dashboard-chart-row {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+}
+
+.dashboard-chart-row-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dashboard-chart-row-label strong {
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-chart-row > span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
+.dashboard-chart-key {
+  display: inline-flex;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--chart-key-color, var(--chart-blue));
+  box-shadow: 0 0 0 3px rgba(15, 23, 42, 0.05);
+  flex: 0 0 auto;
+}
+
+.dashboard-chart-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2f7;
+}
+
+.dashboard-chart-bar i {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: var(--chart-bar-color, var(--chart-blue));
+}
+
+@media (max-width: 1180px) {
+  .dashboard-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-chart-list--wide {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 820px) {
+  .dashboard-chart-shell,
+  .dashboard-chart-shell--wide {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-donut {
+    width: min(220px, 75vw);
+  }
+}
+
+.dashboard-filter-card {
+  margin-bottom: 18px;
+}
+
+.dashboard-filter-form {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(140px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.dashboard-filter-form .form-field {
+  margin: 0;
+}
+
+.dashboard-filter-form input,
+.dashboard-filter-form select {
+  width: 100%;
+}
+
+.dashboard-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.dashboard-filter-actions .primary-button,
+.dashboard-filter-actions .secondary-button {
+  min-height: 42px;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.dashboard-filter-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+#dashboard-live-region.htmx-request {
+  opacity: 0.65;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-filter-form {
+    grid-template-columns: repeat(3, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-filter-form {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-filter-actions .primary-button,
+  .dashboard-filter-actions .secondary-button {
+    width: 100%;
+  }
+}
+
+
+/* Step 4d dashboard drilldowns and lighter chart styling. */
+.dashboard-drilldown-card,
+.dashboard-chart-row--link,
+.dashboard-breakdown-row--link,
+.dashboard-donut--link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.dashboard-drilldown-card {
+  transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.dashboard-drilldown-card:hover,
+.dashboard-drilldown-card:focus-visible {
+  transform: translateY(-1px);
+  border-color: color-mix(in srgb, var(--blue) 38%, var(--line) 62%);
+  box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+}
+
+.dashboard-donut--link {
+  display: grid;
+  place-items: center;
+  transition: transform 160ms ease, filter 160ms ease;
+}
+
+.dashboard-donut--link:hover,
+.dashboard-donut--link:focus-visible {
+  transform: scale(1.015);
+  filter: saturate(1.06);
+}
+
+.dashboard-chart-row--link,
+.dashboard-breakdown-row--link {
+  border-radius: 12px;
+  transition: background 140ms ease, transform 140ms ease;
+}
+
+.dashboard-chart-row--link:hover,
+.dashboard-chart-row--link:focus-visible,
+.dashboard-breakdown-row--link:hover,
+.dashboard-breakdown-row--link:focus-visible {
+  background: color-mix(in srgb, var(--blue-soft) 34%, transparent 66%);
+  transform: translateX(2px);
+}
+
+
+/* Step 4e dashboard responsive pass and calmer chart colors. */
+.dashboard-chart-card {
+  overflow: hidden;
+}
+
+.dashboard-chart-row--link {
+  padding: 6px 8px;
+  margin: -6px -8px;
+}
+
+.dashboard-chart-bar {
+  background: #edf2f7;
+}
+
+.dashboard-donut {
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.1), 0 10px 24px rgba(15, 23, 42, 0.06);
+}
+
+.dashboard-donut::before {
+  inset: 32px;
+}
+
+@media (max-width: 1060px) {
+  .dashboard-metric-grid,
+  .dashboard-metric-grid--secondary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashboard-chart-shell,
+  .dashboard-chart-shell--wide {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .dashboard-donut {
+    width: min(210px, 62vw);
+  }
+}
+
+@media (max-width: 720px) {
+  .dashboard-hero {
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+
+  .hero-badge {
+    width: 100%;
+  }
+
+  .dashboard-metric-grid,
+  .dashboard-metric-grid--secondary,
+  .dashboard-panel-grid,
+  .dashboard-chart-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .dashboard-metric-card {
+    padding: 13px;
+  }
+
+  .dashboard-filter-card,
+  .dashboard-chart-grid,
+  .dashboard-panel-grid {
+    margin-top: 14px;
+  }
+
+  .dashboard-chart-shell,
+  .dashboard-chart-shell--wide {
+    gap: 16px;
+  }
+
+  .dashboard-donut {
+    width: min(188px, 68vw);
+  }
+
+  .dashboard-donut::before {
+    inset: 29px;
+  }
+
+  .dashboard-chart-row-label strong {
+    white-space: normal;
+  }
+
+  .dashboard-chart-row > span {
+    font-size: 0.76rem;
+  }
+}
+
+@media (max-width: 520px) {
+  .dashboard-filter-actions {
+    width: 100%;
+  }
+
+  .dashboard-filter-actions .primary-button,
+  .dashboard-filter-actions .secondary-button {
+    width: 100%;
+  }
+
+  .dashboard-donut {
+    width: min(170px, 74vw);
+  }
+
+  .dashboard-metric-card h3 {
+    font-size: 1.55rem;
+  }
+}
+
+/* Step 4f dashboard performance and empty-state polish. */
+.dashboard-empty-state-card {
+  margin-bottom: 18px;
+  border-style: dashed;
+  background: color-mix(in srgb, #ffffff 82%, var(--slate-soft) 18%);
+}
+
+.dashboard-empty-state--strong {
+  margin: 0;
+  padding: 2px 0;
+}
+
+.dashboard-empty-state--strong strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+  font-size: 0.96rem;
+}
+
+.dashboard-empty-state--strong p {
+  margin: 0;
+  color: var(--muted);
 }

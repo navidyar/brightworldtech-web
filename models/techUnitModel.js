@@ -967,6 +967,59 @@ function configLabelById(map, id, fallback = '') {
   return item ? item.label : fallback;
 }
 
+
+async function listTechUsersWithUnits() {
+  const usersReady = await tableExists('users');
+  const unitsReady = await tableExists('units');
+
+  if (!usersReady || !unitsReady) {
+    return [];
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        users.user_id,
+        users.first_name,
+        users.last_name,
+        users.email,
+        COUNT(u.unit_id) AS unit_count
+      FROM users
+      INNER JOIN units u
+        ON u.created_by_user_id = users.user_id
+      WHERE u.created_by_user_id IS NOT NULL
+      GROUP BY users.user_id, users.first_name, users.last_name, users.email
+      ORDER BY users.first_name, users.last_name, users.email
+    `
+  );
+
+  return rows.map((row) => {
+    const name = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || row.email || `User #${row.user_id}`;
+
+    return {
+      id: Number(row.user_id),
+      label: name,
+      count: Number(row.unit_count || 0)
+    };
+  });
+}
+
+function normalizeDashboardDrilldownDate(value) {
+  const stringValue = String(value || '').trim();
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(stringValue)) {
+    return '';
+  }
+
+  return stringValue;
+}
+
+function normalizePositiveFilterId(value) {
+  const numericValue = Number(value);
+
+  return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : null;
+}
+
 async function listTechUnits(filters = {}) {
   const state = await getUnitTableState();
 
@@ -992,7 +1045,9 @@ async function listTechUnits(filters = {}) {
     operatingSystems,
     manufacturers,
     unitModels,
-    processorModels
+    processorModels,
+    overallGradeOptions,
+    techUserOptions
   ] = await Promise.all([
     listConfigValuesByCategoryCodes(['unit_categories', 'unit_category', 'unit_types', 'unit_type']),
     listConfigValuesByCategoryCodes(['unit_statuses', 'unit_status', 'current_unit_statuses', 'current_unit_status']),
@@ -1001,7 +1056,9 @@ async function listTechUnits(filters = {}) {
     listConfigValuesByCategoryCodes(['operating_systems', 'operating_system']),
     listManufacturers(),
     listUnitModels(),
-    listProcessorModels()
+    listProcessorModels(),
+    listConfigValuesByCategoryCodes(['overall_unit_grades']),
+    listTechUsersWithUnits()
   ]);
 
   const unitIdentifiersTableIsReady = await tableExists('unit_identifiers');
@@ -1017,6 +1074,13 @@ async function listTechUnits(filters = {}) {
 
   const where = [];
   const params = [];
+  const gradeAssessmentsTableIsReady = await tableExists('unit_grade_assessments');
+  const categoryFilterId = normalizePositiveFilterId(filters.categoryId);
+  const techUserFilterId = normalizePositiveFilterId(filters.techUserId);
+  const createdStartDate = normalizeDashboardDrilldownDate(filters.createdStartDate);
+  const createdEndDate = normalizeDashboardDrilldownDate(filters.createdEndDate);
+  const createdWindow = String(filters.createdWindow || '').trim();
+  const gradeFilter = String(filters.gradeFilter || '').trim();
 
   if (filters.lotId) {
     const lotId = Number(filters.lotId);
@@ -1024,6 +1088,65 @@ async function listTechUnits(filters = {}) {
     if (Number.isInteger(lotId) && lotId > 0 && assignableLotIds.has(String(lotId))) {
       where.push('u.lot_id = ?');
       params.push(lotId);
+    }
+  }
+
+  if (categoryFilterId) {
+    where.push('u.unit_category_config_value_id = ?');
+    params.push(categoryFilterId);
+  }
+
+  if (techUserFilterId) {
+    where.push('u.created_by_user_id = ?');
+    params.push(techUserFilterId);
+  }
+
+  if (createdStartDate) {
+    where.push('u.created_at >= ?');
+    params.push(`${createdStartDate} 00:00:00`);
+  }
+
+  if (createdEndDate) {
+    where.push('u.created_at < DATE_ADD(?, INTERVAL 1 DAY)');
+    params.push(`${createdEndDate} 00:00:00`);
+  }
+
+  if (createdWindow === '24h') {
+    where.push('u.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)');
+  }
+
+  if (gradeAssessmentsTableIsReady && gradeFilter === 'needs') {
+    where.push(`
+      NOT EXISTS (
+        SELECT 1
+        FROM unit_grade_assessments uga_filter
+        WHERE uga_filter.unit_id = u.unit_id
+          AND uga_filter.is_current = 1
+      )
+    `);
+  } else if (gradeAssessmentsTableIsReady && gradeFilter === 'current') {
+    where.push(`
+      EXISTS (
+        SELECT 1
+        FROM unit_grade_assessments uga_filter
+        WHERE uga_filter.unit_id = u.unit_id
+          AND uga_filter.is_current = 1
+      )
+    `);
+  } else if (gradeAssessmentsTableIsReady && gradeFilter.startsWith('grade:')) {
+    const gradeFilterId = normalizePositiveFilterId(gradeFilter.replace('grade:', ''));
+
+    if (gradeFilterId) {
+      where.push(`
+        EXISTS (
+          SELECT 1
+          FROM unit_grade_assessments uga_filter
+          WHERE uga_filter.unit_id = u.unit_id
+            AND uga_filter.is_current = 1
+            AND uga_filter.overall_grade_config_value_id = ?
+        )
+      `);
+      params.push(gradeFilterId);
     }
   }
 
@@ -1182,6 +1305,9 @@ async function listTechUnits(filters = {}) {
     units,
     filters,
     lots: assignableLots,
+    unitCategories,
+    overallGradeOptions,
+    techUserOptions,
     unitLimit: UNIT_LIMIT
   };
 }

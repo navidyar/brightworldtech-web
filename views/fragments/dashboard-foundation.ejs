@@ -1,0 +1,439 @@
+<%
+  const safeDashboardData = dashboardData || {};
+  const unitStats = safeDashboardData.unitStats || {};
+  const lotStats = safeDashboardData.lotStats || {};
+  const userStats = safeDashboardData.userStats || {};
+  const overrideStats = safeDashboardData.overrideStats || {};
+
+  const gradeBreakdown = Array.isArray(safeDashboardData.gradeBreakdown) ? safeDashboardData.gradeBreakdown : [];
+  const categoryBreakdown = Array.isArray(safeDashboardData.categoryBreakdown) ? safeDashboardData.categoryBreakdown : [];
+  const lotBreakdown = Array.isArray(safeDashboardData.lotBreakdown) ? safeDashboardData.lotBreakdown : [];
+  const techActivitySummary = Array.isArray(safeDashboardData.techActivitySummary) ? safeDashboardData.techActivitySummary : [];
+
+  function statValue(value) {
+    return formatNumber(Number(value || 0));
+  }
+
+  function percentOfTotal(count, total) {
+    const safeCount = Number(count || 0);
+    const safeTotal = Number(total || 0);
+
+    if (!safeTotal) {
+      return 0;
+    }
+
+    return Math.max(0, Math.min(100, Math.round((safeCount / safeTotal) * 100)));
+  }
+
+  function sumCounts(items) {
+    return items.reduce((sum, item) => sum + Number(item.count || 0), 0);
+  }
+
+  function maxCount(items) {
+    return items.reduce((max, item) => Math.max(max, Number(item.count || 0)), 0);
+  }
+
+  function getChartColor(index) {
+    const colors = [
+      'var(--chart-orange)',
+      'var(--chart-blue)',
+      'var(--chart-purple)',
+      'var(--chart-red)',
+      'var(--chart-teal)',
+      'var(--chart-slate)',
+      'var(--chart-green)',
+      'var(--chart-brown)'
+    ];
+
+    return colors[index % colors.length];
+  }
+
+  function buildDonutGradient(items, total) {
+    const safeItems = Array.isArray(items) ? items : [];
+    const safeTotal = Number(total || 0);
+
+    if (safeItems.length === 0 || safeTotal <= 0) {
+      return 'conic-gradient(var(--chart-empty) 0deg 360deg)';
+    }
+
+    let cursor = 0;
+    const segments = [];
+
+    safeItems.forEach((item, index) => {
+      const value = Number(item.count || 0);
+
+      if (value <= 0) {
+        return;
+      }
+
+      const degrees = Math.max((value / safeTotal) * 360, 1);
+      const start = cursor;
+      const end = Math.min(360, cursor + degrees);
+      const color = getChartColor(index);
+
+      segments.push(`${color} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`);
+      cursor = end;
+    });
+
+    if (segments.length === 0) {
+      return 'conic-gradient(var(--chart-empty) 0deg 360deg)';
+    }
+
+    if (cursor < 360) {
+      segments.push(`var(--chart-empty) ${cursor.toFixed(2)}deg 360deg`);
+    }
+
+    return `conic-gradient(${segments.join(', ')})`;
+  }
+
+  function chartItems(items) {
+    return items.map((item, index) => ({
+      ...item,
+      color: getChartColor(index)
+    }));
+  }
+
+  function buildTechUnitsHref(extraFilters = {}) {
+    const currentFilters = safeDashboardData.filters || {};
+    const params = new URLSearchParams();
+    const mergedFilters = {
+      createdStartDate: currentFilters.startDate || '',
+      createdEndDate: currentFilters.endDate || '',
+      categoryId: currentFilters.categoryId || '',
+      lotId: currentFilters.lotId || '',
+      techUserId: currentFilters.techUserId || '',
+      ...extraFilters
+    };
+
+    Object.entries(mergedFilters).forEach(([key, value]) => {
+      if (value !== null && value !== undefined && String(value).trim() !== '') {
+        params.set(key, String(value).trim());
+      }
+    });
+
+    const queryString = params.toString();
+
+    return queryString ? `/tech/units?${queryString}` : '/tech/units';
+  }
+
+  const categoryTotal = Number(unitStats.totalUnits || 0);
+  const categoryChartItems = chartItems(categoryBreakdown);
+  const categoryMax = maxCount(categoryBreakdown);
+
+  const gradeChartSource = [...gradeBreakdown];
+
+  if (Number(unitStats.unitsWithoutCurrentGrade || 0) > 0) {
+    gradeChartSource.push({
+      id: null,
+      code: 'needs',
+      label: 'Needs Grade',
+      count: Number(unitStats.unitsWithoutCurrentGrade || 0),
+      gradeFilter: 'needs'
+    });
+  }
+
+  const gradeTotal = Math.max(Number(unitStats.totalUnits || 0), sumCounts(gradeChartSource));
+  const gradeChartItems = chartItems(gradeChartSource);
+  const gradeMax = maxCount(gradeChartSource);
+
+  const lotChartTotal = sumCounts(lotBreakdown);
+  const lotChartItems = chartItems(lotBreakdown);
+  const lotMax = maxCount(lotBreakdown);
+
+  const techActivityTotal = safeDashboardData.hasDateFilter ? sumCounts(techActivitySummary) : Number(unitStats.unitsAddedLast24Hours || 0);
+  const techActivityTitle = safeDashboardData.hasDateFilter ? 'Created in Date Range' : 'Created Last 24 Hours';
+
+  function emptyStateMessage(subject, filteredMessage = null) {
+    if (safeDashboardData.hasFilters) {
+      return filteredMessage || `No ${subject} matched the selected dashboard filters.`;
+    }
+
+    return `No ${subject} is available yet.`;
+  }
+%>
+
+<% if (safeDashboardData.hasFilters && Number(unitStats.totalUnits || 0) === 0) { %>
+  <section class="content-card dashboard-empty-state-card">
+    <div class="dashboard-empty-state dashboard-empty-state--strong">
+      <strong>No unit records matched the selected filters.</strong>
+      <p>Try clearing one filter at a time, or use Clear to return to the full dashboard snapshot.</p>
+    </div>
+  </section>
+<% } %>
+
+<section class="dashboard-metric-grid" aria-label="Dashboard metrics">
+  <a class="dashboard-metric-card dashboard-metric-card--blue dashboard-drilldown-card" href="<%= buildTechUnitsHref() %>">
+    <p class="card-label">Units Loaded</p>
+    <h3><%= statValue(unitStats.totalUnits) %></h3>
+    <p>Total unit records currently in the system.</p>
+  </a>
+
+  <a class="dashboard-metric-card dashboard-metric-card--green dashboard-drilldown-card" href="<%= buildTechUnitsHref({ createdWindow: '24h', createdStartDate: '', createdEndDate: '' }) %>">
+    <p class="card-label">Added Last 24 Hours</p>
+    <h3><%= statValue(unitStats.unitsAddedLast24Hours) %></h3>
+    <p>New unit records created during the last rolling day.</p>
+  </a>
+
+  <a class="dashboard-metric-card dashboard-metric-card--purple dashboard-drilldown-card" href="<%= buildTechUnitsHref({ gradeFilter: 'current' }) %>">
+    <p class="card-label">Current Grades</p>
+    <h3><%= statValue(unitStats.unitsWithCurrentGrade) %></h3>
+    <p>Units with a current overall grade recorded.</p>
+  </a>
+
+  <a class="dashboard-metric-card dashboard-metric-card--orange dashboard-drilldown-card" href="<%= buildTechUnitsHref({ gradeFilter: 'needs' }) %>">
+    <p class="card-label">Needs Grade</p>
+    <h3><%= statValue(unitStats.unitsWithoutCurrentGrade) %></h3>
+    <p>Units without a current overall grade record.</p>
+  </a>
+</section>
+
+<section class="dashboard-metric-grid dashboard-metric-grid--secondary" aria-label="Operational metrics">
+  <a class="dashboard-metric-card dashboard-metric-card--slate dashboard-drilldown-card" href="/management/lots">
+    <p class="card-label">Active Lots</p>
+    <h3><%= statValue(lotStats.activeLots) %></h3>
+    <p>Open lots that are not abandoned or closed.</p>
+  </a>
+
+  <a class="dashboard-metric-card dashboard-metric-card--blue dashboard-drilldown-card" href="/management/users">
+    <p class="card-label">Active Users</p>
+    <h3><%= statValue(userStats.activeUsers) %></h3>
+    <p>Employees currently active in the application.</p>
+  </a>
+
+  <a class="dashboard-metric-card dashboard-metric-card--slate dashboard-drilldown-card" href="/management/users">
+    <p class="card-label">Pending Setup</p>
+    <h3><%= statValue(userStats.pendingSetupUsers) %></h3>
+    <p>Users created but not fully set up yet.</p>
+  </a>
+
+  <a class="dashboard-metric-card dashboard-metric-card--red dashboard-drilldown-card" href="/management/overrides">
+    <p class="card-label">Pending Overrides</p>
+    <h3><%= statValue(overrideStats.pendingOverrides) %></h3>
+    <p>Open override requests waiting on review.</p>
+  </a>
+</section>
+
+<section class="dashboard-chart-grid" aria-label="Dashboard charts">
+  <article class="content-card dashboard-chart-card">
+    <div class="content-header">
+      <div>
+        <p class="eyebrow">Unit Mix</p>
+        <h2>Categories</h2>
+      </div>
+    </div>
+
+    <% if (categoryChartItems.length === 0 || categoryTotal === 0) { %>
+      <p class="dashboard-empty-state"><%= emptyStateMessage('unit category data') %></p>
+    <% } else { %>
+      <div class="dashboard-chart-shell">
+        <a class="dashboard-donut dashboard-donut--link" href="<%= buildTechUnitsHref() %>" style="--chart-gradient: <%- buildDonutGradient(categoryChartItems, categoryTotal) %>;" aria-label="Open Unit Browser for this category chart">
+          <div>
+            <strong><%= statValue(categoryTotal) %></strong>
+            <span>Units</span>
+          </div>
+        </a>
+
+        <div class="dashboard-chart-list">
+          <% categoryChartItems.forEach((item) => { %>
+            <a class="dashboard-chart-row dashboard-chart-row--link" href="<%= buildTechUnitsHref({ categoryId: item.id }) %>">
+              <div class="dashboard-chart-row-label">
+                <span class="dashboard-chart-key" style="--chart-key-color: <%= item.color %>;"></span>
+                <strong><%= item.label %></strong>
+              </div>
+              <span><%= statValue(item.count) %> · <%= percentOfTotal(item.count, categoryTotal) %>%</span>
+              <div class="dashboard-chart-bar" aria-hidden="true">
+                <i style="width: <%= percentOfTotal(item.count, categoryMax) %>%; --chart-bar-color: <%= item.color %>;"></i>
+              </div>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+  </article>
+
+  <article class="content-card dashboard-chart-card">
+    <div class="content-header">
+      <div>
+        <p class="eyebrow">Grade Overview</p>
+        <h2>Current Grades</h2>
+      </div>
+    </div>
+
+    <% if (gradeChartItems.length === 0 || gradeTotal === 0) { %>
+      <p class="dashboard-empty-state"><%= emptyStateMessage('current grade data') %></p>
+    <% } else { %>
+      <div class="dashboard-chart-shell">
+        <a class="dashboard-donut dashboard-donut--link" href="<%= buildTechUnitsHref({ gradeFilter: 'current' }) %>" style="--chart-gradient: <%- buildDonutGradient(gradeChartItems, gradeTotal) %>;" aria-label="Open Unit Browser for grade chart">
+          <div>
+            <strong><%= statValue(gradeTotal) %></strong>
+            <span>Units</span>
+          </div>
+        </a>
+
+        <div class="dashboard-chart-list">
+          <% gradeChartItems.forEach((item) => { %>
+            <% const gradeHref = item.gradeFilter ? buildTechUnitsHref({ gradeFilter: item.gradeFilter }) : buildTechUnitsHref({ gradeFilter: item.id ? `grade:${item.id}` : 'current' }); %>
+            <a class="dashboard-chart-row dashboard-chart-row--link" href="<%= gradeHref %>">
+              <div class="dashboard-chart-row-label">
+                <span class="dashboard-chart-key" style="--chart-key-color: <%= item.color %>;"></span>
+                <strong><%= item.label %></strong>
+              </div>
+              <span><%= statValue(item.count) %> · <%= percentOfTotal(item.count, gradeTotal) %>%</span>
+              <div class="dashboard-chart-bar" aria-hidden="true">
+                <i style="width: <%= percentOfTotal(item.count, gradeMax) %>%; --chart-bar-color: <%= item.color %>;"></i>
+              </div>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+  </article>
+
+  <article class="content-card dashboard-chart-card dashboard-chart-card--wide">
+    <div class="content-header">
+      <div>
+        <p class="eyebrow">Lot Mix</p>
+        <h2>Largest Work Areas</h2>
+      </div>
+    </div>
+
+    <% if (lotChartItems.length === 0 || lotChartTotal === 0) { %>
+      <p class="dashboard-empty-state"><%= emptyStateMessage('lot/unit data') %></p>
+    <% } else { %>
+      <div class="dashboard-chart-shell dashboard-chart-shell--wide">
+        <a class="dashboard-donut dashboard-donut--link" href="<%= buildTechUnitsHref() %>" style="--chart-gradient: <%- buildDonutGradient(lotChartItems, lotChartTotal) %>;" aria-label="Open Unit Browser for lot chart">
+          <div>
+            <strong><%= statValue(lotChartTotal) %></strong>
+            <span>Shown</span>
+          </div>
+        </a>
+
+        <div class="dashboard-chart-list dashboard-chart-list--wide">
+          <% lotChartItems.forEach((item) => { %>
+            <a class="dashboard-chart-row dashboard-chart-row--link" href="<%= buildTechUnitsHref({ lotId: item.id }) %>">
+              <div class="dashboard-chart-row-label">
+                <span class="dashboard-chart-key" style="--chart-key-color: <%= item.color %>;"></span>
+                <strong><%= item.label %></strong>
+              </div>
+              <span><%= statValue(item.count) %> · <%= percentOfTotal(item.count, lotChartTotal) %>%</span>
+              <div class="dashboard-chart-bar" aria-hidden="true">
+                <i style="width: <%= percentOfTotal(item.count, lotMax) %>%; --chart-bar-color: <%= item.color %>;"></i>
+              </div>
+            </a>
+          <% }) %>
+        </div>
+      </div>
+    <% } %>
+  </article>
+</section>
+
+<section class="dashboard-panel-grid">
+  <article class="content-card dashboard-panel-card">
+    <div class="content-header">
+      <div>
+        <p class="eyebrow">Unit Mix</p>
+        <h2>Category Details</h2>
+      </div>
+    </div>
+
+    <% if (categoryBreakdown.length === 0) { %>
+      <p class="dashboard-empty-state"><%= emptyStateMessage('unit category data') %></p>
+    <% } else { %>
+      <div class="dashboard-breakdown-list">
+        <% categoryBreakdown.forEach((item) => { %>
+          <a class="dashboard-breakdown-row dashboard-breakdown-row--link" href="<%= buildTechUnitsHref({ categoryId: item.id }) %>">
+            <div>
+              <strong><%= item.label %></strong>
+              <span><%= statValue(item.count) %></span>
+            </div>
+            <div class="dashboard-meter" aria-hidden="true">
+              <span style="width: <%= percentOfTotal(item.count, categoryTotal) %>%;"></span>
+            </div>
+          </a>
+        <% }) %>
+      </div>
+    <% } %>
+  </article>
+
+  <article class="content-card dashboard-panel-card">
+    <div class="content-header">
+      <div>
+        <p class="eyebrow">Grade Overview</p>
+        <h2>Grade Details</h2>
+      </div>
+    </div>
+
+    <% if (gradeChartSource.length === 0) { %>
+      <p class="dashboard-empty-state"><%= emptyStateMessage('current grade data') %></p>
+    <% } else { %>
+      <div class="dashboard-breakdown-list">
+        <% gradeChartSource.forEach((item) => { %>
+          <% const gradeDetailHref = item.gradeFilter ? buildTechUnitsHref({ gradeFilter: item.gradeFilter }) : buildTechUnitsHref({ gradeFilter: item.id ? `grade:${item.id}` : 'current' }); %>
+          <a class="dashboard-breakdown-row dashboard-breakdown-row--link" href="<%= gradeDetailHref %>">
+            <div>
+              <strong><%= item.label %></strong>
+              <span><%= statValue(item.count) %></span>
+            </div>
+            <div class="dashboard-meter" aria-hidden="true">
+              <span style="width: <%= percentOfTotal(item.count, gradeTotal) %>%;"></span>
+            </div>
+          </a>
+        <% }) %>
+      </div>
+    <% } %>
+  </article>
+
+  <article class="content-card dashboard-panel-card">
+    <div class="content-header">
+      <div>
+        <p class="eyebrow">Lots</p>
+        <h2>Work Area Details</h2>
+      </div>
+    </div>
+
+    <% if (lotBreakdown.length === 0) { %>
+      <p class="dashboard-empty-state"><%= emptyStateMessage('lot/unit data') %></p>
+    <% } else { %>
+      <div class="dashboard-breakdown-list">
+        <% lotBreakdown.forEach((item) => { %>
+          <a class="dashboard-breakdown-row dashboard-breakdown-row--link" href="<%= buildTechUnitsHref({ lotId: item.id }) %>">
+            <div>
+              <strong><%= item.label %></strong>
+              <span><%= statValue(item.count) %></span>
+            </div>
+            <div class="dashboard-meter" aria-hidden="true">
+              <span style="width: <%= percentOfTotal(item.count, lotChartTotal) %>%;"></span>
+            </div>
+          </a>
+        <% }) %>
+      </div>
+    <% } %>
+  </article>
+
+  <article class="content-card dashboard-panel-card">
+    <div class="content-header">
+      <div>
+        <p class="eyebrow">Tech Activity</p>
+        <h2><%= techActivityTitle %></h2>
+      </div>
+    </div>
+
+    <% if (techActivitySummary.length === 0) { %>
+      <p class="dashboard-empty-state"><%= emptyStateMessage('tech-created unit records', 'No tech-created unit records matched this dashboard view.') %></p>
+    <% } else { %>
+      <div class="dashboard-breakdown-list">
+        <% techActivitySummary.forEach((item) => { %>
+          <a class="dashboard-breakdown-row dashboard-breakdown-row--link" href="<%= buildTechUnitsHref({ techUserId: item.id }) %>">
+            <div>
+              <strong><%= item.label %></strong>
+              <span><%= statValue(item.count) %></span>
+            </div>
+            <div class="dashboard-meter" aria-hidden="true">
+              <span style="width: <%= percentOfTotal(item.count, techActivityTotal) %>%;"></span>
+            </div>
+          </a>
+        <% }) %>
+      </div>
+    <% } %>
+  </article>
+</section>

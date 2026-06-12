@@ -1,0 +1,10 @@
+<div id="dashboard-live-region">
+  <% if (typeof dashboardErrorMessage === 'string' && dashboardErrorMessage) { %>
+    <section class="content-card">
+      <div class="message error"><p><%= dashboardErrorMessage %></p></div>
+    </section>
+  <% } else { %>
+    <%- include('./dashboard-filters', { dashboardFilters, dashboardFilterOptions, dashboardFilterConfig }) %>
+    <%- include('./dashboard-foundation', { dashboardData }) %>
+  <% } %>
+</div>

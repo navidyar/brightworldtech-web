@@ -6,9 +6,13 @@ const router = express.Router();
 
 /*
   Route order note:
-  Keep the specific role-dashboard route before the root dashboard route.
-  This avoids future conflicts if we add more dashboard-specific routes later.
+  Keep dashboard summary routes before their page routes.
+  The root dashboard route stays last because it matches '/'.
 */
+router.get('/dashboard/summary', requireAuth, dashboardController.renderDashboardSummary);
+
+router.get('/dashboards/:dashboardKey/summary', requireAuth, dashboardController.renderRoleDashboardSummary);
+
 router.get('/dashboards/:dashboardKey', requireAuth, dashboardController.renderRoleDashboard);
 
 router.get('/', requireAuth, dashboardController.renderDashboardHome);
