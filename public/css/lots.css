@@ -601,3 +601,172 @@
     margin-left: 22px;
   }
 }
+/* Step 4j.5 lot modal and detail cleanup. */
+.lot-row-actions,
+.lot-detail-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.lot-detail-action-bar {
+  justify-content: flex-end;
+  margin: 14px 0;
+}
+
+.lot-detail-summary-grid {
+  margin-top: 12px;
+}
+
+.lot-modal .modal-panel,
+.lot-modal {
+  width: min(960px, 100%);
+}
+
+.lot-form-modal-form,
+.lot-requirement-modal-form {
+  max-width: 900px;
+}
+
+.lot-form-grid {
+  align-items: start;
+}
+
+.lot-browser-note,
+.validation-note,
+.lot-context-card,
+.compact-lot-item,
+.enforcement-banner,
+.enforcement-summary-card,
+.validation-summary-card {
+  border-left-width: 1px;
+}
+
+.lot-delete-summary {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.lot-delete-summary p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.lot-delete-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.lot-delete-counts span {
+  display: inline-flex;
+  gap: 5px;
+  align-items: baseline;
+  padding: 6px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 820;
+}
+
+.lot-delete-counts strong {
+  color: var(--text);
+}
+
+@media (max-width: 720px) {
+  .lot-detail-action-bar {
+    justify-content: stretch;
+  }
+
+  .lot-detail-action-bar .primary-button,
+  .lot-detail-action-bar .secondary-button,
+  .lot-row-actions .primary-button,
+  .lot-row-actions .secondary-button {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
+
+/* Step 4j.5.9 Lot ID cleanup and stronger lot names. */
+.lot-display-name,
+.lot-hierarchy-main .lot-display-name,
+.compact-lot-item .lot-display-name {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.lot-hierarchy-main .lot-display-name {
+  max-width: 320px;
+}
+
+.lot-hierarchy-main .unit-link {
+  text-decoration: none;
+}
+
+.lot-hierarchy-main .unit-link:hover .lot-display-name,
+.compact-lot-item:hover .lot-display-name {
+  color: var(--blue-dark);
+  text-decoration: underline;
+}
+
+.lot-detail-title {
+  font-size: clamp(1.9rem, 3vw, 2.6rem);
+  letter-spacing: -0.06em;
+}
+
+.lot-number-badge {
+  display: none !important;
+}
+
+
+/* Step 4j.5.10 Lot Browser visible lot-name sizing. */
+.management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+.management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-name,
+.lot-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name {
+  display: inline-block;
+  color: var(--text);
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+.management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link:hover .lot-display-name,
+.lot-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link:hover .lot-display-name,
+table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link:hover .lot-display-name {
+  color: var(--blue-dark);
+}
+
+/* Step 4j.5.12 Lot Browser lot names: match Unit Browser Specs text. */
+.management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+.management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-name,
+.lot-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+.lot-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-name,
+table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-name {
+  display: block;
+  max-width: 320px;
+  overflow: hidden;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.92rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.28 !important;
+  text-overflow: ellipsis;
+  vertical-align: baseline;
+  white-space: nowrap;
+}

@@ -2,6 +2,9 @@
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
   <link rel="stylesheet" href="/css/lots.css" />
+  <link rel="stylesheet" href="/css/modal.css" />
+  <script defer src="/js/modal.js"></script>
+  <script defer src="/js/lot-form.js"></script>
 
   <body>
     <%
@@ -94,7 +97,7 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-green">
             <div>
-              <p class="eyebrow">Step 2d.3a</p>
+              <p class="eyebrow">Lot Management</p>
               <h2>Lots</h2>
               <p>
                 Review lots in parent/child order without using a separate tree panel.
@@ -135,7 +138,7 @@
                 <h2>Lot Browser</h2>
               </div>
 
-              <a class="primary-button" href="/management/lots/new">Create Lot</a>
+              <a class="primary-button" href="/management/lots/new/modal" hx-get="/management/lots/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Create Lot</a>
             </div>
 
             <% if (successMessage) { %>
@@ -196,17 +199,9 @@
 
                           <div class="lot-hierarchy-main">
                             <a href="/management/lots/<%= lot.lot_id %>" class="unit-link">
-                              <strong><%= lot.lot_name %></strong>
+                              <strong class="lot-display-name"><%= lot.lot_name %></strong>
                             </a>
 
-                            <% if (lot.lot_number) { %>
-                              <span class="lot-number-badge">Lot #<%= lot.lot_number %></span>
-                            <% } %>
-
-                            <% if (lot.lot_code) { %>
-                              <br />
-                              <code><%= lot.lot_code %></code>
-                            <% } %>
 
                             <% if (parentLot) { %>
                               <br />
@@ -265,7 +260,13 @@
                       <td><%= lot.label_format || '—' %></td>
 
                       <td>
-                        <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>">View</a>
+                        <div class="lot-row-actions">
+                          <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>">View</a>
+                          <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                          <% if (Number(lot.unitCount || 0) === 0 && childLots.length === 0) { %>
+                            <a class="secondary-button danger-button" href="/management/lots/<%= lot.lot_id %>/delete/modal" hx-get="/management/lots/<%= lot.lot_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete</a>
+                          <% } %>
+                        </div>
                       </td>
                     </tr>
                   <% }) %>
@@ -307,6 +308,8 @@
             </div>
           </section>
         </main>
+
+        <div id="modal-root"></div>
       </div>
     </div>
   </body>

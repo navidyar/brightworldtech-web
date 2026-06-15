@@ -65,13 +65,13 @@
               </label>
 
               <div>
-                <p class="eyebrow" style="margin-top: 8px;">Roles</p>
+                <p class="eyebrow" style="margin-top: 8px;">Primary Role</p>
 
                 <div class="workflow-list">
                   <% roles.forEach((role) => { %>
                     <label class="workflow-item <%= formData.roleCodes.includes(role.code) ? 'active' : '' %>">
                       <input
-                        type="checkbox"
+                        type="radio"
                         name="roleCodes"
                         value="<%= role.code %>"
                         <%= formData.roleCodes.includes(role.code) ? 'checked' : '' %>

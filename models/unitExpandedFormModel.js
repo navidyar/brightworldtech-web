@@ -1,4 +1,5 @@
 const { pool } = require('./db');
+const unitOutcomeModel = require('./unitOutcomeModel');
 
 const DEFAULT_GRAPHICS_ROWS = [
   {
@@ -207,6 +208,10 @@ function getBlankExpandedFormData() {
   return {
     overallGradeConfigValueId: '',
     overallGradeNotes: '',
+    outcomeCode: '',
+    outcomeNotes: '',
+    outcomeApprovalRequested: false,
+    outcomeApprovalRequestNotes: '',
     biosVersion: '',
     osBuild: '',
     absoluteStatusConfigValueId: '',
@@ -252,6 +257,11 @@ async function getExpandedFormOptions() {
   return {
     expandedOptionsSupported: await tableExists('unit_specifications'),
     gradeOptionsSupported: await tableExists('unit_grade_assessments'),
+    outcomeOptionsSupported: await unitOutcomeModel.tableExists(),
+    outcomeOptions: [
+      { code: 'pass', label: 'Pass' },
+      { code: 'fail', label: 'Fail' }
+    ],
     graphicsOptionsSupported: await tableExists('unit_graphics_adapters'),
     overallGradeOptions: normalizeOverallGradeOptions(rawOverallGradeOptions),
     absoluteStatusOptions,
@@ -340,6 +350,10 @@ async function getCurrentGradeFormData(unitId) {
     overallGradeConfigValueId: row && row.overall_grade_config_value_id ? String(row.overall_grade_config_value_id) : '',
     overallGradeNotes: row && row.notes ? row.notes : ''
   };
+}
+
+async function getCurrentOutcomeFormData(unitId) {
+  return unitOutcomeModel.getOutcomeFormDataByUnitId(unitId);
 }
 
 async function getGraphicsFormData(unitId) {
@@ -498,9 +512,10 @@ async function getExpandedFormDataByUnitId(unitId) {
     return getBlankExpandedFormData();
   }
 
-  const [specificationData, gradeData, graphicsData, scanToolOnlyData] = await Promise.all([
+  const [specificationData, gradeData, outcomeData, graphicsData, scanToolOnlyData] = await Promise.all([
     getUnitSpecificationFormData(safeUnitId),
     getCurrentGradeFormData(safeUnitId),
+    getCurrentOutcomeFormData(safeUnitId),
     getGraphicsFormData(safeUnitId),
     getScanToolOnlyFormDataByUnitId(safeUnitId)
   ]);
@@ -509,6 +524,7 @@ async function getExpandedFormDataByUnitId(unitId) {
     ...getBlankExpandedFormData(),
     ...specificationData,
     ...gradeData,
+    ...outcomeData,
     ...graphicsData,
     ...scanToolOnlyData
   };
@@ -658,6 +674,18 @@ async function saveOverallGrade(connection, unitId, formData, currentUserId) {
   await upsertManualFieldSources(connection, unitId, ['overall_grade'], currentUserId);
 }
 
+async function saveOutcome(connection, unitId, formData, currentUserId) {
+  if (!await unitOutcomeModel.tableExists(connection)) {
+    return;
+  }
+
+  await unitOutcomeModel.saveOutcomeForUnitWithConnection(connection, {
+    unitId,
+    formData,
+    currentUserId
+  });
+}
+
 async function saveGraphicsAdapters(connection, unitId, formData, currentUserId) {
   if (!await tableExists('unit_graphics_adapters', connection)) {
     return;
@@ -720,6 +748,7 @@ async function saveExpandedDetailsForUnit({ unitId, formData, currentUserId }) {
 
     await saveUnitSpecifications(connection, safeUnitId, formData, currentUserId);
     await saveOverallGrade(connection, safeUnitId, formData, currentUserId);
+    await saveOutcome(connection, safeUnitId, formData, currentUserId);
     await saveGraphicsAdapters(connection, safeUnitId, formData, currentUserId);
 
     await connection.commit();

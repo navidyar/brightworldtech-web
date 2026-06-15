@@ -64,6 +64,7 @@
 
   const currentUserRoles = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
   const canDeleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canApproveUnitOutcomes = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
 
 
 
@@ -147,6 +148,7 @@
           const identifiers = Array.isArray(expanded.identifiers) ? expanded.identifiers : [];
           const specifications = expanded.specifications || null;
           const currentGrade = expanded.currentGrade || null;
+          const currentOutcome = expanded.currentOutcome || null;
           const memoryModules = Array.isArray(expanded.memoryModules) ? expanded.memoryModules : [];
           const storageDevices = Array.isArray(expanded.storageDevices) ? expanded.storageDevices : [];
           const cellularModules = Array.isArray(expanded.cellularModules) ? expanded.cellularModules : [];
@@ -158,6 +160,8 @@
           const biosSerialValue = identifierValue(identifiers, 'bios_serial_number') || '—';
           const unitSerialValue = identifierValue(identifiers, 'unit_serial_number') || '—';
           const currentGradeLabel = currentGrade && currentGrade.gradeLabel ? currentGrade.gradeLabel : '—';
+          const currentOutcomeLabel = currentOutcome && currentOutcome.outcomeLabel ? currentOutcome.outcomeLabel : '';
+          const currentOutcomeClass = currentOutcome && currentOutcome.outcomeCode === 'pass' ? 'pass' : (currentOutcome && currentOutcome.outcomeCode === 'fail' ? 'fail' : '');
           const latestTech = expanded.latestTech || null;
           const latestTechName = latestTech && latestTech.displayName ? latestTech.displayName : '';
           const unitCreatedDate = formatUnitCreatedDate(unit.createdAt);
@@ -217,7 +221,24 @@
           </td>
 
           <td>
-            <span class="tech-unit-summary-grade"><%= currentGradeLabel %></span>
+            <div class="tech-unit-summary-grade-stack">
+              <div class="tech-unit-summary-grade-row">
+                <span class="tech-unit-summary-grade"><%= currentGradeLabel %></span>
+                <% if (currentOutcomeLabel) { %>
+                  <span class="tech-outcome-pill tech-outcome-pill--<%= currentOutcomeClass %>"><%= currentOutcomeLabel %></span>
+                <% } %>
+              </div>
+
+              <% if (currentOutcomeLabel) { %>
+                <% if (currentOutcome.isPendingApproval) { %>
+                  <small class="tech-outcome-status">Approval Requested</small>
+                <% } else if (currentOutcome.isApproved && currentOutcome.approvedByName) { %>
+                  <small class="tech-outcome-status">Approved by <%= currentOutcome.approvedByName %></small>
+                <% } %>
+              <% } else { %>
+                <small class="tech-outcome-status">No Pass/Fail</small>
+              <% } %>
+            </div>
           </td>
 
           <td>
@@ -264,6 +285,9 @@
                       <span class="tech-chip"><%= unit.categoryLabel %></span>
                       <% if (currentGrade) { %>
                         <span class="tech-chip">Grade <%= currentGrade.gradeLabel %></span>
+                      <% } %>
+                      <% if (currentOutcomeLabel) { %>
+                        <span class="tech-chip"><%= currentOutcomeLabel %></span>
                       <% } %>
                     </div>
 
@@ -326,27 +350,69 @@
                   </section>
 
                   <section class="tech-detail-section tech-detail-section--grade">
-                    <h3>Overall Grade</h3>
+                    <h3>Cosmetic Grade & Unit Outcome</h3>
 
                     <dl class="tech-detail-list">
                       <div>
-                        <dt>Grade</dt>
+                        <dt>Cosmetic Grade</dt>
                         <dd><%= currentGrade ? currentGrade.gradeLabel : '—' %></dd>
                       </div>
 
                       <div>
-                        <dt>Source</dt>
+                        <dt>Unit Outcome</dt>
+                        <dd>
+                          <% if (currentOutcomeLabel) { %>
+                            <span class="tech-outcome-pill tech-outcome-pill--<%= currentOutcomeClass %>"><%= currentOutcomeLabel %></span>
+                          <% } else { %>
+                            —
+                          <% } %>
+                        </dd>
+                      </div>
+
+                      <div>
+                        <dt>Outcome Approval</dt>
+                        <dd>
+                          <% if (currentOutcome && currentOutcome.isApproved && currentOutcome.approvedByName) { %>
+                            Approved by <%= currentOutcome.approvedByName %>
+                          <% } else if (currentOutcome && currentOutcome.isPendingApproval) { %>
+                            Approval Requested
+                          <% } else { %>
+                            —
+                          <% } %>
+                        </dd>
+                      </div>
+
+                      <% if (currentOutcome && currentOutcome.approvalRequestNotes) { %>
+                        <div>
+                          <dt>Approval Request Notes</dt>
+                          <dd><%= currentOutcome.approvalRequestNotes %></dd>
+                        </div>
+                      <% } %>
+
+                      <% if (currentOutcome && currentOutcome.isPendingApproval && canApproveUnitOutcomes) { %>
+                        <div>
+                          <dt>Review</dt>
+                          <dd>
+                            <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/outcome-approval/modal" hx-get="/tech/units/<%= unit.unitId %>/outcome-approval/modal" hx-target="#modal-root" hx-swap="innerHTML">
+                              Approve Pass/Fail
+                            </a>
+                          </dd>
+                        </div>
+                      <% } %>
+
+                      <div>
+                        <dt>Grade Source</dt>
                         <dd><%= currentGrade ? sourceLabel(currentGrade.sourceCode) : '—' %></dd>
                       </div>
 
                       <div>
-                        <dt>Assessed</dt>
+                        <dt>Grade Assessed</dt>
                         <dd><%= currentGrade && currentGrade.assessedAt ? formatDateTime(currentGrade.assessedAt) : '—' %></dd>
                       </div>
 
                       <% if (currentGrade && currentGrade.notes) { %>
                         <div>
-                          <dt>Notes</dt>
+                          <dt>Cosmetic Grade Notes</dt>
                           <dd><%= currentGrade.notes %></dd>
                         </div>
                       <% } %>

@@ -1,3 +1,10 @@
+const ROLE_HIERARCHY = [
+  'admin',
+  'management',
+  'tech_lead',
+  'tech'
+];
+
 const DASHBOARD_DEFINITIONS = [
   {
     key: 'admin',
@@ -14,70 +21,20 @@ const DASHBOARD_DEFINITIONS = [
     title: 'Management Dashboard',
     menuLabel: 'Management',
     kicker: 'Management Overview',
-    description: 'Overall operations, productivity, user metrics, approvals, configuration, and management reporting.',
+    description: 'Overall operations, productivity, user metrics, approvals, and management reporting.',
     menuArea: 'management',
     allowedRoles: ['admin', 'management'],
     accent: 'blue'
-  },
-  {
-    key: 'tech-lead',
-    title: 'Tech Lead Dashboard',
-    menuLabel: 'Tech Lead',
-    kicker: 'Lead Monitoring',
-    description: 'Team productivity, tech performance, takeover approvals, lot progress, and daily monitoring.',
-    menuArea: 'tech',
-    allowedRoles: ['admin', 'management', 'tech_lead'],
-    accent: 'green'
   },
   {
     key: 'tech',
     title: 'Tech Dashboard',
     menuLabel: 'Tech',
     kicker: 'Tech Portal',
-    description: 'Individual tech work, assigned workflow activity, support tasks, and unit progress.',
+    description: 'Tech productivity, personal metrics, team averages, and unit progress.',
     menuArea: 'tech',
     allowedRoles: ['admin', 'management', 'tech_lead', 'tech'],
     accent: 'green'
-  },
-  {
-    key: 'qc',
-    title: 'QC Dashboard',
-    menuLabel: 'QC',
-    kicker: 'Quality Control',
-    description: 'QC checks, scoring, unit review, accuracy tracking, and weighted QC productivity.',
-    menuArea: 'qc',
-    allowedRoles: ['admin', 'management', 'tech_lead', 'qc'],
-    accent: 'yellow'
-  },
-  {
-    key: 'packing',
-    title: 'Packing Dashboard',
-    menuLabel: 'Packing',
-    kicker: 'Packing Workflow',
-    description: 'Packaging, boxed units, wrapped pallets, ready-to-ship statuses, and support work.',
-    menuArea: 'packing',
-    allowedRoles: ['admin', 'management', 'tech_lead', 'packing'],
-    accent: 'orange'
-  },
-  {
-    key: 'warehouse',
-    title: 'Warehouse Dashboard',
-    menuLabel: 'Warehouse',
-    kicker: 'Warehouse Operations',
-    description: 'Future warehouse inventory, pallet, rack, shelf, bin, and scan-batch workflows.',
-    menuArea: 'warehouse',
-    allowedRoles: ['admin', 'management', 'warehouse'],
-    accent: 'slate'
-  },
-  {
-    key: 'sales',
-    title: 'Sales Dashboard',
-    menuLabel: 'Sales',
-    kicker: 'Sales Operations',
-    description: 'Future sales lots, customer lots, sales status, shipping, delivery, and sales reporting.',
-    menuArea: 'sales',
-    allowedRoles: ['admin', 'management', 'sales'],
-    accent: 'red'
   }
 ];
 
@@ -98,26 +55,6 @@ const MENU_AREAS = [
     allowedRoles: ['admin', 'management', 'tech_lead', 'tech']
   },
   {
-    key: 'qc',
-    label: 'QC',
-    allowedRoles: ['admin', 'management', 'tech_lead', 'qc']
-  },
-  {
-    key: 'packing',
-    label: 'Packing',
-    allowedRoles: ['admin', 'management', 'tech_lead', 'packing']
-  },
-  {
-    key: 'warehouse',
-    label: 'Warehouse',
-    allowedRoles: ['admin', 'management', 'warehouse']
-  },
-  {
-    key: 'sales',
-    label: 'Sales',
-    allowedRoles: ['admin', 'management', 'sales']
-  },
-  {
     key: 'database',
     label: 'Database Check',
     allowedRoles: ['admin', 'management']
@@ -132,10 +69,32 @@ function normalizeRoles(roleCodes) {
   return roleCodes.map((roleCode) => String(roleCode).trim()).filter(Boolean);
 }
 
-function hasAnyRole(userRoleCodes, allowedRoles) {
+function getPrimaryRole(userRoleCodes) {
   const normalizedUserRoles = normalizeRoles(userRoleCodes);
 
-  return normalizedUserRoles.some((roleCode) => allowedRoles.includes(roleCode));
+  return ROLE_HIERARCHY.find((roleCode) => normalizedUserRoles.includes(roleCode)) || normalizedUserRoles[0] || '';
+}
+
+function getEffectiveRoles(userRoleCodes) {
+  const primaryRole = getPrimaryRole(userRoleCodes);
+
+  if (!primaryRole) {
+    return [];
+  }
+
+  const primaryRoleIndex = ROLE_HIERARCHY.indexOf(primaryRole);
+
+  if (primaryRoleIndex < 0) {
+    return [primaryRole];
+  }
+
+  return ROLE_HIERARCHY.slice(primaryRoleIndex);
+}
+
+function hasAnyRole(userRoleCodes, allowedRoles) {
+  const effectiveRoles = getEffectiveRoles(userRoleCodes);
+
+  return effectiveRoles.some((roleCode) => allowedRoles.includes(roleCode));
 }
 
 function getDashboardDefinition(dashboardKey) {
@@ -167,10 +126,13 @@ function getAccessibleDashboards(userRoleCodes) {
 }
 
 module.exports = {
+  ROLE_HIERARCHY,
   DASHBOARD_DEFINITIONS,
   MENU_AREAS,
   canAccessDashboard,
   canAccessMenuArea,
   getAccessibleDashboards,
-  getDashboardDefinition
+  getDashboardDefinition,
+  getEffectiveRoles,
+  getPrimaryRole
 };

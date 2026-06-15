@@ -1,0 +1,60 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeSummary = deleteSummary || {};
+  const safeLot = safeSummary.lot || lot || null;
+  const lotName = safeLot ? safeLot.lot_name : 'Selected Lot';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel lot-modal lot-delete-modal" role="dialog" aria-modal="true" aria-labelledby="lot-delete-modal-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Delete Lot</p>
+        <h2 id="lot-delete-modal-title">Delete <%= lotName %>?</h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeLot) { %>
+        <div class="lot-delete-summary">
+          <p>This lot can only be deleted when it has no units and no child lots.</p>
+          <div class="lot-delete-counts">
+            <span><strong><%= safeSummary.unitCount || 0 %></strong> units</span>
+            <span><strong><%= safeSummary.childLotCount || 0 %></strong> child lots</span>
+            <span><strong><%= safeSummary.requirementCount || 0 %></strong> requirements</span>
+          </div>
+        </div>
+
+        <% if (safeSummary.canDelete) { %>
+          <form method="post" action="/management/lots/<%= safeLot.lot_id %>/delete" hx-post="/management/lots/<%= safeLot.lot_id %>/delete" hx-target="#modal-root" hx-swap="innerHTML">
+            <div class="action-row">
+              <button type="submit" class="secondary-button danger-button">Delete Lot</button>
+              <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            </div>
+          </form>
+        <% } else { %>
+          <div class="message error">
+            <p>This lot cannot be deleted until all attached units and child lots are removed.</p>
+          </div>
+          <div class="action-row">
+            <button type="button" class="secondary-button" data-modal-close>Close</button>
+          </div>
+        <% } %>
+      <% } else { %>
+        <div class="action-row">
+          <button type="button" class="secondary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

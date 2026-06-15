@@ -1853,7 +1853,7 @@ pre {
 .dashboard-empty-state-card {
   margin-bottom: 18px;
   border-style: dashed;
-  background: color-mix(in srgb, #ffffff 82%, var(--slate-soft) 18%);
+  background: color-mix(in srgb, #ffffff 82%, var(--slate-bg) 18%);
 }
 
 .dashboard-empty-state--strong {
@@ -1871,4 +1871,972 @@ pre {
 .dashboard-empty-state--strong p {
   margin: 0;
   color: var(--muted);
+}
+
+/* Step 4g role-specific dashboard planning and calmer chart contrast. */
+:root {
+  --chart-orange: #b76535;
+  --chart-blue: #4d739e;
+  --chart-purple: #695997;
+  --chart-red: #9f535c;
+  --chart-teal: #4f8782;
+  --chart-slate: #5f6e82;
+  --chart-green: #607f66;
+  --chart-brown: #85654b;
+  --chart-empty: #e5e7eb;
+}
+
+.dashboard-plan-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--blue) 28%, var(--line) 72%);
+  border-radius: 999px;
+  color: color-mix(in srgb, var(--text) 76%, var(--blue) 24%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--blue-soft) 48%, #ffffff 52%), #ffffff);
+  font-size: 0.74rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.management-metrics-roadmap {
+  margin-top: 18px;
+  border-color: color-mix(in srgb, var(--line) 74%, var(--purple) 26%);
+  background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, #ffffff 82%, var(--purple-bg) 18%) 52%, color-mix(in srgb, #ffffff 88%, var(--orange-bg) 12%) 100%);
+}
+
+.management-metrics-intro {
+  max-width: 960px;
+  margin: 0 0 18px;
+  color: var(--muted);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.management-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.management-metric-plan-card,
+.management-metrics-breakdown-card,
+.management-metrics-rule-card {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.045);
+}
+
+.management-metric-plan-card {
+  padding: 14px;
+}
+
+.management-metric-plan-card h3,
+.management-metrics-breakdown-card h3 {
+  margin: 4px 0 8px;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.management-metric-plan-card p,
+.management-metrics-breakdown-card p,
+.management-metrics-rule-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.management-metric-plan-card ul {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.management-metric-plan-card li {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 760;
+}
+
+.management-metric-plan-card li::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.68;
+  flex: 0 0 auto;
+}
+
+.management-metric-plan-card.accent-orange {
+  border-color: color-mix(in srgb, var(--chart-orange) 28%, var(--line) 72%);
+  background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, #ffffff 76%, var(--chart-orange) 24%) 100%);
+}
+
+.management-metric-plan-card.accent-blue {
+  border-color: color-mix(in srgb, var(--chart-blue) 28%, var(--line) 72%);
+  background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, #ffffff 77%, var(--chart-blue) 23%) 100%);
+}
+
+.management-metric-plan-card.accent-purple {
+  border-color: color-mix(in srgb, var(--chart-purple) 28%, var(--line) 72%);
+  background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, #ffffff 78%, var(--chart-purple) 22%) 100%);
+}
+
+.management-metric-plan-card.accent-red {
+  border-color: color-mix(in srgb, var(--chart-red) 28%, var(--line) 72%);
+  background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, #ffffff 79%, var(--chart-red) 21%) 100%);
+}
+
+.management-metrics-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.management-metrics-breakdown-card {
+  padding: 14px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.86), color-mix(in srgb, #ffffff 86%, var(--blue-soft) 14%));
+}
+
+.management-metrics-breakdown-card span {
+  display: inline-flex;
+  margin-top: 10px;
+  color: color-mix(in srgb, var(--muted) 72%, var(--blue) 28%);
+  font-size: 0.78rem;
+  font-weight: 820;
+  line-height: 1.45;
+}
+
+.management-metrics-rule-card {
+  margin-top: 14px;
+  padding: 14px;
+  border-color: color-mix(in srgb, var(--chart-red) 20%, var(--line) 80%);
+  background: linear-gradient(135deg, color-mix(in srgb, #ffffff 90%, var(--chart-red) 10%), #ffffff);
+}
+
+.management-metrics-rule-card strong {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 1180px) {
+  .management-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .management-metrics-breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .management-metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-plan-pill {
+    width: 100%;
+  }
+}
+
+/* Step 4i Management completion metrics foundation and date picker-only dates. */
+input[type="date"] {
+  cursor: pointer;
+}
+
+.management-completion-foundation {
+  margin-top: 18px;
+  border-color: color-mix(in srgb, var(--line) 72%, var(--blue) 28%);
+  background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, #ffffff 84%, var(--blue-soft) 16%) 48%, color-mix(in srgb, #ffffff 90%, var(--orange-bg) 10%) 100%);
+}
+
+.management-completion-window-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.management-completion-window-card {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, var(--blue) 22%);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.045);
+}
+
+.management-completion-window-card h3 {
+  margin: 0;
+  color: var(--text);
+  font-size: clamp(1.55rem, 3vw, 2.2rem);
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+
+.management-completion-window-card > span,
+.management-completion-window-card small {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 760;
+  line-height: 1.35;
+}
+
+.management-completion-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.management-completion-split > div {
+  padding: 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: color-mix(in srgb, #ffffff 82%, var(--surface-soft) 18%);
+}
+
+.management-completion-split strong,
+.management-completion-split span {
+  display: block;
+}
+
+.management-completion-split strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.management-completion-split span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.completion-check-good {
+  color: color-mix(in srgb, var(--green) 66%, var(--text) 34%) !important;
+}
+
+.completion-check-bad {
+  color: color-mix(in srgb, var(--red) 66%, var(--text) 34%) !important;
+}
+
+.management-completion-active-window {
+  margin-top: 14px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, var(--purple) 24%);
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255,255,255,0.9), color-mix(in srgb, #ffffff 84%, var(--purple-bg) 16%));
+}
+
+.management-completion-active-window h3 {
+  margin: 4px 0;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.management-completion-active-window span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.management-completion-breakdown-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.management-completion-breakdown-card {
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.04);
+}
+
+.compact-header {
+  margin-bottom: 10px;
+}
+
+.management-completion-breakdown-list {
+  display: grid;
+  gap: 9px;
+}
+
+.management-completion-breakdown-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) repeat(3, minmax(74px, auto));
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: color-mix(in srgb, #ffffff 84%, var(--surface-soft) 16%);
+}
+
+.management-completion-breakdown-row strong {
+  color: var(--text);
+  font-size: 0.88rem;
+}
+
+.management-completion-breakdown-row span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 820;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .management-completion-window-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .management-completion-breakdown-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .management-completion-window-grid,
+  .management-completion-split {
+    grid-template-columns: 1fr;
+  }
+
+  .management-completion-breakdown-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Step 4j live Management completion metrics. */
+.management-completion-live {
+  background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, #ffffff 86%, var(--blue-soft) 14%) 100%);
+}
+
+.management-completion-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.management-completion-kpi-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid color-mix(in srgb, var(--line-soft) 84%, var(--blue) 16%);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+}
+
+.management-completion-kpi-card--custom {
+  border-color: color-mix(in srgb, var(--line-soft) 74%, var(--purple) 26%);
+  background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, #ffffff 84%, var(--purple-bg) 16%) 100%);
+}
+
+.management-completion-kpi-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.management-completion-kpi-header h3 {
+  margin: 4px 0 0;
+  color: var(--text);
+  font-size: clamp(1.65rem, 3vw, 2.35rem);
+  letter-spacing: -0.07em;
+}
+
+.management-completion-kpi-description {
+  min-height: 34px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.management-completion-kpi-date {
+  color: color-mix(in srgb, var(--text) 72%, var(--blue) 28%);
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.management-completion-split--large > div {
+  padding: 11px;
+  background: color-mix(in srgb, #ffffff 88%, var(--surface-soft) 12%);
+}
+
+.completion-check-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.completion-check-badge--good {
+  border: 1px solid color-mix(in srgb, var(--green) 34%, var(--line) 66%);
+  color: color-mix(in srgb, var(--green) 68%, var(--text) 32%);
+  background: color-mix(in srgb, var(--green-bg) 60%, #ffffff 40%);
+}
+
+.completion-check-badge--bad {
+  border: 1px solid color-mix(in srgb, var(--red) 34%, var(--line) 66%);
+  color: color-mix(in srgb, var(--red) 68%, var(--text) 32%);
+  background: color-mix(in srgb, var(--red-bg) 60%, #ffffff 40%);
+}
+
+.management-completion-active-window--live {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.management-completion-active-totals {
+  min-width: 130px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.78);
+  text-align: right;
+}
+
+.management-completion-active-totals strong,
+.management-completion-active-totals span {
+  display: block;
+}
+
+.management-completion-active-totals strong {
+  color: var(--text);
+  font-size: 1.35rem;
+  letter-spacing: -0.05em;
+}
+
+.management-completion-active-totals span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.management-completion-breakdown-row--live {
+  grid-template-columns: minmax(140px, 1fr) repeat(3, minmax(70px, auto)) minmax(60px, auto);
+}
+
+.management-completion-breakdown-row--live small {
+  justify-self: end;
+  font-size: 0.72rem;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+@media (max-width: 1260px) {
+  .management-completion-kpi-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .management-completion-kpi-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .management-completion-active-window--live {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .management-completion-active-totals {
+    text-align: left;
+  }
+
+  .management-completion-breakdown-row--live {
+    grid-template-columns: 1fr;
+  }
+
+  .management-completion-breakdown-row--live small {
+    justify-self: start;
+  }
+}
+
+/* Step 4j.3 role-aware dashboard metrics and pie-first layout. */
+.dashboard-role-metrics {
+  background: linear-gradient(135deg, #ffffff 0%, color-mix(in srgb, #ffffff 88%, var(--blue-bg) 12%) 100%);
+}
+
+.dashboard-period-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(190px, 0.85fr) minmax(140px, auto);
+  gap: 12px;
+  align-items: stretch;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--line-soft) 80%, var(--blue) 20%);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+}
+
+.dashboard-period-form .form-field {
+  margin: 0;
+}
+
+.dashboard-period-main-field small,
+.dashboard-period-field small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.dashboard-period-field {
+  min-width: 0;
+}
+
+.dashboard-period-field[hidden] {
+  display: none !important;
+}
+
+.dashboard-period-field.is-active {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-period-field--range.is-active {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-period-field--no-picker {
+  align-content: center;
+  padding: 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: color-mix(in srgb, #ffffff 84%, var(--green-bg) 16%);
+}
+
+.dashboard-period-field--no-picker strong {
+  color: var(--text);
+}
+
+.dashboard-period-form .primary-button {
+  min-height: 42px;
+  justify-content: center;
+}
+
+.dashboard-selected-period-note {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: center;
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--line-soft) 72%, var(--chart-teal) 28%);
+  border-radius: 14px;
+  background: color-mix(in srgb, #ffffff 88%, var(--teal-bg, var(--blue-bg)) 12%);
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.dashboard-selected-period-note strong {
+  color: var(--text);
+}
+
+.dashboard-pie-grid {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.dashboard-pie-grid--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-pie-panel {
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) minmax(0, 1fr);
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+  padding: 15px;
+  border: 1px solid color-mix(in srgb, var(--line-soft) 82%, var(--blue) 18%);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 14px 28px rgba(15, 23, 42, 0.04);
+}
+
+.dashboard-pie {
+  width: min(210px, 100%);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: var(--pie-gradient, conic-gradient(var(--chart-empty) 0deg 360deg));
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.06), 0 16px 30px rgba(15, 23, 42, 0.08);
+}
+
+.dashboard-pie-side {
+  min-width: 0;
+}
+
+.dashboard-pie-side h3 {
+  margin: 2px 0 0;
+  color: var(--text);
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+  letter-spacing: -0.06em;
+}
+
+.dashboard-pie-side > span {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 850;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.dashboard-pie-legend {
+  display: grid;
+  gap: 7px;
+}
+
+.dashboard-pie-legend-row {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.dashboard-pie-legend-row i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--legend-color);
+}
+
+.dashboard-pie-legend-row strong {
+  overflow: hidden;
+  color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-empty-state--compact {
+  margin: 0;
+  padding: 10px;
+  font-size: 0.8rem;
+}
+
+.tech-team-average-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 16px;
+}
+
+.tech-team-average-panel {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--line-soft) 76%, var(--green) 24%);
+  border-radius: 18px;
+  background: color-mix(in srgb, #ffffff 88%, var(--green-bg) 12%);
+}
+
+.tech-team-average-panel h3 {
+  margin: 2px 0;
+  color: var(--text);
+  font-size: 2rem;
+  letter-spacing: -0.06em;
+}
+
+.tech-team-average-panel span {
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 780;
+}
+
+.all-tech-metrics-list {
+  margin-top: 16px;
+}
+
+.all-tech-metrics-scroll {
+  display: grid;
+  gap: 8px;
+  max-height: 440px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.all-tech-metric-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) repeat(2, minmax(120px, auto));
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.all-tech-metric-row strong {
+  color: var(--text);
+}
+
+@media (max-width: 1180px) {
+  .dashboard-pie-grid--two {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-period-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .dashboard-pie-panel,
+  .dashboard-period-field--range.is-active,
+  .tech-team-average-grid,
+  .all-tech-metric-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-pie {
+    width: min(230px, 78vw);
+    justify-self: center;
+  }
+}
+
+/* Step 4j.4 dashboard hierarchy/form alignment cleanup. */
+.dashboard-period-form,
+.management-reporting-controls,
+.management-reporting-controls--simplified {
+  align-items: stretch;
+}
+
+.dashboard-period-form > .form-field,
+.dashboard-period-form > .dashboard-period-main-field,
+.dashboard-period-form > .dashboard-period-field,
+.management-reporting-controls > .form-field,
+.management-reporting-controls > .management-reporting-main-field,
+.management-reporting-controls > .management-period-panel {
+  height: 100%;
+}
+
+.dashboard-period-form .form-field,
+.management-reporting-controls .form-field,
+.management-period-panel .form-field {
+  display: grid;
+  grid-template-rows: auto minmax(42px, auto) auto;
+  align-content: start;
+  gap: 7px;
+}
+
+.dashboard-period-form .form-field small,
+.management-reporting-controls .form-field small,
+.management-period-panel .form-field small,
+.dashboard-period-field > small,
+.management-period-note {
+  min-height: 2.4em;
+}
+
+.dashboard-period-form input,
+.dashboard-period-form select,
+.management-reporting-controls input,
+.management-reporting-controls select {
+  min-height: 42px;
+}
+
+.sidebar-group .sidebar-subnav:empty {
+  display: none;
+}
+
+/* Step 4j.5 form width and alignment cleanup. */
+.content-card > .app-form,
+.content-card > .auth-form {
+  width: min(100%, 1080px);
+  margin-inline: auto;
+}
+
+.modal-body .app-form,
+.modal-body .auth-form {
+  width: min(100%, 980px);
+  margin-inline: auto;
+}
+
+.form-grid {
+  align-items: start;
+}
+
+.form-field {
+  min-width: 0;
+}
+
+.form-field .field-hint,
+.form-field small {
+  display: block;
+  min-height: 1.15rem;
+  margin-top: 6px;
+  line-height: 1.35;
+}
+
+.dashboard-filter-form,
+.management-reporting-controls,
+.dashboard-period-form {
+  max-width: 1180px;
+  margin-inline: auto;
+}
+
+/* Step 4j.5.3 normalize Management completion Show Charts button. */
+.management-reporting-controls--simplified .management-reporting-actions {
+  align-self: end !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: flex-start !important;
+}
+
+.management-reporting-controls--simplified .management-reporting-actions .primary-button {
+  width: auto !important;
+  height: auto !important;
+  min-height: 42px !important;
+  min-width: 0 !important;
+  padding: 0 18px !important;
+  border-radius: 12px !important;
+  white-space: nowrap !important;
+}
+
+@media (max-width: 1060px) {
+  .management-reporting-controls--simplified .management-reporting-actions .primary-button {
+    width: 100% !important;
+  }
+}
+
+/* Step 4j.5.4 normalize Dashboard Show Charts button. */
+.dashboard-period-form > button.primary-button,
+.dashboard-period-form > .primary-button,
+.dashboard-role-metrics .dashboard-period-form > button.primary-button {
+  align-self: end !important;
+  justify-self: start !important;
+  width: auto !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+  min-width: 0 !important;
+  padding: 0 18px !important;
+  border-radius: 12px !important;
+  line-height: 1 !important;
+  aspect-ratio: auto !important;
+  white-space: nowrap !important;
+}
+
+.dashboard-period-form {
+  align-items: end !important;
+}
+
+.dashboard-period-form > .form-field,
+.dashboard-period-form > .dashboard-period-main-field,
+.dashboard-period-form > .dashboard-period-field {
+  align-self: stretch !important;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-period-form > button.primary-button,
+  .dashboard-period-form > .primary-button,
+  .dashboard-role-metrics .dashboard-period-form > button.primary-button {
+    justify-self: stretch !important;
+    width: 100% !important;
+  }
+}
+
+/* Step 4j.5.5 align Dashboard Show Charts button with the visible form inputs. */
+.dashboard-role-metrics .dashboard-period-form > button.primary-button,
+.dashboard-role-metrics .dashboard-period-form > .primary-button,
+.dashboard-period-form > button.primary-button,
+.dashboard-period-form > .primary-button {
+  align-self: start !important;
+  justify-self: start !important;
+  width: auto !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+  min-width: 0 !important;
+  margin-top: 29px !important;
+  padding: 0 18px !important;
+  border-radius: 12px !important;
+  aspect-ratio: auto !important;
+  line-height: 1 !important;
+  white-space: nowrap !important;
+}
+
+.dashboard-period-form {
+  align-items: start !important;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-role-metrics .dashboard-period-form > button.primary-button,
+  .dashboard-role-metrics .dashboard-period-form > .primary-button,
+  .dashboard-period-form > button.primary-button,
+  .dashboard-period-form > .primary-button {
+    justify-self: stretch !important;
+    width: 100% !important;
+    margin-top: 0 !important;
+  }
+}
+
+/* Step 4j.5.6 fine-tune Dashboard Show Charts button alignment. */
+.dashboard-role-metrics .dashboard-period-form > button.primary-button,
+.dashboard-role-metrics .dashboard-period-form > .primary-button,
+.dashboard-period-form > button.primary-button,
+.dashboard-period-form > .primary-button {
+  align-self: start !important;
+  justify-self: start !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  max-height: 42px !important;
+  margin-top: 25px !important;
+  padding: 0 18px !important;
+  border-radius: 12px !important;
+  line-height: 1 !important;
+}
+
+@media (max-width: 1180px) {
+  .dashboard-role-metrics .dashboard-period-form > button.primary-button,
+  .dashboard-role-metrics .dashboard-period-form > .primary-button,
+  .dashboard-period-form > button.primary-button,
+  .dashboard-period-form > .primary-button {
+    width: 100% !important;
+    margin-top: 0 !important;
+  }
 }

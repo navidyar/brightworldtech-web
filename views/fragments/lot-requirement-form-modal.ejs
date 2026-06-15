@@ -1,0 +1,98 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeFormData = formData || {};
+  const safeMode = mode === 'edit' ? 'edit' : 'create';
+  const safeRequirement = requirement || null;
+  const formAction = safeMode === 'edit' && safeRequirement
+    ? `/management/lots/${lot.lot_id}/requirements/${safeRequirement.lot_requirement_id}/edit/modal`
+    : `/management/lots/${lot.lot_id}/requirements`;
+  const title = safeMode === 'edit' ? 'Edit Requirement' : 'Add Requirement';
+  const submitLabel = safeMode === 'edit' ? 'Save Requirement' : 'Add Requirement';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel lot-modal lot-requirement-modal" role="dialog" aria-modal="true" aria-labelledby="lot-requirement-modal-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Lot Requirement</p>
+        <h2 id="lot-requirement-modal-title"><%= title %></h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <script type="application/json" data-requirement-value-options-json><%- JSON.stringify(requirementValueOptionsByKey || {}).replace(/</g, '\\u003c') %></script>
+
+      <form class="app-form lot-requirement-modal-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML" data-requirement-form>
+        <div class="form-section">
+          <div class="form-section-header">
+            <div>
+              <p class="eyebrow">Rule</p>
+              <h3>Requirement Details</h3>
+            </div>
+            <p>Choose a field, rule, required value, and optional internal note.</p>
+          </div>
+
+          <div class="form-grid lot-form-grid">
+            <label class="form-field">
+              <span>Requirement Field</span>
+              <select name="requirementKey" required data-requirement-key>
+                <option value="">Select requirement</option>
+                <% requirementFieldOptions.forEach((option) => { %>
+                  <option value="<%= option.value %>" <%= safeFormData.requirementKey === option.value ? 'selected' : '' %>>
+                    <%= option.label %>
+                  </option>
+                <% }) %>
+              </select>
+              <small class="field-hint" data-requirement-field-hint>Select a field to see whether standardized values are available.</small>
+            </label>
+
+            <label class="form-field">
+              <span>Rule</span>
+              <select name="operatorCode" required>
+                <% operatorOptions.forEach((option) => { %>
+                  <option value="<%= option.value %>" <%= safeFormData.operatorCode === option.value ? 'selected' : '' %>>
+                    <%= option.label %>
+                  </option>
+                <% }) %>
+              </select>
+            </label>
+
+            <label class="form-field" data-required-value-select-wrap hidden>
+              <span>Required Value</span>
+              <select name="requiredValue" data-required-value-select disabled>
+                <option value="">Select value</option>
+              </select>
+              <small class="field-hint" data-required-value-select-hint>Values are loaded from config values.</small>
+            </label>
+
+            <label class="form-field" data-required-value-text-wrap>
+              <span>Required Value</span>
+              <input type="text" name="requiredValue" value="<%= safeFormData.requiredValue || '' %>" maxlength="120" placeholder="Example: 16GB, DDR4, 512GB, i5-8365U, yes, no" required data-required-value-text />
+              <small class="field-hint">Free text is used when no standardized dropdown exists yet.</small>
+            </label>
+
+            <label class="form-field">
+              <span>Notes</span>
+              <input type="text" name="notes" value="<%= safeFormData.notes || '' %>" maxlength="500" placeholder="Optional internal note" />
+            </label>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="primary-button"><%= submitLabel %></button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

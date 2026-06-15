@@ -145,7 +145,98 @@ function getRequirementFormDataFromRequest(req) {
   };
 }
 
-function validateLotForm(formData, formOptions) {
+function isHtmxRequest(req) {
+  return String(req.get('HX-Request') || '').toLowerCase() === 'true';
+}
+
+function sendHtmxRedirect(req, res, redirectUrl) {
+  if (isHtmxRequest(req)) {
+    res.set('HX-Redirect', redirectUrl);
+    return res.send('');
+  }
+
+  return res.redirect(redirectUrl);
+}
+
+function setNoStoreHeaders(res) {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.set('Surrogate-Control', 'no-store');
+}
+
+function addCacheBuster(redirectUrl) {
+  const separator = redirectUrl.includes('?') ? '&' : '?';
+  return `${redirectUrl}${separator}refresh=${Date.now()}`;
+}
+
+function formatDateForInput(value) {
+  if (!value) {
+    return '';
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  return String(value).slice(0, 10);
+}
+
+function getLotFormDataFromLot(lot) {
+  return {
+    lotName: lot.lot_name || '',
+    parentLotId: lot.parent_lot_id || '',
+    lotTypeConfigValueId: lot.lot_type_config_value_id || '',
+    defaultGradeConfigValueId: lot.default_grade_config_value_id || '',
+    hasUnlimitedGoal: lot.isUnlimited ? '1' : '0',
+    unitAmountGoal: lot.isUnlimited ? '' : String(lot.unitGoal || lot.unit_amount_goal || ''),
+    deadline: formatDateForInput(lot.deadline),
+    labelFormat: lot.label_format || '',
+    objectives: lot.objectives || '',
+    notes: lot.notes || ''
+  };
+}
+
+function getRequirementFormDataFromRequirement(requirement) {
+  return {
+    requirementKey: requirement.requirement_key || '',
+    operatorCode: requirement.operator_code || 'equals',
+    requiredValue: requirement.required_value || '',
+    notes: requirement.notes || ''
+  };
+}
+
+function renderLotModal(res, { mode, formOptions, formData, lot = null, errorMessages = [] }) {
+  return res.render('fragments/lot-form-modal', {
+    mode,
+    lot,
+    formOptions,
+    formData,
+    errorMessages
+  });
+}
+
+function renderRequirementModal(res, {
+  mode,
+  lot,
+  requirement = null,
+  requirementValueOptionsByKey,
+  formData,
+  errorMessages = []
+}) {
+  return res.render('fragments/lot-requirement-form-modal', {
+    mode,
+    lot,
+    requirement,
+    requirementValueOptionsByKey,
+    requirementFieldOptions,
+    operatorOptions,
+    formData,
+    errorMessages
+  });
+}
+
+function validateLotForm(formData, formOptions, currentLotId = null) {
   const errors = [];
 
   if (!formData.lotName || formData.lotName.length < 2) {
@@ -158,6 +249,10 @@ function validateLotForm(formData, formOptions) {
 
   if (formData.parentLotId && !Number.isInteger(Number(formData.parentLotId))) {
     errors.push('Parent lot must be a valid lot.');
+  }
+
+  if (currentLotId && formData.parentLotId && Number(formData.parentLotId) === Number(currentLotId)) {
+    errors.push('A lot cannot be its own parent lot.');
   }
 
   if (formData.lotTypeConfigValueId && !Number.isInteger(Number(formData.lotTypeConfigValueId))) {
@@ -362,12 +457,14 @@ async function renderLotsPage(req, res, next) {
     const lots = await lotModel.listLots();
     const summary = await lotModel.getLotSummary();
 
+    setNoStoreHeaders(res);
+
     res.render('pages/management-lots', {
       pageTitle: 'Lots',
       currentNav: 'management-lots',
       lots,
       summary,
-      successMessage: req.query.created === '1' ? 'Lot created successfully.' : null
+      successMessage: req.query.created === '1' ? 'Lot created successfully.' : (req.query.deleted === '1' ? 'Lot deleted successfully.' : null)
     });
   } catch (error) {
     next(error);
@@ -397,6 +494,16 @@ async function createLot(req, res, next) {
     const errorMessages = validateLotForm(formData, formOptions);
 
     if (errorMessages.length > 0) {
+      if (isHtmxRequest(req)) {
+        return res.status(400).render('fragments/lot-form-modal', {
+          mode: 'create',
+          lot: null,
+          formOptions,
+          formData,
+          errorMessages
+        });
+      }
+
       return res.status(400).render('pages/management-lot-new', {
         pageTitle: 'Create Lot',
         currentNav: 'management-lots',
@@ -408,7 +515,7 @@ async function createLot(req, res, next) {
 
     await lotModel.createLot(formData, req.currentUser.user_id);
 
-    return res.redirect('/management/lots?created=1');
+    return sendHtmxRedirect(req, res, addCacheBuster('/management/lots?created=1'));
   } catch (error) {
     next(error);
   }
@@ -444,7 +551,9 @@ async function renderLotDetailPage(req, res, next) {
       errorMessages: [],
       successMessage: req.query.requirementCreated === '1'
         ? 'Requirement added successfully.'
-        : null
+        : (req.query.updated === '1'
+          ? 'Lot updated successfully.'
+          : (req.query.requirementUpdated === '1' ? 'Requirement updated successfully.' : null))
     });
   } catch (error) {
     next(error);
@@ -475,6 +584,19 @@ async function createLotRequirement(req, res, next) {
     const errorMessages = validateRequirementForm(requirementFormData);
 
     if (errorMessages.length > 0) {
+      if (isHtmxRequest(req)) {
+        return res.status(400).render('fragments/lot-requirement-form-modal', {
+          mode: 'create',
+          lot: lotDetailViewData.lot,
+          requirement: null,
+          requirementValueOptionsByKey: lotDetailViewData.requirementValueOptionsByKey,
+          requirementFieldOptions,
+          operatorOptions,
+          formData: requirementFormData,
+          errorMessages
+        });
+      }
+
       return res.status(400).render('pages/management-lot-detail', {
         pageTitle: lotDetailViewData.lot.lot_name,
         currentNav: 'management-lots',
@@ -489,7 +611,298 @@ async function createLotRequirement(req, res, next) {
 
     await lotModel.createLotRequirement(lotId, requirementFormData, req.currentUser.user_id);
 
-    return res.redirect(`/management/lots/${lotId}?requirementCreated=1`);
+    return sendHtmxRedirect(req, res, `/management/lots/${lotId}?requirementCreated=1`);
+  } catch (error) {
+    next(error);
+  }
+}
+
+
+async function renderNewLotModal(req, res, next) {
+  try {
+    const formOptions = await lotModel.getLotFormOptions();
+
+    return renderLotModal(res, {
+      mode: 'create',
+      formOptions,
+      formData: getBlankLotFormData(),
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderEditLotModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return res.status(404).render('fragments/lot-form-modal', {
+        mode: 'edit',
+        lot: null,
+        formOptions: await lotModel.getLotFormOptions(),
+        formData: getBlankLotFormData(),
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const [lot, formOptions] = await Promise.all([
+      lotModel.getLotById(lotId),
+      lotModel.getLotFormOptions()
+    ]);
+
+    if (!lot) {
+      return res.status(404).render('fragments/lot-form-modal', {
+        mode: 'edit',
+        lot: null,
+        formOptions,
+        formData: getBlankLotFormData(),
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    return renderLotModal(res, {
+      mode: 'edit',
+      lot,
+      formOptions,
+      formData: getLotFormDataFromLot(lot),
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateLotModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const [lot, formOptions] = await Promise.all([
+      lotModel.getLotById(lotId),
+      lotModel.getLotFormOptions()
+    ]);
+
+    if (!Number.isInteger(lotId) || lotId <= 0 || !lot) {
+      return res.status(404).render('fragments/lot-form-modal', {
+        mode: 'edit',
+        lot: null,
+        formOptions,
+        formData: getLotFormDataFromRequest(req),
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const formData = getLotFormDataFromRequest(req);
+    const errorMessages = validateLotForm(formData, formOptions, lotId);
+
+    if (errorMessages.length > 0) {
+      return res.status(400).render('fragments/lot-form-modal', {
+        mode: 'edit',
+        lot,
+        formOptions,
+        formData,
+        errorMessages
+      });
+    }
+
+    await lotModel.updateLot(lotId, formData, req.currentUser.user_id);
+
+    return sendHtmxRedirect(req, res, addCacheBuster('/management/lots?updated=1'));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderDeleteLotModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return res.status(404).render('fragments/lot-delete-modal', {
+        lot: null,
+        deleteSummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const deleteSummary = await lotModel.getLotDeleteSummary(lotId);
+
+    if (!deleteSummary) {
+      return res.status(404).render('fragments/lot-delete-modal', {
+        lot: null,
+        deleteSummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    return res.render('fragments/lot-delete-modal', {
+      lot: deleteSummary.lot,
+      deleteSummary,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function deleteLot(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return res.status(404).render('fragments/lot-delete-modal', {
+        lot: null,
+        deleteSummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const deleteSummary = await lotModel.getLotDeleteSummary(lotId);
+
+    if (!deleteSummary) {
+      return res.status(404).render('fragments/lot-delete-modal', {
+        lot: null,
+        deleteSummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    if (!deleteSummary.canDelete) {
+      return res.status(400).render('fragments/lot-delete-modal', {
+        lot: deleteSummary.lot,
+        deleteSummary,
+        errorMessages: ['This lot cannot be deleted until all attached units and child lots are removed.']
+      });
+    }
+
+    await lotModel.deleteLotIfEmpty(lotId);
+
+    return sendHtmxRedirect(req, res, addCacheBuster('/management/lots?deleted=1'));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderNewLotRequirementModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const lotDetailViewData = await getLotDetailViewData(lotId);
+
+    if (!lotDetailViewData) {
+      return res.status(404).render('fragments/lot-requirement-form-modal', {
+        mode: 'create',
+        lot: null,
+        requirement: null,
+        requirementValueOptionsByKey: {},
+        requirementFieldOptions,
+        operatorOptions,
+        formData: getBlankRequirementFormData(),
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    return renderRequirementModal(res, {
+      mode: 'create',
+      lot: lotDetailViewData.lot,
+      requirementValueOptionsByKey: lotDetailViewData.requirementValueOptionsByKey,
+      formData: getBlankRequirementFormData(),
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderEditLotRequirementModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const requirementId = Number(req.params.requirementId);
+    const lotDetailViewData = await getLotDetailViewData(lotId);
+
+    if (!lotDetailViewData) {
+      return res.status(404).render('fragments/lot-requirement-form-modal', {
+        mode: 'edit',
+        lot: null,
+        requirement: null,
+        requirementValueOptionsByKey: {},
+        requirementFieldOptions,
+        operatorOptions,
+        formData: getBlankRequirementFormData(),
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const requirement = await lotModel.getLotRequirementById(lotId, requirementId);
+
+    if (!requirement) {
+      return res.status(404).render('fragments/lot-requirement-form-modal', {
+        mode: 'edit',
+        lot: lotDetailViewData.lot,
+        requirement: null,
+        requirementValueOptionsByKey: lotDetailViewData.requirementValueOptionsByKey,
+        requirementFieldOptions,
+        operatorOptions,
+        formData: getBlankRequirementFormData(),
+        errorMessages: ['The selected requirement could not be found.']
+      });
+    }
+
+    return renderRequirementModal(res, {
+      mode: 'edit',
+      lot: lotDetailViewData.lot,
+      requirement,
+      requirementValueOptionsByKey: lotDetailViewData.requirementValueOptionsByKey,
+      formData: getRequirementFormDataFromRequirement(requirement),
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateLotRequirementModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const requirementId = Number(req.params.requirementId);
+    const lotDetailViewData = await getLotDetailViewData(lotId);
+
+    if (!lotDetailViewData) {
+      return res.status(404).render('fragments/lot-requirement-form-modal', {
+        mode: 'edit',
+        lot: null,
+        requirement: null,
+        requirementValueOptionsByKey: {},
+        requirementFieldOptions,
+        operatorOptions,
+        formData: getRequirementFormDataFromRequest(req),
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const requirement = await lotModel.getLotRequirementById(lotId, requirementId);
+    const formData = getRequirementFormDataFromRequest(req);
+    const errorMessages = validateRequirementForm(formData);
+
+    if (!requirement) {
+      errorMessages.push('The selected requirement could not be found.');
+    }
+
+    if (errorMessages.length > 0) {
+      return res.status(400).render('fragments/lot-requirement-form-modal', {
+        mode: 'edit',
+        lot: lotDetailViewData.lot,
+        requirement,
+        requirementValueOptionsByKey: lotDetailViewData.requirementValueOptionsByKey,
+        requirementFieldOptions,
+        operatorOptions,
+        formData,
+        errorMessages
+      });
+    }
+
+    await lotModel.updateLotRequirement(lotId, requirementId, formData, req.currentUser.user_id);
+
+    return sendHtmxRedirect(req, res, `/management/lots/${lotId}?requirementUpdated=1`);
   } catch (error) {
     next(error);
   }
@@ -498,7 +911,15 @@ async function createLotRequirement(req, res, next) {
 module.exports = {
   renderLotsPage,
   renderNewLotPage,
+  renderNewLotModal,
   createLot,
+  renderEditLotModal,
+  updateLotModal,
+  renderDeleteLotModal,
+  deleteLot,
   renderLotDetailPage,
-  createLotRequirement
+  renderNewLotRequirementModal,
+  createLotRequirement,
+  renderEditLotRequirementModal,
+  updateLotRequirementModal
 };

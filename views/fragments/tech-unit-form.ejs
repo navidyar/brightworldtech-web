@@ -46,6 +46,14 @@
   const graphicsRows = Array.isArray(formData.graphicsAdapters) && formData.graphicsAdapters.length > 0
     ? formData.graphicsAdapters
     : [{ gpuTypeConfigValueId: '', gpuModel: '', vramMb: '' }];
+  const outcomeOptions = Array.isArray(formOptions.outcomeOptions) && formOptions.outcomeOptions.length > 0
+    ? formOptions.outcomeOptions
+    : [
+        { code: 'pass', label: 'Pass' },
+        { code: 'fail', label: 'Fail' }
+      ];
+  const selectedOutcomeCode = String(formData.outcomeCode || '').trim().toLowerCase();
+  const outcomeApprovalRequested = Boolean(formData.outcomeApprovalRequested);
 
 
   function selected(currentValue, optionValue) {
@@ -232,37 +240,74 @@
     </div>
   </div>
 
-  <div class="form-section">
+  <div class="form-section form-section--grade-outcome">
     <div class="form-section-header">
       <div>
-        <p class="eyebrow">Grade</p>
-        <h3>Overall Unit Grade</h3>
+        <p class="eyebrow">Grade & Outcome</p>
+        <h3>Cosmetic Grade and Unit Pass/Fail</h3>
       </div>
       <p>
-        Record the current overall unit grade for sales and disposition planning. This is saved as a current grade row while previous grade rows remain in grade history.
+        Cosmetic Grade A-D only describes appearance. Unit Pass/Fail describes the working condition and is tracked separately for completion reporting.
       </p>
     </div>
 
     <% if (overallGradeOptions.length === 0) { %>
       <div class="message error">
-        <p>Overall Unit Grade options are not ready yet. Run the Step 3g SQL migration to seed grade values.</p>
+        <p>Cosmetic Grade options are not ready yet. Run the Step 3g SQL migration to seed grade values.</p>
       </div>
     <% } %>
 
-    <div class="form-grid">
+    <% if (formOptions.outcomeOptionsSupported === false) { %>
+      <div class="message error">
+        <p>Unit Pass/Fail outcomes are not ready yet. Run the Step 4h SQL migration before saving unit outcomes.</p>
+      </div>
+    <% } %>
+
+    <div class="form-grid tech-grade-outcome-grid">
       <label class="form-field">
-        <span>Overall Unit Grade</span>
+        <span>Cosmetic Grade</span>
         <select name="overallGradeConfigValueId">
-          <option value="">Select grade</option>
+          <option value="">Select cosmetic grade</option>
           <% overallGradeOptions.forEach((gradeOption) => { %>
             <option value="<%= gradeOption.id %>" <%= selected(formData.overallGradeConfigValueId, gradeOption.id) %>><%= gradeOption.label %></option>
           <% }) %>
         </select>
+        <small class="field-hint">A-D grade is cosmetic only and does not determine pass/fail by itself.</small>
+      </label>
+
+      <fieldset class="form-field tech-outcome-field">
+        <legend>Unit Outcome</legend>
+        <div class="tech-outcome-options" role="radiogroup" aria-label="Unit outcome">
+          <% outcomeOptions.forEach((outcomeOption) => { %>
+            <label class="tech-outcome-option <%= selectedOutcomeCode === outcomeOption.code ? 'active' : '' %>">
+              <input type="radio" name="outcomeCode" value="<%= outcomeOption.code %>" <%= selectedOutcomeCode === outcomeOption.code ? 'checked' : '' %> />
+              <span><%= outcomeOption.label %></span>
+            </label>
+          <% }) %>
+        </div>
+        <small class="field-hint">Pass/Fail is based on the working condition of the unit, including hardware issues and cosmetic grade.</small>
+      </fieldset>
+
+      <label class="form-field">
+        <span>Cosmetic Grade Notes</span>
+        <input type="text" name="overallGradeNotes" value="<%= formData.overallGradeNotes || '' %>" maxlength="500" placeholder="Optional cosmetic grade note" />
       </label>
 
       <label class="form-field">
-        <span>Grade Notes</span>
-        <input type="text" name="overallGradeNotes" value="<%= formData.overallGradeNotes || '' %>" maxlength="500" placeholder="Optional grade note" />
+        <span>Outcome Notes</span>
+        <input type="text" name="outcomeNotes" value="<%= formData.outcomeNotes || '' %>" maxlength="500" placeholder="Optional Pass/Fail note" />
+      </label>
+    </div>
+
+    <div class="tech-outcome-approval-box">
+      <label class="tech-outcome-approval-check">
+        <input type="checkbox" name="outcomeApprovalRequested" value="1" <%= outcomeApprovalRequested ? 'checked' : '' %> />
+        <span>Request Management/Lead approval for this Pass/Fail decision</span>
+      </label>
+
+      <label class="form-field">
+        <span>Approval Request Notes</span>
+        <textarea name="outcomeApprovalRequestNotes" rows="3" maxlength="1000" placeholder="Explain why you want Management/Lead to approve this Pass/Fail decision."><%= formData.outcomeApprovalRequestNotes || '' %></textarea>
       </label>
     </div>
   </div>

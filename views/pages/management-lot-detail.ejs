@@ -2,6 +2,9 @@
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
   <link rel="stylesheet" href="/css/lots.css" />
+  <link rel="stylesheet" href="/css/modal.css" />
+  <script defer src="/js/modal.js"></script>
+  <script defer src="/js/lot-form.js"></script>
   <script defer src="/js/lot-requirements.js"></script>
 
   <body>
@@ -28,10 +31,10 @@
 
           <section class="dashboard-hero accent-green">
             <div>
-              <p class="eyebrow">Step 2h</p>
-              <h2><%= lot.lot_name %></h2>
+              <p class="eyebrow">Lot Details</p>
+              <h2 class="lot-detail-title"><%= lot.lot_name %></h2>
               <p>
-                Review this lot’s relationship, requirements, validation results, and enforcement decisions.
+                Review lot details, requirements, attached units, and validation previews from a cleaner Management view.
               </p>
             </div>
 
@@ -41,19 +44,19 @@
             </div>
           </section>
 
-          <section class="dashboard-grid">
+          <div class="lot-detail-action-bar">
+            <a class="secondary-button" href="/management/lots">Back to Lots</a>
+            <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
+            <% if (Number(lot.unitCount || 0) === 0 && lotRelationships.directChildLots.length === 0) { %>
+              <a class="secondary-button danger-button" href="/management/lots/<%= lot.lot_id %>/delete/modal" hx-get="/management/lots/<%= lot.lot_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Lot</a>
+            <% } %>
+          </div>
+
+          <section class="dashboard-grid lot-detail-summary-grid">
             <article class="dashboard-card">
               <p class="card-label">Lot Type</p>
               <h3><%= lot.lot_type_label || '—' %></h3>
-              <p>
-                <% if (lot.lot_number) { %>
-                  Lot #<%= lot.lot_number %>
-                <% } else if (lot.lot_code) { %>
-                  <%= lot.lot_code %>
-                <% } else { %>
-                  No lot number found.
-                <% } %>
-              </p>
+              <p>Lot profile and planning details.</p>
             </article>
 
             <article class="dashboard-card">
@@ -93,8 +96,6 @@
                 <p class="eyebrow">Enforcement</p>
                 <h2>Requirement Enforcement Preview</h2>
               </div>
-
-              <a class="secondary-button" href="/management/lots">Back to Lots</a>
             </div>
 
             <div class="enforcement-banner <%= enforcementSummary.policyStatus %>">
@@ -235,13 +236,8 @@
               <div class="compact-lot-list">
                 <% lotRelationships.directChildLots.forEach((childLot) => { %>
                   <a href="/management/lots/<%= childLot.lot_id %>" class="compact-lot-item">
-                    <strong><%= childLot.lot_name %></strong>
-                    <span>
-                      <%= childLot.lot_type_label || 'No type' %>
-                      <% if (childLot.lot_number) { %>
-                        · Lot #<%= childLot.lot_number %>
-                      <% } %>
-                    </span>
+                    <strong class="lot-display-name"><%= childLot.lot_name %></strong>
+                      <span><%= childLot.lot_type_label || 'No type' %></span>
                   </a>
                 <% }) %>
               </div>
@@ -417,6 +413,8 @@
                 <p class="eyebrow">Requirements</p>
                 <h2>Lot Requirement Rules</h2>
               </div>
+
+              <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/requirements/new/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Add Requirement</a>
             </div>
 
             <% if (successMessage) { %>
@@ -442,13 +440,14 @@
                     <th>Required Value</th>
                     <th>Status</th>
                     <th>Notes</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   <% if (requirements.length === 0) { %>
                     <tr>
-                      <td colspan="5">No requirements have been added to this lot yet.</td>
+                      <td colspan="6">No requirements have been added to this lot yet.</td>
                     </tr>
                   <% } %>
 
@@ -465,107 +464,14 @@
                         <% } %>
                       </td>
                       <td><%= requirement.notes || '—' %></td>
+                      <td>
+                        <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                      </td>
                     </tr>
                   <% }) %>
                 </tbody>
               </table>
             </div>
-          </section>
-
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Add Requirement</p>
-                <h2>New Requirement Rule</h2>
-              </div>
-            </div>
-
-            <script type="application/json" id="requirement-value-options-json"><%- JSON.stringify(requirementValueOptionsByKey).replace(/</g, '\\u003c') %></script>
-
-            <form class="app-form" method="post" action="/management/lots/<%= lot.lot_id %>/requirements" data-requirement-form>
-              <div class="form-section">
-                <div class="form-section-header">
-                  <div>
-                    <p class="eyebrow">Rule</p>
-                    <h3>Requirement Details</h3>
-                  </div>
-                  <p>
-                    Choose a requirement field first. If standardized config values exist,
-                    the required value field becomes a dropdown.
-                  </p>
-                </div>
-
-                <div class="form-grid">
-                  <label class="form-field">
-                    <span>Requirement Field</span>
-                    <select name="requirementKey" required data-requirement-key>
-                      <option value="">Select requirement</option>
-                      <% requirementFieldOptions.forEach((option) => { %>
-                        <option value="<%= option.value %>" <%= requirementFormData.requirementKey === option.value ? 'selected' : '' %>>
-                          <%= option.label %>
-                        </option>
-                      <% }) %>
-                    </select>
-                    <small class="field-hint" data-requirement-field-hint>
-                      Select a field to see whether standardized values are available.
-                    </small>
-                  </label>
-
-                  <label class="form-field">
-                    <span>Rule</span>
-                    <select name="operatorCode" required>
-                      <% operatorOptions.forEach((option) => { %>
-                        <option value="<%= option.value %>" <%= requirementFormData.operatorCode === option.value ? 'selected' : '' %>>
-                          <%= option.label %>
-                        </option>
-                      <% }) %>
-                    </select>
-                  </label>
-
-                  <label class="form-field" data-required-value-select-wrap hidden>
-                    <span>Required Value</span>
-                    <select name="requiredValue" data-required-value-select disabled>
-                      <option value="">Select value</option>
-                    </select>
-                    <small class="field-hint" data-required-value-select-hint>
-                      Values are loaded from config values.
-                    </small>
-                  </label>
-
-                  <label class="form-field" data-required-value-text-wrap>
-                    <span>Required Value</span>
-                    <input
-                      type="text"
-                      name="requiredValue"
-                      value="<%= requirementFormData.requiredValue %>"
-                      maxlength="120"
-                      placeholder="Example: 16GB, DDR4, 512GB, i5-8365U, yes, no"
-                      required
-                      data-required-value-text
-                    />
-                    <small class="field-hint">
-                      Free text is used when no standardized dropdown exists yet.
-                    </small>
-                  </label>
-
-                  <label class="form-field">
-                    <span>Notes</span>
-                    <input
-                      type="text"
-                      name="notes"
-                      value="<%= requirementFormData.notes %>"
-                      maxlength="500"
-                      placeholder="Optional internal note"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <div class="form-actions">
-                <button type="submit" class="primary-button">Add Requirement</button>
-                <a class="secondary-button" href="/management/lots">Back to Lots</a>
-              </div>
-            </form>
           </section>
 
           <section class="content-card">
@@ -600,6 +506,8 @@
             </div>
           </section>
         </main>
+
+        <div id="modal-root"></div>
       </div>
     </div>
   </body>

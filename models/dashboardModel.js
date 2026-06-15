@@ -3,6 +3,850 @@ const { pool } = require('./db');
 const schemaTableCache = new Map();
 const schemaColumnCache = new Map();
 
+const REPORTING_TIME_ZONE = 'America/Chicago';
+
+function padTwo(value) {
+  return String(value).padStart(2, '0');
+}
+
+function formatDateKeyFromParts(year, month, day) {
+  return `${year}-${padTwo(month)}-${padTwo(day)}`;
+}
+
+function parseDateKey(dateKey) {
+  const normalized = normalizeDate(dateKey);
+
+  if (!normalized) {
+    return null;
+  }
+
+  const [year, month, day] = normalized.split('-').map(Number);
+
+  return { year, month, day };
+}
+
+function addDaysToDateKey(dateKey, days) {
+  const parsed = parseDateKey(dateKey);
+
+  if (!parsed) {
+    return '';
+  }
+
+  const date = new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day + Number(days || 0)));
+
+  return formatDateKeyFromParts(
+    date.getUTCFullYear(),
+    date.getUTCMonth() + 1,
+    date.getUTCDate()
+  );
+}
+
+function getCentralDateKey(date = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: REPORTING_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+
+  const partMap = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+
+  return `${partMap.year}-${partMap.month}-${partMap.day}`;
+}
+
+function getTimeZoneOffsetMs(timeZone, date) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23'
+  }).formatToParts(date);
+
+  const partMap = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const hour = partMap.hour === '24' ? '00' : partMap.hour;
+  const localAsUtc = Date.UTC(
+    Number(partMap.year),
+    Number(partMap.month) - 1,
+    Number(partMap.day),
+    Number(hour),
+    Number(partMap.minute),
+    Number(partMap.second)
+  );
+
+  return localAsUtc - date.getTime();
+}
+
+function zonedDateTimeToUtc(dateKey, hour = 0, minute = 0, second = 0) {
+  const parsed = parseDateKey(dateKey);
+
+  if (!parsed) {
+    return null;
+  }
+
+  const localAsUtc = Date.UTC(parsed.year, parsed.month - 1, parsed.day, hour, minute, second);
+  let utcDate = new Date(localAsUtc - getTimeZoneOffsetMs(REPORTING_TIME_ZONE, new Date(localAsUtc)));
+  utcDate = new Date(localAsUtc - getTimeZoneOffsetMs(REPORTING_TIME_ZONE, utcDate));
+
+  return utcDate;
+}
+
+function formatSqlDateTime(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return [
+    date.getUTCFullYear(),
+    padTwo(date.getUTCMonth() + 1),
+    padTwo(date.getUTCDate())
+  ].join('-') + ' ' + [
+    padTwo(date.getUTCHours()),
+    padTwo(date.getUTCMinutes()),
+    padTwo(date.getUTCSeconds())
+  ].join(':');
+}
+
+function getDateKeyDayOfWeek(dateKey) {
+  const parsed = parseDateKey(dateKey);
+
+  if (!parsed) {
+    return 0;
+  }
+
+  return new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day)).getUTCDay();
+}
+
+function getWeekdayWorkWindow(dateKey) {
+  const safeDateKey = normalizeDate(dateKey) || getCentralDateKey();
+  const dayOfWeek = getDateKeyDayOfWeek(safeDateKey);
+  const offsetToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const startDate = addDaysToDateKey(safeDateKey, offsetToMonday);
+  const endDate = addDaysToDateKey(startDate, 6);
+
+  return { startDate, endDate };
+}
+
+function getMonthWindow(dateKey) {
+  const parsed = parseDateKey(dateKey || getCentralDateKey());
+
+  if (!parsed) {
+    return getMonthWindow(getCentralDateKey());
+  }
+
+  const startDate = formatDateKeyFromParts(parsed.year, parsed.month, 1);
+  const lastDay = new Date(Date.UTC(parsed.year, parsed.month, 0)).getUTCDate();
+  const endDate = formatDateKeyFromParts(parsed.year, parsed.month, lastDay);
+
+  return { startDate, endDate };
+}
+
+function normalizeMonth(value) {
+  const stringValue = String(value || '').trim();
+
+  if (!/^\d{4}-\d{2}$/.test(stringValue)) {
+    return '';
+  }
+
+  return stringValue;
+}
+
+function normalizeWeek(value) {
+  const stringValue = String(value || '').trim();
+
+  if (!/^\d{4}-W\d{2}$/.test(stringValue)) {
+    return '';
+  }
+
+  return stringValue;
+}
+
+function normalizeManagementPeriod(value) {
+  const safeValue = String(value || '').trim();
+  const periodAliases = {
+    to_date: 'month_to_date'
+  };
+  const normalizedValue = periodAliases[safeValue] || safeValue;
+  const allowedPeriods = new Set(['today', 'day', 'work_week', 'month', 'month_to_date', 'custom_range']);
+
+  return allowedPeriods.has(normalizedValue) ? normalizedValue : 'day';
+}
+
+function getIsoWeekdayWorkWindow(weekKey) {
+  const normalizedWeek = normalizeWeek(weekKey);
+
+  if (!normalizedWeek) {
+    return getWeekdayWorkWindow(getCentralDateKey());
+  }
+
+  const [yearPart, weekPart] = normalizedWeek.split('-W');
+  const year = Number(yearPart);
+  const week = Number(weekPart);
+
+  if (!Number.isInteger(year) || !Number.isInteger(week) || week < 1 || week > 53) {
+    return getWeekdayWorkWindow(getCentralDateKey());
+  }
+
+  const januaryFourth = new Date(Date.UTC(year, 0, 4));
+  const januaryFourthDay = januaryFourth.getUTCDay() || 7;
+  const mondayOfWeekOne = new Date(Date.UTC(year, 0, 4 - januaryFourthDay + 1));
+  const monday = new Date(mondayOfWeekOne.getTime() + (week - 1) * 7 * 24 * 60 * 60 * 1000);
+  const startDate = formatDateKeyFromParts(
+    monday.getUTCFullYear(),
+    monday.getUTCMonth() + 1,
+    monday.getUTCDate()
+  );
+
+  return {
+    startDate,
+    endDate: addDaysToDateKey(startDate, 6)
+  };
+}
+
+function getDefaultProductivityWeight(categoryCode, categoryLabel) {
+  const normalized = `${categoryCode || ''} ${categoryLabel || ''}`.toLowerCase();
+
+  if (normalized.includes('configuration task') || normalized.includes('configuration_task')) {
+    return 0.33;
+  }
+
+  if (normalized.includes('windows surface') || normalized.includes('surface')) {
+    return 2.0;
+  }
+
+  if (normalized.includes('mac')) {
+    return 3.0;
+  }
+
+  if (normalized.includes('desktop')) {
+    return 0.5;
+  }
+
+  if (normalized.includes('els')) {
+    return 0.33;
+  }
+
+  if (normalized.includes('laptop')) {
+    return 1.0;
+  }
+
+  return 1.0;
+}
+
+function getProductivityWeightSqlExpression(categoryAlias = 'category') {
+  return `
+    CASE
+      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%configuration task%'
+        OR LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%configuration_task%'
+      THEN 0.33
+      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%windows surface%'
+        OR LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%surface%'
+      THEN 2.00
+      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%mac%'
+      THEN 3.00
+      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%desktop%'
+      THEN 0.50
+      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%els%'
+      THEN 0.33
+      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%laptop%'
+      THEN 1.00
+      ELSE 1.00
+    END
+  `;
+}
+
+function buildReportingWindow({ key, label, startDate = '', endDate = '' }) {
+  const safeStartDate = normalizeDate(startDate);
+  const safeEndDate = normalizeDate(endDate || startDate);
+  const startUtcDate = safeStartDate ? zonedDateTimeToUtc(safeStartDate, 0, 0, 0) : null;
+  const exclusiveEndDateKey = safeEndDate ? addDaysToDateKey(safeEndDate, 1) : '';
+  const endUtcDate = exclusiveEndDateKey ? zonedDateTimeToUtc(exclusiveEndDateKey, 0, 0, 0) : null;
+
+  return {
+    key,
+    label,
+    startDate: safeStartDate,
+    endDate: safeEndDate,
+    startSql: formatSqlDateTime(startUtcDate),
+    endSql: formatSqlDateTime(endUtcDate)
+  };
+}
+
+function buildOutcomeWindowWhere(window, alias = 'uo') {
+  const whereParts = [
+    `${alias}.is_current = 1`,
+    `${alias}.outcome_code IN ('pass', 'fail')`
+  ];
+  const params = [];
+
+  if (window && window.startSql) {
+    whereParts.push(`${alias}.selected_at >= ?`);
+    params.push(window.startSql);
+  }
+
+  if (window && window.endSql) {
+    whereParts.push(`${alias}.selected_at < ?`);
+    params.push(window.endSql);
+  }
+
+  return {
+    whereSql: `WHERE ${whereParts.join(' AND ')}`,
+    andSql: `AND ${whereParts.join(' AND ')}`,
+    params
+  };
+}
+
+
+function buildCompletedUnitWindowWhere(window, gradeAlias = 'uga') {
+  const whereParts = [
+    `${gradeAlias}.is_current = 1`
+  ];
+  const params = [];
+
+  if (window && window.startSql) {
+    whereParts.push(`${gradeAlias}.assessed_at >= ?`);
+    params.push(window.startSql);
+  }
+
+  if (window && window.endSql) {
+    whereParts.push(`${gradeAlias}.assessed_at < ?`);
+    params.push(window.endSql);
+  }
+
+  return {
+    whereSql: `WHERE ${whereParts.join(' AND ')}`,
+    andSql: `AND ${whereParts.join(' AND ')}`,
+    params
+  };
+}
+
+function buildDashboardReportingWindows(filters = {}) {
+  const safeFilters = normalizeDashboardFilters(filters);
+  const todayDate = getCentralDateKey();
+  const selectedDate = safeFilters.managementDate || safeFilters.startDate || todayDate;
+  const selectedWeek = safeFilters.managementWeek || '';
+  const selectedMonth = safeFilters.managementMonth || selectedDate.slice(0, 7);
+  const selectedMonthWindow = getMonthWindow(`${selectedMonth}-01`);
+  const selectedWeekWindow = selectedWeek ? getIsoWeekdayWorkWindow(selectedWeek) : getWeekdayWorkWindow(selectedDate);
+  const currentMonthWindow = getMonthWindow(todayDate);
+  const customStartDate = safeFilters.managementStartDate || safeFilters.startDate || '';
+  const customEndDate = safeFilters.managementEndDate || safeFilters.endDate || customStartDate;
+
+  const windows = [
+    buildReportingWindow({
+      key: 'day',
+      label: 'Day',
+      startDate: selectedDate,
+      endDate: selectedDate
+    }),
+    buildReportingWindow({
+      key: 'work_week',
+      label: 'Week (Mon-Sun)',
+      startDate: selectedWeekWindow.startDate,
+      endDate: selectedWeekWindow.endDate
+    }),
+    buildReportingWindow({
+      key: 'month',
+      label: 'Month',
+      startDate: selectedMonthWindow.startDate,
+      endDate: selectedMonthWindow.endDate
+    }),
+    buildReportingWindow({
+      key: 'month_to_date',
+      label: 'Month-to-Date',
+      startDate: currentMonthWindow.startDate,
+      endDate: todayDate
+    })
+  ];
+
+  if (customStartDate || customEndDate) {
+    windows.push(buildReportingWindow({
+      key: 'custom_range',
+      label: 'Range of Dates',
+      startDate: customStartDate || customEndDate,
+      endDate: customEndDate || customStartDate
+    }));
+  }
+
+  const requestedWindowKey = safeFilters.managementPeriod === 'custom_range' && !windows.some((window) => window.key === 'custom_range')
+    ? 'day'
+    : safeFilters.managementPeriod;
+  const activeWindow = windows.find((window) => window.key === requestedWindowKey) || windows[0];
+
+  return {
+    windows,
+    activeWindow,
+    selectedDate,
+    selectedWeek,
+    selectedMonth,
+    customStartDate,
+    customEndDate,
+    selectedPeriod: activeWindow.key
+  };
+}
+
+async function getCompletionSummaryForWindow(window) {
+  if (!await tableExists('unit_grade_assessments') || !await tableExists('units')) {
+    return {
+      completed: 0,
+      weighted: 0
+    };
+  }
+
+  const weightExpression = getProductivityWeightSqlExpression('category');
+  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
+  const [rows] = await pool.query(
+    `
+      SELECT
+        COUNT(DISTINCT u.unit_id) AS completed_count,
+        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
+      FROM unit_grade_assessments uga
+      INNER JOIN units u
+        ON u.unit_id = uga.unit_id
+      LEFT JOIN config_values category
+        ON category.config_value_id = u.unit_category_config_value_id
+      ${completedFilter.whereSql}
+    `,
+    completedFilter.params
+  );
+
+  return {
+    completed: Number(rows[0]?.completed_count || 0),
+    weighted: Number(rows[0]?.weighted_count || 0)
+  };
+}
+
+async function getCompletionCategoryBreakdown(window) {
+  if (!await tableExists('unit_grade_assessments') || !await tableExists('units')) {
+    return [];
+  }
+
+  const weightExpression = getProductivityWeightSqlExpression('category');
+  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
+  const [rows] = await pool.query(
+    `
+      SELECT
+        category.config_value_id AS category_id,
+        COALESCE(category.label, category.code, 'Uncategorized') AS category_label,
+        COALESCE(category.code, '') AS category_code,
+        COUNT(DISTINCT u.unit_id) AS completed_count,
+        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
+      FROM unit_grade_assessments uga
+      INNER JOIN units u
+        ON u.unit_id = uga.unit_id
+      LEFT JOIN config_values category
+        ON category.config_value_id = u.unit_category_config_value_id
+      ${completedFilter.whereSql}
+      GROUP BY category.config_value_id, category.label, category.code
+      ORDER BY completed_count DESC, category_label
+      LIMIT 12
+    `,
+    completedFilter.params
+  );
+
+  return rows.map((row) => ({
+    id: row.category_id ? Number(row.category_id) : null,
+    label: row.category_label || 'Uncategorized',
+    code: row.category_code || '',
+    completed: Number(row.completed_count || 0),
+    weighted: Number(row.weighted_count || 0),
+    defaultWeight: getDefaultProductivityWeight(row.category_code, row.category_label)
+  }));
+}
+
+async function getCompletionLotBreakdown(window) {
+  if (!await tableExists('unit_grade_assessments') || !await tableExists('units') || !await tableExists('lots')) {
+    return [];
+  }
+
+  const lotColumns = await getColumnSet('lots');
+  const lotNameExpression = selectExpression(
+    'l',
+    lotColumns,
+    ['name', 'lot_name', 'title', 'lot_number'],
+    'lot_name',
+    "CONCAT('Lot #', l.lot_id)"
+  );
+  const weightExpression = getProductivityWeightSqlExpression('category');
+  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
+  const [rows] = await pool.query(
+    `
+      SELECT
+        l.lot_id,
+        ${lotNameExpression},
+        COUNT(DISTINCT u.unit_id) AS completed_count,
+        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
+      FROM unit_grade_assessments uga
+      INNER JOIN units u
+        ON u.unit_id = uga.unit_id
+      LEFT JOIN lots l
+        ON l.lot_id = u.lot_id
+      LEFT JOIN config_values category
+        ON category.config_value_id = u.unit_category_config_value_id
+      ${completedFilter.whereSql}
+      GROUP BY l.lot_id, lot_name
+      ORDER BY completed_count DESC, lot_name
+      LIMIT 12
+    `,
+    completedFilter.params
+  );
+
+  return rows.map((row) => ({
+    id: row.lot_id ? Number(row.lot_id) : null,
+    label: row.lot_name || 'No Lot',
+    completed: Number(row.completed_count || 0),
+    weighted: Number(row.weighted_count || 0)
+  }));
+}
+
+async function getCompletionLotTypeBreakdown(window) {
+  return getCompletionLotBreakdown(window);
+}
+
+async function getManagementCompletionData(filters = {}) {
+  const reporting = buildDashboardReportingWindows(filters);
+  const summaries = await Promise.all(reporting.windows.map(async (window) => ({
+    ...window,
+    summary: await getCompletionSummaryForWindow(window)
+  })));
+  const activeWindow = summaries.find((window) => window.key === reporting.activeWindow.key) || summaries[0];
+  const [categoryBreakdown, lotBreakdown] = await Promise.all([
+    getCompletionCategoryBreakdown(activeWindow),
+    getCompletionLotBreakdown(activeWindow)
+  ]);
+
+  return {
+    timeZone: REPORTING_TIME_ZONE,
+    selectedPeriod: activeWindow ? activeWindow.key : reporting.selectedPeriod,
+    selectedDate: reporting.selectedDate,
+    selectedWeek: reporting.selectedWeek,
+    selectedMonth: reporting.selectedMonth,
+    customStartDate: reporting.customStartDate,
+    customEndDate: reporting.customEndDate,
+    activeWindow,
+    windows: summaries,
+    categoryBreakdown,
+    lotBreakdown,
+    lotTypeBreakdown: lotBreakdown
+  };
+}
+function isElevatedTechDashboardViewer(context = {}) {
+  const roles = Array.isArray(context.currentRoles) ? context.currentRoles : [];
+
+  return roles.includes('admin') || roles.includes('management') || roles.includes('tech_lead');
+}
+
+function getCurrentUserIdFromContext(context = {}) {
+  const userId = Number(context.currentUser?.user_id || context.currentUser?.userId || 0);
+
+  return Number.isInteger(userId) && userId > 0 ? userId : null;
+}
+
+async function getTechDashboardUserOptions() {
+  if (!await tableExists('users') || !await tableExists('units') || !await tableExists('unit_grade_assessments')) {
+    return [];
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        production_users.user_id,
+        users.first_name,
+        users.last_name,
+        users.email,
+        COUNT(DISTINCT production_users.unit_id) AS completed_count
+      FROM (
+        SELECT
+          COALESCE(uga.assessed_by_user_id, u.created_by_user_id) AS user_id,
+          u.unit_id
+        FROM unit_grade_assessments uga
+        INNER JOIN units u
+          ON u.unit_id = uga.unit_id
+        WHERE uga.is_current = 1
+          AND COALESCE(uga.assessed_by_user_id, u.created_by_user_id) IS NOT NULL
+      ) production_users
+      INNER JOIN users
+        ON users.user_id = production_users.user_id
+      WHERE users.is_active = 1
+      GROUP BY users.user_id, users.first_name, users.last_name, users.email
+      ORDER BY users.first_name, users.last_name, users.email
+    `
+  );
+
+  return rows.map((row) => ({
+    userId: Number(row.user_id),
+    name: [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || row.email || `User #${row.user_id}`,
+    completedCount: Number(row.completed_count || 0)
+  }));
+}
+
+async function getProductivitySummaryForUser(window, userId = null) {
+  if (!await tableExists('unit_grade_assessments') || !await tableExists('units')) {
+    return {
+      completed: 0,
+      weighted: 0
+    };
+  }
+
+  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
+  const weightExpression = getProductivityWeightSqlExpression('category');
+  const params = [...completedFilter.params];
+  const userFilter = userId ? 'AND COALESCE(uga.assessed_by_user_id, u.created_by_user_id) = ?' : '';
+
+  if (userId) {
+    params.push(userId);
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        COUNT(DISTINCT u.unit_id) AS completed_count,
+        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
+      FROM unit_grade_assessments uga
+      INNER JOIN units u
+        ON u.unit_id = uga.unit_id
+      LEFT JOIN config_values category
+        ON category.config_value_id = u.unit_category_config_value_id
+      ${completedFilter.whereSql}
+        ${userFilter}
+    `,
+    params
+  );
+
+  return {
+    completed: Number(rows[0]?.completed_count || 0),
+    weighted: Number(rows[0]?.weighted_count || 0)
+  };
+}
+
+async function getProductivityCategoryBreakdownForUser(window, userId = null) {
+  if (!await tableExists('unit_grade_assessments') || !await tableExists('units')) {
+    return [];
+  }
+
+  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
+  const weightExpression = getProductivityWeightSqlExpression('category');
+  const params = [...completedFilter.params];
+  const userFilter = userId ? 'AND COALESCE(uga.assessed_by_user_id, u.created_by_user_id) = ?' : '';
+
+  if (userId) {
+    params.push(userId);
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        category.config_value_id AS category_id,
+        COALESCE(category.label, category.code, 'Uncategorized') AS category_label,
+        COALESCE(category.code, '') AS category_code,
+        COUNT(DISTINCT u.unit_id) AS completed_count,
+        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
+      FROM unit_grade_assessments uga
+      INNER JOIN units u
+        ON u.unit_id = uga.unit_id
+      LEFT JOIN config_values category
+        ON category.config_value_id = u.unit_category_config_value_id
+      ${completedFilter.whereSql}
+        ${userFilter}
+      GROUP BY category.config_value_id, category.label, category.code
+      ORDER BY completed_count DESC, category_label
+      LIMIT 12
+    `,
+    params
+  );
+
+  return rows.map((row) => ({
+    id: row.category_id ? Number(row.category_id) : null,
+    label: row.category_label || 'Uncategorized',
+    completed: Number(row.completed_count || 0),
+    weighted: Number(row.weighted_count || 0),
+    defaultWeight: getDefaultProductivityWeight(row.category_code, row.category_label)
+  }));
+}
+
+async function getProductivityLotBreakdownForUser(window, userId = null) {
+  if (!await tableExists('unit_grade_assessments') || !await tableExists('units') || !await tableExists('lots')) {
+    return [];
+  }
+
+  const lotColumns = await getColumnSet('lots');
+  const lotNameExpression = selectExpression(
+    'l',
+    lotColumns,
+    ['name', 'lot_name', 'title', 'lot_number'],
+    'lot_name',
+    "CONCAT('Lot #', l.lot_id)"
+  );
+  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
+  const weightExpression = getProductivityWeightSqlExpression('category');
+  const params = [...completedFilter.params];
+  const userFilter = userId ? 'AND COALESCE(uga.assessed_by_user_id, u.created_by_user_id) = ?' : '';
+
+  if (userId) {
+    params.push(userId);
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        l.lot_id,
+        ${lotNameExpression},
+        COUNT(DISTINCT u.unit_id) AS completed_count,
+        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
+      FROM unit_grade_assessments uga
+      INNER JOIN units u
+        ON u.unit_id = uga.unit_id
+      LEFT JOIN lots l
+        ON l.lot_id = u.lot_id
+      LEFT JOIN config_values category
+        ON category.config_value_id = u.unit_category_config_value_id
+      ${completedFilter.whereSql}
+        ${userFilter}
+      GROUP BY l.lot_id, lot_name
+      ORDER BY completed_count DESC, lot_name
+      LIMIT 12
+    `,
+    params
+  );
+
+  return rows.map((row) => ({
+    id: row.lot_id ? Number(row.lot_id) : null,
+    label: row.lot_name || 'No Lot',
+    completed: Number(row.completed_count || 0),
+    weighted: Number(row.weighted_count || 0)
+  }));
+}
+
+async function getAllTechSummaryRows(window, techUsers) {
+  if (!await tableExists('unit_grade_assessments') || !await tableExists('units') || techUsers.length === 0) {
+    return techUsers.map((tech) => ({
+      ...tech,
+      completed: 0,
+      weighted: 0
+    }));
+  }
+
+  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
+  const weightExpression = getProductivityWeightSqlExpression('category');
+  const [rows] = await pool.query(
+    `
+      SELECT
+        COALESCE(uga.assessed_by_user_id, u.created_by_user_id) AS tech_user_id,
+        COUNT(DISTINCT u.unit_id) AS completed_count,
+        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
+      FROM unit_grade_assessments uga
+      INNER JOIN units u
+        ON u.unit_id = uga.unit_id
+      LEFT JOIN config_values category
+        ON category.config_value_id = u.unit_category_config_value_id
+      ${completedFilter.whereSql}
+        AND COALESCE(uga.assessed_by_user_id, u.created_by_user_id) IS NOT NULL
+      GROUP BY tech_user_id
+    `,
+    completedFilter.params
+  );
+
+  const metricMap = new Map(rows.map((row) => [
+    Number(row.tech_user_id),
+    {
+      completed: Number(row.completed_count || 0),
+      weighted: Number(row.weighted_count || 0)
+    }
+  ]));
+
+  return techUsers.map((tech) => ({
+    ...tech,
+    completed: metricMap.get(tech.userId)?.completed || 0,
+    weighted: metricMap.get(tech.userId)?.weighted || 0
+  }));
+}
+
+function getTeamAverageFromRows(rows) {
+  const count = rows.length;
+
+  if (!count) {
+    return {
+      completed: 0,
+      weighted: 0
+    };
+  }
+
+  const totals = rows.reduce((summary, row) => ({
+    completed: summary.completed + Number(row.completed || 0),
+    weighted: summary.weighted + Number(row.weighted || 0)
+  }), { completed: 0, weighted: 0 });
+
+  return {
+    completed: Number((totals.completed / count).toFixed(2)),
+    weighted: Number((totals.weighted / count).toFixed(2))
+  };
+}
+
+function buildCurrentUserTechOption(context = {}) {
+  const currentUser = context.currentUser || null;
+  const userId = getCurrentUserIdFromContext(context);
+
+  if (!currentUser || !userId) {
+    return null;
+  }
+
+  return {
+    userId,
+    name: [currentUser.first_name, currentUser.last_name].filter(Boolean).join(' ').trim() || currentUser.email || `User #${userId}`,
+    completedCount: 0
+  };
+}
+
+
+async function getTechDashboardData(filters = {}, context = {}) {
+  const safeFilters = normalizeDashboardFilters(filters);
+  const reporting = buildDashboardReportingWindows(safeFilters);
+  const activeWindow = reporting.activeWindow;
+  const canViewAllTechs = isElevatedTechDashboardViewer(context);
+  const currentUserId = getCurrentUserIdFromContext(context);
+  const activityTechUsers = await getTechDashboardUserOptions();
+  const currentUserTechOption = buildCurrentUserTechOption(context);
+  const techUsers = currentUserTechOption && !activityTechUsers.some((tech) => tech.userId === currentUserTechOption.userId)
+    ? [currentUserTechOption, ...activityTechUsers]
+    : activityTechUsers;
+  const selectedTechId = canViewAllTechs
+    ? (safeFilters.techDashboardUserId || techUsers[0]?.userId || currentUserId)
+    : currentUserId;
+  const selectedTech = techUsers.find((tech) => tech.userId === selectedTechId) || currentUserTechOption || null;
+
+  const [summary, categoryBreakdown, lotBreakdown, allTechRows] = await Promise.all([
+    getProductivitySummaryForUser(activeWindow, selectedTechId),
+    getProductivityCategoryBreakdownForUser(activeWindow, selectedTechId),
+    getProductivityLotBreakdownForUser(activeWindow, selectedTechId),
+    getAllTechSummaryRows(activeWindow, techUsers)
+  ]);
+
+  return {
+    timeZone: REPORTING_TIME_ZONE,
+    selectedPeriod: reporting.selectedPeriod,
+    selectedDate: reporting.selectedDate,
+    selectedWeek: reporting.selectedWeek,
+    selectedMonth: reporting.selectedMonth,
+    customStartDate: reporting.customStartDate,
+    customEndDate: reporting.customEndDate,
+    activeWindow,
+    canViewAllTechs,
+    selectedTechId,
+    selectedTech,
+    techUsers,
+    summary,
+    categoryBreakdown,
+    lotBreakdown,
+    teamAverage: getTeamAverageFromRows(allTechRows),
+    allTechRows: canViewAllTechs ? allTechRows : []
+  };
+}
+
+
+
 async function tableExists(tableName) {
   const safeTableName = String(tableName || '').trim();
 
@@ -119,7 +963,14 @@ function normalizeDashboardFilters(input = {}) {
     endDate: normalizeDate(input.endDate),
     categoryId: toPositiveInteger(input.categoryId),
     lotId: toPositiveInteger(input.lotId),
-    techUserId: toPositiveInteger(input.techUserId)
+    techUserId: toPositiveInteger(input.techUserId),
+    managementPeriod: normalizeManagementPeriod(input.managementPeriod),
+    managementDate: normalizeDate(input.managementDate),
+    managementWeek: normalizeWeek(input.managementWeek),
+    managementMonth: normalizeMonth(input.managementMonth),
+    managementStartDate: normalizeDate(input.managementStartDate),
+    managementEndDate: normalizeDate(input.managementEndDate),
+    techDashboardUserId: toPositiveInteger(input.techDashboardUserId)
   };
 }
 
@@ -130,6 +981,13 @@ function hasAnyDashboardFilter(filters = {}) {
     || filters.categoryId
     || filters.lotId
     || filters.techUserId
+    || filters.managementPeriod !== 'day'
+    || filters.managementDate
+    || filters.managementWeek
+    || filters.managementMonth
+    || filters.managementStartDate
+    || filters.managementEndDate
+    || filters.techDashboardUserId
   );
 }
 
@@ -633,7 +1491,7 @@ async function getDashboardFilterOptions() {
   };
 }
 
-async function getDashboardData(filters = {}) {
+async function getDashboardData(filters = {}, context = {}) {
   const safeFilters = normalizeDashboardFilters(filters);
 
   const [
@@ -644,7 +1502,9 @@ async function getDashboardData(filters = {}) {
     gradeBreakdown,
     categoryBreakdown,
     lotBreakdown,
-    techActivitySummary
+    techActivitySummary,
+    managementCompletionData,
+    techDashboardData
   ] = await Promise.all([
     getUnitStats(safeFilters),
     getLotStats(safeFilters),
@@ -653,7 +1513,9 @@ async function getDashboardData(filters = {}) {
     getGradeBreakdown(safeFilters),
     getCategoryBreakdown(safeFilters),
     getLotBreakdown(safeFilters),
-    getTechActivitySummary(safeFilters)
+    getTechActivitySummary(safeFilters),
+    getManagementCompletionData(safeFilters),
+    getTechDashboardData(safeFilters, context)
   ]);
 
   return {
@@ -667,7 +1529,9 @@ async function getDashboardData(filters = {}) {
     gradeBreakdown,
     categoryBreakdown,
     lotBreakdown,
-    techActivitySummary
+    techActivitySummary,
+    managementCompletionData,
+    techDashboardData
   };
 }
 

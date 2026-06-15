@@ -1,0 +1,182 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeFormData = formData || {};
+  const safeFormOptions = formOptions || { capabilities: {}, parentLots: [], lotTypes: [], grades: [] };
+  const safeMode = mode === 'edit' ? 'edit' : 'create';
+  const safeLot = lot || null;
+  const formAction = safeMode === 'edit' && safeLot
+    ? `/management/lots/${safeLot.lot_id}/edit/modal`
+    : '/management/lots';
+  const title = safeMode === 'edit' ? 'Edit Lot' : 'Create Lot';
+  const submitLabel = safeMode === 'edit' ? 'Save Lot Changes' : 'Create Lot';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel lot-modal" role="dialog" aria-modal="true" aria-labelledby="lot-form-modal-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Management</p>
+        <h2 id="lot-form-modal-title"><%= title %></h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeFormOptions.capabilities.hasLotType && safeFormOptions.lotTypes.length === 0) { %>
+        <div class="message error">
+          <p>The lots table expects a lot type, but no lot type config values were found.</p>
+        </div>
+      <% } %>
+
+      <form class="app-form lot-form-modal-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML" data-lot-form>
+        <div class="form-section">
+          <div class="form-section-header">
+            <div>
+              <p class="eyebrow">Identity</p>
+              <h3>Lot Identity</h3>
+            </div>
+            <p>Name, type, and optional parent lot.</p>
+          </div>
+
+          <div class="form-grid lot-form-grid">
+            <label class="form-field">
+              <span>Lot Name</span>
+              <input type="text" name="lotName" value="<%= safeFormData.lotName || '' %>" maxlength="120" placeholder="Example: Dell Latitude 5400 - Customer Lot" required />
+            </label>
+
+            <% if (safeFormOptions.capabilities.hasParentLotId) { %>
+              <label class="form-field">
+                <span>Parent Lot</span>
+                <select name="parentLotId">
+                  <option value="">No parent lot</option>
+                  <% safeFormOptions.parentLots.forEach((parentLot) => { %>
+                    <% if (!safeLot || Number(parentLot.lot_id) !== Number(safeLot.lot_id)) { %>
+                      <option value="<%= parentLot.lot_id %>" <%= String(safeFormData.parentLotId || '') === String(parentLot.lot_id) ? 'selected' : '' %>>
+                        <%= parentLot.lot_name %>
+                      </option>
+                    <% } %>
+                  <% }) %>
+                </select>
+              </label>
+            <% } %>
+
+            <% if (safeFormOptions.capabilities.hasLotType) { %>
+              <label class="form-field">
+                <span>Lot Type</span>
+                <select name="lotTypeConfigValueId" required>
+                  <option value="">Select lot type</option>
+                  <% safeFormOptions.lotTypes.forEach((lotType) => { %>
+                    <option value="<%= lotType.config_value_id %>" <%= String(safeFormData.lotTypeConfigValueId || '') === String(lotType.config_value_id) ? 'selected' : '' %>>
+                      <%= lotType.label || lotType.code %>
+                    </option>
+                  <% }) %>
+                </select>
+              </label>
+            <% } %>
+
+            <% if (safeFormOptions.capabilities.hasDefaultGrade) { %>
+              <label class="form-field">
+                <span>Default Grade</span>
+                <select name="defaultGradeConfigValueId">
+                  <option value="">No default grade</option>
+                  <% safeFormOptions.grades.forEach((grade) => { %>
+                    <option value="<%= grade.config_value_id %>" <%= String(safeFormData.defaultGradeConfigValueId || '') === String(grade.config_value_id) ? 'selected' : '' %>>
+                      <%= grade.label || grade.code %>
+                    </option>
+                  <% }) %>
+                </select>
+              </label>
+            <% } %>
+          </div>
+        </div>
+
+        <% if (safeFormOptions.capabilities.hasUnitAmountGoal || safeFormOptions.capabilities.hasDeadline || safeFormOptions.capabilities.hasLabelFormat) { %>
+          <div class="form-section">
+            <div class="form-section-header">
+              <div>
+                <p class="eyebrow">Planning</p>
+                <h3>Lot Planning</h3>
+              </div>
+              <p>Goal, deadline, and label format.</p>
+            </div>
+
+            <% if (safeFormOptions.capabilities.hasUnitAmountGoal) { %>
+              <label class="checkbox-card" for="hasUnlimitedGoalModal">
+                <input id="hasUnlimitedGoalModal" type="checkbox" name="hasUnlimitedGoal" value="1" data-lot-unlimited-toggle <%= safeFormData.hasUnlimitedGoal === '1' ? 'checked' : '' %> />
+                <span>
+                  <strong>Unlimited / Open Lot</strong>
+                  <small>Use this when Management does not want a strict unit amount goal.</small>
+                </span>
+              </label>
+            <% } %>
+
+            <div class="form-grid lot-form-grid">
+              <% if (safeFormOptions.capabilities.hasUnitAmountGoal) { %>
+                <label class="form-field" data-lot-goal-field>
+                  <span>Unit Amount Goal</span>
+                  <input type="number" name="unitAmountGoal" value="<%= safeFormData.unitAmountGoal || '' %>" min="1" step="1" placeholder="Example: 100" data-lot-goal-input />
+                </label>
+              <% } %>
+
+              <% if (safeFormOptions.capabilities.hasDeadline) { %>
+                <label class="form-field">
+                  <span>Deadline</span>
+                  <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="deadline" value="<%= safeFormData.deadline || '' %>" />
+                </label>
+              <% } %>
+
+              <% if (safeFormOptions.capabilities.hasLabelFormat) { %>
+                <label class="form-field">
+                  <span>Label Format</span>
+                  <input type="text" name="labelFormat" value="<%= safeFormData.labelFormat || '' %>" maxlength="120" placeholder="Example: Standard BWT Laptop Label" />
+                </label>
+              <% } %>
+            </div>
+          </div>
+        <% } %>
+
+        <% if (safeFormOptions.capabilities.hasObjectives || safeFormOptions.capabilities.hasNotes) { %>
+          <div class="form-section">
+            <div class="form-section-header">
+              <div>
+                <p class="eyebrow">Notes</p>
+                <h3>Instructions</h3>
+              </div>
+              <p>Internal guidance for Management, Leads, and future Tech workflows.</p>
+            </div>
+
+            <div class="form-grid single-column">
+              <% if (safeFormOptions.capabilities.hasObjectives) { %>
+                <label class="form-field">
+                  <span>Objectives</span>
+                  <textarea name="objectives" rows="4" placeholder="Describe what this lot is intended to accomplish."><%= safeFormData.objectives || '' %></textarea>
+                </label>
+              <% } %>
+
+              <% if (safeFormOptions.capabilities.hasNotes) { %>
+                <label class="form-field">
+                  <span>Notes</span>
+                  <textarea name="notes" rows="4" placeholder="Internal notes for Management or Leads."><%= safeFormData.notes || '' %></textarea>
+                </label>
+              <% } %>
+            </div>
+          </div>
+        <% } %>
+
+        <div class="form-actions">
+          <button type="submit" class="primary-button"><%= submitLabel %></button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

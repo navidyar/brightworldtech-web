@@ -7,7 +7,7 @@ const router = express.Router();
 router.get(
   '/management/config',
   requireAuth,
-  requireRole(['admin', 'management']),
+  requireRole(['admin']),
   configController.renderConfigPage
 );
 

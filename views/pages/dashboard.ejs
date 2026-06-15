@@ -12,10 +12,10 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-blue">
             <div>
-              <p class="eyebrow">Step 4f</p>
+              <p class="eyebrow">Operations Dashboard</p>
               <h2>Dashboard</h2>
               <p>
-                Review the current operational snapshot, live chart summaries, and available dashboard areas. The dashboard now includes filters and drilldowns into filtered Unit Browser views.
+                Review the current operational snapshot, live chart summaries, and available dashboard areas. Filters and drilldowns connect dashboard metrics back to the Unit Browser.
               </p>
             </div>
 
@@ -25,7 +25,7 @@
             </div>
           </section>
 
-          <%- include('../fragments/dashboard-live-region', { dashboardData, dashboardFilters, dashboardFilterOptions, dashboardFilterConfig }) %>
+          <%- include('../fragments/dashboard-live-region', { dashboardData, dashboardFilters, dashboardFilterOptions, dashboardFilterConfig, dashboardKey: null }) %>
 
           <section class="content-card">
             <div class="content-header">

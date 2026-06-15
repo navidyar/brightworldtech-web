@@ -9,6 +9,7 @@ const router = express.Router();
 const managementRoles = ['admin', 'management'];
 const techRoles = ['admin', 'management', 'tech_lead', 'tech'];
 const techDeleteRoles = ['admin', 'management', 'tech_lead'];
+const outcomeApprovalRoles = ['admin', 'management', 'tech_lead'];
 
 /*
   Management routes
@@ -232,6 +233,21 @@ router.post(
   requireAuth,
   requireRole(techRoles),
   overrideController.createTechOverrideRequest
+);
+
+
+router.get(
+  '/tech/units/:unitId/outcome-approval/modal',
+  requireAuth,
+  requireRole(outcomeApprovalRoles),
+  techController.renderOutcomeApprovalModal
+);
+
+router.post(
+  '/tech/units/:unitId/outcome-approval',
+  requireAuth,
+  requireRole(outcomeApprovalRoles),
+  techController.approveOutcomeRequest
 );
 
 router.get(

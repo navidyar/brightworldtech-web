@@ -3,6 +3,7 @@ const overrideRequestModel = require('../models/overrideRequestModel');
 const unitExpandedDetailModel = require('../models/unitExpandedDetailModel');
 const unitIssueEntryModel = require('../models/unitIssueEntryModel');
 const unitExpandedFormModel = require('../models/unitExpandedFormModel');
+const unitOutcomeModel = require('../models/unitOutcomeModel');
 
 const VALID_MEMORY_INSTALL_TYPE_CODES = new Set([
   'removable_module',
@@ -217,7 +218,11 @@ function getExpandedDetailsFromRequest(req) {
     virusCheckStatusConfigValueId: normalizeModuleField(req.body.virusCheckStatusConfigValueId),
     driverCheckStatusConfigValueId: normalizeModuleField(req.body.driverCheckStatusConfigValueId),
     skinnedStatusConfigValueId: normalizeModuleField(req.body.skinnedStatusConfigValueId),
-    graphicsAdapters: getGraphicsAdaptersFromRequest(req)
+    graphicsAdapters: getGraphicsAdaptersFromRequest(req),
+    outcomeCode: normalizeModuleField(req.body.outcomeCode),
+    outcomeNotes: normalizeModuleField(req.body.outcomeNotes),
+    outcomeApprovalRequested: req.body.outcomeApprovalRequested ? '1' : '',
+    outcomeApprovalRequestNotes: normalizeModuleField(req.body.outcomeApprovalRequestNotes)
   };
 }
 
@@ -285,6 +290,10 @@ function getUnitFormDataFromRequest(req) {
     driverCheckStatusConfigValueId: expandedDetails.driverCheckStatusConfigValueId,
     skinnedStatusConfigValueId: expandedDetails.skinnedStatusConfigValueId,
     graphicsAdapters: expandedDetails.graphicsAdapters,
+    outcomeCode: expandedDetails.outcomeCode,
+    outcomeNotes: expandedDetails.outcomeNotes,
+    outcomeApprovalRequested: expandedDetails.outcomeApprovalRequested,
+    outcomeApprovalRequestNotes: expandedDetails.outcomeApprovalRequestNotes,
     hardwareNotes: String(req.body.hardwareNotes || '').trim(),
     cosmeticNotes: String(req.body.cosmeticNotes || '').trim()
   };
@@ -498,7 +507,26 @@ function validateExpandedDetails(formData) {
   });
 
   if (formData.overallGradeNotes && formData.overallGradeNotes.length > 500) {
-    errors.push('Overall grade notes must be 500 characters or fewer.');
+    errors.push('Cosmetic grade notes must be 500 characters or fewer.');
+  }
+
+  const normalizedOutcomeCode = unitOutcomeModel.normalizeOutcomeCode(formData.outcomeCode);
+  const outcomeApprovalRequested = unitOutcomeModel.normalizeApprovalRequested(formData.outcomeApprovalRequested);
+
+  if (formData.outcomeCode && !normalizedOutcomeCode) {
+    errors.push('Unit outcome must be Pass or Fail.');
+  }
+
+  if (outcomeApprovalRequested && !normalizedOutcomeCode) {
+    errors.push('Choose Pass or Fail before requesting outcome approval.');
+  }
+
+  if (formData.outcomeNotes && formData.outcomeNotes.length > 500) {
+    errors.push('Unit outcome notes must be 500 characters or fewer.');
+  }
+
+  if (formData.outcomeApprovalRequestNotes && formData.outcomeApprovalRequestNotes.length > 1000) {
+    errors.push('Outcome approval request notes must be 1000 characters or fewer.');
   }
 
   if (formData.biosVersion && formData.biosVersion.length > 100) {
@@ -1330,6 +1358,104 @@ async function updateTechUnitModal(req, res, next) {
   }
 }
 
+
+function getOutcomeApprovalNotes(req) {
+  return String(req.body.approvalNotes || '').trim();
+}
+
+async function renderOutcomeApprovalModal(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render('fragments/tech-unit-outcome-approval-modal', {
+        unit: null,
+        currentOutcome: null,
+        errorMessages: ['The selected unit ID is invalid.']
+      });
+    }
+
+    const unit = await techUnitModel.getTechUnitDeleteSummaryById(unitId);
+    const currentOutcome = await unitOutcomeModel.getCurrentOutcomeByUnitId(unitId);
+
+    if (!unit) {
+      return res.status(404).render('fragments/tech-unit-outcome-approval-modal', {
+        unit: null,
+        currentOutcome: null,
+        errorMessages: ['The selected unit could not be found.']
+      });
+    }
+
+    if (!currentOutcome || !currentOutcome.isPendingApproval) {
+      return res.status(400).render('fragments/tech-unit-outcome-approval-modal', {
+        unit,
+        currentOutcome,
+        errorMessages: ['This unit does not have a pending Pass/Fail approval request.']
+      });
+    }
+
+    return res.render('fragments/tech-unit-outcome-approval-modal', {
+      unit,
+      currentOutcome,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function approveOutcomeRequest(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render('fragments/tech-unit-outcome-approval-modal', {
+        unit: null,
+        currentOutcome: null,
+        errorMessages: ['The selected unit ID is invalid.']
+      });
+    }
+
+    const unit = await techUnitModel.getTechUnitDeleteSummaryById(unitId);
+    const currentOutcome = await unitOutcomeModel.getCurrentOutcomeByUnitId(unitId);
+
+    if (!unit) {
+      return res.status(404).render('fragments/tech-unit-outcome-approval-modal', {
+        unit: null,
+        currentOutcome: null,
+        errorMessages: ['The selected unit could not be found.']
+      });
+    }
+
+    if (!currentOutcome || !currentOutcome.isPendingApproval) {
+      return res.status(400).render('fragments/tech-unit-outcome-approval-modal', {
+        unit,
+        currentOutcome,
+        errorMessages: ['This unit does not have a pending Pass/Fail approval request.']
+      });
+    }
+
+    const approved = await unitOutcomeModel.approveCurrentOutcome({
+      unitId,
+      approvedByUserId: req.currentUser.user_id,
+      approvalNotes: getOutcomeApprovalNotes(req)
+    });
+
+    if (!approved) {
+      return res.status(409).render('fragments/tech-unit-outcome-approval-modal', {
+        unit,
+        currentOutcome,
+        errorMessages: ['This approval request may have already been reviewed. Refresh the Unit Browser and try again.']
+      });
+    }
+
+    res.set('HX-Trigger', 'unit-saved');
+    return res.send('');
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   renderTechUnitsPage,
   renderTechUnitsTable,
@@ -1344,5 +1470,7 @@ module.exports = {
   renderEditTechUnitPage,
   renderEditTechUnitModal,
   updateTechUnit,
-  updateTechUnitModal
+  updateTechUnitModal,
+  renderOutcomeApprovalModal,
+  approveOutcomeRequest
 };

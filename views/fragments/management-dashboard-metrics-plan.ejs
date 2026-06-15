@@ -1,0 +1,88 @@
+<section class="content-card management-metrics-roadmap">
+  <div class="content-header">
+    <div>
+      <p class="eyebrow">Management Metrics</p>
+      <h2>Planned Completion Metrics</h2>
+    </div>
+
+    <span class="dashboard-plan-pill">Management Planning</span>
+  </div>
+
+  <p class="management-metrics-intro">
+    These are the Management-only dashboard metrics planned for the next reporting build. Each completed-unit total will be split into Passed and Failed counts, and Passed + Failed must equal the total completed count for the selected date range.
+  </p>
+
+  <div class="management-metrics-grid">
+    <article class="management-metric-plan-card accent-orange">
+      <p class="eyebrow">Daily</p>
+      <h3>Total Completed Today</h3>
+      <p>Default to today, with a date picker to review any selected day.</p>
+      <ul>
+        <li>Total completed</li>
+        <li>Total passed</li>
+        <li>Total failed</li>
+      </ul>
+    </article>
+
+    <article class="management-metric-plan-card accent-blue">
+      <p class="eyebrow">Weekly</p>
+      <h3>Total Completed This Week</h3>
+      <p>Default to the current Monday-Friday work week, with a picker to review another week.</p>
+      <ul>
+        <li>Total completed Monday-Friday</li>
+        <li>Total passed</li>
+        <li>Total failed</li>
+      </ul>
+    </article>
+
+    <article class="management-metric-plan-card accent-purple">
+      <p class="eyebrow">Monthly / To Date</p>
+      <h3>Total Completed To Date</h3>
+      <p>Default to the current to-date view, with a month picker for a selected month.</p>
+      <ul>
+        <li>Total completed to date or by month</li>
+        <li>Total passed</li>
+        <li>Total failed</li>
+      </ul>
+    </article>
+
+    <article class="management-metric-plan-card accent-red">
+      <p class="eyebrow">Custom Range</p>
+      <h3>Specified Date Range</h3>
+      <p>Allow Management to choose a custom start and end date for the same completion metrics.</p>
+      <ul>
+        <li>Total completed in range</li>
+        <li>Total passed</li>
+        <li>Total failed</li>
+      </ul>
+    </article>
+  </div>
+
+  <div class="management-metrics-breakdown-grid">
+    <article class="management-metrics-breakdown-card">
+      <p class="eyebrow">Breakdown</p>
+      <h3>Total By Unit Category</h3>
+      <p>Show completed, passed, and failed counts within the selected day, week, month, to-date, or custom range.</p>
+      <span>Laptops · Desktops · Surface · MacBooks · Future categories</span>
+    </article>
+
+    <article class="management-metrics-breakdown-card">
+      <p class="eyebrow">Breakdown</p>
+      <h3>Total By Each Unit Category</h3>
+      <p>Each category row should show the total completed plus its passed and failed split.</p>
+      <span>Passed + Failed must equal the category total.</span>
+    </article>
+
+    <article class="management-metrics-breakdown-card">
+      <p class="eyebrow">Breakdown</p>
+      <h3>Total By Lot Type</h3>
+      <p>Show completed, passed, and failed counts grouped by lot type for the selected date window.</p>
+      <span>ELS · Amazon · NewEgg · Customer Lots · Other lot types</span>
+    </article>
+  </div>
+
+  <div class="management-metrics-rule-card">
+    <strong>Reporting rule</strong>
+    <p>For every selected date range and every breakdown, the dashboard should enforce: Total Completed = Total Passed + Total Failed. Completed units without a pass/fail result should be treated as a data-quality issue, not silently ignored.</p>
+  </div>
+</section>

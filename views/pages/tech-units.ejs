@@ -17,7 +17,7 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-green">
             <div>
-              <p class="eyebrow">Step 4f</p>
+              <p class="eyebrow">Tech Unit Registry</p>
               <h2>Tech Units</h2>
               <p>
                 Create, edit, search, and review unit records. Units can only be assigned to lots that do not have child lots.
@@ -33,7 +33,6 @@
           <section class="content-card">
             <div class="content-header">
               <div>
-                <p class="eyebrow">Tech</p>
                 <h2>Unit Browser</h2>
               </div>
 
@@ -66,8 +65,6 @@
 
                   <% if (isLast24HourDrilldown || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
                     <span class="tech-filter-active-pill">Filtered View</span>
-                  <% } else { %>
-                    <span class="tech-filter-active-pill tech-filter-active-pill--muted">Full View</span>
                   <% } %>
                 </div>
 
@@ -86,12 +83,7 @@
                       <select name="lotId">
                         <option value="">All assignable lots</option>
                         <% result.lots.forEach((lot) => { %>
-                          <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>>
-                            <%= lot.lot_name %>
-                            <% if (lot.lot_number) { %>
-                              - Lot #<%= lot.lot_number %>
-                            <% } %>
-                          </option>
+                          <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>><%= lot.lot_name %></option>
                         <% }) %>
                       </select>
                       <small class="field-hint">Lots with child lots are containers and are not assignable.</small>
@@ -131,12 +123,12 @@
 
                     <label class="form-field">
                       <span>Created Start</span>
-                      <input type="date" name="createdStartDate" value="<%= filters.createdStartDate || '' %>" />
+                      <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="createdStartDate" value="<%= filters.createdStartDate || '' %>" />
                     </label>
 
                     <label class="form-field">
                       <span>Created End</span>
-                      <input type="date" name="createdEndDate" value="<%= filters.createdEndDate || '' %>" />
+                      <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="createdEndDate" value="<%= filters.createdEndDate || '' %>" />
                     </label>
                   </div>
                 </div>
@@ -162,36 +154,6 @@
             <% } %>
           </section>
 
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Dashboard</p>
-                <h2>Step 4f Notes</h2>
-              </div>
-            </div>
-
-            <div class="workflow-list">
-              <div class="workflow-item active">
-                <span></span>
-                <div>
-                  <strong>Management override workflow</strong>
-                  <p>
-                    Next we can add override requests, approval tracking, and override reason history.
-                  </p>
-                </div>
-              </div>
-
-              <div class="workflow-item slate">
-                <span></span>
-                <div>
-                  <strong>Enforcement integration</strong>
-                  <p>
-                    After the override foundation exists, we can connect lot validation to unit save actions.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
         </main>
 
         <div id="modal-root"></div>

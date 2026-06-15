@@ -1,0 +1,71 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const unitLabel = unit && unit.asset_tag ? unit.asset_tag : (unit && unit.assetTag ? unit.assetTag : (unit && unit.asset_number ? `BWT${unit.asset_number}` : 'Selected Unit'));
+  const outcomeLabel = currentOutcome && currentOutcome.outcomeLabel ? currentOutcome.outcomeLabel : '—';
+  const outcomeClass = currentOutcome && currentOutcome.outcomeCode === 'pass' ? 'pass' : (currentOutcome && currentOutcome.outcomeCode === 'fail' ? 'fail' : '');
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel tech-outcome-approval-modal" role="dialog" aria-modal="true" aria-labelledby="tech-outcome-approval-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Management / Lead Approval</p>
+        <h2 id="tech-outcome-approval-title">Approve Pass/Fail Outcome</h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (unit && currentOutcome) { %>
+        <div class="tech-outcome-approval-summary">
+          <div>
+            <p class="eyebrow">Unit</p>
+            <strong><%= unitLabel %></strong>
+          </div>
+
+          <div>
+            <p class="eyebrow">Requested Outcome</p>
+            <span class="tech-outcome-pill tech-outcome-pill--<%= outcomeClass %>"><%= outcomeLabel %></span>
+          </div>
+        </div>
+
+        <dl class="tech-detail-list tech-outcome-approval-list">
+          <div>
+            <dt>Requested By</dt>
+            <dd><%= currentOutcome.approvalRequestedByName || currentOutcome.selectedByName || '—' %></dd>
+          </div>
+
+          <div>
+            <dt>Request Notes</dt>
+            <dd><%= currentOutcome.approvalRequestNotes || '—' %></dd>
+          </div>
+        </dl>
+
+        <form method="post" action="/tech/units/<%= unit.unit_id || unit.unitId %>/outcome-approval" hx-post="/tech/units/<%= unit.unit_id || unit.unitId %>/outcome-approval" hx-target="#modal-root" hx-swap="innerHTML">
+          <label class="form-field">
+            <span>Approval Notes</span>
+            <textarea name="approvalNotes" rows="3" maxlength="1000" placeholder="Optional note for the approval record"></textarea>
+          </label>
+
+          <div class="action-row">
+            <button type="submit" class="primary-button">Approve <%= outcomeLabel %></button>
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          </div>
+        </form>
+      <% } else { %>
+        <div class="action-row">
+          <button type="button" class="secondary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

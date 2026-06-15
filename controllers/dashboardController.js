@@ -20,6 +20,7 @@ function normalizeDashboardDefinition(dashboard) {
       dashboard.description ||
       dashboard.summary ||
       `Access the ${title} dashboard and related operational views.`,
+    kicker: dashboard.kicker || dashboard.menuArea || 'Dashboard',
     accent: dashboard.accent || 'slate'
   };
 }
@@ -67,7 +68,11 @@ function getDashboardFilterConfig(dashboardKey = null) {
 async function buildDashboardPayload(req, dashboardKey = null) {
   const dashboardFilters = dashboardModel.normalizeDashboardFilters(req.query || {});
   const [dashboardData, dashboardFilterOptions] = await Promise.all([
-    dashboardModel.getDashboardData(dashboardFilters),
+    dashboardModel.getDashboardData(dashboardFilters, {
+      currentUser: req.currentUser,
+      currentRoles: req.currentUser ? req.currentUser.roles : [],
+      dashboardKey
+    }),
     dashboardModel.getDashboardFilterOptions()
   ]);
 
@@ -75,7 +80,8 @@ async function buildDashboardPayload(req, dashboardKey = null) {
     dashboardData,
     dashboardFilters,
     dashboardFilterOptions,
-    dashboardFilterConfig: getDashboardFilterConfig(dashboardKey)
+    dashboardFilterConfig: getDashboardFilterConfig(dashboardKey),
+    dashboardKey
   };
 }
 
@@ -152,6 +158,7 @@ async function renderRoleDashboardSummary(req, res, next) {
           techUsers: []
         },
         dashboardFilterConfig: getDashboardFilterConfig(dashboardKey),
+        dashboardKey,
         dashboardErrorMessage: 'This dashboard is not available for your account.'
       });
     }

@@ -4,7 +4,13 @@
       <div class="message error"><p><%= dashboardErrorMessage %></p></div>
     </section>
   <% } else { %>
-    <%- include('./dashboard-filters', { dashboardFilters, dashboardFilterOptions, dashboardFilterConfig }) %>
-    <%- include('./dashboard-foundation', { dashboardData }) %>
+    <% if (dashboardKey === 'management') { %>
+      <%- include('./management-dashboard-completion-foundation', { dashboardData, dashboardFilters, dashboardFilterConfig }) %>
+    <% } else if (dashboardKey === 'tech') { %>
+      <%- include('./tech-dashboard-productivity', { dashboardData, dashboardFilters, dashboardFilterConfig }) %>
+    <% } else { %>
+      <%- include('./dashboard-filters', { dashboardFilters, dashboardFilterOptions, dashboardFilterConfig }) %>
+      <%- include('./dashboard-foundation', { dashboardData }) %>
+    <% } %>
   <% } %>
 </div>

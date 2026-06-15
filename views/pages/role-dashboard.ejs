@@ -12,7 +12,7 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-<%= dashboard.accent %>">
             <div>
-              <p class="eyebrow">Step 4f</p>
+              <p class="eyebrow"><%= dashboard.kicker || 'Dashboard' %></p>
               <h2><%= dashboard.title %></h2>
               <p><%= dashboard.description %></p>
             </div>
@@ -23,9 +23,10 @@
             </div>
           </section>
 
-          <%- include('../fragments/dashboard-live-region', { dashboardData, dashboardFilters, dashboardFilterOptions, dashboardFilterConfig }) %>
+          <%- include('../fragments/dashboard-live-region', { dashboardData, dashboardFilters, dashboardFilterOptions, dashboardFilterConfig, dashboardKey: dashboard.key }) %>
 
           <% if (dashboard.key === 'management') { %>
+
             <section class="content-card">
               <div class="content-header">
                 <div>
@@ -53,11 +54,13 @@
                   <span>Review pending unit/lot override requests.</span>
                 </a>
 
-                <a class="role-dashboard-card accent-slate" href="/management/config">
-                  <p>Management</p>
-                  <h3>Config Values</h3>
-                  <span>Review selectable values used across the application.</span>
-                </a>
+                <% if (currentRoles.includes('admin')) { %>
+                  <a class="role-dashboard-card accent-slate" href="/management/config">
+                    <p>Admin</p>
+                    <h3>Config Values</h3>
+                    <span>Review selectable values used across the application.</span>
+                  </a>
+                <% } %>
               </div>
             </section>
           <% } %>

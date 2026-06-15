@@ -29,12 +29,12 @@
   <form class="dashboard-filter-form" method="get" action="<%= safeConfig.pageHref || '/' %>" hx-get="<%= safeConfig.summaryHref || '/dashboard/summary' %>" hx-target="#dashboard-live-region" hx-swap="outerHTML">
     <label class="form-field">
       <span>Start Date</span>
-      <input type="date" name="startDate" value="<%= safeFilters.startDate || '' %>" />
+      <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="startDate" value="<%= safeFilters.startDate || '' %>" />
     </label>
 
     <label class="form-field">
       <span>End Date</span>
-      <input type="date" name="endDate" value="<%= safeFilters.endDate || '' %>" />
+      <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="endDate" value="<%= safeFilters.endDate || '' %>" />
     </label>
 
     <label class="form-field">

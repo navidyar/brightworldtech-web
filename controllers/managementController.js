@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const authModel = require('../models/authModel');
 const managementModel = require('../models/managementModel');
+const accessPolicy = require('../config/accessPolicy');
 
 function hashToken(rawToken) {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -28,15 +29,51 @@ function redirectAfterHtmxAwareAction(req, res, redirectUrl) {
 }
 
 function normalizeRoleCodes(roleCodes) {
-  if (!roleCodes) {
+  const submittedRoleCodes = Array.isArray(roleCodes)
+    ? roleCodes.map((roleCode) => String(roleCode).trim()).filter(Boolean)
+    : [String(roleCodes || '').trim()].filter(Boolean);
+
+  if (submittedRoleCodes.length === 0) {
     return [];
   }
 
-  if (Array.isArray(roleCodes)) {
-    return roleCodes.map((roleCode) => String(roleCode).trim()).filter(Boolean);
+  const primaryRoleCode = accessPolicy.ROLE_HIERARCHY.find((roleCode) => submittedRoleCodes.includes(roleCode)) || submittedRoleCodes[0];
+
+  return primaryRoleCode ? [primaryRoleCode] : [];
+}
+
+function canAssignAdminRole(req) {
+  return Boolean(req.currentUser && Array.isArray(req.currentUser.roles) && req.currentUser.roles.includes('admin'));
+}
+
+function getAssignableRolesForCurrentUser(roles, req) {
+  const safeRoles = Array.isArray(roles) ? roles : [];
+
+  if (canAssignAdminRole(req)) {
+    return safeRoles;
   }
 
-  return [String(roleCodes).trim()].filter(Boolean);
+  return safeRoles.filter((role) => role.code !== 'admin');
+}
+
+function filterAssignableRoleCodes(roleCodes, req) {
+  const safeRoleCodes = Array.isArray(roleCodes) ? roleCodes : [];
+
+  if (canAssignAdminRole(req)) {
+    return safeRoleCodes;
+  }
+
+  return safeRoleCodes.filter((roleCode) => roleCode !== 'admin');
+}
+
+function addAdminRoleAssignmentErrors(errorMessages, requestedRoleCodes, req) {
+  if (!canAssignAdminRole(req) && requestedRoleCodes.includes('admin')) {
+    errorMessages.push('Only Admin users can assign the Admin role.');
+  }
+}
+
+function isAdminUserRecord(user) {
+  return Array.isArray(user?.roles) && user.roles.includes('admin');
 }
 
 function normalizeReturnPath(returnPath) {
@@ -201,7 +238,7 @@ async function renderInactiveUsersPage(req, res, next) {
 
 async function renderNewUserPage(req, res, next) {
   try {
-    const roles = await managementModel.listActiveRoles();
+    const roles = getAssignableRolesForCurrentUser(await managementModel.listActiveRoles(), req);
 
     res.render('pages/management-user-new', {
       pageTitle: 'Create User',
@@ -227,9 +264,12 @@ async function createUser(req, res, next) {
     const email = authModel.normalizeEmail(req.body.email);
     const roleCodes = normalizeRoleCodes(req.body.roleCodes);
 
-    const roles = await managementModel.listActiveRoles();
+    const roles = getAssignableRolesForCurrentUser(await managementModel.listActiveRoles(), req);
     const allowedRoleCodes = new Set(roles.map((role) => role.code));
-    const validRoleCodes = roleCodes.filter((roleCode) => allowedRoleCodes.has(roleCode));
+    const validRoleCodes = filterAssignableRoleCodes(
+      roleCodes.filter((roleCode) => allowedRoleCodes.has(roleCode) || roleCode === 'admin'),
+      req
+    );
 
     const errorMessages = validateUserForm({
       firstName,
@@ -237,6 +277,7 @@ async function createUser(req, res, next) {
       email,
       roleCodes: validRoleCodes
     });
+    addAdminRoleAssignmentErrors(errorMessages, roleCodes, req);
 
     if (errorMessages.length > 0) {
       return res.status(400).render('pages/management-user-new', {
@@ -304,7 +345,16 @@ async function renderEditUserModal(req, res, next) {
       });
     }
 
-    const roles = await managementModel.listActiveRoles();
+    if (isAdminUserRecord(user) && !canAssignAdminRole(req)) {
+      return res.status(403).render('fragments/management-user-action-modal', {
+        actionType: 'error',
+        user,
+        returnPath,
+        errorMessages: ['Only Admin users can edit users with the Admin role.']
+      });
+    }
+
+    const roles = getAssignableRolesForCurrentUser(await managementModel.listActiveRoles(), req);
 
     return res.render('fragments/management-user-edit-modal', {
       user,
@@ -315,7 +365,7 @@ async function renderEditUserModal(req, res, next) {
         firstName: user.first_name || '',
         lastName: user.last_name || '',
         email: user.email || '',
-        roleCodes: user.roles || []
+        roleCodes: normalizeRoleCodes(user.roles || [])
       }
     });
   } catch (error) {
@@ -338,14 +388,26 @@ async function updateUserModal(req, res, next) {
       return redirectAfterHtmxAwareAction(req, res, getUsersReturnUrl(returnPath, 'error=not_found'));
     }
 
+    if (isAdminUserRecord(user) && !canAssignAdminRole(req)) {
+      return res.status(403).render('fragments/management-user-action-modal', {
+        actionType: 'error',
+        user,
+        returnPath,
+        errorMessages: ['Only Admin users can edit users with the Admin role.']
+      });
+    }
+
     const firstName = String(req.body.firstName || '').trim();
     const lastName = String(req.body.lastName || '').trim();
     const email = authModel.normalizeEmail(req.body.email);
     const roleCodes = normalizeRoleCodes(req.body.roleCodes);
 
-    const roles = await managementModel.listActiveRoles();
+    const roles = getAssignableRolesForCurrentUser(await managementModel.listActiveRoles(), req);
     const allowedRoleCodes = new Set(roles.map((role) => role.code));
-    const validRoleCodes = roleCodes.filter((roleCode) => allowedRoleCodes.has(roleCode));
+    const validRoleCodes = filterAssignableRoleCodes(
+      roleCodes.filter((roleCode) => allowedRoleCodes.has(roleCode) || roleCode === 'admin'),
+      req
+    );
 
     const errorMessages = validateUserForm({
       firstName,
@@ -353,6 +415,7 @@ async function updateUserModal(req, res, next) {
       email,
       roleCodes: validRoleCodes
     });
+    addAdminRoleAssignmentErrors(errorMessages, roleCodes, req);
 
     if (errorMessages.length > 0) {
       return res.render('fragments/management-user-edit-modal', {

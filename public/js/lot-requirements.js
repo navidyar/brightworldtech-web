@@ -1,6 +1,8 @@
 (function () {
-  function parseOptions() {
-    const script = document.getElementById('requirement-value-options-json');
+  function parseOptions(form) {
+    const modalScript = form.closest('.modal-body')?.querySelector('[data-requirement-value-options-json]');
+    const pageScript = document.getElementById('requirement-value-options-json');
+    const script = modalScript || pageScript;
 
     if (!script) {
       return {};
@@ -94,14 +96,12 @@
     }
   }
 
-  document.addEventListener('DOMContentLoaded', () => {
-    const form = document.querySelector('[data-requirement-form]');
-
-    if (!form) {
+  function setupRequirementForm(form) {
+    if (form.dataset.requirementFormReady === '1') {
       return;
     }
 
-    const optionsByKey = parseOptions();
+    const optionsByKey = parseOptions(form);
     const requirementSelect = form.querySelector('[data-requirement-key]');
     const selectWrap = form.querySelector('[data-required-value-select-wrap]');
     const selectInput = form.querySelector('[data-required-value-select]');
@@ -125,7 +125,20 @@
       fieldHint
     });
 
+    form.dataset.requirementFormReady = '1';
     requirementSelect.addEventListener('change', update);
     update();
+  }
+
+  function initialize(root) {
+    root.querySelectorAll('[data-requirement-form]').forEach(setupRequirementForm);
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    initialize(document);
+  });
+
+  document.addEventListener('htmx:afterSwap', (event) => {
+    initialize(event.target || document);
   });
 })();

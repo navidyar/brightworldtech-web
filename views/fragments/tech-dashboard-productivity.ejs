@@ -1,0 +1,166 @@
+<%
+  const techData = dashboardData.techDashboardData || {};
+  const activeWindow = techData.activeWindow || null;
+  const selectedTech = techData.selectedTech || null;
+  const summary = techData.summary || { completed: 0, weighted: 0 };
+  const teamAverage = techData.teamAverage || { completed: 0, weighted: 0 };
+  const categoryBreakdown = Array.isArray(techData.categoryBreakdown) ? techData.categoryBreakdown : [];
+  const lotBreakdown = Array.isArray(techData.lotBreakdown) ? techData.lotBreakdown : [];
+  const techUsers = Array.isArray(techData.techUsers) ? techData.techUsers : [];
+  const allTechRows = Array.isArray(techData.allTechRows) ? techData.allTechRows : [];
+  const config = dashboardFilterConfig || {};
+
+  function dateLabel(window) {
+    if (!window) return 'No period selected';
+    if (window.startDate && window.endDate && window.startDate !== window.endDate) return `${window.startDate} to ${window.endDate}`;
+    if (window.startDate) return window.startDate;
+    if (window.endDate) return `Through ${window.endDate}`;
+    return 'All dates';
+  }
+
+  function pct(value, total) {
+    const safeTotal = Number(total || 0);
+    if (!safeTotal) return 0;
+    return Math.max(0, Math.min(100, Math.round((Number(value || 0) / safeTotal) * 100)));
+  }
+
+  function chartColor(index) {
+    const colors = ['var(--chart-orange)', 'var(--chart-blue)', 'var(--chart-purple)', 'var(--chart-red)', 'var(--chart-teal)', 'var(--chart-slate)', 'var(--chart-green)', 'var(--chart-brown)'];
+    return colors[index % colors.length];
+  }
+
+  function pieGradient(rows, total, key) {
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const safeTotal = Number(total || 0);
+    if (!safeRows.length || safeTotal <= 0) return 'conic-gradient(var(--chart-empty) 0deg 360deg)';
+    let cursor = 0;
+    const segments = [];
+    safeRows.forEach((row, index) => {
+      const value = Number(row[key] || 0);
+      if (value <= 0) return;
+      const start = cursor;
+      const end = Math.min(360, cursor + Math.max((value / safeTotal) * 360, 1));
+      segments.push(`${chartColor(index)} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`);
+      cursor = end;
+    });
+    if (cursor < 360) segments.push(`var(--chart-empty) ${cursor.toFixed(2)}deg 360deg`);
+    return `conic-gradient(${segments.join(', ')})`;
+  }
+
+  function totalFor(rows, key) {
+    return rows.reduce((sum, row) => sum + Number(row[key] || 0), 0);
+  }
+
+  function renderPie(chartTitle, rows, key, centerLabel) {
+    const total = totalFor(rows, key);
+%>
+    <article class="dashboard-pie-panel">
+      <div class="dashboard-pie" style="--pie-gradient: <%- pieGradient(rows, total, key) %>;"></div>
+      <div class="dashboard-pie-side">
+        <p class="eyebrow"><%= chartTitle %></p>
+        <h3><%= formatNumber(Number(total || 0).toFixed(key === 'weighted' ? 2 : 0)) %></h3>
+        <span><%= centerLabel %></span>
+        <% if (!rows.length || total === 0) { %>
+          <p class="dashboard-empty-state dashboard-empty-state--compact">No completed units match this period.</p>
+        <% } else { %>
+          <div class="dashboard-pie-legend">
+            <% rows.forEach((row, index) => { %>
+              <div class="dashboard-pie-legend-row">
+                <i style="--legend-color: <%= chartColor(index) %>;"></i>
+                <strong><%= row.label %></strong>
+                <span><%= formatNumber(Number(row[key] || 0).toFixed(key === 'weighted' ? 2 : 0)) %> · <%= pct(row[key], total) %>%</span>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </article>
+<% } %>
+
+<section class="content-card dashboard-role-metrics dashboard-role-metrics--tech">
+  <div class="content-header">
+    <div>
+      <p class="eyebrow">Tech Dashboard</p>
+      <h2><%= techData.canViewAllTechs ? 'Tech Productivity Metrics' : 'My Productivity Metrics' %></h2>
+    </div>
+    <span class="dashboard-plan-pill">Tech Productivity</span>
+  </div>
+
+  <form class="dashboard-period-form" data-reporting-controls method="get" action="<%= config.pageHref || '/dashboards/tech' %>" hx-get="<%= config.summaryHref || '/dashboards/tech/summary' %>" hx-target="#dashboard-live-region" hx-swap="outerHTML">
+    <% if (techData.canViewAllTechs) { %>
+      <label class="form-field dashboard-period-main-field">
+        <span>Tech User</span>
+        <select name="techDashboardUserId">
+          <% techUsers.forEach((tech) => { %>
+            <option value="<%= tech.userId %>" <%= Number(techData.selectedTechId) === Number(tech.userId) ? 'selected' : '' %>><%= tech.name %></option>
+          <% }) %>
+        </select>
+      </label>
+    <% } %>
+
+    <label class="form-field dashboard-period-main-field">
+      <span>Reporting Period</span>
+      <select name="managementPeriod" data-reporting-period-select>
+        <option value="day" <%= techData.selectedPeriod === 'day' ? 'selected' : '' %>>Day</option>
+        <option value="work_week" <%= techData.selectedPeriod === 'work_week' ? 'selected' : '' %>>Week</option>
+        <option value="month" <%= techData.selectedPeriod === 'month' ? 'selected' : '' %>>Month</option>
+        <option value="month_to_date" <%= techData.selectedPeriod === 'month_to_date' ? 'selected' : '' %>>Month-to-Date</option>
+        <option value="custom_range" <%= techData.selectedPeriod === 'custom_range' ? 'selected' : '' %>>Range of Dates</option>
+      </select>
+      <small data-period-guidance>Choose a reporting period first. Only visible fields are used.</small>
+    </label>
+
+    <div class="dashboard-period-field" data-period-field="day"><label class="form-field"><span>Day</span><input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="managementDate" value="<%= techData.selectedDate || '' %>" /></label></div>
+    <div class="dashboard-period-field" data-period-field="work_week"><label class="form-field"><span>Week</span><input type="week" data-date-picker-only inputmode="none" autocomplete="off" name="managementWeek" value="<%= techData.selectedWeek || '' %>" /></label><small>Reports Monday through Sunday.</small></div>
+    <div class="dashboard-period-field" data-period-field="month"><label class="form-field"><span>Month</span><input type="month" data-date-picker-only inputmode="none" autocomplete="off" name="managementMonth" value="<%= techData.selectedMonth || '' %>" /></label></div>
+    <div class="dashboard-period-field dashboard-period-field--no-picker" data-period-field="month_to_date"><strong>No date needed</strong><small>Current month through today.</small></div>
+    <div class="dashboard-period-field dashboard-period-field--range" data-period-field="custom_range"><label class="form-field"><span>Start</span><input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="managementStartDate" value="<%= techData.customStartDate || '' %>" /></label><label class="form-field"><span>End</span><input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="managementEndDate" value="<%= techData.customEndDate || '' %>" /></label></div>
+    <button class="primary-button" type="submit">Show Metrics</button>
+  </form>
+
+  <div class="dashboard-selected-period-note">
+    <strong>Currently showing:</strong>
+    <span><%= selectedTech ? selectedTech.name : 'Selected Tech' %> · <%= activeWindow ? `${activeWindow.label} · ${dateLabel(activeWindow)}` : 'No reporting period selected' %></span>
+    <span><%= formatNumber(summary.completed || 0) %> completed · <%= formatNumber(Number(summary.weighted || 0).toFixed(2)) %> weighted</span>
+  </div>
+
+  <div class="dashboard-pie-grid dashboard-pie-grid--two">
+    <% renderPie('My Total Units by Category', categoryBreakdown, 'completed', 'completed units'); %>
+    <% renderPie('My Weighted Units by Category', categoryBreakdown, 'weighted', 'weighted units'); %>
+    <% renderPie('My Total Units by Lot', lotBreakdown, 'completed', 'completed units'); %>
+    <% renderPie('My Weighted Units by Lot', lotBreakdown, 'weighted', 'weighted units'); %>
+  </div>
+
+  <div class="tech-team-average-grid">
+    <article class="tech-team-average-panel">
+      <p class="eyebrow">Team Average</p>
+      <h3><%= formatNumber(Number(teamAverage.completed || 0).toFixed(2)) %></h3>
+      <span>Average total units done</span>
+    </article>
+    <article class="tech-team-average-panel">
+      <p class="eyebrow">Team Average</p>
+      <h3><%= formatNumber(Number(teamAverage.weighted || 0).toFixed(2)) %></h3>
+      <span>Average weighted units done</span>
+    </article>
+  </div>
+
+  <% if (techData.canViewAllTechs && allTechRows.length > 0) { %>
+    <section class="content-card all-tech-metrics-list">
+      <div class="content-header compact-header">
+        <div>
+          <p class="eyebrow">All Techs</p>
+          <h3>Scrollable Tech Metrics</h3>
+        </div>
+      </div>
+      <div class="all-tech-metrics-scroll">
+        <% allTechRows.forEach((tech) => { %>
+          <div class="all-tech-metric-row">
+            <strong><%= tech.name %></strong>
+            <span>Total <%= formatNumber(tech.completed || 0) %></span>
+            <span>Weighted <%= formatNumber(Number(tech.weighted || 0).toFixed(2)) %></span>
+          </div>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+</section>

@@ -246,7 +246,7 @@ async function listParentLotOptions() {
     lotColumns,
     ['lot_name', 'name', 'title'],
     'lot_name',
-    "CONCAT('Lot #', l.lot_id)"
+    'Unnamed Lot'
   );
 
   const lotCodeSelect = selectExpression(
@@ -337,7 +337,7 @@ async function listLots() {
     lotColumns,
     ['lot_name', 'name', 'title'],
     'lot_name',
-    "CONCAT('Lot #', l.lot_id)"
+    'Unnamed Lot'
   );
 
   const lotNumberSelect = selectExpression(
@@ -506,6 +506,14 @@ async function listLots() {
     ? 'COALESCE(default_grade.label, default_grade.code) AS default_grade_label'
     : 'NULL AS default_grade_label';
 
+  const lotTypeConfigValueIdSelect = hasLotType
+    ? 'l.lot_type_config_value_id AS lot_type_config_value_id'
+    : 'NULL AS lot_type_config_value_id';
+
+  const defaultGradeConfigValueIdSelect = hasDefaultGrade
+    ? 'l.default_grade_config_value_id AS default_grade_config_value_id'
+    : 'NULL AS default_grade_config_value_id';
+
   const unitCountSelect = hasUnitsLotId
     ? 'COALESCE(unit_counts.unit_count, 0) AS unit_count'
     : '0 AS unit_count';
@@ -531,6 +539,8 @@ async function listLots() {
       ${requirementPolicyLabelSelect},
       ${requirementPolicyCodeSelect},
       ${defaultGradeLabelSelect},
+      ${lotTypeConfigValueIdSelect},
+      ${defaultGradeConfigValueIdSelect},
       ${unitGoalSelect},
       ${deadlineSelect},
       ${objectivesSelect},
@@ -686,6 +696,168 @@ async function createLot(formData, currentUserId) {
     lotId: result.insertId,
     lotCode
   };
+}
+
+
+async function updateLot(lotId, formData, currentUserId) {
+  const lotColumns = await getColumnSet('lots');
+  const assignments = [];
+  const values = [];
+
+  function addColumn(columnName, value) {
+    if (!hasColumn(lotColumns, columnName)) {
+      return;
+    }
+
+    assignments.push(`\`${columnName}\` = ?`);
+    values.push(value);
+  }
+
+  function addFirstAvailableColumn(candidateColumns, value) {
+    const columnName = pickColumn(lotColumns, candidateColumns);
+
+    if (!columnName) {
+      return;
+    }
+
+    addColumn(columnName, value);
+  }
+
+  const lotName = String(formData.lotName || '').trim();
+  const parentLotId = formData.parentLotId ? Number(formData.parentLotId) : null;
+  const lotTypeConfigValueId = formData.lotTypeConfigValueId ? Number(formData.lotTypeConfigValueId) : null;
+  const defaultGradeConfigValueId = formData.defaultGradeConfigValueId ? Number(formData.defaultGradeConfigValueId) : null;
+  const hasUnlimitedGoal = formData.hasUnlimitedGoal === '1';
+  const unitAmountGoal = hasUnlimitedGoal ? null : Number(formData.unitAmountGoal || 0);
+  const deadline = formData.deadline ? String(formData.deadline).trim() : null;
+  const objectives = String(formData.objectives || '').trim() || null;
+  const notes = String(formData.notes || '').trim() || null;
+  const labelFormat = String(formData.labelFormat || '').trim() || null;
+
+  addFirstAvailableColumn(['lot_name', 'name', 'title'], lotName);
+  addColumn('parent_lot_id', parentLotId);
+  addColumn('lot_type_config_value_id', lotTypeConfigValueId);
+  addFirstAvailableColumn(['unit_amount_goal', 'unit_goal', 'quantity_goal', 'target_unit_count'], unitAmountGoal);
+  addColumn('default_grade_config_value_id', defaultGradeConfigValueId);
+  addFirstAvailableColumn(['deadline', 'deadline_date', 'due_date'], deadline);
+  addFirstAvailableColumn(['objectives', 'objective'], objectives);
+  addFirstAvailableColumn(['notes', 'note'], notes);
+  addColumn('label_format', labelFormat);
+  addColumn('updated_by_user_id', currentUserId || null);
+
+  if (hasColumn(lotColumns, 'requirement_policy_config_value_id')) {
+    const requirementPolicyConfigValueId = await getDefaultRequirementPolicyConfigValueId(hasUnlimitedGoal);
+
+    if (requirementPolicyConfigValueId) {
+      addColumn('requirement_policy_config_value_id', requirementPolicyConfigValueId);
+    }
+  }
+
+  if (assignments.length === 0) {
+    throw new Error('No compatible lot columns were found for updating a lot.');
+  }
+
+  values.push(Number(lotId));
+
+  const [result] = await pool.query(
+    `
+      UPDATE lots
+      SET ${assignments.join(', ')}
+      WHERE lot_id = ?
+      LIMIT 1
+    `,
+    values
+  );
+
+  return result.affectedRows > 0;
+}
+
+async function getLotDeleteSummary(lotId) {
+  const lot = await getLotById(lotId);
+
+  if (!lot) {
+    return null;
+  }
+
+  const lotColumns = await getColumnSet('lots');
+  const unitColumns = await getColumnSet('units');
+  const requirementColumns = await getColumnSet('lot_requirements');
+
+  let unitCount = Number(lot.unitCount || lot.unit_count || 0);
+  let childLotCount = 0;
+  let requirementCount = Number(lot.requirement_count || 0);
+
+  if (hasColumn(unitColumns, 'lot_id')) {
+    const [unitRows] = await pool.query(
+      'SELECT COUNT(*) AS unit_count FROM units WHERE lot_id = ?',
+      [Number(lotId)]
+    );
+
+    unitCount = Number(unitRows[0]?.unit_count || 0);
+  }
+
+  if (hasColumn(lotColumns, 'parent_lot_id')) {
+    const [childRows] = await pool.query(
+      'SELECT COUNT(*) AS child_lot_count FROM lots WHERE parent_lot_id = ?',
+      [Number(lotId)]
+    );
+
+    childLotCount = Number(childRows[0]?.child_lot_count || 0);
+  }
+
+  if (hasColumn(requirementColumns, 'lot_id')) {
+    const [requirementRows] = await pool.query(
+      'SELECT COUNT(*) AS requirement_count FROM lot_requirements WHERE lot_id = ?',
+      [Number(lotId)]
+    );
+
+    requirementCount = Number(requirementRows[0]?.requirement_count || 0);
+  }
+
+  return {
+    lot,
+    unitCount,
+    childLotCount,
+    requirementCount,
+    canDelete: unitCount === 0 && childLotCount === 0
+  };
+}
+
+async function deleteLotIfEmpty(lotId) {
+  const summary = await getLotDeleteSummary(lotId);
+
+  if (!summary || !summary.canDelete) {
+    return false;
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const requirementColumns = await getColumnSet('lot_requirements');
+
+    if (hasColumn(requirementColumns, 'lot_id')) {
+      await connection.query(
+        'DELETE FROM lot_requirements WHERE lot_id = ?',
+        [Number(lotId)]
+      );
+    }
+
+    const [result] = await connection.query(
+      'DELETE FROM lots WHERE lot_id = ? LIMIT 1',
+      [Number(lotId)]
+    );
+
+    await connection.commit();
+
+    return result.affectedRows > 0;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function listLotRequirements(lotId) {
@@ -957,6 +1129,121 @@ async function createLotRequirement(lotId, formData, currentUserId) {
   };
 }
 
+
+function getRequirementIdColumn(requirementColumns) {
+  return pickColumn(requirementColumns, ['lot_requirement_id', 'requirement_id', 'id']);
+}
+
+async function getLotRequirementById(lotId, requirementId) {
+  const requirements = await listLotRequirements(lotId);
+
+  return requirements.find((requirement) => Number(requirement.lot_requirement_id) === Number(requirementId)) || null;
+}
+
+async function updateLotRequirement(lotId, requirementId, formData, currentUserId) {
+  const requirementColumns = await getColumnSet('lot_requirements');
+  const requirementIdColumn = getRequirementIdColumn(requirementColumns);
+
+  if (!requirementIdColumn) {
+    throw new Error('The lot_requirements table does not have a compatible requirement ID column.');
+  }
+
+  const assignments = [];
+  const values = [];
+
+  function addColumn(columnName, value) {
+    if (!hasColumn(requirementColumns, columnName)) {
+      return false;
+    }
+
+    assignments.push(`\`${columnName}\` = ?`);
+    values.push(value);
+
+    return true;
+  }
+
+  function addFirstAvailableColumn(candidateColumns, value) {
+    const columnName = pickColumn(requirementColumns, candidateColumns);
+
+    if (!columnName) {
+      return false;
+    }
+
+    return addColumn(columnName, value);
+  }
+
+  const requirementKey = String(formData.requirementKey || '').trim();
+  const operatorCode = String(formData.operatorCode || 'equals').trim();
+  const requiredValue = String(formData.requiredValue || '').trim();
+  const notes = String(formData.notes || '').trim() || null;
+  const requiredValueAsNumber = Number(requiredValue);
+
+  const addedRequirementKey = addFirstAvailableColumn(
+    ['requirement_key', 'requirement_code', 'field_name', 'requirement_type_code'],
+    requirementKey
+  );
+
+  if (hasColumn(requirementColumns, 'requirement_type_config_value_id')) {
+    const requirementTypeConfigValueId = await findConfigValueIdByCode(
+      ['lot_requirement_types', 'requirement_types'],
+      requirementKey
+    );
+
+    if (requirementTypeConfigValueId) {
+      addColumn('requirement_type_config_value_id', requirementTypeConfigValueId);
+    } else if (!addedRequirementKey) {
+      throw new Error(
+        'The lot_requirements table expects requirement_type_config_value_id, but no matching config value was found. Add lot requirement type config values or add a text requirement_key column.'
+      );
+    }
+  } else if (!addedRequirementKey) {
+    throw new Error(
+      'The lot_requirements table does not have a compatible requirement key column. Expected one of: requirement_key, requirement_code, field_name, requirement_type_code.'
+    );
+  }
+
+  addFirstAvailableColumn(['operator_code', 'comparison_operator', 'operator'], operatorCode);
+  addFirstAvailableColumn(
+    ['required_value_text', 'value_text', 'required_text', 'text_value', 'requirement_value', 'value'],
+    requiredValue
+  );
+
+  if (!Number.isNaN(requiredValueAsNumber)) {
+    addFirstAvailableColumn(
+      ['required_value_number', 'value_number', 'required_number', 'number_value'],
+      requiredValueAsNumber
+    );
+  } else {
+    addFirstAvailableColumn(
+      ['required_value_number', 'value_number', 'required_number', 'number_value'],
+      null
+    );
+  }
+
+  addFirstAvailableColumn(['notes', 'note'], notes);
+  addColumn('updated_by_user_id', currentUserId || null);
+
+  if (assignments.length === 0) {
+    throw new Error('No compatible lot requirement columns were found for updating.');
+  }
+
+  values.push(Number(lotId));
+  values.push(Number(requirementId));
+
+  const [result] = await pool.query(
+    `
+      UPDATE lot_requirements
+      SET ${assignments.join(', ')}
+      WHERE lot_id = ?
+        AND \`${requirementIdColumn}\` = ?
+      LIMIT 1
+    `,
+    values
+  );
+
+  return result.affectedRows > 0;
+}
+
 module.exports = {
   listLots,
   getLotById,
@@ -964,6 +1251,11 @@ module.exports = {
   getLotFormOptions,
   getLotSchemaCapabilities,
   createLot,
+  updateLot,
+  getLotDeleteSummary,
+  deleteLotIfEmpty,
   listLotRequirements,
-  createLotRequirement
+  getLotRequirementById,
+  createLotRequirement,
+  updateLotRequirement
 };

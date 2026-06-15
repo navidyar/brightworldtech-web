@@ -1,4 +1,5 @@
 const { pool } = require('./db');
+const unitOutcomeModel = require('./unitOutcomeModel');
 const EXPANDED_TABLES = [
   'unit_identifiers',
   'unit_specifications',
@@ -10,7 +11,8 @@ const EXPANDED_TABLES = [
   'unit_cellular_module_bands',
   'unit_graphics_adapters',
   'unit_issue_entries',
-  'unit_comments'
+  'unit_comments',
+  'unit_outcomes'
 ];
 function normalizeUnitIds(unitIds) {
   return Array.from(
@@ -32,6 +34,7 @@ function createEmptyDetails() {
     specifications: null,
     fieldSources: [],
     currentGrade: null,
+    currentOutcome: null,
     gradeHistory: [],
     memoryModules: [],
     memoryHistory: [],
@@ -324,6 +327,19 @@ async function attachCurrentGrades(detailsMap, unitIds, existingTables) {
     });
   });
 }
+
+async function attachCurrentOutcomes(detailsMap, unitIds, existingTables) {
+  if (!existingTables.has('unit_outcomes')) {
+    return;
+  }
+
+  const outcomeMap = await unitOutcomeModel.listCurrentOutcomesForUnits(unitIds);
+
+  outcomeMap.forEach((outcome, unitId) => {
+    setForUnit(detailsMap, unitId, 'currentOutcome', outcome);
+  });
+}
+
 async function attachMemoryModules(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_memory_modules')) {
     return;
@@ -1112,6 +1128,28 @@ async function attachLatestTechActivity(detailsMap, unitIds, existingTables) {
     [...unitIds, ...unitIds]
   );
 
+
+  addActivityQuery(
+    'unit_outcomes',
+    `
+      SELECT uo.unit_id, uo.selected_by_user_id AS user_id, uo.selected_at AS activity_at, uo.unit_outcome_id AS activity_id, 'Outcome' AS activity_label
+      FROM unit_outcomes uo
+      WHERE uo.unit_id IN (${buildPlaceholders(unitIds)})
+        AND uo.selected_by_user_id IS NOT NULL
+      UNION ALL
+      SELECT uo.unit_id, uo.approval_requested_by_user_id AS user_id, uo.approval_requested_at AS activity_at, uo.unit_outcome_id AS activity_id, 'Outcome Approval Request' AS activity_label
+      FROM unit_outcomes uo
+      WHERE uo.unit_id IN (${buildPlaceholders(unitIds)})
+        AND uo.approval_requested_by_user_id IS NOT NULL
+      UNION ALL
+      SELECT uo.unit_id, uo.approved_by_user_id AS user_id, uo.approved_at AS activity_at, uo.unit_outcome_id AS activity_id, 'Outcome Approval' AS activity_label
+      FROM unit_outcomes uo
+      WHERE uo.unit_id IN (${buildPlaceholders(unitIds)})
+        AND uo.approved_by_user_id IS NOT NULL
+    `,
+    [...unitIds, ...unitIds, ...unitIds]
+  );
+
   addActivityQuery(
     'unit_comments',
     `
@@ -1186,6 +1224,7 @@ async function listExpandedDetailsForUnits(unitIds) {
   await attachSpecifications(detailsMap, safeUnitIds, existingTables);
   await attachFieldSources(detailsMap, safeUnitIds, existingTables);
   await attachCurrentGrades(detailsMap, safeUnitIds, existingTables);
+  await attachCurrentOutcomes(detailsMap, safeUnitIds, existingTables);
   await attachMemoryModules(detailsMap, safeUnitIds, existingTables);
   await attachStorageDevices(detailsMap, safeUnitIds, existingTables);
   await attachCellularModules(detailsMap, safeUnitIds, existingTables);

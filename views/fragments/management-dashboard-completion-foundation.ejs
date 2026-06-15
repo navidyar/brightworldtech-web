@@ -1,0 +1,140 @@
+<%
+  const completionData = dashboardData.managementCompletionData || {};
+  const activeWindow = completionData.activeWindow || null;
+  const summary = activeWindow && activeWindow.summary ? activeWindow.summary : { completed: 0, weighted: 0 };
+  const categoryBreakdown = Array.isArray(completionData.categoryBreakdown) ? completionData.categoryBreakdown : [];
+  const lotBreakdown = Array.isArray(completionData.lotBreakdown) ? completionData.lotBreakdown : [];
+  const filters = dashboardFilters || dashboardData.filters || {};
+  const config = dashboardFilterConfig || {};
+
+  function dateLabel(window) {
+    if (!window) return 'No period selected';
+    if (window.startDate && window.endDate && window.startDate !== window.endDate) return `${window.startDate} to ${window.endDate}`;
+    if (window.startDate) return window.startDate;
+    if (window.endDate) return `Through ${window.endDate}`;
+    return 'All dates';
+  }
+
+  function pct(value, total) {
+    const safeTotal = Number(total || 0);
+    if (!safeTotal) return 0;
+    return Math.max(0, Math.min(100, Math.round((Number(value || 0) / safeTotal) * 100)));
+  }
+
+  function chartColor(index) {
+    const colors = ['var(--chart-orange)', 'var(--chart-blue)', 'var(--chart-purple)', 'var(--chart-red)', 'var(--chart-teal)', 'var(--chart-slate)', 'var(--chart-green)', 'var(--chart-brown)'];
+    return colors[index % colors.length];
+  }
+
+  function pieGradient(rows, total, key) {
+    const safeRows = Array.isArray(rows) ? rows : [];
+    const safeTotal = Number(total || 0);
+    if (!safeRows.length || safeTotal <= 0) return 'conic-gradient(var(--chart-empty) 0deg 360deg)';
+
+    let cursor = 0;
+    const segments = [];
+    safeRows.forEach((row, index) => {
+      const value = Number(row[key] || 0);
+      if (value <= 0) return;
+      const start = cursor;
+      const end = Math.min(360, cursor + Math.max((value / safeTotal) * 360, 1));
+      segments.push(`${chartColor(index)} ${start.toFixed(2)}deg ${end.toFixed(2)}deg`);
+      cursor = end;
+    });
+    if (cursor < 360) segments.push(`var(--chart-empty) ${cursor.toFixed(2)}deg 360deg`);
+    return `conic-gradient(${segments.join(', ')})`;
+  }
+
+  function totalFor(rows, key) {
+    return rows.reduce((sum, row) => sum + Number(row[key] || 0), 0);
+  }
+
+  function renderPie(chartTitle, rows, key, centerLabel) {
+    const total = totalFor(rows, key);
+%>
+    <article class="dashboard-pie-panel">
+      <div class="dashboard-pie" style="--pie-gradient: <%- pieGradient(rows, total, key) %>;"></div>
+      <div class="dashboard-pie-side">
+        <p class="eyebrow"><%= chartTitle %></p>
+        <h3><%= formatNumber(Number(total || 0).toFixed(key === 'weighted' ? 2 : 0)) %></h3>
+        <span><%= centerLabel %></span>
+        <% if (!rows.length || total === 0) { %>
+          <p class="dashboard-empty-state dashboard-empty-state--compact">No completed units match this period.</p>
+        <% } else { %>
+          <div class="dashboard-pie-legend">
+            <% rows.forEach((row, index) => { %>
+              <div class="dashboard-pie-legend-row">
+                <i style="--legend-color: <%= chartColor(index) %>;"></i>
+                <strong><%= row.label %></strong>
+                <span><%= formatNumber(Number(row[key] || 0).toFixed(key === 'weighted' ? 2 : 0)) %> · <%= pct(row[key], total) %>%</span>
+              </div>
+            <% }) %>
+          </div>
+        <% } %>
+      </div>
+    </article>
+<% } %>
+
+<section class="content-card management-completion-foundation dashboard-role-metrics dashboard-role-metrics--management">
+  <div class="content-header">
+    <div>
+      <p class="eyebrow">Management Metrics</p>
+      <h2>Completed Units Dashboard</h2>
+    </div>
+    <span class="dashboard-plan-pill">Management Metrics</span>
+  </div>
+
+  <p class="management-metrics-intro">Completed units are units with a cosmetic grade. Pass/Fail is tracked separately and is not required for a unit to count as completed.</p>
+
+  <form class="dashboard-period-form" data-reporting-controls method="get" action="<%= config.pageHref || '/dashboards/management' %>" hx-get="<%= config.summaryHref || '/dashboards/management/summary' %>" hx-target="#dashboard-live-region" hx-swap="outerHTML">
+    <label class="form-field dashboard-period-main-field">
+      <span>Reporting Period</span>
+      <select name="managementPeriod" data-reporting-period-select>
+        <option value="day" <%= completionData.selectedPeriod === 'day' ? 'selected' : '' %>>Day</option>
+        <option value="work_week" <%= completionData.selectedPeriod === 'work_week' ? 'selected' : '' %>>Week</option>
+        <option value="month" <%= completionData.selectedPeriod === 'month' ? 'selected' : '' %>>Month</option>
+        <option value="month_to_date" <%= completionData.selectedPeriod === 'month_to_date' ? 'selected' : '' %>>Month-to-Date</option>
+        <option value="custom_range" <%= completionData.selectedPeriod === 'custom_range' ? 'selected' : '' %>>Range of Dates</option>
+      </select>
+      <small data-period-guidance>Choose a reporting period first. Only visible fields are used.</small>
+    </label>
+
+    <div class="dashboard-period-field" data-period-field="day">
+      <label class="form-field"><span>Day</span><input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="managementDate" value="<%= completionData.selectedDate || '' %>" /></label>
+    </div>
+
+    <div class="dashboard-period-field" data-period-field="work_week">
+      <label class="form-field"><span>Week</span><input type="week" data-date-picker-only inputmode="none" autocomplete="off" name="managementWeek" value="<%= completionData.selectedWeek || '' %>" /></label>
+      <small>Reports Monday through Sunday.</small>
+    </div>
+
+    <div class="dashboard-period-field" data-period-field="month">
+      <label class="form-field"><span>Month</span><input type="month" data-date-picker-only inputmode="none" autocomplete="off" name="managementMonth" value="<%= completionData.selectedMonth || '' %>" /></label>
+    </div>
+
+    <div class="dashboard-period-field dashboard-period-field--no-picker" data-period-field="month_to_date">
+      <strong>No date needed</strong>
+      <small>Current month through today.</small>
+    </div>
+
+    <div class="dashboard-period-field dashboard-period-field--range" data-period-field="custom_range">
+      <label class="form-field"><span>Start</span><input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="managementStartDate" value="<%= completionData.customStartDate || '' %>" /></label>
+      <label class="form-field"><span>End</span><input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="managementEndDate" value="<%= completionData.customEndDate || '' %>" /></label>
+    </div>
+
+    <button class="primary-button" type="submit">Show Charts</button>
+  </form>
+
+  <div class="dashboard-selected-period-note">
+    <strong>Currently showing:</strong>
+    <span><%= activeWindow ? `${activeWindow.label} · ${dateLabel(activeWindow)}` : 'No reporting period selected' %></span>
+    <span><%= formatNumber(summary.completed || 0) %> completed · <%= formatNumber(Number(summary.weighted || 0).toFixed(2)) %> weighted</span>
+  </div>
+
+  <div class="dashboard-pie-grid dashboard-pie-grid--two">
+    <% renderPie('Total Units by Category', categoryBreakdown, 'completed', 'completed units'); %>
+    <% renderPie('Total Units by Lot', lotBreakdown, 'completed', 'completed units'); %>
+    <% renderPie('Weighted Units by Category', categoryBreakdown, 'weighted', 'weighted units'); %>
+    <% renderPie('Weighted Units by Lot', lotBreakdown, 'weighted', 'weighted units'); %>
+  </div>
+</section>

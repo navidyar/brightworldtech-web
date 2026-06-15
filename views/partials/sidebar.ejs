@@ -22,10 +22,28 @@
   </div>
 
   <nav class="sidebar-nav">
-    <a href="<%= dashboardHref %>" class="sidebar-link <%= currentNav === 'dashboard' || String(currentNav || '').startsWith('dashboard:') ? 'active' : '' %>">
-      <span class="sidebar-icon">⌂</span>
-      <span>Dashboard</span>
-    </a>
+    <% if (accessibleDashboards.length > 1) { %>
+      <details class="sidebar-group" <%= currentNav === 'dashboard' || String(currentNav || '').startsWith('dashboard:') ? 'open' : '' %>>
+        <summary>
+          <span class="sidebar-icon">⌂</span>
+          <span>Dashboard</span>
+        </summary>
+
+        <div class="sidebar-subnav">
+          <% accessibleDashboards.forEach((dashboard) => { %>
+            <a href="/dashboards/<%= dashboard.key %>" class="sidebar-sublink <%= currentNav === `dashboard:${dashboard.key}` ? 'active' : '' %>">
+              <span class="submenu-dot <%= dashboard.accent || 'slate' %>"></span>
+              <span><%= dashboard.menuLabel || dashboard.title %></span>
+            </a>
+          <% }) %>
+        </div>
+      </details>
+    <% } else { %>
+      <a href="<%= dashboardHref %>" class="sidebar-link <%= currentNav === 'dashboard' || String(currentNav || '').startsWith('dashboard:') ? 'active' : '' %>">
+        <span class="sidebar-icon">⌂</span>
+        <span>Dashboard</span>
+      </a>
+    <% } %>
 
     <% if (canAccessMenuArea('admin')) { %>
       <details class="sidebar-group">
@@ -61,10 +79,12 @@
             <span>Lots</span>
           </a>
 
-          <a href="/management/config" class="sidebar-sublink <%= currentNav === 'management-config' ? 'active' : '' %>">
-            <span class="submenu-dot slate"></span>
-            <span>Config Values</span>
-          </a>
+          <% if (currentRoles.includes('admin')) { %>
+            <a href="/management/config" class="sidebar-sublink <%= currentNav === 'management-config' ? 'active' : '' %>">
+              <span class="submenu-dot slate"></span>
+              <span>Config Values</span>
+            </a>
+          <% } %>
 
           <a href="/management/overrides" class="sidebar-sublink <%= currentNav === 'management-overrides' ? 'active' : '' %>">
             <span class="submenu-dot red"></span>

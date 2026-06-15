@@ -50,12 +50,12 @@
         </label>
 
         <div>
-          <p class="eyebrow management-user-modal-roles-label">Roles</p>
+          <p class="eyebrow management-user-modal-roles-label">Primary Role</p>
 
           <div class="workflow-list management-user-modal-roles">
             <% safeRoles.forEach((role) => { %>
               <label class="workflow-item <%= selectedRoles.includes(role.code) ? 'active' : '' %>">
-                <input type="checkbox" name="roleCodes" value="<%= role.code %>" <%= selectedRoles.includes(role.code) ? 'checked' : '' %> />
+                <input type="radio" name="roleCodes" value="<%= role.code %>" <%= selectedRoles.includes(role.code) ? 'checked' : '' %> />
 
                 <div>
                   <strong><%= role.name %></strong>
