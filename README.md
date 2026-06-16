@@ -4,56 +4,69 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
-Step 5e: Configuration CRUD foundation.
+Step 5f: Production weight application cleanup.
 
-This step adds controlled create/edit/activate/deactivate behavior for configuration values after the Step 5d Configuration display cleanup and Step 5c User/Role cleanup.
+This step makes the Step 5a production weight foundation visible and usable on unit records without adding support-task productivity, QC tracking, or full productivity reporting.
 
-## Step 5e Status
+## Step 5f Status
 
 Included in this handoff:
 
-- Admin-only Configuration value create flow.
-- Admin-only Configuration value edit flow.
-- Active/inactive toggle for config values.
-- Activate/deactivate confirmation modals.
-- No hard delete behavior for config values.
-- Existing records remain protected because old values are deactivated instead of deleted.
-- HTMX modal flows use HTML fragments and HTMX redirects, not JSON.
-- Configuration categories remain grouped from Step 5d.
-- Production Weight Configuration remains separate from support-task productivity.
+- Shows each unit's effective production weight in the Tech Unit Browser.
+- Shows the weight source on the unit row and expanded unit details.
+- Resolves effective weight in this order:
+  1. Unit-level override
+  2. Lot-level default
+  3. Unit category default
+- Adds controlled unit-level production weight override fields to the Tech Unit edit/create form.
+- Limits unit-level weight overrides to Admin, Management, and Tech Lead users.
+- Keeps normal Tech users read-only for unit-level weight overrides.
+- Keeps production weight separate from Cosmetic Grade.
+- Keeps production weight separate from Unit Pass/Fail.
+- Adds optional audit columns for tracking who last updated a unit override and when.
+- Does not add support-task productivity records.
+- Does not add full productivity reporting.
 
 ## Important Direction
 
-Support-task productivity remains deferred to a future version. Step 5 is focused on Configuration, Lots, User/Role cleanup, and production weight foundation.
+Support-task productivity remains deferred to a future version. Current Step 5 work is focused on Configuration, Lots, User/Role cleanup, and production weight foundation/application.
 
 ## Key Routes
 
 ```text
+/tech/units
+/tech/units/new
+/tech/units/new/modal
+/tech/units/:unitId/edit
+/tech/units/:unitId/edit/modal
+/management/lots
 /management/config
-/management/config/values/new/modal
-/management/config/values
-/management/config/values/:configValueId/edit/modal
-/management/config/values/:configValueId/activate/modal
-/management/config/values/:configValueId/deactivate/modal
 ```
 
-## Step 5e File Touches
+## Step 5f File Touches
 
 - `README.md`
-- `controllers/configController.js`
-- `models/configModel.js`
-- `routes/config.js`
-- `views/fragments/config-value-form-modal.ejs`
-- `views/fragments/config-value-status-modal.ejs`
-- `views/pages/management-config.ejs`
-- `public/css/style.css`
+- `controllers/techController.js`
+- `models/productionWeightModel.js`
+- `models/techUnitModel.js`
+- `sql/2026-06-step-5f-production-weight-override-audit.sql`
+- `views/fragments/tech-unit-duplicate-modal.ejs`
+- `views/fragments/tech-unit-form.ejs`
+- `views/fragments/tech-units-table.ejs`
+- `public/css/tech.css`
 
-## Step 5e Notes
+## Step 5f Notes
 
-Config values may be used by existing lots, units, and app forms. This step intentionally does not add hard deletes. Use deactivate/reactivate for lifecycle changes.
+Production weight is not a unit condition field. It does not replace Cosmetic Grade and does not decide Unit Pass/Fail.
 
-Codes are stable app keys. Edit labels, values, descriptions, sort order, and active state freely, but change codes only when you know the app does not depend on the existing code.
+The current effective weight order is:
+
+```text
+Unit override > Lot default > Unit category default
+```
+
+Unit overrides should be used sparingly when a single unit does not match the lot/category default.
 
 ## Next Direction
 
-Next likely step: Step 5f — Production weight application cleanup.
+Next likely step: Step 5g — Configuration page final polish.

@@ -255,6 +255,74 @@ async function getProductionWeightPayloadFromConfigValueId(configValueId) {
   };
 }
 
+function findProductionWeightOptionForCategory(unitCategory = {}, productionWeightOptions = []) {
+  const categoryCode = unitCategory.code || unitCategory.value || unitCategory.label || '';
+  const mappedWeightCode = mapUnitCategoryCodeToProductionWeightCode(categoryCode);
+
+  if (!mappedWeightCode) {
+    return null;
+  }
+
+  return productionWeightOptions.find((option) => option.code === mappedWeightCode) || null;
+}
+
+function buildProductionWeightDetails({
+  unitProductionWeightOverride = null,
+  unitProductionWeightNotes = '',
+  lotDefaultProductionWeight = null,
+  lotDefaultProductionWeightLabel = '',
+  unitCategory = {},
+  productionWeightOptions = []
+} = {}) {
+  const overrideWeight = normalizeWeightValue(unitProductionWeightOverride);
+
+  if (overrideWeight !== null) {
+    return {
+      effectiveWeight: overrideWeight,
+      formattedEffectiveWeight: formatWeightValue(overrideWeight),
+      sourceCode: 'unit_override',
+      sourceLabel: 'Unit override',
+      notes: unitProductionWeightNotes || '',
+      hasOverride: true
+    };
+  }
+
+  const lotDefaultWeight = normalizeWeightValue(lotDefaultProductionWeight);
+
+  if (lotDefaultWeight !== null) {
+    return {
+      effectiveWeight: lotDefaultWeight,
+      formattedEffectiveWeight: formatWeightValue(lotDefaultWeight),
+      sourceCode: 'lot_default',
+      sourceLabel: lotDefaultProductionWeightLabel ? `Lot default: ${lotDefaultProductionWeightLabel}` : 'Lot default',
+      notes: '',
+      hasOverride: false
+    };
+  }
+
+  const categoryWeightOption = findProductionWeightOptionForCategory(unitCategory, productionWeightOptions);
+
+  if (categoryWeightOption && categoryWeightOption.weightValue !== null && categoryWeightOption.weightValue !== undefined) {
+    return {
+      effectiveWeight: categoryWeightOption.weightValue,
+      formattedEffectiveWeight: categoryWeightOption.formattedWeightValue,
+      sourceCode: 'category_default',
+      sourceLabel: `Category default: ${categoryWeightOption.label}`,
+      notes: '',
+      hasOverride: false
+    };
+  }
+
+  return {
+    effectiveWeight: null,
+    formattedEffectiveWeight: '—',
+    sourceCode: 'not_configured',
+    sourceLabel: 'No configured weight',
+    notes: '',
+    hasOverride: false
+  };
+}
+
 module.exports = {
   PRODUCTION_WEIGHT_CATEGORY_CODES,
   normalizeWeightValue,
@@ -264,5 +332,7 @@ module.exports = {
   getProductionWeightOptionById,
   getProductionWeightOptionByCode,
   getDefaultProductionWeightForUnitCategory,
-  getProductionWeightPayloadFromConfigValueId
+  getProductionWeightPayloadFromConfigValueId,
+  findProductionWeightOptionForCategory,
+  buildProductionWeightDetails
 };

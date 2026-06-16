@@ -37,6 +37,22 @@ function buildTechUnitsTableUrl(filters) {
   return queryString ? `/tech/units/table?${queryString}` : '/tech/units/table';
 }
 
+
+function userCanOverrideProductionWeight(req) {
+  const roles = req && req.currentUser && Array.isArray(req.currentUser.roles)
+    ? req.currentUser.roles
+    : [];
+
+  return roles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+}
+
+function markProductionWeightPermission(formData, formOptions) {
+  return {
+    ...formData,
+    canOverrideProductionWeight: Boolean(formOptions && formOptions.canOverrideProductionWeight)
+  };
+}
+
 function getFiltersFromRequest(req) {
   return {
     search: String(req.query.search || '').trim(),
@@ -294,6 +310,8 @@ function getUnitFormDataFromRequest(req) {
     outcomeNotes: expandedDetails.outcomeNotes,
     outcomeApprovalRequested: expandedDetails.outcomeApprovalRequested,
     outcomeApprovalRequestNotes: expandedDetails.outcomeApprovalRequestNotes,
+    productionWeightOverride: String(req.body.productionWeightOverride || '').trim(),
+    productionWeightNotes: String(req.body.productionWeightNotes || '').trim(),
     hardwareNotes: String(req.body.hardwareNotes || '').trim(),
     cosmeticNotes: String(req.body.cosmeticNotes || '').trim()
   };
@@ -618,6 +636,14 @@ function validateUnitForm(formData, formOptions, mode) {
     errors.push('Cosmetic notes must be 1000 characters or fewer.');
   }
 
+  if (formOptions.canOverrideProductionWeight && formData.productionWeightOverride && !isPositiveOrZeroNumber(formData.productionWeightOverride)) {
+    errors.push('Production weight override must be a valid non-negative number.');
+  }
+
+  if (formOptions.canOverrideProductionWeight && formData.productionWeightNotes && formData.productionWeightNotes.length > 500) {
+    errors.push('Production weight notes must be 500 characters or fewer.');
+  }
+
   errors.push(...validateMemoryModules(formData));
   errors.push(...validateStorageDevices(formData));
   errors.push(...validateIssueDetails(formData));
@@ -661,7 +687,7 @@ async function renderDuplicateUnitModal(res, { formOptions, formData, duplicateM
   });
 }
 
-async function getTechUnitFormOptionsWithIssues() {
+async function getTechUnitFormOptionsWithIssues(req = null) {
   const formOptions = await techUnitModel.getTechUnitFormOptions();
   const issueFormOptions = await unitIssueEntryModel.getIssueFormOptions();
   const expandedFormOptions = await unitExpandedFormModel.getExpandedFormOptions();
@@ -669,7 +695,8 @@ async function getTechUnitFormOptionsWithIssues() {
   return {
     ...formOptions,
     ...issueFormOptions,
-    ...expandedFormOptions
+    ...expandedFormOptions,
+    canOverrideProductionWeight: userCanOverrideProductionWeight(req)
   };
 }
 
@@ -720,8 +747,8 @@ async function saveExpandedDetailsIfPossible(unitId, formData, currentUserId) {
   });
 }
 
-async function getBlankFormDataWithDefaults() {
-  const formOptions = await getTechUnitFormOptionsWithIssues();
+async function getBlankFormDataWithDefaults(req = null) {
+  const formOptions = await getTechUnitFormOptionsWithIssues(req);
 
   return {
     formOptions,
@@ -882,7 +909,7 @@ async function deleteTechUnit(req, res, next) {
 
 async function renderNewTechUnitPage(req, res, next) {
   try {
-    const { formOptions, formData } = await getBlankFormDataWithDefaults();
+    const { formOptions, formData } = await getBlankFormDataWithDefaults(req);
 
     return res.render('pages/tech-unit-form', {
       pageTitle: 'Create Unit',
@@ -900,7 +927,7 @@ async function renderNewTechUnitPage(req, res, next) {
 
 async function renderNewTechUnitModal(req, res, next) {
   try {
-    const { formOptions, formData } = await getBlankFormDataWithDefaults();
+    const { formOptions, formData } = await getBlankFormDataWithDefaults(req);
 
     return res.render('fragments/tech-unit-modal', {
       pageTitle: 'Create Unit',
@@ -917,8 +944,8 @@ async function renderNewTechUnitModal(req, res, next) {
 
 async function createTechUnit(req, res, next) {
   try {
-    const formOptions = await getTechUnitFormOptionsWithIssues();
-    const formData = getUnitFormDataFromRequest(req);
+    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
     const errorMessages = validateUnitForm(formData, formOptions, 'create');
 
     if (errorMessages.length > 0) {
@@ -963,8 +990,8 @@ async function createTechUnit(req, res, next) {
 
 async function createTechUnitModal(req, res, next) {
   try {
-    const formOptions = await getTechUnitFormOptionsWithIssues();
-    const formData = getUnitFormDataFromRequest(req);
+    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
     const errorMessages = validateUnitForm(formData, formOptions, 'create');
 
     if (errorMessages.length > 0) {
@@ -1060,8 +1087,8 @@ async function useExistingTechUnitModal(req, res, next) {
       });
     }
 
-    const formOptions = await getTechUnitFormOptionsWithIssues();
-    const formData = getUnitFormDataFromRequest(req);
+    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
 
     if (errorMessages.length > 0) {
@@ -1119,7 +1146,7 @@ async function renderEditTechUnitPage(req, res, next) {
       });
     }
 
-    const formOptions = await getTechUnitFormOptionsWithIssues();
+    const formOptions = await getTechUnitFormOptionsWithIssues(req);
     const formData = await buildEditFormData(unitId, formOptions);
 
     if (!formData) {
@@ -1188,7 +1215,7 @@ async function renderEditTechUnitModal(req, res, next) {
       });
     }
 
-    const formOptions = await getTechUnitFormOptionsWithIssues();
+    const formOptions = await getTechUnitFormOptionsWithIssues(req);
     const formData = await buildEditFormData(unitId, formOptions);
 
     if (!formData) {
@@ -1226,8 +1253,8 @@ async function updateTechUnit(req, res, next) {
       });
     }
 
-    const formOptions = await getTechUnitFormOptionsWithIssues();
-    const formData = getUnitFormDataFromRequest(req);
+    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
 
     if (errorMessages.length > 0) {
@@ -1315,8 +1342,8 @@ async function updateTechUnitModal(req, res, next) {
       });
     }
 
-    const formOptions = await getTechUnitFormOptionsWithIssues();
-    const formData = getUnitFormDataFromRequest(req);
+    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
 
     if (errorMessages.length > 0) {

@@ -185,7 +185,10 @@
                   <span>Lot: <%= unit.lotName || '—' %></span>
                   <span aria-hidden="true">·</span>
                   <span>Category: <%= unit.categoryLabel || '—' %></span>
+                  <span aria-hidden="true">·</span>
+                  <span>Weight: <%= unit.formattedProductionWeight || '—' %></span>
                 </small>
+                <small class="tech-unit-summary-weight-source"><%= unit.productionWeightSourceLabel || 'No configured weight' %></small>
               </span>
             </button>
           </td>
@@ -326,6 +329,14 @@
                       <div>
                         <dt>Category</dt>
                         <dd><%= unit.categoryLabel || '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Production Weight</dt>
+                        <dd>
+                          <%= unit.formattedProductionWeight || '—' %>
+                          <span class="tech-chip"><%= unit.productionWeightSourceLabel || 'No configured weight' %></span>
+                        </dd>
                       </div>
                     </dl>
 

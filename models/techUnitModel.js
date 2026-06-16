@@ -1,5 +1,6 @@
 const { pool } = require('./db');
 const lotModel = require('./lotModel');
+const productionWeightModel = require('./productionWeightModel');
 
 const UNIT_LIMIT = 100;
 const MAX_SEARCH_TERMS = 100;
@@ -112,7 +113,8 @@ async function getTableColumns(tableName) {
     'processor_models',
     'unit_identifiers',
     'unit_memory_modules',
-    'unit_storage_devices'
+    'unit_storage_devices',
+    'lots'
   ];
 
   if (!allowedTables.includes(tableName)) {
@@ -380,7 +382,13 @@ async function getUnitTableState() {
     hasAssetNumber: hasColumn(columns, 'asset_number'),
     hasLotId: hasColumn(columns, 'lot_id'),
     hasUnitCategory: hasColumn(columns, 'unit_category_config_value_id'),
-    hasUnitStatus: hasColumn(columns, 'current_unit_status_config_value_id')
+    hasUnitStatus: hasColumn(columns, 'current_unit_status_config_value_id'),
+    productionWeightCapabilities: {
+      hasProductionWeightOverride: hasColumn(columns, 'production_weight_override'),
+      hasProductionWeightNotes: hasColumn(columns, 'production_weight_notes'),
+      hasProductionWeightOverrideUpdatedByUserId: hasColumn(columns, 'production_weight_override_updated_by_user_id'),
+      hasProductionWeightOverrideUpdatedAt: hasColumn(columns, 'production_weight_override_updated_at')
+    }
   };
 }
 
@@ -704,7 +712,8 @@ async function getTechUnitFormOptions() {
     operatingSystems,
     manufacturers,
     unitModels,
-    processorModels
+    processorModels,
+    productionWeightOptions
   ] = await Promise.all([
     listConfigValuesByCategoryCodes(['unit_categories', 'unit_category', 'unit_types', 'unit_type']),
     listConfigValuesByCategoryCodes(['unit_statuses', 'unit_status', 'current_unit_statuses', 'current_unit_status']),
@@ -714,7 +723,8 @@ async function getTechUnitFormOptions() {
     listConfigValuesByCategoryCodes(['operating_systems', 'operating_system']),
     listManufacturers(),
     listUnitModels(),
-    listProcessorModels()
+    listProcessorModels(),
+    productionWeightModel.listProductionWeightOptions()
   ]);
 
   const receivedStatus = unitStatuses.find((status) => status.code === 'received') || unitStatuses[0] || null;
@@ -737,7 +747,9 @@ async function getTechUnitFormOptions() {
     operatingSystems,
     manufacturers,
     unitModels,
-    processorModels
+    processorModels,
+    productionWeightOptions,
+    productionWeightCapabilities: state.productionWeightCapabilities
   };
 }
 
@@ -758,6 +770,16 @@ function getBlankUnitFormData(formOptions = null) {
     storageGb: '',
     storageTypeConfigValueId: '',
     operatingSystemConfigValueId: '',
+    productionWeightOverride: '',
+    productionWeightNotes: '',
+    productionWeightDetails: {
+      effectiveWeight: null,
+      formattedEffectiveWeight: '—',
+      sourceCode: 'not_configured',
+      sourceLabel: 'Calculated after save',
+      notes: '',
+      hasOverride: false
+    },
     memoryModules: getBlankMemoryModuleRows(),
     storageDevices: getBlankStorageDeviceRows(),
     hardwareNotes: '',
@@ -925,6 +947,21 @@ async function getUnitFormDataById(unitId, formOptions = null) {
     listCurrentStorageDevicesForUnit(unitId)
   ]);
 
+  const { lotMap } = await getLotMap();
+  const lot = lotMap.get(Number(unit.lot_id)) || null;
+  const unitCategory = (formOptions && Array.isArray(formOptions.unitCategories))
+    ? formOptions.unitCategories.find((category) => Number(category.id) === Number(unit.unit_category_config_value_id)) || null
+    : null;
+  const productionWeightOptions = formOptions && Array.isArray(formOptions.productionWeightOptions)
+    ? formOptions.productionWeightOptions
+    : await productionWeightModel.listProductionWeightOptions();
+  const productionWeightDetails = getProductionWeightDetailsForUnit({
+    row: unit,
+    lot,
+    unitCategory,
+    productionWeightOptions
+  });
+
   return {
     assetTag: unit.asset_number ? getDisplayAssetTag(unit.asset_number) : '',
     unitSerialNumber,
@@ -945,6 +982,9 @@ async function getUnitFormDataById(unitId, formOptions = null) {
     storageGb: unit.storage_gb !== null && unit.storage_gb !== undefined ? String(unit.storage_gb) : '',
     storageTypeConfigValueId: unit.storage_type_config_value_id ? String(unit.storage_type_config_value_id) : '',
     operatingSystemConfigValueId: unit.operating_system_config_value_id ? String(unit.operating_system_config_value_id) : '',
+    productionWeightOverride: unit.production_weight_override !== null && unit.production_weight_override !== undefined ? productionWeightModel.formatWeightValue(unit.production_weight_override) : '',
+    productionWeightNotes: unit.production_weight_notes || '',
+    productionWeightDetails,
     memoryModules,
     storageDevices,
     hardwareNotes: unit.hardware_notes || '',
@@ -966,6 +1006,17 @@ function configLabelById(map, id, fallback = '') {
   const item = map.get(Number(id));
 
   return item ? item.label : fallback;
+}
+
+function getProductionWeightDetailsForUnit({ row = {}, lot = null, unitCategory = null, productionWeightOptions = [] } = {}) {
+  return productionWeightModel.buildProductionWeightDetails({
+    unitProductionWeightOverride: row.production_weight_override,
+    unitProductionWeightNotes: row.production_weight_notes,
+    lotDefaultProductionWeight: lot ? lot.resolved_default_production_weight : null,
+    lotDefaultProductionWeightLabel: lot ? lot.default_production_weight_label : '',
+    unitCategory: unitCategory || {},
+    productionWeightOptions
+  });
 }
 
 
@@ -1048,7 +1099,8 @@ async function listTechUnits(filters = {}) {
     unitModels,
     processorModels,
     overallGradeOptions,
-    techUserOptions
+    techUserOptions,
+    productionWeightOptions
   ] = await Promise.all([
     listConfigValuesByCategoryCodes(['unit_categories', 'unit_category', 'unit_types', 'unit_type']),
     listConfigValuesByCategoryCodes(['unit_statuses', 'unit_status', 'current_unit_statuses', 'current_unit_status']),
@@ -1059,7 +1111,8 @@ async function listTechUnits(filters = {}) {
     listUnitModels(),
     listProcessorModels(),
     listConfigValuesByCategoryCodes(['overall_unit_grades']),
-    listTechUsersWithUnits()
+    listTechUsersWithUnits(),
+    productionWeightModel.listProductionWeightOptions()
   ]);
 
   const unitIdentifiersTableIsReady = await tableExists('unit_identifiers');
@@ -1261,6 +1314,13 @@ async function listTechUnits(filters = {}) {
     const ramTypeLabel = configLabelById(ramTypeMap, row.ram_type_config_value_id, '');
     const storageTypeLabel = configLabelById(storageTypeMap, row.storage_type_config_value_id, '');
     const operatingSystemLabel = configLabelById(operatingSystemMap, row.operating_system_config_value_id, '');
+    const unitCategory = unitCategoryMap.get(Number(row.unit_category_config_value_id)) || null;
+    const productionWeightDetails = getProductionWeightDetailsForUnit({
+      row,
+      lot,
+      unitCategory,
+      productionWeightOptions
+    });
 
     const specParts = [
       manufacturerLabel,
@@ -1281,6 +1341,11 @@ async function listTechUnits(filters = {}) {
       lotName: lot ? lot.lot_name : 'Lot name not available',
       statusLabel: configLabelById(unitStatusMap, row.current_unit_status_config_value_id, 'Unknown'),
       categoryLabel: configLabelById(unitCategoryMap, row.unit_category_config_value_id, 'Unknown'),
+      productionWeight: productionWeightDetails.effectiveWeight,
+      formattedProductionWeight: productionWeightDetails.formattedEffectiveWeight,
+      productionWeightSourceCode: productionWeightDetails.sourceCode,
+      productionWeightSourceLabel: productionWeightDetails.sourceLabel,
+      productionWeightNotes: productionWeightDetails.notes,
       manufacturerLabel: manufacturerLabel || '—',
       modelLabel: modelLabel || '—',
       processorLabel: processorLabel || '—',
@@ -1732,7 +1797,7 @@ async function saveUnitModuleRows(connection, unitId, formData, currentUserId) {
   await saveUnitStorageDevices(connection, unitId, formData, currentUserId);
 }
 
-function buildWritePayload(formData, currentUserId, mode, assetNumber) {
+function buildWritePayload(formData, currentUserId, mode, assetNumber, unitColumns = null) {
   const columns = [];
   const values = [];
   const usedColumns = new Set();
@@ -1772,6 +1837,24 @@ function buildWritePayload(formData, currentUserId, mode, assetNumber) {
   addColumn('hardware_notes', normalizeText(formData.hardwareNotes));
   addColumn('cosmetic_notes', normalizeText(formData.cosmeticNotes));
 
+  if (formData.canOverrideProductionWeight === true) {
+    if (!unitColumns || hasColumn(unitColumns, 'production_weight_override')) {
+      addColumn('production_weight_override', productionWeightModel.normalizeWeightValue(formData.productionWeightOverride));
+    }
+
+    if (!unitColumns || hasColumn(unitColumns, 'production_weight_notes')) {
+      addColumn('production_weight_notes', normalizeOptionalString(formData.productionWeightNotes, 500) || null);
+    }
+
+    if (unitColumns && hasColumn(unitColumns, 'production_weight_override_updated_by_user_id')) {
+      addColumn('production_weight_override_updated_by_user_id', currentUserId || null);
+    }
+
+    if (unitColumns && hasColumn(unitColumns, 'production_weight_override_updated_at')) {
+      addColumn('production_weight_override_updated_at', new Date());
+    }
+  }
+
   return {
     columns,
     values
@@ -1798,7 +1881,7 @@ async function createTechUnit(formData, currentUserId) {
   try {
     await connection.beginTransaction();
 
-    const payload = buildWritePayload(formData, currentUserId, 'create', assetNumber);
+    const payload = buildWritePayload(formData, currentUserId, 'create', assetNumber, state.columns);
     const placeholders = payload.columns.map(() => '?').join(', ');
     const columnSql = payload.columns.map(escapeIdentifier).join(', ');
 
@@ -1895,7 +1978,7 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
   try {
     await connection.beginTransaction();
 
-    const payload = buildWritePayload(formData, currentUserId, 'update', null);
+    const payload = buildWritePayload(formData, currentUserId, 'update', null, state.columns);
     const setSql = payload.columns.map((columnName) => `${escapeIdentifier(columnName)} = ?`).join(', ');
 
     await connection.query(
