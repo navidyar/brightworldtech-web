@@ -144,6 +144,7 @@ async function recordFailedLogin(email) {
 
 async function createUserWithRoles({ firstName, lastName, email, roleCodes }) {
   const normalizedEmail = normalizeEmail(email);
+  const primaryRoleCodes = Array.isArray(roleCodes) ? roleCodes.slice(0, 1) : [];
   const connection = await pool.getConnection();
 
   try {
@@ -172,7 +173,15 @@ async function createUserWithRoles({ firstName, lastName, email, roleCodes }) {
 
     const userId = userResult.insertId;
 
-    for (const roleCode of roleCodes) {
+    await connection.query(
+      `
+        DELETE FROM user_roles
+        WHERE user_id = ?
+      `,
+      [userId]
+    );
+
+    for (const roleCode of primaryRoleCodes) {
       const roleId = await getRoleId(roleCode, connection);
 
       await connection.query(

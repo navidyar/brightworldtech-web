@@ -1,13 +1,35 @@
 const { pool } = require('./db');
+const accessPolicy = require('../config/accessPolicy');
 
 function mapUserRow(row) {
+  const roles = row.role_codes ? row.role_codes.split(',') : [];
+  const roleNames = row.role_names ? row.role_names.split(', ') : [];
+  const primaryRoleCode = accessPolicy.getPrimaryRole(roles);
+  const primaryRoleIndex = roles.indexOf(primaryRoleCode);
+  const primaryRoleName = primaryRoleIndex >= 0 ? roleNames[primaryRoleIndex] : row.primary_role_name || primaryRoleCode || '';
+
   return {
     ...row,
-    roles: row.role_codes ? row.role_codes.split(',') : [],
+    roles,
+    primary_role_code: primaryRoleCode,
+    primary_role_name: primaryRoleName,
+    role_count: Number(row.role_count || roles.length || 0),
     is_active: Number(row.is_active) === 1,
     has_password: Number(row.has_password || 0) === 1,
     can_delete_pending_setup: Number(row.can_delete_pending_setup || 0) === 1
   };
+}
+
+function getRoleOrderSql(alias = 'r') {
+  return `
+    CASE ${alias}.code
+      WHEN 'admin' THEN 10
+      WHEN 'management' THEN 20
+      WHEN 'tech_lead' THEN 30
+      WHEN 'tech' THEN 40
+      ELSE 999
+    END
+  `;
 }
 
 async function getRoleId(roleCode, connection = pool) {
@@ -53,8 +75,9 @@ async function listUsers(options = {}) {
         END AS can_delete_pending_setup,
         u.created_at,
         u.updated_at,
-        GROUP_CONCAT(r.code ORDER BY r.code SEPARATOR ',') AS role_codes,
-        GROUP_CONCAT(r.name ORDER BY r.code SEPARATOR ', ') AS role_names
+        GROUP_CONCAT(r.code ORDER BY ${getRoleOrderSql('r')} SEPARATOR ',') AS role_codes,
+        GROUP_CONCAT(r.name ORDER BY ${getRoleOrderSql('r')} SEPARATOR ', ') AS role_names,
+        COUNT(DISTINCT r.role_id) AS role_count
       FROM users u
       LEFT JOIN config_values status
         ON status.config_value_id = u.account_status_config_value_id
@@ -98,29 +121,24 @@ async function countUsersByActiveStatus() {
   };
 }
 
-async function listActiveRoles() {
-  const [rows] = await pool.query(`
-    SELECT
-      role_id,
-      code,
-      name,
-      description
-    FROM roles
-    WHERE is_active = 1
-    ORDER BY
-      CASE code
-        WHEN 'admin' THEN 10
-        WHEN 'management' THEN 20
-        WHEN 'tech_lead' THEN 30
-        WHEN 'tech' THEN 40
-        WHEN 'qc' THEN 50
-        WHEN 'packing' THEN 60
-        WHEN 'warehouse' THEN 70
-        WHEN 'sales' THEN 80
-        ELSE 999
-      END,
-      name
-  `);
+async function listAssignableAccountRoles() {
+  const roleCodes = accessPolicy.ACCOUNT_ROLE_CODES;
+  const placeholders = roleCodes.map(() => '?').join(', ');
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        role_id,
+        code,
+        name,
+        description
+      FROM roles
+      WHERE is_active = 1
+        AND code IN (${placeholders})
+      ORDER BY ${getRoleOrderSql('roles')}, name
+    `,
+    roleCodes
+  );
 
   return rows;
 }
@@ -145,8 +163,9 @@ async function getUserById(userId) {
           THEN 1
           ELSE 0
         END AS can_delete_pending_setup,
-        GROUP_CONCAT(r.code ORDER BY r.code SEPARATOR ',') AS role_codes,
-        GROUP_CONCAT(r.name ORDER BY r.code SEPARATOR ', ') AS role_names
+        GROUP_CONCAT(r.code ORDER BY ${getRoleOrderSql('r')} SEPARATOR ',') AS role_codes,
+        GROUP_CONCAT(r.name ORDER BY ${getRoleOrderSql('r')} SEPARATOR ', ') AS role_names,
+        COUNT(DISTINCT r.role_id) AS role_count
       FROM users u
       LEFT JOIN config_values status
         ON status.config_value_id = u.account_status_config_value_id
@@ -368,7 +387,7 @@ async function deletePendingSetupUser(userId) {
 module.exports = {
   listUsers,
   countUsersByActiveStatus,
-  listActiveRoles,
+  listAssignableAccountRoles,
   getUserById,
   updateUserWithRoles,
   deactivateUser,

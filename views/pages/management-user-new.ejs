@@ -28,7 +28,7 @@
               </div>
             <% } %>
 
-            <form class="auth-form" method="post" action="/management/users" autocomplete="off">
+            <form class="auth-form management-user-create-form" method="post" action="/management/users" autocomplete="off">
               <label class="form-field">
                 <span>First Name</span>
                 <input
@@ -65,7 +65,8 @@
               </label>
 
               <div>
-                <p class="eyebrow" style="margin-top: 8px;">Primary Role</p>
+                <p class="eyebrow" style="margin-top: 8px;">Primary Access Role</p>
+                <p class="management-user-role-help">Choose one account access role. Production activity, QC, packing, or task work should be handled by activity records later, not by assigning extra account roles here.</p>
 
                 <div class="workflow-list">
                   <% roles.forEach((role) => { %>

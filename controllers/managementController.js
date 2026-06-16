@@ -47,7 +47,10 @@ function canAssignAdminRole(req) {
 }
 
 function getAssignableRolesForCurrentUser(roles, req) {
-  const safeRoles = Array.isArray(roles) ? roles : [];
+  const accountRoleCodes = new Set(accessPolicy.ACCOUNT_ROLE_CODES);
+  const safeRoles = Array.isArray(roles)
+    ? roles.filter((role) => accountRoleCodes.has(role.code))
+    : [];
 
   if (canAssignAdminRole(req)) {
     return safeRoles;
@@ -238,7 +241,7 @@ async function renderInactiveUsersPage(req, res, next) {
 
 async function renderNewUserPage(req, res, next) {
   try {
-    const roles = getAssignableRolesForCurrentUser(await managementModel.listActiveRoles(), req);
+    const roles = getAssignableRolesForCurrentUser(await managementModel.listAssignableAccountRoles(), req);
 
     res.render('pages/management-user-new', {
       pageTitle: 'Create User',
@@ -264,7 +267,7 @@ async function createUser(req, res, next) {
     const email = authModel.normalizeEmail(req.body.email);
     const roleCodes = normalizeRoleCodes(req.body.roleCodes);
 
-    const roles = getAssignableRolesForCurrentUser(await managementModel.listActiveRoles(), req);
+    const roles = getAssignableRolesForCurrentUser(await managementModel.listAssignableAccountRoles(), req);
     const allowedRoleCodes = new Set(roles.map((role) => role.code));
     const validRoleCodes = filterAssignableRoleCodes(
       roleCodes.filter((roleCode) => allowedRoleCodes.has(roleCode) || roleCode === 'admin'),
@@ -354,7 +357,7 @@ async function renderEditUserModal(req, res, next) {
       });
     }
 
-    const roles = getAssignableRolesForCurrentUser(await managementModel.listActiveRoles(), req);
+    const roles = getAssignableRolesForCurrentUser(await managementModel.listAssignableAccountRoles(), req);
 
     return res.render('fragments/management-user-edit-modal', {
       user,
@@ -402,7 +405,7 @@ async function updateUserModal(req, res, next) {
     const email = authModel.normalizeEmail(req.body.email);
     const roleCodes = normalizeRoleCodes(req.body.roleCodes);
 
-    const roles = getAssignableRolesForCurrentUser(await managementModel.listActiveRoles(), req);
+    const roles = getAssignableRolesForCurrentUser(await managementModel.listAssignableAccountRoles(), req);
     const allowedRoleCodes = new Set(roles.map((role) => role.code));
     const validRoleCodes = filterAssignableRoleCodes(
       roleCodes.filter((roleCode) => allowedRoleCodes.has(roleCode) || roleCode === 'admin'),

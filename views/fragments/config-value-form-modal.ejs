@@ -1,0 +1,100 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeCategories = Array.isArray(categories) ? categories : [];
+  const safeFormData = formData || {};
+  const safeMode = mode === 'edit' ? 'edit' : 'create';
+  const safeConfigValue = configValue || null;
+  const formAction = safeMode === 'edit' && safeConfigValue
+    ? `/management/config/values/${safeConfigValue.config_value_id}/edit/modal`
+    : '/management/config/values';
+  const title = safeMode === 'edit' ? 'Edit Config Value' : 'Create Config Value';
+  const submitLabel = safeMode === 'edit' ? 'Save Config Value' : 'Create Config Value';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel config-value-modal" role="dialog" aria-modal="true" aria-labelledby="config-value-form-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Configuration</p>
+        <h2 id="config-value-form-title"><%= title %></h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <div class="message warning config-value-system-note">
+        <p>Config values can be used by existing units, lots, and app forms. Use active/inactive instead of deleting history. Codes should be changed only when you are sure no feature depends on the old code.</p>
+      </div>
+
+      <form class="app-form config-value-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML" autocomplete="off">
+        <input type="hidden" name="includeInactive" value="<%= safeFormData.includeInactive || '0' %>" />
+
+        <div class="form-grid config-value-form-grid">
+          <label class="form-field">
+            <span>Category</span>
+            <select name="configCategoryId" required>
+              <option value="">Select category</option>
+              <% safeCategories.forEach((category) => { %>
+                <option value="<%= category.config_category_id %>" <%= String(safeFormData.configCategoryId || '') === String(category.config_category_id) ? 'selected' : '' %>>
+                  <%= category.label || category.code %><%= category.isActive ? '' : ' (Inactive category)' %>
+                </option>
+              <% }) %>
+            </select>
+            <small class="field-hint">Choose where this value should appear on the Configuration page.</small>
+          </label>
+
+          <label class="form-field">
+            <span>Code</span>
+            <input type="text" name="code" value="<%= safeFormData.code || '' %>" maxlength="120" placeholder="example_config_value" required />
+            <small class="field-hint">Stable app key. Lowercase letters, numbers, underscores, or hyphens.</small>
+          </label>
+
+          <label class="form-field">
+            <span>Label</span>
+            <input type="text" name="label" value="<%= safeFormData.label || '' %>" maxlength="120" placeholder="Example Config Value" required />
+            <small class="field-hint">Human-readable text shown in forms and tables.</small>
+          </label>
+
+          <label class="form-field">
+            <span>Value</span>
+            <input type="text" name="value" value="<%= safeFormData.value || '' %>" maxlength="120" placeholder="Optional stored value" />
+            <small class="field-hint">Optional. Used for values like production weight numbers.</small>
+          </label>
+
+          <label class="form-field">
+            <span>Sort Order</span>
+            <input type="number" name="sortOrder" value="<%= safeFormData.sortOrder || '0' %>" step="1" inputmode="numeric" />
+            <small class="field-hint">Lower numbers display first.</small>
+          </label>
+
+          <label class="checkbox-card config-value-active-toggle" for="configValueIsActive">
+            <input id="configValueIsActive" type="checkbox" name="isActive" value="1" <%= String(safeFormData.isActive || '0') === '1' ? 'checked' : '' %> />
+            <span>
+              <strong>Active</strong>
+              <small>Active values are available in normal app dropdowns.</small>
+            </span>
+          </label>
+        </div>
+
+        <label class="form-field">
+          <span>Description</span>
+          <textarea name="description" rows="4" maxlength="500" placeholder="Optional description for Management and Admin users."><%= safeFormData.description || '' %></textarea>
+        </label>
+
+        <div class="form-actions">
+          <button type="submit" class="primary-button"><%= submitLabel %></button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

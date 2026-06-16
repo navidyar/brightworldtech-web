@@ -1,0 +1,1269 @@
+diff -ruN base5e/README.md work5e/README.md
+--- base5e/README.md	2026-06-16 15:55:01.307425206 +0000
++++ work5e/README.md	2026-06-16 15:54:49.938771946 +0000
+@@ -4,27 +4,23 @@
+ 
+ ## Current Step
+ 
+-Step 5c UI Hotfix: User Management page styling cleanup.
++Step 5e: Configuration CRUD foundation.
+ 
+-This hotfix follows Step 5c and fixes the User Management page when the new Step 5c summary-card styles do not load correctly after the build.
++This step adds controlled create/edit/activate/deactivate behavior for configuration values after the Step 5d Configuration display cleanup and Step 5c User/Role cleanup.
+ 
+-## Step 5c Status
++## Step 5e Status
+ 
+-Confirmed Step 5c direction:
++Included in this handoff:
+ 
+-- User and role management cleanup is active.
+-- User list readability was improved.
+-- User records now show one Primary Role.
+-- Account roles remain app-access roles only.
+-- Admin role assignment remains restricted to Admin users only.
+-- Configuration controls remain restricted to Admin users only.
+-- Production activity labels remain separate from account roles.
+-
+-## UI Hotfix Notes
+-
+-This hotfix moves the Management/User page-specific CSS links into the document head through the shared `head.ejs` partial and adds a small cache-busting query string to the Management page stylesheets.
+-
+-That prevents the browser from displaying the new Step 5c markup with an older cached `management.css` file.
++- Admin-only Configuration value create flow.
++- Admin-only Configuration value edit flow.
++- Active/inactive toggle for config values.
++- Activate/deactivate confirmation modals.
++- No hard delete behavior for config values.
++- Existing records remain protected because old values are deactivated instead of deleted.
++- HTMX modal flows use HTML fragments and HTMX redirects, not JSON.
++- Configuration categories remain grouped from Step 5d.
++- Production Weight Configuration remains separate from support-task productivity.
+ 
+ ## Important Direction
+ 
+@@ -33,20 +29,31 @@
+ ## Key Routes
+ 
+ ```text
+-/management/users
+-/management/users/inactive
+-/management/users/new
+-/management/users/:userId/edit/modal
+ /management/config
++/management/config/values/new/modal
++/management/config/values
++/management/config/values/:configValueId/edit/modal
++/management/config/values/:configValueId/activate/modal
++/management/config/values/:configValueId/deactivate/modal
+ ```
+ 
+-## Step 5c UI Hotfix File Touches
++## Step 5e File Touches
+ 
+ - `README.md`
+-- `views/partials/head.ejs`
+-- `views/pages/management-users.ejs`
+-- `public/css/management.css`
++- `controllers/configController.js`
++- `models/configModel.js`
++- `routes/config.js`
++- `views/fragments/config-value-form-modal.ejs`
++- `views/fragments/config-value-status-modal.ejs`
++- `views/pages/management-config.ejs`
++- `public/css/style.css`
++
++## Step 5e Notes
++
++Config values may be used by existing lots, units, and app forms. This step intentionally does not add hard deletes. Use deactivate/reactivate for lifecycle changes.
++
++Codes are stable app keys. Edit labels, values, descriptions, sort order, and active state freely, but change codes only when you know the app does not depend on the existing code.
+ 
+ ## Next Direction
+ 
+-Next likely step: Step 5e — Configuration CRUD foundation.
++Next likely step: Step 5f — Production weight application cleanup.
+diff -ruN base5e/controllers/configController.js work5e/controllers/configController.js
+--- base5e/controllers/configController.js	2026-06-16 14:02:54.000000000 +0000
++++ work5e/controllers/configController.js	2026-06-16 15:53:12.225272044 +0000
+@@ -4,6 +4,142 @@
+   return value === '1' || value === 'true' || value === 'yes' || value === 'on';
+ }
+ 
++function isHtmxRequest(req) {
++  return String(req.get('HX-Request') || '').toLowerCase() === 'true';
++}
++
++function sendHtmxRedirect(req, res, redirectUrl) {
++  if (isHtmxRequest(req)) {
++    res.set('HX-Redirect', redirectUrl);
++    return res.status(204).send('');
++  }
++
++  return res.redirect(redirectUrl);
++}
++
++function getConfigReturnUrl(includeInactiveValues, queryString = '') {
++  const baseUrl = includeInactiveValues ? '/management/config?includeInactive=1' : '/management/config';
++
++  if (!queryString) {
++    return baseUrl;
++  }
++
++  return `${baseUrl}${baseUrl.includes('?') ? '&' : '?'}${queryString}`;
++}
++
++function addCacheBuster(redirectUrl) {
++  const separator = redirectUrl.includes('?') ? '&' : '?';
++  return `${redirectUrl}${separator}refresh=${Date.now()}`;
++}
++
++function parsePositiveInteger(value) {
++  const number = Number.parseInt(String(value || '').trim(), 10);
++  return Number.isInteger(number) && number > 0 ? number : null;
++}
++
++function parseSortOrder(value) {
++  if (value === null || value === undefined || String(value).trim() === '') {
++    return 0;
++  }
++
++  const number = Number.parseInt(String(value).trim(), 10);
++  return Number.isInteger(number) ? number : 0;
++}
++
++function normalizeCode(value) {
++  return String(value || '')
++    .trim()
++    .toLowerCase()
++    .replace(/[^a-z0-9_-]+/g, '_')
++    .replace(/_+/g, '_')
++    .replace(/^_+|_+$/g, '');
++}
++
++function getConfigValueFormDataFromRequest(req) {
++  return {
++    configCategoryId: String(req.body.configCategoryId || '').trim(),
++    code: normalizeCode(req.body.code),
++    label: String(req.body.label || '').trim(),
++    value: String(req.body.value || '').trim(),
++    description: String(req.body.description || '').trim(),
++    sortOrder: String(req.body.sortOrder || '').trim(),
++    isActive: req.body.isActive === '1' ? '1' : '0',
++    includeInactive: parseIncludeInactiveFlag(req.body.includeInactive) ? '1' : '0'
++  };
++}
++
++function getInitialConfigValueFormData({ categoryId = '', configValue = null, includeInactiveValues = false } = {}) {
++  if (configValue) {
++    return {
++      configCategoryId: String(configValue.config_category_id || ''),
++      code: configValue.code || '',
++      label: configValue.label || '',
++      value: configValue.value || '',
++      description: configValue.description || '',
++      sortOrder: String(configValue.sort_order ?? 0),
++      isActive: configValue.isActive ? '1' : '0',
++      includeInactive: includeInactiveValues ? '1' : '0'
++    };
++  }
++
++  return {
++    configCategoryId: categoryId ? String(categoryId) : '',
++    code: '',
++    label: '',
++    value: '',
++    description: '',
++    sortOrder: '0',
++    isActive: '1',
++    includeInactive: includeInactiveValues ? '1' : '0'
++  };
++}
++
++async function validateConfigValueForm(formData, options = {}) {
++  const errorMessages = [];
++  const configCategoryId = parsePositiveInteger(formData.configCategoryId);
++  const configValueId = options.configValueId ? Number(options.configValueId) : null;
++
++  if (!configCategoryId) {
++    errorMessages.push('Choose a configuration category.');
++  } else {
++    const category = await configModel.getConfigCategoryById(configCategoryId);
++
++    if (!category) {
++      errorMessages.push('The selected configuration category could not be found.');
++    }
++  }
++
++  if (!formData.code) {
++    errorMessages.push('Enter a stable code for this value.');
++  } else if (!/^[a-z0-9][a-z0-9_-]{1,118}[a-z0-9]$/.test(formData.code)) {
++    errorMessages.push('Code must be 3 to 120 characters and use lowercase letters, numbers, underscores, or hyphens.');
++  } else {
++    const codeExists = await configModel.configValueCodeExists(formData.code, configValueId);
++
++    if (codeExists) {
++      errorMessages.push('That config value code is already in use. Codes must stay unique.');
++    }
++  }
++
++  if (!formData.label) {
++    errorMessages.push('Enter a label.');
++  }
++
++  if (formData.label.length > 120) {
++    errorMessages.push('Label must be 120 characters or less.');
++  }
++
++  if (formData.value.length > 120) {
++    errorMessages.push('Value must be 120 characters or less.');
++  }
++
++  if (formData.description.length > 500) {
++    errorMessages.push('Description must be 500 characters or less.');
++  }
++
++  return errorMessages;
++}
++
+ async function renderConfigPage(req, res, next) {
+   try {
+     const includeInactiveValues = parseIncludeInactiveFlag(req.query.includeInactive);
+@@ -24,6 +160,191 @@
+   }
+ }
+ 
++async function renderNewConfigValueModal(req, res, next) {
++  try {
++    const includeInactiveValues = parseIncludeInactiveFlag(req.query.includeInactive);
++    const categories = await configModel.listConfigCategoriesForForm();
++
++    return res.render('fragments/config-value-form-modal', {
++      mode: 'create',
++      configValue: null,
++      categories,
++      errorMessages: [],
++      formData: getInitialConfigValueFormData({
++        categoryId: req.query.categoryId,
++        includeInactiveValues
++      })
++    });
++  } catch (error) {
++    next(error);
++  }
++}
++
++async function createConfigValue(req, res, next) {
++  try {
++    const formData = getConfigValueFormDataFromRequest(req);
++    const categories = await configModel.listConfigCategoriesForForm();
++    const errorMessages = await validateConfigValueForm(formData);
++
++    if (errorMessages.length > 0) {
++      return res.status(400).render('fragments/config-value-form-modal', {
++        mode: 'create',
++        configValue: null,
++        categories,
++        errorMessages,
++        formData
++      });
++    }
++
++    await configModel.createConfigValue({
++      configCategoryId: parsePositiveInteger(formData.configCategoryId),
++      code: formData.code,
++      label: formData.label,
++      value: formData.value,
++      description: formData.description,
++      sortOrder: parseSortOrder(formData.sortOrder),
++      isActive: formData.isActive === '1'
++    });
++
++    return sendHtmxRedirect(
++      req,
++      res,
++      addCacheBuster(getConfigReturnUrl(formData.includeInactive === '1', 'created=1'))
++    );
++  } catch (error) {
++    next(error);
++  }
++}
++
++async function renderEditConfigValueModal(req, res, next) {
++  try {
++    const configValueId = parsePositiveInteger(req.params.configValueId);
++    const includeInactiveValues = parseIncludeInactiveFlag(req.query.includeInactive);
++    const configValue = configValueId ? await configModel.getConfigValueById(configValueId) : null;
++
++    if (!configValue) {
++      return res.status(404).render('fragments/config-value-status-modal', {
++        actionType: 'error',
++        configValue: null,
++        includeInactiveValues,
++        errorMessages: ['The selected config value could not be found.']
++      });
++    }
++
++    const categories = await configModel.listConfigCategoriesForForm();
++
++    return res.render('fragments/config-value-form-modal', {
++      mode: 'edit',
++      configValue,
++      categories,
++      errorMessages: [],
++      formData: getInitialConfigValueFormData({ configValue, includeInactiveValues })
++    });
++  } catch (error) {
++    next(error);
++  }
++}
++
++async function updateConfigValue(req, res, next) {
++  try {
++    const configValueId = parsePositiveInteger(req.params.configValueId);
++    const formData = getConfigValueFormDataFromRequest(req);
++    const categories = await configModel.listConfigCategoriesForForm();
++    const configValue = configValueId ? await configModel.getConfigValueById(configValueId) : null;
++
++    if (!configValue) {
++      return sendHtmxRedirect(req, res, getConfigReturnUrl(formData.includeInactive === '1', 'error=not_found'));
++    }
++
++    const errorMessages = await validateConfigValueForm(formData, { configValueId });
++
++    if (errorMessages.length > 0) {
++      return res.status(400).render('fragments/config-value-form-modal', {
++        mode: 'edit',
++        configValue,
++        categories,
++        errorMessages,
++        formData
++      });
++    }
++
++    await configModel.updateConfigValue({
++      configValueId,
++      configCategoryId: parsePositiveInteger(formData.configCategoryId),
++      code: formData.code,
++      label: formData.label,
++      value: formData.value,
++      description: formData.description,
++      sortOrder: parseSortOrder(formData.sortOrder),
++      isActive: formData.isActive === '1'
++    });
++
++    return sendHtmxRedirect(
++      req,
++      res,
++      addCacheBuster(getConfigReturnUrl(formData.includeInactive === '1', 'updated=1'))
++    );
++  } catch (error) {
++    next(error);
++  }
++}
++
++async function renderConfigValueStatusModal(req, res, next) {
++  try {
++    const configValueId = parsePositiveInteger(req.params.configValueId);
++    const actionType = req.path.includes('/activate') ? 'activate' : 'deactivate';
++    const includeInactiveValues = parseIncludeInactiveFlag(req.query.includeInactive);
++    const configValue = configValueId ? await configModel.getConfigValueById(configValueId) : null;
++
++    if (!configValue) {
++      return res.status(404).render('fragments/config-value-status-modal', {
++        actionType: 'error',
++        configValue: null,
++        includeInactiveValues,
++        errorMessages: ['The selected config value could not be found.']
++      });
++    }
++
++    return res.render('fragments/config-value-status-modal', {
++      actionType,
++      configValue,
++      includeInactiveValues,
++      errorMessages: []
++    });
++  } catch (error) {
++    next(error);
++  }
++}
++
++async function updateConfigValueStatus(req, res, next) {
++  try {
++    const configValueId = parsePositiveInteger(req.params.configValueId);
++    const shouldActivate = req.path.includes('/activate');
++    const includeInactiveValues = parseIncludeInactiveFlag(req.body.includeInactive);
++    const configValue = configValueId ? await configModel.getConfigValueById(configValueId) : null;
++
++    if (!configValue) {
++      return sendHtmxRedirect(req, res, getConfigReturnUrl(includeInactiveValues, 'error=not_found'));
++    }
++
++    await configModel.setConfigValueActive(configValueId, shouldActivate);
++
++    return sendHtmxRedirect(
++      req,
++      res,
++      addCacheBuster(getConfigReturnUrl(includeInactiveValues || !shouldActivate, shouldActivate ? 'activated=1' : 'deactivated=1'))
++    );
++  } catch (error) {
++    next(error);
++  }
++}
++
+ module.exports = {
+-  renderConfigPage
+-};
+\ No newline at end of file
++  renderConfigPage,
++  renderNewConfigValueModal,
++  createConfigValue,
++  renderEditConfigValueModal,
++  updateConfigValue,
++  renderConfigValueStatusModal,
++  updateConfigValueStatus
++};
+diff -ruN base5e/models/configModel.js work5e/models/configModel.js
+--- base5e/models/configModel.js	2026-06-16 14:03:19.000000000 +0000
++++ work5e/models/configModel.js	2026-06-16 15:53:47.131148724 +0000
+@@ -128,21 +128,57 @@
+   return Array.from(sectionsByKey.values()).sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label));
+ }
+ 
+-async function listConfigCategoriesWithValues(options = {}) {
+-  const includeInactiveValues = options.includeInactiveValues === true;
++async function getConfigCategorySelectExpressions() {
+   const categoryColumns = await getColumnSet('config_categories');
++
++  return {
++    categoryColumns,
++    categoryLabelExpression: pickColumnExpression('cc', categoryColumns, ['label', 'name'], 'cc.`code`'),
++    categoryDescriptionExpression: pickColumnExpression('cc', categoryColumns, ['description'], 'NULL'),
++    categorySortExpression: pickColumnExpression('cc', categoryColumns, ['sort_order'], '0'),
++    categoryActiveExpression: pickColumnExpression('cc', categoryColumns, ['is_active'], '1')
++  };
++}
++
++async function getConfigValueSelectExpressions() {
+   const valueColumns = await getColumnSet('config_values');
+ 
+-  const categoryLabelExpression = pickColumnExpression('cc', categoryColumns, ['label', 'name'], 'cc.`code`');
+-  const categoryDescriptionExpression = pickColumnExpression('cc', categoryColumns, ['description'], 'NULL');
+-  const categorySortExpression = pickColumnExpression('cc', categoryColumns, ['sort_order'], '0');
+-  const categoryActiveExpression = pickColumnExpression('cc', categoryColumns, ['is_active'], '1');
+-
+-  const valueLabelExpression = pickColumnExpression('cv', valueColumns, ['label', 'name'], 'cv.`code`');
+-  const valueDescriptionExpression = pickColumnExpression('cv', valueColumns, ['description'], 'NULL');
+-  const valueValueExpression = pickColumnExpression('cv', valueColumns, ['value'], 'NULL');
+-  const valueSortExpression = pickColumnExpression('cv', valueColumns, ['sort_order'], '0');
+-  const valueActiveExpression = pickColumnExpression('cv', valueColumns, ['is_active'], '1');
++  return {
++    valueColumns,
++    valueLabelExpression: pickColumnExpression('cv', valueColumns, ['label', 'name'], 'cv.`code`'),
++    valueDescriptionExpression: pickColumnExpression('cv', valueColumns, ['description'], 'NULL'),
++    valueValueExpression: pickColumnExpression('cv', valueColumns, ['value'], 'NULL'),
++    valueSortExpression: pickColumnExpression('cv', valueColumns, ['sort_order'], '0'),
++    valueActiveExpression: pickColumnExpression('cv', valueColumns, ['is_active'], '1')
++  };
++}
++
++function normalizeConfigValueRow(row) {
++  if (!row) {
++    return null;
++  }
++
++  return {
++    ...row,
++    isActive: isActiveRecord(row)
++  };
++}
++
++async function listConfigCategoriesWithValues(options = {}) {
++  const includeInactiveValues = options.includeInactiveValues === true;
++  const {
++    categoryLabelExpression,
++    categoryDescriptionExpression,
++    categorySortExpression,
++    categoryActiveExpression
++  } = await getConfigCategorySelectExpressions();
++  const {
++    valueLabelExpression,
++    valueDescriptionExpression,
++    valueValueExpression,
++    valueSortExpression,
++    valueActiveExpression
++  } = await getConfigValueSelectExpressions();
+ 
+   const [categoryRows] = await pool.query(`
+     SELECT
+@@ -172,7 +208,9 @@
+ 
+   const valuesByCategoryId = new Map();
+ 
+-  for (const value of valueRows) {
++  for (const rawValue of valueRows) {
++    const value = normalizeConfigValueRow(rawValue);
++
+     if (!valuesByCategoryId.has(value.config_category_id)) {
+       valuesByCategoryId.set(value.config_category_id, []);
+     }
+@@ -182,8 +220,8 @@
+ 
+   return categoryRows.map((category) => {
+     const allValues = valuesByCategoryId.get(category.config_category_id) || [];
+-    const activeValues = allValues.filter((value) => isActiveRecord(value));
+-    const inactiveValues = allValues.filter((value) => !isActiveRecord(value));
++    const activeValues = allValues.filter((value) => value.isActive);
++    const inactiveValues = allValues.filter((value) => !value.isActive);
+     const visibleValues = includeInactiveValues ? allValues : activeValues;
+     const section = getConfigSection(category.code);
+ 
+@@ -203,6 +241,241 @@
+   });
+ }
+ 
++async function listConfigCategoriesForForm() {
++  const {
++    categoryLabelExpression,
++    categoryDescriptionExpression,
++    categorySortExpression,
++    categoryActiveExpression
++  } = await getConfigCategorySelectExpressions();
++
++  const [rows] = await pool.query(`
++    SELECT
++      cc.config_category_id,
++      cc.code,
++      ${categoryLabelExpression} AS label,
++      ${categoryDescriptionExpression} AS description,
++      ${categorySortExpression} AS sort_order,
++      ${categoryActiveExpression} AS is_active
++    FROM config_categories cc
++    ORDER BY sort_order, label, code
++  `);
++
++  return rows.map((row) => ({
++    ...row,
++    isActive: isActiveRecord(row)
++  }));
++}
++
++async function getConfigCategoryById(configCategoryId) {
++  const {
++    categoryLabelExpression,
++    categoryDescriptionExpression,
++    categorySortExpression,
++    categoryActiveExpression
++  } = await getConfigCategorySelectExpressions();
++
++  const [rows] = await pool.query(
++    `
++      SELECT
++        cc.config_category_id,
++        cc.code,
++        ${categoryLabelExpression} AS label,
++        ${categoryDescriptionExpression} AS description,
++        ${categorySortExpression} AS sort_order,
++        ${categoryActiveExpression} AS is_active
++      FROM config_categories cc
++      WHERE cc.config_category_id = ?
++      LIMIT 1
++    `,
++    [configCategoryId]
++  );
++
++  return rows[0]
++    ? {
++        ...rows[0],
++        isActive: isActiveRecord(rows[0])
++      }
++    : null;
++}
++
++async function getConfigValueById(configValueId) {
++  const {
++    categoryLabelExpression,
++    categoryDescriptionExpression,
++    categorySortExpression,
++    categoryActiveExpression
++  } = await getConfigCategorySelectExpressions();
++  const {
++    valueLabelExpression,
++    valueDescriptionExpression,
++    valueValueExpression,
++    valueSortExpression,
++    valueActiveExpression
++  } = await getConfigValueSelectExpressions();
++
++  const [rows] = await pool.query(
++    `
++      SELECT
++        cv.config_value_id,
++        cv.config_category_id,
++        cv.code,
++        ${valueLabelExpression} AS label,
++        ${valueDescriptionExpression} AS description,
++        ${valueValueExpression} AS value,
++        ${valueSortExpression} AS sort_order,
++        ${valueActiveExpression} AS is_active,
++        cc.code AS category_code,
++        ${categoryLabelExpression} AS category_label,
++        ${categoryDescriptionExpression} AS category_description,
++        ${categorySortExpression} AS category_sort_order,
++        ${categoryActiveExpression} AS category_is_active
++      FROM config_values cv
++      INNER JOIN config_categories cc
++        ON cc.config_category_id = cv.config_category_id
++      WHERE cv.config_value_id = ?
++      LIMIT 1
++    `,
++    [configValueId]
++  );
++
++  return normalizeConfigValueRow(rows[0]);
++}
++
++async function configValueCodeExists(code, exceptConfigValueId = null) {
++  const params = [code];
++  let sql = `
++    SELECT config_value_id
++    FROM config_values
++    WHERE code = ?
++  `;
++
++  if (exceptConfigValueId) {
++    sql += ' AND config_value_id <> ?';
++    params.push(exceptConfigValueId);
++  }
++
++  sql += ' LIMIT 1';
++
++  const [rows] = await pool.query(sql, params);
++  return rows.length > 0;
++}
++
++async function createConfigValue({ configCategoryId, code, label, value, description, sortOrder, isActive }) {
++  const valueColumns = await getColumnSet('config_values');
++  const fields = ['config_category_id', 'code'];
++  const values = [configCategoryId, code];
++
++  if (valueColumns.has('label')) {
++    fields.push('label');
++    values.push(label);
++  }
++
++  if (valueColumns.has('name')) {
++    fields.push('name');
++    values.push(label);
++  }
++
++  if (valueColumns.has('value')) {
++    fields.push('value');
++    values.push(value || null);
++  }
++
++  if (valueColumns.has('description')) {
++    fields.push('description');
++    values.push(description || null);
++  }
++
++  if (valueColumns.has('sort_order')) {
++    fields.push('sort_order');
++    values.push(sortOrder);
++  }
++
++  if (valueColumns.has('is_active')) {
++    fields.push('is_active');
++    values.push(isActive ? 1 : 0);
++  }
++
++  const placeholders = fields.map(() => '?').join(', ');
++  const quotedFields = fields.map((field) => `\`${field}\``).join(', ');
++
++  const [result] = await pool.query(
++    `
++      INSERT INTO config_values (${quotedFields})
++      VALUES (${placeholders})
++    `,
++    values
++  );
++
++  return result.insertId;
++}
++
++async function updateConfigValue({ configValueId, configCategoryId, code, label, value, description, sortOrder, isActive }) {
++  const valueColumns = await getColumnSet('config_values');
++  const assignments = ['config_category_id = ?', 'code = ?'];
++  const values = [configCategoryId, code];
++
++  if (valueColumns.has('label')) {
++    assignments.push('label = ?');
++    values.push(label);
++  }
++
++  if (valueColumns.has('name')) {
++    assignments.push('name = ?');
++    values.push(label);
++  }
++
++  if (valueColumns.has('value')) {
++    assignments.push('value = ?');
++    values.push(value || null);
++  }
++
++  if (valueColumns.has('description')) {
++    assignments.push('description = ?');
++    values.push(description || null);
++  }
++
++  if (valueColumns.has('sort_order')) {
++    assignments.push('sort_order = ?');
++    values.push(sortOrder);
++  }
++
++  if (valueColumns.has('is_active')) {
++    assignments.push('is_active = ?');
++    values.push(isActive ? 1 : 0);
++  }
++
++  values.push(configValueId);
++
++  await pool.query(
++    `
++      UPDATE config_values
++      SET ${assignments.join(', ')}
++      WHERE config_value_id = ?
++      LIMIT 1
++    `,
++    values
++  );
++}
++
++async function setConfigValueActive(configValueId, isActive) {
++  const valueColumns = await getColumnSet('config_values');
++
++  if (!valueColumns.has('is_active')) {
++    return;
++  }
++
++  await pool.query(
++    `
++      UPDATE config_values
++      SET is_active = ?
++      WHERE config_value_id = ?
++      LIMIT 1
++    `,
++    [isActive ? 1 : 0, configValueId]
++  );
++}
++
+ async function getConfigSummary() {
+   const valueColumns = await getColumnSet('config_values');
+   const valueActiveExpression = pickColumnExpression('cv', valueColumns, ['is_active'], '1');
+@@ -226,6 +499,13 @@
+ 
+ module.exports = {
+   listConfigCategoriesWithValues,
++  listConfigCategoriesForForm,
++  getConfigCategoryById,
++  getConfigValueById,
++  configValueCodeExists,
++  createConfigValue,
++  updateConfigValue,
++  setConfigValueActive,
+   getConfigSummary,
+   groupConfigCategories
+ };
+diff -ruN base5e/public/css/style.css work5e/public/css/style.css
+--- base5e/public/css/style.css	2026-06-16 14:18:40.000000000 +0000
++++ work5e/public/css/style.css	2026-06-16 15:54:42.520761647 +0000
+@@ -2963,3 +2963,107 @@
+     justify-content: flex-start;
+   }
+ }
++
++/* Step 5e Configuration CRUD */
++.config-values-actions,
++.config-category-pills,
++.config-value-row-actions {
++  display: flex;
++  flex-wrap: wrap;
++  gap: 8px;
++  align-items: center;
++}
++
++.config-values-actions {
++  justify-content: flex-end;
++}
++
++.config-inline-action,
++.config-value-row-actions .secondary-button {
++  min-height: 30px;
++  padding: 0 10px;
++  border-radius: 999px;
++  font-size: 0.76rem;
++  font-weight: 850;
++  text-decoration: none;
++}
++
++.config-value-row-actions {
++  min-width: 180px;
++}
++
++.config-value-row-actions .danger-button,
++.config-value-status-modal .danger-button {
++  border-color: color-mix(in srgb, var(--red) 44%, var(--line) 56%);
++  color: var(--red);
++  background: color-mix(in srgb, var(--red-bg) 80%, #ffffff 20%);
++}
++
++.config-value-row-actions .danger-button:hover,
++.config-value-status-modal .danger-button:hover {
++  border-color: color-mix(in srgb, var(--red) 65%, var(--line) 35%);
++  background: color-mix(in srgb, var(--red-bg) 66%, #ffffff 34%);
++}
++
++.config-value-modal {
++  width: min(780px, 100%);
++}
++
++.config-value-form {
++  max-width: none;
++}
++
++.config-value-form-grid {
++  grid-template-columns: repeat(2, minmax(0, 1fr));
++}
++
++.config-value-active-toggle {
++  align-self: end;
++  min-height: 76px;
++}
++
++.config-value-system-note {
++  margin-bottom: 14px;
++}
++
++.config-value-confirm-card {
++  display: grid;
++  gap: 4px;
++  padding: 14px;
++  border: 1px solid var(--line-soft);
++  border-radius: 14px;
++  background: var(--surface-soft);
++}
++
++.config-value-confirm-card h3,
++.config-value-confirm-card p {
++  margin: 0;
++}
++
++.config-value-confirm-copy {
++  margin: 14px 0 0;
++  color: var(--text);
++  font-size: 0.94rem;
++  line-height: 1.5;
++}
++
++.config-value-status-modal .form-actions {
++  margin-top: 18px;
++}
++
++@media (max-width: 860px) {
++  .config-values-actions {
++    justify-content: stretch;
++  }
++
++  .config-values-actions > *,
++  .config-category-pills > *,
++  .config-value-row-actions > * {
++    width: 100%;
++    justify-content: center;
++  }
++
++  .config-value-form-grid {
++    grid-template-columns: 1fr;
++  }
++}
+diff -ruN base5e/routes/config.js work5e/routes/config.js
+--- base5e/routes/config.js	2026-06-15 15:17:24.000000000 +0000
++++ work5e/routes/config.js	2026-06-16 15:53:47.140022352 +0000
+@@ -4,11 +4,69 @@
+ 
+ const router = express.Router();
+ 
++const configRoles = ['admin'];
++
+ router.get(
+   '/management/config',
+   requireAuth,
+-  requireRole(['admin']),
++  requireRole(configRoles),
+   configController.renderConfigPage
+ );
+ 
+-module.exports = router;
+\ No newline at end of file
++router.get(
++  '/management/config/values/new/modal',
++  requireAuth,
++  requireRole(configRoles),
++  configController.renderNewConfigValueModal
++);
++
++router.post(
++  '/management/config/values',
++  requireAuth,
++  requireRole(configRoles),
++  configController.createConfigValue
++);
++
++router.get(
++  '/management/config/values/:configValueId/edit/modal',
++  requireAuth,
++  requireRole(configRoles),
++  configController.renderEditConfigValueModal
++);
++
++router.post(
++  '/management/config/values/:configValueId/edit/modal',
++  requireAuth,
++  requireRole(configRoles),
++  configController.updateConfigValue
++);
++
++router.get(
++  '/management/config/values/:configValueId/activate/modal',
++  requireAuth,
++  requireRole(configRoles),
++  configController.renderConfigValueStatusModal
++);
++
++router.post(
++  '/management/config/values/:configValueId/activate',
++  requireAuth,
++  requireRole(configRoles),
++  configController.updateConfigValueStatus
++);
++
++router.get(
++  '/management/config/values/:configValueId/deactivate/modal',
++  requireAuth,
++  requireRole(configRoles),
++  configController.renderConfigValueStatusModal
++);
++
++router.post(
++  '/management/config/values/:configValueId/deactivate',
++  requireAuth,
++  requireRole(configRoles),
++  configController.updateConfigValueStatus
++);
++
++module.exports = router;
+diff -ruN base5e/views/fragments/config-value-form-modal.ejs work5e/views/fragments/config-value-form-modal.ejs
+--- base5e/views/fragments/config-value-form-modal.ejs	1970-01-01 00:00:00.000000000 +0000
++++ work5e/views/fragments/config-value-form-modal.ejs	2026-06-16 15:54:11.338705725 +0000
+@@ -0,0 +1,100 @@
++<%
++  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
++  const safeCategories = Array.isArray(categories) ? categories : [];
++  const safeFormData = formData || {};
++  const safeMode = mode === 'edit' ? 'edit' : 'create';
++  const safeConfigValue = configValue || null;
++  const formAction = safeMode === 'edit' && safeConfigValue
++    ? `/management/config/values/${safeConfigValue.config_value_id}/edit/modal`
++    : '/management/config/values';
++  const title = safeMode === 'edit' ? 'Edit Config Value' : 'Create Config Value';
++  const submitLabel = safeMode === 'edit' ? 'Save Config Value' : 'Create Config Value';
++%>
++
++<div class="modal-backdrop" data-modal-backdrop>
++  <section class="modal-panel config-value-modal" role="dialog" aria-modal="true" aria-labelledby="config-value-form-title">
++    <header class="modal-header">
++      <div>
++        <p class="eyebrow">Configuration</p>
++        <h2 id="config-value-form-title"><%= title %></h2>
++      </div>
++
++      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
++    </header>
++
++    <div class="modal-body">
++      <% if (safeErrors.length > 0) { %>
++        <div class="message error">
++          <% safeErrors.forEach((errorMessage) => { %>
++            <p><%= errorMessage %></p>
++          <% }) %>
++        </div>
++      <% } %>
++
++      <div class="message warning config-value-system-note">
++        <p>Config values can be used by existing units, lots, and app forms. Use active/inactive instead of deleting history. Codes should be changed only when you are sure no feature depends on the old code.</p>
++      </div>
++
++      <form class="app-form config-value-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML" autocomplete="off">
++        <input type="hidden" name="includeInactive" value="<%= safeFormData.includeInactive || '0' %>" />
++
++        <div class="form-grid config-value-form-grid">
++          <label class="form-field">
++            <span>Category</span>
++            <select name="configCategoryId" required>
++              <option value="">Select category</option>
++              <% safeCategories.forEach((category) => { %>
++                <option value="<%= category.config_category_id %>" <%= String(safeFormData.configCategoryId || '') === String(category.config_category_id) ? 'selected' : '' %>>
++                  <%= category.label || category.code %><%= category.isActive ? '' : ' (Inactive category)' %>
++                </option>
++              <% }) %>
++            </select>
++            <small class="field-hint">Choose where this value should appear on the Configuration page.</small>
++          </label>
++
++          <label class="form-field">
++            <span>Code</span>
++            <input type="text" name="code" value="<%= safeFormData.code || '' %>" maxlength="120" placeholder="example_config_value" required />
++            <small class="field-hint">Stable app key. Lowercase letters, numbers, underscores, or hyphens.</small>
++          </label>
++
++          <label class="form-field">
++            <span>Label</span>
++            <input type="text" name="label" value="<%= safeFormData.label || '' %>" maxlength="120" placeholder="Example Config Value" required />
++            <small class="field-hint">Human-readable text shown in forms and tables.</small>
++          </label>
++
++          <label class="form-field">
++            <span>Value</span>
++            <input type="text" name="value" value="<%= safeFormData.value || '' %>" maxlength="120" placeholder="Optional stored value" />
++            <small class="field-hint">Optional. Used for values like production weight numbers.</small>
++          </label>
++
++          <label class="form-field">
++            <span>Sort Order</span>
++            <input type="number" name="sortOrder" value="<%= safeFormData.sortOrder || '0' %>" step="1" inputmode="numeric" />
++            <small class="field-hint">Lower numbers display first.</small>
++          </label>
++
++          <label class="checkbox-card config-value-active-toggle" for="configValueIsActive">
++            <input id="configValueIsActive" type="checkbox" name="isActive" value="1" <%= String(safeFormData.isActive || '0') === '1' ? 'checked' : '' %> />
++            <span>
++              <strong>Active</strong>
++              <small>Active values are available in normal app dropdowns.</small>
++            </span>
++          </label>
++        </div>
++
++        <label class="form-field">
++          <span>Description</span>
++          <textarea name="description" rows="4" maxlength="500" placeholder="Optional description for Management and Admin users."><%= safeFormData.description || '' %></textarea>
++        </label>
++
++        <div class="form-actions">
++          <button type="submit" class="primary-button"><%= submitLabel %></button>
++          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
++        </div>
++      </form>
++    </div>
++  </section>
++</div>
+diff -ruN base5e/views/fragments/config-value-status-modal.ejs work5e/views/fragments/config-value-status-modal.ejs
+--- base5e/views/fragments/config-value-status-modal.ejs	1970-01-01 00:00:00.000000000 +0000
++++ work5e/views/fragments/config-value-status-modal.ejs	2026-06-16 15:54:11.353904836 +0000
+@@ -0,0 +1,66 @@
++<%
++  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
++  const safeConfigValue = configValue || null;
++  const safeIncludeInactive = includeInactiveValues ? '1' : '0';
++  const safeActionType = ['activate', 'deactivate', 'error'].includes(actionType) ? actionType : 'error';
++  const isActivate = safeActionType === 'activate';
++  const title = safeActionType === 'error'
++    ? 'Config Value Not Found'
++    : `${isActivate ? 'Activate' : 'Deactivate'} Config Value`;
++  const actionPath = safeConfigValue
++    ? `/management/config/values/${safeConfigValue.config_value_id}/${isActivate ? 'activate' : 'deactivate'}`
++    : '';
++%>
++
++<div class="modal-backdrop" data-modal-backdrop>
++  <section class="modal-panel config-value-modal config-value-status-modal" role="dialog" aria-modal="true" aria-labelledby="config-value-status-title">
++    <header class="modal-header">
++      <div>
++        <p class="eyebrow">Configuration</p>
++        <h2 id="config-value-status-title"><%= title %></h2>
++      </div>
++
++      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
++    </header>
++
++    <div class="modal-body">
++      <% if (safeErrors.length > 0) { %>
++        <div class="message error">
++          <% safeErrors.forEach((errorMessage) => { %>
++            <p><%= errorMessage %></p>
++          <% }) %>
++        </div>
++      <% } %>
++
++      <% if (safeConfigValue) { %>
++        <div class="config-value-confirm-card">
++          <p class="eyebrow"><%= safeConfigValue.category_label || safeConfigValue.category_code || 'Configuration' %></p>
++          <h3><%= safeConfigValue.label || safeConfigValue.code %></h3>
++          <p><code><%= safeConfigValue.code %></code></p>
++          <% if (safeConfigValue.value) { %>
++            <p>Value: <strong><%= safeConfigValue.value %></strong></p>
++          <% } %>
++        </div>
++
++        <% if (isActivate) { %>
++          <p class="config-value-confirm-copy">Activating this value makes it available again anywhere this category is used by the app.</p>
++        <% } else { %>
++          <p class="config-value-confirm-copy">Deactivating this value hides it from normal dropdowns without deleting existing history that already references it.</p>
++        <% } %>
++
++        <form method="post" action="<%= actionPath %>" hx-post="<%= actionPath %>" hx-target="#modal-root" hx-swap="innerHTML">
++          <input type="hidden" name="includeInactive" value="<%= safeIncludeInactive %>" />
++
++          <div class="form-actions">
++            <button type="submit" class="primary-button <%= isActivate ? '' : 'danger-button' %>"><%= isActivate ? 'Activate Value' : 'Deactivate Value' %></button>
++            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
++          </div>
++        </form>
++      <% } else { %>
++        <div class="form-actions">
++          <button type="button" class="secondary-button" data-modal-close>Close</button>
++        </div>
++      <% } %>
++    </div>
++  </section>
++</div>
+diff -ruN base5e/views/pages/management-config.ejs work5e/views/pages/management-config.ejs
+--- base5e/views/pages/management-config.ejs	2026-06-16 14:02:54.000000000 +0000
++++ work5e/views/pages/management-config.ejs	2026-06-16 15:54:31.851337276 +0000
+@@ -1,6 +1,6 @@
+ <!DOCTYPE html>
+ <html lang="en">
+-  <%- include('../partials/head', { pageTitle }) %>
++  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=step5e-config-crud'] }) %>
+ 
+   <body>
+     <div class="app-shell">
+@@ -12,11 +12,11 @@
+         <main class="content-shell">
+           <section class="dashboard-hero accent-slate">
+             <div>
+-              <p class="eyebrow">Step 5d</p>
++              <p class="eyebrow">Step 5e</p>
+               <h2>Configuration Values</h2>
+               <p>
+-                Review app configuration in clearer groups. Active values are shown by default so old
+-                or inactive options do not clutter production configuration screens.
++                Review, create, edit, activate, and deactivate app configuration values. Active/inactive
++                status replaces hard deletion so existing unit and lot history stays intact.
+               </p>
+             </div>
+ 
+@@ -49,19 +49,21 @@
+           <section class="content-card config-values-control-card">
+             <div class="content-header config-values-control-header">
+               <div>
+-                <p class="eyebrow">Display</p>
+-                <h2>Configuration Display Mode</h2>
++                <p class="eyebrow">Management</p>
++                <h2>Configuration Controls</h2>
+                 <p>
+-                  This page is still review-focused. CRUD controls will be handled separately so we do not
+-                  mix configuration cleanup with editing behavior.
++                  Admin users can now create and edit config values. Use active/inactive for normal lifecycle
++                  changes instead of deleting values that may be referenced by existing records.
+                 </p>
+               </div>
+ 
+               <div class="config-values-actions">
++                <a class="primary-button" href="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Create Config Value</a>
++
+                 <% if (includeInactiveValues) { %>
+                   <a class="secondary-button" href="/management/config">Hide inactive values</a>
+                 <% } else { %>
+-                  <a class="primary-button" href="/management/config?includeInactive=1">Show inactive values</a>
++                  <a class="secondary-button" href="/management/config?includeInactive=1">Show inactive values</a>
+                 <% } %>
+               </div>
+             </div>
+@@ -70,7 +72,7 @@
+           <section class="content-card">
+             <div class="content-header">
+               <div>
+-                <p class="eyebrow">Management</p>
++                <p class="eyebrow">Configuration</p>
+                 <h2>Configuration Groups</h2>
+               </div>
+             </div>
+@@ -133,6 +135,8 @@
+                               <% if (category.hiddenInactiveValueCount > 0) { %>
+                                 <span class="pill muted"><%= formatNumber(category.hiddenInactiveValueCount) %> hidden</span>
+                               <% } %>
++
++                              <a class="secondary-button config-inline-action" href="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Add Value</a>
+                             </div>
+                           </div>
+ 
+@@ -149,13 +153,14 @@
+                                   <th>Value</th>
+                                   <th>Status</th>
+                                   <th>Description</th>
++                                  <th>Actions</th>
+                                 </tr>
+                               </thead>
+ 
+                               <tbody>
+                                 <% if (category.values.length === 0) { %>
+                                   <tr>
+-                                    <td colspan="5">
++                                    <td colspan="6">
+                                       <% if (category.inactiveValueCount > 0 && !includeInactiveValues) { %>
+                                         This category only has inactive values. Use Show inactive values to review them.
+                                       <% } else { %>
+@@ -166,18 +171,29 @@
+                                 <% } %>
+ 
+                                 <% category.values.forEach((value) => { %>
+-                                  <tr class="<%= value.is_active ? '' : 'config-value-row--inactive' %>">
++                                  <tr class="<%= value.isActive ? '' : 'config-value-row--inactive' %>">
+                                     <td><%= value.label || value.code %></td>
+                                     <td><code><%= value.code %></code></td>
+                                     <td><%= value.value || '—' %></td>
+                                     <td>
+-                                      <% if (value.is_active) { %>
++                                      <% if (value.isActive) { %>
+                                         <span class="pill good">Active</span>
+                                       <% } else { %>
+                                         <span class="pill bad">Inactive</span>
+                                       <% } %>
+                                     </td>
+                                     <td><%= value.description || '—' %></td>
++                                    <td>
++                                      <div class="config-value-row-actions">
++                                        <a class="secondary-button" href="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
++
++                                        <% if (value.isActive) { %>
++                                          <a class="secondary-button danger-button" href="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Deactivate</a>
++                                        <% } else { %>
++                                          <a class="secondary-button" href="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Activate</a>
++                                        <% } %>
++                                      </div>
++                                    </td>
+                                   </tr>
+                                 <% }) %>
+                               </tbody>
+@@ -192,7 +208,11 @@
+             </div>
+           </section>
+         </main>
++
++        <div id="modal-root"></div>
+       </div>
+     </div>
++
++    <script defer src="/js/modal.js"></script>
+   </body>
+ </html>

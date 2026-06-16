@@ -2963,3 +2963,107 @@ input[type="date"] {
     justify-content: flex-start;
   }
 }
+
+/* Step 5e Configuration CRUD */
+.config-values-actions,
+.config-category-pills,
+.config-value-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.config-values-actions {
+  justify-content: flex-end;
+}
+
+.config-inline-action,
+.config-value-row-actions .secondary-button {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 850;
+  text-decoration: none;
+}
+
+.config-value-row-actions {
+  min-width: 180px;
+}
+
+.config-value-row-actions .danger-button,
+.config-value-status-modal .danger-button {
+  border-color: color-mix(in srgb, var(--red) 44%, var(--line) 56%);
+  color: var(--red);
+  background: color-mix(in srgb, var(--red-bg) 80%, #ffffff 20%);
+}
+
+.config-value-row-actions .danger-button:hover,
+.config-value-status-modal .danger-button:hover {
+  border-color: color-mix(in srgb, var(--red) 65%, var(--line) 35%);
+  background: color-mix(in srgb, var(--red-bg) 66%, #ffffff 34%);
+}
+
+.config-value-modal {
+  width: min(780px, 100%);
+}
+
+.config-value-form {
+  max-width: none;
+}
+
+.config-value-form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.config-value-active-toggle {
+  align-self: end;
+  min-height: 76px;
+}
+
+.config-value-system-note {
+  margin-bottom: 14px;
+}
+
+.config-value-confirm-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.config-value-confirm-card h3,
+.config-value-confirm-card p {
+  margin: 0;
+}
+
+.config-value-confirm-copy {
+  margin: 14px 0 0;
+  color: var(--text);
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.config-value-status-modal .form-actions {
+  margin-top: 18px;
+}
+
+@media (max-width: 860px) {
+  .config-values-actions {
+    justify-content: stretch;
+  }
+
+  .config-values-actions > *,
+  .config-category-pills > *,
+  .config-value-row-actions > * {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .config-value-form-grid {
+    grid-template-columns: 1fr;
+  }
+}

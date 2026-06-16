@@ -237,3 +237,84 @@
     justify-content: center;
   }
 }
+
+.management-user-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.management-user-summary-card {
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.management-user-summary-card strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.management-user-summary-card span {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.management-user-identity,
+.management-user-role-stack,
+.management-user-account-stack {
+  display: grid;
+  gap: 4px;
+}
+
+.management-user-identity strong {
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.management-user-identity span,
+.management-user-identity em,
+.management-user-role-stack small,
+.management-user-account-stack small,
+.management-user-role-help {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.management-user-identity em {
+  font-style: normal;
+  font-weight: 800;
+}
+
+.management-user-role-help {
+  margin: 4px 0 10px;
+}
+
+.management-user-create-form {
+  max-width: 760px;
+}
+
+.management-users-table-card table th:first-child,
+.management-users-table-card table td:first-child {
+  min-width: 210px;
+}
+
+.management-users-table-card table th:last-child,
+.management-users-table-card table td:last-child {
+  min-width: 300px;
+}
+
+@media (max-width: 980px) {
+  .management-user-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

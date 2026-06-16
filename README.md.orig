@@ -4,66 +4,56 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
-Step 4K: Dashboard final handoff cleanup.
+Step 5e: Configuration CRUD foundation.
 
-This step closes the Step 4 dashboard/lot-management pass. It verifies that the current app is ready to move forward after the Step 4j dashboard work and Step 4j.5 Lot Browser cleanup.
+This step adds controlled create/edit/activate/deactivate behavior for configuration values after the Step 5d Configuration display cleanup and Step 5c User/Role cleanup.
 
-## Step 4 Status
+## Step 5e Status
 
-Confirmed areas in this handoff:
+Included in this handoff:
 
-- Dashboard role routing is in place.
-- Management Dashboard period controls are in place.
-- Month-to-Date means the current month through today's Central-time date.
-- Management Dashboard pie charts are rendered from the selected reporting period.
-- Tech Dashboard productivity visibility is role-aware.
-- Lot Browser create/edit/delete modal flows redirect back with a cache-busting refresh.
-- Lot names are displayed without frontend Lot ID labels.
-- Lot Browser data is sent with no-store headers so browser caching is less likely to show stale rows after add/edit/delete.
+- Admin-only Configuration value create flow.
+- Admin-only Configuration value edit flow.
+- Active/inactive toggle for config values.
+- Activate/deactivate confirmation modals.
+- No hard delete behavior for config values.
+- Existing records remain protected because old values are deactivated instead of deleted.
+- HTMX modal flows use HTML fragments and HTMX redirects, not JSON.
+- Configuration categories remain grouped from Step 5d.
+- Production Weight Configuration remains separate from support-task productivity.
+
+## Important Direction
+
+Support-task productivity remains deferred to a future version. Step 5 is focused on Configuration, Lots, User/Role cleanup, and production weight foundation.
 
 ## Key Routes
 
 ```text
-/
-/dashboards/admin
-/dashboards/management
-/dashboards/tech
-/dashboard/summary
-/dashboards/:dashboardKey/summary
-/management/lots
-/management/lots/new/modal
-/management/lots/:lotId/edit/modal
-/management/lots/:lotId/delete/modal
-/tech/units
+/management/config
+/management/config/values/new/modal
+/management/config/values
+/management/config/values/:configValueId/edit/modal
+/management/config/values/:configValueId/activate/modal
+/management/config/values/:configValueId/deactivate/modal
 ```
 
-## Important Preferences Preserved
-
-- HTMX flows should return HTML fragments or HTMX redirects, not JSON, unless JSON is specifically needed.
-- Post-rebuild checks should focus only on the feature just changed.
-- Lot IDs should not be visible in frontend lot displays.
-- Month-to-Date is not a generic to-date option; it is the current month through today.
-- Cosmetic Grade and Pass/Fail remain separate concepts.
-
-## Step 4K File Touches
+## Step 5e File Touches
 
 - `README.md`
-- `controllers/overrideController.js`
-- `models/dashboardModel.js`
-- `models/overrideRequestModel.js`
-- `models/techUnitModel.js`
-- `views/fragments/tech-unit-duplicate-modal.ejs`
-- `views/fragments/tech-unit-form.ejs`
-- `public/css/lots.css`
+- `controllers/configController.js`
+- `models/configModel.js`
+- `routes/config.js`
+- `views/fragments/config-value-form-modal.ejs`
+- `views/fragments/config-value-status-modal.ejs`
+- `views/pages/management-config.ejs`
+- `public/css/style.css`
 
-## Step 4K Notes
+## Step 5e Notes
 
-The only code cleanup in this handoff removes visible Lot ID / Lot # fallback text from remaining frontend-facing paths. Internal database IDs and route parameters are still used by the app, but the user-facing labels now fall back to neutral text such as `Lot name not available` instead of showing a numeric Lot ID.
+Config values may be used by existing lots, units, and app forms. This step intentionally does not add hard deletes. Use deactivate/reactivate for lifecycle changes.
+
+Codes are stable app keys. Edit labels, values, descriptions, sort order, and active state freely, but change codes only when you know the app does not depend on the existing code.
 
 ## Next Direction
 
-Step 5 should move into the next major feature area instead of adding more dashboard cleanup. Good candidates are:
-
-1. support-task productivity records,
-2. QC check tracking,
-3. cleaner unit completion ownership using `primary_completed_by_user_id` and `completed_at`.
+Next likely step: Step 5f — Production weight application cleanup.

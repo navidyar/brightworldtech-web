@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle }) %>
-  <link rel="stylesheet" href="/css/modal.css" />
-  <link rel="stylesheet" href="/css/management.css" />
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: [
+      '/css/modal.css?v=step5c-ui-hotfix',
+      '/css/management.css?v=step5c-ui-hotfix'
+    ]
+  }) %>
   <script defer src="/js/modal.js"></script>
 
   <body>
@@ -15,12 +19,12 @@
         <main class="content-shell">
           <section class="dashboard-hero">
             <div>
-              <p class="eyebrow">Step 3l.3.2</p>
+              <p class="eyebrow">Step 5c</p>
               <h2><%= isInactiveView ? 'Inactive Users' : 'User Management' %></h2>
               <p>
                 <%= isInactiveView
                   ? 'Review inactive users and reactivate returning employees without losing their work history.'
-                  : 'Create users, assign roles, generate setup links, edit user details, and deactivate employees without deleting their history.' %>
+                  : 'Create users, assign one primary access role, generate setup links, and deactivate employees without deleting their history.' %>
               </p>
             </div>
 
@@ -28,6 +32,26 @@
               <span>Access</span>
               <strong>Admin / Management</strong>
             </div>
+          </section>
+
+          <section class="management-user-summary-grid">
+            <article class="management-user-summary-card">
+              <p class="eyebrow">Active Users</p>
+              <strong><%= formatNumber(userCounts.activeCount) %></strong>
+              <span>Visible in normal user management.</span>
+            </article>
+
+            <article class="management-user-summary-card">
+              <p class="eyebrow">Inactive Users</p>
+              <strong><%= formatNumber(userCounts.inactiveCount) %></strong>
+              <span>Hidden from normal lists and blocked from sign-in.</span>
+            </article>
+
+            <article class="management-user-summary-card">
+              <p class="eyebrow">Role Rule</p>
+              <strong>Single Primary Role</strong>
+              <span>Account roles control app access only; production activity is handled separately.</span>
+            </article>
           </section>
 
           <section class="content-card">
@@ -61,20 +85,22 @@
 
             <% if (isInactiveView) { %>
               <div class="message error management-user-note">
-                <p>Inactive users are hidden from the normal user list and cannot sign in. Their completed work, comments, grades, and unit history remain linked to their user record.</p>
+                <p>Inactive users are hidden from the normal users list and cannot sign in. Their completed work, comments, grades, and unit history remain linked to their user record.</p>
               </div>
             <% } %>
+
+            <div class="message management-user-note">
+              <p><strong>Role assignment rule:</strong> each user receives one primary access role. Admin users can assign Admin. Management users can assign Management, Tech Lead, or Tech. Production labels such as QC, packing, or task activity should not be assigned here as account roles.</p>
+            </div>
 
             <div class="table-card management-users-table-card" style="margin-top: 20px;">
               <table>
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Email</th>
+                    <th>User</th>
+                    <th>Primary Role</th>
                     <th>Employee</th>
-                    <th>Account</th>
-                    <th>Roles</th>
-                    <th>Password</th>
+                    <th>Account Setup</th>
                     <th>Last Login</th>
                     <th>Actions</th>
                   </tr>
@@ -83,16 +109,34 @@
                 <tbody>
                   <% if (users.length === 0) { %>
                     <tr>
-                      <td colspan="8"><%= isInactiveView ? 'No inactive users found.' : 'No active users found.' %></td>
+                      <td colspan="6"><%= isInactiveView ? 'No inactive users found.' : 'No active users found.' %></td>
                     </tr>
                   <% } %>
 
                   <% users.forEach((user) => { %>
+                    <% const roleLabel = user.primary_role_name || user.role_names || 'No role assigned'; %>
                     <tr>
                       <td>
-                        <strong><%= user.first_name %> <%= user.last_name %></strong>
+                        <div class="management-user-identity">
+                          <strong><%= user.first_name %> <%= user.last_name %></strong>
+                          <span><%= user.email %></span>
+                          <% if (Number(user.user_id) === Number(currentUserId)) { %>
+                            <em>Current user</em>
+                          <% } %>
+                        </div>
                       </td>
-                      <td><%= user.email %></td>
+                      <td>
+                        <% if (user.primary_role_code) { %>
+                          <div class="management-user-role-stack">
+                            <span class="pill slate"><%= roleLabel %></span>
+                            <% if (user.role_count > 1) { %>
+                              <small>Legacy multiple roles detected. Editing will save one primary role.</small>
+                            <% } %>
+                          </div>
+                        <% } else { %>
+                          <span class="pill bad">No role</span>
+                        <% } %>
+                      </td>
                       <td>
                         <% if (user.is_active) { %>
                           <span class="pill good">Active</span>
@@ -101,14 +145,15 @@
                         <% } %>
                       </td>
                       <td>
-                        <% if (user.account_status_code === 'active') { %>
-                          <span class="pill good">Active</span>
-                        <% } else { %>
-                          <span class="pill bad"><%= user.account_status_label || user.account_status_code || 'Unknown' %></span>
-                        <% } %>
+                        <div class="management-user-account-stack">
+                          <% if (user.account_status_code === 'active') { %>
+                            <span class="pill good">Active Account</span>
+                          <% } else { %>
+                            <span class="pill bad"><%= user.account_status_label || user.account_status_code || 'Unknown Account' %></span>
+                          <% } %>
+                          <small><%= user.has_password ? 'Password created' : 'Pending setup link' %></small>
+                        </div>
                       </td>
-                      <td><%= user.role_names || 'No roles' %></td>
-                      <td><%= user.has_password ? 'Created' : 'Pending setup' %></td>
                       <td><%= formatDateTime(user.last_login_at) %></td>
                       <td>
                         <div class="management-user-row-actions">
@@ -127,9 +172,7 @@
                               </button>
                             </form>
 
-                            <% if (Number(user.user_id) === Number(currentUserId)) { %>
-                              <span class="management-user-self-note">Current user</span>
-                            <% } else { %>
+                            <% if (Number(user.user_id) !== Number(currentUserId)) { %>
                               <% if (user.can_delete_pending_setup) { %>
                                 <a class="secondary-button danger-button" href="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=active" hx-get="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=active" hx-target="#modal-root" hx-swap="innerHTML">Delete Pending User</a>
                               <% } %>
@@ -170,7 +213,7 @@
                 <div>
                   <strong>Reactivate returning employees</strong>
                   <p>
-                    Reactivating a user keeps the same account, roles, unit associations, comments, grades, and historical audit trail intact.
+                    Reactivating a user keeps the same account, primary role, unit associations, comments, grades, and historical audit trail intact.
                   </p>
                 </div>
               </div>

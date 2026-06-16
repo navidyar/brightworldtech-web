@@ -128,21 +128,57 @@ function groupConfigCategories(categories) {
   return Array.from(sectionsByKey.values()).sort((a, b) => a.sortOrder - b.sortOrder || a.label.localeCompare(b.label));
 }
 
-async function listConfigCategoriesWithValues(options = {}) {
-  const includeInactiveValues = options.includeInactiveValues === true;
+async function getConfigCategorySelectExpressions() {
   const categoryColumns = await getColumnSet('config_categories');
+
+  return {
+    categoryColumns,
+    categoryLabelExpression: pickColumnExpression('cc', categoryColumns, ['label', 'name'], 'cc.`code`'),
+    categoryDescriptionExpression: pickColumnExpression('cc', categoryColumns, ['description'], 'NULL'),
+    categorySortExpression: pickColumnExpression('cc', categoryColumns, ['sort_order'], '0'),
+    categoryActiveExpression: pickColumnExpression('cc', categoryColumns, ['is_active'], '1')
+  };
+}
+
+async function getConfigValueSelectExpressions() {
   const valueColumns = await getColumnSet('config_values');
 
-  const categoryLabelExpression = pickColumnExpression('cc', categoryColumns, ['label', 'name'], 'cc.`code`');
-  const categoryDescriptionExpression = pickColumnExpression('cc', categoryColumns, ['description'], 'NULL');
-  const categorySortExpression = pickColumnExpression('cc', categoryColumns, ['sort_order'], '0');
-  const categoryActiveExpression = pickColumnExpression('cc', categoryColumns, ['is_active'], '1');
+  return {
+    valueColumns,
+    valueLabelExpression: pickColumnExpression('cv', valueColumns, ['label', 'name'], 'cv.`code`'),
+    valueDescriptionExpression: pickColumnExpression('cv', valueColumns, ['description'], 'NULL'),
+    valueValueExpression: pickColumnExpression('cv', valueColumns, ['value'], 'NULL'),
+    valueSortExpression: pickColumnExpression('cv', valueColumns, ['sort_order'], '0'),
+    valueActiveExpression: pickColumnExpression('cv', valueColumns, ['is_active'], '1')
+  };
+}
 
-  const valueLabelExpression = pickColumnExpression('cv', valueColumns, ['label', 'name'], 'cv.`code`');
-  const valueDescriptionExpression = pickColumnExpression('cv', valueColumns, ['description'], 'NULL');
-  const valueValueExpression = pickColumnExpression('cv', valueColumns, ['value'], 'NULL');
-  const valueSortExpression = pickColumnExpression('cv', valueColumns, ['sort_order'], '0');
-  const valueActiveExpression = pickColumnExpression('cv', valueColumns, ['is_active'], '1');
+function normalizeConfigValueRow(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...row,
+    isActive: isActiveRecord(row)
+  };
+}
+
+async function listConfigCategoriesWithValues(options = {}) {
+  const includeInactiveValues = options.includeInactiveValues === true;
+  const {
+    categoryLabelExpression,
+    categoryDescriptionExpression,
+    categorySortExpression,
+    categoryActiveExpression
+  } = await getConfigCategorySelectExpressions();
+  const {
+    valueLabelExpression,
+    valueDescriptionExpression,
+    valueValueExpression,
+    valueSortExpression,
+    valueActiveExpression
+  } = await getConfigValueSelectExpressions();
 
   const [categoryRows] = await pool.query(`
     SELECT
@@ -172,7 +208,9 @@ async function listConfigCategoriesWithValues(options = {}) {
 
   const valuesByCategoryId = new Map();
 
-  for (const value of valueRows) {
+  for (const rawValue of valueRows) {
+    const value = normalizeConfigValueRow(rawValue);
+
     if (!valuesByCategoryId.has(value.config_category_id)) {
       valuesByCategoryId.set(value.config_category_id, []);
     }
@@ -182,8 +220,8 @@ async function listConfigCategoriesWithValues(options = {}) {
 
   return categoryRows.map((category) => {
     const allValues = valuesByCategoryId.get(category.config_category_id) || [];
-    const activeValues = allValues.filter((value) => isActiveRecord(value));
-    const inactiveValues = allValues.filter((value) => !isActiveRecord(value));
+    const activeValues = allValues.filter((value) => value.isActive);
+    const inactiveValues = allValues.filter((value) => !value.isActive);
     const visibleValues = includeInactiveValues ? allValues : activeValues;
     const section = getConfigSection(category.code);
 
@@ -201,6 +239,241 @@ async function listConfigCategoriesWithValues(options = {}) {
       hiddenInactiveValueCount: includeInactiveValues ? 0 : inactiveValues.length
     };
   });
+}
+
+async function listConfigCategoriesForForm() {
+  const {
+    categoryLabelExpression,
+    categoryDescriptionExpression,
+    categorySortExpression,
+    categoryActiveExpression
+  } = await getConfigCategorySelectExpressions();
+
+  const [rows] = await pool.query(`
+    SELECT
+      cc.config_category_id,
+      cc.code,
+      ${categoryLabelExpression} AS label,
+      ${categoryDescriptionExpression} AS description,
+      ${categorySortExpression} AS sort_order,
+      ${categoryActiveExpression} AS is_active
+    FROM config_categories cc
+    ORDER BY sort_order, label, code
+  `);
+
+  return rows.map((row) => ({
+    ...row,
+    isActive: isActiveRecord(row)
+  }));
+}
+
+async function getConfigCategoryById(configCategoryId) {
+  const {
+    categoryLabelExpression,
+    categoryDescriptionExpression,
+    categorySortExpression,
+    categoryActiveExpression
+  } = await getConfigCategorySelectExpressions();
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        cc.config_category_id,
+        cc.code,
+        ${categoryLabelExpression} AS label,
+        ${categoryDescriptionExpression} AS description,
+        ${categorySortExpression} AS sort_order,
+        ${categoryActiveExpression} AS is_active
+      FROM config_categories cc
+      WHERE cc.config_category_id = ?
+      LIMIT 1
+    `,
+    [configCategoryId]
+  );
+
+  return rows[0]
+    ? {
+        ...rows[0],
+        isActive: isActiveRecord(rows[0])
+      }
+    : null;
+}
+
+async function getConfigValueById(configValueId) {
+  const {
+    categoryLabelExpression,
+    categoryDescriptionExpression,
+    categorySortExpression,
+    categoryActiveExpression
+  } = await getConfigCategorySelectExpressions();
+  const {
+    valueLabelExpression,
+    valueDescriptionExpression,
+    valueValueExpression,
+    valueSortExpression,
+    valueActiveExpression
+  } = await getConfigValueSelectExpressions();
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        cv.config_value_id,
+        cv.config_category_id,
+        cv.code,
+        ${valueLabelExpression} AS label,
+        ${valueDescriptionExpression} AS description,
+        ${valueValueExpression} AS value,
+        ${valueSortExpression} AS sort_order,
+        ${valueActiveExpression} AS is_active,
+        cc.code AS category_code,
+        ${categoryLabelExpression} AS category_label,
+        ${categoryDescriptionExpression} AS category_description,
+        ${categorySortExpression} AS category_sort_order,
+        ${categoryActiveExpression} AS category_is_active
+      FROM config_values cv
+      INNER JOIN config_categories cc
+        ON cc.config_category_id = cv.config_category_id
+      WHERE cv.config_value_id = ?
+      LIMIT 1
+    `,
+    [configValueId]
+  );
+
+  return normalizeConfigValueRow(rows[0]);
+}
+
+async function configValueCodeExists(code, exceptConfigValueId = null) {
+  const params = [code];
+  let sql = `
+    SELECT config_value_id
+    FROM config_values
+    WHERE code = ?
+  `;
+
+  if (exceptConfigValueId) {
+    sql += ' AND config_value_id <> ?';
+    params.push(exceptConfigValueId);
+  }
+
+  sql += ' LIMIT 1';
+
+  const [rows] = await pool.query(sql, params);
+  return rows.length > 0;
+}
+
+async function createConfigValue({ configCategoryId, code, label, value, description, sortOrder, isActive }) {
+  const valueColumns = await getColumnSet('config_values');
+  const fields = ['config_category_id', 'code'];
+  const values = [configCategoryId, code];
+
+  if (valueColumns.has('label')) {
+    fields.push('label');
+    values.push(label);
+  }
+
+  if (valueColumns.has('name')) {
+    fields.push('name');
+    values.push(label);
+  }
+
+  if (valueColumns.has('value')) {
+    fields.push('value');
+    values.push(value || null);
+  }
+
+  if (valueColumns.has('description')) {
+    fields.push('description');
+    values.push(description || null);
+  }
+
+  if (valueColumns.has('sort_order')) {
+    fields.push('sort_order');
+    values.push(sortOrder);
+  }
+
+  if (valueColumns.has('is_active')) {
+    fields.push('is_active');
+    values.push(isActive ? 1 : 0);
+  }
+
+  const placeholders = fields.map(() => '?').join(', ');
+  const quotedFields = fields.map((field) => `\`${field}\``).join(', ');
+
+  const [result] = await pool.query(
+    `
+      INSERT INTO config_values (${quotedFields})
+      VALUES (${placeholders})
+    `,
+    values
+  );
+
+  return result.insertId;
+}
+
+async function updateConfigValue({ configValueId, configCategoryId, code, label, value, description, sortOrder, isActive }) {
+  const valueColumns = await getColumnSet('config_values');
+  const assignments = ['config_category_id = ?', 'code = ?'];
+  const values = [configCategoryId, code];
+
+  if (valueColumns.has('label')) {
+    assignments.push('label = ?');
+    values.push(label);
+  }
+
+  if (valueColumns.has('name')) {
+    assignments.push('name = ?');
+    values.push(label);
+  }
+
+  if (valueColumns.has('value')) {
+    assignments.push('value = ?');
+    values.push(value || null);
+  }
+
+  if (valueColumns.has('description')) {
+    assignments.push('description = ?');
+    values.push(description || null);
+  }
+
+  if (valueColumns.has('sort_order')) {
+    assignments.push('sort_order = ?');
+    values.push(sortOrder);
+  }
+
+  if (valueColumns.has('is_active')) {
+    assignments.push('is_active = ?');
+    values.push(isActive ? 1 : 0);
+  }
+
+  values.push(configValueId);
+
+  await pool.query(
+    `
+      UPDATE config_values
+      SET ${assignments.join(', ')}
+      WHERE config_value_id = ?
+      LIMIT 1
+    `,
+    values
+  );
+}
+
+async function setConfigValueActive(configValueId, isActive) {
+  const valueColumns = await getColumnSet('config_values');
+
+  if (!valueColumns.has('is_active')) {
+    return;
+  }
+
+  await pool.query(
+    `
+      UPDATE config_values
+      SET is_active = ?
+      WHERE config_value_id = ?
+      LIMIT 1
+    `,
+    [isActive ? 1 : 0, configValueId]
+  );
 }
 
 async function getConfigSummary() {
@@ -226,6 +499,13 @@ async function getConfigSummary() {
 
 module.exports = {
   listConfigCategoriesWithValues,
+  listConfigCategoriesForForm,
+  getConfigCategoryById,
+  getConfigValueById,
+  configValueCodeExists,
+  createConfigValue,
+  updateConfigValue,
+  setConfigValueActive,
   getConfigSummary,
   groupConfigCategories
 };

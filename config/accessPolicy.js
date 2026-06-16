@@ -5,6 +5,13 @@ const ROLE_HIERARCHY = [
   'tech'
 ];
 
+const ACCOUNT_ROLE_CODES = [
+  'admin',
+  'management',
+  'tech_lead',
+  'tech'
+];
+
 const DASHBOARD_DEFINITIONS = [
   {
     key: 'admin',
@@ -127,6 +134,7 @@ function getAccessibleDashboards(userRoleCodes) {
 
 module.exports = {
   ROLE_HIERARCHY,
+  ACCOUNT_ROLE_CODES,
   DASHBOARD_DEFINITIONS,
   MENU_AREAS,
   canAccessDashboard,

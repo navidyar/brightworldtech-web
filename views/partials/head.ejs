@@ -29,6 +29,12 @@
   <link rel="stylesheet" href="/css/theme.css" />
   <link rel="stylesheet" href="/css/work-area.css" />
 
+  <% if (typeof stylesheets !== 'undefined' && Array.isArray(stylesheets)) { %>
+    <% stylesheets.forEach((stylesheetHref) => { %>
+      <link rel="stylesheet" href="<%= stylesheetHref %>" />
+    <% }) %>
+  <% } %>
+
   <script defer src="/js/theme.js"></script>
   <script defer src="/js/date-picker-only.js"></script>
   <script defer src="/js/management-reporting-controls.js"></script>

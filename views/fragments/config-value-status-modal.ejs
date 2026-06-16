@@ -1,0 +1,66 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeConfigValue = configValue || null;
+  const safeIncludeInactive = includeInactiveValues ? '1' : '0';
+  const safeActionType = ['activate', 'deactivate', 'error'].includes(actionType) ? actionType : 'error';
+  const isActivate = safeActionType === 'activate';
+  const title = safeActionType === 'error'
+    ? 'Config Value Not Found'
+    : `${isActivate ? 'Activate' : 'Deactivate'} Config Value`;
+  const actionPath = safeConfigValue
+    ? `/management/config/values/${safeConfigValue.config_value_id}/${isActivate ? 'activate' : 'deactivate'}`
+    : '';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel config-value-modal config-value-status-modal" role="dialog" aria-modal="true" aria-labelledby="config-value-status-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Configuration</p>
+        <h2 id="config-value-status-title"><%= title %></h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeConfigValue) { %>
+        <div class="config-value-confirm-card">
+          <p class="eyebrow"><%= safeConfigValue.category_label || safeConfigValue.category_code || 'Configuration' %></p>
+          <h3><%= safeConfigValue.label || safeConfigValue.code %></h3>
+          <p><code><%= safeConfigValue.code %></code></p>
+          <% if (safeConfigValue.value) { %>
+            <p>Value: <strong><%= safeConfigValue.value %></strong></p>
+          <% } %>
+        </div>
+
+        <% if (isActivate) { %>
+          <p class="config-value-confirm-copy">Activating this value makes it available again anywhere this category is used by the app.</p>
+        <% } else { %>
+          <p class="config-value-confirm-copy">Deactivating this value hides it from normal dropdowns without deleting existing history that already references it.</p>
+        <% } %>
+
+        <form method="post" action="<%= actionPath %>" hx-post="<%= actionPath %>" hx-target="#modal-root" hx-swap="innerHTML">
+          <input type="hidden" name="includeInactive" value="<%= safeIncludeInactive %>" />
+
+          <div class="form-actions">
+            <button type="submit" class="primary-button <%= isActivate ? '' : 'danger-button' %>"><%= isActivate ? 'Activate Value' : 'Deactivate Value' %></button>
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          </div>
+        </form>
+      <% } else { %>
+        <div class="form-actions">
+          <button type="button" class="secondary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>
