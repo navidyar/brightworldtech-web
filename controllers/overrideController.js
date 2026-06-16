@@ -71,7 +71,7 @@ async function getLotLabel(lotId) {
 
   const lot = await lotModel.getLotById(lotId);
 
-  return lot ? lot.lot_name : `Lot ID ${lotId}`;
+  return lot ? lot.lot_name : 'Lot name not available';
 }
 
 async function renderOverrideRequestsPage(req, res, next) {

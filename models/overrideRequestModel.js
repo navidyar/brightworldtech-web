@@ -77,11 +77,11 @@ function getPersonName(row, prefix) {
 }
 
 async function getLotNameMap() {
-  const lots = await lotModel.listLots();
+  const lots = await lotModel.listLots({ includeHidden: true });
   const lotMap = new Map();
 
   lots.forEach((lot) => {
-    lotMap.set(Number(lot.lot_id), lot.lot_name || lot.name || `Lot #${lot.lot_id}`);
+    lotMap.set(Number(lot.lot_id), lot.lot_name || lot.name || 'Lot name not available');
   });
 
   return lotMap;
@@ -188,7 +188,7 @@ function mapOverrideRequest(row, lotMap) {
     unitOverrideRequestId: Number(row.unit_override_request_id),
     unitId: row.unit_id ? Number(row.unit_id) : null,
     lotId: row.lot_id ? Number(row.lot_id) : null,
-    lotName: row.lot_id ? lotMap.get(Number(row.lot_id)) || `Lot ID ${row.lot_id}` : 'No lot selected',
+    lotName: row.lot_id ? lotMap.get(Number(row.lot_id)) || 'Lot name not available' : 'No lot selected',
     unitAssetTag,
     unitLabel: unitAssetTag || 'No asset tag',
     requestType: row.request_type || 'lot_requirement_override',

@@ -1,0 +1,78 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeSummary = visibilitySummary || {};
+  const safeLot = safeSummary.lot || null;
+  const safeMode = mode === 'unhide' ? 'unhide' : 'hide';
+  const isUnhide = safeMode === 'unhide';
+  const actionLabel = isUnhide ? 'Unhide Lot' : 'Hide Lot';
+  const actionPath = safeLot ? `/management/lots/${safeLot.lot_id}/${isUnhide ? 'unhide' : 'hide'}` : '#';
+  const lotName = safeLot ? safeLot.lot_name : 'Selected Lot';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel lot-modal lot-visibility-modal" role="dialog" aria-modal="true" aria-labelledby="lot-visibility-modal-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow"><%= isUnhide ? 'Unhide Lot' : 'Hide Lot' %></p>
+        <h2 id="lot-visibility-modal-title"><%= actionLabel %>: <%= lotName %>?</h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeLot) { %>
+        <div class="lot-delete-summary lot-visibility-summary">
+          <% if (isUnhide) { %>
+            <p>Unhiding this lot will make it visible in the Lot Browser and eligible for normal Management workflows again.</p>
+          <% } else { %>
+            <p>Hiding this lot keeps its history, units, and requirements intact, but removes it from normal lot browsers and assignment dropdowns.</p>
+          <% } %>
+
+          <div class="lot-delete-counts">
+            <span><strong><%= safeSummary.unitCount || 0 %></strong> units</span>
+            <span><strong><%= safeSummary.childLotCount || 0 %></strong> child lots</span>
+            <span><strong><%= safeSummary.activeChildLotCount || 0 %></strong> visible child lots</span>
+          </div>
+        </div>
+
+        <% if (!isUnhide && Number(safeSummary.childLotCount || 0) > 0) { %>
+          <div class="message warning">
+            <p>
+              This is a parent lot with child lots. Hiding the parent does not automatically hide its child lots.
+              Review the child lots separately if they should also be hidden.
+            </p>
+          </div>
+        <% } %>
+
+        <% if (!safeSummary.canChangeVisibility) { %>
+          <div class="message error">
+            <p>Lot visibility cannot be changed because the lots table does not support hidden lots yet.</p>
+          </div>
+          <div class="action-row">
+            <button type="button" class="secondary-button" data-modal-close>Close</button>
+          </div>
+        <% } else { %>
+          <form method="post" action="<%= actionPath %>" hx-post="<%= actionPath %>" hx-target="#modal-root" hx-swap="innerHTML">
+            <div class="action-row">
+              <button type="submit" class="<%= isUnhide ? 'primary-button' : 'secondary-button danger-button' %>"><%= actionLabel %></button>
+              <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            </div>
+          </form>
+        <% } %>
+      <% } else { %>
+        <div class="action-row">
+          <button type="button" class="secondary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

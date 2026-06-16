@@ -34,6 +34,35 @@ router.post(
   lotController.updateLotModal
 );
 
+
+router.get(
+  '/management/lots/:lotId/hide/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotVisibilityModal
+);
+
+router.post(
+  '/management/lots/:lotId/hide',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.updateLotVisibility
+);
+
+router.get(
+  '/management/lots/:lotId/unhide/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotVisibilityModal
+);
+
+router.post(
+  '/management/lots/:lotId/unhide',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.updateLotVisibility
+);
+
 router.get(
   '/management/lots/:lotId/delete/modal',
   requireAuth,

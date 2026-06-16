@@ -113,15 +113,21 @@
 
           <section class="dashboard-grid">
             <article class="dashboard-card">
-              <p class="card-label">Active Lots</p>
+              <p class="card-label">Visible Lots</p>
               <h3><%= formatNumber(summary.activeLotCount) %></h3>
-              <p>Lots currently marked active.</p>
+              <p>Lots shown in normal workflows and dropdowns.</p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Hidden Lots</p>
+              <h3><%= formatNumber(summary.hiddenLotCount || 0) %></h3>
+              <p>Old or closed lots hidden from normal selection lists.</p>
             </article>
 
             <article class="dashboard-card">
               <p class="card-label">Units in Lots</p>
               <h3><%= formatNumber(summary.totalUnits) %></h3>
-              <p>Units currently connected to listed lots.</p>
+              <p>Units currently connected to all lots.</p>
             </article>
 
             <article class="dashboard-card">
@@ -149,10 +155,23 @@
 
             <div class="lot-browser-note">
               <strong>Hierarchy view:</strong>
-              Parent lots appear first. Sub-lots are indented underneath their parent using the arrow marker.
+              Parent lots appear first. Sub-lots are indented underneath their parent using the arrow marker. Hidden lots are kept for history, but stay out of normal lot dropdowns.
             </div>
 
-            <h2 class="section-title">Lots</h2>
+            <div class="lot-visibility-toolbar">
+              <div>
+                <strong><%= showHidden ? 'Showing visible and hidden lots' : 'Showing visible lots only' %></strong>
+                <span>Hidden lots are still preserved for reporting and old unit history.</span>
+              </div>
+
+              <% if (showHidden) { %>
+                <a class="secondary-button" href="/management/lots">Hide Hidden Lots</a>
+              <% } else { %>
+                <a class="secondary-button" href="/management/lots?showHidden=1">Show Hidden Lots</a>
+              <% } %>
+            </div>
+
+            <h2 class="section-title"><%= showHidden ? 'Lots — Visible and Hidden' : 'Lots' %></h2>
 
             <div class="table-card">
               <table>
@@ -161,6 +180,7 @@
                     <th>Lot</th>
                     <th>Type</th>
                     <th>Default Grade</th>
+                    <th>Default Weight</th>
                     <th>Units</th>
                     <th>Goal</th>
                     <th>Progress</th>
@@ -175,7 +195,7 @@
                 <tbody>
                   <% if (orderedLots.length === 0) { %>
                     <tr>
-                      <td colspan="11">No lots found.</td>
+                      <td colspan="12">No lots found.</td>
                     </tr>
                   <% } %>
 
@@ -186,7 +206,7 @@
                       const hierarchyLevel = Math.min(Number(lot.hierarchyLevel || 0), 6);
                     %>
 
-                    <tr class="<%= hierarchyLevel > 0 ? 'lot-child-row' : 'lot-parent-row' %>">
+                    <tr class="<%= [hierarchyLevel > 0 ? 'lot-child-row' : 'lot-parent-row', Number(lot.is_active) === 1 ? '' : 'lot-hidden-row'].filter(Boolean).join(' ') %>">
                       <td class="lot-hierarchy-cell" style="--lot-level: <%= hierarchyLevel %>;">
                         <div class="lot-hierarchy-wrap">
                           <% if (hierarchyLevel > 0) { %>
@@ -224,6 +244,17 @@
 
                       <td><%= lot.lot_type_label || '—' %></td>
                       <td><%= lot.default_grade_label || '—' %></td>
+                      <td>
+                        <% if (lot.resolved_default_production_weight !== null && lot.resolved_default_production_weight !== undefined) { %>
+                          <strong><%= formatWeight(lot.resolved_default_production_weight) %></strong>
+                          <% if (lot.default_production_weight_label) { %>
+                            <br />
+                            <span class="table-muted-line"><%= lot.default_production_weight_label %></span>
+                          <% } %>
+                        <% } else { %>
+                          <span class="table-muted-line">Category default</span>
+                        <% } %>
+                      </td>
                       <td><%= formatNumber(lot.unitCount) %></td>
 
                       <td>
@@ -251,9 +282,9 @@
 
                       <td>
                         <% if (Number(lot.is_active) === 1) { %>
-                          <span class="pill good">Active</span>
+                          <span class="pill good">Visible</span>
                         <% } else { %>
-                          <span class="pill bad">Inactive</span>
+                          <span class="pill bad">Hidden</span>
                         <% } %>
                       </td>
 
@@ -263,6 +294,11 @@
                         <div class="lot-row-actions">
                           <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>">View</a>
                           <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                          <% if (Number(lot.is_active) === 1) { %>
+                            <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal" hx-target="#modal-root" hx-swap="innerHTML">Hide</a>
+                          <% } else { %>
+                            <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-get="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-target="#modal-root" hx-swap="innerHTML">Unhide</a>
+                          <% } %>
                           <% if (Number(lot.unitCount || 0) === 0 && childLots.length === 0) { %>
                             <a class="secondary-button danger-button" href="/management/lots/<%= lot.lot_id %>/delete/modal" hx-get="/management/lots/<%= lot.lot_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete</a>
                           <% } %>
@@ -278,8 +314,8 @@
           <section class="content-card">
             <div class="content-header">
               <div>
-                <p class="eyebrow">Next</p>
-                <h2>Step 2e Preview</h2>
+                <p class="eyebrow">Lot Configuration</p>
+                <h2>Visibility Behavior</h2>
               </div>
             </div>
 
@@ -287,10 +323,9 @@
               <div class="workflow-item active">
                 <span></span>
                 <div>
-                  <strong>Unit-to-lot validation</strong>
+                  <strong>Visible lots</strong>
                   <p>
-                    Next we can compare unit data against these lot requirements and show whether
-                    a unit is accepted, rejected by lot requirements, or needs Management override.
+                    Visible lots appear in the normal Lot Browser and in normal lot assignment dropdowns.
                   </p>
                 </div>
               </div>
@@ -298,10 +333,10 @@
               <div class="workflow-item slate">
                 <span></span>
                 <div>
-                  <strong>Standardized requirement dropdowns</strong>
+                  <strong>Hidden lots</strong>
                   <p>
-                    After the first validation flow works, we can replace text-only requirement values
-                    with dropdowns for memory, SSD, CPU, manufacturers, models, and touchscreen.
+                    Hidden lots remain in history and reporting, but they are removed from normal selection lists.
+                    Use Show Hidden Lots when Management needs to review or unhide them.
                   </p>
                 </div>
               </div>

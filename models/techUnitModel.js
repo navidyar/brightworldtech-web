@@ -397,7 +397,7 @@ function getParentLotIdsWithChildren(lots) {
 }
 
 function isAssignableLot(lot, parentLotIdsWithChildren) {
-  if (!lot) {
+  if (!lot || Number(lot.is_active) !== 1) {
     return false;
   }
 
@@ -405,13 +405,14 @@ function isAssignableLot(lot, parentLotIdsWithChildren) {
 }
 
 function getAssignableLots(lots) {
-  const parentLotIdsWithChildren = getParentLotIdsWithChildren(lots);
+  const visibleLots = lots.filter((lot) => Number(lot.is_active) === 1);
+  const parentLotIdsWithChildren = getParentLotIdsWithChildren(visibleLots);
 
-  return lots.filter((lot) => isAssignableLot(lot, parentLotIdsWithChildren));
+  return visibleLots.filter((lot) => isAssignableLot(lot, parentLotIdsWithChildren));
 }
 
 async function getLotMap() {
-  const lots = await lotModel.listLots();
+  const lots = await lotModel.listLots({ includeHidden: true });
   const assignableLots = getAssignableLots(lots);
   const lotMap = new Map();
 
@@ -1277,7 +1278,7 @@ async function listTechUnits(filters = {}) {
       assetTag,
       label: assetTag || 'No asset tag',
       lotId: row.lot_id,
-      lotName: lot ? lot.lot_name : `Lot ID ${row.lot_id}`,
+      lotName: lot ? lot.lot_name : 'Lot name not available',
       statusLabel: configLabelById(unitStatusMap, row.current_unit_status_config_value_id, 'Unknown'),
       categoryLabel: configLabelById(unitCategoryMap, row.unit_category_config_value_id, 'Unknown'),
       manufacturerLabel: manufacturerLabel || '—',

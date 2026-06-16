@@ -12,17 +12,17 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-slate">
             <div>
-              <p class="eyebrow">Step 1h</p>
-              <h2>Config Values</h2>
+              <p class="eyebrow">Step 5d</p>
+              <h2>Configuration Values</h2>
               <p>
-                Review the seeded configuration categories and selectable values that will power lots,
-                unit records, tech workflows, QC, statuses, roles, and future portal forms.
+                Review app configuration in clearer groups. Active values are shown by default so old
+                or inactive options do not clutter production configuration screens.
               </p>
             </div>
 
             <div class="hero-badge">
-              <span>Total Values</span>
-              <strong><%= formatNumber(summary.valueCount) %></strong>
+              <span>Active Values</span>
+              <strong><%= formatNumber(summary.activeValueCount || 0) %></strong>
             </div>
           </section>
 
@@ -34,28 +34,49 @@
             </article>
 
             <article class="dashboard-card">
-              <p class="card-label">Values</p>
-              <h3><%= formatNumber(summary.valueCount) %></h3>
-              <p>Selectable values available to the application.</p>
+              <p class="card-label">Active Values</p>
+              <h3><%= formatNumber(summary.activeValueCount || 0) %></h3>
+              <p>Selectable values currently available to the application.</p>
             </article>
 
             <article class="dashboard-card">
-              <p class="card-label">Mode</p>
-              <h3>Read Only</h3>
-              <p>Editing will be added after we review the config structure.</p>
+              <p class="card-label">Inactive Values</p>
+              <h3><%= formatNumber(summary.inactiveValueCount || 0) %></h3>
+              <p><%= includeInactiveValues ? 'Inactive values are currently visible.' : 'Inactive values are hidden by default.' %></p>
             </article>
+          </section>
+
+          <section class="content-card config-values-control-card">
+            <div class="content-header config-values-control-header">
+              <div>
+                <p class="eyebrow">Display</p>
+                <h2>Configuration Display Mode</h2>
+                <p>
+                  This page is still review-focused. CRUD controls will be handled separately so we do not
+                  mix configuration cleanup with editing behavior.
+                </p>
+              </div>
+
+              <div class="config-values-actions">
+                <% if (includeInactiveValues) { %>
+                  <a class="secondary-button" href="/management/config">Hide inactive values</a>
+                <% } else { %>
+                  <a class="primary-button" href="/management/config?includeInactive=1">Show inactive values</a>
+                <% } %>
+              </div>
+            </div>
           </section>
 
           <section class="content-card">
             <div class="content-header">
               <div>
                 <p class="eyebrow">Management</p>
-                <h2>Configuration Categories</h2>
+                <h2>Configuration Groups</h2>
               </div>
             </div>
 
-            <div class="workflow-list">
-              <% if (categories.length === 0) { %>
+            <div class="config-section-list">
+              <% if (categorySections.length === 0) { %>
                 <div class="workflow-item warning">
                   <span></span>
                   <div>
@@ -65,61 +86,108 @@
                 </div>
               <% } %>
 
-              <% categories.forEach((category) => { %>
-                <div class="workflow-item slate">
-                  <span></span>
-                  <div style="width: 100%;">
-                    <strong><%= category.label || category.code %></strong>
-                    <p>
-                      <code><%= category.code %></code>
-                      ·
-                      <%= category.values.length %> values
-                      <% if (!category.is_active) { %>
-                        · inactive
-                      <% } %>
-                    </p>
+              <% categorySections.forEach((section) => { %>
+                <section class="config-section">
+                  <div class="config-section-header">
+                    <div>
+                      <p class="eyebrow">Configuration Group</p>
+                      <h3><%= section.label %></h3>
+                      <p><%= section.description %></p>
+                    </div>
 
-                    <% if (category.description) { %>
-                      <p><%= category.description %></p>
-                    <% } %>
-
-                    <div class="table-card" style="margin-top: 14px;">
-                      <table>
-                        <thead>
-                          <tr>
-                            <th>Label</th>
-                            <th>Code</th>
-                            <th>Status</th>
-                            <th>Description</th>
-                          </tr>
-                        </thead>
-
-                        <tbody>
-                          <% if (category.values.length === 0) { %>
-                            <tr>
-                              <td colspan="4">No values in this category.</td>
-                            </tr>
-                          <% } %>
-
-                          <% category.values.forEach((value) => { %>
-                            <tr>
-                              <td><%= value.label || value.code %></td>
-                              <td><code><%= value.code %></code></td>
-                              <td>
-                                <% if (value.is_active) { %>
-                                  <span class="pill good">Active</span>
-                                <% } else { %>
-                                  <span class="pill bad">Inactive</span>
-                                <% } %>
-                              </td>
-                              <td><%= value.description || '—' %></td>
-                            </tr>
-                          <% }) %>
-                        </tbody>
-                      </table>
+                    <div class="config-section-stats">
+                      <span><strong><%= formatNumber(section.categoryCount) %></strong> categories</span>
+                      <span><strong><%= formatNumber(section.activeValueCount) %></strong> active</span>
+                      <span><strong><%= formatNumber(section.inactiveValueCount) %></strong> inactive</span>
                     </div>
                   </div>
-                </div>
+
+                  <div class="workflow-list">
+                    <% section.categories.forEach((category) => { %>
+                      <div class="workflow-item slate config-category-card">
+                        <span></span>
+                        <div class="config-category-content">
+                          <div class="config-category-title-row">
+                            <div>
+                              <strong><%= category.label || category.code %></strong>
+                              <p>
+                                <code><%= category.code %></code>
+                                ·
+                                <%= formatNumber(category.activeValueCount) %> active
+                                <% if (category.inactiveValueCount > 0) { %>
+                                  · <%= formatNumber(category.inactiveValueCount) %> inactive
+                                <% } %>
+                                <% if (!category.isActive) { %>
+                                  · inactive category
+                                <% } %>
+                              </p>
+                            </div>
+
+                            <div class="config-category-pills">
+                              <% if (category.isActive) { %>
+                                <span class="pill good">Active</span>
+                              <% } else { %>
+                                <span class="pill bad">Inactive</span>
+                              <% } %>
+
+                              <% if (category.hiddenInactiveValueCount > 0) { %>
+                                <span class="pill muted"><%= formatNumber(category.hiddenInactiveValueCount) %> hidden</span>
+                              <% } %>
+                            </div>
+                          </div>
+
+                          <% if (category.description) { %>
+                            <p><%= category.description %></p>
+                          <% } %>
+
+                          <div class="table-card config-values-table-card">
+                            <table>
+                              <thead>
+                                <tr>
+                                  <th>Label</th>
+                                  <th>Code</th>
+                                  <th>Value</th>
+                                  <th>Status</th>
+                                  <th>Description</th>
+                                </tr>
+                              </thead>
+
+                              <tbody>
+                                <% if (category.values.length === 0) { %>
+                                  <tr>
+                                    <td colspan="5">
+                                      <% if (category.inactiveValueCount > 0 && !includeInactiveValues) { %>
+                                        This category only has inactive values. Use Show inactive values to review them.
+                                      <% } else { %>
+                                        No values in this category.
+                                      <% } %>
+                                    </td>
+                                  </tr>
+                                <% } %>
+
+                                <% category.values.forEach((value) => { %>
+                                  <tr class="<%= value.is_active ? '' : 'config-value-row--inactive' %>">
+                                    <td><%= value.label || value.code %></td>
+                                    <td><code><%= value.code %></code></td>
+                                    <td><%= value.value || '—' %></td>
+                                    <td>
+                                      <% if (value.is_active) { %>
+                                        <span class="pill good">Active</span>
+                                      <% } else { %>
+                                        <span class="pill bad">Inactive</span>
+                                      <% } %>
+                                    </td>
+                                    <td><%= value.description || '—' %></td>
+                                  </tr>
+                                <% }) %>
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    <% }) %>
+                  </div>
+                </section>
               <% }) %>
             </div>
           </section>

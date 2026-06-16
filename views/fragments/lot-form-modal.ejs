@@ -1,7 +1,7 @@
 <%
   const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
   const safeFormData = formData || {};
-  const safeFormOptions = formOptions || { capabilities: {}, parentLots: [], lotTypes: [], grades: [] };
+  const safeFormOptions = formOptions || { capabilities: {}, parentLots: [], lotTypes: [], grades: [], productionWeightOptions: [] };
   const safeMode = mode === 'edit' ? 'edit' : 'create';
   const safeLot = lot || null;
   const formAction = safeMode === 'edit' && safeLot
@@ -61,11 +61,12 @@
                   <% safeFormOptions.parentLots.forEach((parentLot) => { %>
                     <% if (!safeLot || Number(parentLot.lot_id) !== Number(safeLot.lot_id)) { %>
                       <option value="<%= parentLot.lot_id %>" <%= String(safeFormData.parentLotId || '') === String(parentLot.lot_id) ? 'selected' : '' %>>
-                        <%= parentLot.lot_name %>
+                        <%= parentLot.lot_name %><%= Number(parentLot.is_active) === 1 ? '' : ' (Hidden)' %>
                       </option>
                     <% } %>
                   <% }) %>
                 </select>
+                <small class="field-hint">Hidden lots are not available as new parent choices.</small>
               </label>
             <% } %>
 
@@ -94,6 +95,23 @@
                     </option>
                   <% }) %>
                 </select>
+              </label>
+            <% } %>
+
+            <% if (safeFormOptions.capabilities.hasDefaultProductionWeightConfigValueId) { %>
+              <label class="form-field">
+                <span>Default Production Weight</span>
+                <select name="defaultProductionWeightConfigValueId">
+                  <option value="">Use unit category default</option>
+                  <% safeFormOptions.productionWeightOptions.forEach((weightOption) => { %>
+                    <option value="<%= weightOption.configValueId %>" <%= String(safeFormData.defaultProductionWeightConfigValueId || '') === String(weightOption.configValueId) ? 'selected' : '' %>>
+                      <%= weightOption.label %> — <%= weightOption.formattedWeightValue %>
+                    </option>
+                  <% }) %>
+                </select>
+                <small class="field-hint">
+                  Optional lot-level default. Leave blank to use the unit category default weight.
+                </small>
               </label>
             <% } %>
           </div>

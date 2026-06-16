@@ -39,20 +39,37 @@
             </div>
 
             <div class="hero-badge">
-              <span>Enforcement</span>
+              <span><%= Number(lot.is_active) === 1 ? 'Visible Lot' : 'Hidden Lot' %></span>
               <strong><%= enforcementSummary.policyLabel %></strong>
             </div>
           </section>
 
+          <% if (Number(lot.is_active) !== 1) { %>
+            <div class="message warning">
+              This lot is hidden from normal lot browsers and assignment dropdowns, but remains available here for history and review.
+            </div>
+          <% } %>
+
           <div class="lot-detail-action-bar">
-            <a class="secondary-button" href="/management/lots">Back to Lots</a>
+            <a class="secondary-button" href="/management/lots<%= Number(lot.is_active) === 1 ? '' : '?showHidden=1' %>">Back to Lots</a>
             <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
+            <% if (Number(lot.is_active) === 1) { %>
+              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal" hx-target="#modal-root" hx-swap="innerHTML">Hide Lot</a>
+            <% } else { %>
+              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-get="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-target="#modal-root" hx-swap="innerHTML">Unhide Lot</a>
+            <% } %>
             <% if (Number(lot.unitCount || 0) === 0 && lotRelationships.directChildLots.length === 0) { %>
               <a class="secondary-button danger-button" href="/management/lots/<%= lot.lot_id %>/delete/modal" hx-get="/management/lots/<%= lot.lot_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Lot</a>
             <% } %>
           </div>
 
           <section class="dashboard-grid lot-detail-summary-grid">
+            <article class="dashboard-card">
+              <p class="card-label">Visibility</p>
+              <h3><%= Number(lot.is_active) === 1 ? 'Visible' : 'Hidden' %></h3>
+              <p><%= Number(lot.is_active) === 1 ? 'Available in normal lot browsers and dropdowns.' : 'Hidden from normal lot browsers and assignment dropdowns.' %></p>
+            </article>
+
             <article class="dashboard-card">
               <p class="card-label">Lot Type</p>
               <h3><%= lot.lot_type_label || '—' %></h3>
@@ -85,6 +102,24 @@
                   This lot has reached its unit goal.
                 <% } else { %>
                   This lot can still accept more units.
+                <% } %>
+              </p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Default Weight</p>
+              <h3>
+                <% if (lot.resolved_default_production_weight !== null && lot.resolved_default_production_weight !== undefined) { %>
+                  <%= formatWeight(lot.resolved_default_production_weight) %>
+                <% } else { %>
+                  Category
+                <% } %>
+              </h3>
+              <p>
+                <% if (lot.default_production_weight_label) { %>
+                  <%= lot.default_production_weight_label %> lot-level default.
+                <% } else { %>
+                  Uses unit category default weights.
                 <% } %>
               </p>
             </article>
@@ -237,7 +272,7 @@
                 <% lotRelationships.directChildLots.forEach((childLot) => { %>
                   <a href="/management/lots/<%= childLot.lot_id %>" class="compact-lot-item">
                     <strong class="lot-display-name"><%= childLot.lot_name %></strong>
-                      <span><%= childLot.lot_type_label || 'No type' %></span>
+                      <span><%= childLot.lot_type_label || 'No type' %><%= Number(childLot.is_active) === 1 ? '' : ' · Hidden' %></span>
                   </a>
                 <% }) %>
               </div>

@@ -93,6 +93,7 @@ function getBlankLotFormData() {
     parentLotId: '',
     lotTypeConfigValueId: '',
     defaultGradeConfigValueId: '',
+    defaultProductionWeightConfigValueId: '',
     hasUnlimitedGoal: '0',
     unitAmountGoal: '',
     deadline: '',
@@ -108,6 +109,7 @@ function getLotFormDataFromRequest(req) {
     parentLotId: String(req.body.parentLotId || '').trim(),
     lotTypeConfigValueId: String(req.body.lotTypeConfigValueId || '').trim(),
     defaultGradeConfigValueId: String(req.body.defaultGradeConfigValueId || '').trim(),
+    defaultProductionWeightConfigValueId: String(req.body.defaultProductionWeightConfigValueId || '').trim(),
     hasUnlimitedGoal: req.body.hasUnlimitedGoal === '1' ? '1' : '0',
     unitAmountGoal: String(req.body.unitAmountGoal || '').trim(),
     deadline: String(req.body.deadline || '').trim(),
@@ -188,6 +190,7 @@ function getLotFormDataFromLot(lot) {
     parentLotId: lot.parent_lot_id || '',
     lotTypeConfigValueId: lot.lot_type_config_value_id || '',
     defaultGradeConfigValueId: lot.default_grade_config_value_id || '',
+    defaultProductionWeightConfigValueId: lot.default_production_weight_config_value_id || '',
     hasUnlimitedGoal: lot.isUnlimited ? '1' : '0',
     unitAmountGoal: lot.isUnlimited ? '' : String(lot.unitGoal || lot.unit_amount_goal || ''),
     deadline: formatDateForInput(lot.deadline),
@@ -261,6 +264,10 @@ function validateLotForm(formData, formOptions, currentLotId = null) {
 
   if (formData.defaultGradeConfigValueId && !Number.isInteger(Number(formData.defaultGradeConfigValueId))) {
     errors.push('Default grade must be valid.');
+  }
+
+  if (formData.defaultProductionWeightConfigValueId && !Number.isInteger(Number(formData.defaultProductionWeightConfigValueId))) {
+    errors.push('Default production weight must be valid.');
   }
 
   if (formData.hasUnlimitedGoal !== '1') {
@@ -433,7 +440,7 @@ async function getLotDetailViewData(lotId) {
     return null;
   }
 
-  const lots = await lotModel.listLots();
+  const lots = await lotModel.listLots({ includeHidden: true });
   const requirements = await lotModel.listLotRequirements(lotId);
   const validationReport = await lotValidationModel.buildLotValidationReport(lotId);
   const enforcementSummary = lotEnforcementModel.buildLotEnforcementSummary(validationReport);
@@ -452,9 +459,38 @@ async function getLotDetailViewData(lotId) {
   };
 }
 
+function getLotSuccessMessage(query) {
+  if (query.created === '1') {
+    return 'Lot created successfully.';
+  }
+
+  if (query.updated === '1') {
+    return 'Lot updated successfully.';
+  }
+
+  if (query.deleted === '1') {
+    return 'Lot deleted successfully.';
+  }
+
+  if (query.hidden === '1') {
+    return 'Lot hidden successfully.';
+  }
+
+  if (query.unhidden === '1') {
+    return 'Lot unhidden successfully.';
+  }
+
+  return null;
+}
+
+function shouldShowHiddenLots(req) {
+  return req.query.showHidden === '1' || req.query.showHidden === 'true';
+}
+
 async function renderLotsPage(req, res, next) {
   try {
-    const lots = await lotModel.listLots();
+    const showHidden = shouldShowHiddenLots(req);
+    const lots = await lotModel.listLots({ includeHidden: showHidden });
     const summary = await lotModel.getLotSummary();
 
     setNoStoreHeaders(res);
@@ -464,7 +500,8 @@ async function renderLotsPage(req, res, next) {
       currentNav: 'management-lots',
       lots,
       summary,
-      successMessage: req.query.created === '1' ? 'Lot created successfully.' : (req.query.deleted === '1' ? 'Lot deleted successfully.' : null)
+      showHidden,
+      successMessage: getLotSuccessMessage(req.query)
     });
   } catch (error) {
     next(error);
@@ -647,10 +684,10 @@ async function renderEditLotModal(req, res, next) {
       });
     }
 
-    const [lot, formOptions] = await Promise.all([
-      lotModel.getLotById(lotId),
-      lotModel.getLotFormOptions()
-    ]);
+    const lot = await lotModel.getLotById(lotId);
+    const formOptions = await lotModel.getLotFormOptions({
+      includeParentLotIds: lot?.parent_lot_id ? [lot.parent_lot_id] : []
+    });
 
     if (!lot) {
       return res.status(404).render('fragments/lot-form-modal', {
@@ -677,10 +714,10 @@ async function renderEditLotModal(req, res, next) {
 async function updateLotModal(req, res, next) {
   try {
     const lotId = Number(req.params.lotId);
-    const [lot, formOptions] = await Promise.all([
-      lotModel.getLotById(lotId),
-      lotModel.getLotFormOptions()
-    ]);
+    const lot = await lotModel.getLotById(lotId);
+    const formOptions = await lotModel.getLotFormOptions({
+      includeParentLotIds: lot?.parent_lot_id ? [lot.parent_lot_id] : []
+    });
 
     if (!Number.isInteger(lotId) || lotId <= 0 || !lot) {
       return res.status(404).render('fragments/lot-form-modal', {
@@ -708,6 +745,83 @@ async function updateLotModal(req, res, next) {
     await lotModel.updateLot(lotId, formData, req.currentUser.user_id);
 
     return sendHtmxRedirect(req, res, addCacheBuster('/management/lots?updated=1'));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderLotVisibilityModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const mode = req.path.includes('/unhide') ? 'unhide' : 'hide';
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return res.status(404).render('fragments/lot-visibility-modal', {
+        mode,
+        visibilitySummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const visibilitySummary = await lotModel.getLotVisibilitySummary(lotId);
+
+    if (!visibilitySummary) {
+      return res.status(404).render('fragments/lot-visibility-modal', {
+        mode,
+        visibilitySummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    return res.render('fragments/lot-visibility-modal', {
+      mode,
+      visibilitySummary,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateLotVisibility(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const shouldUnhide = req.path.includes('/unhide');
+    const mode = shouldUnhide ? 'unhide' : 'hide';
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return res.status(404).render('fragments/lot-visibility-modal', {
+        mode,
+        visibilitySummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const visibilitySummary = await lotModel.getLotVisibilitySummary(lotId);
+
+    if (!visibilitySummary) {
+      return res.status(404).render('fragments/lot-visibility-modal', {
+        mode,
+        visibilitySummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    if (!visibilitySummary.canChangeVisibility) {
+      return res.status(400).render('fragments/lot-visibility-modal', {
+        mode,
+        visibilitySummary,
+        errorMessages: ['Lot visibility cannot be changed because the lots table does not support hidden lots yet.']
+      });
+    }
+
+    await lotModel.setLotVisibility(lotId, shouldUnhide, req.currentUser.user_id);
+
+    const redirectUrl = shouldUnhide
+      ? '/management/lots?showHidden=1&unhidden=1'
+      : '/management/lots?hidden=1';
+
+    return sendHtmxRedirect(req, res, addCacheBuster(redirectUrl));
   } catch (error) {
     next(error);
   }
@@ -915,6 +1029,8 @@ module.exports = {
   createLot,
   renderEditLotModal,
   updateLotModal,
+  renderLotVisibilityModal,
+  updateLotVisibility,
   renderDeleteLotModal,
   deleteLot,
   renderLotDetailPage,

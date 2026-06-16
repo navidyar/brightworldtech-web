@@ -770,3 +770,56 @@ table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-n
   vertical-align: baseline;
   white-space: nowrap;
 }
+
+/* Step 5b lot visibility controls. */
+.lot-visibility-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.lot-visibility-toolbar div {
+  display: grid;
+  gap: 3px;
+}
+
+.lot-visibility-toolbar strong {
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.lot-visibility-toolbar span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.lot-hidden-row td {
+  background: color-mix(in srgb, var(--surface-soft) 78%, #f59e0b 8%);
+}
+
+.lot-hidden-row .lot-display-name {
+  color: var(--muted) !important;
+}
+
+.lot-visibility-summary {
+  border-left-color: #f59e0b;
+}
+
+@media (max-width: 760px) {
+  .lot-visibility-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lot-visibility-toolbar .secondary-button {
+    justify-content: center;
+    width: 100%;
+  }
+}

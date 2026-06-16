@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { pool } = require('./db');
+const productionWeightModel = require('./productionWeightModel');
 
 const INSPECTABLE_TABLES = [
   'lots',
@@ -238,8 +239,14 @@ async function getDefaultRequirementPolicyConfigValueId(hasUnlimitedGoal) {
   );
 }
 
-async function listParentLotOptions() {
+async function listParentLotOptions(options = {}) {
   const lotColumns = await getColumnSet('lots');
+  const includeLotIds = Array.isArray(options.includeLotIds)
+    ? options.includeLotIds
+        .map((lotId) => Number(lotId))
+        .filter((lotId) => Number.isInteger(lotId) && lotId > 0)
+    : [];
+
 
   const lotNameSelect = selectExpression(
     'l',
@@ -257,9 +264,21 @@ async function listParentLotOptions() {
     'NULL'
   );
 
-  const isActiveWhere = hasColumn(lotColumns, 'is_active')
-    ? 'WHERE l.is_active = 1'
+  const isActiveSelect = selectExpression(
+    'l',
+    lotColumns,
+    ['is_active'],
+    'is_active',
+    '1'
+  );
+
+  const hasLotIsActive = hasColumn(lotColumns, 'is_active');
+  const isActiveWhere = hasLotIsActive
+    ? (includeLotIds.length > 0
+      ? `WHERE l.is_active = 1 OR l.lot_id IN (${includeLotIds.map(() => '?').join(', ')})`
+      : 'WHERE l.is_active = 1')
     : '';
+  const queryParams = hasLotIsActive && includeLotIds.length > 0 ? includeLotIds : [];
 
   const orderExpression = pickColumn(lotColumns, ['lot_name', 'name', 'title'])
     ? 'lot_name, l.lot_id'
@@ -269,12 +288,13 @@ async function listParentLotOptions() {
     SELECT
       l.lot_id,
       ${lotNameSelect},
-      ${lotCodeSelect}
+      ${lotCodeSelect},
+      ${isActiveSelect}
     FROM lots l
     ${isActiveWhere}
     ORDER BY ${orderExpression}
     LIMIT 250
-  `);
+  `, queryParams);
 
   return rows;
 }
@@ -289,6 +309,8 @@ async function getLotSchemaCapabilities() {
     hasRequirementPolicy: hasColumn(lotColumns, 'requirement_policy_config_value_id'),
     hasLotNumber: hasColumn(lotColumns, 'lot_number'),
     hasDefaultGrade: hasColumn(lotColumns, 'default_grade_config_value_id'),
+    hasDefaultProductionWeightConfigValueId: hasColumn(lotColumns, 'default_production_weight_config_value_id'),
+    hasDefaultProductionWeight: hasColumn(lotColumns, 'default_production_weight'),
     hasUnitAmountGoal: Boolean(pickColumn(lotColumns, ['unit_amount_goal', 'unit_goal', 'quantity_goal', 'target_unit_count'])),
     hasDeadline: Boolean(pickColumn(lotColumns, ['deadline', 'deadline_date', 'due_date'])),
     hasObjectives: Boolean(pickColumn(lotColumns, ['objectives', 'objective'])),
@@ -297,17 +319,23 @@ async function getLotSchemaCapabilities() {
   };
 }
 
-async function getLotFormOptions() {
+async function getLotFormOptions(options = {}) {
+  const includeParentLotIds = Array.isArray(options.includeParentLotIds)
+    ? options.includeParentLotIds
+    : [];
+
   const [
     capabilities,
     lotTypeResult,
     gradeResult,
+    productionWeightOptions,
     parentLots
   ] = await Promise.all([
     getLotSchemaCapabilities(),
     listConfigValuesForFirstExistingCategory(['lot_types', 'lot_type']),
     listConfigValuesForFirstExistingCategory(['unit_grades', 'unit_grade', 'grades']),
-    listParentLotOptions()
+    productionWeightModel.listProductionWeightOptions(),
+    listParentLotOptions({ includeLotIds: includeParentLotIds })
   ]);
 
   return {
@@ -316,11 +344,13 @@ async function getLotFormOptions() {
     lotTypeCategory: lotTypeResult.category,
     grades: gradeResult.values,
     gradeCategory: gradeResult.category,
+    productionWeightOptions,
     parentLots
   };
 }
 
-async function listLots() {
+async function listLots(options = {}) {
+  const includeHidden = options.includeHidden === true;
   const lotColumns = await getColumnSet('lots');
   const unitColumns = await getColumnSet('units');
   const lotRequirementColumns = await getColumnSet('lot_requirements');
@@ -329,8 +359,13 @@ async function listLots() {
   const hasLotStatus = hasColumn(lotColumns, 'lot_status_config_value_id');
   const hasRequirementPolicy = hasColumn(lotColumns, 'requirement_policy_config_value_id');
   const hasDefaultGrade = hasColumn(lotColumns, 'default_grade_config_value_id');
+  const hasDefaultProductionWeightConfigValueId = hasColumn(lotColumns, 'default_production_weight_config_value_id');
+  const hasDefaultProductionWeight = hasColumn(lotColumns, 'default_production_weight');
   const hasUnitsLotId = hasColumn(unitColumns, 'lot_id');
   const hasRequirementsLotId = hasColumn(lotRequirementColumns, 'lot_id');
+  const lotVisibilityWhere = hasColumn(lotColumns, 'is_active') && !includeHidden
+    ? 'WHERE l.is_active = 1'
+    : '';
 
   const lotNameSelect = selectExpression(
     'l',
@@ -456,6 +491,13 @@ async function listLots() {
     `
     : '';
 
+  const defaultProductionWeightJoin = hasDefaultProductionWeightConfigValueId
+    ? `
+      LEFT JOIN config_values default_production_weight_value
+        ON default_production_weight_value.config_value_id = l.default_production_weight_config_value_id
+    `
+    : '';
+
   const unitCountJoin = hasUnitsLotId
     ? `
       LEFT JOIN (
@@ -506,6 +548,26 @@ async function listLots() {
     ? 'COALESCE(default_grade.label, default_grade.code) AS default_grade_label'
     : 'NULL AS default_grade_label';
 
+  const defaultProductionWeightLabelSelect = hasDefaultProductionWeightConfigValueId
+    ? 'COALESCE(default_production_weight_value.label, default_production_weight_value.code) AS default_production_weight_label'
+    : 'NULL AS default_production_weight_label';
+
+  const defaultProductionWeightConfigValueIdSelect = hasDefaultProductionWeightConfigValueId
+    ? 'l.default_production_weight_config_value_id AS default_production_weight_config_value_id'
+    : 'NULL AS default_production_weight_config_value_id';
+
+  const defaultProductionWeightSelect = hasDefaultProductionWeight
+    ? 'l.default_production_weight AS default_production_weight'
+    : 'NULL AS default_production_weight';
+
+  const resolvedDefaultProductionWeightSelect = hasDefaultProductionWeight && hasDefaultProductionWeightConfigValueId
+    ? 'COALESCE(l.default_production_weight, CAST(default_production_weight_value.value AS DECIMAL(8,2))) AS resolved_default_production_weight'
+    : hasDefaultProductionWeight
+      ? 'l.default_production_weight AS resolved_default_production_weight'
+      : hasDefaultProductionWeightConfigValueId
+        ? 'CAST(default_production_weight_value.value AS DECIMAL(8,2)) AS resolved_default_production_weight'
+        : 'NULL AS resolved_default_production_weight';
+
   const lotTypeConfigValueIdSelect = hasLotType
     ? 'l.lot_type_config_value_id AS lot_type_config_value_id'
     : 'NULL AS lot_type_config_value_id';
@@ -539,6 +601,10 @@ async function listLots() {
       ${requirementPolicyLabelSelect},
       ${requirementPolicyCodeSelect},
       ${defaultGradeLabelSelect},
+      ${defaultProductionWeightLabelSelect},
+      ${defaultProductionWeightConfigValueIdSelect},
+      ${defaultProductionWeightSelect},
+      ${resolvedDefaultProductionWeightSelect},
       ${lotTypeConfigValueIdSelect},
       ${defaultGradeConfigValueIdSelect},
       ${unitGoalSelect},
@@ -556,8 +622,10 @@ async function listLots() {
     ${lotStatusJoin}
     ${requirementPolicyJoin}
     ${defaultGradeJoin}
+    ${defaultProductionWeightJoin}
     ${unitCountJoin}
     ${requirementCountJoin}
+    ${lotVisibilityWhere}
     ORDER BY ${orderExpression}
     LIMIT 250
   `);
@@ -573,14 +641,15 @@ async function listLots() {
 }
 
 async function getLotById(lotId) {
-  const lots = await listLots();
+  const lots = await listLots({ includeHidden: true });
   return lots.find((lot) => Number(lot.lot_id) === Number(lotId)) || null;
 }
 
 async function getLotSummary() {
-  const lots = await listLots();
+  const lots = await listLots({ includeHidden: true });
 
   const activeLots = lots.filter((lot) => Number(lot.is_active) === 1);
+  const hiddenLots = lots.filter((lot) => Number(lot.is_active) !== 1);
   const fullLots = lots.filter((lot) => lot.isFull);
   const unlimitedLots = lots.filter((lot) => lot.isUnlimited);
 
@@ -590,6 +659,7 @@ async function getLotSummary() {
   return {
     lotCount: lots.length,
     activeLotCount: activeLots.length,
+    hiddenLotCount: hiddenLots.length,
     fullLotCount: fullLots.length,
     unlimitedLotCount: unlimitedLots.length,
     totalUnits,
@@ -629,6 +699,7 @@ async function createLot(formData, currentUserId) {
   const parentLotId = formData.parentLotId ? Number(formData.parentLotId) : null;
   const lotTypeConfigValueId = formData.lotTypeConfigValueId ? Number(formData.lotTypeConfigValueId) : null;
   const defaultGradeConfigValueId = formData.defaultGradeConfigValueId ? Number(formData.defaultGradeConfigValueId) : null;
+  const defaultProductionWeightPayload = await productionWeightModel.getProductionWeightPayloadFromConfigValueId(formData.defaultProductionWeightConfigValueId);
   const hasUnlimitedGoal = formData.hasUnlimitedGoal === '1';
   const unitAmountGoal = hasUnlimitedGoal ? null : Number(formData.unitAmountGoal || 0);
   const deadline = formData.deadline ? String(formData.deadline).trim() : null;
@@ -672,6 +743,8 @@ async function createLot(formData, currentUserId) {
 
   addFirstAvailableColumn(['unit_amount_goal', 'unit_goal', 'quantity_goal', 'target_unit_count'], unitAmountGoal);
   addColumn('default_grade_config_value_id', defaultGradeConfigValueId);
+  addColumn('default_production_weight_config_value_id', defaultProductionWeightPayload.configValueId);
+  addColumn('default_production_weight', defaultProductionWeightPayload.weightValue);
   addFirstAvailableColumn(['deadline', 'deadline_date', 'due_date'], deadline);
   addFirstAvailableColumn(['objectives', 'objective'], objectives);
   addFirstAvailableColumn(['notes', 'note'], notes);
@@ -727,6 +800,7 @@ async function updateLot(lotId, formData, currentUserId) {
   const parentLotId = formData.parentLotId ? Number(formData.parentLotId) : null;
   const lotTypeConfigValueId = formData.lotTypeConfigValueId ? Number(formData.lotTypeConfigValueId) : null;
   const defaultGradeConfigValueId = formData.defaultGradeConfigValueId ? Number(formData.defaultGradeConfigValueId) : null;
+  const defaultProductionWeightPayload = await productionWeightModel.getProductionWeightPayloadFromConfigValueId(formData.defaultProductionWeightConfigValueId);
   const hasUnlimitedGoal = formData.hasUnlimitedGoal === '1';
   const unitAmountGoal = hasUnlimitedGoal ? null : Number(formData.unitAmountGoal || 0);
   const deadline = formData.deadline ? String(formData.deadline).trim() : null;
@@ -739,6 +813,8 @@ async function updateLot(lotId, formData, currentUserId) {
   addColumn('lot_type_config_value_id', lotTypeConfigValueId);
   addFirstAvailableColumn(['unit_amount_goal', 'unit_goal', 'quantity_goal', 'target_unit_count'], unitAmountGoal);
   addColumn('default_grade_config_value_id', defaultGradeConfigValueId);
+  addColumn('default_production_weight_config_value_id', defaultProductionWeightPayload.configValueId);
+  addColumn('default_production_weight', defaultProductionWeightPayload.weightValue);
   addFirstAvailableColumn(['deadline', 'deadline_date', 'due_date'], deadline);
   addFirstAvailableColumn(['objectives', 'objective'], objectives);
   addFirstAvailableColumn(['notes', 'note'], notes);
@@ -755,6 +831,92 @@ async function updateLot(lotId, formData, currentUserId) {
 
   if (assignments.length === 0) {
     throw new Error('No compatible lot columns were found for updating a lot.');
+  }
+
+  values.push(Number(lotId));
+
+  const [result] = await pool.query(
+    `
+      UPDATE lots
+      SET ${assignments.join(', ')}
+      WHERE lot_id = ?
+      LIMIT 1
+    `,
+    values
+  );
+
+  return result.affectedRows > 0;
+}
+
+
+async function getLotVisibilitySummary(lotId) {
+  const lot = await getLotById(lotId);
+
+  if (!lot) {
+    return null;
+  }
+
+  const lotColumns = await getColumnSet('lots');
+  const unitColumns = await getColumnSet('units');
+
+  let unitCount = Number(lot.unitCount || lot.unit_count || 0);
+  let childLotCount = 0;
+  let activeChildLotCount = 0;
+  let hiddenChildLotCount = 0;
+
+  if (hasColumn(unitColumns, 'lot_id')) {
+    const [unitRows] = await pool.query(
+      'SELECT COUNT(*) AS unit_count FROM units WHERE lot_id = ?',
+      [Number(lotId)]
+    );
+
+    unitCount = Number(unitRows[0]?.unit_count || 0);
+  }
+
+  if (hasColumn(lotColumns, 'parent_lot_id')) {
+    const activeChildExpression = hasColumn(lotColumns, 'is_active')
+      ? 'SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active_child_lot_count, SUM(CASE WHEN is_active = 0 THEN 1 ELSE 0 END) AS hidden_child_lot_count'
+      : 'COUNT(*) AS active_child_lot_count, 0 AS hidden_child_lot_count';
+
+    const [childRows] = await pool.query(
+      `
+        SELECT
+          COUNT(*) AS child_lot_count,
+          ${activeChildExpression}
+        FROM lots
+        WHERE parent_lot_id = ?
+      `,
+      [Number(lotId)]
+    );
+
+    childLotCount = Number(childRows[0]?.child_lot_count || 0);
+    activeChildLotCount = Number(childRows[0]?.active_child_lot_count || 0);
+    hiddenChildLotCount = Number(childRows[0]?.hidden_child_lot_count || 0);
+  }
+
+  return {
+    lot,
+    unitCount,
+    childLotCount,
+    activeChildLotCount,
+    hiddenChildLotCount,
+    canChangeVisibility: hasColumn(lotColumns, 'is_active')
+  };
+}
+
+async function setLotVisibility(lotId, isActive, currentUserId) {
+  const lotColumns = await getColumnSet('lots');
+
+  if (!hasColumn(lotColumns, 'is_active')) {
+    throw new Error('Lot visibility cannot be changed because the lots table does not have an is_active column.');
+  }
+
+  const assignments = ['is_active = ?'];
+  const values = [isActive ? 1 : 0];
+
+  if (hasColumn(lotColumns, 'updated_by_user_id')) {
+    assignments.push('updated_by_user_id = ?');
+    values.push(currentUserId || null);
   }
 
   values.push(Number(lotId));
@@ -1249,6 +1411,8 @@ module.exports = {
   getLotById,
   getLotSummary,
   getLotFormOptions,
+  getLotVisibilitySummary,
+  setLotVisibility,
   getLotSchemaCapabilities,
   createLot,
   updateLot,

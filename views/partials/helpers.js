@@ -41,8 +41,23 @@ function formatNumber(value) {
   return new Intl.NumberFormat('en-US').format(number);
 }
 
+function formatWeight(value) {
+  if (value === null || value === undefined || value === '') {
+    return '—';
+  }
+
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return '—';
+  }
+
+  return number.toFixed(2);
+}
+
 module.exports = {
   escapeHtml,
   formatDateTime,
-  formatNumber
+  formatNumber,
+  formatWeight
 };
