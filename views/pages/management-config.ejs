@@ -1,6 +1,32 @@
+<%
+  const systemConfigCategoryCodes = new Set([
+    'production_weight_types',
+    'lot_types',
+    'unit_categories',
+    'cosmetic_grades',
+    'pass_fail_statuses',
+    'unit_statuses',
+    'unit_outcomes',
+    'issue_types',
+    'ram_types',
+    'storage_types',
+    'os_types',
+    'manufacturer_types',
+    'processor_types',
+    'user_roles',
+    'roles'
+  ]);
+
+  const getConfigCategoryCode = (category) => String(category && category.code ? category.code : '').toLowerCase();
+  const isProductionWeightCategory = (category) => getConfigCategoryCode(category) === 'production_weight_types';
+  const isSystemUsedCategory = (category) => {
+    const categoryCode = getConfigCategoryCode(category);
+    return systemConfigCategoryCodes.has(categoryCode) || isProductionWeightCategory(category);
+  };
+%>
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=step5e-config-crud'] }) %>
+  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=step5g-config-polish'] }) %>
 
   <body>
     <div class="app-shell">
@@ -12,11 +38,10 @@
         <main class="content-shell">
           <section class="dashboard-hero accent-slate">
             <div>
-              <p class="eyebrow">Step 5e</p>
+              <p class="eyebrow">Step 5g</p>
               <h2>Configuration Values</h2>
               <p>
-                Review, create, edit, activate, and deactivate app configuration values. Active/inactive
-                status replaces hard deletion so existing unit and lot history stays intact.
+                Review, create, edit, activate, and deactivate app configuration values. Inactive values stay hidden by default so normal maintenance stays focused on currently available options.
               </p>
             </div>
 
@@ -52,9 +77,13 @@
                 <p class="eyebrow">Management</p>
                 <h2>Configuration Controls</h2>
                 <p>
-                  Admin users can now create and edit config values. Use active/inactive for normal lifecycle
-                  changes instead of deleting values that may be referenced by existing records.
+                  Admin users can maintain selectable app values here. Codes should stay stable, labels should stay user-friendly, and inactive values should be used when an option should no longer appear in normal forms.
                 </p>
+
+                <div class="config-filter-state <%= includeInactiveValues ? 'config-filter-state--expanded' : '' %>">
+                  <strong><%= includeInactiveValues ? 'Inactive values visible' : 'Active values only' %></strong>
+                  <span><%= includeInactiveValues ? 'Reviewing active and inactive values.' : 'Inactive values are hidden by default.' %></span>
+                </div>
               </div>
 
               <div class="config-values-actions">
@@ -66,6 +95,25 @@
                   <a class="secondary-button" href="/management/config?includeInactive=1">Show inactive values</a>
                 <% } %>
               </div>
+            </div>
+
+            <div class="config-guidance-grid">
+              <article>
+                <strong>Codes</strong>
+                <p>Stable app keys. Avoid changing codes after values are used by lots, units, or dropdowns.</p>
+              </article>
+              <article>
+                <strong>Labels</strong>
+                <p>User-facing text. Update labels when wording needs cleanup without changing the stored code.</p>
+              </article>
+              <article>
+                <strong>Values</strong>
+                <p>Optional stored data. Production Weight Types use numeric values such as 1.00 or 0.50.</p>
+              </article>
+              <article>
+                <strong>Inactive values</strong>
+                <p>Hide retired options without deleting history that may still reference them.</p>
+              </article>
             </div>
           </section>
 
@@ -132,6 +180,14 @@
                                 <span class="pill bad">Inactive</span>
                               <% } %>
 
+                              <% if (isSystemUsedCategory(category)) { %>
+                                <span class="pill config-pill-system">System-used</span>
+                              <% } %>
+
+                              <% if (isProductionWeightCategory(category)) { %>
+                                <span class="pill config-pill-weight">Production weights</span>
+                              <% } %>
+
                               <% if (category.hiddenInactiveValueCount > 0) { %>
                                 <span class="pill muted"><%= formatNumber(category.hiddenInactiveValueCount) %> hidden</span>
                               <% } %>
@@ -172,9 +228,22 @@
 
                                 <% category.values.forEach((value) => { %>
                                   <tr class="<%= value.isActive ? '' : 'config-value-row--inactive' %>">
-                                    <td><%= value.label || value.code %></td>
+                                    <td>
+                                      <div class="config-value-label-stack">
+                                        <strong><%= value.label || value.code %></strong>
+                                        <% if (isSystemUsedCategory(category)) { %>
+                                          <span>System-used value</span>
+                                        <% } %>
+                                      </div>
+                                    </td>
                                     <td><code><%= value.code %></code></td>
-                                    <td><%= value.value || '—' %></td>
+                                    <td>
+                                      <% if (isProductionWeightCategory(category) && value.value) { %>
+                                        <span class="config-weight-chip"><%= value.value %></span>
+                                      <% } else { %>
+                                        <span class="config-value-plain"><%= value.value || '—' %></span>
+                                      <% } %>
+                                    </td>
                                     <td>
                                       <% if (value.isActive) { %>
                                         <span class="pill good">Active</span>

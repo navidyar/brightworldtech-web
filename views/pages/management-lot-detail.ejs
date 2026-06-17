@@ -116,12 +116,20 @@
                 <% } %>
               </h3>
               <p>
-                <% if (lot.default_production_weight_label) { %>
-                  <%= lot.default_production_weight_label %> lot-level default.
+                <% if (lot.default_production_weight !== null && lot.default_production_weight !== undefined) { %>
+                  Custom lot default. Unit overrides still take priority.
+                <% } else if (lot.default_production_weight_label) { %>
+                  Preset lot default: <%= lot.default_production_weight_label %>.
                 <% } else { %>
                   Uses unit category default weights.
                 <% } %>
               </p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Created</p>
+              <h3><%= formatDate(lot.created_at) %></h3>
+              <p><%= formatTime(lot.created_at) %> Central time.</p>
             </article>
           </section>
 

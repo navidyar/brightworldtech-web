@@ -5,6 +5,7 @@
   <link rel="stylesheet" href="/css/modal.css" />
   <script defer src="/js/modal.js"></script>
   <script defer src="/js/lot-form.js"></script>
+  <script defer src="/js/lot-browser-tree.js"></script>
 
   <body>
     <%
@@ -154,8 +155,8 @@
             <% } %>
 
             <div class="lot-browser-note">
-              <strong>Hierarchy view:</strong>
-              Parent lots appear first. Sub-lots are indented underneath their parent using the arrow marker. Hidden lots are kept for history, but stay out of normal lot dropdowns.
+              <strong>Expandable hierarchy:</strong>
+              Root lots are shown first. Use the arrow beside a lot name to reveal its direct child lots inline. Child lots can be expanded again when they contain deeper levels.
             </div>
 
             <div class="lot-visibility-toolbar">
@@ -174,10 +175,11 @@
             <h2 class="section-title"><%= showHidden ? 'Lots — Visible and Hidden' : 'Lots' %></h2>
 
             <div class="table-card">
-              <table>
+              <table class="management-lots-table">
                 <thead>
                   <tr>
                     <th>Lot</th>
+                    <th>Created</th>
                     <th>Type</th>
                     <th>Default Grade</th>
                     <th>Default Weight</th>
@@ -195,7 +197,7 @@
                 <tbody>
                   <% if (orderedLots.length === 0) { %>
                     <tr>
-                      <td colspan="12">No lots found.</td>
+                      <td colspan="13">No lots found.</td>
                     </tr>
                   <% } %>
 
@@ -206,21 +208,21 @@
                       const hierarchyLevel = Math.min(Number(lot.hierarchyLevel || 0), 6);
                     %>
 
-                    <tr class="<%= [hierarchyLevel > 0 ? 'lot-child-row' : 'lot-parent-row', Number(lot.is_active) === 1 ? '' : 'lot-hidden-row'].filter(Boolean).join(' ') %>">
+                    <tr class="<%= ['lot-clickable-row', hierarchyLevel > 0 ? 'lot-child-row lot-tree-child-row' : 'lot-parent-row lot-tree-root-row', `lot-level-${Math.min(hierarchyLevel, 6)}`, Number(lot.is_active) === 1 ? '' : 'lot-hidden-row'].filter(Boolean).join(' ') %>" data-lot-id="<%= lot.lot_id %>" data-parent-lot-id="<%= parentLot ? parentLot.lot_id : '' %>" data-lot-level="<%= hierarchyLevel %>" data-view-href="/management/lots/<%= lot.lot_id %>" tabindex="0" role="link" aria-label="View <%= lot.lot_name %>">
                       <td class="lot-hierarchy-cell" style="--lot-level: <%= hierarchyLevel %>;">
                         <div class="lot-hierarchy-wrap">
-                          <% if (hierarchyLevel > 0) { %>
-                            <span class="lot-hierarchy-arrow">↳</span>
-                          <% } else if (childLots.length > 0) { %>
-                            <span class="lot-hierarchy-parent-dot"></span>
+                          <% if (childLots.length > 0) { %>
+                            <button class="lot-tree-toggle" type="button" aria-expanded="false" aria-label="Show child lots for <%= lot.lot_name %>">
+                              <span class="lot-tree-toggle-visual" aria-hidden="true">
+                                <span class="lot-tree-toggle-icon" aria-hidden="true">▸</span>
+                              </span>
+                            </button>
                           <% } else { %>
-                            <span class="lot-hierarchy-spacer"></span>
+                            <span class="lot-tree-toggle-spacer" aria-hidden="true"></span>
                           <% } %>
 
                           <div class="lot-hierarchy-main">
-                            <a href="/management/lots/<%= lot.lot_id %>" class="unit-link">
-                              <strong class="lot-display-name"><%= lot.lot_name %></strong>
-                            </a>
+                            <strong class="lot-display-name"><%= lot.lot_name %></strong>
 
 
                             <% if (parentLot) { %>
@@ -242,17 +244,24 @@
                         </div>
                       </td>
 
+                      <td>
+                        <strong><%= formatDate(lot.created_at) %></strong>
+                        <br />
+                        <span class="table-muted-line"><%= formatTime(lot.created_at) %></span>
+                      </td>
                       <td><%= lot.lot_type_label || '—' %></td>
                       <td><%= lot.default_grade_label || '—' %></td>
                       <td>
                         <% if (lot.resolved_default_production_weight !== null && lot.resolved_default_production_weight !== undefined) { %>
                           <strong><%= formatWeight(lot.resolved_default_production_weight) %></strong>
-                          <% if (lot.default_production_weight_label) { %>
-                            <br />
-                            <span class="table-muted-line"><%= lot.default_production_weight_label %></span>
+                          <br />
+                          <% if (lot.default_production_weight !== null && lot.default_production_weight !== undefined) { %>
+                            <span class="table-muted-line">Custom lot default</span>
+                          <% } else if (lot.default_production_weight_label) { %>
+                            <span class="table-muted-line">Preset: <%= lot.default_production_weight_label %></span>
                           <% } %>
                         <% } else { %>
-                          <span class="table-muted-line">Category default</span>
+                          <span class="table-muted-line">Unit category default</span>
                         <% } %>
                       </td>
                       <td><%= formatNumber(lot.unitCount) %></td>
@@ -292,7 +301,6 @@
 
                       <td>
                         <div class="lot-row-actions">
-                          <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>">View</a>
                           <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
                           <% if (Number(lot.is_active) === 1) { %>
                             <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal" hx-target="#modal-root" hx-swap="innerHTML">Hide</a>

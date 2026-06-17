@@ -47,6 +47,11 @@
             <p>Name, type, and optional parent lot.</p>
           </div>
 
+          <div class="lot-weight-note">
+            <strong>Production weight order:</strong>
+            Unit override takes priority, then this lot's custom default, then the unit category default.
+          </div>
+
           <div class="form-grid lot-form-grid">
             <label class="form-field">
               <span>Lot Name</span>
@@ -98,7 +103,22 @@
               </label>
             <% } %>
 
-            <% if (safeFormOptions.capabilities.hasDefaultProductionWeightConfigValueId) { %>
+            <% if (safeFormOptions.capabilities.hasDefaultProductionWeight) { %>
+              <label class="form-field">
+                <span>Custom Lot Default Weight</span>
+                <input type="number" name="defaultProductionWeight" value="<%= safeFormData.defaultProductionWeight || '' %>" min="0" step="0.01" placeholder="Example: 1.25" list="production-weight-examples" />
+                <datalist id="production-weight-examples">
+                  <% safeFormOptions.productionWeightOptions.forEach((weightOption) => { %>
+                    <% if (weightOption.formattedWeightValue && weightOption.formattedWeightValue !== '—') { %>
+                      <option value="<%= weightOption.formattedWeightValue %>"><%= weightOption.label %></option>
+                    <% } %>
+                  <% }) %>
+                </datalist>
+                <small class="field-hint">
+                  Optional custom lot-level default. Leave blank to use the unit category default. Examples: Laptop 1.00, Desktop 0.50, Mac 3.00.
+                </small>
+              </label>
+            <% } else if (safeFormOptions.capabilities.hasDefaultProductionWeightConfigValueId) { %>
               <label class="form-field">
                 <span>Default Production Weight</span>
                 <select name="defaultProductionWeightConfigValueId">
@@ -156,6 +176,9 @@
                 <label class="form-field">
                   <span>Label Format</span>
                   <input type="text" name="labelFormat" value="<%= safeFormData.labelFormat || '' %>" maxlength="120" placeholder="Example: Standard BWT Laptop Label" />
+                  <small class="field-hint">
+                    Optional note for the label style or print template this lot should use later. It does not print labels by itself yet.
+                  </small>
                 </label>
               <% } %>
             </div>

@@ -699,7 +699,10 @@ async function createLot(formData, currentUserId) {
   const parentLotId = formData.parentLotId ? Number(formData.parentLotId) : null;
   const lotTypeConfigValueId = formData.lotTypeConfigValueId ? Number(formData.lotTypeConfigValueId) : null;
   const defaultGradeConfigValueId = formData.defaultGradeConfigValueId ? Number(formData.defaultGradeConfigValueId) : null;
-  const defaultProductionWeightPayload = await productionWeightModel.getProductionWeightPayloadFromConfigValueId(formData.defaultProductionWeightConfigValueId);
+  const customDefaultProductionWeight = productionWeightModel.normalizeWeightValue(formData.defaultProductionWeight);
+  const defaultProductionWeightPayload = formData.defaultProductionWeightConfigValueId
+    ? await productionWeightModel.getProductionWeightPayloadFromConfigValueId(formData.defaultProductionWeightConfigValueId)
+    : { configValueId: null, weightValue: customDefaultProductionWeight };
   const hasUnlimitedGoal = formData.hasUnlimitedGoal === '1';
   const unitAmountGoal = hasUnlimitedGoal ? null : Number(formData.unitAmountGoal || 0);
   const deadline = formData.deadline ? String(formData.deadline).trim() : null;
@@ -800,7 +803,10 @@ async function updateLot(lotId, formData, currentUserId) {
   const parentLotId = formData.parentLotId ? Number(formData.parentLotId) : null;
   const lotTypeConfigValueId = formData.lotTypeConfigValueId ? Number(formData.lotTypeConfigValueId) : null;
   const defaultGradeConfigValueId = formData.defaultGradeConfigValueId ? Number(formData.defaultGradeConfigValueId) : null;
-  const defaultProductionWeightPayload = await productionWeightModel.getProductionWeightPayloadFromConfigValueId(formData.defaultProductionWeightConfigValueId);
+  const customDefaultProductionWeight = productionWeightModel.normalizeWeightValue(formData.defaultProductionWeight);
+  const defaultProductionWeightPayload = formData.defaultProductionWeightConfigValueId
+    ? await productionWeightModel.getProductionWeightPayloadFromConfigValueId(formData.defaultProductionWeightConfigValueId)
+    : { configValueId: null, weightValue: customDefaultProductionWeight };
   const hasUnlimitedGoal = formData.hasUnlimitedGoal === '1';
   const unitAmountGoal = hasUnlimitedGoal ? null : Number(formData.unitAmountGoal || 0);
   const deadline = formData.deadline ? String(formData.deadline).trim() : null;

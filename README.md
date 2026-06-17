@@ -4,69 +4,224 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
-Step 5f: Production weight application cleanup.
+Step 5h: Step 5 final handoff cleanup.
 
-This step makes the Step 5a production weight foundation visible and usable on unit records without adding support-task productivity, QC tracking, or full productivity reporting.
+This is a documentation and handoff step. It closes the Step 5 Configuration/Lot/User/Production Weight pass and records the current approved app behavior before moving into Step 6 work.
 
-## Step 5f Status
+## Step 5h Goal
 
-Included in this handoff:
+Create a clean Step 5 handoff baseline without changing application behavior.
 
-- Shows each unit's effective production weight in the Tech Unit Browser.
-- Shows the weight source on the unit row and expanded unit details.
-- Resolves effective weight in this order:
-  1. Unit-level override
-  2. Lot-level default
-  3. Unit category default
-- Adds controlled unit-level production weight override fields to the Tech Unit edit/create form.
-- Limits unit-level weight overrides to Admin, Management, and Tech Lead users.
-- Keeps normal Tech users read-only for unit-level weight overrides.
-- Keeps production weight separate from Cosmetic Grade.
-- Keeps production weight separate from Unit Pass/Fail.
-- Adds optional audit columns for tracking who last updated a unit override and when.
-- Does not add support-task productivity records.
-- Does not add full productivity reporting.
+Step 5h does not add routes, database tables, UI controls, or SQL. It updates the project handoff notes so the next work can start from the current approved state.
 
-## Important Direction
+## Important Direction Preserved
 
-Support-task productivity remains deferred to a future version. Current Step 5 work is focused on Configuration, Lots, User/Role cleanup, and production weight foundation/application.
+- Support-task productivity remains deferred to a future version.
+- Current scope stays focused on Configuration, Lots, Users/Roles, and Production Weight foundation/application.
+- HTMX flows should continue returning HTML fragments or HTMX redirects, not JSON, unless JSON is specifically needed.
+- Post-rebuild checks should focus only on the feature just changed.
+- Cosmetic Grade and Pass/Fail remain separate concepts.
+- Lot IDs should not be visible in frontend lot displays.
+- Patch files are applied from `/home/bwtdallas-webserver/app/`.
+- Zipped handoff files that are created for upload/reference are kept in `/home/bwtdallas-webserver/app/handoff/`.
 
-## Key Routes
+## Current Stack
 
-```text
-/tech/units
-/tech/units/new
-/tech/units/new/modal
-/tech/units/:unitId/edit
-/tech/units/:unitId/edit/modal
-/management/lots
-/management/config
+- Node.js / Express app served from `server.js`.
+- EJS views and fragments.
+- HTMX modal and table-update flows.
+- MySQL 8 database through `mysql2/promise`.
+- Docker Compose app container behind Traefik.
+- Rebuild command:
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
 ```
 
-## Step 5f File Touches
+## Current Major Areas
 
-- `README.md`
-- `controllers/techController.js`
-- `models/productionWeightModel.js`
-- `models/techUnitModel.js`
-- `sql/2026-06-step-5f-production-weight-override-audit.sql`
-- `views/fragments/tech-unit-duplicate-modal.ejs`
-- `views/fragments/tech-unit-form.ejs`
-- `views/fragments/tech-units-table.ejs`
-- `public/css/tech.css`
+### Dashboards
 
-## Step 5f Notes
+- Dashboard role routing is in place.
+- Dashboard summary routes are available.
+- Management dashboard period controls and charts are in place from Step 4.
+- Dashboard productivity work should not be expanded into support-task productivity yet.
 
-Production weight is not a unit condition field. It does not replace Cosmetic Grade and does not decide Unit Pass/Fail.
+### Tech Unit Browser
 
-The current effective weight order is:
+- Tech Unit Browser supports create/edit modal flows.
+- Duplicate-unit confirmation flow is in place.
+- Unit history panel is available.
+- Override request flow is available from Tech Units.
+- Outcome approval flow is available for Admin/Management/Tech Lead roles.
+- Production weight visibility/application is in place from Step 5f.
+- Effective production weight priority is:
 
 ```text
 Unit override > Lot default > Unit category default
 ```
 
-Unit overrides should be used sparingly when a single unit does not match the lot/category default.
+### Management Users
+
+- Management Users cleanup is in place.
+- Single-account role normalization is in place.
+- Active/inactive user flows remain available.
+- Pending setup user cleanup remains available.
+
+### Configuration
+
+- Configuration page is available at `/management/config` for Admin users.
+- Configuration CRUD modal flow is in place.
+- Inactive config values are hidden by default.
+- `/management/config?includeInactive=1` shows inactive values for review/reactivation.
+- Activating/reactivating a config value redirects back to `/management/config`, returning the user to the Active values only view.
+- Deactivating a config value redirects to `/management/config?includeInactive=1`, so the newly inactive value remains visible for confirmation.
+- Config page guidance cards, state note, system-used pills, production-weight pills, inactive-row treatment, and modal help text are in place from Step 5g.
+
+### Lots
+
+- Lot Browser is available at `/management/lots` for Admin/Management users.
+- Lots support create/edit/hide/unhide/delete modal flows.
+- Lot detail pages support lot requirement management.
+- Lot hierarchy uses expandable parent/child rows.
+- Root lots show first; expanding a parent reveals direct children.
+- Child rows can expand their own children.
+- The hierarchy separator is indentation/expand-collapse behavior, not colored rails/slivers.
+- Row body click opens the lot detail page.
+- Expand/collapse arrow zone is protected and toggles children.
+- Blank child indentation area is not clickable.
+- Empty separator space between root groups is not clickable.
+- Action button area is protected so button padding/empty action space does not open the lot detail page.
+- Current arrow badge treatment is gray background, darker gray 1px border, black arrow symbol.
+- Lot-name typography is preserved at the approved size.
+
+### Production Weight
+
+- Production Weight Types are managed through config values.
+- Unit category defaults are available through Production Weight Types.
+- Lot default production weight can be set as a custom numeric value by higher-level users.
+- Unit-level production weight override is available where role policy allows it.
+- Production weight audit/support tables from Step 5f are in place.
+- Support-task productivity remains deferred and should not be built in this version.
+
+## Key Routes
+
+```text
+/
+/dashboards/admin
+/dashboards/management
+/dashboards/tech
+/dashboard/summary
+/dashboards/:dashboardKey/summary
+
+/management/config
+/management/config?includeInactive=1
+/management/config/values/new/modal
+/management/config/values/:configValueId/edit/modal
+/management/config/values/:configValueId/activate/modal
+/management/config/values/:configValueId/deactivate/modal
+
+/management/lots
+/management/lots?showHidden=1
+/management/lots/new/modal
+/management/lots/:lotId
+/management/lots/:lotId/edit/modal
+/management/lots/:lotId/hide/modal
+/management/lots/:lotId/unhide/modal
+/management/lots/:lotId/delete/modal
+/management/lots/:lotId/requirements/new/modal
+/management/lots/:lotId/requirements/:requirementId/edit/modal
+
+/management/users
+/management/users/inactive
+/management/users/new
+/management/users/:userId/edit/modal
+/management/users/:userId/deactivate/modal
+/management/users/:userId/reactivate/modal
+/management/users/:userId/delete-pending/modal
+
+/management/overrides
+/management/overrides/table
+
+/tech/units
+/tech/units/table
+/tech/units/new/modal
+/tech/units/:unitId/edit/modal
+/tech/units/:unitId/history
+/tech/units/:unitId/override/modal
+/tech/units/:unitId/outcome-approval/modal
+/tech/units/:unitId/delete/modal
+```
+
+## Step 5 SQL Files Present
+
+```text
+sql/2026-06-step-5a-production-weights.sql
+sql/2026-06-step-5a-production-weight-values-cleanup.sql
+sql/2026-06-step-5a-production-weight-values-hotfix.sql
+sql/2026-06-step-5b-lot-visibility.sql
+sql/2026-06-step-5c-single-account-role-normalization.sql
+sql/2026-06-step-5f-production-weight-override-audit.sql
+```
+
+## Step 5 Completed Areas
+
+### Step 5a
+
+Production weight foundation and Production Weight Types groundwork.
+
+### Step 5b
+
+Lot configuration cleanup and lot visibility foundation.
+
+### Step 5c
+
+User/role management cleanup and single-account role normalization.
+
+### Step 5d / Step 5e
+
+Configuration values cleanup and Configuration CRUD foundation.
+
+### Step 5f through Step 5f.23
+
+Production weight application and Lot Browser UI stabilization, ending with the approved expandable hierarchy behavior and gray arrow badge treatment.
+
+### Step 5g / Step 5g.1
+
+Configuration page final polish and activate/reactivate redirect cleanup.
+
+### Step 5h
+
+Final Step 5 README/handoff cleanup only.
+
+## Step 5h File Touches
+
+- `README.md`
+
+## Rebuild
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+
+docker logs --tail=80 bwtdallas-app
+```
+
+## Post-Rebuild Checks
+
+Because Step 5h is documentation-only, the main check is that the app still starts normally.
+
+Optional quick checks:
+
+1. Go to `/management/config` and confirm the page still loads.
+2. Go to `/management/lots` and confirm the expandable Lot Browser still loads.
+3. Go to `/tech/units` and confirm the Tech Unit Browser still loads.
 
 ## Next Direction
 
-Next likely step: Step 5g — Configuration page final polish.
+Recommended next step: Step 6a — Unit production-weight display review.
+
+Step 6a should review unit-side production weight display and wording without adding support-task productivity.

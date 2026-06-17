@@ -1013,7 +1013,9 @@ function getProductionWeightDetailsForUnit({ row = {}, lot = null, unitCategory 
     unitProductionWeightOverride: row.production_weight_override,
     unitProductionWeightNotes: row.production_weight_notes,
     lotDefaultProductionWeight: lot ? lot.resolved_default_production_weight : null,
-    lotDefaultProductionWeightLabel: lot ? lot.default_production_weight_label : '',
+    lotDefaultProductionWeightLabel: lot && lot.default_production_weight !== null && lot.default_production_weight !== undefined
+      ? 'Custom lot default'
+      : (lot ? lot.default_production_weight_label : ''),
     unitCategory: unitCategory || {},
     productionWeightOptions
   });

@@ -94,6 +94,7 @@ function getBlankLotFormData() {
     lotTypeConfigValueId: '',
     defaultGradeConfigValueId: '',
     defaultProductionWeightConfigValueId: '',
+    defaultProductionWeight: '',
     hasUnlimitedGoal: '0',
     unitAmountGoal: '',
     deadline: '',
@@ -110,6 +111,7 @@ function getLotFormDataFromRequest(req) {
     lotTypeConfigValueId: String(req.body.lotTypeConfigValueId || '').trim(),
     defaultGradeConfigValueId: String(req.body.defaultGradeConfigValueId || '').trim(),
     defaultProductionWeightConfigValueId: String(req.body.defaultProductionWeightConfigValueId || '').trim(),
+    defaultProductionWeight: String(req.body.defaultProductionWeight || '').trim(),
     hasUnlimitedGoal: req.body.hasUnlimitedGoal === '1' ? '1' : '0',
     unitAmountGoal: String(req.body.unitAmountGoal || '').trim(),
     deadline: String(req.body.deadline || '').trim(),
@@ -191,6 +193,7 @@ function getLotFormDataFromLot(lot) {
     lotTypeConfigValueId: lot.lot_type_config_value_id || '',
     defaultGradeConfigValueId: lot.default_grade_config_value_id || '',
     defaultProductionWeightConfigValueId: lot.default_production_weight_config_value_id || '',
+    defaultProductionWeight: lot.default_production_weight !== null && lot.default_production_weight !== undefined ? String(lot.default_production_weight) : '',
     hasUnlimitedGoal: lot.isUnlimited ? '1' : '0',
     unitAmountGoal: lot.isUnlimited ? '' : String(lot.unitGoal || lot.unit_amount_goal || ''),
     deadline: formatDateForInput(lot.deadline),
@@ -268,6 +271,14 @@ function validateLotForm(formData, formOptions, currentLotId = null) {
 
   if (formData.defaultProductionWeightConfigValueId && !Number.isInteger(Number(formData.defaultProductionWeightConfigValueId))) {
     errors.push('Default production weight must be valid.');
+  }
+
+  if (formData.defaultProductionWeight) {
+    const defaultProductionWeight = Number(formData.defaultProductionWeight);
+
+    if (!Number.isFinite(defaultProductionWeight) || defaultProductionWeight < 0) {
+      errors.push('Custom lot production weight must be a valid number of 0 or higher.');
+    }
   }
 
   if (formData.hasUnlimitedGoal !== '1') {

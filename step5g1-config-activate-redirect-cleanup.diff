@@ -1,0 +1,81 @@
+--- a/README.md
++++ b/README.md
+@@ -4,26 +4,21 @@
+ 
+ ## Current Step
+ 
+-Step 5g: Configuration page final polish.
++Step 5g.1: Configuration activate redirect cleanup.
+ 
+ This step builds on Step 5f.23. It keeps the approved Lot Browser behavior unchanged and focuses only on Configuration page readability, active/inactive visibility, form guidance, and system-used value recognition.
+ 
+-## Step 5g Goal
++## Step 5g.1 Goal
+ 
+ Make the Configuration page easier for Admin users to scan and safer to maintain without changing the underlying configuration CRUD behavior.
+ 
+-## Step 5g Changes
++## Step 5g.1 Changes
+ 
+-- Updates the Configuration page hero from Step 5e to Step 5g.
+-- Adds a visible active-only/inactive-visible state note near the controls.
+-- Adds short guidance cards for Codes, Labels, Values, and Inactive values.
+-- Adds System-used and Production weights pills on relevant configuration categories.
+-- Makes Production Weight Types values display as weight chips in the table.
+-- Makes inactive rows easier to recognize while keeping inactive values hidden by default.
+-- Improves config value modal help text for Code, Label, Value, Sort Order, Description, and Active status.
+ - Keeps Configuration CRUD behavior unchanged.
+-- Keeps HTMX modal flows as HTML fragments / redirects.
+-- Keeps support-task productivity deferred.
++- Keeps HTMX modal flows unchanged.
++- Keeps inactive values hidden by default.
++- After activating/reactivating a config value, redirects to `/management/config` instead of staying on `includeInactive=1`.
++- After deactivating a config value, still redirects to `/management/config?includeInactive=1` so the newly inactive value remains visible for confirmation.
+ - Requires no SQL.
+ 
+ ## Important Direction
+@@ -43,12 +38,10 @@
+ /management/users
+ ```
+ 
+-## Step 5g File Touches
++## Step 5g.1 File Touches
+ 
+ - `README.md`
+-- `views/pages/management-config.ejs`
+-- `views/fragments/config-value-form-modal.ejs`
+-- `public/css/style.css`
++- `controllers/configController.js`
+ 
+ ## Rebuild
+ 
+@@ -62,13 +55,11 @@
+ 
+ ## Post-Rebuild Checks
+ 
+-1. Go to `/management/config`.
+-2. Confirm inactive values are still hidden by default.
+-3. Confirm the new active-only state note and guidance cards display near the top.
+-4. Confirm relevant categories show System-used and/or Production weights pills.
+-5. Confirm Production Weight Types values display as weight chips.
+-6. Open Create Config Value and confirm the updated field help text appears.
+-7. Confirm create/edit/activate/deactivate modal flows still open and close normally.
++1. Go to `/management/config?includeInactive=1`.
++2. Activate an inactive config value.
++3. Confirm the redirect lands on `/management/config`, not `/management/config?includeInactive=1`.
++4. Confirm the page shows the Active values only state.
++5. Deactivate a config value if needed and confirm deactivation still redirects to the inactive-visible page for confirmation.
+ 
+ ## Next Direction
+ 
+--- a/controllers/configController.js
++++ b/controllers/configController.js
+@@ -332,7 +332,7 @@
+     return sendHtmxRedirect(
+       req,
+       res,
+-      addCacheBuster(getConfigReturnUrl(includeInactiveValues || !shouldActivate, shouldActivate ? 'activated=1' : 'deactivated=1'))
++      addCacheBuster(getConfigReturnUrl(!shouldActivate, shouldActivate ? 'activated=1' : 'deactivated=1'))
+     );
+   } catch (error) {
+     next(error);

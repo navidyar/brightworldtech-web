@@ -332,7 +332,7 @@ async function updateConfigValueStatus(req, res, next) {
     return sendHtmxRedirect(
       req,
       res,
-      addCacheBuster(getConfigReturnUrl(includeInactiveValues || !shouldActivate, shouldActivate ? 'activated=1' : 'deactivated=1'))
+      addCacheBuster(getConfigReturnUrl(!shouldActivate, shouldActivate ? 'activated=1' : 'deactivated=1'))
     );
   } catch (error) {
     next(error);

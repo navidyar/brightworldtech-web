@@ -3067,3 +3067,149 @@ input[type="date"] {
     grid-template-columns: 1fr;
   }
 }
+
+/* Step 5g Configuration page final polish. */
+.config-filter-state {
+  display: inline-grid;
+  gap: 2px;
+  max-width: 360px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--green) 28%, var(--line) 72%);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--green-bg) 78%, #ffffff 22%);
+}
+
+.config-filter-state strong {
+  color: color-mix(in srgb, var(--green) 74%, var(--text) 26%);
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.config-filter-state span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.config-filter-state--expanded {
+  border-color: color-mix(in srgb, var(--blue) 30%, var(--line) 70%);
+  background: color-mix(in srgb, var(--blue-soft) 76%, #ffffff 24%);
+}
+
+.config-filter-state--expanded strong {
+  color: var(--blue-dark);
+}
+
+.config-guidance-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.config-guidance-grid article {
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: color-mix(in srgb, #ffffff 76%, var(--surface-soft) 24%);
+}
+
+.config-guidance-grid strong {
+  display: block;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 850;
+}
+
+.config-guidance-grid p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.config-pill-system {
+  color: #334155 !important;
+  background: #e2e8f0 !important;
+}
+
+.config-pill-weight {
+  color: var(--blue-dark) !important;
+  background: var(--blue-soft) !important;
+}
+
+.config-value-label-stack {
+  display: grid;
+  gap: 3px;
+}
+
+.config-value-label-stack strong {
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 760;
+  line-height: 1.25;
+}
+
+.config-value-label-stack span {
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.config-weight-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 54px;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid color-mix(in srgb, var(--blue) 42%, var(--line) 58%);
+  border-radius: 999px;
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+  font-size: 0.78rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.config-value-plain {
+  color: var(--text);
+  font-size: 0.86rem;
+}
+
+.config-value-row--inactive .config-value-label-stack strong,
+.config-value-row--inactive .config-value-plain {
+  color: #64748b;
+}
+
+.config-value-row--inactive .config-value-label-stack span {
+  color: #94a3b8;
+}
+
+.config-value-row--inactive .config-weight-chip {
+  border-color: #cbd5e1;
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.config-values-table-card table td:nth-child(3) {
+  min-width: 90px;
+}
+
+.config-value-form .field-hint {
+  line-height: 1.38;
+}
+
+@media (max-width: 1180px) {
+  .config-guidance-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .config-guidance-grid {
+    grid-template-columns: 1fr;
+  }
+}

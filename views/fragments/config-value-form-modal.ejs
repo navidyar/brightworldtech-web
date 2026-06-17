@@ -49,38 +49,38 @@
                 </option>
               <% }) %>
             </select>
-            <small class="field-hint">Choose where this value should appear on the Configuration page.</small>
+            <small class="field-hint">Choose the group this value belongs to. Production weights, lot values, and unit workflow values should stay in their matching categories.</small>
           </label>
 
           <label class="form-field">
             <span>Code</span>
             <input type="text" name="code" value="<%= safeFormData.code || '' %>" maxlength="120" placeholder="example_config_value" required />
-            <small class="field-hint">Stable app key. Lowercase letters, numbers, underscores, or hyphens.</small>
+            <small class="field-hint">Stable app key. Use lowercase letters, numbers, underscores, or hyphens. Avoid changing this after the value is used.</small>
           </label>
 
           <label class="form-field">
             <span>Label</span>
             <input type="text" name="label" value="<%= safeFormData.label || '' %>" maxlength="120" placeholder="Example Config Value" required />
-            <small class="field-hint">Human-readable text shown in forms and tables.</small>
+            <small class="field-hint">Human-readable text shown in forms, tables, and dropdowns. This is safe to improve when wording needs cleanup.</small>
           </label>
 
           <label class="form-field">
             <span>Value</span>
             <input type="text" name="value" value="<%= safeFormData.value || '' %>" maxlength="120" placeholder="Optional stored value" />
-            <small class="field-hint">Optional. Used for values like production weight numbers.</small>
+            <small class="field-hint">Optional stored value. For Production Weight Types, use the numeric weight value, such as 1.00, 0.50, or 0.33.</small>
           </label>
 
           <label class="form-field">
             <span>Sort Order</span>
             <input type="number" name="sortOrder" value="<%= safeFormData.sortOrder || '0' %>" step="1" inputmode="numeric" />
-            <small class="field-hint">Lower numbers display first.</small>
+            <small class="field-hint">Lower numbers display first inside the selected category. Use gaps like 10, 20, 30 when possible.</small>
           </label>
 
           <label class="checkbox-card config-value-active-toggle" for="configValueIsActive">
             <input id="configValueIsActive" type="checkbox" name="isActive" value="1" <%= String(safeFormData.isActive || '0') === '1' ? 'checked' : '' %> />
             <span>
               <strong>Active</strong>
-              <small>Active values are available in normal app dropdowns.</small>
+              <small>Active values are available in normal app dropdowns. Turn this off to retire a value without deleting history.</small>
             </span>
           </label>
         </div>
@@ -88,6 +88,7 @@
         <label class="form-field">
           <span>Description</span>
           <textarea name="description" rows="4" maxlength="500" placeholder="Optional description for Management and Admin users."><%= safeFormData.description || '' %></textarea>
+          <small class="field-hint">Optional Admin-facing notes. Use this to explain when or why the value should be selected.</small>
         </label>
 
         <div class="form-actions">

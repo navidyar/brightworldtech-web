@@ -151,7 +151,9 @@
                           <% } else { %>
                             <span class="pill bad"><%= user.account_status_label || user.account_status_code || 'Unknown Account' %></span>
                           <% } %>
-                          <small><%= user.has_password ? 'Password created' : 'Pending setup link' %></small>
+                          <% if (!user.has_password) { %>
+                            <small>Pending setup</small>
+                          <% } %>
                         </div>
                       </td>
                       <td><%= formatDateTime(user.last_login_at) %></td>

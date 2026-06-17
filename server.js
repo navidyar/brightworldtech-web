@@ -13,7 +13,7 @@ const lotRoutes = require('./routes/lots');
 const { createSessionStore } = require('./models/sessionStore');
 const { loadCurrentUser } = require('./middleware/authMiddleware');
 const { attachAccessLocals } = require('./middleware/accessMiddleware');
-const { escapeHtml, formatDateTime, formatNumber, formatWeight } = require('./views/partials/helpers');
+const { escapeHtml, formatDateTime, formatDate, formatTime, formatNumber, formatWeight } = require('./views/partials/helpers');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,6 +28,8 @@ app.set('views', path.join(__dirname, 'views'));
 
 app.locals.escapeHtml = escapeHtml;
 app.locals.formatDateTime = formatDateTime;
+app.locals.formatDate = formatDate;
+app.locals.formatTime = formatTime;
 app.locals.formatNumber = formatNumber;
 app.locals.formatWeight = formatWeight;
 app.locals.appName = 'BWTDallas App';

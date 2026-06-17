@@ -31,6 +31,45 @@ function formatDateTime(value) {
   }).format(date);
 }
 
+
+function formatDate(value) {
+  if (!value) {
+    return '—';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '—';
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    timeZone: APP_DISPLAY_TIME_ZONE
+  }).format(date);
+}
+
+function formatTime(value) {
+  if (!value) {
+    return '—';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '—';
+  }
+
+  return new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: APP_DISPLAY_TIME_ZONE
+  }).format(date);
+}
+
 function formatNumber(value) {
   const number = Number(value);
 
@@ -58,6 +97,8 @@ function formatWeight(value) {
 module.exports = {
   escapeHtml,
   formatDateTime,
+  formatDate,
+  formatTime,
   formatNumber,
   formatWeight
 };

@@ -823,3 +823,717 @@ table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-n
     width: 100%;
   }
 }
+
+/* Step 5f.1 lot weight and hierarchy UI correction. */
+table tr.lot-level-0 td {
+  background: var(--surface);
+}
+
+table tr.lot-level-1 td {
+  background: color-mix(in srgb, var(--surface) 88%, #dbeafe 12%);
+}
+
+table tr.lot-level-2 td {
+  background: color-mix(in srgb, var(--surface) 84%, #dcfce7 16%);
+}
+
+table tr.lot-level-3 td {
+  background: color-mix(in srgb, var(--surface) 82%, #fef3c7 18%);
+}
+
+table tr.lot-hidden-row td {
+  background: color-mix(in srgb, var(--surface-soft) 76%, #f59e0b 10%);
+}
+
+.lot-hierarchy-wrap {
+  gap: 6px;
+  padding-left: calc(var(--lot-level, 0) * 16px);
+}
+
+.lot-hierarchy-main {
+  line-height: 1.2;
+}
+
+.table-card table td {
+  padding-top: 8px;
+  padding-bottom: 8px;
+  vertical-align: middle;
+}
+
+.lot-row-actions {
+  gap: 5px;
+}
+
+.lot-row-actions .secondary-button,
+.lot-row-actions .primary-button {
+  min-height: 30px;
+  padding: 6px 9px;
+  font-size: 0.78rem;
+}
+
+.lot-weight-note {
+  margin-top: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.lot-weight-note strong {
+  color: var(--text);
+}
+
+/* Step 5f.2 Lot Browser compact density and hierarchy color refinement. */
+.management-lots-table {
+  table-layout: auto;
+}
+
+.management-lots-table th,
+.management-lots-table td {
+  padding: 8px 10px !important;
+  vertical-align: top;
+}
+
+.management-lots-table .lot-hierarchy-cell {
+  min-width: 250px;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+.management-lots-table .lot-hierarchy-wrap {
+  align-items: start;
+  gap: 7px;
+  padding-left: calc(var(--lot-level, 0) * 84px);
+}
+
+.management-lots-table .lot-hierarchy-arrow,
+.management-lots-table .lot-hierarchy-parent-dot,
+.management-lots-table .lot-hierarchy-spacer {
+  margin-top: 3px;
+}
+
+.management-lots-table .lot-hierarchy-main {
+  display: grid;
+  gap: 4px;
+  line-height: 1.18;
+}
+
+.management-lots-table .lot-hierarchy-main br {
+  display: none;
+}
+
+.management-lots-table .lot-hierarchy-main > a.unit-link .lot-display-name,
+.management-lots-table .lot-hierarchy-main > a.unit-link strong.lot-display-name {
+  font-size: 0.9rem !important;
+  line-height: 1.15 !important;
+}
+
+.management-lots-table .table-muted-line {
+  display: block;
+  margin-top: 3px;
+  font-size: 0.73rem;
+  line-height: 1.2;
+}
+
+.management-lots-table .lot-row-actions {
+  align-items: flex-start;
+  gap: 5px;
+}
+
+.management-lots-table .lot-row-actions .secondary-button,
+.management-lots-table .lot-row-actions .primary-button {
+  min-height: 28px;
+  padding: 5px 8px;
+  font-size: 0.73rem;
+  line-height: 1;
+}
+
+.management-lots-table tr.lot-level-0 td,
+.management-lots-table tr.lot-level-1 td,
+.management-lots-table tr.lot-level-2 td,
+.management-lots-table tr.lot-level-3 td,
+.management-lots-table tr.lot-level-4 td,
+.management-lots-table tr.lot-level-5 td,
+.management-lots-table tr.lot-level-6 td {
+  background: var(--surface);
+}
+
+.management-lots-table tr.lot-level-0 td:first-child {
+  box-shadow: inset 5px 0 0 #991b1b;
+}
+
+.management-lots-table tr.lot-level-1 td:first-child {
+  box-shadow: inset 5px 0 0 #166534;
+}
+
+.management-lots-table tr.lot-level-2 td:first-child,
+.management-lots-table tr.lot-level-3 td:first-child,
+.management-lots-table tr.lot-level-4 td:first-child,
+.management-lots-table tr.lot-level-5 td:first-child,
+.management-lots-table tr.lot-level-6 td:first-child {
+  box-shadow: inset 5px 0 0 #c2410c;
+}
+
+.management-lots-table tr.lot-hidden-row td {
+  background: color-mix(in srgb, var(--surface-soft) 76%, #fde68a 24%) !important;
+}
+
+.management-lots-table tr.lot-hidden-row td:first-child {
+  box-shadow: inset 5px 0 0 #92400e;
+}
+
+
+/* Step 5f.5 Lot Browser hierarchy sliver alignment and parent grouping correction. */
+.management-lots-table .lot-hierarchy-wrap {
+  position: relative;
+  grid-template-columns: 10px 18px minmax(0, 1fr);
+  gap: 8px;
+  padding-left: calc(var(--lot-level, 0) * 168px);
+}
+
+.management-lots-table .lot-hierarchy-wrap::before {
+  content: "";
+  display: block;
+  width: 10px;
+  min-height: 32px;
+  align-self: stretch;
+  border-radius: 6px;
+  background: var(--lot-level-marker, #6d28d9);
+}
+
+.management-lots-table tr.lot-level-0 {
+  --lot-level-marker: #6d28d9;
+}
+
+.management-lots-table tr.lot-level-1 {
+  --lot-level-marker: #991b1b;
+}
+
+.management-lots-table tr.lot-level-2,
+.management-lots-table tr.lot-level-3,
+.management-lots-table tr.lot-level-4,
+.management-lots-table tr.lot-level-5,
+.management-lots-table tr.lot-level-6 {
+  --lot-level-marker: #166534;
+}
+
+.management-lots-table tr.lot-level-0 td,
+.management-lots-table tr.lot-level-1 td,
+.management-lots-table tr.lot-level-2 td,
+.management-lots-table tr.lot-level-3 td,
+.management-lots-table tr.lot-level-4 td,
+.management-lots-table tr.lot-level-5 td,
+.management-lots-table tr.lot-level-6 td {
+  background: var(--surface);
+}
+
+.management-lots-table tr.lot-level-0 td:first-child,
+.management-lots-table tr.lot-level-1 td:first-child,
+.management-lots-table tr.lot-level-2 td:first-child,
+.management-lots-table tr.lot-level-3 td:first-child,
+.management-lots-table tr.lot-level-4 td:first-child,
+.management-lots-table tr.lot-level-5 td:first-child,
+.management-lots-table tr.lot-level-6 td:first-child,
+.management-lots-table tr.lot-hidden-row td:first-child {
+  box-shadow: none !important;
+}
+
+.management-lots-table tbody tr.lot-level-0:not(:first-child) td {
+  border-top: 10px solid var(--surface-soft);
+}
+
+.management-lots-table tr.lot-hidden-row {
+  --lot-level-marker: #6b7280;
+}
+
+/* Step 5f.6 Lot Browser hierarchy marker and root-group spacing refinement. */
+.management-lots-table .lot-hierarchy-cell {
+  padding-left: calc(10px + (var(--lot-level, 0) * 84px)) !important;
+}
+
+.management-lots-table .lot-hierarchy-wrap {
+  grid-template-columns: 10px 18px minmax(0, 1fr);
+  gap: 8px;
+  padding-left: 0;
+}
+
+.management-lots-table .lot-hierarchy-wrap::before {
+  width: 10px;
+  min-height: 32px;
+  border-radius: 0;
+}
+
+.management-lots-table tbody tr.lot-level-0:not(:first-child) td {
+  border-top: 16px solid var(--surface-soft);
+  box-shadow: inset 0 1px 0 var(--line), inset 0 2px 0 rgba(15, 23, 42, 0.06);
+}
+
+.management-lots-table tbody tr.lot-level-0:not(:first-child) td:first-child {
+  box-shadow: inset 0 1px 0 var(--line), inset 0 2px 0 rgba(15, 23, 42, 0.06) !important;
+}
+
+/* Step 5f.7 Lot Browser cell-border hierarchy marker refinement. */
+.management-lots-table .lot-hierarchy-cell {
+  --lot-indent-step: 84px;
+  --lot-marker-width: 10px;
+  --lot-marker-gap: 10px;
+  position: relative;
+  padding-left: calc(10px + (var(--lot-level, 0) * var(--lot-indent-step)) + var(--lot-marker-width) + var(--lot-marker-gap)) !important;
+  background-image: linear-gradient(var(--lot-level-marker, #6d28d9), var(--lot-level-marker, #6d28d9));
+  background-position: calc(10px + (var(--lot-level, 0) * var(--lot-indent-step))) 0;
+  background-repeat: no-repeat;
+  background-size: var(--lot-marker-width) 100%;
+}
+
+.management-lots-table .lot-hierarchy-wrap {
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  padding-left: 0;
+}
+
+.management-lots-table .lot-hierarchy-wrap::before {
+  display: none;
+  content: none;
+}
+
+.management-lots-table tbody tr.lot-level-0:not(:first-child) td {
+  border-top: 20px solid var(--surface-soft);
+  box-shadow: inset 0 1px 0 var(--line), inset 0 3px 0 rgba(15, 23, 42, 0.08);
+}
+
+.management-lots-table tbody tr.lot-level-0:not(:first-child) td:first-child {
+  box-shadow: inset 0 1px 0 var(--line), inset 0 3px 0 rgba(15, 23, 42, 0.08) !important;
+}
+
+
+/* Step 5f.8 Lot Browser fixed group rail cleanup. */
+.management-lots-table .lot-hierarchy-cell {
+  --lot-indent-step: 84px;
+  --lot-group-rail-width: 10px;
+  --lot-group-rail-offset: 10px;
+  --lot-group-rail-gap: 14px;
+  --lot-group-rail-color: #7c3aed;
+  position: relative;
+  padding-left: calc(var(--lot-group-rail-offset) + var(--lot-group-rail-width) + var(--lot-group-rail-gap) + (var(--lot-level, 0) * var(--lot-indent-step))) !important;
+  background-image: linear-gradient(var(--lot-group-rail-color), var(--lot-group-rail-color)) !important;
+  background-position: var(--lot-group-rail-offset) 0 !important;
+  background-repeat: no-repeat !important;
+  background-size: var(--lot-group-rail-width) 100% !important;
+}
+
+.management-lots-table .lot-hierarchy-wrap {
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  padding-left: 0 !important;
+}
+
+.management-lots-table .lot-hierarchy-wrap::before {
+  display: none !important;
+  content: none !important;
+}
+
+.management-lots-table tr.lot-level-0,
+.management-lots-table tr.lot-level-1,
+.management-lots-table tr.lot-level-2,
+.management-lots-table tr.lot-level-3,
+.management-lots-table tr.lot-level-4,
+.management-lots-table tr.lot-level-5,
+.management-lots-table tr.lot-level-6 {
+  --lot-level-marker: var(--lot-group-rail-color);
+}
+
+.management-lots-table tr.lot-level-0 td,
+.management-lots-table tr.lot-level-1 td,
+.management-lots-table tr.lot-level-2 td,
+.management-lots-table tr.lot-level-3 td,
+.management-lots-table tr.lot-level-4 td,
+.management-lots-table tr.lot-level-5 td,
+.management-lots-table tr.lot-level-6 td {
+  background-color: var(--surface);
+}
+
+.management-lots-table tbody tr.lot-level-0:not(:first-child) td {
+  border-top: 22px solid var(--surface-soft);
+  box-shadow: inset 0 2px 0 rgba(15, 23, 42, 0.18), inset 0 4px 0 rgba(15, 23, 42, 0.06);
+}
+
+.management-lots-table tbody tr.lot-level-0:not(:first-child) td:first-child {
+  box-shadow: inset 0 2px 0 rgba(15, 23, 42, 0.18), inset 0 4px 0 rgba(15, 23, 42, 0.06) !important;
+}
+
+
+/* Step 5f.9 Lot Browser true table-cell border rail correction. */
+.management-lots-table .lot-hierarchy-cell {
+  --lot-indent-step: 84px;
+  --lot-group-rail-color: #15803d;
+  border-left: 6px solid var(--lot-group-rail-color) !important;
+  padding-left: calc(14px + (var(--lot-level, 0) * var(--lot-indent-step))) !important;
+  background-image: none !important;
+  background-position: initial !important;
+  background-repeat: initial !important;
+  background-size: initial !important;
+}
+
+.management-lots-table .lot-hierarchy-wrap {
+  padding-left: 0 !important;
+}
+
+.management-lots-table .lot-hierarchy-wrap::before {
+  display: none !important;
+  content: none !important;
+}
+
+.management-lots-table tr.lot-level-0,
+.management-lots-table tr.lot-level-1,
+.management-lots-table tr.lot-level-2,
+.management-lots-table tr.lot-level-3,
+.management-lots-table tr.lot-level-4,
+.management-lots-table tr.lot-level-5,
+.management-lots-table tr.lot-level-6 {
+  --lot-level-marker: var(--lot-group-rail-color);
+}
+
+
+/* Step 5f.11 Lot Browser expandable hierarchy prototype. */
+.management-lots-table tr.lot-tree-row-hidden {
+  display: none;
+}
+
+.management-lots-table .lot-hierarchy-cell {
+  border-left: 0 !important;
+  background-image: none !important;
+  padding-left: 10px !important;
+}
+
+.management-lots-table .lot-hierarchy-wrap {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding-left: calc(var(--lot-level, 0) * 42px) !important;
+}
+
+.management-lots-table .lot-tree-toggle,
+.management-lots-table .lot-tree-toggle-spacer {
+  width: 24px;
+  height: 24px;
+  margin-top: -2px;
+}
+
+.management-lots-table .lot-tree-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.management-lots-table .lot-tree-toggle:hover {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  transform: translateY(-1px);
+}
+
+.management-lots-table .lot-tree-toggle:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 2px;
+}
+
+.management-lots-table .lot-tree-toggle-spacer {
+  display: inline-block;
+}
+
+.management-lots-table .lot-hierarchy-arrow,
+.management-lots-table .lot-hierarchy-parent-dot,
+.management-lots-table .lot-hierarchy-spacer {
+  display: none !important;
+}
+
+.management-lots-table tr.lot-level-0 td,
+.management-lots-table tr.lot-level-1 td,
+.management-lots-table tr.lot-level-2 td,
+.management-lots-table tr.lot-level-3 td,
+.management-lots-table tr.lot-level-4 td,
+.management-lots-table tr.lot-level-5 td,
+.management-lots-table tr.lot-level-6 td {
+  background: var(--surface) !important;
+}
+
+.management-lots-table tr.lot-child-row td {
+  border-top-color: color-mix(in srgb, var(--line-soft) 78%, transparent 22%);
+}
+
+.management-lots-table tbody tr.lot-level-0:not(:first-child) td {
+  border-top: 12px solid var(--surface-soft) !important;
+  box-shadow: inset 0 1px 0 var(--line-soft) !important;
+}
+
+.management-lots-table tbody tr.lot-level-0:not(:first-child) td:first-child {
+  box-shadow: inset 0 1px 0 var(--line-soft) !important;
+}
+
+.management-lots-table .lot-hierarchy-main {
+  gap: 4px;
+}
+
+.management-lots-table .table-muted-line {
+  margin-top: 4px;
+}
+
+.management-lots-table tr.lot-hidden-row td {
+  background: color-mix(in srgb, var(--surface-soft) 82%, #fef3c7 18%) !important;
+}
+
+/* Step 5f.12 Lot Browser row-click behavior and larger tree toggle target. */
+.management-lots-table tr.lot-clickable-row {
+  cursor: pointer;
+}
+
+.management-lots-table tr.lot-clickable-row:hover td {
+  background: color-mix(in srgb, var(--surface) 88%, var(--surface-soft) 12%) !important;
+}
+
+.management-lots-table tr.lot-clickable-row:focus-visible td {
+  outline: 3px solid rgba(37, 99, 235, 0.18);
+  outline-offset: -3px;
+}
+
+.management-lots-table .lot-row-actions,
+.management-lots-table .lot-row-actions a,
+.management-lots-table .lot-tree-toggle,
+.management-lots-table .lot-tree-toggle-spacer,
+.management-lots-table .table-muted-line a {
+  cursor: auto;
+}
+
+.management-lots-table .lot-tree-toggle,
+.management-lots-table .lot-tree-toggle-spacer {
+  width: 38px;
+  height: 32px;
+  margin-top: -5px;
+}
+
+.management-lots-table .lot-tree-toggle {
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.management-lots-table .lot-tree-toggle-visual {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.management-lots-table .lot-tree-toggle:hover .lot-tree-toggle-visual {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  transform: translateY(-1px);
+}
+
+.management-lots-table .lot-tree-toggle:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 1px;
+}
+
+.management-lots-table .lot-display-name {
+  color: var(--blue-dark);
+}
+
+/* Step 5f.13 Lot Browser expand target refinement. */
+.management-lots-table .lot-hierarchy-wrap {
+  grid-template-columns: 50px minmax(0, 1fr);
+  align-items: stretch;
+}
+
+.management-lots-table .lot-tree-toggle,
+.management-lots-table .lot-tree-toggle-spacer {
+  align-self: stretch;
+  width: 50px;
+  min-height: 44px;
+  height: auto;
+  margin-top: 0;
+}
+
+.management-lots-table .lot-tree-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 15px 0 6px;
+  cursor: pointer;
+}
+
+.management-lots-table .lot-tree-toggle-spacer {
+  display: block;
+}
+
+.management-lots-table .lot-tree-toggle-visual {
+  flex: 0 0 auto;
+}
+
+.management-lots-table .lot-hierarchy-main {
+  align-self: center;
+}
+
+.management-lots-table .lot-row-actions,
+.management-lots-table .lot-row-actions a,
+.management-lots-table .lot-tree-toggle,
+.management-lots-table .lot-tree-toggle-spacer,
+.management-lots-table .lot-tree-toggle-visual,
+.management-lots-table .lot-tree-toggle-icon,
+.management-lots-table .table-muted-line a {
+  cursor: auto;
+}
+
+.management-lots-table .lot-tree-toggle {
+  cursor: pointer;
+}
+
+/* Step 5f.14 Lot Browser invisible control-zone cleanup. */
+.management-lots-table .lot-hierarchy-wrap {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.management-lots-table .lot-tree-toggle,
+.management-lots-table .lot-tree-toggle-spacer {
+  align-self: stretch;
+  width: 44px;
+  min-height: 44px;
+  height: auto;
+  margin-top: 0;
+}
+
+.management-lots-table .lot-tree-toggle {
+  justify-content: flex-start;
+  padding: 0 10px 0 6px;
+  border: 0 !important;
+  background: transparent !important;
+  transform: none !important;
+  cursor: pointer;
+}
+
+.management-lots-table .lot-tree-toggle:hover {
+  border-color: transparent !important;
+  background: transparent !important;
+  transform: none !important;
+}
+
+.management-lots-table .lot-tree-toggle:hover .lot-tree-toggle-visual {
+  border-color: var(--line-soft) !important;
+  background: var(--surface) !important;
+  transform: none !important;
+}
+
+.management-lots-table .lot-tree-toggle-visual {
+  pointer-events: none;
+}
+
+.management-lots-table td:has(.lot-row-actions) {
+  cursor: default;
+}
+
+.management-lots-table td:has(.lot-row-actions) .lot-row-actions {
+  min-height: 100%;
+  margin: -8px -10px -8px -15px;
+  padding: 8px 10px 8px 15px;
+}
+
+.management-lots-table td:has(.lot-row-actions) .lot-row-actions a,
+.management-lots-table td:has(.lot-row-actions) .lot-row-actions button {
+  cursor: pointer;
+}
+
+
+
+/* Step 5f.15 Lot Browser click-zone and typography cleanup. */
+.management-lots-table tbody tr.lot-level-0:not(:first-child) td {
+  /* Keep the visible root separator, but make it plain table spacing. */
+  border-top-color: var(--surface-soft) !important;
+}
+
+.management-lots-table td:has(.lot-row-actions) {
+  cursor: default;
+}
+
+.management-lots-table td:has(.lot-row-actions) .lot-row-actions {
+  min-height: 100%;
+  margin: -8px -10px -8px -15px;
+  padding: 8px 10px 8px 15px;
+}
+
+.management-lots-table td:has(.lot-row-actions) .lot-row-actions a,
+.management-lots-table td:has(.lot-row-actions) .lot-row-actions button {
+  padding: 9px 12px !important;
+  border-radius: 6px !important;
+  cursor: pointer;
+}
+
+.management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+.management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-name,
+.management-lots-table .lot-display-name {
+  color: var(--text) !important;
+  font-size: 0.92rem !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.28 !important;
+}
+
+.management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link:hover .lot-display-name,
+.management-lots-table tr.lot-clickable-row:hover .lot-display-name {
+  color: var(--text) !important;
+  text-decoration: none !important;
+}
+
+/* Step 5f.21 Lot Browser arrow badge blue hotfix. */
+.management-lots-table .lot-tree-toggle-visual {
+  border-color: #1d4ed8 !important;
+  background: #1d4ed8 !important;
+  color: #ffffff !important;
+}
+
+.management-lots-table .lot-tree-toggle:hover .lot-tree-toggle-visual {
+  border-color: #1e40af !important;
+  background: #1e40af !important;
+  color: #ffffff !important;
+}
+
+.management-lots-table .lot-tree-toggle:focus-visible .lot-tree-toggle-visual {
+  border-color: #1e40af !important;
+}
+
+/* Step 5f.23 Lot Browser arrow badge gray border hotfix. */
+.management-lots-table .lot-tree-toggle-visual {
+  box-sizing: border-box;
+  border: 1px solid #6b7280 !important;
+  background: #e5e7eb !important;
+  color: #111827 !important;
+}
+
+.management-lots-table .lot-tree-toggle:hover .lot-tree-toggle-visual {
+  border-color: #6b7280 !important;
+  background: #e5e7eb !important;
+  color: #111827 !important;
+}
+
+.management-lots-table .lot-tree-toggle:focus-visible .lot-tree-toggle-visual {
+  border-color: #4b5563 !important;
+}
