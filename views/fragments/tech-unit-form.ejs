@@ -63,6 +63,7 @@
     hasOverride: false
   };
   const canOverrideProductionWeight = Boolean(formOptions.canOverrideProductionWeight && productionWeightCapabilities.hasProductionWeightOverride);
+  const productionWeightHasUnitOverride = productionWeightDetails.sourceCode === 'unit_override' || Boolean(productionWeightDetails.hasOverride);
 
 
   function selected(currentValue, optionValue) {
@@ -136,6 +137,14 @@
   <input type="hidden" name="ramGb" value="<%= memoryTotalGb() || formData.ramGb || '' %>" data-memory-total-input />
   <input type="hidden" name="storageGb" value="<%= storageTotalGb() || formData.storageGb || '' %>" data-storage-total-input />
   <input type="hidden" name="currentUnitStatusConfigValueId" value="<%= formData.currentUnitStatusConfigValueId || formOptions.defaultUnitStatusId || '' %>" />
+
+  <div class="tech-unit-form-guide" aria-label="Tech Unit form guide">
+    <span><strong>1</strong> Identity</span>
+    <span><strong>2</strong> Lot & Category</span>
+    <span><strong>3</strong> Weight</span>
+    <span><strong>4</strong> Grade & Specs</span>
+    <span><strong>5</strong> Issues & Comments</span>
+  </div>
 
   <div class="form-section">
     <div class="form-section-header">
@@ -215,10 +224,14 @@
     <div class="form-grid">
       <label class="form-field">
         <span>Assignable Lot</span>
-        <select name="lotId" required>
+        <select name="lotId" required data-lot-select>
           <option value="">Select assignable lot</option>
           <% formOptions.lots.forEach((lot) => { %>
-            <option value="<%= lot.lot_id %>" <%= selected(formData.lotId, lot.lot_id) %>>
+            <%
+              const lotProductionWeightNumber = Number(lot.resolved_default_production_weight);
+              const lotProductionWeightValue = Number.isFinite(lotProductionWeightNumber) ? lotProductionWeightNumber.toFixed(2) : '';
+            %>
+            <option value="<%= lot.lot_id %>" data-production-weight="<%= lotProductionWeightValue %>" <%= selected(formData.lotId, lot.lot_id) %>>
               <%= lot.lot_name %>
               <% if (lot.lot_number) { %>
                 - Lot #<%= lot.lot_number %>
@@ -236,7 +249,7 @@
         <select name="unitCategoryConfigValueId" required data-unit-category-select>
           <option value="">Select category</option>
           <% formOptions.unitCategories.forEach((category) => { %>
-            <option value="<%= category.id %>" <%= selected(formData.unitCategoryConfigValueId, category.id) %>>
+            <option value="<%= category.id %>" data-production-weight="<%= category.defaultProductionWeightValue || '' %>" <%= selected(formData.unitCategoryConfigValueId, category.id) %>>
               <%= category.label %>
             </option>
           <% }) %>
@@ -253,23 +266,18 @@
     <div class="form-section-header">
       <div>
         <p class="eyebrow">Production Weight</p>
-        <h3>Weight Preview and Override</h3>
+        <h3>Production Weight</h3>
       </div>
       <p>
-        Production weight is separate from Cosmetic Grade and Unit Pass/Fail. The effective value comes from a unit override first,
-        then the lot default, then the unit category default.
+        Review the effective weight before saving.
       </p>
     </div>
 
-    <div class="production-weight-preview-grid">
+    <div class="production-weight-preview-grid production-weight-preview-grid--simple">
       <div class="production-weight-preview-card">
         <span>Effective Weight</span>
-        <strong><%= productionWeightDetails.formattedEffectiveWeight || '—' %></strong>
-      </div>
-
-      <div class="production-weight-preview-card">
-        <span>Source</span>
-        <strong><%= productionWeightDetails.sourceLabel || 'Calculated after save' %></strong>
+        <strong data-production-weight-preview-value><%= productionWeightDetails.formattedEffectiveWeight || '—' %></strong>
+        <small class="production-weight-unit-override-label" data-production-weight-unit-override-label data-initial-unit-override="<%= productionWeightHasUnitOverride ? 'true' : 'false' %>" <%= productionWeightHasUnitOverride ? '' : 'hidden' %>>Unit override</small>
       </div>
     </div>
 
@@ -282,34 +290,29 @@
     <% if (canOverrideProductionWeight) { %>
       <div class="form-grid">
         <label class="form-field">
-          <span>Unit Weight Override</span>
+          <span>Unit Override Weight</span>
           <input
             type="number"
             name="productionWeightOverride"
             value="<%= formData.productionWeightOverride || '' %>"
             step="0.01"
             min="0"
-            placeholder="Leave blank to use lot/category default"
+            placeholder="Optional custom weight"
             autocomplete="off"
+            data-production-weight-override-input
           />
           <small class="field-hint">
-            Optional. Management, Admin, and Tech Leads can override a single unit when the lot/category default is not correct.
+            Leave blank to use the selected lot/category weight.
           </small>
         </label>
 
         <label class="form-field">
-          <span>Override Notes</span>
-          <textarea name="productionWeightNotes" rows="3" maxlength="500" placeholder="Why this unit needs a different weight"><%= formData.productionWeightNotes || '' %></textarea>
+          <span>Unit Override Notes</span>
+          <textarea name="productionWeightNotes" rows="3" maxlength="500" placeholder="Optional unit override note"><%= formData.productionWeightNotes || '' %></textarea>
           <small class="field-hint">
-            Notes are only for the unit-level override. They do not affect Pass/Fail or Cosmetic Grade.
+            Optional note for the unit override.
           </small>
         </label>
-      </div>
-    <% } else { %>
-      <div class="message success production-weight-readonly-note">
-        <p>
-          Unit-level weight overrides are limited to Admin, Management, and Tech Lead users. Tech users can still view the effective weight here after save.
-        </p>
       </div>
     <% } %>
   </div>
@@ -505,7 +508,7 @@
             <div class="content-header" style="align-items: center; margin-bottom: 12px;">
               <div>
                 <strong>Memory Module <span data-module-display-number><%= index + 1 %></span></strong>
-                <p>Slot, size, type, speed, and module identifiers.</p>
+                <p>Slot, size, type, and install type.</p>
               </div>
               <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
             </div>
@@ -541,25 +544,10 @@
                 <small class="field-hint">Defaults to removable. Use integrated/soldered when memory cannot be removed.</small>
               </label>
 
-              <label class="form-field">
-                <span>Speed MHz</span>
-                <input type="number" name="memoryModules[<%= index %>][speedMhz]" value="<%= moduleRow.speedMhz || '' %>" min="1" step="1" placeholder="Example: 3200" data-module-field />
-              </label>
-
-              <label class="form-field">
-                <span>Module Manufacturer</span>
-                <input type="text" name="memoryModules[<%= index %>][manufacturerName]" value="<%= moduleRow.manufacturerName || '' %>" maxlength="120" placeholder="Example: Samsung" data-module-field />
-              </label>
-
-              <label class="form-field">
-                <span>Part Number</span>
-                <input type="text" name="memoryModules[<%= index %>][partNumber]" value="<%= moduleRow.partNumber || '' %>" maxlength="120" data-module-field />
-              </label>
-
-              <label class="form-field">
-                <span>Serial Number</span>
-                <input type="text" name="memoryModules[<%= index %>][serialNumber]" value="<%= moduleRow.serialNumber || '' %>" maxlength="120" data-module-field />
-              </label>
+              <input type="hidden" name="memoryModules[<%= index %>][speedMhz]" value="<%= moduleRow.speedMhz || '' %>" />
+              <input type="hidden" name="memoryModules[<%= index %>][manufacturerName]" value="<%= moduleRow.manufacturerName || '' %>" />
+              <input type="hidden" name="memoryModules[<%= index %>][partNumber]" value="<%= moduleRow.partNumber || '' %>" />
+              <input type="hidden" name="memoryModules[<%= index %>][serialNumber]" value="<%= moduleRow.serialNumber || '' %>" />
 
               <label class="form-field">
                 <span>Change Notes</span>
@@ -596,7 +584,7 @@
             <div class="content-header" style="align-items: center; margin-bottom: 12px;">
               <div>
                 <strong>Storage Device <span data-module-display-number><%= index + 1 %></span></strong>
-                <p>Drive slot, size, type, model, serial, firmware, and wipe status.</p>
+                <p>Drive slot, size, type, and wipe status.</p>
               </div>
               <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
             </div>
@@ -632,25 +620,10 @@
                 </select>
       </label>
 
-              <label class="form-field">
-                <span>Drive Manufacturer</span>
-                <input type="text" name="storageDevices[<%= index %>][manufacturerName]" value="<%= deviceRow.manufacturerName || '' %>" maxlength="120" placeholder="Example: Samsung" data-module-field />
-              </label>
-
-              <label class="form-field">
-                <span>Model Number</span>
-                <input type="text" name="storageDevices[<%= index %>][modelNumber]" value="<%= deviceRow.modelNumber || '' %>" maxlength="120" data-module-field />
-              </label>
-
-              <label class="form-field">
-                <span>Serial Number</span>
-                <input type="text" name="storageDevices[<%= index %>][serialNumber]" value="<%= deviceRow.serialNumber || '' %>" maxlength="120" data-module-field />
-              </label>
-
-              <label class="form-field">
-                <span>Firmware Version</span>
-                <input type="text" name="storageDevices[<%= index %>][firmwareVersion]" value="<%= deviceRow.firmwareVersion || '' %>" maxlength="120" data-module-field />
-              </label>
+              <input type="hidden" name="storageDevices[<%= index %>][manufacturerName]" value="<%= deviceRow.manufacturerName || '' %>" />
+              <input type="hidden" name="storageDevices[<%= index %>][modelNumber]" value="<%= deviceRow.modelNumber || '' %>" />
+              <input type="hidden" name="storageDevices[<%= index %>][serialNumber]" value="<%= deviceRow.serialNumber || '' %>" />
+              <input type="hidden" name="storageDevices[<%= index %>][firmwareVersion]" value="<%= deviceRow.firmwareVersion || '' %>" />
 
               <label class="form-field">
                 <span>Change Notes</span>
@@ -808,13 +781,13 @@
         <h3>Graphics Adapters</h3>
       </div>
       <p>
-        Record integrated or dedicated graphics adapters. Multiple rows are supported for units with both integrated and dedicated GPUs.
+        Graphics adapter information is ScanTool-only. These fields are visible for review but cannot be edited here.
       </p>
     </div>
 
     <div class="workflow-list" data-module-list="graphicsAdapter">
       <% graphicsRows.forEach((graphicsAdapter, index) => { %>
-        <article class="workflow-item slate" data-module-row="graphicsAdapter">
+        <article class="workflow-item slate tech-scantool-readonly-item" data-module-row="graphicsAdapter">
           <span></span>
           <div style="width: 100%;">
             <div class="content-header" style="align-items: center; margin-bottom: 12px;">
@@ -822,13 +795,13 @@
                 <strong>Graphics Adapter <span data-module-display-number><%= index + 1 %></span></strong>
                 <p>GPU type, model, and VRAM.</p>
               </div>
-              <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
             </div>
 
             <div class="form-grid">
               <label class="form-field">
                 <span>GPU Type</span>
-                <select name="graphicsAdapters[<%= index %>][gpuTypeConfigValueId]" data-module-field>
+                <input type="hidden" name="graphicsAdapters[<%= index %>][gpuTypeConfigValueId]" value="<%= graphicsAdapter.gpuTypeConfigValueId || '' %>" />
+                <select data-module-field disabled aria-disabled="true">
                   <option value="">Select GPU type</option>
                   <% gpuTypeOptions.forEach((gpuType) => { %>
                     <option value="<%= gpuType.id %>" <%= selected(graphicsAdapter.gpuTypeConfigValueId, gpuType.id) %>><%= gpuType.label %></option>
@@ -838,12 +811,12 @@
 
               <label class="form-field">
                 <span>GPU Model</span>
-                <input type="text" name="graphicsAdapters[<%= index %>][gpuModel]" value="<%= graphicsAdapter.gpuModel || '' %>" maxlength="150" placeholder="Example: Intel UHD Graphics" data-module-field />
+                <input type="text" name="graphicsAdapters[<%= index %>][gpuModel]" value="<%= graphicsAdapter.gpuModel || '' %>" maxlength="150" placeholder="Example: Intel UHD Graphics" data-module-field readonly aria-readonly="true" />
               </label>
 
               <label class="form-field">
                 <span>VRAM MB</span>
-                <input type="number" name="graphicsAdapters[<%= index %>][vramMb]" value="<%= graphicsAdapter.vramMb || '' %>" min="0" step="1" placeholder="Example: 2048" data-module-field />
+                <input type="number" name="graphicsAdapters[<%= index %>][vramMb]" value="<%= graphicsAdapter.vramMb || '' %>" min="0" step="1" placeholder="Example: 2048" data-module-field readonly aria-readonly="true" />
               </label>
             </div>
           </div>
@@ -851,9 +824,7 @@
       <% }) %>
     </div>
 
-    <div class="form-actions" style="margin-top: 12px;">
-      <button type="button" class="secondary-button" data-add-module-row="graphicsAdapter">+ Add Graphics Adapter</button>
-    </div>
+    <p class="field-hint tech-scantool-readonly-note">Graphics adapter rows are populated by ScanTools and are not editable in the manual unit form.</p>
   </div>
 
   <div class="form-section">
@@ -1073,7 +1044,7 @@
   </template>
 
   <template data-module-template="graphicsAdapter">
-    <article class="workflow-item slate" data-module-row="graphicsAdapter">
+    <article class="workflow-item slate tech-scantool-readonly-item" data-module-row="graphicsAdapter">
       <span></span>
       <div style="width: 100%;">
         <div class="content-header" style="align-items: center; margin-bottom: 12px;">
@@ -1081,12 +1052,11 @@
             <strong>Graphics Adapter <span data-module-display-number>__DISPLAY__</span></strong>
             <p>GPU type, model, and VRAM.</p>
           </div>
-          <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
         </div>
         <div class="form-grid">
-          <label class="form-field"><span>GPU Type</span><select name="graphicsAdapters[__INDEX__][gpuTypeConfigValueId]" data-module-field><option value="">Select GPU type</option><% gpuTypeOptions.forEach((gpuType) => { %><option value="<%= gpuType.id %>"><%= gpuType.label %></option><% }) %></select></label>
-          <label class="form-field"><span>GPU Model</span><input type="text" name="graphicsAdapters[__INDEX__][gpuModel]" maxlength="150" placeholder="Example: Intel UHD Graphics" data-module-field /></label>
-          <label class="form-field"><span>VRAM MB</span><input type="number" name="graphicsAdapters[__INDEX__][vramMb]" min="0" step="1" placeholder="Example: 2048" data-module-field /></label>
+          <label class="form-field"><span>GPU Type</span><input type="hidden" name="graphicsAdapters[__INDEX__][gpuTypeConfigValueId]" /><select data-module-field disabled aria-disabled="true"><option value="">Select GPU type</option><% gpuTypeOptions.forEach((gpuType) => { %><option value="<%= gpuType.id %>"><%= gpuType.label %></option><% }) %></select></label>
+          <label class="form-field"><span>GPU Model</span><input type="text" name="graphicsAdapters[__INDEX__][gpuModel]" maxlength="150" placeholder="Example: Intel UHD Graphics" data-module-field readonly aria-readonly="true" /></label>
+          <label class="form-field"><span>VRAM MB</span><input type="number" name="graphicsAdapters[__INDEX__][vramMb]" min="0" step="1" placeholder="Example: 2048" data-module-field readonly aria-readonly="true" /></label>
         </div>
       </div>
     </article>
@@ -1099,7 +1069,7 @@
         <div class="content-header" style="align-items: center; margin-bottom: 12px;">
           <div>
             <strong>Memory Module <span data-module-display-number>__DISPLAY__</span></strong>
-            <p>Slot, size, type, speed, and module identifiers.</p>
+            <p>Slot, size, type, and install type.</p>
           </div>
           <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
         </div>
@@ -1109,10 +1079,10 @@
           <label class="form-field"><span>Size GB</span><input type="number" name="memoryModules[__INDEX__][sizeGb]" min="1" step="1" placeholder="Example: 8" data-memory-size-input data-module-field /></label>
           <label class="form-field"><span>Memory Type</span><select name="memoryModules[__INDEX__][ramTypeConfigValueId]" data-module-field><option value="">Select memory type</option><% formOptions.ramTypes.forEach((ramType) => { %><option value="<%= ramType.id %>"><%= ramType.label %></option><% }) %></select></label>
           <label class="form-field"><span>Install Type</span><select name="memoryModules[__INDEX__][memoryInstallTypeCode]" data-module-field><% memoryInstallTypes.forEach((installType) => { %><option value="<%= installType.code %>" <%= installType.code === 'removable_module' ? 'selected' : '' %>><%= installType.label %></option><% }) %></select><small class="field-hint">Defaults to removable.</small></label>
-          <label class="form-field"><span>Speed MHz</span><input type="number" name="memoryModules[__INDEX__][speedMhz]" min="1" step="1" placeholder="Example: 3200" data-module-field /></label>
-          <label class="form-field"><span>Module Manufacturer</span><input type="text" name="memoryModules[__INDEX__][manufacturerName]" maxlength="120" placeholder="Example: Samsung" data-module-field /></label>
-          <label class="form-field"><span>Part Number</span><input type="text" name="memoryModules[__INDEX__][partNumber]" maxlength="120" data-module-field /></label>
-          <label class="form-field"><span>Serial Number</span><input type="text" name="memoryModules[__INDEX__][serialNumber]" maxlength="120" data-module-field /></label>
+          <input type="hidden" name="memoryModules[__INDEX__][speedMhz]" />
+          <input type="hidden" name="memoryModules[__INDEX__][manufacturerName]" />
+          <input type="hidden" name="memoryModules[__INDEX__][partNumber]" />
+          <input type="hidden" name="memoryModules[__INDEX__][serialNumber]" />
           <label class="form-field"><span>Change Notes</span><input type="text" name="memoryModules[__INDEX__][changeNotes]" maxlength="500" placeholder="Installed, replaced, upgraded, downgraded, etc." data-module-field /></label>
         </div>
       </div>
@@ -1126,7 +1096,7 @@
         <div class="content-header" style="align-items: center; margin-bottom: 12px;">
           <div>
             <strong>Storage Device <span data-module-display-number>__DISPLAY__</span></strong>
-            <p>Drive slot, size, type, model, serial, firmware, and wipe status.</p>
+            <p>Drive slot, size, type, and wipe status.</p>
           </div>
           <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
         </div>
@@ -1136,10 +1106,10 @@
           <label class="form-field"><span>Size GB</span><input type="number" name="storageDevices[__INDEX__][sizeGb]" min="1" step="1" placeholder="Example: 256" data-storage-size-input data-module-field /></label>
           <label class="form-field"><span>Storage Type</span><select name="storageDevices[__INDEX__][storageTypeConfigValueId]" data-module-field><option value="">Select storage type</option><% formOptions.storageTypes.forEach((storageType) => { %><option value="<%= storageType.id %>"><%= storageType.label %></option><% }) %></select></label>
           <label class="form-field"><span>Wipe Status</span><select name="storageDevices[__INDEX__][wipeStatusConfigValueId]" data-module-field><option value="">Select wipe status</option><% (formOptions.storageWipeStatuses || []).forEach((wipeStatus) => { %><option value="<%= wipeStatus.id %>"><%= wipeStatus.label %></option><% }) %></select></label>
-          <label class="form-field"><span>Drive Manufacturer</span><input type="text" name="storageDevices[__INDEX__][manufacturerName]" maxlength="120" placeholder="Example: Samsung" data-module-field /></label>
-          <label class="form-field"><span>Model Number</span><input type="text" name="storageDevices[__INDEX__][modelNumber]" maxlength="120" data-module-field /></label>
-          <label class="form-field"><span>Serial Number</span><input type="text" name="storageDevices[__INDEX__][serialNumber]" maxlength="120" data-module-field /></label>
-          <label class="form-field"><span>Firmware Version</span><input type="text" name="storageDevices[__INDEX__][firmwareVersion]" maxlength="120" data-module-field /></label>
+          <input type="hidden" name="storageDevices[__INDEX__][manufacturerName]" />
+          <input type="hidden" name="storageDevices[__INDEX__][modelNumber]" />
+          <input type="hidden" name="storageDevices[__INDEX__][serialNumber]" />
+          <input type="hidden" name="storageDevices[__INDEX__][firmwareVersion]" />
           <label class="form-field"><span>Change Notes</span><input type="text" name="storageDevices[__INDEX__][changeNotes]" maxlength="500" placeholder="Installed, replaced, upgraded, downgraded, wiped, etc." data-module-field /></label>
         </div>
       </div>

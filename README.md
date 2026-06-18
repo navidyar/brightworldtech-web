@@ -4,201 +4,81 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
-Step 5h: Step 5 final handoff cleanup.
+Step 6f: Unit archive and retained-history cleanup.
 
-This is a documentation and handoff step. It closes the Step 5 Configuration/Lot/User/Production Weight pass and records the current approved app behavior before moving into Step 6 work.
+This step replaces permanent Tech Unit deletion with archival. Archiving removes a unit from the normal unfiltered Unit Browser while retaining the database record, identifiers, history, and related detail records.
 
-## Step 5h Goal
+## Step 6f Goal
 
-Create a clean Step 5 handoff baseline without changing application behavior.
+Protect unit history by ensuring a unit is never removed from the database through the Tech Unit Browser.
 
-Step 5h does not add routes, database tables, UI controls, or SQL. It updates the project handoff notes so the next work can start from the current approved state.
+## Step 6f Changes
+
+- Adds unit archive fields through a SQL migration:
+  - `is_archived`
+  - `archived_at`
+  - `archived_by_user_id`
+- Changes the existing Tech Unit Delete flow into an Archive flow without changing the existing URLs.
+- Changes the row action label from `Delete` to `Archive` for active units.
+- Does not delete from `units` or delete related unit detail records.
+- Hides archived units from the normal unfiltered Unit Browser.
+- Includes archived units when a user searches by an identifier or other search text.
+- Clearly labels archived units in matching search results and expanded detail views.
+- Preserves edit/history access to archived units found through search.
+- Keeps archived-unit identifiers reserved, so a later create attempt cannot accidentally create a duplicate record for the same hardware.
+- Requires the Step 6f SQL migration before archiving can be used.
 
 ## Important Direction Preserved
 
-- Support-task productivity remains deferred to a future version.
-- Current scope stays focused on Configuration, Lots, Users/Roles, and Production Weight foundation/application.
-- HTMX flows should continue returning HTML fragments or HTMX redirects, not JSON, unless JSON is specifically needed.
-- Post-rebuild checks should focus only on the feature just changed.
+- `/tech/units` remains the single Unit Browser for Tech, Tech Lead, Management, and Admin users according to access policy.
+- Production Weight stays numeric-only except when identifying a Unit override.
 - Cosmetic Grade and Pass/Fail remain separate concepts.
-- Lot IDs should not be visible in frontend lot displays.
+- Support-task productivity remains deferred.
+- Database Check is an Admin-only tool. Management users do not see the sidebar link and cannot open `/database`.
 - Patch files are applied from `/home/bwtdallas-webserver/app/`.
-- Zipped handoff files that are created for upload/reference are kept in `/home/bwtdallas-webserver/app/handoff/`.
+- Zipped handoff files created for upload/reference are kept in `/home/bwtdallas-webserver/app/handoff/`.
 
-## Current Stack
-
-- Node.js / Express app served from `server.js`.
-- EJS views and fragments.
-- HTMX modal and table-update flows.
-- MySQL 8 database through `mysql2/promise`.
-- Docker Compose app container behind Traefik.
-- Rebuild command:
-
-```bash
-cd /home/bwtdallas-webserver/app
-
-docker compose up -d --build
-```
-
-## Current Major Areas
-
-### Dashboards
-
-- Dashboard role routing is in place.
-- Dashboard summary routes are available.
-- Management dashboard period controls and charts are in place from Step 4.
-- Dashboard productivity work should not be expanded into support-task productivity yet.
-
-### Tech Unit Browser
-
-- Tech Unit Browser supports create/edit modal flows.
-- Duplicate-unit confirmation flow is in place.
-- Unit history panel is available.
-- Override request flow is available from Tech Units.
-- Outcome approval flow is available for Admin/Management/Tech Lead roles.
-- Production weight visibility/application is in place from Step 5f.
-- Effective production weight priority is:
+## Archive Behavior
 
 ```text
-Unit override > Lot default > Unit category default
+Active unit
+  -> Archive action
+  -> Unit row disappears from the normal unfiltered Unit Browser
+  -> Unit, identifiers, history, and detail records remain in the database
+  -> Search by asset tag, BIOS serial, unit serial, or other searchable text retrieves the archived unit
 ```
-
-### Management Users
-
-- Management Users cleanup is in place.
-- Single-account role normalization is in place.
-- Active/inactive user flows remain available.
-- Pending setup user cleanup remains available.
-
-### Configuration
-
-- Configuration page is available at `/management/config` for Admin users.
-- Configuration CRUD modal flow is in place.
-- Inactive config values are hidden by default.
-- `/management/config?includeInactive=1` shows inactive values for review/reactivation.
-- Activating/reactivating a config value redirects back to `/management/config`, returning the user to the Active values only view.
-- Deactivating a config value redirects to `/management/config?includeInactive=1`, so the newly inactive value remains visible for confirmation.
-- Config page guidance cards, state note, system-used pills, production-weight pills, inactive-row treatment, and modal help text are in place from Step 5g.
-
-### Lots
-
-- Lot Browser is available at `/management/lots` for Admin/Management users.
-- Lots support create/edit/hide/unhide/delete modal flows.
-- Lot detail pages support lot requirement management.
-- Lot hierarchy uses expandable parent/child rows.
-- Root lots show first; expanding a parent reveals direct children.
-- Child rows can expand their own children.
-- The hierarchy separator is indentation/expand-collapse behavior, not colored rails/slivers.
-- Row body click opens the lot detail page.
-- Expand/collapse arrow zone is protected and toggles children.
-- Blank child indentation area is not clickable.
-- Empty separator space between root groups is not clickable.
-- Action button area is protected so button padding/empty action space does not open the lot detail page.
-- Current arrow badge treatment is gray background, darker gray 1px border, black arrow symbol.
-- Lot-name typography is preserved at the approved size.
-
-### Production Weight
-
-- Production Weight Types are managed through config values.
-- Unit category defaults are available through Production Weight Types.
-- Lot default production weight can be set as a custom numeric value by higher-level users.
-- Unit-level production weight override is available where role policy allows it.
-- Production weight audit/support tables from Step 5f are in place.
-- Support-task productivity remains deferred and should not be built in this version.
 
 ## Key Routes
 
 ```text
-/
-/dashboards/admin
-/dashboards/management
-/dashboards/tech
-/dashboard/summary
-/dashboards/:dashboardKey/summary
-
-/management/config
-/management/config?includeInactive=1
-/management/config/values/new/modal
-/management/config/values/:configValueId/edit/modal
-/management/config/values/:configValueId/activate/modal
-/management/config/values/:configValueId/deactivate/modal
-
-/management/lots
-/management/lots?showHidden=1
-/management/lots/new/modal
-/management/lots/:lotId
-/management/lots/:lotId/edit/modal
-/management/lots/:lotId/hide/modal
-/management/lots/:lotId/unhide/modal
-/management/lots/:lotId/delete/modal
-/management/lots/:lotId/requirements/new/modal
-/management/lots/:lotId/requirements/:requirementId/edit/modal
-
-/management/users
-/management/users/inactive
-/management/users/new
-/management/users/:userId/edit/modal
-/management/users/:userId/deactivate/modal
-/management/users/:userId/reactivate/modal
-/management/users/:userId/delete-pending/modal
-
-/management/overrides
-/management/overrides/table
-
 /tech/units
 /tech/units/table
 /tech/units/new/modal
 /tech/units/:unitId/edit/modal
 /tech/units/:unitId/history
-/tech/units/:unitId/override/modal
-/tech/units/:unitId/outcome-approval/modal
 /tech/units/:unitId/delete/modal
 ```
 
-## Step 5 SQL Files Present
+The existing `/tech/units/:unitId/delete` route is retained for compatibility, but after Step 6f it archives the unit instead of deleting it.
 
-```text
-sql/2026-06-step-5a-production-weights.sql
-sql/2026-06-step-5a-production-weight-values-cleanup.sql
-sql/2026-06-step-5a-production-weight-values-hotfix.sql
-sql/2026-06-step-5b-lot-visibility.sql
-sql/2026-06-step-5c-single-account-role-normalization.sql
-sql/2026-06-step-5f-production-weight-override-audit.sql
-```
-
-## Step 5 Completed Areas
-
-### Step 5a
-
-Production weight foundation and Production Weight Types groundwork.
-
-### Step 5b
-
-Lot configuration cleanup and lot visibility foundation.
-
-### Step 5c
-
-User/role management cleanup and single-account role normalization.
-
-### Step 5d / Step 5e
-
-Configuration values cleanup and Configuration CRUD foundation.
-
-### Step 5f through Step 5f.23
-
-Production weight application and Lot Browser UI stabilization, ending with the approved expandable hierarchy behavior and gray arrow badge treatment.
-
-### Step 5g / Step 5g.1
-
-Configuration page final polish and activate/reactivate redirect cleanup.
-
-### Step 5h
-
-Final Step 5 README/handoff cleanup only.
-
-## Step 5h File Touches
+## Step 6f File Touches
 
 - `README.md`
+- `sql/2026-06-step-6f-unit-archive.sql`
+- `models/techUnitModel.js`
+- `controllers/techController.js`
+- `routes/management.js`
+- `views/pages/tech-units.ejs`
+- `views/fragments/tech-units-table.ejs`
+- `views/fragments/tech-unit-delete-modal.ejs`
+
+## Apply the SQL Migration
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' < sql/2026-06-step-6f-unit-archive.sql
+```
 
 ## Rebuild
 
@@ -212,16 +92,16 @@ docker logs --tail=80 bwtdallas-app
 
 ## Post-Rebuild Checks
 
-Because Step 5h is documentation-only, the main check is that the app still starts normally.
-
-Optional quick checks:
-
-1. Go to `/management/config` and confirm the page still loads.
-2. Go to `/management/lots` and confirm the expandable Lot Browser still loads.
-3. Go to `/tech/units` and confirm the Tech Unit Browser still loads.
+1. Run the Step 6f SQL migration.
+2. Go to `/tech/units` with no search value and choose an active unit.
+3. Confirm the row action says `Archive`.
+4. Archive the unit and confirm it disappears from the normal unfiltered list.
+5. Search for the archived unit by asset tag, BIOS serial, or unit serial.
+6. Confirm the archived unit appears with its `Archived` label.
+7. Expand the result and confirm Unit Details and History remain available.
+8. Confirm the unit record and related detail records were not deleted.
+9. Try creating a new unit with an archived unit identifier and confirm duplicate protection still directs the user to the retained record.
 
 ## Next Direction
 
-Recommended next step: Step 6a — Unit production-weight display review.
-
-Step 6a should review unit-side production weight display and wording without adding support-task productivity.
+Recommended next step: review archive/retrieval behavior with real unit data before adding a future restore/unarchive workflow.

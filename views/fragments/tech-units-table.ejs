@@ -126,19 +126,19 @@
   <table class="tech-units-table">
     <thead>
       <tr>
-        <th>Specs</th>
+        <th>Unit / Weight</th>
         <th>Date</th>
-        <th>Tech User</th>
-        <th>Asset Tag, BIOS Serial, Unit Serial</th>
-        <th>Grade</th>
-        <th>Actions</th>
+        <th>Latest Tech</th>
+        <th>Identifiers</th>
+        <th>Grade / Pass-Fail</th>
+        <th>Unit Actions</th>
       </tr>
     </thead>
 
     <tbody>
       <% if (result.units.length === 0) { %>
         <tr>
-          <td colspan="6">No units found.</td>
+          <td colspan="6">No units match the current filters.</td>
         </tr>
       <% } %>
 
@@ -185,10 +185,17 @@
                   <span>Lot: <%= unit.lotName || '—' %></span>
                   <span aria-hidden="true">·</span>
                   <span>Category: <%= unit.categoryLabel || '—' %></span>
-                  <span aria-hidden="true">·</span>
-                  <span>Weight: <%= unit.formattedProductionWeight || '—' %></span>
+                  <% if (unit.isArchived) { %>
+                    <span aria-hidden="true">·</span>
+                    <span>Archived</span>
+                  <% } %>
                 </small>
-                <small class="tech-unit-summary-weight-source"><%= unit.productionWeightSourceLabel || 'No configured weight' %></small>
+                <span class="tech-unit-summary-weight-strip">
+                  <span class="tech-unit-summary-weight-value">Weight <strong><%= unit.formattedProductionWeight || '—' %></strong></span>
+                  <% if (unit.productionWeightSourceCode === 'unit_override') { %>
+                    <span class="tech-unit-summary-weight-source">Unit override</span>
+                  <% } %>
+                </span>
               </span>
             </button>
           </td>
@@ -253,7 +260,9 @@
                 <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" data-no-row-toggle>
                   Edit
                 </a>
-                <% if (canDeleteTechUnits) { %>
+                <% if (unit.isArchived) { %>
+                  <span class="tech-chip">Archived</span>
+                <% } else if (canDeleteTechUnits) { %>
                   <a
                     class="secondary-button danger-button tech-delete-action-button"
                     href="/tech/units/<%= unit.unitId %>/delete/modal"
@@ -263,7 +272,7 @@
                     hx-target="#modal-root"
                     hx-swap="innerHTML"
                   >
-                    Delete
+                    Archive
                   </a>
                 <% } %>
               </div>
@@ -279,8 +288,8 @@
               <div class="tech-detail-panel" data-unit-detail-panel>
                 <div class="tech-detail-header">
                   <div class="tech-detail-title">
-                    <strong>Additional Details</strong>
-                    <span>Expanded information for this unit record.</span>
+                    <strong>Unit Details</strong>
+                    <span>Identity, grade/pass-fail, hardware, workflow, modules, issues, and comments.</span>
                   </div>
 
                   <div class="tech-detail-actions">
@@ -291,6 +300,9 @@
                       <% } %>
                       <% if (currentOutcomeLabel) { %>
                         <span class="tech-chip"><%= currentOutcomeLabel %></span>
+                      <% } %>
+                      <% if (unit.isArchived) { %>
+                        <span class="tech-chip">Archived</span>
                       <% } %>
                     </div>
 
@@ -334,8 +346,14 @@
                       <div>
                         <dt>Production Weight</dt>
                         <dd>
-                          <%= unit.formattedProductionWeight || '—' %>
-                          <span class="tech-chip"><%= unit.productionWeightSourceLabel || 'No configured weight' %></span>
+                          <div class="tech-production-weight-detail">
+                            <div class="tech-production-weight-detail-main">
+                              <strong><%= unit.formattedProductionWeight || '—' %></strong>
+                              <% if (unit.productionWeightSourceCode === 'unit_override') { %>
+                                <span class="tech-chip tech-production-weight-source-chip">Unit override</span>
+                              <% } %>
+                            </div>
+                          </div>
                         </dd>
                       </div>
                     </dl>
@@ -537,6 +555,13 @@
                         <dt>Completed</dt>
                         <dd><%= unit.completedAt ? formatDateTime(unit.completedAt) : '—' %></dd>
                       </div>
+
+                      <% if (unit.isArchived) { %>
+                        <div>
+                          <dt>Archived</dt>
+                          <dd><%= unit.archivedAt ? formatDateTime(unit.archivedAt) : 'Yes' %></dd>
+                        </div>
+                      <% } %>
                     </dl>
                   </section>
                 </div>
@@ -545,20 +570,6 @@
                   <section class="tech-notes-section tech-notes-section--memory">
                   <div class="tech-section-title-row">
                     <h3>Current Memory Modules</h3>
-                    <% if (memoryModules.length > 0) { %>
-                      <details class="tech-inline-more-info">
-                        <summary>View More Info</summary>
-                        <div class="tech-inline-more-info-panel">
-                          <% memoryModules.forEach((memoryModule) => { %>
-                            <p>
-                              <strong><%= memoryModule.slotLabel || 'Slot' %></strong>
-                              <span>Speed: <%= formatMhz(memoryModule.speedMhz) || '—' %></span>
-                              <span>Serial: <%= memoryModule.serialNumber || '—' %></span>
-                            </p>
-                          <% }) %>
-                        </div>
-                      </details>
-                    <% } %>
                   </div>
 
                   <% if (memoryModules.length > 0) { %>
@@ -610,14 +621,6 @@
                             <div>
                               <dt>Size / Type</dt>
                               <dd><%= formatGb(storageDevice.sizeGb) %> <%= storageDevice.storageTypeLabel || '' %></dd>
-                            </div>
-                            <div>
-                              <dt>Model</dt>
-                              <dd><%= storageDevice.modelNumber || storageDevice.manufacturerName || '—' %></dd>
-                            </div>
-                            <div>
-                              <dt>Serial</dt>
-                              <dd><%= storageDevice.serialNumber || '—' %></dd>
                             </div>
                             <div>
                               <dt>Wipe Status</dt>

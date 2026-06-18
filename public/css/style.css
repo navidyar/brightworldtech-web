@@ -3213,3 +3213,39 @@ input[type="date"] {
     grid-template-columns: 1fr;
   }
 }
+
+/* Step 6e.5 shared action-button styling: match approved Lot Browser row actions. */
+.config-value-row-actions {
+  gap: 5px;
+}
+
+.config-values-table-card .config-value-row-actions .secondary-button,
+.config-values-table-card .config-value-row-actions .danger-button,
+.config-values-table-card .config-value-row-actions button.secondary-button,
+.config-values-table-card .config-value-row-actions button.danger-button {
+  min-height: 28px;
+  padding: 9px 12px !important;
+  border-radius: 6px !important;
+  font-size: 0.73rem;
+  line-height: 1;
+}
+
+/* Step 6e.6 shared row action-button contrast refinement. */
+.config-values-table-card .config-value-row-actions .secondary-button {
+  border-color: #94a3b8 !important;
+}
+
+.config-values-table-card .config-value-row-actions .secondary-button:hover {
+  border-color: #64748b !important;
+}
+
+.config-values-table-card .config-value-row-actions .danger-button {
+  border-color: color-mix(in srgb, var(--red) 56%, #94a3b8 44%) !important;
+  color: color-mix(in srgb, var(--red) 82%, var(--text) 18%) !important;
+  background: color-mix(in srgb, #fee2e2 56%, #ffffff 44%) !important;
+}
+
+.config-values-table-card .config-value-row-actions .danger-button:hover {
+  border-color: color-mix(in srgb, var(--red) 72%, #64748b 28%) !important;
+  background: color-mix(in srgb, #fecaca 60%, #ffffff 40%) !important;
+}

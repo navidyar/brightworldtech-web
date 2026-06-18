@@ -43,6 +43,16 @@ function normalizeStatusFilter(statusFilter) {
   return VALID_STATUS_FILTERS.has(normalized) ? normalized : 'pending';
 }
 
+function normalizeRequestStatus(status) {
+  const normalized = String(status || 'pending').trim().toLowerCase();
+
+  if (!normalized || normalized === 'all') {
+    return 'pending';
+  }
+
+  return normalized;
+}
+
 function normalizeOptionalInteger(value) {
   const parsed = Number(value);
 
@@ -88,19 +98,21 @@ async function getLotNameMap() {
 }
 
 function getStatusLabel(status) {
-  if (status === 'pending') {
+  const normalizedStatus = normalizeRequestStatus(status);
+
+  if (normalizedStatus === 'pending') {
     return 'Pending';
   }
 
-  if (status === 'approved') {
+  if (normalizedStatus === 'approved') {
     return 'Approved';
   }
 
-  if (status === 'denied') {
+  if (normalizedStatus === 'denied') {
     return 'Denied';
   }
 
-  if (status === 'cancelled') {
+  if (normalizedStatus === 'cancelled') {
     return 'Cancelled';
   }
 
@@ -108,11 +120,13 @@ function getStatusLabel(status) {
 }
 
 function getStatusClass(status) {
-  if (status === 'approved') {
+  const normalizedStatus = normalizeRequestStatus(status);
+
+  if (normalizedStatus === 'approved') {
     return 'good';
   }
 
-  if (status === 'denied' || status === 'cancelled') {
+  if (normalizedStatus === 'denied' || normalizedStatus === 'cancelled') {
     return 'bad';
   }
 
@@ -180,6 +194,7 @@ function getDecisionLabel(decision) {
 }
 
 function mapOverrideRequest(row, lotMap) {
+  const normalizedRequestStatus = normalizeRequestStatus(row.request_status);
   const unitAssetTag = row.asset_number
     ? getDisplayAssetTag(row.asset_number)
     : null;
@@ -193,7 +208,7 @@ function mapOverrideRequest(row, lotMap) {
     unitLabel: unitAssetTag || 'No asset tag',
     requestType: row.request_type || 'lot_requirement_override',
     requestTypeLabel: getRequestTypeLabel(row.request_type),
-    requestStatus: row.request_status || 'pending',
+    requestStatus: normalizedRequestStatus,
     validationStatus: row.validation_status || null,
     enforcementDecision: row.enforcement_decision || null,
     reason: row.reason || '',
@@ -207,9 +222,9 @@ function mapOverrideRequest(row, lotMap) {
     expiresAt: row.expires_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    isPending: row.request_status === 'pending',
-    statusLabel: getStatusLabel(row.request_status),
-    statusClass: getStatusClass(row.request_status),
+    isPending: normalizedRequestStatus === 'pending',
+    statusLabel: getStatusLabel(normalizedRequestStatus),
+    statusClass: getStatusClass(normalizedRequestStatus),
     validationLabel: getValidationLabel(row.validation_status),
     decisionLabel: getDecisionLabel(row.enforcement_decision)
   };
@@ -236,7 +251,7 @@ async function listOverrideRequests(options = {}) {
   const params = [];
 
   if (statusFilter !== 'all') {
-    where.push('r.request_status = ?');
+    where.push('LOWER(r.request_status) = ?');
     params.push(statusFilter);
   }
 
@@ -278,7 +293,7 @@ async function listOverrideRequests(options = {}) {
         ON reviewed_by.user_id = r.reviewed_by_user_id
       ${whereSql}
       ORDER BY
-        CASE r.request_status
+        CASE LOWER(r.request_status)
           WHEN 'pending' THEN 10
           WHEN 'approved' THEN 20
           WHEN 'denied' THEN 30
@@ -516,7 +531,7 @@ async function getPendingOverrideRequestForUnit({ unitId, lotId }) {
         created_at
       FROM unit_override_requests
       WHERE unit_id = ?
-        AND request_status = 'pending'
+        AND LOWER(request_status) = 'pending'
         AND (
           lot_id = ?
           OR (? IS NULL AND lot_id IS NULL)
@@ -602,7 +617,7 @@ async function approveOverrideRequest({ overrideRequestId, reviewedByUserId, rev
         review_notes = ?,
         reviewed_at = NOW()
       WHERE unit_override_request_id = ?
-        AND request_status = 'pending'
+        AND LOWER(request_status) = 'pending'
       LIMIT 1
     `,
     [reviewerId, normalizeText(reviewNotes), requestId]
@@ -628,7 +643,7 @@ async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, review
         review_notes = ?,
         reviewed_at = NOW()
       WHERE unit_override_request_id = ?
-        AND request_status = 'pending'
+        AND LOWER(request_status) = 'pending'
       LIMIT 1
     `,
     [reviewerId, normalizeText(reviewNotes), requestId]

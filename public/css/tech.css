@@ -4699,3 +4699,341 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+/* Step 6a: unit production-weight display review. */
+.tech-unit-summary-weight-strip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 5px;
+}
+
+.tech-unit-summary-weight-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--line) 76%, var(--blue) 24%);
+  border-radius: 999px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface) 78%, var(--blue-soft) 22%);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.tech-unit-summary-weight-value strong {
+  color: var(--text);
+  font-size: 0.74rem;
+  font-weight: 900;
+}
+
+.tech-unit-summary-weight-source {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 7px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: #475569;
+  background: #f1f5f9;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1;
+}
+
+.tech-production-weight-detail {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tech-production-weight-detail-main {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.tech-production-weight-detail-main strong {
+  color: var(--text);
+  font-size: 0.92rem;
+  font-weight: 900;
+}
+
+.tech-production-weight-detail small {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.tech-production-weight-source-chip {
+  color: #475569;
+  background: #f1f5f9;
+}
+
+.production-weight-preview-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.production-weight-preview-grid--simple {
+  grid-template-columns: minmax(180px, 260px);
+}
+
+.production-weight-unit-override-label {
+  color: #475569;
+  font-weight: 850 !important;
+}
+
+.production-weight-preview-card small {
+  display: block;
+  margin-top: 7px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+@media (max-width: 980px) {
+  .production-weight-preview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Step 6b: Tech Unit form/modal cleanup. */
+.tech-unit-form-guide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, var(--blue) 22%);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface) 78%, var(--blue-soft) 22%);
+}
+
+.tech-unit-form-guide span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 26px;
+  padding: 4px 9px;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  color: #475569;
+  background: rgba(255, 255, 255, 0.84);
+  font-size: 0.76rem;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.tech-unit-form-guide strong {
+  display: inline-flex;
+  width: 18px;
+  height: 18px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  color: #ffffff;
+  background: #64748b;
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.tech-unit-modal .tech-unit-form .form-actions,
+.tech-unit-form .form-actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  margin: 4px -16px -16px;
+  padding: 12px 16px;
+  border: 1px solid color-mix(in srgb, var(--line) 78%, var(--blue) 22%);
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0 0 12px 12px;
+  background: color-mix(in srgb, rgba(255, 255, 255, 0.96) 88%, var(--surface-soft) 12%);
+  box-shadow: 0 -10px 24px rgba(15, 23, 42, 0.08);
+}
+
+.tech-unit-modal .tech-unit-form .form-actions .primary-button,
+.tech-unit-modal .tech-unit-form .form-actions .secondary-button {
+  min-width: 120px;
+  justify-content: center;
+}
+
+.form-section--production-weight .form-section-header {
+  margin-bottom: 11px;
+}
+
+.form-section--production-weight .production-weight-preview-grid {
+  margin-bottom: 12px;
+}
+
+.form-section--production-weight .form-grid {
+  margin-top: 2px;
+}
+
+@media (max-width: 720px) {
+  .tech-unit-form-guide {
+    gap: 6px;
+    padding: 9px;
+  }
+
+  .tech-unit-form-guide span {
+    font-size: 0.72rem;
+  }
+
+  .tech-unit-modal .tech-unit-form .form-actions,
+  .tech-unit-form .form-actions {
+    margin-right: -12px;
+    margin-bottom: -14px;
+    margin-left: -12px;
+    justify-content: stretch;
+  }
+
+  .tech-unit-modal .tech-unit-form .form-actions .primary-button,
+  .tech-unit-modal .tech-unit-form .form-actions .secondary-button {
+    flex: 1 1 140px;
+  }
+}
+
+/* Step 6e.1 Tech Unit Browser detail/form corrections. */
+.tech-detail-title,
+.tech-unit-history-panel-header > div:first-child {
+  box-sizing: border-box;
+  padding-left: 10px;
+}
+
+.tech-unit-summary-identifiers {
+  display: grid;
+  gap: 1px;
+  max-width: 220px;
+  line-height: 1.16;
+}
+
+.tech-unit-summary-id-item {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 6px;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.tech-unit-summary-id-item:not(:last-child)::after {
+  display: none;
+}
+
+.tech-unit-summary-id-label,
+.tech-unit-summary-id-value {
+  font-size: 0.75rem;
+  line-height: 1.16;
+}
+
+.tech-unit-summary-id-value {
+  max-width: 150px;
+}
+
+.tech-scantool-readonly-item {
+  opacity: 0.78;
+}
+
+.tech-scantool-readonly-item input[readonly],
+.tech-scantool-readonly-item select:disabled {
+  cursor: not-allowed;
+  border-color: #cbd5e1;
+  color: #64748b;
+  background: #f1f5f9;
+}
+
+.tech-scantool-readonly-note {
+  margin: 10px 0 0;
+}
+
+@media (max-width: 760px) {
+  .tech-unit-summary-identifiers {
+    max-width: none;
+  }
+
+  .tech-unit-summary-id-item {
+    grid-template-columns: 1fr;
+    gap: 1px;
+  }
+}
+
+/* Step 6e.3 Unit detail body inset correction. */
+.tech-unit-panel-view > .message,
+.tech-unit-panel-view > .tech-detail-layout,
+.tech-unit-panel-view > .tech-notes-section,
+.tech-unit-history-panel > .message,
+.tech-unit-history-panel > .tech-notes-section {
+  margin-left: 14px;
+}
+
+@media (max-width: 760px) {
+  .tech-unit-panel-view > .message,
+  .tech-unit-panel-view > .tech-detail-layout,
+  .tech-unit-panel-view > .tech-notes-section,
+  .tech-unit-history-panel > .message,
+  .tech-unit-history-panel > .tech-notes-section {
+    margin-left: 10px;
+  }
+}
+
+/* Step 6e.4 Current Memory Modules container left-padding hotfix. */
+.tech-module-pair-layout > .tech-notes-section--memory {
+  box-sizing: border-box;
+  padding-left: 24px !important;
+}
+
+@media (max-width: 760px) {
+  .tech-module-pair-layout > .tech-notes-section--memory {
+    padding-left: 20px !important;
+  }
+}
+
+/* Step 6e.5 shared action-button styling: match approved Lot Browser row actions. */
+.tech-summary-actions {
+  gap: 5px;
+}
+
+.tech-units-table .tech-summary-actions .secondary-button,
+.tech-units-table .tech-summary-actions .danger-button,
+.tech-units-table .tech-summary-actions button.secondary-button,
+.tech-units-table .tech-summary-actions button.danger-button {
+  min-height: 28px;
+  padding: 9px 12px !important;
+  border-radius: 6px !important;
+  font-size: 0.73rem;
+  line-height: 1;
+}
+
+/* Step 6e.6 shared row action-button contrast refinement. */
+.tech-units-table .tech-summary-actions .secondary-button {
+  border-color: #94a3b8 !important;
+}
+
+.tech-units-table .tech-summary-actions .secondary-button:hover {
+  border-color: #64748b !important;
+}
+
+.tech-units-table .tech-summary-actions .tech-history-action-button.is-active {
+  border-color: color-mix(in srgb, var(--blue) 58%, #64748b 42%) !important;
+}
+
+.tech-units-table .tech-summary-actions .danger-button {
+  border-color: color-mix(in srgb, var(--red) 56%, #94a3b8 44%) !important;
+  color: color-mix(in srgb, var(--red) 82%, var(--text) 18%) !important;
+  background: color-mix(in srgb, #fee2e2 56%, #ffffff 44%) !important;
+}
+
+.tech-units-table .tech-summary-actions .danger-button:hover {
+  border-color: color-mix(in srgb, var(--red) 72%, #64748b 28%) !important;
+  background: color-mix(in srgb, #fecaca 60%, #ffffff 40%) !important;
+}

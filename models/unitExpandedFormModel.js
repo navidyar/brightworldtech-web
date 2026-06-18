@@ -749,7 +749,6 @@ async function saveExpandedDetailsForUnit({ unitId, formData, currentUserId }) {
     await saveUnitSpecifications(connection, safeUnitId, formData, currentUserId);
     await saveOverallGrade(connection, safeUnitId, formData, currentUserId);
     await saveOutcome(connection, safeUnitId, formData, currentUserId);
-    await saveGraphicsAdapters(connection, safeUnitId, formData, currentUserId);
 
     await connection.commit();
   } catch (error) {

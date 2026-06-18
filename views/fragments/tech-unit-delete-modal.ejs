@@ -8,7 +8,7 @@
     <header class="modal-header">
       <div>
         <p class="eyebrow">Tech Unit</p>
-        <h2 id="tech-unit-delete-modal-title">Delete Unit</h2>
+        <h2 id="tech-unit-delete-modal-title">Archive Unit</h2>
       </div>
 
       <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
@@ -23,9 +23,9 @@
         </div>
       <% } %>
 
-      <% if (safeUnit) { %>
+      <% if (safeUnit && safeUnit.archiveSupported && !safeUnit.isArchived) { %>
         <div class="tech-delete-confirm-card">
-          <p class="tech-delete-warning">This will delete the unit record from this lot and remove its related unit detail records.</p>
+          <p class="tech-delete-warning">This will archive the unit from the normal Unit Browser. The unit record, identifiers, history, and related details remain intact and can still be retrieved by searching for an identifier.</p>
 
           <dl class="tech-delete-summary-list">
             <div>
@@ -66,7 +66,7 @@
           hx-swap="innerHTML"
         >
           <button type="button" class="secondary-button" data-modal-close>Cancel</button>
-          <button type="submit" class="secondary-button danger-button">Delete Unit</button>
+          <button type="submit" class="secondary-button danger-button">Archive Unit</button>
         </form>
       <% } else { %>
         <div class="tech-delete-confirm-actions">

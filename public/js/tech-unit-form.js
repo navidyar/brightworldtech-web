@@ -200,6 +200,49 @@
     });
   }
 
+
+  function formatProductionWeight(value) {
+    if (value === null || value === undefined || value === '') {
+      return '—';
+    }
+
+    const numericValue = Number(value);
+
+    return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue.toFixed(2) : '—';
+  }
+
+  function getSelectedProductionWeight(select) {
+    const selectedOption = getSelectedOption(select);
+
+    return selectedOption ? selectedOption.getAttribute('data-production-weight') || '' : '';
+  }
+
+  function updateProductionWeightPreview(form) {
+    if (!form) {
+      return;
+    }
+
+    const previewValue = form.querySelector('[data-production-weight-preview-value]');
+    const overrideLabel = form.querySelector('[data-production-weight-unit-override-label]');
+    const overrideInput = form.querySelector('[data-production-weight-override-input]');
+    const lotSelect = form.querySelector('[data-lot-select]');
+    const categorySelect = form.querySelector('[data-unit-category-select]');
+    const overrideValue = overrideInput ? overrideInput.value : '';
+    const lotWeight = getSelectedProductionWeight(lotSelect);
+    const categoryWeight = getSelectedProductionWeight(categorySelect);
+    const displayValue = overrideValue || lotWeight || categoryWeight || '';
+    const initialUnitOverride = overrideLabel && overrideLabel.getAttribute('data-initial-unit-override') === 'true';
+    const hasOverride = Boolean(overrideValue) || (!overrideInput && initialUnitOverride);
+
+    if (previewValue) {
+      previewValue.textContent = formatProductionWeight(displayValue);
+    }
+
+    if (overrideLabel) {
+      overrideLabel.hidden = !hasOverride;
+    }
+  }
+
   function updateModuleTotals(form) {
     const memoryTotal = Array.from(form.querySelectorAll('[data-memory-size-input]')).reduce((sum, input) => {
       const value = Number(input.value || 0);
@@ -300,6 +343,7 @@
     renumberModuleRows(form, 'memory');
     renumberModuleRows(form, 'storage');
     updateModuleTotals(form);
+    updateProductionWeightPreview(form);
 
     const processorSpeedInput = form.querySelector('[data-processor-speed-input]');
 
@@ -322,6 +366,15 @@
     if (modelFilterSelect) {
       const form = getFormFromElement(modelFilterSelect);
       updateUnitModelFilter(form, false);
+      updateProductionWeightPreview(form);
+      return;
+    }
+
+    const lotSelect = event.target.closest('[data-lot-select]');
+
+    if (lotSelect) {
+      const form = getFormFromElement(lotSelect);
+      updateProductionWeightPreview(form);
       return;
     }
 
@@ -354,6 +407,13 @@
 
     if (speedInput) {
       speedInput.setAttribute('data-auto-filled', 'false');
+    }
+
+    const productionWeightOverrideInput = event.target.closest('[data-production-weight-override-input]');
+
+    if (productionWeightOverrideInput) {
+      const form = getFormFromElement(productionWeightOverrideInput);
+      updateProductionWeightPreview(form);
     }
 
     const moduleSizeInput = event.target.closest('[data-memory-size-input], [data-storage-size-input]');

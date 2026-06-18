@@ -20,7 +20,7 @@
               <p class="eyebrow">Tech Unit Registry</p>
               <h2>Tech Units</h2>
               <p>
-                Create, edit, search, and review unit records. Units can only be assigned to lots that do not have child lots.
+                Create, edit, search, and review unit records from the shared Unit Browser. Units can only be assigned to lots that do not have child lots.
               </p>
             </div>
 
@@ -60,7 +60,7 @@
                 <div class="tech-filter-panel-header">
                   <div>
                     <p class="eyebrow">Search & Filters</p>
-                    <h3>Find Units</h3>
+                    <h3>Scan or Search Units</h3>
                   </div>
 
                   <% if (isLast24HourDrilldown || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
@@ -73,7 +73,7 @@
                     <span>Search Units</span>
                     <textarea name="search" rows="5" placeholder="Scan or paste asset tags, BIOS serials, or unit serials — one per line"><%= filters.search %></textarea>
                     <small class="field-hint">
-                      Search one unit or several units at a time. Asset tags work with or without the <%= result.assetTagPrefix || 'BWT' %> prefix.
+                      Search one unit or several units at a time. Asset tags work with or without the <%= result.assetTagPrefix || 'BWT' %> prefix. Archived units remain searchable by identifier so their retained details and history can be reviewed.
                     </small>
                   </label>
 
@@ -122,12 +122,12 @@
                     </label>
 
                     <label class="form-field">
-                      <span>Created Start</span>
+                      <span>Created From</span>
                       <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="createdStartDate" value="<%= filters.createdStartDate || '' %>" />
                     </label>
 
                     <label class="form-field">
-                      <span>Created End</span>
+                      <span>Created Through</span>
                       <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="createdEndDate" value="<%= filters.createdEndDate || '' %>" />
                     </label>
                   </div>

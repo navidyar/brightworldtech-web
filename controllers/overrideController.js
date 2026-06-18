@@ -32,6 +32,13 @@ function getReturnStatus(req) {
   return VALID_STATUS_FILTERS.has(returnStatus) ? returnStatus : 'pending';
 }
 
+
+function setOverrideNoStoreHeaders(res) {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+}
+
 function getReviewNotes(req) {
   return String(req.body.reviewNotes || '').trim();
 }
@@ -79,6 +86,8 @@ async function renderOverrideRequestsPage(req, res, next) {
     const statusFilter = getStatusFilter(req);
     const result = await overrideRequestModel.listOverrideRequests({ statusFilter });
 
+    setOverrideNoStoreHeaders(res);
+
     return res.render('pages/management-overrides', {
       pageTitle: 'Override Requests',
       currentNav: 'management-overrides',
@@ -96,6 +105,8 @@ async function renderOverrideRequestsTable(req, res, next) {
   try {
     const statusFilter = getStatusFilter(req);
     const result = await overrideRequestModel.listOverrideRequests({ statusFilter });
+
+    setOverrideNoStoreHeaders(res);
 
     return res.render('fragments/override-request-table', {
       result,

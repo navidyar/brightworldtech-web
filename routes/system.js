@@ -11,7 +11,7 @@ router.get('/', requireAuth, systemController.renderHomePage);
 router.get(
   '/database',
   requireAuth,
-  requireRole(['admin', 'management']),
+  requireRole(['admin']),
   systemController.renderDatabasePage
 );
 

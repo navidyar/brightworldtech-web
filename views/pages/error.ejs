@@ -57,7 +57,7 @@
 
         <h1>Something went wrong.</h1>
 
-        <p><%= safeMessage %></p>
+        <p class="error-page-message <%= pageTitle === 'Access Denied' ? 'error-page-message--denied' : '' %>"><%= safeMessage %></p>
 
         <div class="error-page-meta">
           Error 500 · The app is running, but this request could not be completed.

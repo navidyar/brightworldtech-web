@@ -1537,3 +1537,23 @@ table tr.lot-hidden-row td {
 .management-lots-table .lot-tree-toggle:focus-visible .lot-tree-toggle-visual {
   border-color: #4b5563 !important;
 }
+
+/* Step 6e.6 shared row action-button contrast refinement. */
+.management-lots-table .lot-row-actions .secondary-button {
+  border-color: #94a3b8 !important;
+}
+
+.management-lots-table .lot-row-actions .secondary-button:hover {
+  border-color: #64748b !important;
+}
+
+.management-lots-table .lot-row-actions .danger-button {
+  border-color: color-mix(in srgb, var(--red) 56%, #94a3b8 44%) !important;
+  color: color-mix(in srgb, var(--red) 82%, var(--text) 18%) !important;
+  background: color-mix(in srgb, #fee2e2 56%, #ffffff 44%) !important;
+}
+
+.management-lots-table .lot-row-actions .danger-button:hover {
+  border-color: color-mix(in srgb, var(--red) 72%, #64748b 28%) !important;
+  background: color-mix(in srgb, #fecaca 60%, #ffffff 40%) !important;
+}

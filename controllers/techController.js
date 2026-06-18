@@ -777,7 +777,9 @@ async function renderTechUnitsPage(req, res, next) {
         ? 'Unit created successfully.'
         : req.query.updated === '1'
           ? 'Unit updated successfully.'
-          : null
+          : req.query.archived === '1'
+            ? 'Unit archived successfully. Search by an identifier to retrieve the retained record.'
+            : null
     });
   } catch (error) {
     next(error);
@@ -836,7 +838,7 @@ async function renderTechUnitHistoryPanel(req, res, next) {
 }
 
 
-async function renderDeleteTechUnitModal(req, res, next) {
+async function renderArchiveTechUnitModal(req, res, next) {
   try {
     const unitId = Number(req.params.unitId);
 
@@ -852,20 +854,24 @@ async function renderDeleteTechUnitModal(req, res, next) {
     if (!unit) {
       return res.status(404).render('fragments/tech-unit-delete-modal', {
         unit: null,
-        errorMessages: ['The selected unit could not be found. It may have already been deleted.']
+        errorMessages: ['The selected unit could not be found.']
       });
     }
 
     return res.render('fragments/tech-unit-delete-modal', {
       unit,
-      errorMessages: []
+      errorMessages: unit.isArchived
+        ? ['This unit is already archived. Search by identifier to view its retained details.']
+        : unit.archiveSupported
+          ? []
+          : ['Unit archiving is not ready yet. Run the Step 6f archive SQL migration before archiving units.']
     });
   } catch (error) {
     next(error);
   }
 }
 
-async function deleteTechUnit(req, res, next) {
+async function archiveTechUnit(req, res, next) {
   try {
     const unitId = Number(req.params.unitId);
 
@@ -880,28 +886,39 @@ async function deleteTechUnit(req, res, next) {
 
     if (!unit) {
       if (req.get('HX-Request') === 'true') {
-        res.set('HX-Trigger', 'unit-saved, unit-deleted');
+        res.set('HX-Trigger', 'unit-saved, unit-archived');
         return res.send('');
       }
 
-      return res.redirect('/tech/units?deleted=1');
+      return res.redirect('/tech/units?archived=1');
     }
 
-    const deleted = await techUnitModel.deleteTechUnit(unitId);
-
-    if (!deleted) {
+    if (unit.isArchived) {
       return res.status(400).render('fragments/tech-unit-delete-modal', {
         unit,
-        errorMessages: ['The unit could not be deleted. Refresh the page and try again.']
+        errorMessages: ['This unit is already archived. Search by identifier to view its retained details.']
+      });
+    }
+
+    const archiveResult = await techUnitModel.archiveTechUnit(unitId, req.currentUser.user_id);
+
+    if (!archiveResult.archived) {
+      const errorMessage = archiveResult.reason === 'archive_migration_required'
+        ? 'Unit archiving is not ready yet. Run the Step 6f archive SQL migration before archiving units.'
+        : 'The unit could not be archived. Refresh the page and try again.';
+
+      return res.status(400).render('fragments/tech-unit-delete-modal', {
+        unit,
+        errorMessages: [errorMessage]
       });
     }
 
     if (req.get('HX-Request') === 'true') {
-      res.set('HX-Trigger', 'unit-saved, unit-deleted');
+      res.set('HX-Trigger', 'unit-saved, unit-archived');
       return res.send('');
     }
 
-    return res.redirect('/tech/units?deleted=1');
+    return res.redirect('/tech/units?archived=1');
   } catch (error) {
     next(error);
   }
@@ -1487,8 +1504,8 @@ module.exports = {
   renderTechUnitsPage,
   renderTechUnitsTable,
   renderTechUnitHistoryPanel,
-  renderDeleteTechUnitModal,
-  deleteTechUnit,
+  renderArchiveTechUnitModal,
+  archiveTechUnit,
   renderNewTechUnitPage,
   renderNewTechUnitModal,
   createTechUnit,

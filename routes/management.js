@@ -254,14 +254,14 @@ router.get(
   '/tech/units/:unitId/delete/modal',
   requireAuth,
   requireRole(techDeleteRoles),
-  techController.renderDeleteTechUnitModal
+  techController.renderArchiveTechUnitModal
 );
 
 router.post(
   '/tech/units/:unitId/delete',
   requireAuth,
   requireRole(techDeleteRoles),
-  techController.deleteTechUnit
+  techController.archiveTechUnit
 );
 
 router.get(

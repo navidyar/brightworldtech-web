@@ -388,6 +388,11 @@ async function getUnitTableState() {
       hasProductionWeightNotes: hasColumn(columns, 'production_weight_notes'),
       hasProductionWeightOverrideUpdatedByUserId: hasColumn(columns, 'production_weight_override_updated_by_user_id'),
       hasProductionWeightOverrideUpdatedAt: hasColumn(columns, 'production_weight_override_updated_at')
+    },
+    archiveCapabilities: {
+      hasIsArchived: hasColumn(columns, 'is_archived'),
+      hasArchivedAt: hasColumn(columns, 'archived_at'),
+      hasArchivedByUserId: hasColumn(columns, 'archived_by_user_id')
     }
   };
 }
@@ -728,6 +733,17 @@ async function getTechUnitFormOptions() {
   ]);
 
   const receivedStatus = unitStatuses.find((status) => status.code === 'received') || unitStatuses[0] || null;
+  const unitCategoriesWithProductionWeights = unitCategories.map((category) => {
+    const defaultProductionWeight = productionWeightModel.findProductionWeightOptionForCategory(category, productionWeightOptions);
+
+    return {
+      ...category,
+      defaultProductionWeightValue: defaultProductionWeight && defaultProductionWeight.weightValue !== null && defaultProductionWeight.weightValue !== undefined
+        ? productionWeightModel.formatWeightValue(defaultProductionWeight.weightValue)
+        : '',
+      defaultProductionWeightLabel: defaultProductionWeight ? defaultProductionWeight.label : ''
+    };
+  });
 
   return {
     supported: state.exists && Boolean(state.primaryKeyColumn),
@@ -737,7 +753,7 @@ async function getTechUnitFormOptions() {
     assetTagPrefix: getAssetTagPrefix(),
     state,
     lots: assignableLots,
-    unitCategories,
+    unitCategories: unitCategoriesWithProductionWeights,
     unitStatuses,
     defaultUnitStatusId: receivedStatus ? String(receivedStatus.id) : '',
     memoryInstallTypes: MEMORY_INSTALL_TYPE_OPTIONS,
@@ -1024,11 +1040,15 @@ function getProductionWeightDetailsForUnit({ row = {}, lot = null, unitCategory 
 
 async function listTechUsersWithUnits() {
   const usersReady = await tableExists('users');
-  const unitsReady = await tableExists('units');
+  const unitState = await getUnitTableState();
 
-  if (!usersReady || !unitsReady) {
+  if (!usersReady || !unitState.exists) {
     return [];
   }
+
+  const archiveFilter = unitState.archiveCapabilities.hasIsArchived
+    ? 'AND COALESCE(u.is_archived, 0) = 0'
+    : '';
 
   const [rows] = await pool.query(
     `
@@ -1042,6 +1062,7 @@ async function listTechUsersWithUnits() {
       INNER JOIN units u
         ON u.created_by_user_id = users.user_id
       WHERE u.created_by_user_id IS NOT NULL
+        ${archiveFilter}
       GROUP BY users.user_id, users.first_name, users.last_name, users.email
       ORDER BY users.first_name, users.last_name, users.email
     `
@@ -1131,12 +1152,18 @@ async function listTechUnits(filters = {}) {
   const where = [];
   const params = [];
   const gradeAssessmentsTableIsReady = await tableExists('unit_grade_assessments');
+  const searchTerms = getSearchTerms(filters.search);
+  const includesArchivedSearchResults = state.archiveCapabilities.hasIsArchived && searchTerms.length > 0;
   const categoryFilterId = normalizePositiveFilterId(filters.categoryId);
   const techUserFilterId = normalizePositiveFilterId(filters.techUserId);
   const createdStartDate = normalizeDashboardDrilldownDate(filters.createdStartDate);
   const createdEndDate = normalizeDashboardDrilldownDate(filters.createdEndDate);
   const createdWindow = String(filters.createdWindow || '').trim();
   const gradeFilter = String(filters.gradeFilter || '').trim();
+
+  if (state.archiveCapabilities.hasIsArchived && !includesArchivedSearchResults) {
+    where.push('COALESCE(u.is_archived, 0) = 0');
+  }
 
   if (filters.lotId) {
     const lotId = Number(filters.lotId);
@@ -1206,8 +1233,7 @@ async function listTechUnits(filters = {}) {
     }
   }
 
-  if (filters.search) {
-    const searchTerms = getSearchTerms(filters.search);
+  if (searchTerms.length > 0) {
     const isMultiSearch = searchTerms.length > 1;
     const searchGroups = [];
 
@@ -1276,6 +1302,9 @@ async function listTechUnits(filters = {}) {
   }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+  const archiveOrderSql = state.archiveCapabilities.hasIsArchived
+    ? 'COALESCE(u.is_archived, 0) ASC,'
+    : '';
 
   const [rows] = await pool.query(
     `
@@ -1300,7 +1329,7 @@ async function listTechUnits(filters = {}) {
       LEFT JOIN config_values cv_os
         ON cv_os.config_value_id = u.operating_system_config_value_id
       ${whereSql}
-      ORDER BY u.updated_at DESC, u.unit_id DESC
+      ORDER BY ${archiveOrderSql} u.updated_at DESC, u.unit_id DESC
       LIMIT ?
     `,
     [...params, UNIT_LIMIT]
@@ -1347,6 +1376,9 @@ async function listTechUnits(filters = {}) {
       formattedProductionWeight: productionWeightDetails.formattedEffectiveWeight,
       productionWeightSourceCode: productionWeightDetails.sourceCode,
       productionWeightSourceLabel: productionWeightDetails.sourceLabel,
+      productionWeightSourceDescription: productionWeightDetails.sourceDescription,
+      productionWeightPriorityPath: productionWeightDetails.priorityPath,
+      productionWeightHasOverride: productionWeightDetails.hasOverride,
       productionWeightNotes: productionWeightDetails.notes,
       manufacturerLabel: manufacturerLabel || '—',
       modelLabel: modelLabel || '—',
@@ -1362,7 +1394,9 @@ async function listTechUnits(filters = {}) {
       cosmeticNotes: row.cosmetic_notes || '',
       createdAt: row.created_at,
       updatedAt: row.updated_at,
-      completedAt: row.completed_at
+      completedAt: row.completed_at,
+      isArchived: state.archiveCapabilities.hasIsArchived && Number(row.is_archived) === 1,
+      archivedAt: state.archiveCapabilities.hasArchivedAt ? row.archived_at : null
     };
   });
 
@@ -2061,7 +2095,8 @@ async function getTechUnitDeleteSummaryById(unitId) {
         um.model_name,
         pm.model_code AS processor_model_code,
         u.ram_gb,
-        u.storage_gb
+        u.storage_gb,
+        ${state.archiveCapabilities.hasIsArchived ? 'COALESCE(u.is_archived, 0)' : '0'} AS is_archived
       FROM units u
       LEFT JOIN lots l
         ON l.lot_id = u.lot_id
@@ -2105,33 +2140,57 @@ async function getTechUnitDeleteSummaryById(unitId) {
     biosSerialNumber: biosSerialNumber || '',
     lotName: row.lot_name || '',
     categoryLabel: row.category_label || '',
-    specSummary: specParts.length > 0 ? specParts.join(' · ') : 'No specs entered yet'
+    specSummary: specParts.length > 0 ? specParts.join(' · ') : 'No specs entered yet',
+    isArchived: Number(row.is_archived) === 1,
+    archiveSupported: state.archiveCapabilities.hasIsArchived
+      && state.archiveCapabilities.hasArchivedAt
+      && state.archiveCapabilities.hasArchivedByUserId
   };
 }
 
-async function deleteTechUnit(unitId) {
+async function archiveTechUnit(unitId, archivedByUserId) {
   const safeUnitId = Number(unitId);
+  const safeArchivedByUserId = normalizeRequiredInteger(archivedByUserId);
 
-  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0) {
-    return false;
+  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0 || !safeArchivedByUserId) {
+    return {
+      archived: false,
+      reason: 'invalid_request'
+    };
   }
 
   const state = await getUnitTableState();
+  const archiveSupported = state.exists
+    && Boolean(state.primaryKeyColumn)
+    && state.archiveCapabilities.hasIsArchived
+    && state.archiveCapabilities.hasArchivedAt
+    && state.archiveCapabilities.hasArchivedByUserId;
 
-  if (!state.exists || !state.primaryKeyColumn) {
-    return false;
+  if (!archiveSupported) {
+    return {
+      archived: false,
+      reason: 'archive_migration_required'
+    };
   }
 
   const [result] = await pool.query(
     `
-      DELETE FROM units
+      UPDATE units
+      SET
+        is_archived = 1,
+        archived_at = NOW(),
+        archived_by_user_id = ?
       WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
+        AND COALESCE(is_archived, 0) = 0
       LIMIT 1
     `,
-    [safeUnitId]
+    [safeArchivedByUserId, safeUnitId]
   );
 
-  return Number(result.affectedRows) > 0;
+  return {
+    archived: Number(result.affectedRows) > 0,
+    reason: Number(result.affectedRows) > 0 ? null : 'already_archived_or_missing'
+  };
 }
 
 module.exports = {
@@ -2146,7 +2205,7 @@ module.exports = {
   useExistingTechUnit,
   getUnitById,
   getTechUnitDeleteSummaryById,
-  deleteTechUnit,
+  archiveTechUnit,
   getAssetTagPrefix,
   getDisplayAssetTag,
   normalizeAssetTagInput,

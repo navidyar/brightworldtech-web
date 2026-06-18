@@ -46,6 +46,27 @@
     });
   }
 
+  function isPanelOpen(detailRow, panelName) {
+    if (!detailRow || detailRow.hidden) {
+      return false;
+    }
+
+    const normalizedPanelName = panelName === 'history' ? 'history' : 'details';
+    const activePanel = detailRow.querySelector(`[data-unit-panel-content="${normalizedPanelName}"]`);
+
+    return Boolean(activePanel && !activePanel.hidden);
+  }
+
+  function hideDetailRow(detailRow) {
+    if (!detailRow) {
+      return;
+    }
+
+    detailRow.hidden = true;
+    setSummaryToggleExpanded(detailRow.id, false);
+    setPanel(detailRow, 'details');
+  }
+
   function showDetailRow(detailRow, panelName) {
     if (!detailRow) {
       return;
@@ -108,6 +129,13 @@
       const detailRow = targetId ? document.getElementById(targetId) : panelButton.closest('.tech-detail-row');
       const panelName = panelButton.getAttribute('data-panel');
 
+      if (isPanelOpen(detailRow, panelName)) {
+        event.preventDefault();
+        event.stopPropagation();
+        hideDetailRow(detailRow);
+        return;
+      }
+
       showDetailRow(detailRow, panelName);
       return;
     }
@@ -132,7 +160,7 @@
     closeOtherRows(null);
   });
 
-  document.body.addEventListener('unit-deleted', () => {
+  document.body.addEventListener('unit-archived', () => {
     closeModalRoot();
     closeOtherRows(null);
   });

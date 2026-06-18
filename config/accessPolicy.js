@@ -64,7 +64,7 @@ const MENU_AREAS = [
   {
     key: 'database',
     label: 'Database Check',
-    allowedRoles: ['admin', 'management']
+    allowedRoles: ['admin']
   }
 ];
 

@@ -90,3 +90,9 @@
     padding: 22px;
   }
 }
+
+/* Step 6e.7.1: Access Denied message emphasis. */
+.error-page-message--denied {
+  color: #b91c1c !important;
+  font-weight: 700;
+}

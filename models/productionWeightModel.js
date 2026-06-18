@@ -24,6 +24,21 @@ const PRODUCTION_WEIGHT_CODE_ALIASES = new Map([
   ['config_task', 'production_weight_configuration_task']
 ]);
 
+const PRODUCTION_WEIGHT_PRIORITY_PATH = 'Unit override > Lot default > Unit category default';
+
+function getProductionWeightSourceDescription(sourceCode) {
+  switch (sourceCode) {
+    case 'unit_override':
+      return 'Unit override is taking priority over the lot default and unit category default.';
+    case 'lot_default':
+      return 'Lot default is being used because this unit does not have a unit-level override.';
+    case 'category_default':
+      return 'Unit category default is being used because this unit has no override and the lot has no default.';
+    default:
+      return 'No unit override, lot default, or unit category default is configured yet.';
+  }
+}
+
 function normalizeWeightValue(value) {
   if (value === null || value === undefined || value === '') {
     return null;
@@ -282,6 +297,8 @@ function buildProductionWeightDetails({
       formattedEffectiveWeight: formatWeightValue(overrideWeight),
       sourceCode: 'unit_override',
       sourceLabel: 'Unit override',
+      sourceDescription: getProductionWeightSourceDescription('unit_override'),
+      priorityPath: PRODUCTION_WEIGHT_PRIORITY_PATH,
       notes: unitProductionWeightNotes || '',
       hasOverride: true
     };
@@ -295,6 +312,8 @@ function buildProductionWeightDetails({
       formattedEffectiveWeight: formatWeightValue(lotDefaultWeight),
       sourceCode: 'lot_default',
       sourceLabel: lotDefaultProductionWeightLabel ? `Lot default: ${lotDefaultProductionWeightLabel}` : 'Lot default',
+      sourceDescription: getProductionWeightSourceDescription('lot_default'),
+      priorityPath: PRODUCTION_WEIGHT_PRIORITY_PATH,
       notes: '',
       hasOverride: false
     };
@@ -308,6 +327,8 @@ function buildProductionWeightDetails({
       formattedEffectiveWeight: categoryWeightOption.formattedWeightValue,
       sourceCode: 'category_default',
       sourceLabel: `Category default: ${categoryWeightOption.label}`,
+      sourceDescription: getProductionWeightSourceDescription('category_default'),
+      priorityPath: PRODUCTION_WEIGHT_PRIORITY_PATH,
       notes: '',
       hasOverride: false
     };
@@ -318,6 +339,8 @@ function buildProductionWeightDetails({
     formattedEffectiveWeight: '—',
     sourceCode: 'not_configured',
     sourceLabel: 'No configured weight',
+    sourceDescription: getProductionWeightSourceDescription('not_configured'),
+    priorityPath: PRODUCTION_WEIGHT_PRIORITY_PATH,
     notes: '',
     hasOverride: false
   };
@@ -334,5 +357,6 @@ module.exports = {
   getDefaultProductionWeightForUnitCategory,
   getProductionWeightPayloadFromConfigValueId,
   findProductionWeightOptionForCategory,
-  buildProductionWeightDetails
+  buildProductionWeightDetails,
+  getProductionWeightSourceDescription
 };
