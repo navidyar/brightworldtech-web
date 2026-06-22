@@ -414,11 +414,22 @@ async function getUnitTableState() {
 }
 
 function getUnitParkedSql(state, tableAlias = 'u') {
-  if (state && state.parkingCapabilities && state.parkingCapabilities.hasIsParked) {
+  const hasParkedState = Boolean(
+    state && state.parkingCapabilities && state.parkingCapabilities.hasIsParked
+  );
+  const hasLegacyArchiveState = Boolean(
+    state && state.legacyArchiveCapabilities && state.legacyArchiveCapabilities.hasIsArchived
+  );
+
+  if (hasParkedState && hasLegacyArchiveState) {
+    return `GREATEST(COALESCE(${tableAlias}.is_parked, 0), COALESCE(${tableAlias}.is_archived, 0))`;
+  }
+
+  if (hasParkedState) {
     return `COALESCE(${tableAlias}.is_parked, 0)`;
   }
 
-  if (state && state.legacyArchiveCapabilities && state.legacyArchiveCapabilities.hasIsArchived) {
+  if (hasLegacyArchiveState) {
     return `COALESCE(${tableAlias}.is_archived, 0)`;
   }
 
@@ -430,11 +441,8 @@ function isUnitParked(unit) {
     return false;
   }
 
-  if (unit.is_parked !== undefined && unit.is_parked !== null) {
-    return Number(unit.is_parked) === 1;
-  }
-
-  return Number(unit.is_archived || 0) === 1;
+  return Number(unit.is_parked || 0) === 1
+    || Number(unit.is_archived || 0) === 1;
 }
 
 function createUnitLifecycleError(code, message) {

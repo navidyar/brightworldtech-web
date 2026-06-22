@@ -237,6 +237,27 @@
     toggleDetailRow(summaryRow.querySelector('[data-unit-detail-toggle]'));
   });
 
+  document.body.addEventListener('change', (event) => {
+    const unitStateToggle = event.target.closest('[data-unit-state-toggle]');
+
+    if (!unitStateToggle) {
+      return;
+    }
+
+    const filterForm = unitStateToggle.closest('form');
+
+    if (!filterForm) {
+      return;
+    }
+
+    if (typeof filterForm.requestSubmit === 'function') {
+      filterForm.requestSubmit();
+      return;
+    }
+
+    filterForm.submit();
+  });
+
   document.body.addEventListener('unit-saved', () => {
     closeOtherRows(null);
   });

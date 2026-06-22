@@ -88,11 +88,15 @@ function buildCompleteWorkModalView({ preview = null, req = null, successMessage
   };
 }
 
+function canViewParkedUnits(req) {
+  return getCurrentRoleCodes(req)
+    .some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+}
+
 function isRegularTechUnitBrowserUser(req) {
   const roleCodes = getCurrentRoleCodes(req);
-  const hasElevatedUnitAuthority = roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
 
-  return roleCodes.includes('tech') && !hasElevatedUnitAuthority;
+  return roleCodes.includes('tech') && !canViewParkedUnits(req);
 }
 
 function getFiltersFromRequest(req) {
@@ -108,7 +112,7 @@ function getFiltersFromRequest(req) {
     unitState: String(req.query.unitState || 'active').trim(),
     currentUserId: req && req.currentUser ? req.currentUser.user_id : null,
     restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req),
-    canViewParkedUnits: getCurrentRoleCodes(req).some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode))
+    canViewParkedUnits: canViewParkedUnits(req)
   };
 }
 
@@ -944,6 +948,15 @@ async function renderMyUnitWeightPanel(req, res, next) {
       });
     }
 
+    const lifecycleUnit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
+
+    if (!lifecycleUnit || (lifecycleUnit.isParked && !canViewParkedUnits(req))) {
+      return res.status(404).render('fragments/tech-unit-my-weight-panel', {
+        completions: [],
+        errorMessages: ['Your earned weight could not be loaded for the selected unit.']
+      });
+    }
+
     const completions = await techUnitModel.getUnitWorkCompletionsForUser(unitId, currentUserId);
 
     return res.render('fragments/tech-unit-my-weight-panel', {
@@ -1203,7 +1216,7 @@ async function returnTechUnitToActive(req, res, next) {
     });
 
     if (isHtmxRequest(req)) {
-      res.set('HX-Trigger', 'unit-saved, unit-returned-active');
+      res.set('HX-Redirect', '/tech/units?returnedToActive=1');
       return res.send('');
     }
 

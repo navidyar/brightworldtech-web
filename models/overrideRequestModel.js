@@ -844,7 +844,7 @@ async function approveOverrideRequest({
           u.assigned_to_user_id,
           u.created_by_user_id,
           u.lot_id AS current_lot_id,
-          COALESCE(u.is_archived, 0) AS is_parked
+          GREATEST(COALESCE(u.is_parked, 0), COALESCE(u.is_archived, 0)) AS is_parked
         FROM unit_override_requests r
         LEFT JOIN units u
           ON u.unit_id = r.unit_id

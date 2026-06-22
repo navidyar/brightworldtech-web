@@ -5225,3 +5225,105 @@ textarea {
     width: 100%;
   }
 }
+
+/* Step 6f.4: compact elevated-user Parked Units browser toggle. */
+.tech-filter-panel-header-actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.tech-unit-state-toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  padding: 5px 8px 5px 10px;
+  border: 1px solid color-mix(in srgb, var(--line) 74%, var(--purple-bg) 26%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 88%, var(--purple-bg) 12%);
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tech-unit-state-toggle-label {
+  font-size: 0.76rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tech-unit-state-toggle-control {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+}
+
+.tech-unit-state-toggle-control input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.tech-unit-state-toggle-track {
+  position: relative;
+  display: block;
+  width: 34px;
+  height: 20px;
+  border: 1px solid color-mix(in srgb, var(--line) 68%, var(--muted) 32%);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-soft) 82%, var(--line) 18%);
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.tech-unit-state-toggle-track::after {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+  content: '';
+  transition: transform 140ms ease, background-color 140ms ease;
+}
+
+.tech-unit-state-toggle-control input:checked + .tech-unit-state-toggle-track {
+  border-color: color-mix(in srgb, var(--purple-bg) 72%, var(--line) 28%);
+  background: color-mix(in srgb, var(--purple-bg) 58%, #ffffff 42%);
+}
+
+.tech-unit-state-toggle-control input:checked + .tech-unit-state-toggle-track::after {
+  transform: translateX(14px);
+  background: color-mix(in srgb, var(--purple-bg) 82%, var(--text) 18%);
+}
+
+.tech-unit-state-toggle-control input:focus-visible + .tech-unit-state-toggle-track {
+  outline: 3px solid color-mix(in srgb, var(--purple-bg) 52%, transparent 48%);
+  outline-offset: 2px;
+}
+
+.tech-unit-state-toggle:hover {
+  border-color: color-mix(in srgb, var(--purple-bg) 52%, var(--line) 48%);
+}
+
+@media (max-width: 620px) {
+  .tech-filter-panel-header-actions {
+    width: 100%;
+    align-items: stretch;
+  }
+
+  .tech-unit-state-toggle {
+    justify-content: space-between;
+    width: 100%;
+  }
+}

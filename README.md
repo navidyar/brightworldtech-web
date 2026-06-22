@@ -4,9 +4,100 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
-Step 6f.2: Parked Unit Lifecycle.
+Step 6f.4: Unit Browser Lifecycle Toggle and Return Navigation.
 
-This step replaces the legacy one-way archive behavior with a role-governed **Active / Parked / Return to Active** lifecycle. Parking clears only the unit’s current operational lot and assignment while retaining unit details, audit history, and earned production credit.
+Step 6f.4 makes the Parked Units browser view more compact for authorized users and returns the browser to the default Active Units view after a unit is returned to Active.
+
+## Step 6f.4 — Unit Browser Lifecycle Toggle and Return Navigation
+
+### What Changed
+
+- Replaces the elevated-user **Unit State** dropdown with a compact **Show Parked Units** toggle in the Unit Browser filter header.
+- The toggle is visible only to Tech Lead, Management, and Admin. It is off by default for the Active Units view; regular Techs continue to see only Active Units and never receive the toggle.
+- Toggling the control automatically reloads the Unit Browser with the selected lifecycle view while retaining the other current filters.
+- A successful HTMX **Return to Active** now performs a full redirect to the default Active Units view and displays the existing success message, rather than leaving the user in the prior Parked Units view.
+- No database migration is required.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step6f4-unit-browser-lifecycle-toggle.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step6f4-unit-browser-lifecycle-toggle.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation
+
+1. As Tech Lead, Management, or Admin, confirm the Unit Browser shows **Show Parked Units** as a compact toggle instead of the former Unit State dropdown.
+2. Confirm the default toggle-off view lists Active Units. Turn the toggle on and confirm it automatically loads Parked Units while retaining any other active filters.
+3. As a regular Tech, confirm the toggle remains absent and only Active Units can be viewed.
+4. As an authorized user, return a Parked unit to an eligible open lot. Confirm the browser redirects to the Active Units view with the returned unit available there.
+
+## Step 6f.3 — Parked Lifecycle Validation and Guard Hardening
+
+### What Changed
+
+- Validates the Step 6f.2 Active / Parked / Return to Active workflow without changing the approved lifecycle policy.
+- Treats a unit as Parked whenever either the authoritative `is_parked` field or retained legacy `is_archived` compatibility field is set. This keeps browser visibility and server-side lifecycle guards fail-safe if historical data is ever inconsistent.
+- Updates override approval to use that same compatibility-safe Parked check, so an approval cannot proceed for a unit that is Parked under either state field.
+- Blocks the direct **My Weight Earned** endpoint for a Parked unit when requested by a regular Tech. This closes a direct-route visibility bypass while preserving credit data and elevated-user access.
+- Confirms that Park and Return continue to preserve unit history and earned Work Complete credit, while parked records remain blocked from edit, assignment, completion, Pass/Fail review, and override workflows.
+- No database migration is required for this validation-and-hardening step.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step6f3-parked-lifecycle-validation.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step6f3-parked-lifecycle-validation.diff
+
+git diff --check
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation — BWT2300007
+
+1. Before changing the unit, record its current Active/Parked state, current lot, current assignment, and any existing Work Complete history so it can be returned to the same operational state after testing.
+2. As Tech Lead, Management, or Admin, Park the unit. Confirm it leaves **Active Units**, appears only under **Parked Units**, and has no current lot or assignment.
+3. Open the authorized History panel and confirm the Parked event retains the former lot and assignment. Confirm existing Work Complete credit remains present and unchanged.
+4. As a regular Tech, confirm the Parked Units filter is absent; direct Park/Return, Edit, Work Complete, and Override requests remain blocked. A direct request for **My Weight Earned** must not return Parked-unit credit details.
+5. As Tech Lead, Management, or Admin, return the unit to an open, assignable leaf lot. Test an optional assignment only with an active Tech or Tech Lead. Closed, hidden, and parent/container lots must be rejected.
+6. Confirm the returned unit can resume normal active workflows, then restore the unit to its original intended lot and assignment if the test changed them.
 
 ## Step 6f.2 — Parked Units and Return to Active
 
@@ -18,7 +109,7 @@ This step replaces the legacy one-way archive behavior with a role-governed **Ac
 - Converts legacy archived units to Parked during the migration. The unit’s final known lot and assignment are written to history before the current operational values are cleared.
 - Limits Park and Return actions, routes, and Parked Unit browsing to **Tech Lead, Management, and Admin**. Regular Techs cannot access parked records or lifecycle routes.
 - Parking runs in one database transaction and clears the current lot and assignment. It does not delete identifiers, unit details, audit history, Work Complete records, or earned production credit.
-- Parked records are absent from the default Active Unit Browser. Authorized users can select **Parked Units** using the Unit State filter.
+- Parked records are absent from the default Active Unit Browser. Authorized users can use the **Show Parked Units** toggle to review them.
 - Returning a unit to Active requires an eligible **open** destination lot and can optionally assign an active Tech or Tech Lead.
 - A parked unit cannot be edited, moved, assigned, marked Work Complete, reviewed for Pass/Fail, requested for override, or approved through override handoff until returned to Active.
 - Legacy Step 6f archive columns remain only for backwards compatibility and are synchronized by the new lifecycle. The application no longer presents Archive/Unarchive terminology.
@@ -54,10 +145,10 @@ The final `ls` command must show the migration file before any database command 
 ```bash
 cd /home/bwtdallas-webserver/app
 
-mkdir -p handoff/db-backups
+mkdir -p backup
 
-docker compose exec -T mysql sh -lc 'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
-  > "handoff/db-backups/bwtdallas-before-step6f2-$(date +%F-%H%M%S).sql"
+docker compose exec -T mysql sh -lc 'mysqldump --no-tablespaces -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  > "backup/bwtdallas-before-step6f2-$(date +%F-%H%M%S).sql"
 ```
 
 #### 4. Database migration — database changes only; do not rebuild yet
