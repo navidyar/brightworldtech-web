@@ -20,7 +20,7 @@
               <p class="eyebrow">Tech Unit Registry</p>
               <h2>Tech Units</h2>
               <p>
-                Create, edit, search, and review unit records from the shared Unit Browser. Units can only be assigned to open lots that do not have child lots.
+                Create, edit, search, and review unit records from the shared Unit Browser. Active units can only be assigned to open lots that do not have child lots; authorized users can separately review parked units.
               </p>
             </div>
 
@@ -56,6 +56,7 @@
                 const techUserOptions = Array.isArray(result.techUserOptions) ? result.techUserOptions : [];
                 const pageRoleCodes = Array.isArray(currentRoles) ? currentRoles : [];
                 const isRegularTechBrowserUser = pageRoleCodes.includes('tech') && !pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+                const canViewParkedUnits = pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
                 const isLast24HourDrilldown = filters.createdWindow === '24h';
               %>
               <form class="tech-filter-form tech-filter-panel" method="get" action="/tech/units">
@@ -65,7 +66,7 @@
                     <h3>Scan or Search Units</h3>
                   </div>
 
-                  <% if (isLast24HourDrilldown || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
+                  <% if (isLast24HourDrilldown || filters.unitState === 'parked' || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
                     <span class="tech-filter-active-pill">Filtered View</span>
                   <% } %>
                 </div>
@@ -75,7 +76,7 @@
                     <span>Search Units</span>
                     <textarea name="search" rows="5" placeholder="Scan or paste asset tags, BIOS serials, or unit serials — one per line"><%= filters.search %></textarea>
                     <small class="field-hint">
-                      Search one unit or several units at a time. Asset tags work with or without the <%= result.assetTagPrefix || 'BWT' %> prefix. Archived units remain searchable by identifier so their retained details and history can be reviewed.
+                      Search one unit or several units at a time. Asset tags work with or without the <%= result.assetTagPrefix || 'BWT' %> prefix. Parked units are excluded from the Active view; authorized users can select the Parked lifecycle view below.
                     </small>
                   </label>
 
@@ -112,6 +113,17 @@
                         <% }) %>
                       </select>
                     </label>
+
+                    <% if (canViewParkedUnits) { %>
+                      <label class="form-field">
+                        <span>Unit State</span>
+                        <select name="unitState">
+                          <option value="active" <%= filters.unitState !== 'parked' ? 'selected' : '' %>>Active Units</option>
+                          <option value="parked" <%= filters.unitState === 'parked' ? 'selected' : '' %>>Parked Units</option>
+                        </select>
+                        <small class="field-hint">Parked units have no current lot or Tech assignment. Only Tech Leads, Management, and Admin can view them.</small>
+                      </label>
+                    <% } %>
 
                     <% if (!isRegularTechBrowserUser) { %>
                       <label class="form-field">
@@ -150,7 +162,7 @@
                 </div>
               </form>
 
-              <div class="tech-table-shell" id="tech-units-list" hx-get="<%= tableUrl %>" hx-trigger="load, unit-saved from:body, unit-work-completed from:body, unit-permanently-deleted from:body" hx-swap="innerHTML">
+              <div class="tech-table-shell" id="tech-units-list" hx-get="<%= tableUrl %>" hx-trigger="load, unit-saved from:body, unit-work-completed from:body, unit-permanently-deleted from:body, unit-parked from:body, unit-returned-active from:body" hx-swap="innerHTML">
                 <div class="tech-loading-card">
                   Loading units...
                 </div>

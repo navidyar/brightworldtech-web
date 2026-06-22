@@ -64,6 +64,7 @@
 
   const currentUserRoles = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
   const canDeleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canManageUnitLifecycle = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const canApproveUnitOutcomes = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const canCompleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
   const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
@@ -199,9 +200,9 @@
                   <% } %>
                   <span aria-hidden="true">·</span>
                   <span>Category: <%= unit.categoryLabel || '—' %></span>
-                  <% if (unit.isArchived) { %>
+                  <% if (unit.isParked) { %>
                     <span aria-hidden="true">·</span>
-                    <span>Archived</span>
+                    <span>Parked</span>
                   <% } %>
                 </small>
                 <span class="tech-unit-summary-weight-strip">
@@ -270,7 +271,7 @@
           <td>
             <% if (unit.unitId) { %>
               <div class="tech-summary-actions">
-                <% if (canCompleteTechUnits && !unit.isArchived && !isReadOnlySearchResult) { %>
+                <% if (canCompleteTechUnits && !unit.isParked && !isReadOnlySearchResult) { %>
                   <a
                     class="secondary-button"
                     href="/tech/units/<%= unit.unitId %>/complete-work/modal"
@@ -280,24 +281,31 @@
                     Work Complete
                   </a>
                 <% } %>
-                <% if (!isReadOnlySearchResult) { %>
+                <% if (!unit.isParked && !isReadOnlySearchResult) { %>
                   <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" data-no-row-toggle>
                     Edit
                   </a>
                 <% } %>
-                <% if (unit.isArchived) { %>
-                  <span class="tech-chip">Archived</span>
-                <% } else if (canDeleteTechUnits) { %>
+                <% if (unit.isParked) { %>
+                  <span class="tech-chip">Parked</span>
+                  <% if (canManageUnitLifecycle) { %>
+                    <a
+                      class="secondary-button"
+                      href="/tech/units/<%= unit.unitId %>/return-to-active/modal"
+                      data-tech-modal-trigger
+                      data-no-row-toggle
+                    >
+                      Return to Active
+                    </a>
+                  <% } %>
+                <% } else if (canManageUnitLifecycle) { %>
                   <a
-                    class="secondary-button danger-button tech-delete-action-button"
-                    href="/tech/units/<%= unit.unitId %>/delete/modal"
+                    class="secondary-button tech-delete-action-button"
+                    href="/tech/units/<%= unit.unitId %>/park/modal"
+                    data-tech-modal-trigger
                     data-no-row-toggle
-                    data-delete-modal-trigger
-                    hx-get="/tech/units/<%= unit.unitId %>/delete/modal"
-                    hx-target="#modal-root"
-                    hx-swap="innerHTML"
                   >
-                    Archive
+                    Park Unit
                   </a>
                 <% } %>
               </div>
@@ -326,8 +334,8 @@
                       <% if (currentOutcomeLabel) { %>
                         <span class="tech-chip"><%= currentOutcomeLabel %></span>
                       <% } %>
-                      <% if (unit.isArchived) { %>
-                        <span class="tech-chip">Archived</span>
+                      <% if (unit.isParked) { %>
+                        <span class="tech-chip">Parked</span>
                       <% } %>
                       <% if (isReadOnlySearchResult) { %>
                         <span class="tech-chip">Read-only search result</span>
@@ -335,7 +343,7 @@
                     </div>
 
                     <% if (unit.unitId) { %>
-                      <% if (canRequestUnitOverride) { %>
+                      <% if (canRequestUnitOverride && !unit.isParked) { %>
                         <a
                           class="secondary-button"
                           href="/tech/units/<%= unit.unitId %>/override/modal"
@@ -634,10 +642,10 @@
                         <dd><%= unit.completedAt ? formatDateTime(unit.completedAt) : '—' %></dd>
                       </div>
 
-                      <% if (unit.isArchived) { %>
+                      <% if (unit.isParked) { %>
                         <div>
-                          <dt>Archived</dt>
-                          <dd><%= unit.archivedAt ? formatDateTime(unit.archivedAt) : 'Yes' %></dd>
+                          <dt>Parked</dt>
+                          <dd><%= unit.parkedAt ? formatDateTime(unit.parkedAt) : 'Yes' %></dd>
                         </div>
                       <% } %>
                     </dl>

@@ -115,10 +115,12 @@ async function getTableColumns(tableName) {
     'unit_memory_modules',
     'unit_storage_devices',
     'lots',
+    'users',
+    'roles',
+    'user_roles',
     'unit_work_completions',
     'unit_assignment_history',
-    'unit_work_completions',
-    'unit_assignment_history'
+    'unit_park_history'
   ];
 
   if (!allowedTables.includes(tableName)) {
@@ -393,7 +395,12 @@ async function getUnitTableState() {
       hasProductionWeightOverrideUpdatedByUserId: hasColumn(columns, 'production_weight_override_updated_by_user_id'),
       hasProductionWeightOverrideUpdatedAt: hasColumn(columns, 'production_weight_override_updated_at')
     },
-    archiveCapabilities: {
+    parkingCapabilities: {
+      hasIsParked: hasColumn(columns, 'is_parked'),
+      hasParkedAt: hasColumn(columns, 'parked_at'),
+      hasParkedByUserId: hasColumn(columns, 'parked_by_user_id')
+    },
+    legacyArchiveCapabilities: {
       hasIsArchived: hasColumn(columns, 'is_archived'),
       hasArchivedAt: hasColumn(columns, 'archived_at'),
       hasArchivedByUserId: hasColumn(columns, 'archived_by_user_id')
@@ -402,13 +409,38 @@ async function getUnitTableState() {
       hasAssignedToUserId: hasColumn(columns, 'assigned_to_user_id'),
       hasAssignedAt: hasColumn(columns, 'assigned_at'),
       hasAssignmentUpdatedByUserId: hasColumn(columns, 'assignment_updated_by_user_id')
-    },
-    assignmentCapabilities: {
-      hasAssignedToUserId: hasColumn(columns, 'assigned_to_user_id'),
-      hasAssignedAt: hasColumn(columns, 'assigned_at'),
-      hasAssignmentUpdatedByUserId: hasColumn(columns, 'assignment_updated_by_user_id')
     }
   };
+}
+
+function getUnitParkedSql(state, tableAlias = 'u') {
+  if (state && state.parkingCapabilities && state.parkingCapabilities.hasIsParked) {
+    return `COALESCE(${tableAlias}.is_parked, 0)`;
+  }
+
+  if (state && state.legacyArchiveCapabilities && state.legacyArchiveCapabilities.hasIsArchived) {
+    return `COALESCE(${tableAlias}.is_archived, 0)`;
+  }
+
+  return '0';
+}
+
+function isUnitParked(unit) {
+  if (!unit) {
+    return false;
+  }
+
+  if (unit.is_parked !== undefined && unit.is_parked !== null) {
+    return Number(unit.is_parked) === 1;
+  }
+
+  return Number(unit.is_archived || 0) === 1;
+}
+
+function createUnitLifecycleError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
 }
 
 function getParentLotIdsWithChildren(lots) {
@@ -1103,9 +1135,7 @@ async function listTechUsersWithUnits() {
     return [];
   }
 
-  const archiveFilter = unitState.archiveCapabilities.hasIsArchived
-    ? 'AND COALESCE(u.is_archived, 0) = 0'
-    : '';
+  const parkedFilter = `AND ${getUnitParkedSql(unitState, 'u')} = 0`;
   const assignmentColumn = unitState.assignmentCapabilities.hasAssignedToUserId
     ? 'u.assigned_to_user_id'
     : 'u.created_by_user_id';
@@ -1122,7 +1152,7 @@ async function listTechUsersWithUnits() {
       INNER JOIN units u
         ON ${assignmentColumn} = users.user_id
       WHERE ${assignmentColumn} IS NOT NULL
-        ${archiveFilter}
+        ${parkedFilter}
       GROUP BY users.user_id, users.first_name, users.last_name, users.email
       ORDER BY users.first_name, users.last_name, users.email
     `
@@ -1135,6 +1165,50 @@ async function listTechUsersWithUnits() {
       id: Number(row.user_id),
       label: name,
       count: Number(row.unit_count || 0)
+    };
+  });
+}
+
+async function listActiveAssignableTechnicians() {
+  const [userColumns, roleColumns, userRoleColumns] = await Promise.all([
+    getTableColumns('users'),
+    getTableColumns('roles'),
+    getTableColumns('user_roles')
+  ]);
+
+  if (userColumns.size === 0 || roleColumns.size === 0 || userRoleColumns.size === 0) {
+    return [];
+  }
+
+  const activeUserFilter = hasColumn(userColumns, 'is_active') ? 'AND COALESCE(u.is_active, 1) = 1' : '';
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        u.user_id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        GROUP_CONCAT(DISTINCT r.code ORDER BY r.code SEPARATOR ',') AS role_codes
+      FROM users u
+      INNER JOIN user_roles ur
+        ON ur.user_id = u.user_id
+      INNER JOIN roles r
+        ON r.role_id = ur.role_id
+      WHERE r.code IN ('tech', 'tech_lead')
+        ${activeUserFilter}
+      GROUP BY u.user_id, u.first_name, u.last_name, u.email
+      ORDER BY u.first_name, u.last_name, u.email
+    `
+  );
+
+  return rows.map((row) => {
+    const name = [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || row.email || `User #${row.user_id}`;
+
+    return {
+      id: Number(row.user_id),
+      label: name,
+      roleCodes: String(row.role_codes || '').split(',').filter(Boolean)
     };
   });
 }
@@ -1213,7 +1287,9 @@ async function listTechUnits(filters = {}) {
   const params = [];
   const gradeAssessmentsTableIsReady = await tableExists('unit_grade_assessments');
   const searchTerms = getSearchTerms(filters.search);
-  const includesArchivedSearchResults = state.archiveCapabilities.hasIsArchived && searchTerms.length > 0;
+  const canViewParkedUnits = filters.canViewParkedUnits === true;
+  const requestedUnitState = String(filters.unitState || 'active').trim().toLowerCase();
+  const unitState = canViewParkedUnits && requestedUnitState === 'parked' ? 'parked' : 'active';
   const categoryFilterId = normalizePositiveFilterId(filters.categoryId);
   const techUserFilterId = normalizePositiveFilterId(filters.techUserId);
   const createdStartDate = normalizeDashboardDrilldownDate(filters.createdStartDate);
@@ -1226,9 +1302,7 @@ async function listTechUnits(filters = {}) {
     ? 'u.assigned_to_user_id'
     : 'u.created_by_user_id';
 
-  if (state.archiveCapabilities.hasIsArchived && !includesArchivedSearchResults) {
-    where.push('COALESCE(u.is_archived, 0) = 0');
-  }
+  where.push(`${getUnitParkedSql(state, 'u')} = ${unitState === 'parked' ? '1' : '0'}`);
 
   if (filters.lotId) {
     const lotId = Number(filters.lotId);
@@ -1372,9 +1446,6 @@ async function listTechUnits(filters = {}) {
   }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
-  const archiveOrderSql = state.archiveCapabilities.hasIsArchived
-    ? 'COALESCE(u.is_archived, 0) ASC,'
-    : '';
 
   const [rows] = await pool.query(
     `
@@ -1405,7 +1476,7 @@ async function listTechUnits(filters = {}) {
       LEFT JOIN users assigned_user
         ON assigned_user.user_id = ${state.assignmentCapabilities.hasAssignedToUserId ? 'u.assigned_to_user_id' : 'u.created_by_user_id'}
       ${whereSql}
-      ORDER BY ${archiveOrderSql} u.created_at DESC, u.unit_id DESC
+      ORDER BY u.created_at DESC, u.unit_id DESC
       LIMIT ?
     `,
     [...params, UNIT_LIMIT]
@@ -1461,7 +1532,7 @@ async function listTechUnits(filters = {}) {
       assetTag,
       label: assetTag || 'No asset tag',
       lotId: row.lot_id,
-      lotName: lot ? lot.lot_name : 'Lot name not available',
+      lotName: lot ? lot.lot_name : (isUnitParked(row) ? 'No active lot' : 'Lot name not available'),
       statusLabel: configLabelById(unitStatusMap, row.current_unit_status_config_value_id, 'Unknown'),
       categoryLabel: configLabelById(unitCategoryMap, row.unit_category_config_value_id, 'Unknown'),
       productionWeight: productionWeightDetails.effectiveWeight,
@@ -1497,8 +1568,10 @@ async function listTechUnits(filters = {}) {
       assignedToName: [row.assigned_first_name, row.assigned_last_name].filter(Boolean).join(' ').trim() || row.assigned_email || '',
       isUnassigned: state.assignmentCapabilities.hasAssignedToUserId ? !row.assigned_to_user_id : false,
       isReadOnlyForCurrentUser,
-      isArchived: state.archiveCapabilities.hasIsArchived && Number(row.is_archived) === 1,
-      archivedAt: state.archiveCapabilities.hasArchivedAt ? row.archived_at : null
+      isParked: isUnitParked(row),
+      parkedAt: state.parkingCapabilities.hasParkedAt
+        ? row.parked_at
+        : (state.legacyArchiveCapabilities.hasArchivedAt ? row.archived_at : null)
     };
   });
 
@@ -1507,7 +1580,12 @@ async function listTechUnits(filters = {}) {
     message: 'Tech units loaded.',
     assetTagPrefix: getAssetTagPrefix(),
     units,
-    filters,
+    filters: {
+      ...filters,
+      unitState
+    },
+    unitState,
+    canViewParkedUnits,
     lots: filterLots,
     unitCategories,
     overallGradeOptions,
@@ -2233,6 +2311,7 @@ const UNIT_RELATED_TABLE_LABELS = {
   unit_comments: 'Comments',
   unit_lot_history: 'Lot-move history',
   unit_assignment_history: 'Assignment history',
+  unit_park_history: 'Parked lifecycle history',
   unit_work_completions: 'Earned-weight records',
   unit_override_requests: 'Override requests',
   unit_lot_validation_overrides: 'Lot-validation overrides',
@@ -2545,7 +2624,7 @@ async function permanentlyDeleteTechUnit(unitId) {
 }
 
 async function getTechUnitPermanentDeletionPreviewById(unitId) {
-  const unit = await getTechUnitDeleteSummaryById(unitId);
+  const unit = await getTechUnitLifecycleSummaryById(unitId);
 
   if (!unit) {
     return null;
@@ -2563,10 +2642,78 @@ async function getTechUnitPermanentDeletionPreviewById(unitId) {
   };
 }
 
-async function getTechUnitDeleteSummaryById(unitId) {
-  const safeUnitId = Number(unitId);
+async function getLatestUnitParkHistory(unitId) {
+  if (!await tableExists('unit_park_history')) {
+    return null;
+  }
 
-  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+
+  if (!safeUnitId) {
+    return null;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        h.event_type,
+        h.from_lot_id,
+        h.to_lot_id,
+        h.from_assigned_to_user_id,
+        h.to_assigned_to_user_id,
+        h.changed_by_user_id,
+        h.notes,
+        h.changed_at,
+        from_lot.name AS from_lot_name,
+        to_lot.name AS to_lot_name,
+        from_user.first_name AS from_user_first_name,
+        from_user.last_name AS from_user_last_name,
+        from_user.email AS from_user_email,
+        to_user.first_name AS to_user_first_name,
+        to_user.last_name AS to_user_last_name,
+        to_user.email AS to_user_email,
+        changed_by.first_name AS changed_by_first_name,
+        changed_by.last_name AS changed_by_last_name,
+        changed_by.email AS changed_by_email
+      FROM unit_park_history h
+      LEFT JOIN lots from_lot ON from_lot.lot_id = h.from_lot_id
+      LEFT JOIN lots to_lot ON to_lot.lot_id = h.to_lot_id
+      LEFT JOIN users from_user ON from_user.user_id = h.from_assigned_to_user_id
+      LEFT JOIN users to_user ON to_user.user_id = h.to_assigned_to_user_id
+      LEFT JOIN users changed_by ON changed_by.user_id = h.changed_by_user_id
+      WHERE h.unit_id = ?
+      ORDER BY h.changed_at DESC, h.unit_park_history_id DESC
+      LIMIT 1
+    `,
+    [safeUnitId]
+  );
+
+  const row = rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    eventType: row.event_type,
+    fromLotId: normalizeOptionalInteger(row.from_lot_id),
+    fromLotName: row.from_lot_name || '',
+    toLotId: normalizeOptionalInteger(row.to_lot_id),
+    toLotName: row.to_lot_name || '',
+    fromAssignedToUserId: normalizeOptionalInteger(row.from_assigned_to_user_id),
+    fromAssignedToName: getUserDisplayNameFromRow(row, 'from_user') || '',
+    toAssignedToUserId: normalizeOptionalInteger(row.to_assigned_to_user_id),
+    toAssignedToName: getUserDisplayNameFromRow(row, 'to_user') || '',
+    changedByName: getUserDisplayNameFromRow(row, 'changed_by') || '',
+    changedAt: row.changed_at,
+    notes: row.notes || ''
+  };
+}
+
+async function getTechUnitLifecycleSummaryById(unitId) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+
+  if (!safeUnitId) {
     return null;
   }
 
@@ -2576,30 +2723,33 @@ async function getTechUnitDeleteSummaryById(unitId) {
     return null;
   }
 
+  const parkedSql = getUnitParkedSql(state, 'u');
   const [rows] = await pool.query(
     `
       SELECT
         u.unit_id,
         u.asset_number,
+        u.lot_id,
+        u.assigned_to_user_id,
         l.name AS lot_name,
+        assigned_user.first_name AS assigned_first_name,
+        assigned_user.last_name AS assigned_last_name,
+        assigned_user.email AS assigned_email,
         cv_category.label AS category_label,
         m.name AS manufacturer_name,
         um.model_name,
         pm.model_code AS processor_model_code,
         u.ram_gb,
         u.storage_gb,
-        ${state.archiveCapabilities.hasIsArchived ? 'COALESCE(u.is_archived, 0)' : '0'} AS is_archived
+        ${parkedSql} AS is_parked,
+        ${state.parkingCapabilities.hasParkedAt ? 'u.parked_at' : (state.legacyArchiveCapabilities.hasArchivedAt ? 'u.archived_at' : 'NULL')} AS parked_at
       FROM units u
-      LEFT JOIN lots l
-        ON l.lot_id = u.lot_id
-      LEFT JOIN config_values cv_category
-        ON cv_category.config_value_id = u.unit_category_config_value_id
-      LEFT JOIN manufacturers m
-        ON m.manufacturer_id = u.manufacturer_id
-      LEFT JOIN unit_models um
-        ON um.unit_model_id = u.unit_model_id
-      LEFT JOIN processor_models pm
-        ON pm.processor_model_id = u.processor_model_id
+      LEFT JOIN lots l ON l.lot_id = u.lot_id
+      LEFT JOIN users assigned_user ON assigned_user.user_id = u.assigned_to_user_id
+      LEFT JOIN config_values cv_category ON cv_category.config_value_id = u.unit_category_config_value_id
+      LEFT JOIN manufacturers m ON m.manufacturer_id = u.manufacturer_id
+      LEFT JOIN unit_models um ON um.unit_model_id = u.unit_model_id
+      LEFT JOIN processor_models pm ON pm.processor_model_id = u.processor_model_id
       WHERE u.${escapeIdentifier(state.primaryKeyColumn)} = ?
       LIMIT 1
     `,
@@ -2612,9 +2762,10 @@ async function getTechUnitDeleteSummaryById(unitId) {
     return null;
   }
 
-  const [unitSerialNumber, biosSerialNumber] = await Promise.all([
+  const [unitSerialNumber, biosSerialNumber, latestParkHistory] = await Promise.all([
     getUnitIdentifierValue(safeUnitId, 'unit_serial_number'),
-    getUnitIdentifierValue(safeUnitId, 'bios_serial_number')
+    getUnitIdentifierValue(safeUnitId, 'bios_serial_number'),
+    getLatestUnitParkHistory(safeUnitId)
   ]);
 
   const specParts = [
@@ -2626,63 +2777,346 @@ async function getTechUnitDeleteSummaryById(unitId) {
   ].filter(Boolean);
 
   return {
-    unitId: row.unit_id,
+    unitId: Number(row.unit_id),
     assetTag: row.asset_number ? getDisplayAssetTag(row.asset_number) : '',
     unitSerialNumber: unitSerialNumber || '',
     biosSerialNumber: biosSerialNumber || '',
+    lotId: normalizeOptionalInteger(row.lot_id),
     lotName: row.lot_name || '',
+    assignedToUserId: normalizeOptionalInteger(row.assigned_to_user_id),
+    assignedToName: getUserDisplayNameFromRow(row, 'assigned') || '',
     categoryLabel: row.category_label || '',
     specSummary: specParts.length > 0 ? specParts.join(' · ') : 'No specs entered yet',
-    isArchived: Number(row.is_archived) === 1,
-    archiveSupported: state.archiveCapabilities.hasIsArchived
-      && state.archiveCapabilities.hasArchivedAt
-      && state.archiveCapabilities.hasArchivedByUserId
+    isParked: Number(row.is_parked) === 1,
+    parkedAt: row.parked_at || null,
+    lifecycleSupported: Boolean(
+      state.parkingCapabilities.hasIsParked &&
+      state.parkingCapabilities.hasParkedAt &&
+      state.parkingCapabilities.hasParkedByUserId &&
+      state.assignmentCapabilities.hasAssignedToUserId
+    ),
+    latestParkHistory
   };
 }
 
-async function archiveTechUnit(unitId, archivedByUserId) {
-  const safeUnitId = Number(unitId);
-  const safeArchivedByUserId = normalizeRequiredInteger(archivedByUserId);
-
-  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0 || !safeArchivedByUserId) {
-    return {
-      archived: false,
-      reason: 'invalid_request'
-    };
+async function recordUnitParkHistory(connection, {
+  unitId,
+  eventType,
+  fromLotId = null,
+  toLotId = null,
+  fromAssignedToUserId = null,
+  toAssignedToUserId = null,
+  changedByUserId = null,
+  notes = null
+}) {
+  if (!await tableExists('unit_park_history')) {
+    return;
   }
 
-  const state = await getUnitTableState();
-  const archiveSupported = state.exists
-    && Boolean(state.primaryKeyColumn)
-    && state.archiveCapabilities.hasIsArchived
-    && state.archiveCapabilities.hasArchivedAt
-    && state.archiveCapabilities.hasArchivedByUserId;
-
-  if (!archiveSupported) {
-    return {
-      archived: false,
-      reason: 'archive_migration_required'
-    };
-  }
-
-  const [result] = await pool.query(
+  await connection.query(
     `
-      UPDATE units
-      SET
-        is_archived = 1,
-        archived_at = NOW(),
-        archived_by_user_id = ?
-      WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
-        AND COALESCE(is_archived, 0) = 0
-      LIMIT 1
+      INSERT INTO unit_park_history (
+        unit_id,
+        event_type,
+        from_lot_id,
+        to_lot_id,
+        from_assigned_to_user_id,
+        to_assigned_to_user_id,
+        changed_by_user_id,
+        notes
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
-    [safeArchivedByUserId, safeUnitId]
+    [
+      normalizeRequiredInteger(unitId),
+      normalizeText(eventType) || 'parked',
+      normalizeOptionalInteger(fromLotId),
+      normalizeOptionalInteger(toLotId),
+      normalizeOptionalInteger(fromAssignedToUserId),
+      normalizeOptionalInteger(toAssignedToUserId),
+      normalizeOptionalInteger(changedByUserId),
+      normalizeText(notes)
+    ]
   );
+}
+
+function assertUnitLifecycleAuthority(actorRoleCodes) {
+  if (!hasElevatedLotMoveAuthority(actorRoleCodes)) {
+    throw createUnitLifecycleError(
+      'BWT_UNIT_LIFECYCLE_FORBIDDEN',
+      'Only a Tech Lead, Management user, or Admin can park or return a unit to Active.'
+    );
+  }
+}
+
+function assertUnitIsNotParked(unit) {
+  if (isUnitParked(unit)) {
+    throw createUnitLifecycleError(
+      'BWT_UNIT_IS_PARKED',
+      'This unit is parked. Return it to Active before changing unit details, assignments, lot placement, or work completion.'
+    );
+  }
+}
+
+async function getReturnToActiveOptions() {
+  const [{ assignableLots }, technicians] = await Promise.all([
+    getLotMap(),
+    listActiveAssignableTechnicians()
+  ]);
 
   return {
-    archived: Number(result.affectedRows) > 0,
-    reason: Number(result.affectedRows) > 0 ? null : 'already_archived_or_missing'
+    lots: assignableLots,
+    technicians
   };
+}
+
+async function assertReturnAssigneeIsEligible(assignedToUserId) {
+  const normalizedAssignedToUserId = normalizeOptionalInteger(assignedToUserId);
+
+  if (!normalizedAssignedToUserId) {
+    return null;
+  }
+
+  const technicians = await listActiveAssignableTechnicians();
+  const isEligible = technicians.some((technician) => technician.id === normalizedAssignedToUserId);
+
+  if (!isEligible) {
+    throw createUnitLifecycleError(
+      'BWT_RETURN_ASSIGNEE_NOT_ELIGIBLE',
+      'Choose an active Tech or Tech Lead, or leave the assignment unassigned.'
+    );
+  }
+
+  return normalizedAssignedToUserId;
+}
+
+async function parkTechUnit({ unitId, parkedByUserId, actorRoleCodes }) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const safeParkedByUserId = normalizeRequiredInteger(parkedByUserId);
+  const state = await getUnitTableState();
+
+  if (!safeUnitId || !safeParkedByUserId || !state.parkingCapabilities.hasIsParked || !state.assignmentCapabilities.hasAssignedToUserId) {
+    throw createUnitLifecycleError(
+      'BWT_UNIT_LIFECYCLE_MIGRATION_REQUIRED',
+      'The Parked Unit lifecycle is not ready yet. Run the Step 6f.2 SQL migration first.'
+    );
+  }
+
+  assertUnitLifecycleAuthority(actorRoleCodes);
+
+  const unit = await getUnitById(safeUnitId);
+
+  if (!unit) {
+    throw createUnitLifecycleError('BWT_UNIT_NOT_FOUND', 'The selected unit could not be found.');
+  }
+
+  if (isUnitParked(unit)) {
+    throw createUnitLifecycleError('BWT_UNIT_ALREADY_PARKED', 'This unit is already parked.');
+  }
+
+  const currentLotId = normalizeOptionalInteger(unit.lot_id);
+  const currentAssignedToUserId = normalizeOptionalInteger(unit.assigned_to_user_id);
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const updates = [
+      'is_parked = 1',
+      'parked_at = NOW()',
+      'parked_by_user_id = ?',
+      'lot_id = NULL',
+      'assigned_to_user_id = NULL'
+    ];
+    const values = [safeParkedByUserId];
+
+    if (state.assignmentCapabilities.hasAssignedAt) {
+      updates.push('assigned_at = NULL');
+    }
+
+    if (state.assignmentCapabilities.hasAssignmentUpdatedByUserId) {
+      updates.push('assignment_updated_by_user_id = ?');
+      values.push(safeParkedByUserId);
+    }
+
+    if (state.legacyArchiveCapabilities.hasIsArchived) {
+      updates.push('is_archived = 1');
+    }
+
+    if (state.legacyArchiveCapabilities.hasArchivedAt) {
+      updates.push('archived_at = NOW()');
+    }
+
+    if (state.legacyArchiveCapabilities.hasArchivedByUserId) {
+      updates.push('archived_by_user_id = ?');
+      values.push(safeParkedByUserId);
+    }
+
+    const [parkResult] = await connection.query(
+      `
+        UPDATE units
+        SET ${updates.join(', ')}
+        WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
+          AND COALESCE(is_parked, 0) = 0
+        LIMIT 1
+      `,
+      [...values, safeUnitId]
+    );
+
+    if (Number(parkResult.affectedRows) !== 1) {
+      throw createUnitLifecycleError('BWT_UNIT_ALREADY_PARKED', 'This unit is already parked or was changed by another user.');
+    }
+
+    if (currentAssignedToUserId) {
+      await recordUnitAssignmentHistory(connection, {
+        unitId: safeUnitId,
+        fromUserId: currentAssignedToUserId,
+        toUserId: null,
+        changedByUserId: safeParkedByUserId,
+        changeSource: 'parked',
+        notes: 'Assignment cleared when the unit was parked.'
+      });
+    }
+
+    await recordUnitParkHistory(connection, {
+      unitId: safeUnitId,
+      eventType: 'parked',
+      fromLotId: currentLotId,
+      fromAssignedToUserId: currentAssignedToUserId,
+      changedByUserId: safeParkedByUserId,
+      notes: 'Unit parked. Current lot and assignment were cleared; existing records and earned credit were retained.'
+    });
+
+    await connection.commit();
+    return { parked: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function returnTechUnitToActive({
+  unitId,
+  destinationLotId,
+  assignedToUserId = null,
+  returnedByUserId,
+  actorRoleCodes
+}) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const safeDestinationLotId = normalizeRequiredInteger(destinationLotId);
+  const safeReturnedByUserId = normalizeRequiredInteger(returnedByUserId);
+  const state = await getUnitTableState();
+
+  if (!safeUnitId || !safeDestinationLotId || !safeReturnedByUserId || !state.parkingCapabilities.hasIsParked || !state.assignmentCapabilities.hasAssignedToUserId) {
+    throw createUnitLifecycleError(
+      'BWT_UNIT_LIFECYCLE_MIGRATION_REQUIRED',
+      'The Parked Unit lifecycle is not ready yet. Run the Step 6f.2 SQL migration first.'
+    );
+  }
+
+  assertUnitLifecycleAuthority(actorRoleCodes);
+
+  const unit = await getUnitById(safeUnitId);
+
+  if (!unit) {
+    throw createUnitLifecycleError('BWT_UNIT_NOT_FOUND', 'The selected unit could not be found.');
+  }
+
+  if (!isUnitParked(unit)) {
+    throw createUnitLifecycleError('BWT_UNIT_NOT_PARKED', 'Only a parked unit can be returned to Active.');
+  }
+
+  await assertLotDestinationIsOpenOrCurrent({ unit: { lot_id: null }, nextLotId: safeDestinationLotId });
+  const safeAssignedToUserId = await assertReturnAssigneeIsEligible(assignedToUserId);
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const updates = [
+      'is_parked = 0',
+      'parked_at = NULL',
+      'parked_by_user_id = NULL',
+      'lot_id = ?',
+      'assigned_to_user_id = ?'
+    ];
+    const values = [safeDestinationLotId, safeAssignedToUserId];
+
+    if (state.assignmentCapabilities.hasAssignedAt) {
+      updates.push('assigned_at = ?');
+      values.push(safeAssignedToUserId ? new Date() : null);
+    }
+
+    if (state.assignmentCapabilities.hasAssignmentUpdatedByUserId) {
+      updates.push('assignment_updated_by_user_id = ?');
+      values.push(safeReturnedByUserId);
+    }
+
+    if (state.legacyArchiveCapabilities.hasIsArchived) {
+      updates.push('is_archived = 0');
+    }
+
+    if (state.legacyArchiveCapabilities.hasArchivedAt) {
+      updates.push('archived_at = NULL');
+    }
+
+    if (state.legacyArchiveCapabilities.hasArchivedByUserId) {
+      updates.push('archived_by_user_id = NULL');
+    }
+
+    const [returnResult] = await connection.query(
+      `
+        UPDATE units
+        SET ${updates.join(', ')}
+        WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
+          AND COALESCE(is_parked, 0) = 1
+        LIMIT 1
+      `,
+      [...values, safeUnitId]
+    );
+
+    if (Number(returnResult.affectedRows) !== 1) {
+      throw createUnitLifecycleError('BWT_UNIT_NOT_PARKED', 'This unit is no longer parked or was changed by another user.');
+    }
+
+    await recordUnitLotHistory(connection, {
+      unitId: safeUnitId,
+      fromLotId: null,
+      toLotId: safeDestinationLotId,
+      movedByUserId: safeReturnedByUserId,
+      notes: 'Unit returned to Active from the Parked lifecycle.'
+    });
+
+    if (safeAssignedToUserId) {
+      await recordUnitAssignmentHistory(connection, {
+        unitId: safeUnitId,
+        fromUserId: null,
+        toUserId: safeAssignedToUserId,
+        changedByUserId: safeReturnedByUserId,
+        changeSource: 'returned_to_active',
+        notes: 'Assignment set while returning the unit to Active.'
+      });
+    }
+
+    await recordUnitParkHistory(connection, {
+      unitId: safeUnitId,
+      eventType: 'returned_to_active',
+      toLotId: safeDestinationLotId,
+      toAssignedToUserId: safeAssignedToUserId,
+      changedByUserId: safeReturnedByUserId,
+      notes: 'Unit returned to Active. Historical work and credit records were retained without changes.'
+    });
+
+    await connection.commit();
+    return { returnedToActive: true };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 
@@ -2737,6 +3171,8 @@ async function assignTechUnit({ unitId, toUserId = null, changedByUserId = null,
   if (!unit) {
     return false;
   }
+
+  assertUnitIsNotParked(unit);
 
   const normalizedToUserId = normalizeOptionalInteger(toUserId);
   const normalizedChangedByUserId = normalizeOptionalInteger(changedByUserId);
@@ -2832,6 +3268,8 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
   if (!unit) {
     throw new Error('The selected unit could not be found.');
   }
+
+  assertUnitIsNotParked(unit);
 
   const resolvedWeight = weightValue !== null && weightValue !== undefined
     ? productionWeightModel.normalizeWeightValue(weightValue)
@@ -3201,7 +3639,7 @@ async function getUnitWorkCompletionPreview(unitId) {
     };
   }
 
-  if (state.archiveCapabilities.hasIsArchived && Number(unit.is_archived) === 1) {
+  if (isUnitParked(unit)) {
     return {
       ready: false,
       unit,
@@ -3422,20 +3860,22 @@ async function getUnitOperationalHistory(unitId) {
   const emptyHistory = {
     workCompletions: [],
     assignmentChanges: [],
-    lotMoves: []
+    lotMoves: [],
+    lifecycleEvents: []
   };
 
   if (!safeUnitId) {
     return emptyHistory;
   }
 
-  const [hasWorkCompletions, hasAssignmentHistory, hasLotHistory] = await Promise.all([
+  const [hasWorkCompletions, hasAssignmentHistory, hasLotHistory, hasParkHistory] = await Promise.all([
     tableExists('unit_work_completions'),
     tableExists('unit_assignment_history'),
-    tableExists('unit_lot_history')
+    tableExists('unit_lot_history'),
+    tableExists('unit_park_history')
   ]);
 
-  const [workRows, assignmentRows, lotRows] = await Promise.all([
+  const [workRows, assignmentRows, lotRows, parkRows] = await Promise.all([
     hasWorkCompletions
       ? pool.query(
         `
@@ -3531,6 +3971,43 @@ async function getUnitOperationalHistory(unitId) {
         `,
         [safeUnitId]
       )
+      : Promise.resolve([[]]),
+    hasParkHistory
+      ? pool.query(
+        `
+          SELECT
+            h.unit_park_history_id,
+            h.event_type,
+            h.from_lot_id,
+            h.to_lot_id,
+            h.from_assigned_to_user_id,
+            h.to_assigned_to_user_id,
+            h.changed_by_user_id,
+            h.notes,
+            h.changed_at,
+            from_lot.name AS from_lot_name,
+            to_lot.name AS to_lot_name,
+            from_user.first_name AS from_user_first_name,
+            from_user.last_name AS from_user_last_name,
+            from_user.email AS from_user_email,
+            to_user.first_name AS to_user_first_name,
+            to_user.last_name AS to_user_last_name,
+            to_user.email AS to_user_email,
+            changed_by.first_name AS changed_by_first_name,
+            changed_by.last_name AS changed_by_last_name,
+            changed_by.email AS changed_by_email
+          FROM unit_park_history h
+          LEFT JOIN lots from_lot ON from_lot.lot_id = h.from_lot_id
+          LEFT JOIN lots to_lot ON to_lot.lot_id = h.to_lot_id
+          LEFT JOIN users from_user ON from_user.user_id = h.from_assigned_to_user_id
+          LEFT JOIN users to_user ON to_user.user_id = h.to_assigned_to_user_id
+          LEFT JOIN users changed_by ON changed_by.user_id = h.changed_by_user_id
+          WHERE h.unit_id = ?
+          ORDER BY h.changed_at DESC, h.unit_park_history_id DESC
+          LIMIT 100
+        `,
+        [safeUnitId]
+      )
       : Promise.resolve([[]])
   ]);
 
@@ -3565,6 +4042,17 @@ async function getUnitOperationalHistory(unitId) {
       movedByName: getUserDisplayNameFromRow(row, 'moved_by') || 'System',
       movedAt: row.moved_at,
       notes: row.notes || ''
+    })),
+    lifecycleEvents: (parkRows[0] || []).map((row) => ({
+      eventType: row.event_type || 'parked',
+      eventLabel: row.event_type === 'returned_to_active' ? 'Returned to Active' : 'Parked',
+      fromLotName: row.from_lot_name || 'No active lot',
+      toLotName: row.to_lot_name || 'No active lot',
+      fromAssignedToName: getUserDisplayNameFromRow(row, 'from_user') || 'Unassigned',
+      toAssignedToName: getUserDisplayNameFromRow(row, 'to_user') || 'Unassigned',
+      changedByName: getUserDisplayNameFromRow(row, 'changed_by') || 'System',
+      changedAt: row.changed_at,
+      notes: row.notes || ''
     }))
   };
 }
@@ -3576,6 +4064,8 @@ function hasElevatedLotMoveAuthority(actorRoleCodes) {
 }
 
 function assertUnitActionPermission({ unit, currentUserId, actorRoleCodes }) {
+  assertUnitIsNotParked(unit);
+
   if (hasElevatedLotMoveAuthority(actorRoleCodes)) {
     return;
   }
@@ -3592,6 +4082,8 @@ function assertUnitActionPermission({ unit, currentUserId, actorRoleCodes }) {
 }
 
 function assertUnitEditPermission({ unit, currentUserId, actorRoleCodes }) {
+  assertUnitIsNotParked(unit);
+
   if (hasElevatedLotMoveAuthority(actorRoleCodes)) {
     return;
   }
@@ -3701,8 +4193,12 @@ module.exports = {
   updateTechUnit,
   useExistingTechUnit,
   getUnitById,
-  getTechUnitDeleteSummaryById,
+  getTechUnitLifecycleSummaryById,
   getTechUnitPermanentDeletionPreviewById,
+  getReturnToActiveOptions,
+  parkTechUnit,
+  returnTechUnitToActive,
+  isUnitParked,
   permanentlyDeleteTechUnit,
   assignTechUnit,
   getLatestWorkCompletionMapForUnits,
@@ -3710,7 +4206,6 @@ module.exports = {
   getUnitWorkCompletionsForUser,
   getUnitWorkCompletionPreview,
   recordUnitWorkCompletion,
-  archiveTechUnit,
   getAssetTagPrefix,
   getDisplayAssetTag,
   normalizeAssetTagInput,

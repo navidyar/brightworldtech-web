@@ -241,7 +241,12 @@
     closeOtherRows(null);
   });
 
-  document.body.addEventListener('unit-archived', () => {
+  document.body.addEventListener('unit-parked', () => {
+    closeModalRoot();
+    closeOtherRows(null);
+  });
+
+  document.body.addEventListener('unit-returned-active', () => {
     closeModalRoot();
     closeOtherRows(null);
   });

@@ -9,6 +9,7 @@ const router = express.Router();
 const managementRoles = ['admin', 'management'];
 const techRoles = ['admin', 'management', 'tech_lead', 'tech'];
 const techDeleteRoles = ['admin', 'management', 'tech_lead'];
+const unitLifecycleRoles = ['admin', 'management', 'tech_lead'];
 const outcomeApprovalRoles = ['admin', 'management', 'tech_lead'];
 const techHistoryRoles = ['admin', 'management', 'tech_lead'];
 const overrideReviewRoles = ['admin', 'management', 'tech_lead'];
@@ -288,17 +289,31 @@ router.post(
 );
 
 router.get(
-  '/tech/units/:unitId/delete/modal',
+  '/tech/units/:unitId/park/modal',
   requireAuth,
-  requireRole(techDeleteRoles),
-  techController.renderArchiveTechUnitModal
+  requireRole(unitLifecycleRoles),
+  techController.renderParkTechUnitModal
 );
 
 router.post(
-  '/tech/units/:unitId/delete',
+  '/tech/units/:unitId/park',
   requireAuth,
-  requireRole(techDeleteRoles),
-  techController.archiveTechUnit
+  requireRole(unitLifecycleRoles),
+  techController.parkTechUnit
+);
+
+router.get(
+  '/tech/units/:unitId/return-to-active/modal',
+  requireAuth,
+  requireRole(unitLifecycleRoles),
+  techController.renderReturnTechUnitToActiveModal
+);
+
+router.post(
+  '/tech/units/:unitId/return-to-active',
+  requireAuth,
+  requireRole(unitLifecycleRoles),
+  techController.returnTechUnitToActive
 );
 
 router.get(

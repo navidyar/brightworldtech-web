@@ -39,6 +39,13 @@ function getTechOverrideRequestEligibility(req, unit) {
     };
   }
 
+  if (techUnitModel.isUnitParked(unit)) {
+    return {
+      allowed: false,
+      message: 'This unit is parked. A Tech Lead, Management user, or Admin must return it to Active before an override can be requested.'
+    };
+  }
+
   const currentUserId = normalizePositiveInteger(req && req.currentUser ? req.currentUser.user_id : null);
 
   if (!currentUserId) {
@@ -90,6 +97,10 @@ function getErrorMessages(query) {
 
   if (query.skipped === 'destination-lot-required') {
     return ['Select an open destination lot before approving an override for a unit with recorded work.'];
+  }
+
+  if (query.skipped === 'unit-parked') {
+    return ['This unit is parked. Return it to Active before approving an override request.'];
   }
 
   if (query.skipped === 'invalid-destination-lot') {
@@ -238,6 +249,10 @@ async function approveOverrideRequest(req, res, next) {
 
     if (error && error.code === 'BWT_OVERRIDE_DESTINATION_LOT_REQUIRED') {
       return res.redirect(`/management/overrides?status=${encodeURIComponent(getReturnStatus(req))}&skipped=destination-lot-required`);
+    }
+
+    if (error && error.code === 'BWT_UNIT_PARKED') {
+      return res.redirect(`/management/overrides?status=${encodeURIComponent(getReturnStatus(req))}&skipped=unit-parked`);
     }
 
     if (error && error.code === 'BWT_INVALID_OVERRIDE_DESTINATION_LOT') {

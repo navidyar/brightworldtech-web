@@ -1,0 +1,132 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeUnit = unit || null;
+  const isReturn = mode === 'return';
+  const safeOptions = formOptions || {};
+  const lots = Array.isArray(safeOptions.lots) ? safeOptions.lots : [];
+  const technicians = Array.isArray(safeOptions.technicians) ? safeOptions.technicians : [];
+  const safeFormData = formData || {};
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel tech-delete-modal" role="dialog" aria-modal="true" aria-labelledby="tech-unit-park-modal-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Unit Lifecycle</p>
+        <h2 id="tech-unit-park-modal-title"><%= isReturn ? 'Return Unit to Active' : 'Park Unit' %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeUnit) { %>
+        <div class="tech-delete-confirm-card">
+          <dl class="tech-delete-summary-list">
+            <div>
+              <dt>Asset Tag</dt>
+              <dd><%= safeUnit.assetTag || '—' %></dd>
+            </div>
+            <div>
+              <dt>BIOS Serial</dt>
+              <dd><%= safeUnit.biosSerialNumber || '—' %></dd>
+            </div>
+            <div>
+              <dt>Unit Serial</dt>
+              <dd><%= safeUnit.unitSerialNumber || '—' %></dd>
+            </div>
+            <div>
+              <dt>Current Lot</dt>
+              <dd><%= safeUnit.lotName || 'No active lot' %></dd>
+            </div>
+            <div>
+              <dt>Current Assignment</dt>
+              <dd><%= safeUnit.assignedToName || 'Unassigned' %></dd>
+            </div>
+            <div>
+              <dt>Specs</dt>
+              <dd><%= safeUnit.specSummary || '—' %></dd>
+            </div>
+          </dl>
+
+          <% if (isReturn && safeUnit.latestParkHistory) { %>
+            <p class="field-hint">
+              Last parked from <strong><%= safeUnit.latestParkHistory.fromLotName || 'No active lot' %></strong>
+              and <strong><%= safeUnit.latestParkHistory.fromAssignedToName || 'Unassigned' %></strong>.
+            </p>
+          <% } %>
+        </div>
+
+        <% if (!isReturn && !safeUnit.isParked && safeUnit.lifecycleSupported) { %>
+          <p class="tech-delete-warning">
+            Parking removes this unit from Active operational views and clears its current lot and assignment. Identifiers, history, completed work, and earned credit remain unchanged.
+          </p>
+
+          <form
+            class="tech-delete-confirm-actions"
+            method="post"
+            action="/tech/units/<%= safeUnit.unitId %>/park"
+            hx-post="/tech/units/<%= safeUnit.unitId %>/park"
+            hx-trigger="submit consume"
+            hx-target="#modal-root"
+            hx-swap="innerHTML"
+          >
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            <button type="submit" class="secondary-button">Park Unit</button>
+          </form>
+        <% } else if (isReturn && safeUnit.isParked && safeUnit.lifecycleSupported) { %>
+          <form
+            class="tech-unit-form"
+            method="post"
+            action="/tech/units/<%= safeUnit.unitId %>/return-to-active"
+            hx-post="/tech/units/<%= safeUnit.unitId %>/return-to-active"
+            hx-trigger="submit consume"
+            hx-target="#modal-root"
+            hx-swap="innerHTML"
+          >
+            <label class="form-field">
+              <span>Open Destination Lot</span>
+              <select name="destinationLotId" required>
+                <option value="">Choose an open, assignable lot</option>
+                <% lots.forEach((lot) => { %>
+                  <option value="<%= lot.lot_id %>" <%= String(safeFormData.destinationLotId) === String(lot.lot_id) ? 'selected' : '' %>><%= lot.lot_name %></option>
+                <% }) %>
+              </select>
+              <small class="field-hint">Closed, hidden, and parent/container lots cannot receive a returned unit.</small>
+            </label>
+
+            <label class="form-field">
+              <span>Assign to Tech <small>(optional)</small></span>
+              <select name="assignedToUserId">
+                <option value="">Leave unassigned</option>
+                <% technicians.forEach((technician) => { %>
+                  <option value="<%= technician.id %>" <%= String(safeFormData.assignedToUserId) === String(technician.id) ? 'selected' : '' %>><%= technician.label %></option>
+                <% }) %>
+              </select>
+            </label>
+
+            <p class="field-hint">Returning this unit restores Active status. Its prior history and earned credit remain unchanged.</p>
+
+            <div class="tech-delete-confirm-actions">
+              <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+              <button type="submit" class="primary-button">Return to Active</button>
+            </div>
+          </form>
+        <% } else { %>
+          <div class="tech-delete-confirm-actions">
+            <button type="button" class="secondary-button" data-modal-close>Close</button>
+          </div>
+        <% } %>
+      <% } else { %>
+        <div class="tech-delete-confirm-actions">
+          <button type="button" class="secondary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

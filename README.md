@@ -4,9 +4,96 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
-Step 6f.1: Closed Lot Lifecycle.
+Step 6f.2: Parked Unit Lifecycle.
 
-This step adds a reversible Open / Closed operational state to lots. Closed lots remain reviewable, but cannot receive new, moved, or override-handoff units.
+This step replaces the legacy one-way archive behavior with a role-governed **Active / Parked / Return to Active** lifecycle. Parking clears only the unit’s current operational lot and assignment while retaining unit details, audit history, and earned production credit.
+
+## Step 6f.2 — Parked Units and Return to Active
+
+### What Changed
+
+- Replaces the user-facing archive workflow with **Park Unit** and **Return to Active**.
+- Adds explicit `is_parked`, `parked_at`, and `parked_by_user_id` fields on `units`.
+- Adds `unit_park_history` to retain each lifecycle transition, including prior/current lot, assignment, authorized actor, timestamp, and note.
+- Converts legacy archived units to Parked during the migration. The unit’s final known lot and assignment are written to history before the current operational values are cleared.
+- Limits Park and Return actions, routes, and Parked Unit browsing to **Tech Lead, Management, and Admin**. Regular Techs cannot access parked records or lifecycle routes.
+- Parking runs in one database transaction and clears the current lot and assignment. It does not delete identifiers, unit details, audit history, Work Complete records, or earned production credit.
+- Parked records are absent from the default Active Unit Browser. Authorized users can select **Parked Units** using the Unit State filter.
+- Returning a unit to Active requires an eligible **open** destination lot and can optionally assign an active Tech or Tech Lead.
+- A parked unit cannot be edited, moved, assigned, marked Work Complete, reviewed for Pass/Fail, requested for override, or approved through override handoff until returned to Active.
+- Legacy Step 6f archive columns remain only for backwards compatibility and are synchronized by the new lifecycle. The application no longer presents Archive/Unarchive terminology.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step6f2-parked-unit-lifecycle-clean.diff
+```
+
+Stop if any file is skipped, reversed, or fails to check.
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step6f2-parked-unit-lifecycle-clean.diff
+
+git diff --check
+
+ls -l sql/2026-06-step-6f2-parked-unit-lifecycle.sql
+```
+
+The final `ls` command must show the migration file before any database command is run.
+
+#### 3. Database backup — separate recommended checkpoint
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+mkdir -p handoff/db-backups
+
+docker compose exec -T mysql sh -lc 'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  > "handoff/db-backups/bwtdallas-before-step6f2-$(date +%F-%H%M%S).sql"
+```
+
+#### 4. Database migration — database changes only; do not rebuild yet
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < sql/2026-06-step-6f2-parked-unit-lifecycle.sql
+```
+
+Expected final message:
+
+```text
+Step 6f.2 parked-unit lifecycle migration complete
+```
+
+#### 5. Rebuild — only after the migration succeeds
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Checks
+
+1. As a Tech Lead, Management user, or Admin, open `/tech/units`, select an Active unit, and choose **Park Unit**.
+2. Confirm it disappears from Active Units and appears under **Parked Units** with no current lot or Tech assignment.
+3. Open the authorized History panel and verify that the Parked transition retains the former lot and assignment.
+4. Confirm a parked unit cannot be edited, moved, assigned, marked Work Complete, requested for override, or approved through override handoff.
+5. Confirm a regular Tech cannot choose Parked Units or access Park/Return routes directly.
+6. Return the unit to Active using an open, eligible destination lot; test once unassigned and once with an eligible Tech/Tech Lead selected.
+7. Confirm hidden, closed, and parent/container lots cannot be selected as return destinations.
+8. Confirm previously earned Work Complete credit remains unchanged after parking and return.
+9. With a legacy archived test record, confirm the migration converts it to Parked and retains its final known lot and assignment in lifecycle history.
 
 ## Step 6f.0 Goal
 
@@ -72,7 +159,7 @@ Step 6f.0 assignment and completion foundation migration complete
 
 ## Next Direction
 
-After Step 6f.0 is confirmed, continue with closed lots, Parked/Return-to-Active wording, role-aware Unit Browser filtering, and pagination.
+After Step 6f.2 is confirmed, continue with the next approved Unit Browser lifecycle and operational cleanup step. Do not reintroduce Archive/Unarchive terminology.
 
 ## Step 6f.0 Action-Flow Hotfix
 

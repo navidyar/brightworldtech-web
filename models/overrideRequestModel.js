@@ -843,7 +843,8 @@ async function approveOverrideRequest({
           r.request_status,
           u.assigned_to_user_id,
           u.created_by_user_id,
-          u.lot_id AS current_lot_id
+          u.lot_id AS current_lot_id,
+          COALESCE(u.is_archived, 0) AS is_parked
         FROM unit_override_requests r
         LEFT JOIN units u
           ON u.unit_id = r.unit_id
@@ -858,6 +859,12 @@ async function approveOverrideRequest({
     if (!request || String(request.request_status || '').toLowerCase() !== 'pending') {
       await connection.rollback();
       return false;
+    }
+
+    if (Number(request.is_parked || 0) === 1) {
+      const error = new Error('This unit is parked. Return it to Active before approving an override request.');
+      error.code = 'BWT_UNIT_PARKED';
+      throw error;
     }
 
     const isOutcomeConfirmation = request.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE;

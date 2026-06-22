@@ -23,7 +23,8 @@ function buildTechUnitsTableUrl(filters) {
     'techUserId',
     'createdStartDate',
     'createdEndDate',
-    'createdWindow'
+    'createdWindow',
+    'unitState'
   ];
 
   passthroughKeys.forEach((key) => {
@@ -104,8 +105,10 @@ function getFiltersFromRequest(req) {
     createdStartDate: String(req.query.createdStartDate || '').trim(),
     createdEndDate: String(req.query.createdEndDate || '').trim(),
     createdWindow: String(req.query.createdWindow || '').trim(),
+    unitState: String(req.query.unitState || 'active').trim(),
     currentUserId: req && req.currentUser ? req.currentUser.user_id : null,
-    restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req)
+    restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req),
+    canViewParkedUnits: getCurrentRoleCodes(req).some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode))
   };
 }
 
@@ -716,6 +719,10 @@ function getFriendlySaveError(error, formOptions) {
     return 'You can record work only for a unit currently assigned to you.';
   }
 
+  if (error && error.code === 'BWT_UNIT_IS_PARKED') {
+    return 'This unit is parked. Return it to Active before changing its details or recording work.';
+  }
+
   if (error && error.code === 'BWT_LOT_MOVE_NOT_ASSIGNED') {
     return 'Only the Tech currently assigned to an unfinished unit may correct its lot directly.';
   }
@@ -852,9 +859,11 @@ async function renderTechUnitsPage(req, res, next) {
             ? 'Work completion recorded successfully.'
             : req.query.deleted === '1'
               ? 'Unit and all linked records were permanently deleted.'
-              : req.query.archived === '1'
-                ? 'Unit archived successfully. Search by an identifier to retrieve the retained record.'
-                : null
+              : req.query.parked === '1'
+                ? 'Unit parked successfully. Its current lot and assignment were cleared while history and earned credit were retained.'
+                : req.query.returnedToActive === '1'
+                  ? 'Unit returned to Active successfully.'
+                  : null
     });
   } catch (error) {
     next(error);
@@ -897,7 +906,8 @@ async function renderTechUnitHistoryPanel(req, res, next) {
         operationalHistory: {
           workCompletions: [],
           assignmentChanges: [],
-          lotMoves: []
+          lotMoves: [],
+          lifecycleEvents: []
         },
         errorMessages: ['The selected unit ID is invalid.']
       });
@@ -1019,92 +1029,195 @@ async function completeTechUnitWork(req, res, next) {
   }
 }
 
-async function renderArchiveTechUnitModal(req, res, next) {
+function getLifecycleFormData(req = null) {
+  return {
+    destinationLotId: String(req && req.body ? req.body.destinationLotId || '' : '').trim(),
+    assignedToUserId: String(req && req.body ? req.body.assignedToUserId || '' : '').trim()
+  };
+}
+
+function buildUnitParkModalView({ mode = 'park', unit = null, formOptions = {}, formData = {}, errorMessages = [] } = {}) {
+  return {
+    mode,
+    unit,
+    formOptions: {
+      lots: Array.isArray(formOptions.lots) ? formOptions.lots : [],
+      technicians: Array.isArray(formOptions.technicians) ? formOptions.technicians : []
+    },
+    formData: {
+      destinationLotId: String(formData.destinationLotId || ''),
+      assignedToUserId: String(formData.assignedToUserId || '')
+    },
+    errorMessages: Array.isArray(errorMessages) ? errorMessages : []
+  };
+}
+
+async function renderParkTechUnitModal(req, res, next) {
   try {
     const unitId = Number(req.params.unitId);
 
     if (!Number.isInteger(unitId) || unitId <= 0) {
-      return res.status(400).render('fragments/tech-unit-delete-modal', {
-        unit: null,
+      return res.status(400).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
         errorMessages: ['The selected unit ID is invalid.']
-      });
+      }));
     }
 
-    const unit = await techUnitModel.getTechUnitDeleteSummaryById(unitId);
+    const unit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
 
     if (!unit) {
-      return res.status(404).render('fragments/tech-unit-delete-modal', {
-        unit: null,
+      return res.status(404).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
         errorMessages: ['The selected unit could not be found.']
-      });
+      }));
     }
 
-    return res.render('fragments/tech-unit-delete-modal', {
+    return res.render('fragments/tech-unit-park-modal', buildUnitParkModalView({
+      mode: 'park',
       unit,
-      errorMessages: unit.isArchived
-        ? ['This unit is already archived. Search by identifier to view its retained details.']
-        : unit.archiveSupported
+      errorMessages: unit.isParked
+        ? ['This unit is already parked.']
+        : unit.lifecycleSupported
           ? []
-          : ['Unit archiving is not ready yet. Run the Step 6f archive SQL migration before archiving units.']
-    });
+          : ['The Parked Unit lifecycle is not ready yet. Run the Step 6f.2 SQL migration first.']
+    }));
   } catch (error) {
     next(error);
   }
 }
 
-async function archiveTechUnit(req, res, next) {
+async function parkTechUnit(req, res, next) {
+  let unit = null;
+
   try {
     const unitId = Number(req.params.unitId);
 
     if (!Number.isInteger(unitId) || unitId <= 0) {
-      return res.status(400).render('fragments/tech-unit-delete-modal', {
-        unit: null,
+      return res.status(400).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
         errorMessages: ['The selected unit ID is invalid.']
-      });
+      }));
     }
 
-    const unit = await techUnitModel.getTechUnitDeleteSummaryById(unitId);
+    unit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
 
     if (!unit) {
-      if (req.get('HX-Request') === 'true') {
-        res.set('HX-Trigger', 'unit-saved, unit-archived');
-        return res.send('');
-      }
-
-      return res.redirect('/tech/units?archived=1');
+      return res.status(404).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
+        errorMessages: ['The selected unit could not be found.']
+      }));
     }
 
-    if (unit.isArchived) {
-      return res.status(400).render('fragments/tech-unit-delete-modal', {
-        unit,
-        errorMessages: ['This unit is already archived. Search by identifier to view its retained details.']
-      });
-    }
+    await techUnitModel.parkTechUnit({
+      unitId,
+      parkedByUserId: req.currentUser.user_id,
+      actorRoleCodes: getCurrentRoleCodes(req)
+    });
 
-    const archiveResult = await techUnitModel.archiveTechUnit(unitId, req.currentUser.user_id);
-
-    if (!archiveResult.archived) {
-      const errorMessage = archiveResult.reason === 'archive_migration_required'
-        ? 'Unit archiving is not ready yet. Run the Step 6f archive SQL migration before archiving units.'
-        : 'The unit could not be archived. Refresh the page and try again.';
-
-      return res.status(400).render('fragments/tech-unit-delete-modal', {
-        unit,
-        errorMessages: [errorMessage]
-      });
-    }
-
-    if (req.get('HX-Request') === 'true') {
-      res.set('HX-Trigger', 'unit-saved, unit-archived');
+    if (isHtmxRequest(req)) {
+      res.set('HX-Trigger', 'unit-saved, unit-parked');
       return res.send('');
     }
 
-    return res.redirect('/tech/units?archived=1');
+    return res.redirect('/tech/units?parked=1');
+  } catch (error) {
+    return res.status(400).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
+      mode: 'park',
+      unit,
+      errorMessages: [error.message || 'The unit could not be parked.']
+    }));
+  }
+}
+
+async function renderReturnTechUnitToActiveModal(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
+        mode: 'return',
+        errorMessages: ['The selected unit ID is invalid.']
+      }));
+    }
+
+    const [unit, formOptions] = await Promise.all([
+      techUnitModel.getTechUnitLifecycleSummaryById(unitId),
+      techUnitModel.getReturnToActiveOptions()
+    ]);
+
+    if (!unit) {
+      return res.status(404).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
+        mode: 'return',
+        formOptions,
+        errorMessages: ['The selected unit could not be found.']
+      }));
+    }
+
+    return res.render('fragments/tech-unit-park-modal', buildUnitParkModalView({
+      mode: 'return',
+      unit,
+      formOptions,
+      errorMessages: !unit.isParked
+        ? ['Only a parked unit can be returned to Active.']
+        : unit.lifecycleSupported
+          ? []
+          : ['The Parked Unit lifecycle is not ready yet. Run the Step 6f.2 SQL migration first.']
+    }));
   } catch (error) {
     next(error);
   }
 }
 
+async function returnTechUnitToActive(req, res, next) {
+  let unit = null;
+  let formOptions = { lots: [], technicians: [] };
+  const formData = getLifecycleFormData(req);
+
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
+        mode: 'return',
+        formData,
+        errorMessages: ['The selected unit ID is invalid.']
+      }));
+    }
+
+    [unit, formOptions] = await Promise.all([
+      techUnitModel.getTechUnitLifecycleSummaryById(unitId),
+      techUnitModel.getReturnToActiveOptions()
+    ]);
+
+    if (!unit) {
+      return res.status(404).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
+        mode: 'return',
+        formOptions,
+        formData,
+        errorMessages: ['The selected unit could not be found.']
+      }));
+    }
+
+    await techUnitModel.returnTechUnitToActive({
+      unitId,
+      destinationLotId: formData.destinationLotId,
+      assignedToUserId: formData.assignedToUserId,
+      returnedByUserId: req.currentUser.user_id,
+      actorRoleCodes: getCurrentRoleCodes(req)
+    });
+
+    if (isHtmxRequest(req)) {
+      res.set('HX-Trigger', 'unit-saved, unit-returned-active');
+      return res.send('');
+    }
+
+    return res.redirect('/tech/units?returnedToActive=1');
+  } catch (error) {
+    return res.status(400).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
+      mode: 'return',
+      unit,
+      formOptions,
+      formData,
+      errorMessages: [error.message || 'The unit could not be returned to Active.']
+    }));
+  }
+}
 
 function buildPermanentDeleteModalView({ unit = null, errorMessages = [], confirmationPhrase = '' } = {}) {
   return {
@@ -1461,6 +1574,16 @@ async function renderEditTechUnitPage(req, res, next) {
       });
     }
 
+    const lifecycleUnit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
+
+    if (lifecycleUnit && lifecycleUnit.isParked) {
+      return res.status(409).render('pages/error', {
+        pageTitle: 'Parked Unit',
+        message: 'This unit is parked. Return it to Active before editing its details.',
+        error: null
+      });
+    }
+
     const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
     const formData = await buildEditFormData(unitId, formOptions);
 
@@ -1528,6 +1651,16 @@ async function renderEditTechUnitModal(req, res, next) {
         formData: techUnitModel.getBlankUnitFormData(),
         errorMessages: ['The selected unit ID is invalid.']
       });
+    }
+
+    const lifecycleUnit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
+
+    if (lifecycleUnit && lifecycleUnit.isParked) {
+      return res.status(409).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
+        mode: 'park',
+        unit: lifecycleUnit,
+        errorMessages: ['This unit is parked. Return it to Active before editing its details.']
+      }));
     }
 
     const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
@@ -1717,7 +1850,7 @@ async function renderOutcomeApprovalModal(req, res, next) {
       });
     }
 
-    const unit = await techUnitModel.getTechUnitDeleteSummaryById(unitId);
+    const unit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
     const currentOutcome = await unitOutcomeModel.getCurrentOutcomeByUnitId(unitId);
 
     if (!unit) {
@@ -1725,6 +1858,14 @@ async function renderOutcomeApprovalModal(req, res, next) {
         unit: null,
         currentOutcome: null,
         errorMessages: ['The selected unit could not be found.']
+      });
+    }
+
+    if (unit.isParked) {
+      return res.status(409).render('fragments/tech-unit-outcome-approval-modal', {
+        unit,
+        currentOutcome,
+        errorMessages: ['This unit is parked. Return it to Active before reviewing its Pass/Fail request.']
       });
     }
 
@@ -1758,7 +1899,7 @@ async function approveOutcomeRequest(req, res, next) {
       });
     }
 
-    const unit = await techUnitModel.getTechUnitDeleteSummaryById(unitId);
+    const unit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
     const currentOutcome = await unitOutcomeModel.getCurrentOutcomeByUnitId(unitId);
 
     if (!unit) {
@@ -1766,6 +1907,14 @@ async function approveOutcomeRequest(req, res, next) {
         unit: null,
         currentOutcome: null,
         errorMessages: ['The selected unit could not be found.']
+      });
+    }
+
+    if (unit.isParked) {
+      return res.status(409).render('fragments/tech-unit-outcome-approval-modal', {
+        unit,
+        currentOutcome,
+        errorMessages: ['This unit is parked. Return it to Active before reviewing its Pass/Fail request.']
       });
     }
 
@@ -1805,8 +1954,10 @@ module.exports = {
   renderMyUnitWeightPanel,
   renderCompleteTechUnitWorkModal,
   completeTechUnitWork,
-  renderArchiveTechUnitModal,
-  archiveTechUnit,
+  renderParkTechUnitModal,
+  parkTechUnit,
+  renderReturnTechUnitToActiveModal,
+  returnTechUnitToActive,
   renderPermanentDeleteTechUnitModal,
   permanentlyDeleteTechUnit,
   renderNewTechUnitPage,

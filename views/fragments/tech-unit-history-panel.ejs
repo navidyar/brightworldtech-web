@@ -13,10 +13,12 @@
   const workCompletions = Array.isArray(safeOperationalHistory.workCompletions) ? safeOperationalHistory.workCompletions : [];
   const assignmentChanges = Array.isArray(safeOperationalHistory.assignmentChanges) ? safeOperationalHistory.assignmentChanges : [];
   const lotMoves = Array.isArray(safeOperationalHistory.lotMoves) ? safeOperationalHistory.lotMoves : [];
+  const lifecycleEvents = Array.isArray(safeOperationalHistory.lifecycleEvents) ? safeOperationalHistory.lifecycleEvents : [];
 
   const totalHistoryRows = workCompletions.length
     + assignmentChanges.length
     + lotMoves.length
+    + lifecycleEvents.length
     + gradeHistory.length
     + memoryHistory.length
     + storageHistory.length
@@ -160,6 +162,32 @@
               <span><%= move.movedAt ? formatDateTime(move.movedAt) : 'No date recorded' %></span>
             </div>
             <% if (move.notes) { %><p class="tech-history-text"><%= move.notes %></p><% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+
+  <% if (lifecycleEvents.length > 0) { %>
+    <section class="tech-notes-section tech-notes-section--history">
+      <div class="tech-history-section-title">
+        <div>
+          <h3>Parked Lifecycle</h3>
+          <span><%= lifecycleEvents.length %> records</span>
+        </div>
+      </div>
+
+      <div class="tech-history-list">
+        <% lifecycleEvents.forEach((event) => { %>
+          <article class="tech-history-row">
+            <div class="tech-history-meta">
+              <span class="tech-history-status is-prior"><%= event.eventLabel || 'Lifecycle' %></span>
+              <span>Lot: <%= event.fromLotName || 'No active lot' %> → <%= event.toLotName || 'No active lot' %></span>
+              <span>Assignment: <%= event.fromAssignedToName || 'Unassigned' %> → <%= event.toAssignedToName || 'Unassigned' %></span>
+              <span>Changed by <%= event.changedByName || 'System' %></span>
+              <span><%= event.changedAt ? formatDateTime(event.changedAt) : 'No date recorded' %></span>
+            </div>
+            <% if (event.notes) { %><p class="tech-history-text"><%= event.notes %></p><% } %>
           </article>
         <% }) %>
       </div>
