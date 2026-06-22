@@ -38,12 +38,15 @@ function buildTechUnitsTableUrl(filters) {
 }
 
 
-function userCanOverrideProductionWeight(req) {
-  const roles = req && req.currentUser && Array.isArray(req.currentUser.roles)
+function getCurrentRoleCodes(req) {
+  return req && req.currentUser && Array.isArray(req.currentUser.roles)
     ? req.currentUser.roles
     : [];
+}
 
-  return roles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+function userCanOverrideProductionWeight(req) {
+  return getCurrentRoleCodes(req)
+    .some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
 }
 
 function markProductionWeightPermission(formData, formOptions) {
@@ -51,6 +54,44 @@ function markProductionWeightPermission(formData, formOptions) {
     ...formData,
     canOverrideProductionWeight: Boolean(formOptions && formOptions.canOverrideProductionWeight)
   };
+}
+
+function isHtmxRequest(req) {
+  return req.get('HX-Request') === 'true';
+}
+
+function getCurrentUserDisplayName(req) {
+  const currentUser = req && req.currentUser ? req.currentUser : {};
+  const fullName = [currentUser.first_name, currentUser.last_name]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+
+  return fullName || currentUser.email || 'Current user';
+}
+
+function buildCompleteWorkModalView({ preview = null, req = null, successMessage = null, errorMessages = [] } = {}) {
+  return {
+    preview: preview || {
+      ready: false,
+      unitId: null,
+      unitLabel: 'Unit not found',
+      lotName: 'Unknown lot',
+      productionWeight: null,
+      formattedProductionWeight: '—',
+      errorMessage: ''
+    },
+    creditedToName: getCurrentUserDisplayName(req),
+    successMessage,
+    errorMessages: Array.isArray(errorMessages) ? errorMessages : []
+  };
+}
+
+function isRegularTechUnitBrowserUser(req) {
+  const roleCodes = getCurrentRoleCodes(req);
+  const hasElevatedUnitAuthority = roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+
+  return roleCodes.includes('tech') && !hasElevatedUnitAuthority;
 }
 
 function getFiltersFromRequest(req) {
@@ -62,7 +103,9 @@ function getFiltersFromRequest(req) {
     techUserId: String(req.query.techUserId || '').trim(),
     createdStartDate: String(req.query.createdStartDate || '').trim(),
     createdEndDate: String(req.query.createdEndDate || '').trim(),
-    createdWindow: String(req.query.createdWindow || '').trim()
+    createdWindow: String(req.query.createdWindow || '').trim(),
+    currentUserId: req && req.currentUser ? req.currentUser.user_id : null,
+    restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req)
   };
 }
 
@@ -665,6 +708,26 @@ function getFriendlySaveError(error, formOptions) {
     return 'One of the selected dropdown values no longer exists. Refresh the page and try again.';
   }
 
+  if (error && error.code === 'BWT_UNIT_EDIT_NOT_ASSIGNED') {
+    return 'You can edit only units currently assigned to you. Use Request Override for another Tech’s unit.';
+  }
+
+  if (error && error.code === 'BWT_UNIT_ACTION_NOT_ASSIGNED') {
+    return 'You can record work only for a unit currently assigned to you.';
+  }
+
+  if (error && error.code === 'BWT_LOT_MOVE_NOT_ASSIGNED') {
+    return 'Only the Tech currently assigned to an unfinished unit may correct its lot directly.';
+  }
+
+  if (error && error.code === 'BWT_LOT_MOVE_REQUIRES_APPROVAL') {
+    return 'This unit already has recorded work. A Tech Lead, Management user, or Admin must move it to another lot.';
+  }
+
+  if (error && error.code === 'BWT_LOT_DESTINATION_NOT_OPEN') {
+    return error.message || 'Closed, hidden, and parent/container lots cannot receive units. Choose an open child or standalone lot.';
+  }
+
   return null;
 }
 
@@ -687,8 +750,8 @@ async function renderDuplicateUnitModal(res, { formOptions, formData, duplicateM
   });
 }
 
-async function getTechUnitFormOptionsWithIssues(req = null) {
-  const formOptions = await techUnitModel.getTechUnitFormOptions();
+async function getTechUnitFormOptionsWithIssues(req = null, options = {}) {
+  const formOptions = await techUnitModel.getTechUnitFormOptions(options);
   const issueFormOptions = await unitIssueEntryModel.getIssueFormOptions();
   const expandedFormOptions = await unitExpandedFormModel.getExpandedFormOptions();
 
@@ -698,6 +761,14 @@ async function getTechUnitFormOptionsWithIssues(req = null) {
     ...expandedFormOptions,
     canOverrideProductionWeight: userCanOverrideProductionWeight(req)
   };
+}
+
+async function getEditTechUnitFormOptionsWithIssues(req, unitId) {
+  const unit = await techUnitModel.getUnitById(unitId);
+
+  return getTechUnitFormOptionsWithIssues(req, {
+    includeCurrentLotId: unit && unit.lot_id ? unit.lot_id : null
+  });
 }
 
 async function buildEditFormData(unitId, formOptions) {
@@ -777,9 +848,13 @@ async function renderTechUnitsPage(req, res, next) {
         ? 'Unit created successfully.'
         : req.query.updated === '1'
           ? 'Unit updated successfully.'
-          : req.query.archived === '1'
-            ? 'Unit archived successfully. Search by an identifier to retrieve the retained record.'
-            : null
+          : req.query.completed === '1'
+            ? 'Work completion recorded successfully.'
+            : req.query.deleted === '1'
+              ? 'Unit and all linked records were permanently deleted.'
+              : req.query.archived === '1'
+                ? 'Unit archived successfully. Search by an identifier to retrieve the retained record.'
+                : null
     });
   } catch (error) {
     next(error);
@@ -819,17 +894,26 @@ async function renderTechUnitHistoryPanel(req, res, next) {
           supported: false,
           requests: []
         },
+        operationalHistory: {
+          workCompletions: [],
+          assignmentChanges: [],
+          lotMoves: []
+        },
         errorMessages: ['The selected unit ID is invalid.']
       });
     }
 
-    const historyDetails = await unitExpandedDetailModel.getHistoryDetailsForUnit(unitId);
-    const overrideHistory = await overrideRequestModel.listOverrideRequestsForUnit(unitId, 25);
+    const [historyDetails, overrideHistory, operationalHistory] = await Promise.all([
+      unitExpandedDetailModel.getHistoryDetailsForUnit(unitId),
+      overrideRequestModel.listOverrideRequestsForUnit(unitId, 25),
+      techUnitModel.getUnitOperationalHistory(unitId)
+    ]);
 
     return res.render('fragments/tech-unit-history-panel', {
       unitId,
       historyDetails,
       overrideHistory,
+      operationalHistory,
       errorMessages: []
     });
   } catch (error) {
@@ -837,6 +921,103 @@ async function renderTechUnitHistoryPanel(req, res, next) {
   }
 }
 
+
+async function renderMyUnitWeightPanel(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+    const currentUserId = req && req.currentUser ? Number(req.currentUser.user_id) : NaN;
+
+    if (!Number.isInteger(unitId) || unitId <= 0 || !Number.isInteger(currentUserId) || currentUserId <= 0) {
+      return res.status(400).render('fragments/tech-unit-my-weight-panel', {
+        completions: [],
+        errorMessages: ['Your earned weight could not be loaded for the selected unit.']
+      });
+    }
+
+    const completions = await techUnitModel.getUnitWorkCompletionsForUser(unitId, currentUserId);
+
+    return res.render('fragments/tech-unit-my-weight-panel', {
+      completions,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderCompleteTechUnitWorkModal(req, res, next) {
+  try {
+    const preview = await techUnitModel.getUnitWorkCompletionPreview(req.params.unitId);
+    const errorMessages = preview.ready ? [] : [preview.errorMessage];
+
+    return res.render(
+      'fragments/tech-unit-complete-work-modal',
+      buildCompleteWorkModalView({
+        preview,
+        req,
+        errorMessages
+      })
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function completeTechUnitWork(req, res, next) {
+  let preview = null;
+
+  try {
+    preview = await techUnitModel.getUnitWorkCompletionPreview(req.params.unitId);
+
+    if (!preview.ready) {
+      return res.render(
+        'fragments/tech-unit-complete-work-modal',
+        buildCompleteWorkModalView({
+          preview,
+          req,
+          errorMessages: [preview.errorMessage]
+        })
+      );
+    }
+
+    await techUnitModel.recordUnitWorkCompletion({
+      unitId: preview.unitId,
+      completedByUserId: req.currentUser.user_id,
+      recordedByUserId: req.currentUser.user_id,
+      creditSource: 'manual_completion',
+      notes: 'Lot work completion recorded from the Tech Unit Browser.',
+      actorRoleCodes: getCurrentRoleCodes(req)
+    });
+
+    if (isHtmxRequest(req)) {
+      res.set('HX-Trigger', 'unit-work-completed');
+
+      return res.render(
+        'fragments/tech-unit-complete-work-modal',
+        buildCompleteWorkModalView({
+          preview,
+          req,
+          successMessage: 'Lot work completion was recorded successfully.'
+        })
+      );
+    }
+
+    return res.redirect('/tech/units?completed=1');
+  } catch (error) {
+    if (isHtmxRequest(req)) {
+      return res.render(
+        'fragments/tech-unit-complete-work-modal',
+        buildCompleteWorkModalView({
+          preview,
+          req,
+          errorMessages: [error.message || 'Lot work completion could not be recorded.']
+        })
+      );
+    }
+
+    next(error);
+  }
+}
 
 async function renderArchiveTechUnitModal(req, res, next) {
   try {
@@ -921,6 +1102,123 @@ async function archiveTechUnit(req, res, next) {
     return res.redirect('/tech/units?archived=1');
   } catch (error) {
     next(error);
+  }
+}
+
+
+function buildPermanentDeleteModalView({ unit = null, errorMessages = [], confirmationPhrase = '' } = {}) {
+  return {
+    unit,
+    errorMessages: Array.isArray(errorMessages) ? errorMessages : [],
+    confirmationPhrase: String(confirmationPhrase || '')
+  };
+}
+
+async function renderPermanentDeleteTechUnitModal(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render(
+        'fragments/tech-unit-permanent-delete-modal',
+        buildPermanentDeleteModalView({
+          errorMessages: ['The selected unit ID is invalid.']
+        })
+      );
+    }
+
+    const unit = await techUnitModel.getTechUnitPermanentDeletionPreviewById(unitId);
+
+    if (!unit) {
+      return res.status(404).render(
+        'fragments/tech-unit-permanent-delete-modal',
+        buildPermanentDeleteModalView({
+          errorMessages: ['The selected unit could not be found.']
+        })
+      );
+    }
+
+    return res.render(
+      'fragments/tech-unit-permanent-delete-modal',
+      buildPermanentDeleteModalView({ unit })
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function permanentlyDeleteTechUnit(req, res, next) {
+  let unit = null;
+
+  try {
+    const unitId = Number(req.params.unitId);
+    const confirmationPhrase = String(req.body.confirmationPhrase || '').trim();
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render(
+        'fragments/tech-unit-permanent-delete-modal',
+        buildPermanentDeleteModalView({
+          errorMessages: ['The selected unit ID is invalid.'],
+          confirmationPhrase
+        })
+      );
+    }
+
+    unit = await techUnitModel.getTechUnitPermanentDeletionPreviewById(unitId);
+
+    if (!unit) {
+      return res.status(404).render(
+        'fragments/tech-unit-permanent-delete-modal',
+        buildPermanentDeleteModalView({
+          errorMessages: ['The selected unit could not be found.'],
+          confirmationPhrase
+        })
+      );
+    }
+
+    if (confirmationPhrase !== 'DELETE') {
+      return res.status(400).render(
+        'fragments/tech-unit-permanent-delete-modal',
+        buildPermanentDeleteModalView({
+          unit,
+          confirmationPhrase,
+          errorMessages: ['Type DELETE exactly to confirm permanent deletion.']
+        })
+      );
+    }
+
+    const deleteResult = await techUnitModel.permanentlyDeleteTechUnit(unitId);
+
+    if (!deleteResult.deleted) {
+      const errorMessage = deleteResult.reason === 'missing'
+        ? 'The selected unit could not be found.'
+        : 'The unit could not be permanently deleted. No records were removed.';
+
+      return res.status(400).render(
+        'fragments/tech-unit-permanent-delete-modal',
+        buildPermanentDeleteModalView({
+          unit,
+          errorMessages: [errorMessage]
+        })
+      );
+    }
+
+    if (isHtmxRequest(req)) {
+      res.set('HX-Trigger', 'unit-permanently-deleted');
+      return res.send('');
+    }
+
+    return res.redirect('/tech/units?deleted=1');
+  } catch (error) {
+    console.error('Permanent unit deletion failed:', error);
+
+    return res.status(400).render(
+      'fragments/tech-unit-permanent-delete-modal',
+      buildPermanentDeleteModalView({
+        unit,
+        errorMessages: ['The unit could not be permanently deleted. No records were removed.']
+      })
+    );
   }
 }
 
@@ -1104,7 +1402,7 @@ async function useExistingTechUnitModal(req, res, next) {
       });
     }
 
-    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
     const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
 
@@ -1118,7 +1416,7 @@ async function useExistingTechUnitModal(req, res, next) {
     }
 
     try {
-      await techUnitModel.useExistingTechUnit(unitId, formData, req.currentUser.user_id);
+      await techUnitModel.useExistingTechUnit(unitId, formData, req.currentUser.user_id, { actorRoleCodes: getCurrentRoleCodes(req) });
       await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
       await saveExpandedDetailsIfPossible(unitId, formData, req.currentUser.user_id);
     } catch (saveError) {
@@ -1163,7 +1461,7 @@ async function renderEditTechUnitPage(req, res, next) {
       });
     }
 
-    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
     const formData = await buildEditFormData(unitId, formOptions);
 
     if (!formData) {
@@ -1232,7 +1530,7 @@ async function renderEditTechUnitModal(req, res, next) {
       });
     }
 
-    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
     const formData = await buildEditFormData(unitId, formOptions);
 
     if (!formData) {
@@ -1270,7 +1568,7 @@ async function updateTechUnit(req, res, next) {
       });
     }
 
-    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
     const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
 
@@ -1287,7 +1585,7 @@ async function updateTechUnit(req, res, next) {
     }
 
     try {
-      await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id);
+      await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id, { actorRoleCodes: getCurrentRoleCodes(req) });
     await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
       await saveExpandedDetailsIfPossible(unitId, formData, req.currentUser.user_id);
     } catch (saveError) {
@@ -1359,7 +1657,7 @@ async function updateTechUnitModal(req, res, next) {
       });
     }
 
-    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
     const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
 
@@ -1375,7 +1673,7 @@ async function updateTechUnitModal(req, res, next) {
     }
 
     try {
-      await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id);
+      await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id, { actorRoleCodes: getCurrentRoleCodes(req) });
     await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
       await saveExpandedDetailsIfPossible(unitId, formData, req.currentUser.user_id);
     } catch (saveError) {
@@ -1504,8 +1802,13 @@ module.exports = {
   renderTechUnitsPage,
   renderTechUnitsTable,
   renderTechUnitHistoryPanel,
+  renderMyUnitWeightPanel,
+  renderCompleteTechUnitWorkModal,
+  completeTechUnitWork,
   renderArchiveTechUnitModal,
   archiveTechUnit,
+  renderPermanentDeleteTechUnitModal,
+  permanentlyDeleteTechUnit,
   renderNewTechUnitPage,
   renderNewTechUnitModal,
   createTechUnit,

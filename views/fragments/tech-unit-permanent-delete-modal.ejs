@@ -1,0 +1,125 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeUnit = unit || null;
+  const safeRelatedRecords = safeUnit && Array.isArray(safeUnit.relatedRecords)
+    ? safeUnit.relatedRecords
+    : [];
+  const safeConfirmationPhrase = String(confirmationPhrase || '');
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel tech-permanent-delete-modal" role="dialog" aria-modal="true" aria-labelledby="tech-unit-permanent-delete-modal-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Destructive Unit Action</p>
+        <h2 id="tech-unit-permanent-delete-modal-title">Delete Unit Permanently</h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeUnit) { %>
+        <div class="tech-permanent-delete-card">
+          <p class="tech-permanent-delete-warning">
+            This permanently removes this unit and all records linked to it. It cannot be undone, and any earned-weight records for this unit will be removed from dashboard totals.
+          </p>
+
+          <dl class="tech-delete-summary-list">
+            <div>
+              <dt>Asset Tag</dt>
+              <dd><%= safeUnit.assetTag || '—' %></dd>
+            </div>
+            <div>
+              <dt>BIOS Serial</dt>
+              <dd><%= safeUnit.biosSerialNumber || '—' %></dd>
+            </div>
+            <div>
+              <dt>Unit Serial</dt>
+              <dd><%= safeUnit.unitSerialNumber || '—' %></dd>
+            </div>
+            <div>
+              <dt>Lot</dt>
+              <dd><%= safeUnit.lotName || '—' %></dd>
+            </div>
+            <div>
+              <dt>Category</dt>
+              <dd><%= safeUnit.categoryLabel || '—' %></dd>
+            </div>
+            <div>
+              <dt>Specs</dt>
+              <dd><%= safeUnit.specSummary || '—' %></dd>
+            </div>
+          </dl>
+
+          <ul class="tech-permanent-delete-impact-list">
+            <li>Identifiers, specifications, hardware details, grades, Pass/Fail records, issues, and comments</li>
+            <li>Lot-move, assignment, override, and earned-weight records</li>
+            <li>Other linked unit records, including scan, QC, workflow, and support records when present</li>
+          </ul>
+
+          <p class="tech-permanent-delete-count">
+            Directly linked records scheduled for removal: <strong><%= Number(safeUnit.relatedRecordCount || 0) %></strong>
+          </p>
+
+          <% if (safeRelatedRecords.length > 0) { %>
+            <ul class="tech-permanent-delete-related-list" aria-label="Directly linked records scheduled for removal">
+              <% safeRelatedRecords.forEach((record) => { %>
+                <li>
+                  <span><%= record.label %></span>
+                  <strong><%= record.recordCount %></strong>
+                </li>
+              <% }) %>
+            </ul>
+          <% } %>
+        </div>
+
+        <form
+          class="tech-permanent-delete-confirm-actions"
+          method="post"
+          action="/tech/units/<%= safeUnit.unitId %>/permanent-delete"
+          data-permanent-delete-form
+          hx-post="/tech/units/<%= safeUnit.unitId %>/permanent-delete"
+          hx-trigger="submit consume"
+          hx-target="#modal-root"
+          hx-swap="innerHTML"
+        >
+          <label class="tech-permanent-delete-confirmation">
+            <span>Type DELETE to confirm</span>
+            <input
+              type="text"
+              name="confirmationPhrase"
+              value="<%= safeConfirmationPhrase %>"
+              autocomplete="off"
+              spellcheck="false"
+              data-permanent-delete-confirmation
+            />
+            <small>This action permanently removes the unit and cannot be reversed.</small>
+          </label>
+
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          <button
+            type="submit"
+            class="secondary-button danger-button"
+            data-permanent-delete-submit
+            <%= safeConfirmationPhrase === 'DELETE' ? '' : 'disabled' %>
+          >
+            Delete Unit Permanently
+          </button>
+        </form>
+      <% } else { %>
+        <div class="tech-permanent-delete-confirm-actions">
+          <button type="button" class="secondary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

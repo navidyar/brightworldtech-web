@@ -1,10 +1,14 @@
 (function () {
+  function normalizePanelName(panelName) {
+    return ['history', 'my-weight'].includes(panelName) ? panelName : 'details';
+  }
+
   function setPanel(detailRow, panelName) {
     if (!detailRow) {
       return;
     }
 
-    const normalizedPanelName = panelName === 'history' ? 'history' : 'details';
+    const normalizedPanelName = normalizePanelName(panelName);
 
     detailRow.querySelectorAll('[data-unit-panel-content]').forEach((panel) => {
       panel.hidden = panel.getAttribute('data-unit-panel-content') !== normalizedPanelName;
@@ -51,7 +55,7 @@
       return false;
     }
 
-    const normalizedPanelName = panelName === 'history' ? 'history' : 'details';
+    const normalizedPanelName = normalizePanelName(panelName);
     const activePanel = detailRow.querySelector(`[data-unit-panel-content="${normalizedPanelName}"]`);
 
     return Boolean(activePanel && !activePanel.hidden);
@@ -121,7 +125,84 @@
     }
   }
 
+
+  function showModalRequestError(message) {
+    const modalRoot = document.getElementById('modal-root');
+
+    if (!modalRoot) {
+      return;
+    }
+
+    modalRoot.innerHTML = `
+      <div class="modal-backdrop" data-modal-backdrop>
+        <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="tech-modal-request-error-title">
+          <div class="modal-header">
+            <div>
+              <p class="eyebrow">Unit Action</p>
+              <h2 id="tech-modal-request-error-title">Action could not be opened</h2>
+            </div>
+            <button type="button" class="modal-close" data-modal-close aria-label="Close modal">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="message error">
+              <p>${message}</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    `;
+  }
+
+  function openTechModal(trigger) {
+    const url = trigger.getAttribute('href');
+
+    if (!url) {
+      return;
+    }
+
+    if (window.htmx && typeof window.htmx.ajax === 'function') {
+      window.htmx.ajax('GET', url, {
+        target: '#modal-root',
+        swap: 'innerHTML'
+      });
+      return;
+    }
+
+    window.location.assign(url);
+  }
+
+  document.addEventListener('input', (event) => {
+    const confirmationInput = event.target.closest('[data-permanent-delete-confirmation]');
+
+    if (!confirmationInput) {
+      return;
+    }
+
+    const confirmationForm = confirmationInput.closest('[data-permanent-delete-form]');
+
+    if (!confirmationForm) {
+      return;
+    }
+
+    const submitButton = confirmationForm.querySelector('[data-permanent-delete-submit]');
+
+    if (!submitButton) {
+      return;
+    }
+
+    submitButton.disabled = confirmationInput.value.trim() !== 'DELETE';
+  });
+
   document.addEventListener('click', (event) => {
+    const modalTrigger = event.target.closest('[data-tech-modal-trigger]');
+
+    if (modalTrigger) {
+      event.preventDefault();
+      event.stopPropagation();
+      openTechModal(modalTrigger);
+      return;
+    }
+
     const panelButton = event.target.closest('[data-unit-panel-button]');
 
     if (panelButton) {
@@ -163,5 +244,34 @@
   document.body.addEventListener('unit-archived', () => {
     closeModalRoot();
     closeOtherRows(null);
+  });
+
+  document.body.addEventListener('unit-permanently-deleted', () => {
+    closeModalRoot();
+    closeOtherRows(null);
+  });
+
+  document.body.addEventListener('unit-work-completed', () => {
+    closeOtherRows(null);
+  });
+
+  document.body.addEventListener('htmx:responseError', (event) => {
+    const sourceElement = event.detail && event.detail.elt ? event.detail.elt : null;
+
+    if (!sourceElement || !sourceElement.closest('[data-tech-modal-trigger]')) {
+      return;
+    }
+
+    showModalRequestError('The requested unit action could not be opened. Please try again.');
+  });
+
+  document.body.addEventListener('htmx:sendError', (event) => {
+    const sourceElement = event.detail && event.detail.elt ? event.detail.elt : null;
+
+    if (!sourceElement || !sourceElement.closest('[data-tech-modal-trigger]')) {
+      return;
+    }
+
+    showModalRequestError('The server could not be reached. Please try again.');
   });
 })();

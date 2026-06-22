@@ -272,13 +272,33 @@ async function listParentLotOptions(options = {}) {
     '1'
   );
 
+  const isClosedSelect = selectExpression(
+    'l',
+    lotColumns,
+    ['is_closed'],
+    'is_closed',
+    '0'
+  );
+
   const hasLotIsActive = hasColumn(lotColumns, 'is_active');
-  const isActiveWhere = hasLotIsActive
-    ? (includeLotIds.length > 0
-      ? `WHERE l.is_active = 1 OR l.lot_id IN (${includeLotIds.map(() => '?').join(', ')})`
-      : 'WHERE l.is_active = 1')
-    : '';
-  const queryParams = hasLotIsActive && includeLotIds.length > 0 ? includeLotIds : [];
+  const hasLotIsClosed = hasColumn(lotColumns, 'is_closed');
+  const operationalWhereParts = [];
+
+  if (hasLotIsActive) {
+    operationalWhereParts.push('l.is_active = 1');
+  }
+
+  if (hasLotIsClosed) {
+    operationalWhereParts.push('COALESCE(l.is_closed, 0) = 0');
+  }
+
+  const operationalWhere = operationalWhereParts.length > 0
+    ? operationalWhereParts.join(' AND ')
+    : '1 = 1';
+  const isActiveWhere = includeLotIds.length > 0
+    ? `WHERE (${operationalWhere}) OR l.lot_id IN (${includeLotIds.map(() => '?').join(', ')})`
+    : `WHERE ${operationalWhere}`;
+  const queryParams = includeLotIds.length > 0 ? includeLotIds : [];
 
   const orderExpression = pickColumn(lotColumns, ['lot_name', 'name', 'title'])
     ? 'lot_name, l.lot_id'
@@ -289,7 +309,8 @@ async function listParentLotOptions(options = {}) {
       l.lot_id,
       ${lotNameSelect},
       ${lotCodeSelect},
-      ${isActiveSelect}
+      ${isActiveSelect},
+      ${isClosedSelect}
     FROM lots l
     ${isActiveWhere}
     ORDER BY ${orderExpression}
@@ -315,7 +336,8 @@ async function getLotSchemaCapabilities() {
     hasDeadline: Boolean(pickColumn(lotColumns, ['deadline', 'deadline_date', 'due_date'])),
     hasObjectives: Boolean(pickColumn(lotColumns, ['objectives', 'objective'])),
     hasNotes: Boolean(pickColumn(lotColumns, ['notes', 'note'])),
-    hasLabelFormat: hasColumn(lotColumns, 'label_format')
+    hasLabelFormat: hasColumn(lotColumns, 'label_format'),
+    hasClosedState: hasColumn(lotColumns, 'is_closed')
   };
 }
 
@@ -445,6 +467,14 @@ async function listLots(options = {}) {
     ['is_active'],
     'is_active',
     '1'
+  );
+
+  const isClosedSelect = selectExpression(
+    'l',
+    lotColumns,
+    ['is_closed'],
+    'is_closed',
+    '0'
   );
 
   const createdAtSelect = selectExpression(
@@ -613,6 +643,7 @@ async function listLots(options = {}) {
       ${notesSelect},
       ${labelFormatSelect},
       ${isActiveSelect},
+      ${isClosedSelect},
       ${createdAtSelect},
       ${updatedAtSelect},
       ${unitCountSelect},
@@ -650,6 +681,7 @@ async function getLotSummary() {
 
   const activeLots = lots.filter((lot) => Number(lot.is_active) === 1);
   const hiddenLots = lots.filter((lot) => Number(lot.is_active) !== 1);
+  const closedLots = lots.filter((lot) => Number(lot.is_closed) === 1);
   const fullLots = lots.filter((lot) => lot.isFull);
   const unlimitedLots = lots.filter((lot) => lot.isUnlimited);
 
@@ -660,6 +692,7 @@ async function getLotSummary() {
     lotCount: lots.length,
     activeLotCount: activeLots.length,
     hiddenLotCount: hiddenLots.length,
+    closedLotCount: closedLots.length,
     fullLotCount: fullLots.length,
     unlimitedLotCount: unlimitedLots.length,
     totalUnits,
@@ -919,6 +952,74 @@ async function setLotVisibility(lotId, isActive, currentUserId) {
 
   const assignments = ['is_active = ?'];
   const values = [isActive ? 1 : 0];
+
+  if (hasColumn(lotColumns, 'updated_by_user_id')) {
+    assignments.push('updated_by_user_id = ?');
+    values.push(currentUserId || null);
+  }
+
+  values.push(Number(lotId));
+
+  const [result] = await pool.query(
+    `
+      UPDATE lots
+      SET ${assignments.join(', ')}
+      WHERE lot_id = ?
+      LIMIT 1
+    `,
+    values
+  );
+
+  return result.affectedRows > 0;
+}
+
+async function getLotClosureSummary(lotId) {
+  const lot = await getLotById(lotId);
+
+  if (!lot) {
+    return null;
+  }
+
+  const lotColumns = await getColumnSet('lots');
+  const unitColumns = await getColumnSet('units');
+  let unitCount = Number(lot.unitCount || lot.unit_count || 0);
+  let childLotCount = 0;
+
+  if (hasColumn(unitColumns, 'lot_id')) {
+    const [unitRows] = await pool.query(
+      'SELECT COUNT(*) AS unit_count FROM units WHERE lot_id = ?',
+      [Number(lotId)]
+    );
+
+    unitCount = Number(unitRows[0]?.unit_count || 0);
+  }
+
+  if (hasColumn(lotColumns, 'parent_lot_id')) {
+    const [childRows] = await pool.query(
+      'SELECT COUNT(*) AS child_lot_count FROM lots WHERE parent_lot_id = ?',
+      [Number(lotId)]
+    );
+
+    childLotCount = Number(childRows[0]?.child_lot_count || 0);
+  }
+
+  return {
+    lot,
+    unitCount,
+    childLotCount,
+    canChangeClosure: hasColumn(lotColumns, 'is_closed')
+  };
+}
+
+async function setLotClosed(lotId, isClosed, currentUserId) {
+  const lotColumns = await getColumnSet('lots');
+
+  if (!hasColumn(lotColumns, 'is_closed')) {
+    throw new Error('Lot closure is not ready yet. Run the Step 6f.1 closed-lot migration first.');
+  }
+
+  const assignments = ['is_closed = ?'];
+  const values = [isClosed ? 1 : 0];
 
   if (hasColumn(lotColumns, 'updated_by_user_id')) {
     assignments.push('updated_by_user_id = ?');
@@ -1419,6 +1520,8 @@ module.exports = {
   getLotFormOptions,
   getLotVisibilitySummary,
   setLotVisibility,
+  getLotClosureSummary,
+  setLotClosed,
   getLotSchemaCapabilities,
   createLot,
   updateLot,

@@ -1,0 +1,31 @@
+--- a/views/fragments/lot-closure-modal.ejs
++++ b/views/fragments/lot-closure-modal.ejs
+@@ -9,14 +9,14 @@
+   const childLotCount = Number(safeSummary.childLotCount || 0);
+ %>
+ 
+-<div class="modal-overlay" data-modal-overlay>
++<div class="modal-backdrop" data-modal-backdrop>
+   <section class="modal-panel lot-modal lot-closure-modal" role="dialog" aria-modal="true" aria-labelledby="lot-closure-modal-title">
+     <div class="modal-header">
+       <div>
+         <p class="eyebrow"><%= actionLabel %></p>
+         <h2 id="lot-closure-modal-title"><%= actionLabel %>: <%= lotName %>?</h2>
+       </div>
+-      <button type="button" class="modal-close" data-modal-close aria-label="Close modal">×</button>
++      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+     </div>
+ 
+     <div class="modal-body">
+@@ -66,9 +66,9 @@
+ 
+         <% if (safeSummary.canChangeClosure) { %>
+           <form method="post" action="<%= actionPath %>" hx-post="<%= actionPath %>" hx-target="#modal-root" hx-swap="innerHTML">
+-            <div class="modal-actions">
++            <div class="action-row">
++              <button type="submit" class="<%= isReopen ? 'primary-button' : 'secondary-button danger-button' %>"><%= actionLabel %></button>
+               <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+-              <button type="submit" class="<%= isReopen ? 'primary-button' : 'secondary-button' %>"><%= actionLabel %></button>
+             </div>
+           </form>
+         <% } %>

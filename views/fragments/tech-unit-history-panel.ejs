@@ -9,8 +9,15 @@
   const hardwareIssueHistory = Array.isArray(safeHistoryDetails.hardwareIssueHistory) ? safeHistoryDetails.hardwareIssueHistory : [];
   const cosmeticIssueHistory = Array.isArray(safeHistoryDetails.cosmeticIssueHistory) ? safeHistoryDetails.cosmeticIssueHistory : [];
   const overrideRequests = Array.isArray(safeOverrideHistory.requests) ? safeOverrideHistory.requests : [];
+  const safeOperationalHistory = operationalHistory || {};
+  const workCompletions = Array.isArray(safeOperationalHistory.workCompletions) ? safeOperationalHistory.workCompletions : [];
+  const assignmentChanges = Array.isArray(safeOperationalHistory.assignmentChanges) ? safeOperationalHistory.assignmentChanges : [];
+  const lotMoves = Array.isArray(safeOperationalHistory.lotMoves) ? safeOperationalHistory.lotMoves : [];
 
-  const totalHistoryRows = gradeHistory.length
+  const totalHistoryRows = workCompletions.length
+    + assignmentChanges.length
+    + lotMoves.length
+    + gradeHistory.length
     + memoryHistory.length
     + storageHistory.length
     + hardwareIssueHistory.length
@@ -75,8 +82,88 @@
     </div>
   <% } else if (totalHistoryRows === 0) { %>
     <div class="message success">
-      <p>No memory, storage, grade, issue, or override history records have been saved for this unit yet.</p>
+      <p>No work, assignment, lot, grade, issue, or override history records have been saved for this unit yet.</p>
     </div>
+  <% } %>
+
+
+  <% if (workCompletions.length > 0) { %>
+    <section class="tech-notes-section tech-notes-section--history">
+      <div class="tech-history-section-title">
+        <div>
+          <h3>Earned Weight History</h3>
+          <span><%= workCompletions.length %> records</span>
+        </div>
+      </div>
+
+      <div class="tech-history-list">
+        <% workCompletions.forEach((completion) => { %>
+          <article class="tech-history-row">
+            <div class="tech-history-meta">
+              <span class="tech-history-status is-current"><%= completion.creditSourceLabel || 'Work Complete' %></span>
+              <span><%= completion.completedByName || 'Unknown user' %></span>
+              <span><%= completion.lotName || 'No active lot' %></span>
+              <span><%= completion.completedAt ? formatDateTime(completion.completedAt) : 'No date recorded' %></span>
+            </div>
+            <div class="tech-history-summary">
+              <span>Credit: <%= completion.formattedProductionWeight || '—' %></span>
+              <% if (completion.recordedByName && completion.recordedByName !== completion.completedByName) { %><span>Recorded by <%= completion.recordedByName %></span><% } %>
+            </div>
+            <% if (completion.notes) { %><p class="tech-history-text"><%= completion.notes %></p><% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+
+  <% if (assignmentChanges.length > 0) { %>
+    <section class="tech-notes-section tech-notes-section--history">
+      <div class="tech-history-section-title">
+        <div>
+          <h3>Assignment History</h3>
+          <span><%= assignmentChanges.length %> records</span>
+        </div>
+      </div>
+
+      <div class="tech-history-list">
+        <% assignmentChanges.forEach((change) => { %>
+          <article class="tech-history-row">
+            <div class="tech-history-meta">
+              <span class="tech-history-status is-prior">Assignment</span>
+              <span><%= change.fromUserName || 'Unassigned' %> → <%= change.toUserName || 'Unassigned' %></span>
+              <span>Changed by <%= change.changedByName || 'System' %></span>
+              <span><%= change.changedAt ? formatDateTime(change.changedAt) : 'No date recorded' %></span>
+            </div>
+            <% if (change.notes) { %><p class="tech-history-text"><%= change.notes %></p><% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+
+  <% if (lotMoves.length > 0) { %>
+    <section class="tech-notes-section tech-notes-section--history">
+      <div class="tech-history-section-title">
+        <div>
+          <h3>Lot Move History</h3>
+          <span><%= lotMoves.length %> records</span>
+        </div>
+      </div>
+
+      <div class="tech-history-list">
+        <% lotMoves.forEach((move) => { %>
+          <article class="tech-history-row">
+            <div class="tech-history-meta">
+              <span class="tech-history-status is-prior">Lot move</span>
+              <span><%= move.fromLotName || 'No active lot' %> → <%= move.toLotName || 'No active lot' %></span>
+              <span>Moved by <%= move.movedByName || 'System' %></span>
+              <span><%= move.movedAt ? formatDateTime(move.movedAt) : 'No date recorded' %></span>
+            </div>
+            <% if (move.notes) { %><p class="tech-history-text"><%= move.notes %></p><% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
   <% } %>
 
   <% if (gradeHistory.length > 0) { %>
@@ -263,6 +350,7 @@
               <span>System Check: <%= request.validationLabel || 'Not captured yet' %></span>
               <span>Decision: <%= request.decisionLabel || 'Not captured yet' %></span>
               <% if (request.reviewedByName) { %><span>Reviewed by <%= request.reviewedByName %><% if (request.reviewedAt) { %> · <%= formatDateTime(request.reviewedAt) %><% } %></span><% } %>
+              <% if (request.priorTechCreditGranted) { %><span>Prior Tech credit: <%= request.priorTechCreditUserName || 'Prior Tech' %> · <%= Number(request.priorTechCreditWeight || 0).toFixed(2) %></span><% } %>
             </div>
             <% if (request.reason || request.reviewNotes) { %>
               <p class="tech-history-text"><%= [request.reason, request.reviewNotes].filter(Boolean).join(' · ') %></p>

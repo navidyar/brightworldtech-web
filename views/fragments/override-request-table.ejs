@@ -66,6 +66,27 @@
                   <form method="post" action="/management/overrides/<%= request.unitOverrideRequestId %>/approve">
                     <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
                     <input class="management-review-input" type="text" name="reviewNotes" placeholder="Optional approval reason" maxlength="500" autocomplete="off" />
+                    <% if (request.requestType === 'manual_tech_override_request') { %>
+                      <% if (request.hasRecordedWork) { %>
+                        <label class="management-review-destination-lot">
+                          <span>Destination Lot</span>
+                          <select class="management-review-input" name="destinationLotId" required>
+                            <option value="">Select open destination lot</option>
+                            <% (result.assignableLots || []).forEach((lot) => { %>
+                              <option value="<%= lot.lotId %>" <%= Number(request.lotId) === Number(lot.lotId) ? 'selected' : '' %>><%= lot.lotName %></option>
+                            <% }) %>
+                          </select>
+                          <small>Required because this unit already has recorded work. Select the current lot to keep it there.</small>
+                        </label>
+                      <% } %>
+                      <label class="management-review-credit-toggle">
+                        <input type="checkbox" name="priorTechCreditGranted" value="1" data-prior-tech-credit-toggle />
+                        <span>Give prior Tech credit</span>
+                      </label>
+                      <div class="management-review-credit-weight" data-prior-tech-credit-weight hidden>
+                        <input class="management-review-input" type="text" name="priorTechCreditWeight" placeholder="Custom weight 0.10–10.00" inputmode="decimal" pattern="^(?:0\.[1-9][0-9]|[1-9]\.[0-9]{2}|10\.00)$" autocomplete="off" disabled />
+                      </div>
+                    <% } %>
                     <button class="primary-button" type="submit">Approve</button>
                   </form>
 
@@ -76,6 +97,9 @@
                   </form>
                 </div>
               <% } else { %>
+                <% if (request.priorTechCreditGranted) { %>
+                  <p class="management-review-note"><strong>Prior Tech credit:</strong> <%= request.priorTechCreditUserName || 'Prior Tech' %> · <%= Number(request.priorTechCreditWeight || 0).toFixed(2) %></p>
+                <% } %>
                 <strong><%= request.reviewedByName || 'Reviewed' %></strong>
                 <br />
                 <span class="table-muted-line"><%= request.reviewedAt ? formatDateTime(request.reviewedAt) : '—' %></span>

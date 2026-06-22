@@ -1557,3 +1557,17 @@ table tr.lot-hidden-row td {
   border-color: color-mix(in srgb, var(--red) 72%, #64748b 28%) !important;
   background: color-mix(in srgb, #fecaca 60%, #ffffff 40%) !important;
 }
+
+
+/* Step 6f.1 closed-lot lifecycle. Closed is operational state, separate from hidden visibility. */
+.management-lots-table tr.lot-closed-row td {
+  background: color-mix(in srgb, var(--surface) 88%, #fce7f3 12%);
+}
+
+.management-lots-table tr.lot-closed-row.lot-hidden-row td {
+  background: color-mix(in srgb, var(--surface-soft) 74%, #fce7f3 14%);
+}
+
+.lot-closure-summary {
+  border-left-color: #b7798f;
+}

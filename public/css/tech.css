@@ -5037,3 +5037,191 @@ textarea {
   border-color: color-mix(in srgb, var(--red) 72%, #64748b 28%) !important;
   background: color-mix(in srgb, #fecaca 60%, #ffffff 40%) !important;
 }
+
+
+/* Step 6f.0 completion-action form alignment. */
+.tech-inline-action-form {
+  display: inline-flex;
+  margin: 0;
+}
+
+.tech-inline-action-form button {
+  white-space: nowrap;
+}
+
+
+/* Step 6f.0.3 Unit Browser history access and credited-work layout. */
+.tech-unit-summary-work-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  max-width: 160px;
+}
+
+.tech-unit-summary-work-stack .tech-outcome-status {
+  display: block;
+}
+
+.tech-detail-actions .tech-history-action-button.is-active {
+  border-color: color-mix(in srgb, var(--blue) 58%, #64748b 42%) !important;
+}
+
+@media (max-width: 760px) {
+  .tech-unit-summary-work-stack {
+    max-width: none;
+  }
+}
+
+
+/* Step 6f.0.4e personal earned-weight panel. */
+.tech-detail-actions .tech-personal-credit-action-button.is-active {
+  border-color: color-mix(in srgb, var(--blue) 58%, #64748b 42%) !important;
+}
+
+.management-review-destination-lot {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+}
+
+.management-review-destination-lot > span {
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.management-review-destination-lot small {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+
+
+/* Step 6f.0.4f permanent unit deletion. */
+.tech-detail-actions .tech-permanent-delete-action-button {
+  border-color: color-mix(in srgb, var(--red) 58%, #94a3b8 42%) !important;
+  color: color-mix(in srgb, var(--red) 82%, var(--text) 18%) !important;
+  background: color-mix(in srgb, #fee2e2 56%, #ffffff 44%) !important;
+}
+
+.tech-detail-actions .tech-permanent-delete-action-button:hover {
+  border-color: color-mix(in srgb, var(--red) 72%, #64748b 28%) !important;
+  background: color-mix(in srgb, #fecaca 60%, #ffffff 40%) !important;
+}
+
+.tech-permanent-delete-modal .modal-body {
+  display: grid;
+  gap: 16px;
+}
+
+.tech-permanent-delete-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid color-mix(in srgb, var(--red) 42%, var(--line) 58%);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 70%, var(--red-bg) 30%);
+  padding: 18px;
+}
+
+.tech-permanent-delete-warning {
+  margin: 0;
+  color: color-mix(in srgb, var(--text) 62%, var(--red) 38%);
+  font-size: 0.92rem;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.tech-permanent-delete-impact-list {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
+
+.tech-permanent-delete-impact-list li::marker {
+  color: var(--red);
+}
+
+.tech-permanent-delete-count {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 750;
+}
+
+.tech-permanent-delete-related-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tech-permanent-delete-related-list li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  border-top: 1px solid color-mix(in srgb, var(--line) 76%, var(--red) 24%);
+  padding-top: 8px;
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.tech-permanent-delete-related-list li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.tech-permanent-delete-related-list strong {
+  color: color-mix(in srgb, var(--red) 78%, var(--text) 22%);
+  font-variant-numeric: tabular-nums;
+}
+
+.tech-permanent-delete-confirmation {
+  display: grid;
+  gap: 6px;
+}
+
+.tech-permanent-delete-confirmation > span {
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.tech-permanent-delete-confirmation small {
+  color: var(--muted);
+}
+
+.tech-permanent-delete-confirm-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tech-permanent-delete-confirm-actions .danger-button[disabled] {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+@media (max-width: 640px) {
+  .tech-permanent-delete-related-list li {
+    gap: 8px;
+  }
+
+  .tech-permanent-delete-confirm-actions {
+    justify-content: stretch;
+  }
+
+  .tech-permanent-delete-confirm-actions .secondary-button {
+    justify-content: center;
+    width: 100%;
+  }
+}

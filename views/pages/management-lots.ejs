@@ -116,13 +116,19 @@
             <article class="dashboard-card">
               <p class="card-label">Visible Lots</p>
               <h3><%= formatNumber(summary.activeLotCount) %></h3>
-              <p>Lots shown in normal workflows and dropdowns.</p>
+              <p>Lots shown in normal workflows and review tools.</p>
+            </article>
+
+            <article class="dashboard-card">
+              <p class="card-label">Closed Lots</p>
+              <h3><%= formatNumber(summary.closedLotCount || 0) %></h3>
+              <p>Kept for review but unavailable as unit destinations.</p>
             </article>
 
             <article class="dashboard-card">
               <p class="card-label">Hidden Lots</p>
               <h3><%= formatNumber(summary.hiddenLotCount || 0) %></h3>
-              <p>Old or closed lots hidden from normal selection lists.</p>
+              <p>Administratively suppressed from normal lot browsing.</p>
             </article>
 
             <article class="dashboard-card">
@@ -162,7 +168,7 @@
             <div class="lot-visibility-toolbar">
               <div>
                 <strong><%= showHidden ? 'Showing visible and hidden lots' : 'Showing visible lots only' %></strong>
-                <span>Hidden lots are still preserved for reporting and old unit history.</span>
+                <span>Closed lots remain visible for review; hidden lots are preserved for reporting and historical reference.</span>
               </div>
 
               <% if (showHidden) { %>
@@ -208,7 +214,7 @@
                       const hierarchyLevel = Math.min(Number(lot.hierarchyLevel || 0), 6);
                     %>
 
-                    <tr class="<%= ['lot-clickable-row', hierarchyLevel > 0 ? 'lot-child-row lot-tree-child-row' : 'lot-parent-row lot-tree-root-row', `lot-level-${Math.min(hierarchyLevel, 6)}`, Number(lot.is_active) === 1 ? '' : 'lot-hidden-row'].filter(Boolean).join(' ') %>" data-lot-id="<%= lot.lot_id %>" data-parent-lot-id="<%= parentLot ? parentLot.lot_id : '' %>" data-lot-level="<%= hierarchyLevel %>" data-view-href="/management/lots/<%= lot.lot_id %>" tabindex="0" role="link" aria-label="View <%= lot.lot_name %>">
+                    <tr class="<%= ['lot-clickable-row', hierarchyLevel > 0 ? 'lot-child-row lot-tree-child-row' : 'lot-parent-row lot-tree-root-row', `lot-level-${Math.min(hierarchyLevel, 6)}`, Number(lot.is_active) === 1 ? '' : 'lot-hidden-row', Number(lot.is_closed) === 1 ? 'lot-closed-row' : ''].filter(Boolean).join(' ') %>" data-lot-id="<%= lot.lot_id %>" data-parent-lot-id="<%= parentLot ? parentLot.lot_id : '' %>" data-lot-level="<%= hierarchyLevel %>" data-view-href="/management/lots/<%= lot.lot_id %>" tabindex="0" role="link" aria-label="View <%= lot.lot_name %>">
                       <td class="lot-hierarchy-cell" style="--lot-level: <%= hierarchyLevel %>;">
                         <div class="lot-hierarchy-wrap">
                           <% if (childLots.length > 0) { %>
@@ -290,9 +296,13 @@
                       <td><%= formatDateTime(lot.deadline) %></td>
 
                       <td>
-                        <% if (Number(lot.is_active) === 1) { %>
-                          <span class="pill good">Visible</span>
+                        <% if (Number(lot.is_closed) === 1) { %>
+                          <span class="pill bad">Closed</span>
                         <% } else { %>
+                          <span class="pill good">Open</span>
+                        <% } %>
+                        <% if (Number(lot.is_active) !== 1) { %>
+                          <br />
                           <span class="pill bad">Hidden</span>
                         <% } %>
                       </td>
@@ -302,6 +312,11 @@
                       <td>
                         <div class="lot-row-actions">
                           <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                          <% if (Number(lot.is_closed) === 1) { %>
+                            <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-target="#modal-root" hx-swap="innerHTML">Reopen</a>
+                          <% } else { %>
+                            <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/close/modal" hx-get="/management/lots/<%= lot.lot_id %>/close/modal" hx-target="#modal-root" hx-swap="innerHTML">Close</a>
+                          <% } %>
                           <% if (Number(lot.is_active) === 1) { %>
                             <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal" hx-target="#modal-root" hx-swap="innerHTML">Hide</a>
                           <% } else { %>

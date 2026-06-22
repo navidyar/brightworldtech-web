@@ -1,0 +1,362 @@
+diff --git a/controllers/techController.js b/controllers/techController.js
+index f20f002..285eb40 100644
+--- a/controllers/techController.js
++++ b/controllers/techController.js
+@@ -158,35 +158,10 @@ async function attachExpandedUnitDetails(result) {
+   };
+ }
+ 
+-async function attachLatestWorkCompletion(result) {
+-  if (!result || !result.supported || !Array.isArray(result.units) || result.units.length === 0) {
+-    return result;
+-  }
+-
+-  const unitIds = result.units
+-    .map((unit) => Number(unit.unitId))
+-    .filter((unitId) => Number.isInteger(unitId) && unitId > 0);
+-
+-  if (unitIds.length === 0) {
+-    return result;
+-  }
+-
+-  const latestWorkCompletionMap = await techUnitModel.getLatestWorkCompletionMapForUnits(unitIds);
+-
+-  return {
+-    ...result,
+-    units: result.units.map((unit) => ({
+-      ...unit,
+-      latestWorkCompletion: latestWorkCompletionMap.get(Number(unit.unitId)) || null
+-    }))
+-  };
+-}
+-
+ async function buildTechUnitsResult(filters) {
+   const rawResult = await techUnitModel.listTechUnits(filters);
+-  const withLatestWorkCompletion = await attachLatestWorkCompletion(rawResult);
+ 
+-  return attachExpandedUnitDetails(withLatestWorkCompletion);
++  return attachExpandedUnitDetails(rawResult);
+ }
+ 
+ function normalizeModuleRowsFromBody(value) {
+@@ -933,6 +908,29 @@ async function renderTechUnitHistoryPanel(req, res, next) {
+ }
+ 
+ 
++async function renderMyUnitWeightPanel(req, res, next) {
++  try {
++    const unitId = Number(req.params.unitId);
++    const currentUserId = req && req.currentUser ? Number(req.currentUser.user_id) : NaN;
++
++    if (!Number.isInteger(unitId) || unitId <= 0 || !Number.isInteger(currentUserId) || currentUserId <= 0) {
++      return res.status(400).render('fragments/tech-unit-my-weight-panel', {
++        completions: [],
++        errorMessages: ['Your earned weight could not be loaded for the selected unit.']
++      });
++    }
++
++    const completions = await techUnitModel.getUnitWorkCompletionsForUser(unitId, currentUserId);
++
++    return res.render('fragments/tech-unit-my-weight-panel', {
++      completions,
++      errorMessages: []
++    });
++  } catch (error) {
++    next(error);
++  }
++}
++
+ async function renderCompleteTechUnitWorkModal(req, res, next) {
+   try {
+     const preview = await techUnitModel.getUnitWorkCompletionPreview(req.params.unitId);
+@@ -1673,6 +1671,7 @@ module.exports = {
+   renderTechUnitsPage,
+   renderTechUnitsTable,
+   renderTechUnitHistoryPanel,
++  renderMyUnitWeightPanel,
+   renderCompleteTechUnitWorkModal,
+   completeTechUnitWork,
+   renderArchiveTechUnitModal,
+diff --git a/models/techUnitModel.js b/models/techUnitModel.js
+index 5a6e555..df9bf26 100644
+--- a/models/techUnitModel.js
++++ b/models/techUnitModel.js
+@@ -2971,6 +2971,47 @@ async function getLatestWorkCompletionMapForUnits(unitIds) {
+   return result;
+ }
+ 
++async function getUnitWorkCompletionsForUser(unitId, userId) {
++  const safeUnitId = normalizeRequiredInteger(unitId);
++  const safeUserId = normalizeRequiredInteger(userId);
++
++  if (!safeUnitId || !safeUserId || !await tableExists('unit_work_completions')) {
++    return [];
++  }
++
++  const [rows] = await pool.query(
++    `
++      SELECT
++        c.unit_work_completion_id,
++        c.lot_id,
++        c.completed_at,
++        c.production_weight_value,
++        c.credit_source,
++        c.notes,
++        l.name AS lot_name
++      FROM unit_work_completions c
++      LEFT JOIN lots l
++        ON l.lot_id = c.lot_id
++      WHERE c.unit_id = ?
++        AND c.completed_by_user_id = ?
++      ORDER BY c.completed_at DESC, c.unit_work_completion_id DESC
++      LIMIT 100
++    `,
++    [safeUnitId, safeUserId]
++  );
++
++  return rows.map((row) => ({
++    unitWorkCompletionId: Number(row.unit_work_completion_id),
++    lotName: row.lot_name || 'No active lot',
++    completedAt: row.completed_at,
++    formattedProductionWeight: row.production_weight_value !== null && row.production_weight_value !== undefined
++      ? Number(row.production_weight_value).toFixed(2)
++      : '—',
++    creditSourceLabel: getWorkCreditSourceLabel(row.credit_source),
++    notes: row.notes || ''
++  }));
++}
++
+ async function getUnitOperationalHistory(unitId) {
+   const safeUnitId = normalizeRequiredInteger(unitId);
+   const emptyHistory = {
+@@ -3233,6 +3274,7 @@ module.exports = {
+   assignTechUnit,
+   getLatestWorkCompletionMapForUnits,
+   getUnitOperationalHistory,
++  getUnitWorkCompletionsForUser,
+   getUnitWorkCompletionPreview,
+   recordUnitWorkCompletion,
+   archiveTechUnit,
+diff --git a/public/css/tech.css b/public/css/tech.css
+index cc926e9..9ddd606 100644
+--- a/public/css/tech.css
++++ b/public/css/tech.css
+@@ -5074,28 +5074,9 @@ textarea {
+ }
+ 
+ 
+-/* Step 6f.0.4 earned-weight summary clarity. */
+-.tech-unit-summary-earned-weight {
+-  display: block;
+-  color: var(--text);
+-  font-size: 0.78rem;
+-  font-weight: 900;
+-  line-height: 1.2;
+-}
+-
+-/* Step 6f.0.4d override handoff clarity. */
+-.tech-unit-summary-work-stack .tech-unit-summary-credit-label {
+-  margin-top: 4px;
+-}
+-
+-.tech-unit-summary-credit-tech {
+-  display: block;
+-  max-width: 160px;
+-  color: color-mix(in srgb, var(--text) 70%, var(--blue) 30%);
+-  font-size: 0.78rem;
+-  font-weight: 750;
+-  line-height: 1.2;
+-  overflow-wrap: anywhere;
++/* Step 6f.0.4e personal earned-weight panel. */
++.tech-detail-actions .tech-personal-credit-action-button.is-active {
++  border-color: color-mix(in srgb, var(--blue) 58%, #64748b 42%) !important;
+ }
+ 
+ .management-review-destination-lot {
+diff --git a/public/js/tech-units.js b/public/js/tech-units.js
+index 6429b95..7c74de4 100644
+--- a/public/js/tech-units.js
++++ b/public/js/tech-units.js
+@@ -1,10 +1,14 @@
+ (function () {
++  function normalizePanelName(panelName) {
++    return ['history', 'my-weight'].includes(panelName) ? panelName : 'details';
++  }
++
+   function setPanel(detailRow, panelName) {
+     if (!detailRow) {
+       return;
+     }
+ 
+-    const normalizedPanelName = panelName === 'history' ? 'history' : 'details';
++    const normalizedPanelName = normalizePanelName(panelName);
+ 
+     detailRow.querySelectorAll('[data-unit-panel-content]').forEach((panel) => {
+       panel.hidden = panel.getAttribute('data-unit-panel-content') !== normalizedPanelName;
+@@ -51,7 +55,7 @@
+       return false;
+     }
+ 
+-    const normalizedPanelName = panelName === 'history' ? 'history' : 'details';
++    const normalizedPanelName = normalizePanelName(panelName);
+     const activePanel = detailRow.querySelector(`[data-unit-panel-content="${normalizedPanelName}"]`);
+ 
+     return Boolean(activePanel && !activePanel.hidden);
+diff --git a/routes/management.js b/routes/management.js
+index 3f08e55..14528c7 100644
+--- a/routes/management.js
++++ b/routes/management.js
+@@ -223,6 +223,13 @@ router.get(
+   techController.renderTechUnitHistoryPanel
+ );
+ 
++router.get(
++  '/tech/units/:unitId/my-weight-earned',
++  requireAuth,
++  requireRole(techRoles),
++  techController.renderMyUnitWeightPanel
++);
++
+ router.get(
+   '/tech/units/:unitId/override/modal',
+   requireAuth,
+diff --git a/views/fragments/tech-unit-my-weight-panel.ejs b/views/fragments/tech-unit-my-weight-panel.ejs
+new file mode 100644
+index 0000000..cda2e41
+--- /dev/null
++++ b/views/fragments/tech-unit-my-weight-panel.ejs
+@@ -0,0 +1,57 @@
++<%
++  const safeCompletions = Array.isArray(completions) ? completions : [];
++  const safeErrorMessages = Array.isArray(errorMessages) ? errorMessages : [];
++%>
++
++<div class="tech-unit-history-panel tech-unit-personal-credit-panel">
++  <div class="tech-unit-history-panel-header">
++    <div>
++      <strong>My Weight Earned</strong>
++      <span>Only your recorded work credit for this unit is shown.</span>
++    </div>
++
++    <div class="tech-unit-history-panel-actions">
++      <span><%= safeCompletions.length %> record<%= safeCompletions.length === 1 ? '' : 's' %></span>
++      <button type="button" class="tech-detail-view-link" data-unit-panel-button data-panel="details">
++        Back to Details
++      </button>
++    </div>
++  </div>
++
++  <% if (safeErrorMessages.length > 0) { %>
++    <div class="message error">
++      <% safeErrorMessages.forEach((message) => { %>
++        <p><%= message %></p>
++      <% }) %>
++    </div>
++  <% } else if (safeCompletions.length === 0) { %>
++    <div class="message success">
++      <p>You do not have recorded work credit for this unit.</p>
++    </div>
++  <% } else { %>
++    <section class="tech-notes-section tech-notes-section--history">
++      <div class="tech-history-section-title">
++        <div>
++          <h3>My Earned Weight</h3>
++          <span><%= safeCompletions.length %> record<%= safeCompletions.length === 1 ? '' : 's' %></span>
++        </div>
++      </div>
++
++      <div class="tech-history-list">
++        <% safeCompletions.forEach((completion) => { %>
++          <article class="tech-history-row">
++            <div class="tech-history-meta">
++              <span class="tech-history-status is-current"><%= completion.creditSourceLabel || 'Work Complete' %></span>
++              <span><%= completion.lotName || 'No active lot' %></span>
++              <span><%= completion.completedAt ? formatDateTime(completion.completedAt) : 'No date recorded' %></span>
++            </div>
++            <div class="tech-history-summary">
++              <span>Weight Earned: <%= completion.formattedProductionWeight || '—' %></span>
++            </div>
++            <% if (completion.notes) { %><p class="tech-history-text"><%= completion.notes %></p><% } %>
++          </article>
++        <% }) %>
++      </div>
++    </section>
++  <% } %>
++</div>
+diff --git a/views/fragments/tech-units-table.ejs b/views/fragments/tech-units-table.ejs
+index 6779fea..e8d2b66 100644
+--- a/views/fragments/tech-units-table.ejs
++++ b/views/fragments/tech-units-table.ejs
+@@ -70,8 +70,9 @@
+   const currentUserId = currentUser && Number.isInteger(Number(currentUser.user_id))
+     ? Number(currentUser.user_id)
+     : null;
+-  const isRegularTechOverrideRequester = currentUserRoles.includes('tech')
++  const isRegularTechUser = currentUserRoles.includes('tech')
+     && !currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
++  const isRegularTechOverrideRequester = isRegularTechUser;
+ 
+ 
+ 
+@@ -169,10 +170,6 @@
+           const currentGradeLabel = currentGrade && currentGrade.gradeLabel ? currentGrade.gradeLabel : '—';
+           const currentOutcomeLabel = currentOutcome && currentOutcome.outcomeLabel ? currentOutcome.outcomeLabel : '';
+           const currentOutcomeClass = currentOutcome && currentOutcome.outcomeCode === 'pass' ? 'pass' : (currentOutcome && currentOutcome.outcomeCode === 'fail' ? 'fail' : '');
+-          const latestWorkCompletion = unit.latestWorkCompletion || null;
+-          const latestWorkTechName = latestWorkCompletion && latestWorkCompletion.completedByName
+-            ? latestWorkCompletion.completedByName
+-            : '';
+           const assignedTechName = unit.assignedToName || 'Unassigned';
+           const isReadOnlySearchResult = Boolean(unit.isReadOnlyForCurrentUser);
+           const isAssignedToCurrentUser = Boolean(currentUserId && Number(unit.assignedToUserId) === currentUserId);
+@@ -223,13 +220,6 @@
+             <span class="tech-unit-summary-work-stack">
+               <small class="tech-outcome-status">Assigned To</small>
+               <span class="tech-unit-summary-tech-user"><%= assignedTechName %></span>
+-              <% if (latestWorkCompletion) { %>
+-                <small class="tech-outcome-status tech-unit-summary-credit-label">Last Credited Tech</small>
+-                <span class="tech-unit-summary-credit-tech"><%= latestWorkTechName || 'Unknown Tech' %></span>
+-                <strong class="tech-unit-summary-earned-weight">Weight Earned: <%= latestWorkCompletion.formattedProductionWeight || '—' %></strong>
+-              <% } else { %>
+-                <small class="tech-outcome-status">No work recorded</small>
+-              <% } %>
+             </span>
+           </td>
+ 
+@@ -352,6 +342,21 @@
+                         </a>
+                       <% } %>
+ 
++                      <% if (isRegularTechUser) { %>
++                        <button
++                          type="button"
++                          class="secondary-button tech-personal-credit-action-button"
++                          data-unit-panel-button
++                          data-panel="my-weight"
++                          data-no-row-toggle
++                          hx-get="/tech/units/<%= unit.unitId %>/my-weight-earned"
++                          hx-target="#tech-unit-my-weight-content-<%= unit.unitId %>"
++                          hx-swap="innerHTML"
++                        >
++                          My Weight Earned
++                        </button>
++                      <% } %>
++
+                       <% if (canViewUnitHistory) { %>
+                         <button
+                           type="button"
+@@ -837,6 +842,14 @@
+                 <% } %>
+                   </div>
+ 
++                  <% if (isRegularTechUser) { %>
++                    <div id="tech-unit-my-weight-panel-<%= unit.unitId %>" class="tech-unit-panel-view" data-unit-panel-content="my-weight" hidden>
++                      <div id="tech-unit-my-weight-content-<%= unit.unitId %>" class="tech-history-panel-placeholder">
++                        <p>Select My Weight Earned to load your recorded work credit.</p>
++                      </div>
++                    </div>
++                  <% } %>
++
+                   <% if (canViewUnitHistory) { %>
+                     <div id="tech-unit-history-panel-<%= unit.unitId %>" class="tech-unit-panel-view" data-unit-panel-content="history" hidden>
+                       <div id="tech-unit-history-content-<%= unit.unitId %>" class="tech-history-panel-placeholder">

@@ -1,0 +1,100 @@
+<%
+  const safePreview = preview || {};
+  const safeErrorMessages = Array.isArray(errorMessages) ? errorMessages.filter(Boolean) : [];
+  const canSubmit = Boolean(safePreview.ready) && !successMessage && safeErrorMessages.length === 0;
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel tech-complete-work-modal" role="dialog" aria-modal="true" aria-labelledby="tech-complete-work-title">
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">Lot Work Completion</p>
+        <h2 id="tech-complete-work-title">Confirm Work Complete</h2>
+      </div>
+
+      <button type="button" class="modal-close" data-modal-close aria-label="Close modal">×</button>
+    </div>
+
+    <div class="modal-body">
+      <% if (successMessage) { %>
+        <div class="message success">
+          <p><%= successMessage %></p>
+        </div>
+
+        <div class="tech-override-summary">
+          <dl>
+            <div>
+              <dt>Unit</dt>
+              <dd><%= safePreview.unitLabel || '—' %></dd>
+            </div>
+            <div>
+              <dt>Lot</dt>
+              <dd><%= safePreview.lotName || '—' %></dd>
+            </div>
+            <div>
+              <dt>Credit</dt>
+              <dd><%= safePreview.formattedProductionWeight || '—' %> to <%= creditedToName %></dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="primary-button" data-modal-close>Done</button>
+        </div>
+      <% } else { %>
+        <% if (safeErrorMessages.length > 0) { %>
+          <div class="message error">
+            <% safeErrorMessages.forEach((errorMessage) => { %>
+              <p><%= errorMessage %></p>
+            <% }) %>
+          </div>
+        <% } %>
+
+        <div class="tech-override-summary">
+          <dl>
+            <div>
+              <dt>Unit</dt>
+              <dd><%= safePreview.unitLabel || '—' %></dd>
+            </div>
+            <div>
+              <dt>Current Lot</dt>
+              <dd><%= safePreview.lotName || '—' %></dd>
+            </div>
+            <div>
+              <dt>Credit To</dt>
+              <dd><%= creditedToName %></dd>
+            </div>
+            <div>
+              <dt>Current Lot Weight</dt>
+              <dd><%= safePreview.formattedProductionWeight || '—' %></dd>
+            </div>
+          </dl>
+        </div>
+
+        <p class="field-hint">
+          This records the work you performed in the current lot. It does not change the unit’s assignment, lot, grade, or Pass/Fail status.
+        </p>
+
+        <% if (canSubmit) { %>
+          <form
+            class="app-form"
+            method="post"
+            action="/tech/units/<%= safePreview.unitId %>/complete-work"
+            hx-post="/tech/units/<%= safePreview.unitId %>/complete-work"
+            hx-target="#modal-root"
+            hx-swap="innerHTML"
+          >
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Record Completion</button>
+              <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            </div>
+          </form>
+        <% } else { %>
+          <div class="form-actions">
+            <button type="button" class="primary-button" data-modal-close>Close</button>
+          </div>
+        <% } %>
+      <% } %>
+    </div>
+  </section>
+</div>

@@ -405,3 +405,20 @@
   border-color: color-mix(in srgb, var(--red) 72%, #64748b 28%) !important;
   background: color-mix(in srgb, #fecaca 60%, #ffffff 40%) !important;
 }
+
+
+/* Step 6f.0 prior-Tech credit controls. */
+.management-review-credit-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+
+/* Step 6f.0.2 intentional prior-credit entry. */
+.management-review-credit-weight[hidden] {
+  display: none;
+}

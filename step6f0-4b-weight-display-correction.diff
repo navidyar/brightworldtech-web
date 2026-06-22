@@ -1,0 +1,57 @@
+diff -ruN a/README.md b/README.md
+--- a/README.md	2026-06-21 06:34:09.081096727 +0000
++++ b/README.md	2026-06-21 06:34:43.113199727 +0000
+@@ -143,3 +143,11 @@
+ - Leaves **Latest Weight Earned** tied only to the recorded completion-credit snapshot.
+ - Prevents the current effective unit weight from being mistaken for earned credit.
+ 
++
++
++## Step 6f.0.4b — Weight Display Correction
++
++- Shows only the configured **Current Lot Weight** under `Unit / Weight`.
++- Removes redundant Unit Override display from the Unit / Weight summary and expanded detail.
++- Shows the unit's effective weight under **Latest Weight Earned** beside the credited Tech.
++- Keeps completion history and dashboard calculations based on the saved completion-credit snapshot.
+diff -ruN a/views/fragments/tech-units-table.ejs b/views/fragments/tech-units-table.ejs
+--- a/views/fragments/tech-units-table.ejs	2026-06-21 06:34:09.082748374 +0000
++++ b/views/fragments/tech-units-table.ejs	2026-06-21 06:34:43.112898018 +0000
+@@ -198,9 +198,6 @@
+                 </small>
+                 <span class="tech-unit-summary-weight-strip">
+                   <span class="tech-unit-summary-weight-value">Current lot weight <strong><%= unit.formattedCurrentLotWeight || '—' %></strong></span>
+-                  <% if (unit.hasUnitProductionWeightOverride) { %>
+-                    <span class="tech-unit-summary-weight-source">Unit override <strong><%= unit.formattedUnitProductionWeightOverride || '—' %></strong></span>
+-                  <% } %>
+                 </span>
+               </span>
+             </button>
+@@ -220,7 +217,7 @@
+               <span class="tech-unit-summary-tech-user"><%= activityTechName || 'Unassigned' %></span>
+               <% if (latestWorkCompletion) { %>
+                 <small class="tech-outcome-status">Latest Weight Earned</small>
+-                <strong class="tech-unit-summary-earned-weight"><%= latestWorkCompletion.formattedProductionWeight || '—' %></strong>
++                <strong class="tech-unit-summary-earned-weight"><%= unit.formattedProductionWeight || latestWorkCompletion.formattedProductionWeight || '—' %></strong>
+               <% } else if (unit.assignedToName) { %>
+                 <small class="tech-outcome-status">Assigned Tech</small>
+               <% } else { %>
+@@ -408,19 +405,6 @@
+                           </div>
+                         </dd>
+                       </div>
+-
+-                      <% if (unit.hasUnitProductionWeightOverride) { %>
+-                        <div>
+-                          <dt>Unit Override</dt>
+-                          <dd>
+-                            <div class="tech-production-weight-detail">
+-                              <div class="tech-production-weight-detail-main">
+-                                <strong><%= unit.formattedUnitProductionWeightOverride || '—' %></strong>
+-                              </div>
+-                            </div>
+-                          </dd>
+-                        </div>
+-                      <% } %>
+                     </dl>
+ 
+                     <p class="tech-detail-subheading">Identifiers</p>

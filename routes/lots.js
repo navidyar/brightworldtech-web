@@ -64,6 +64,34 @@ router.post(
 );
 
 router.get(
+  '/management/lots/:lotId/close/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotClosureModal
+);
+
+router.post(
+  '/management/lots/:lotId/close',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.updateLotClosure
+);
+
+router.get(
+  '/management/lots/:lotId/reopen/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotClosureModal
+);
+
+router.post(
+  '/management/lots/:lotId/reopen',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.updateLotClosure
+);
+
+router.get(
   '/management/lots/:lotId/delete/modal',
   requireAuth,
   requireRole(lotManagementRoles),

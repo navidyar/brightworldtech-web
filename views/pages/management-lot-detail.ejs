@@ -39,10 +39,16 @@
             </div>
 
             <div class="hero-badge">
-              <span><%= Number(lot.is_active) === 1 ? 'Visible Lot' : 'Hidden Lot' %></span>
+              <span><%= Number(lot.is_closed) === 1 ? 'Closed Lot' : 'Open Lot' %></span>
               <strong><%= enforcementSummary.policyLabel %></strong>
             </div>
           </section>
+
+          <% if (Number(lot.is_closed) === 1) { %>
+            <div class="message warning">
+              This lot is closed. Existing units remain available for review, but the lot cannot receive new, moved, or override-handoff units until reopened.
+            </div>
+          <% } %>
 
           <% if (Number(lot.is_active) !== 1) { %>
             <div class="message warning">
@@ -53,6 +59,11 @@
           <div class="lot-detail-action-bar">
             <a class="secondary-button" href="/management/lots<%= Number(lot.is_active) === 1 ? '' : '?showHidden=1' %>">Back to Lots</a>
             <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
+            <% if (Number(lot.is_closed) === 1) { %>
+              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-target="#modal-root" hx-swap="innerHTML">Reopen Lot</a>
+            <% } else { %>
+              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/close/modal" hx-get="/management/lots/<%= lot.lot_id %>/close/modal" hx-target="#modal-root" hx-swap="innerHTML">Close Lot</a>
+            <% } %>
             <% if (Number(lot.is_active) === 1) { %>
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal" hx-target="#modal-root" hx-swap="innerHTML">Hide Lot</a>
             <% } else { %>
@@ -65,9 +76,15 @@
 
           <section class="dashboard-grid lot-detail-summary-grid">
             <article class="dashboard-card">
+              <p class="card-label">Lot State</p>
+              <h3><%= Number(lot.is_closed) === 1 ? 'Closed' : 'Open' %></h3>
+              <p><%= Number(lot.is_closed) === 1 ? 'Reviewable, but unavailable as a unit destination.' : 'Available as a unit destination when visible and not a parent/container lot.' %></p>
+            </article>
+
+            <article class="dashboard-card">
               <p class="card-label">Visibility</p>
               <h3><%= Number(lot.is_active) === 1 ? 'Visible' : 'Hidden' %></h3>
-              <p><%= Number(lot.is_active) === 1 ? 'Available in normal lot browsers and dropdowns.' : 'Hidden from normal lot browsers and assignment dropdowns.' %></p>
+              <p><%= Number(lot.is_active) === 1 ? 'Shown in normal lot browsers.' : 'Hidden from normal lot browsers and assignment dropdowns.' %></p>
             </article>
 
             <article class="dashboard-card">
@@ -98,7 +115,9 @@
                 <% } %>
               </h3>
               <p>
-                <% if (lot.isFull) { %>
+                <% if (Number(lot.is_closed) === 1) { %>
+                  Closed lots cannot receive more units.
+                <% } else if (lot.isFull) { %>
                   This lot has reached its unit goal.
                 <% } else { %>
                   This lot can still accept more units.

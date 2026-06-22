@@ -1,0 +1,1100 @@
+diff --git a/README.md b/README.md
+index ed31c118b8c21c1aba2bb73c60460fdcf9592594..886c2d0001a48a31e64ae2f47f5dde97982798a2 100644
+--- a/README.md
++++ b/README.md
+@@ -4,9 +4,9 @@ Internal operations portal for Bright World Technologies.
+ 
+ ## Current Step
+ 
+-Step 6f.0: Unit assignment and completion-credit foundation.
++Step 6f.1: Closed Lot Lifecycle.
+ 
+-This step separates current unit assignment from historical record creation and starts recording production credit as immutable work-completion events.
++This step adds a reversible Open / Closed operational state to lots. Closed lots remain reviewable, but cannot receive new, moved, or override-handoff units.
+ 
+ ## Step 6f.0 Goal
+ 
+@@ -179,3 +179,29 @@ Step 6f.0.4 completion safeguards migration complete
+ - Deletion runs in one database transaction and removes the unit plus all linked rows detected through current database unit references.
+ - If any linked row cannot be removed, the transaction rolls back so the unit and its records remain intact.
+ - Permanent deletion intentionally removes associated earned-weight entries from dashboard totals because the unit is treated as never having been added.
++
++
++## Step 6f.1 — Closed Lot Lifecycle
++
++- Adds a reversible `is_closed` operational state to `lots`.
++- **Open** lots can receive units when they are visible and are not parent/container lots.
++- **Closed** lots remain visible for management review, unit history, and Unit Browser filtering.
++- Closed lots are removed from unit creation, direct lot-move, and override-handoff destination lists.
++- Existing units remain in a lot when it is closed; closing does not reassign, delete, or alter production credit.
++- Management and Admin can Close or Reopen a lot from `/management/lots`; Tech Leads remain blocked from that page.
++- A closed unit's current lot remains visible in an Edit Unit form only so the record can be preserved or moved to an open destination. It cannot be selected as a new destination.
++- Hidden remains separate from Closed: Hidden controls browsing visibility; Closed controls whether a lot can receive units.
++
++### Required SQL
++
++```bash
++cd /home/bwtdallas-webserver/app
++
++docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' < sql/2026-06-step-6f1-closed-lot-lifecycle.sql
++```
++
++Expected final message:
++
++```text
++Step 6f.1 closed-lot lifecycle migration complete
++```
+diff --git a/controllers/lotController.js b/controllers/lotController.js
+index 33f65eb8c747b223bdb9c801ec56a4b018f3a83e..2b2b862eb7470ae0f8b10341510c6aecb4119d70 100644
+--- a/controllers/lotController.js
++++ b/controllers/lotController.js
+@@ -491,6 +491,14 @@ function getLotSuccessMessage(query) {
+     return 'Lot unhidden successfully.';
+   }
+ 
++  if (query.closed === '1') {
++    return 'Lot closed successfully.';
++  }
++
++  if (query.reopened === '1') {
++    return 'Lot reopened successfully.';
++  }
++
+   return null;
+ }
+ 
+@@ -601,7 +609,11 @@ async function renderLotDetailPage(req, res, next) {
+         ? 'Requirement added successfully.'
+         : (req.query.updated === '1'
+           ? 'Lot updated successfully.'
+-          : (req.query.requirementUpdated === '1' ? 'Requirement updated successfully.' : null))
++          : (req.query.requirementUpdated === '1'
++            ? 'Requirement updated successfully.'
++            : (req.query.closed === '1'
++              ? 'Lot closed successfully.'
++              : (req.query.reopened === '1' ? 'Lot reopened successfully.' : null))))
+     });
+   } catch (error) {
+     next(error);
+@@ -838,6 +850,91 @@ async function updateLotVisibility(req, res, next) {
+   }
+ }
+ 
++async function renderLotClosureModal(req, res, next) {
++  try {
++    const lotId = Number(req.params.lotId);
++    const mode = req.path.includes('/reopen') ? 'reopen' : 'close';
++
++    if (!Number.isInteger(lotId) || lotId <= 0) {
++      return res.status(404).render('fragments/lot-closure-modal', {
++        mode,
++        closureSummary: null,
++        errorMessages: ['The selected lot could not be found.']
++      });
++    }
++
++    const closureSummary = await lotModel.getLotClosureSummary(lotId);
++
++    if (!closureSummary) {
++      return res.status(404).render('fragments/lot-closure-modal', {
++        mode,
++        closureSummary: null,
++        errorMessages: ['The selected lot could not be found.']
++      });
++    }
++
++    if (!closureSummary.canChangeClosure) {
++      return res.status(400).render('fragments/lot-closure-modal', {
++        mode,
++        closureSummary,
++        errorMessages: ['Lot closure is not ready yet. Run the Step 6f.1 closed-lot migration first.']
++      });
++    }
++
++    return res.render('fragments/lot-closure-modal', {
++      mode,
++      closureSummary,
++      errorMessages: []
++    });
++  } catch (error) {
++    next(error);
++  }
++}
++
++async function updateLotClosure(req, res, next) {
++  try {
++    const lotId = Number(req.params.lotId);
++    const shouldReopen = req.path.includes('/reopen');
++    const mode = shouldReopen ? 'reopen' : 'close';
++
++    if (!Number.isInteger(lotId) || lotId <= 0) {
++      return res.status(404).render('fragments/lot-closure-modal', {
++        mode,
++        closureSummary: null,
++        errorMessages: ['The selected lot could not be found.']
++      });
++    }
++
++    const closureSummary = await lotModel.getLotClosureSummary(lotId);
++
++    if (!closureSummary) {
++      return res.status(404).render('fragments/lot-closure-modal', {
++        mode,
++        closureSummary: null,
++        errorMessages: ['The selected lot could not be found.']
++      });
++    }
++
++    if (!closureSummary.canChangeClosure) {
++      return res.status(400).render('fragments/lot-closure-modal', {
++        mode,
++        closureSummary,
++        errorMessages: ['Lot closure is not ready yet. Run the Step 6f.1 closed-lot migration first.']
++      });
++    }
++
++    await lotModel.setLotClosed(lotId, !shouldReopen, req.currentUser.user_id);
++
++    const redirectUrl = shouldReopen
++      ? '/management/lots?reopened=1'
++      : '/management/lots?closed=1';
++
++    return sendHtmxRedirect(req, res, addCacheBuster(redirectUrl));
++  } catch (error) {
++    next(error);
++  }
++}
++
+ async function renderDeleteLotModal(req, res, next) {
+   try {
+     const lotId = Number(req.params.lotId);
+@@ -1042,6 +1139,8 @@ module.exports = {
+   updateLotModal,
+   renderLotVisibilityModal,
+   updateLotVisibility,
++  renderLotClosureModal,
++  updateLotClosure,
+   renderDeleteLotModal,
+   deleteLot,
+   renderLotDetailPage,
+diff --git a/controllers/techController.js b/controllers/techController.js
+index 3fc54d260c1201bb32974ca94890093d4664f715..300ebf7de12e3ce270cd5e5c70d6924ec3364eb3 100644
+--- a/controllers/techController.js
++++ b/controllers/techController.js
+@@ -724,6 +724,10 @@ function getFriendlySaveError(error, formOptions) {
+     return 'This unit already has recorded work. A Tech Lead, Management user, or Admin must move it to another lot.';
+   }
+ 
++  if (error && error.code === 'BWT_LOT_DESTINATION_NOT_OPEN') {
++    return error.message || 'Closed, hidden, and parent/container lots cannot receive units. Choose an open child or standalone lot.';
++  }
++
+   return null;
+ }
+ 
+@@ -746,8 +750,8 @@ async function renderDuplicateUnitModal(res, { formOptions, formData, duplicateM
+   });
+ }
+ 
+-async function getTechUnitFormOptionsWithIssues(req = null) {
+-  const formOptions = await techUnitModel.getTechUnitFormOptions();
++async function getTechUnitFormOptionsWithIssues(req = null, options = {}) {
++  const formOptions = await techUnitModel.getTechUnitFormOptions(options);
+   const issueFormOptions = await unitIssueEntryModel.getIssueFormOptions();
+   const expandedFormOptions = await unitExpandedFormModel.getExpandedFormOptions();
+ 
+@@ -759,6 +763,14 @@ async function getTechUnitFormOptionsWithIssues(req = null) {
+   };
+ }
+ 
++async function getEditTechUnitFormOptionsWithIssues(req, unitId) {
++  const unit = await techUnitModel.getUnitById(unitId);
++
++  return getTechUnitFormOptionsWithIssues(req, {
++    includeCurrentLotId: unit && unit.lot_id ? unit.lot_id : null
++  });
++}
++
+ async function buildEditFormData(unitId, formOptions) {
+   const unitFormData = await techUnitModel.getUnitFormDataById(unitId, formOptions);
+ 
+@@ -1390,7 +1402,7 @@ async function useExistingTechUnitModal(req, res, next) {
+       });
+     }
+ 
+-    const formOptions = await getTechUnitFormOptionsWithIssues(req);
++    const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
+     const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
+     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
+ 
+@@ -1449,7 +1461,7 @@ async function renderEditTechUnitPage(req, res, next) {
+       });
+     }
+ 
+-    const formOptions = await getTechUnitFormOptionsWithIssues(req);
++    const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
+     const formData = await buildEditFormData(unitId, formOptions);
+ 
+     if (!formData) {
+@@ -1518,7 +1530,7 @@ async function renderEditTechUnitModal(req, res, next) {
+       });
+     }
+ 
+-    const formOptions = await getTechUnitFormOptionsWithIssues(req);
++    const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
+     const formData = await buildEditFormData(unitId, formOptions);
+ 
+     if (!formData) {
+@@ -1556,7 +1568,7 @@ async function updateTechUnit(req, res, next) {
+       });
+     }
+ 
+-    const formOptions = await getTechUnitFormOptionsWithIssues(req);
++    const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
+     const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
+     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
+ 
+@@ -1645,7 +1657,7 @@ async function updateTechUnitModal(req, res, next) {
+       });
+     }
+ 
+-    const formOptions = await getTechUnitFormOptionsWithIssues(req);
++    const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
+     const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
+     const errorMessages = validateUnitForm(formData, formOptions, 'edit');
+ 
+diff --git a/models/lotModel.js b/models/lotModel.js
+index 92dc395987a53bc1f4136051e23146480cd95ed7..1daf7f9ad8439ea2e712fe13595938a5f8861f2f 100644
+--- a/models/lotModel.js
++++ b/models/lotModel.js
+@@ -272,13 +272,33 @@ async function listParentLotOptions(options = {}) {
+     '1'
+   );
+ 
++  const isClosedSelect = selectExpression(
++    'l',
++    lotColumns,
++    ['is_closed'],
++    'is_closed',
++    '0'
++  );
++
+   const hasLotIsActive = hasColumn(lotColumns, 'is_active');
+-  const isActiveWhere = hasLotIsActive
+-    ? (includeLotIds.length > 0
+-      ? `WHERE l.is_active = 1 OR l.lot_id IN (${includeLotIds.map(() => '?').join(', ')})`
+-      : 'WHERE l.is_active = 1')
+-    : '';
+-  const queryParams = hasLotIsActive && includeLotIds.length > 0 ? includeLotIds : [];
++  const hasLotIsClosed = hasColumn(lotColumns, 'is_closed');
++  const operationalWhereParts = [];
++
++  if (hasLotIsActive) {
++    operationalWhereParts.push('l.is_active = 1');
++  }
++
++  if (hasLotIsClosed) {
++    operationalWhereParts.push('COALESCE(l.is_closed, 0) = 0');
++  }
++
++  const operationalWhere = operationalWhereParts.length > 0
++    ? operationalWhereParts.join(' AND ')
++    : '1 = 1';
++  const isActiveWhere = includeLotIds.length > 0
++    ? `WHERE (${operationalWhere}) OR l.lot_id IN (${includeLotIds.map(() => '?').join(', ')})`
++    : `WHERE ${operationalWhere}`;
++  const queryParams = includeLotIds.length > 0 ? includeLotIds : [];
+ 
+   const orderExpression = pickColumn(lotColumns, ['lot_name', 'name', 'title'])
+     ? 'lot_name, l.lot_id'
+@@ -289,7 +309,8 @@ async function listParentLotOptions(options = {}) {
+       l.lot_id,
+       ${lotNameSelect},
+       ${lotCodeSelect},
+-      ${isActiveSelect}
++      ${isActiveSelect},
++      ${isClosedSelect}
+     FROM lots l
+     ${isActiveWhere}
+     ORDER BY ${orderExpression}
+@@ -315,7 +336,8 @@ async function getLotSchemaCapabilities() {
+     hasDeadline: Boolean(pickColumn(lotColumns, ['deadline', 'deadline_date', 'due_date'])),
+     hasObjectives: Boolean(pickColumn(lotColumns, ['objectives', 'objective'])),
+     hasNotes: Boolean(pickColumn(lotColumns, ['notes', 'note'])),
+-    hasLabelFormat: hasColumn(lotColumns, 'label_format')
++    hasLabelFormat: hasColumn(lotColumns, 'label_format'),
++    hasClosedState: hasColumn(lotColumns, 'is_closed')
+   };
+ }
+ 
+@@ -447,6 +469,14 @@ async function listLots(options = {}) {
+     '1'
+   );
+ 
++  const isClosedSelect = selectExpression(
++    'l',
++    lotColumns,
++    ['is_closed'],
++    'is_closed',
++    '0'
++  );
++
+   const createdAtSelect = selectExpression(
+     'l',
+     lotColumns,
+@@ -613,6 +643,7 @@ async function listLots(options = {}) {
+       ${notesSelect},
+       ${labelFormatSelect},
+       ${isActiveSelect},
++      ${isClosedSelect},
+       ${createdAtSelect},
+       ${updatedAtSelect},
+       ${unitCountSelect},
+@@ -650,6 +681,7 @@ async function getLotSummary() {
+ 
+   const activeLots = lots.filter((lot) => Number(lot.is_active) === 1);
+   const hiddenLots = lots.filter((lot) => Number(lot.is_active) !== 1);
++  const closedLots = lots.filter((lot) => Number(lot.is_closed) === 1);
+   const fullLots = lots.filter((lot) => lot.isFull);
+   const unlimitedLots = lots.filter((lot) => lot.isUnlimited);
+ 
+@@ -660,6 +692,7 @@ async function getLotSummary() {
+     lotCount: lots.length,
+     activeLotCount: activeLots.length,
+     hiddenLotCount: hiddenLots.length,
++    closedLotCount: closedLots.length,
+     fullLotCount: fullLots.length,
+     unlimitedLotCount: unlimitedLots.length,
+     totalUnits,
+@@ -940,6 +973,74 @@ async function setLotVisibility(lotId, isActive, currentUserId) {
+   return result.affectedRows > 0;
+ }
+ 
++async function getLotClosureSummary(lotId) {
++  const lot = await getLotById(lotId);
++
++  if (!lot) {
++    return null;
++  }
++
++  const lotColumns = await getColumnSet('lots');
++  const unitColumns = await getColumnSet('units');
++  let unitCount = Number(lot.unitCount || lot.unit_count || 0);
++  let childLotCount = 0;
++
++  if (hasColumn(unitColumns, 'lot_id')) {
++    const [unitRows] = await pool.query(
++      'SELECT COUNT(*) AS unit_count FROM units WHERE lot_id = ?',
++      [Number(lotId)]
++    );
++
++    unitCount = Number(unitRows[0]?.unit_count || 0);
++  }
++
++  if (hasColumn(lotColumns, 'parent_lot_id')) {
++    const [childRows] = await pool.query(
++      'SELECT COUNT(*) AS child_lot_count FROM lots WHERE parent_lot_id = ?',
++      [Number(lotId)]
++    );
++
++    childLotCount = Number(childRows[0]?.child_lot_count || 0);
++  }
++
++  return {
++    lot,
++    unitCount,
++    childLotCount,
++    canChangeClosure: hasColumn(lotColumns, 'is_closed')
++  };
++}
++
++async function setLotClosed(lotId, isClosed, currentUserId) {
++  const lotColumns = await getColumnSet('lots');
++
++  if (!hasColumn(lotColumns, 'is_closed')) {
++    throw new Error('Lot closure is not ready yet. Run the Step 6f.1 closed-lot migration first.');
++  }
++
++  const assignments = ['is_closed = ?'];
++  const values = [isClosed ? 1 : 0];
++
++  if (hasColumn(lotColumns, 'updated_by_user_id')) {
++    assignments.push('updated_by_user_id = ?');
++    values.push(currentUserId || null);
++  }
++
++  values.push(Number(lotId));
++
++  const [result] = await pool.query(
++    `
++      UPDATE lots
++      SET ${assignments.join(', ')}
++      WHERE lot_id = ?
++      LIMIT 1
++    `,
++    values
++  );
++
++  return result.affectedRows > 0;
++}
++
+ async function getLotDeleteSummary(lotId) {
+   const lot = await getLotById(lotId);
+ 
+@@ -1419,6 +1520,8 @@ module.exports = {
+   getLotFormOptions,
+   getLotVisibilitySummary,
+   setLotVisibility,
++  getLotClosureSummary,
++  setLotClosed,
+   getLotSchemaCapabilities,
+   createLot,
+   updateLot,
+diff --git a/models/overrideRequestModel.js b/models/overrideRequestModel.js
+index 0d386fc6691cf6e9d3aa2a41e8264f735a5b41f9..66d1c374a97796ad7b8bfb99e621da5d0d47177b 100644
+--- a/models/overrideRequestModel.js
++++ b/models/overrideRequestModel.js
+@@ -118,7 +118,7 @@ async function getLotNameMap() {
+ 
+ async function listAssignableLots() {
+   const lots = await lotModel.listLots({ includeHidden: true });
+-  const activeLots = lots.filter((lot) => Number(lot.is_active) === 1);
++  const activeLots = lots.filter((lot) => Number(lot.is_active) === 1 && Number(lot.is_closed || 0) !== 1);
+   const parentLotIdsWithChildren = new Set(
+     activeLots
+       .filter((lot) => lot.parent_lot_id)
+diff --git a/models/techUnitModel.js b/models/techUnitModel.js
+index 59d0c532711bfc48760861a0ad3f954586863488..5874fb79e7ae3232a314630d6392c09295e769c3 100644
+--- a/models/techUnitModel.js
++++ b/models/techUnitModel.js
+@@ -423,7 +423,13 @@ function getParentLotIdsWithChildren(lots) {
+   return parentLotIds;
+ }
+ 
+-function isAssignableLot(lot, parentLotIdsWithChildren) {
++function isOperationalLot(lot) {
++  return Boolean(lot)
++    && Number(lot.is_active) === 1
++    && Number(lot.is_closed || 0) !== 1;
++}
++
++function isBrowsableLot(lot, parentLotIdsWithChildren) {
+   if (!lot || Number(lot.is_active) !== 1) {
+     return false;
+   }
+@@ -431,6 +437,18 @@ function isAssignableLot(lot, parentLotIdsWithChildren) {
+   return !parentLotIdsWithChildren.has(String(lot.lot_id));
+ }
+ 
++function isAssignableLot(lot, parentLotIdsWithChildren) {
++  return isOperationalLot(lot)
++    && !parentLotIdsWithChildren.has(String(lot.lot_id));
++}
++
++function getBrowsableLots(lots) {
++  const visibleLots = lots.filter((lot) => Number(lot.is_active) === 1);
++  const parentLotIdsWithChildren = getParentLotIdsWithChildren(visibleLots);
++
++  return visibleLots.filter((lot) => isBrowsableLot(lot, parentLotIdsWithChildren));
++}
++
+ function getAssignableLots(lots) {
+   const visibleLots = lots.filter((lot) => Number(lot.is_active) === 1);
+   const parentLotIdsWithChildren = getParentLotIdsWithChildren(visibleLots);
+@@ -438,9 +456,17 @@ function getAssignableLots(lots) {
+   return visibleLots.filter((lot) => isAssignableLot(lot, parentLotIdsWithChildren));
+ }
+ 
++function sortLotsByName(lots) {
++  return lots.slice().sort((a, b) => String(a.lot_name || '').localeCompare(String(b.lot_name || ''), undefined, {
++    numeric: true,
++    sensitivity: 'base'
++  }));
++}
++
+ async function getLotMap() {
+   const lots = await lotModel.listLots({ includeHidden: true });
+   const assignableLots = getAssignableLots(lots);
++  const filterLots = getBrowsableLots(lots);
+   const lotMap = new Map();
+ 
+   lots.forEach((lot) => {
+@@ -450,6 +476,7 @@ async function getLotMap() {
+   return {
+     lots,
+     assignableLots,
++    filterLots,
+     lotMap
+   };
+ }
+@@ -718,9 +745,24 @@ function mapById(items) {
+   return map;
+ }
+ 
+-async function getTechUnitFormOptions() {
++async function getTechUnitFormOptions(options = {}) {
+   const state = await getUnitTableState();
+-  const { assignableLots } = await getLotMap();
++  const includeCurrentLotId = normalizeOptionalInteger(options.includeCurrentLotId);
++  const { assignableLots, lotMap } = await getLotMap();
++  const currentLot = includeCurrentLotId ? lotMap.get(includeCurrentLotId) || null : null;
++  const currentLotIsSelectable = currentLot
++    ? assignableLots.some((lot) => Number(lot.lot_id) === includeCurrentLotId)
++    : false;
++  const lots = currentLot && !currentLotIsSelectable
++    ? sortLotsByName([
++      ...assignableLots,
++      {
++        ...currentLot,
++        isCurrentLot: true,
++        isCurrentLotClosed: Number(currentLot.is_closed || 0) === 1
++      }
++    ])
++    : assignableLots;
+ 
+   const [
+     unitCategories,
+@@ -766,7 +808,8 @@ async function getTechUnitFormOptions() {
+       : 'The units table does not exist yet.',
+     assetTagPrefix: getAssetTagPrefix(),
+     state,
+-    lots: assignableLots,
++    lots,
++    currentLotIsClosed: Boolean(currentLot && Number(currentLot.is_closed || 0) === 1),
+     unitCategories: unitCategoriesWithProductionWeights,
+     unitStatuses,
+     defaultUnitStatusId: receivedStatus ? String(receivedStatus.id) : '',
+@@ -1126,8 +1169,8 @@ async function listTechUnits(filters = {}) {
+     };
+   }
+ 
+-  const { assignableLots, lotMap } = await getLotMap();
+-  const assignableLotIds = new Set(assignableLots.map((lot) => String(lot.lot_id)));
++  const { filterLots, lotMap } = await getLotMap();
++  const filterLotIds = new Set(filterLots.map((lot) => String(lot.lot_id)));
+ 
+   const [
+     unitCategories,
+@@ -1190,7 +1233,7 @@ async function listTechUnits(filters = {}) {
+   if (filters.lotId) {
+     const lotId = Number(filters.lotId);
+ 
+-    if (Number.isInteger(lotId) && lotId > 0 && assignableLotIds.has(String(lotId))) {
++    if (Number.isInteger(lotId) && lotId > 0 && filterLotIds.has(String(lotId))) {
+       where.push('u.lot_id = ?');
+       params.push(lotId);
+     }
+@@ -1429,6 +1472,7 @@ async function listTechUnits(filters = {}) {
+       productionWeightPriorityPath: productionWeightDetails.priorityPath,
+       productionWeightHasOverride: productionWeightDetails.hasOverride,
+       productionWeightNotes: productionWeightDetails.notes,
++      isLotClosed: Boolean(lot && Number(lot.is_closed || 0) === 1),
+       currentLotWeight,
+       formattedCurrentLotWeight: productionWeightModel.formatWeightValue(currentLotWeight),
+       unitProductionWeightOverride,
+@@ -1464,7 +1508,7 @@ async function listTechUnits(filters = {}) {
+     assetTagPrefix: getAssetTagPrefix(),
+     units,
+     filters,
+-    lots: assignableLots,
++    lots: filterLots,
+     unitCategories,
+     overallGradeOptions,
+     techUserOptions,
+@@ -1982,6 +2026,16 @@ async function createTechUnit(formData, currentUserId) {
+     throw createDuplicateIdentifierError(duplicateMatches);
+   }
+ 
++  const { assignableLots } = await getLotMap();
++  const requestedLotId = normalizeRequiredInteger(formData.lotId);
++
++  if (!assignableLots.some((lot) => Number(lot.lot_id) === requestedLotId)) {
++    throw createLotMovePolicyError(
++      'BWT_LOT_DESTINATION_NOT_OPEN',
++      'Closed, hidden, and parent/container lots cannot receive new units. Choose an open child or standalone lot.'
++    );
++  }
++
+   const connection = await pool.getConnection();
+ 
+   try {
+@@ -2087,6 +2141,11 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
+   const previousLotId = normalizeOptionalInteger(unit.lot_id);
+   const lotChanged = Boolean(nextLotId && previousLotId && Number(nextLotId) !== Number(previousLotId));
+ 
++  await assertLotDestinationIsOpenOrCurrent({
++    unit,
++    nextLotId
++  });
++
+   if (lotChanged) {
+     await assertLotMovePermission({
+       unit,
+@@ -3575,6 +3634,32 @@ function createLotMovePolicyError(code, message) {
+   return error;
+ }
+ 
++async function assertLotDestinationIsOpenOrCurrent({ unit, nextLotId }) {
++  const previousLotId = normalizeOptionalInteger(unit && unit.lot_id);
++  const normalizedNextLotId = normalizeRequiredInteger(nextLotId);
++
++  if (!normalizedNextLotId) {
++    throw createLotMovePolicyError(
++      'BWT_LOT_DESTINATION_NOT_OPEN',
++      'Choose an open, assignable lot.'
++    );
++  }
++
++  if (previousLotId && previousLotId === normalizedNextLotId) {
++    return;
++  }
++
++  const { assignableLots } = await getLotMap();
++  const isOpenAssignableLot = assignableLots.some((lot) => Number(lot.lot_id) === normalizedNextLotId);
++
++  if (!isOpenAssignableLot) {
++    throw createLotMovePolicyError(
++      'BWT_LOT_DESTINATION_NOT_OPEN',
++      'Closed, hidden, and parent/container lots cannot receive units. Choose an open child or standalone lot.'
++    );
++  }
++}
++
+ async function assertLotMovePermission({ unit, nextLotId, currentUserId, actorRoleCodes }) {
+   const previousLotId = normalizeOptionalInteger(unit && unit.lot_id);
+   const normalizedNextLotId = normalizeRequiredInteger(nextLotId);
+@@ -3630,5 +3715,6 @@ module.exports = {
+   getDisplayAssetTag,
+   normalizeAssetTagInput,
+   isAssignableLot,
+-  getAssignableLots
++  getAssignableLots,
++  getBrowsableLots
+ };
+diff --git a/public/css/lots.css b/public/css/lots.css
+index 79f165f88fe9169a85d0f26330b674afb36eb858..bb85a11db63dc6785e20026b0665ce79db2f58a6 100644
+--- a/public/css/lots.css
++++ b/public/css/lots.css
+@@ -1557,3 +1557,17 @@ table tr.lot-hidden-row td {
+   border-color: color-mix(in srgb, var(--red) 72%, #64748b 28%) !important;
+   background: color-mix(in srgb, #fecaca 60%, #ffffff 40%) !important;
+ }
++
++
++/* Step 6f.1 closed-lot lifecycle. Closed is operational state, separate from hidden visibility. */
++.management-lots-table tr.lot-closed-row td {
++  background: color-mix(in srgb, var(--surface) 88%, #fce7f3 12%);
++}
++
++.management-lots-table tr.lot-closed-row.lot-hidden-row td {
++  background: color-mix(in srgb, var(--surface-soft) 74%, #fce7f3 14%);
++}
++
++.lot-closure-summary {
++  border-left-color: #b7798f;
++}
+diff --git a/routes/lots.js b/routes/lots.js
+index ef3a490e1fe3c337c5f7518d836efaac56167652..fb241ae111e77039a04a857ba112e7ae2525bfdc 100644
+--- a/routes/lots.js
++++ b/routes/lots.js
+@@ -63,6 +63,34 @@ router.post(
+   lotController.updateLotVisibility
+ );
+ 
++router.get(
++  '/management/lots/:lotId/close/modal',
++  requireAuth,
++  requireRole(lotManagementRoles),
++  lotController.renderLotClosureModal
++);
++
++router.post(
++  '/management/lots/:lotId/close',
++  requireAuth,
++  requireRole(lotManagementRoles),
++  lotController.updateLotClosure
++);
++
++router.get(
++  '/management/lots/:lotId/reopen/modal',
++  requireAuth,
++  requireRole(lotManagementRoles),
++  lotController.renderLotClosureModal
++);
++
++router.post(
++  '/management/lots/:lotId/reopen',
++  requireAuth,
++  requireRole(lotManagementRoles),
++  lotController.updateLotClosure
++);
++
+ router.get(
+   '/management/lots/:lotId/delete/modal',
+   requireAuth,
+diff --git a/sql/2026-06-step-6f1-closed-lot-lifecycle.sql b/sql/2026-06-step-6f1-closed-lot-lifecycle.sql
+new file mode 100644
+index 0000000000000000000000000000000000000000..f0fa13a19fa1c87a099c4986f60289a1825d8294
+--- /dev/null
++++ b/sql/2026-06-step-6f1-closed-lot-lifecycle.sql
+@@ -0,0 +1,44 @@
++/*
++  Step 6f.1 — Closed Lot Lifecycle
++
++  Open and Closed are operational lot states.
++  Hidden remains a separate administrative visibility setting.
++*/
++
++SET @database_name = DATABASE();
++
++/* Add the reversible operational closed state. */
++SET @column_exists = (
++  SELECT COUNT(*)
++  FROM information_schema.COLUMNS
++  WHERE TABLE_SCHEMA = @database_name
++    AND TABLE_NAME = 'lots'
++    AND COLUMN_NAME = 'is_closed'
++);
++SET @sql = IF(
++  @column_exists = 0,
++  'ALTER TABLE lots ADD COLUMN is_closed TINYINT(1) NOT NULL DEFAULT 0 AFTER is_active',
++  'SELECT ''lots.is_closed already exists'' AS message'
++);
++PREPARE statement FROM @sql; EXECUTE statement; DEALLOCATE PREPARE statement;
++
++UPDATE lots
++SET is_closed = 0
++WHERE is_closed IS NULL;
++
++/* Supports open-lot destination lookups without changing hidden-lot behavior. */
++SET @index_exists = (
++  SELECT COUNT(*)
++  FROM information_schema.STATISTICS
++  WHERE TABLE_SCHEMA = @database_name
++    AND TABLE_NAME = 'lots'
++    AND INDEX_NAME = 'idx_lots_operational_state'
++);
++SET @sql = IF(
++  @index_exists = 0,
++  'ALTER TABLE lots ADD INDEX idx_lots_operational_state (is_active, is_closed)',
++  'SELECT ''idx_lots_operational_state already exists'' AS message'
++);
++PREPARE statement FROM @sql; EXECUTE statement; DEALLOCATE PREPARE statement;
++
++SELECT 'Step 6f.1 closed-lot lifecycle migration complete' AS message;
+diff --git a/views/fragments/lot-closure-modal.ejs b/views/fragments/lot-closure-modal.ejs
+new file mode 100644
+index 0000000000000000000000000000000000000000..fc36434321614f17c544f2ffdeb23b10b0791541
+--- /dev/null
++++ b/views/fragments/lot-closure-modal.ejs
+@@ -0,0 +1,78 @@
++<%
++  const safeSummary = closureSummary || {};
++  const safeLot = safeSummary.lot || null;
++  const lotName = safeLot && safeLot.lot_name ? safeLot.lot_name : 'Lot';
++  const isReopen = mode === 'reopen';
++  const actionLabel = isReopen ? 'Reopen Lot' : 'Close Lot';
++  const actionPath = safeLot ? `/management/lots/${safeLot.lot_id}/${isReopen ? 'reopen' : 'close'}` : '#';
++  const unitCount = Number(safeSummary.unitCount || 0);
++  const childLotCount = Number(safeSummary.childLotCount || 0);
++%>
++
++<div class="modal-overlay" data-modal-overlay>
++  <section class="modal-panel lot-modal lot-closure-modal" role="dialog" aria-modal="true" aria-labelledby="lot-closure-modal-title">
++    <div class="modal-header">
++      <div>
++        <p class="eyebrow"><%= actionLabel %></p>
++        <h2 id="lot-closure-modal-title"><%= actionLabel %>: <%= lotName %>?</h2>
++      </div>
++      <button type="button" class="modal-close" data-modal-close aria-label="Close modal">×</button>
++    </div>
++
++    <div class="modal-body">
++      <% if (errorMessages && errorMessages.length > 0) { %>
++        <div class="message error">
++          <% errorMessages.forEach((errorMessage) => { %>
++            <p><%= errorMessage %></p>
++          <% }) %>
++        </div>
++      <% } %>
++
++      <% if (safeLot) { %>
++        <div class="lot-delete-summary lot-closure-summary">
++          <% if (isReopen) { %>
++            <p>
++              Reopening makes this lot available again as an operational destination, provided it is visible and is not a parent/container lot.
++            </p>
++          <% } else { %>
++            <p>
++              Closing keeps this lot and its current units available for review and history, but prevents it from receiving new, moved, or override-handoff units.
++            </p>
++          <% } %>
++
++          <dl>
++            <div>
++              <dt>Units currently in lot</dt>
++              <dd><%= unitCount %></dd>
++            </div>
++            <div>
++              <dt>Direct child lots</dt>
++              <dd><%= childLotCount %></dd>
++            </div>
++          </dl>
++        </div>
++
++        <% if (!isReopen && childLotCount > 0) { %>
++          <div class="message warning">
++            <p>Child lots keep their own Open or Closed status. Closing this parent/container lot does not automatically close its children.</p>
++          </div>
++        <% } %>
++
++        <% if (!isReopen && unitCount > 0) { %>
++          <div class="message info">
++            <p>Existing units remain in this lot. They are not reassigned, deleted, or changed by closing the lot.</p>
++          </div>
++        <% } %>
++
++        <% if (safeSummary.canChangeClosure) { %>
++          <form method="post" action="<%= actionPath %>" hx-post="<%= actionPath %>" hx-target="#modal-root" hx-swap="innerHTML">
++            <div class="modal-actions">
++              <button type="button" class="secondary-button" data-modal-close>Cancel</button>
++              <button type="submit" class="<%= isReopen ? 'primary-button' : 'secondary-button' %>"><%= actionLabel %></button>
++            </div>
++          </form>
++        <% } %>
++      <% } %>
++    </div>
++  </section>
++</div>
+diff --git a/views/fragments/tech-unit-form.ejs b/views/fragments/tech-unit-form.ejs
+index 5d120687d0be96e12d11e68d5ff3de7ca538237b..f9a93d2e2e786488605fbcd07900816bdd9e0bb3 100644
+--- a/views/fragments/tech-unit-form.ejs
++++ b/views/fragments/tech-unit-form.ejs
+@@ -216,7 +216,7 @@
+         <h3>Lot Assignment</h3>
+       </div>
+       <p>
+-        Assign the unit to the child lot the tech is working on. Parent/container lots are not assignable.
++        Assign the unit to the open child or standalone lot the Tech is working on. Closed and parent/container lots cannot receive units.
+         If an existing unit is confirmed during duplicate matching, changing the lot records a lot-movement history entry.
+       </p>
+     </div>
+@@ -230,17 +230,20 @@
+             <%
+               const lotProductionWeightNumber = Number(lot.resolved_default_production_weight);
+               const lotProductionWeightValue = Number.isFinite(lotProductionWeightNumber) ? lotProductionWeightNumber.toFixed(2) : '';
++              const lotOptionLabel = lot.isCurrentLotClosed
++                ? `${lot.lot_name} (Closed — current lot)`
++                : lot.lot_name;
+             %>
+             <option value="<%= lot.lot_id %>" data-production-weight="<%= lotProductionWeightValue %>" <%= selected(formData.lotId, lot.lot_id) %>>
+-              <%= lot.lot_name %>
+-              <% if (lot.lot_number) { %>
+-                - Lot #<%= lot.lot_number %>
+-              <% } %>
++              <%= lotOptionLabel %>
+             </option>
+           <% }) %>
+         </select>
+         <small class="field-hint">
+-          Lots with child lots are containers and cannot receive units directly.
++          Closed lots cannot receive new or moved units. Lots with child lots are containers and cannot receive units directly.
++          <% if (formOptions.currentLotIsClosed) { %>
++            This unit remains in its current closed lot unless you select an open destination lot.
++          <% } %>
+         </small>
+       </label>
+ 
+diff --git a/views/fragments/tech-units-table.ejs b/views/fragments/tech-units-table.ejs
+index c23a90a57063bf8b0dac153215f33babe2155b20..9bd61dae577ba645b15cfe9c4e1d2209cbc3aa4d 100644
+--- a/views/fragments/tech-units-table.ejs
++++ b/views/fragments/tech-units-table.ejs
+@@ -193,6 +193,10 @@
+                 <strong><%= unit.specSummary %></strong>
+                 <small>
+                   <span>Lot: <%= unit.lotName || '—' %></span>
++                  <% if (unit.isLotClosed) { %>
++                    <span aria-hidden="true">·</span>
++                    <span>Closed lot</span>
++                  <% } %>
+                   <span aria-hidden="true">·</span>
+                   <span>Category: <%= unit.categoryLabel || '—' %></span>
+                   <% if (unit.isArchived) { %>
+@@ -406,7 +410,12 @@
+                     <dl class="tech-detail-list">
+                       <div>
+                         <dt>Lot</dt>
+-                        <dd><%= unit.lotName || '—' %></dd>
++                        <dd>
++                          <%= unit.lotName || '—' %>
++                          <% if (unit.isLotClosed) { %>
++                            <span class="tech-chip">Closed</span>
++                          <% } %>
++                        </dd>
+                       </div>
+ 
+                       <div>
+diff --git a/views/pages/management-lot-detail.ejs b/views/pages/management-lot-detail.ejs
+index 9ce77e35b116239341811398801212596b06c493..501701cec48cf3cff9ed87801ddb1802c8bfed23 100644
+--- a/views/pages/management-lot-detail.ejs
++++ b/views/pages/management-lot-detail.ejs
+@@ -39,11 +39,17 @@
+             </div>
+ 
+             <div class="hero-badge">
+-              <span><%= Number(lot.is_active) === 1 ? 'Visible Lot' : 'Hidden Lot' %></span>
++              <span><%= Number(lot.is_closed) === 1 ? 'Closed Lot' : 'Open Lot' %></span>
+               <strong><%= enforcementSummary.policyLabel %></strong>
+             </div>
+           </section>
+ 
++          <% if (Number(lot.is_closed) === 1) { %>
++            <div class="message warning">
++              This lot is closed. Existing units remain available for review, but the lot cannot receive new, moved, or override-handoff units until reopened.
++            </div>
++          <% } %>
++
+           <% if (Number(lot.is_active) !== 1) { %>
+             <div class="message warning">
+               This lot is hidden from normal lot browsers and assignment dropdowns, but remains available here for history and review.
+@@ -53,6 +59,11 @@
+           <div class="lot-detail-action-bar">
+             <a class="secondary-button" href="/management/lots<%= Number(lot.is_active) === 1 ? '' : '?showHidden=1' %>">Back to Lots</a>
+             <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
++            <% if (Number(lot.is_closed) === 1) { %>
++              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-target="#modal-root" hx-swap="innerHTML">Reopen Lot</a>
++            <% } else { %>
++              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/close/modal" hx-get="/management/lots/<%= lot.lot_id %>/close/modal" hx-target="#modal-root" hx-swap="innerHTML">Close Lot</a>
++            <% } %>
+             <% if (Number(lot.is_active) === 1) { %>
+               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal" hx-target="#modal-root" hx-swap="innerHTML">Hide Lot</a>
+             <% } else { %>
+@@ -64,10 +75,16 @@
+           </div>
+ 
+           <section class="dashboard-grid lot-detail-summary-grid">
++            <article class="dashboard-card">
++              <p class="card-label">Lot State</p>
++              <h3><%= Number(lot.is_closed) === 1 ? 'Closed' : 'Open' %></h3>
++              <p><%= Number(lot.is_closed) === 1 ? 'Reviewable, but unavailable as a unit destination.' : 'Available as a unit destination when visible and not a parent/container lot.' %></p>
++            </article>
++
+             <article class="dashboard-card">
+               <p class="card-label">Visibility</p>
+               <h3><%= Number(lot.is_active) === 1 ? 'Visible' : 'Hidden' %></h3>
+-              <p><%= Number(lot.is_active) === 1 ? 'Available in normal lot browsers and dropdowns.' : 'Hidden from normal lot browsers and assignment dropdowns.' %></p>
++              <p><%= Number(lot.is_active) === 1 ? 'Shown in normal lot browsers.' : 'Hidden from normal lot browsers and assignment dropdowns.' %></p>
+             </article>
+ 
+             <article class="dashboard-card">
+@@ -98,7 +115,9 @@
+                 <% } %>
+               </h3>
+               <p>
+-                <% if (lot.isFull) { %>
++                <% if (Number(lot.is_closed) === 1) { %>
++                  Closed lots cannot receive more units.
++                <% } else if (lot.isFull) { %>
+                   This lot has reached its unit goal.
+                 <% } else { %>
+                   This lot can still accept more units.
+diff --git a/views/pages/management-lots.ejs b/views/pages/management-lots.ejs
+index e758fabe34992e164f7146f0bd8b75016075df92..dd3bdb2b741e836ed4ff395f30be2cfb08d7d42e 100644
+--- a/views/pages/management-lots.ejs
++++ b/views/pages/management-lots.ejs
+@@ -116,13 +116,19 @@
+             <article class="dashboard-card">
+               <p class="card-label">Visible Lots</p>
+               <h3><%= formatNumber(summary.activeLotCount) %></h3>
+-              <p>Lots shown in normal workflows and dropdowns.</p>
++              <p>Lots shown in normal workflows and review tools.</p>
++            </article>
++
++            <article class="dashboard-card">
++              <p class="card-label">Closed Lots</p>
++              <h3><%= formatNumber(summary.closedLotCount || 0) %></h3>
++              <p>Kept for review but unavailable as unit destinations.</p>
+             </article>
+ 
+             <article class="dashboard-card">
+               <p class="card-label">Hidden Lots</p>
+               <h3><%= formatNumber(summary.hiddenLotCount || 0) %></h3>
+-              <p>Old or closed lots hidden from normal selection lists.</p>
++              <p>Administratively suppressed from normal lot browsing.</p>
+             </article>
+ 
+             <article class="dashboard-card">
+@@ -162,7 +168,7 @@
+             <div class="lot-visibility-toolbar">
+               <div>
+                 <strong><%= showHidden ? 'Showing visible and hidden lots' : 'Showing visible lots only' %></strong>
+-                <span>Hidden lots are still preserved for reporting and old unit history.</span>
++                <span>Closed lots remain visible for review; hidden lots are preserved for reporting and historical reference.</span>
+               </div>
+ 
+               <% if (showHidden) { %>
+@@ -208,7 +214,7 @@
+                       const hierarchyLevel = Math.min(Number(lot.hierarchyLevel || 0), 6);
+                     %>
+ 
+-                    <tr class="<%= ['lot-clickable-row', hierarchyLevel > 0 ? 'lot-child-row lot-tree-child-row' : 'lot-parent-row lot-tree-root-row', `lot-level-${Math.min(hierarchyLevel, 6)}`, Number(lot.is_active) === 1 ? '' : 'lot-hidden-row'].filter(Boolean).join(' ') %>" data-lot-id="<%= lot.lot_id %>" data-parent-lot-id="<%= parentLot ? parentLot.lot_id : '' %>" data-lot-level="<%= hierarchyLevel %>" data-view-href="/management/lots/<%= lot.lot_id %>" tabindex="0" role="link" aria-label="View <%= lot.lot_name %>">
++                    <tr class="<%= ['lot-clickable-row', hierarchyLevel > 0 ? 'lot-child-row lot-tree-child-row' : 'lot-parent-row lot-tree-root-row', `lot-level-${Math.min(hierarchyLevel, 6)}`, Number(lot.is_active) === 1 ? '' : 'lot-hidden-row', Number(lot.is_closed) === 1 ? 'lot-closed-row' : ''].filter(Boolean).join(' ') %>" data-lot-id="<%= lot.lot_id %>" data-parent-lot-id="<%= parentLot ? parentLot.lot_id : '' %>" data-lot-level="<%= hierarchyLevel %>" data-view-href="/management/lots/<%= lot.lot_id %>" tabindex="0" role="link" aria-label="View <%= lot.lot_name %>">
+                       <td class="lot-hierarchy-cell" style="--lot-level: <%= hierarchyLevel %>;">
+                         <div class="lot-hierarchy-wrap">
+                           <% if (childLots.length > 0) { %>
+@@ -290,9 +296,13 @@
+                       <td><%= formatDateTime(lot.deadline) %></td>
+ 
+                       <td>
+-                        <% if (Number(lot.is_active) === 1) { %>
+-                          <span class="pill good">Visible</span>
++                        <% if (Number(lot.is_closed) === 1) { %>
++                          <span class="pill bad">Closed</span>
+                         <% } else { %>
++                          <span class="pill good">Open</span>
++                        <% } %>
++                        <% if (Number(lot.is_active) !== 1) { %>
++                          <br />
+                           <span class="pill bad">Hidden</span>
+                         <% } %>
+                       </td>
+@@ -302,6 +312,11 @@
+                       <td>
+                         <div class="lot-row-actions">
+                           <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
++                          <% if (Number(lot.is_closed) === 1) { %>
++                            <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-target="#modal-root" hx-swap="innerHTML">Reopen</a>
++                          <% } else { %>
++                            <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/close/modal" hx-get="/management/lots/<%= lot.lot_id %>/close/modal" hx-target="#modal-root" hx-swap="innerHTML">Close</a>
++                          <% } %>
+                           <% if (Number(lot.is_active) === 1) { %>
+                             <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal" hx-target="#modal-root" hx-swap="innerHTML">Hide</a>
+                           <% } else { %>
+diff --git a/views/pages/tech-units.ejs b/views/pages/tech-units.ejs
+index f1345515f42c920b778ed37964e169176c74acbd..f02bc590090aab80a42dc3e6f09a014161319489 100644
+--- a/views/pages/tech-units.ejs
++++ b/views/pages/tech-units.ejs
+@@ -20,7 +20,7 @@
+               <p class="eyebrow">Tech Unit Registry</p>
+               <h2>Tech Units</h2>
+               <p>
+-                Create, edit, search, and review unit records from the shared Unit Browser. Units can only be assigned to lots that do not have child lots.
++                Create, edit, search, and review unit records from the shared Unit Browser. Units can only be assigned to open lots that do not have child lots.
+               </p>
+             </div>
+ 
+@@ -83,12 +83,12 @@
+                     <label class="form-field">
+                       <span>Assignable Lot</span>
+                       <select name="lotId">
+-                        <option value="">All assignable lots</option>
++                        <option value="">All visible lots</option>
+                         <% result.lots.forEach((lot) => { %>
+                           <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>><%= lot.lot_name %></option>
+                         <% }) %>
+                       </select>
+-                      <small class="field-hint">Lots with child lots are containers and are not assignable.</small>
++                      <small class="field-hint">Closed lots remain available for review but cannot receive new or moved units. Lots with child lots are containers and are not assignable.</small>
+                     </label>
+ 
+                     <label class="form-field">

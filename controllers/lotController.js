@@ -491,6 +491,14 @@ function getLotSuccessMessage(query) {
     return 'Lot unhidden successfully.';
   }
 
+  if (query.closed === '1') {
+    return 'Lot closed successfully.';
+  }
+
+  if (query.reopened === '1') {
+    return 'Lot reopened successfully.';
+  }
+
   return null;
 }
 
@@ -601,7 +609,11 @@ async function renderLotDetailPage(req, res, next) {
         ? 'Requirement added successfully.'
         : (req.query.updated === '1'
           ? 'Lot updated successfully.'
-          : (req.query.requirementUpdated === '1' ? 'Requirement updated successfully.' : null))
+          : (req.query.requirementUpdated === '1'
+            ? 'Requirement updated successfully.'
+            : (req.query.closed === '1'
+              ? 'Lot closed successfully.'
+              : (req.query.reopened === '1' ? 'Lot reopened successfully.' : null))))
     });
   } catch (error) {
     next(error);
@@ -838,6 +850,91 @@ async function updateLotVisibility(req, res, next) {
   }
 }
 
+async function renderLotClosureModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const mode = req.path.includes('/reopen') ? 'reopen' : 'close';
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return res.status(404).render('fragments/lot-closure-modal', {
+        mode,
+        closureSummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const closureSummary = await lotModel.getLotClosureSummary(lotId);
+
+    if (!closureSummary) {
+      return res.status(404).render('fragments/lot-closure-modal', {
+        mode,
+        closureSummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    if (!closureSummary.canChangeClosure) {
+      return res.status(400).render('fragments/lot-closure-modal', {
+        mode,
+        closureSummary,
+        errorMessages: ['Lot closure is not ready yet. Run the Step 6f.1 closed-lot migration first.']
+      });
+    }
+
+    return res.render('fragments/lot-closure-modal', {
+      mode,
+      closureSummary,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateLotClosure(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const shouldReopen = req.path.includes('/reopen');
+    const mode = shouldReopen ? 'reopen' : 'close';
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return res.status(404).render('fragments/lot-closure-modal', {
+        mode,
+        closureSummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const closureSummary = await lotModel.getLotClosureSummary(lotId);
+
+    if (!closureSummary) {
+      return res.status(404).render('fragments/lot-closure-modal', {
+        mode,
+        closureSummary: null,
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    if (!closureSummary.canChangeClosure) {
+      return res.status(400).render('fragments/lot-closure-modal', {
+        mode,
+        closureSummary,
+        errorMessages: ['Lot closure is not ready yet. Run the Step 6f.1 closed-lot migration first.']
+      });
+    }
+
+    await lotModel.setLotClosed(lotId, !shouldReopen, req.currentUser.user_id);
+
+    const redirectUrl = shouldReopen
+      ? '/management/lots?reopened=1'
+      : '/management/lots?closed=1';
+
+    return sendHtmxRedirect(req, res, addCacheBuster(redirectUrl));
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function renderDeleteLotModal(req, res, next) {
   try {
     const lotId = Number(req.params.lotId);
@@ -1042,6 +1139,8 @@ module.exports = {
   updateLotModal,
   renderLotVisibilityModal,
   updateLotVisibility,
+  renderLotClosureModal,
+  updateLotClosure,
   renderDeleteLotModal,
   deleteLot,
   renderLotDetailPage,

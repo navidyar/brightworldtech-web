@@ -323,6 +323,27 @@ function buildCompletedUnitWindowWhere(window, gradeAlias = 'uga') {
   };
 }
 
+function buildWorkCompletionWindowWhere(window, alias = 'uwc') {
+  const whereParts = [];
+  const params = [];
+
+  if (window && window.startSql) {
+    whereParts.push(`${alias}.completed_at >= ?`);
+    params.push(window.startSql);
+  }
+
+  if (window && window.endSql) {
+    whereParts.push(`${alias}.completed_at < ?`);
+    params.push(window.endSql);
+  }
+
+  return {
+    whereSql: whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '',
+    andSql: whereParts.length > 0 ? `AND ${whereParts.join(' AND ')}` : '',
+    params
+  };
+}
+
 function buildDashboardReportingWindows(filters = {}) {
   const safeFilters = normalizeDashboardFilters(filters);
   const todayDate = getCentralDateKey();
@@ -389,11 +410,27 @@ function buildDashboardReportingWindows(filters = {}) {
 }
 
 async function getCompletionSummaryForWindow(window) {
-  if (!await tableExists('unit_grade_assessments') || !await tableExists('units')) {
+  if (await tableExists('unit_work_completions')) {
+    const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
+    const [rows] = await pool.query(
+      `
+        SELECT
+          COUNT(*) AS completed_count,
+          COALESCE(ROUND(SUM(uwc.production_weight_value), 2), 0) AS weighted_count
+        FROM unit_work_completions uwc
+        ${completedFilter.whereSql}
+      `,
+      completedFilter.params
+    );
+
     return {
-      completed: 0,
-      weighted: 0
+      completed: Number(rows[0]?.completed_count || 0),
+      weighted: Number(rows[0]?.weighted_count || 0)
     };
+  }
+
+  if (!await tableExists('unit_grade_assessments') || !await tableExists('units')) {
+    return { completed: 0, weighted: 0 };
   }
 
   const weightExpression = getProductivityWeightSqlExpression('category');
@@ -420,72 +457,62 @@ async function getCompletionSummaryForWindow(window) {
 }
 
 async function getCompletionCategoryBreakdown(window) {
-  if (!await tableExists('unit_grade_assessments') || !await tableExists('units')) {
-    return [];
+  if (await tableExists('unit_work_completions') && await tableExists('units')) {
+    const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
+    const [rows] = await pool.query(
+      `
+        SELECT
+          category.config_value_id AS category_id,
+          COALESCE(category.label, category.code, 'Uncategorized') AS category_label,
+          COALESCE(category.code, '') AS category_code,
+          COUNT(*) AS completed_count,
+          COALESCE(ROUND(SUM(uwc.production_weight_value), 2), 0) AS weighted_count
+        FROM unit_work_completions uwc
+        INNER JOIN units u
+          ON u.unit_id = uwc.unit_id
+        LEFT JOIN config_values category
+          ON category.config_value_id = u.unit_category_config_value_id
+        ${completedFilter.whereSql}
+        GROUP BY category.config_value_id, category.label, category.code
+        ORDER BY completed_count DESC, category_label
+        LIMIT 12
+      `,
+      completedFilter.params
+    );
+
+    return rows.map((row) => ({
+      id: row.category_id ? Number(row.category_id) : null,
+      label: row.category_label || 'Uncategorized',
+      code: row.category_code || '',
+      completed: Number(row.completed_count || 0),
+      weighted: Number(row.weighted_count || 0),
+      defaultWeight: getDefaultProductivityWeight(row.category_code, row.category_label)
+    }));
   }
 
-  const weightExpression = getProductivityWeightSqlExpression('category');
-  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
-  const [rows] = await pool.query(
-    `
-      SELECT
-        category.config_value_id AS category_id,
-        COALESCE(category.label, category.code, 'Uncategorized') AS category_label,
-        COALESCE(category.code, '') AS category_code,
-        COUNT(DISTINCT u.unit_id) AS completed_count,
-        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
-      FROM unit_grade_assessments uga
-      INNER JOIN units u
-        ON u.unit_id = uga.unit_id
-      LEFT JOIN config_values category
-        ON category.config_value_id = u.unit_category_config_value_id
-      ${completedFilter.whereSql}
-      GROUP BY category.config_value_id, category.label, category.code
-      ORDER BY completed_count DESC, category_label
-      LIMIT 12
-    `,
-    completedFilter.params
-  );
-
-  return rows.map((row) => ({
-    id: row.category_id ? Number(row.category_id) : null,
-    label: row.category_label || 'Uncategorized',
-    code: row.category_code || '',
-    completed: Number(row.completed_count || 0),
-    weighted: Number(row.weighted_count || 0),
-    defaultWeight: getDefaultProductivityWeight(row.category_code, row.category_label)
-  }));
+  return [];
 }
 
 async function getCompletionLotBreakdown(window) {
-  if (!await tableExists('unit_grade_assessments') || !await tableExists('units') || !await tableExists('lots')) {
+  if (!await tableExists('unit_work_completions') || !await tableExists('lots')) {
     return [];
   }
 
   const lotColumns = await getColumnSet('lots');
   const lotNameExpression = selectExpression(
-    'l',
-    lotColumns,
-    ['name', 'lot_name', 'title', 'lot_number'],
-    'lot_name',
-    "CONCAT('Lot #', l.lot_id)"
+    'l', lotColumns, ['name', 'lot_name', 'title', 'lot_number'], 'lot_name', "CONCAT('Lot #', l.lot_id)"
   );
-  const weightExpression = getProductivityWeightSqlExpression('category');
-  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
+  const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
   const [rows] = await pool.query(
     `
       SELECT
         l.lot_id,
         ${lotNameExpression},
-        COUNT(DISTINCT u.unit_id) AS completed_count,
-        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
-      FROM unit_grade_assessments uga
-      INNER JOIN units u
-        ON u.unit_id = uga.unit_id
+        COUNT(*) AS completed_count,
+        COALESCE(ROUND(SUM(uwc.production_weight_value), 2), 0) AS weighted_count
+      FROM unit_work_completions uwc
       LEFT JOIN lots l
-        ON l.lot_id = u.lot_id
-      LEFT JOIN config_values category
-        ON category.config_value_id = u.unit_category_config_value_id
+        ON l.lot_id = uwc.lot_id
       ${completedFilter.whereSql}
       GROUP BY l.lot_id, lot_name
       ORDER BY completed_count DESC, lot_name
@@ -546,55 +573,42 @@ function getCurrentUserIdFromContext(context = {}) {
 }
 
 async function getTechDashboardUserOptions() {
-  if (!await tableExists('users') || !await tableExists('units') || !await tableExists('unit_grade_assessments')) {
-    return [];
+  if (await tableExists('unit_work_completions')) {
+    const [rows] = await pool.query(
+      `
+        SELECT
+          users.user_id,
+          users.first_name,
+          users.last_name,
+          users.email,
+          COUNT(*) AS completed_count
+        FROM unit_work_completions uwc
+        INNER JOIN users
+          ON users.user_id = uwc.completed_by_user_id
+        WHERE users.is_active = 1
+        GROUP BY users.user_id, users.first_name, users.last_name, users.email
+        ORDER BY users.first_name, users.last_name, users.email
+      `
+    );
+
+    return rows.map((row) => ({
+      userId: Number(row.user_id),
+      name: [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || row.email || `User #${row.user_id}`,
+      completedCount: Number(row.completed_count || 0)
+    }));
   }
 
-  const [rows] = await pool.query(
-    `
-      SELECT
-        production_users.user_id,
-        users.first_name,
-        users.last_name,
-        users.email,
-        COUNT(DISTINCT production_users.unit_id) AS completed_count
-      FROM (
-        SELECT
-          COALESCE(uga.assessed_by_user_id, u.created_by_user_id) AS user_id,
-          u.unit_id
-        FROM unit_grade_assessments uga
-        INNER JOIN units u
-          ON u.unit_id = uga.unit_id
-        WHERE uga.is_current = 1
-          AND COALESCE(uga.assessed_by_user_id, u.created_by_user_id) IS NOT NULL
-      ) production_users
-      INNER JOIN users
-        ON users.user_id = production_users.user_id
-      WHERE users.is_active = 1
-      GROUP BY users.user_id, users.first_name, users.last_name, users.email
-      ORDER BY users.first_name, users.last_name, users.email
-    `
-  );
-
-  return rows.map((row) => ({
-    userId: Number(row.user_id),
-    name: [row.first_name, row.last_name].filter(Boolean).join(' ').trim() || row.email || `User #${row.user_id}`,
-    completedCount: Number(row.completed_count || 0)
-  }));
+  return [];
 }
 
 async function getProductivitySummaryForUser(window, userId = null) {
-  if (!await tableExists('unit_grade_assessments') || !await tableExists('units')) {
-    return {
-      completed: 0,
-      weighted: 0
-    };
+  if (!await tableExists('unit_work_completions')) {
+    return { completed: 0, weighted: 0 };
   }
 
-  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
-  const weightExpression = getProductivityWeightSqlExpression('category');
+  const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
   const params = [...completedFilter.params];
-  const userFilter = userId ? 'AND COALESCE(uga.assessed_by_user_id, u.created_by_user_id) = ?' : '';
+  const userFilter = userId ? `${completedFilter.whereSql ? 'AND' : 'WHERE'} uwc.completed_by_user_id = ?` : '';
 
   if (userId) {
     params.push(userId);
@@ -603,15 +617,11 @@ async function getProductivitySummaryForUser(window, userId = null) {
   const [rows] = await pool.query(
     `
       SELECT
-        COUNT(DISTINCT u.unit_id) AS completed_count,
-        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
-      FROM unit_grade_assessments uga
-      INNER JOIN units u
-        ON u.unit_id = uga.unit_id
-      LEFT JOIN config_values category
-        ON category.config_value_id = u.unit_category_config_value_id
+        COUNT(*) AS completed_count,
+        COALESCE(ROUND(SUM(uwc.production_weight_value), 2), 0) AS weighted_count
+      FROM unit_work_completions uwc
       ${completedFilter.whereSql}
-        ${userFilter}
+      ${userFilter}
     `,
     params
   );
@@ -623,14 +633,13 @@ async function getProductivitySummaryForUser(window, userId = null) {
 }
 
 async function getProductivityCategoryBreakdownForUser(window, userId = null) {
-  if (!await tableExists('unit_grade_assessments') || !await tableExists('units')) {
+  if (!await tableExists('unit_work_completions') || !await tableExists('units')) {
     return [];
   }
 
-  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
-  const weightExpression = getProductivityWeightSqlExpression('category');
+  const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
   const params = [...completedFilter.params];
-  const userFilter = userId ? 'AND COALESCE(uga.assessed_by_user_id, u.created_by_user_id) = ?' : '';
+  const userFilter = userId ? `${completedFilter.whereSql ? 'AND' : 'WHERE'} uwc.completed_by_user_id = ?` : '';
 
   if (userId) {
     params.push(userId);
@@ -642,15 +651,15 @@ async function getProductivityCategoryBreakdownForUser(window, userId = null) {
         category.config_value_id AS category_id,
         COALESCE(category.label, category.code, 'Uncategorized') AS category_label,
         COALESCE(category.code, '') AS category_code,
-        COUNT(DISTINCT u.unit_id) AS completed_count,
-        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
-      FROM unit_grade_assessments uga
+        COUNT(*) AS completed_count,
+        COALESCE(ROUND(SUM(uwc.production_weight_value), 2), 0) AS weighted_count
+      FROM unit_work_completions uwc
       INNER JOIN units u
-        ON u.unit_id = uga.unit_id
+        ON u.unit_id = uwc.unit_id
       LEFT JOIN config_values category
         ON category.config_value_id = u.unit_category_config_value_id
       ${completedFilter.whereSql}
-        ${userFilter}
+      ${userFilter}
       GROUP BY category.config_value_id, category.label, category.code
       ORDER BY completed_count DESC, category_label
       LIMIT 12
@@ -668,22 +677,17 @@ async function getProductivityCategoryBreakdownForUser(window, userId = null) {
 }
 
 async function getProductivityLotBreakdownForUser(window, userId = null) {
-  if (!await tableExists('unit_grade_assessments') || !await tableExists('units') || !await tableExists('lots')) {
+  if (!await tableExists('unit_work_completions') || !await tableExists('lots')) {
     return [];
   }
 
   const lotColumns = await getColumnSet('lots');
   const lotNameExpression = selectExpression(
-    'l',
-    lotColumns,
-    ['name', 'lot_name', 'title', 'lot_number'],
-    'lot_name',
-    "CONCAT('Lot #', l.lot_id)"
+    'l', lotColumns, ['name', 'lot_name', 'title', 'lot_number'], 'lot_name', "CONCAT('Lot #', l.lot_id)"
   );
-  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
-  const weightExpression = getProductivityWeightSqlExpression('category');
+  const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
   const params = [...completedFilter.params];
-  const userFilter = userId ? 'AND COALESCE(uga.assessed_by_user_id, u.created_by_user_id) = ?' : '';
+  const userFilter = userId ? `${completedFilter.whereSql ? 'AND' : 'WHERE'} uwc.completed_by_user_id = ?` : '';
 
   if (userId) {
     params.push(userId);
@@ -694,17 +698,13 @@ async function getProductivityLotBreakdownForUser(window, userId = null) {
       SELECT
         l.lot_id,
         ${lotNameExpression},
-        COUNT(DISTINCT u.unit_id) AS completed_count,
-        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
-      FROM unit_grade_assessments uga
-      INNER JOIN units u
-        ON u.unit_id = uga.unit_id
+        COUNT(*) AS completed_count,
+        COALESCE(ROUND(SUM(uwc.production_weight_value), 2), 0) AS weighted_count
+      FROM unit_work_completions uwc
       LEFT JOIN lots l
-        ON l.lot_id = u.lot_id
-      LEFT JOIN config_values category
-        ON category.config_value_id = u.unit_category_config_value_id
+        ON l.lot_id = uwc.lot_id
       ${completedFilter.whereSql}
-        ${userFilter}
+      ${userFilter}
       GROUP BY l.lot_id, lot_name
       ORDER BY completed_count DESC, lot_name
       LIMIT 12
@@ -721,40 +721,27 @@ async function getProductivityLotBreakdownForUser(window, userId = null) {
 }
 
 async function getAllTechSummaryRows(window, techUsers) {
-  if (!await tableExists('unit_grade_assessments') || !await tableExists('units') || techUsers.length === 0) {
-    return techUsers.map((tech) => ({
-      ...tech,
-      completed: 0,
-      weighted: 0
-    }));
+  if (!await tableExists('unit_work_completions') || techUsers.length === 0) {
+    return techUsers.map((tech) => ({ ...tech, completed: 0, weighted: 0 }));
   }
 
-  const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
-  const weightExpression = getProductivityWeightSqlExpression('category');
+  const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
   const [rows] = await pool.query(
     `
       SELECT
-        COALESCE(uga.assessed_by_user_id, u.created_by_user_id) AS tech_user_id,
-        COUNT(DISTINCT u.unit_id) AS completed_count,
-        COALESCE(ROUND(SUM(${weightExpression}), 2), 0) AS weighted_count
-      FROM unit_grade_assessments uga
-      INNER JOIN units u
-        ON u.unit_id = uga.unit_id
-      LEFT JOIN config_values category
-        ON category.config_value_id = u.unit_category_config_value_id
+        uwc.completed_by_user_id AS tech_user_id,
+        COUNT(*) AS completed_count,
+        COALESCE(ROUND(SUM(uwc.production_weight_value), 2), 0) AS weighted_count
+      FROM unit_work_completions uwc
       ${completedFilter.whereSql}
-        AND COALESCE(uga.assessed_by_user_id, u.created_by_user_id) IS NOT NULL
-      GROUP BY tech_user_id
+      GROUP BY uwc.completed_by_user_id
     `,
     completedFilter.params
   );
 
   const metricMap = new Map(rows.map((row) => [
     Number(row.tech_user_id),
-    {
-      completed: Number(row.completed_count || 0),
-      weighted: Number(row.weighted_count || 0)
-    }
+    { completed: Number(row.completed_count || 0), weighted: Number(row.weighted_count || 0) }
   ]));
 
   return techUsers.map((tech) => ({

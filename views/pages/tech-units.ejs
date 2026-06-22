@@ -20,7 +20,7 @@
               <p class="eyebrow">Tech Unit Registry</p>
               <h2>Tech Units</h2>
               <p>
-                Create, edit, search, and review unit records from the shared Unit Browser. Units can only be assigned to lots that do not have child lots.
+                Create, edit, search, and review unit records from the shared Unit Browser. Units can only be assigned to open lots that do not have child lots.
               </p>
             </div>
 
@@ -54,6 +54,8 @@
                 const unitCategoryOptions = Array.isArray(result.unitCategories) ? result.unitCategories : [];
                 const overallGradeOptions = Array.isArray(result.overallGradeOptions) ? result.overallGradeOptions : [];
                 const techUserOptions = Array.isArray(result.techUserOptions) ? result.techUserOptions : [];
+                const pageRoleCodes = Array.isArray(currentRoles) ? currentRoles : [];
+                const isRegularTechBrowserUser = pageRoleCodes.includes('tech') && !pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
                 const isLast24HourDrilldown = filters.createdWindow === '24h';
               %>
               <form class="tech-filter-form tech-filter-panel" method="get" action="/tech/units">
@@ -81,12 +83,12 @@
                     <label class="form-field">
                       <span>Assignable Lot</span>
                       <select name="lotId">
-                        <option value="">All assignable lots</option>
+                        <option value="">All visible lots</option>
                         <% result.lots.forEach((lot) => { %>
                           <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>><%= lot.lot_name %></option>
                         <% }) %>
                       </select>
-                      <small class="field-hint">Lots with child lots are containers and are not assignable.</small>
+                      <small class="field-hint">Closed lots remain available for review but cannot receive new or moved units. Lots with child lots are containers and are not assignable.</small>
                     </label>
 
                     <label class="form-field">
@@ -111,15 +113,17 @@
                       </select>
                     </label>
 
-                    <label class="form-field">
-                      <span>Tech User</span>
-                      <select name="techUserId">
-                        <option value="">All Tech Users</option>
-                        <% techUserOptions.forEach((techUser) => { %>
-                          <option value="<%= techUser.id %>" <%= String(filters.techUserId) === String(techUser.id) ? 'selected' : '' %>><%= techUser.label %> (<%= formatNumber(techUser.count) %>)</option>
-                        <% }) %>
-                      </select>
-                    </label>
+                    <% if (!isRegularTechBrowserUser) { %>
+                      <label class="form-field">
+                        <span>Tech User</span>
+                        <select name="techUserId">
+                          <option value="">All Tech Users</option>
+                          <% techUserOptions.forEach((techUser) => { %>
+                            <option value="<%= techUser.id %>" <%= String(filters.techUserId) === String(techUser.id) ? 'selected' : '' %>><%= techUser.label %> (<%= formatNumber(techUser.count) %>)</option>
+                          <% }) %>
+                        </select>
+                      </label>
+                    <% } %>
 
                     <label class="form-field">
                       <span>Created From</span>
@@ -146,7 +150,7 @@
                 </div>
               </form>
 
-              <div class="tech-table-shell" id="tech-units-list" hx-get="<%= tableUrl %>" hx-trigger="load, unit-saved from:body" hx-swap="innerHTML">
+              <div class="tech-table-shell" id="tech-units-list" hx-get="<%= tableUrl %>" hx-trigger="load, unit-saved from:body, unit-work-completed from:body, unit-permanently-deleted from:body" hx-swap="innerHTML">
                 <div class="tech-loading-card">
                   Loading units...
                 </div>

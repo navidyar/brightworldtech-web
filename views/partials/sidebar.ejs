@@ -106,6 +106,12 @@
             <span class="submenu-dot green"></span>
             <span>Units</span>
           </a>
+          <% if (currentRoles.includes('tech_lead') && !currentRoles.some((roleCode) => ['admin', 'management'].includes(roleCode))) { %>
+            <a href="/management/overrides" class="sidebar-sublink <%= currentNav === 'management-overrides' ? 'active' : '' %>">
+              <span class="submenu-dot red"></span>
+              <span>Overrides</span>
+            </a>
+          <% } %>
         </div>
       </details>
     <% } %>

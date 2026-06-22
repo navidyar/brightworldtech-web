@@ -10,6 +10,8 @@ const managementRoles = ['admin', 'management'];
 const techRoles = ['admin', 'management', 'tech_lead', 'tech'];
 const techDeleteRoles = ['admin', 'management', 'tech_lead'];
 const outcomeApprovalRoles = ['admin', 'management', 'tech_lead'];
+const techHistoryRoles = ['admin', 'management', 'tech_lead'];
+const overrideReviewRoles = ['admin', 'management', 'tech_lead'];
 
 /*
   Management routes
@@ -117,28 +119,28 @@ router.post(
 router.get(
   '/management/overrides',
   requireAuth,
-  requireRole(managementRoles),
+  requireRole(overrideReviewRoles),
   overrideController.renderOverrideRequestsPage
 );
 
 router.get(
   '/management/overrides/table',
   requireAuth,
-  requireRole(managementRoles),
+  requireRole(overrideReviewRoles),
   overrideController.renderOverrideRequestsTable
 );
 
 router.post(
   '/management/overrides/:overrideRequestId/approve',
   requireAuth,
-  requireRole(managementRoles),
+  requireRole(overrideReviewRoles),
   overrideController.approveOverrideRequest
 );
 
 router.post(
   '/management/overrides/:overrideRequestId/deny',
   requireAuth,
-  requireRole(managementRoles),
+  requireRole(overrideReviewRoles),
   overrideController.denyOverrideRequest
 );
 
@@ -217,8 +219,15 @@ router.post(
 router.get(
   '/tech/units/:unitId/history',
   requireAuth,
-  requireRole(techRoles),
+  requireRole(techHistoryRoles),
   techController.renderTechUnitHistoryPanel
+);
+
+router.get(
+  '/tech/units/:unitId/my-weight-earned',
+  requireAuth,
+  requireRole(techRoles),
+  techController.renderMyUnitWeightPanel
 );
 
 router.get(
@@ -248,6 +257,34 @@ router.post(
   requireAuth,
   requireRole(outcomeApprovalRoles),
   techController.approveOutcomeRequest
+);
+
+router.get(
+  '/tech/units/:unitId/complete-work/modal',
+  requireAuth,
+  requireRole(techRoles),
+  techController.renderCompleteTechUnitWorkModal
+);
+
+router.post(
+  '/tech/units/:unitId/complete-work',
+  requireAuth,
+  requireRole(techRoles),
+  techController.completeTechUnitWork
+);
+
+router.get(
+  '/tech/units/:unitId/permanent-delete/modal',
+  requireAuth,
+  requireRole(techDeleteRoles),
+  techController.renderPermanentDeleteTechUnitModal
+);
+
+router.post(
+  '/tech/units/:unitId/permanent-delete',
+  requireAuth,
+  requireRole(techDeleteRoles),
+  techController.permanentlyDeleteTechUnit
 );
 
 router.get(

@@ -1,0 +1,89 @@
+diff -ruN a/README.md b/README.md
+--- a/README.md	2026-06-21 06:26:21.755585171 +0000
++++ b/README.md	2026-06-21 06:26:46.017101831 +0000
+@@ -134,3 +134,12 @@
+ ```text
+ Step 6f.0.4 completion safeguards migration complete
+ ```
++
++## Step 6f.0.4a — Current Lot Weight / Earned Weight Display Hotfix
++
++- Separates the configured **Current Lot Weight** from any unit-specific override.
++- Shows the configured lot weight under **Unit / Weight**.
++- Shows the unit override as its own value when present.
++- Leaves **Latest Weight Earned** tied only to the recorded completion-credit snapshot.
++- Prevents the current effective unit weight from being mistaken for earned credit.
++
+diff -ruN a/models/techUnitModel.js b/models/techUnitModel.js
+--- a/models/techUnitModel.js	2026-06-21 06:26:21.758339091 +0000
++++ b/models/techUnitModel.js	2026-06-21 06:26:46.016084344 +0000
+@@ -1385,6 +1385,12 @@
+       unitCategory,
+       productionWeightOptions
+     });
++    const currentLotWeight = lot && lot.resolved_default_production_weight !== null && lot.resolved_default_production_weight !== undefined
++      ? productionWeightModel.normalizeWeightValue(lot.resolved_default_production_weight)
++      : null;
++    const unitProductionWeightOverride = row.production_weight_override !== null && row.production_weight_override !== undefined
++      ? productionWeightModel.normalizeWeightValue(row.production_weight_override)
++      : null;
+ 
+     const currentAssignmentUserId = state.assignmentCapabilities.hasAssignedToUserId && row.assigned_to_user_id
+       ? Number(row.assigned_to_user_id)
+@@ -1423,6 +1429,11 @@
+       productionWeightPriorityPath: productionWeightDetails.priorityPath,
+       productionWeightHasOverride: productionWeightDetails.hasOverride,
+       productionWeightNotes: productionWeightDetails.notes,
++      currentLotWeight,
++      formattedCurrentLotWeight: productionWeightModel.formatWeightValue(currentLotWeight),
++      unitProductionWeightOverride,
++      formattedUnitProductionWeightOverride: productionWeightModel.formatWeightValue(unitProductionWeightOverride),
++      hasUnitProductionWeightOverride: unitProductionWeightOverride !== null,
+       manufacturerLabel: manufacturerLabel || '—',
+       modelLabel: modelLabel || '—',
+       processorLabel: processorLabel || '—',
+diff -ruN a/views/fragments/tech-units-table.ejs b/views/fragments/tech-units-table.ejs
+--- a/views/fragments/tech-units-table.ejs	2026-06-21 06:26:21.763652497 +0000
++++ b/views/fragments/tech-units-table.ejs	2026-06-21 06:26:46.016719076 +0000
+@@ -197,9 +197,9 @@
+                   <% } %>
+                 </small>
+                 <span class="tech-unit-summary-weight-strip">
+-                  <span class="tech-unit-summary-weight-value">Current lot weight <strong><%= unit.formattedProductionWeight || '—' %></strong></span>
+-                  <% if (unit.productionWeightSourceCode === 'unit_override') { %>
+-                    <span class="tech-unit-summary-weight-source">Unit override</span>
++                  <span class="tech-unit-summary-weight-value">Current lot weight <strong><%= unit.formattedCurrentLotWeight || '—' %></strong></span>
++                  <% if (unit.hasUnitProductionWeightOverride) { %>
++                    <span class="tech-unit-summary-weight-source">Unit override <strong><%= unit.formattedUnitProductionWeightOverride || '—' %></strong></span>
+                   <% } %>
+                 </span>
+               </span>
+@@ -403,14 +403,24 @@
+                         <dd>
+                           <div class="tech-production-weight-detail">
+                             <div class="tech-production-weight-detail-main">
+-                              <strong><%= unit.formattedProductionWeight || '—' %></strong>
+-                              <% if (unit.productionWeightSourceCode === 'unit_override') { %>
+-                                <span class="tech-chip tech-production-weight-source-chip">Unit override</span>
+-                              <% } %>
++                              <strong><%= unit.formattedCurrentLotWeight || '—' %></strong>
+                             </div>
+                           </div>
+                         </dd>
+                       </div>
++
++                      <% if (unit.hasUnitProductionWeightOverride) { %>
++                        <div>
++                          <dt>Unit Override</dt>
++                          <dd>
++                            <div class="tech-production-weight-detail">
++                              <div class="tech-production-weight-detail-main">
++                                <strong><%= unit.formattedUnitProductionWeightOverride || '—' %></strong>
++                              </div>
++                            </div>
++                          </dd>
++                        </div>
++                      <% } %>
+                     </dl>
+ 
+                     <p class="tech-detail-subheading">Identifiers</p>

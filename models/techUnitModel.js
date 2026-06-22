@@ -114,7 +114,11 @@ async function getTableColumns(tableName) {
     'unit_identifiers',
     'unit_memory_modules',
     'unit_storage_devices',
-    'lots'
+    'lots',
+    'unit_work_completions',
+    'unit_assignment_history',
+    'unit_work_completions',
+    'unit_assignment_history'
   ];
 
   if (!allowedTables.includes(tableName)) {
@@ -393,6 +397,16 @@ async function getUnitTableState() {
       hasIsArchived: hasColumn(columns, 'is_archived'),
       hasArchivedAt: hasColumn(columns, 'archived_at'),
       hasArchivedByUserId: hasColumn(columns, 'archived_by_user_id')
+    },
+    assignmentCapabilities: {
+      hasAssignedToUserId: hasColumn(columns, 'assigned_to_user_id'),
+      hasAssignedAt: hasColumn(columns, 'assigned_at'),
+      hasAssignmentUpdatedByUserId: hasColumn(columns, 'assignment_updated_by_user_id')
+    },
+    assignmentCapabilities: {
+      hasAssignedToUserId: hasColumn(columns, 'assigned_to_user_id'),
+      hasAssignedAt: hasColumn(columns, 'assigned_at'),
+      hasAssignmentUpdatedByUserId: hasColumn(columns, 'assignment_updated_by_user_id')
     }
   };
 }
@@ -409,12 +423,30 @@ function getParentLotIdsWithChildren(lots) {
   return parentLotIds;
 }
 
-function isAssignableLot(lot, parentLotIdsWithChildren) {
+function isOperationalLot(lot) {
+  return Boolean(lot)
+    && Number(lot.is_active) === 1
+    && Number(lot.is_closed || 0) !== 1;
+}
+
+function isBrowsableLot(lot, parentLotIdsWithChildren) {
   if (!lot || Number(lot.is_active) !== 1) {
     return false;
   }
 
   return !parentLotIdsWithChildren.has(String(lot.lot_id));
+}
+
+function isAssignableLot(lot, parentLotIdsWithChildren) {
+  return isOperationalLot(lot)
+    && !parentLotIdsWithChildren.has(String(lot.lot_id));
+}
+
+function getBrowsableLots(lots) {
+  const visibleLots = lots.filter((lot) => Number(lot.is_active) === 1);
+  const parentLotIdsWithChildren = getParentLotIdsWithChildren(visibleLots);
+
+  return visibleLots.filter((lot) => isBrowsableLot(lot, parentLotIdsWithChildren));
 }
 
 function getAssignableLots(lots) {
@@ -424,9 +456,17 @@ function getAssignableLots(lots) {
   return visibleLots.filter((lot) => isAssignableLot(lot, parentLotIdsWithChildren));
 }
 
+function sortLotsByName(lots) {
+  return lots.slice().sort((a, b) => String(a.lot_name || '').localeCompare(String(b.lot_name || ''), undefined, {
+    numeric: true,
+    sensitivity: 'base'
+  }));
+}
+
 async function getLotMap() {
   const lots = await lotModel.listLots({ includeHidden: true });
   const assignableLots = getAssignableLots(lots);
+  const filterLots = getBrowsableLots(lots);
   const lotMap = new Map();
 
   lots.forEach((lot) => {
@@ -436,6 +476,7 @@ async function getLotMap() {
   return {
     lots,
     assignableLots,
+    filterLots,
     lotMap
   };
 }
@@ -704,9 +745,24 @@ function mapById(items) {
   return map;
 }
 
-async function getTechUnitFormOptions() {
+async function getTechUnitFormOptions(options = {}) {
   const state = await getUnitTableState();
-  const { assignableLots } = await getLotMap();
+  const includeCurrentLotId = normalizeOptionalInteger(options.includeCurrentLotId);
+  const { assignableLots, lotMap } = await getLotMap();
+  const currentLot = includeCurrentLotId ? lotMap.get(includeCurrentLotId) || null : null;
+  const currentLotIsSelectable = currentLot
+    ? assignableLots.some((lot) => Number(lot.lot_id) === includeCurrentLotId)
+    : false;
+  const lots = currentLot && !currentLotIsSelectable
+    ? sortLotsByName([
+      ...assignableLots,
+      {
+        ...currentLot,
+        isCurrentLot: true,
+        isCurrentLotClosed: Number(currentLot.is_closed || 0) === 1
+      }
+    ])
+    : assignableLots;
 
   const [
     unitCategories,
@@ -752,7 +808,8 @@ async function getTechUnitFormOptions() {
       : 'The units table does not exist yet.',
     assetTagPrefix: getAssetTagPrefix(),
     state,
-    lots: assignableLots,
+    lots,
+    currentLotIsClosed: Boolean(currentLot && Number(currentLot.is_closed || 0) === 1),
     unitCategories: unitCategoriesWithProductionWeights,
     unitStatuses,
     defaultUnitStatusId: receivedStatus ? String(receivedStatus.id) : '',
@@ -1049,6 +1106,9 @@ async function listTechUsersWithUnits() {
   const archiveFilter = unitState.archiveCapabilities.hasIsArchived
     ? 'AND COALESCE(u.is_archived, 0) = 0'
     : '';
+  const assignmentColumn = unitState.assignmentCapabilities.hasAssignedToUserId
+    ? 'u.assigned_to_user_id'
+    : 'u.created_by_user_id';
 
   const [rows] = await pool.query(
     `
@@ -1060,8 +1120,8 @@ async function listTechUsersWithUnits() {
         COUNT(u.unit_id) AS unit_count
       FROM users
       INNER JOIN units u
-        ON u.created_by_user_id = users.user_id
-      WHERE u.created_by_user_id IS NOT NULL
+        ON ${assignmentColumn} = users.user_id
+      WHERE ${assignmentColumn} IS NOT NULL
         ${archiveFilter}
       GROUP BY users.user_id, users.first_name, users.last_name, users.email
       ORDER BY users.first_name, users.last_name, users.email
@@ -1109,8 +1169,8 @@ async function listTechUnits(filters = {}) {
     };
   }
 
-  const { assignableLots, lotMap } = await getLotMap();
-  const assignableLotIds = new Set(assignableLots.map((lot) => String(lot.lot_id)));
+  const { filterLots, lotMap } = await getLotMap();
+  const filterLotIds = new Set(filterLots.map((lot) => String(lot.lot_id)));
 
   const [
     unitCategories,
@@ -1160,6 +1220,11 @@ async function listTechUnits(filters = {}) {
   const createdEndDate = normalizeDashboardDrilldownDate(filters.createdEndDate);
   const createdWindow = String(filters.createdWindow || '').trim();
   const gradeFilter = String(filters.gradeFilter || '').trim();
+  const currentUserId = normalizePositiveFilterId(filters.currentUserId);
+  const restrictToCurrentAssignment = filters.restrictToCurrentAssignment === true && Boolean(currentUserId) && searchTerms.length === 0;
+  const assignmentColumnSql = state.assignmentCapabilities.hasAssignedToUserId
+    ? 'u.assigned_to_user_id'
+    : 'u.created_by_user_id';
 
   if (state.archiveCapabilities.hasIsArchived && !includesArchivedSearchResults) {
     where.push('COALESCE(u.is_archived, 0) = 0');
@@ -1168,7 +1233,7 @@ async function listTechUnits(filters = {}) {
   if (filters.lotId) {
     const lotId = Number(filters.lotId);
 
-    if (Number.isInteger(lotId) && lotId > 0 && assignableLotIds.has(String(lotId))) {
+    if (Number.isInteger(lotId) && lotId > 0 && filterLotIds.has(String(lotId))) {
       where.push('u.lot_id = ?');
       params.push(lotId);
     }
@@ -1180,8 +1245,13 @@ async function listTechUnits(filters = {}) {
   }
 
   if (techUserFilterId) {
-    where.push('u.created_by_user_id = ?');
+    where.push(`${assignmentColumnSql} = ?`);
     params.push(techUserFilterId);
+  }
+
+  if (restrictToCurrentAssignment) {
+    where.push(`${assignmentColumnSql} = ?`);
+    params.push(currentUserId);
   }
 
   if (createdStartDate) {
@@ -1308,7 +1378,11 @@ async function listTechUnits(filters = {}) {
 
   const [rows] = await pool.query(
     `
-      SELECT u.*
+      SELECT
+        u.*,
+        assigned_user.first_name AS assigned_first_name,
+        assigned_user.last_name AS assigned_last_name,
+        assigned_user.email AS assigned_email
       FROM units u
       LEFT JOIN manufacturers m
         ON m.manufacturer_id = u.manufacturer_id
@@ -1328,8 +1402,10 @@ async function listTechUnits(filters = {}) {
         ON cv_storage_type.config_value_id = u.storage_type_config_value_id
       LEFT JOIN config_values cv_os
         ON cv_os.config_value_id = u.operating_system_config_value_id
+      LEFT JOIN users assigned_user
+        ON assigned_user.user_id = ${state.assignmentCapabilities.hasAssignedToUserId ? 'u.assigned_to_user_id' : 'u.created_by_user_id'}
       ${whereSql}
-      ORDER BY ${archiveOrderSql} u.updated_at DESC, u.unit_id DESC
+      ORDER BY ${archiveOrderSql} u.created_at DESC, u.unit_id DESC
       LIMIT ?
     `,
     [...params, UNIT_LIMIT]
@@ -1352,6 +1428,22 @@ async function listTechUnits(filters = {}) {
       unitCategory,
       productionWeightOptions
     });
+    const currentLotWeight = lot && lot.resolved_default_production_weight !== null && lot.resolved_default_production_weight !== undefined
+      ? productionWeightModel.normalizeWeightValue(lot.resolved_default_production_weight)
+      : null;
+    const unitProductionWeightOverride = row.production_weight_override !== null && row.production_weight_override !== undefined
+      ? productionWeightModel.normalizeWeightValue(row.production_weight_override)
+      : null;
+
+    const currentAssignmentUserId = state.assignmentCapabilities.hasAssignedToUserId && row.assigned_to_user_id
+      ? Number(row.assigned_to_user_id)
+      : (row.created_by_user_id ? Number(row.created_by_user_id) : null);
+    const isReadOnlyForCurrentUser = Boolean(
+      filters.restrictToCurrentAssignment === true &&
+      searchTerms.length > 0 &&
+      currentUserId &&
+      currentAssignmentUserId !== currentUserId
+    );
 
     const specParts = [
       manufacturerLabel,
@@ -1380,6 +1472,12 @@ async function listTechUnits(filters = {}) {
       productionWeightPriorityPath: productionWeightDetails.priorityPath,
       productionWeightHasOverride: productionWeightDetails.hasOverride,
       productionWeightNotes: productionWeightDetails.notes,
+      isLotClosed: Boolean(lot && Number(lot.is_closed || 0) === 1),
+      currentLotWeight,
+      formattedCurrentLotWeight: productionWeightModel.formatWeightValue(currentLotWeight),
+      unitProductionWeightOverride,
+      formattedUnitProductionWeightOverride: productionWeightModel.formatWeightValue(unitProductionWeightOverride),
+      hasUnitProductionWeightOverride: unitProductionWeightOverride !== null,
       manufacturerLabel: manufacturerLabel || '—',
       modelLabel: modelLabel || '—',
       processorLabel: processorLabel || '—',
@@ -1395,6 +1493,10 @@ async function listTechUnits(filters = {}) {
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       completedAt: row.completed_at,
+      assignedToUserId: currentAssignmentUserId,
+      assignedToName: [row.assigned_first_name, row.assigned_last_name].filter(Boolean).join(' ').trim() || row.assigned_email || '',
+      isUnassigned: state.assignmentCapabilities.hasAssignedToUserId ? !row.assigned_to_user_id : false,
+      isReadOnlyForCurrentUser,
       isArchived: state.archiveCapabilities.hasIsArchived && Number(row.is_archived) === 1,
       archivedAt: state.archiveCapabilities.hasArchivedAt ? row.archived_at : null
     };
@@ -1406,7 +1508,7 @@ async function listTechUnits(filters = {}) {
     assetTagPrefix: getAssetTagPrefix(),
     units,
     filters,
-    lots: assignableLots,
+    lots: filterLots,
     unitCategories,
     overallGradeOptions,
     techUserOptions,
@@ -1851,6 +1953,18 @@ function buildWritePayload(formData, currentUserId, mode, assetNumber, unitColum
   if (mode === 'create') {
     addColumn('asset_number', assetNumber);
     addColumn('created_by_user_id', currentUserId || null);
+
+    if (unitColumns && hasColumn(unitColumns, 'assigned_to_user_id')) {
+      addColumn('assigned_to_user_id', currentUserId || null);
+    }
+
+    if (unitColumns && hasColumn(unitColumns, 'assigned_at')) {
+      addColumn('assigned_at', currentUserId ? new Date() : null);
+    }
+
+    if (unitColumns && hasColumn(unitColumns, 'assignment_updated_by_user_id')) {
+      addColumn('assignment_updated_by_user_id', currentUserId || null);
+    }
   }
 
   addColumn('lot_id', normalizeRequiredInteger(formData.lotId));
@@ -1910,6 +2024,16 @@ async function createTechUnit(formData, currentUserId) {
 
   if (duplicateMatches.length > 0) {
     throw createDuplicateIdentifierError(duplicateMatches);
+  }
+
+  const { assignableLots } = await getLotMap();
+  const requestedLotId = normalizeRequiredInteger(formData.lotId);
+
+  if (!assignableLots.some((lot) => Number(lot.lot_id) === requestedLotId)) {
+    throw createLotMovePolicyError(
+      'BWT_LOT_DESTINATION_NOT_OPEN',
+      'Closed, hidden, and parent/container lots cannot receive new units. Choose an open child or standalone lot.'
+    );
   }
 
   const connection = await pool.getConnection();
@@ -1997,6 +2121,12 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
     throw new Error('The selected unit could not be found.');
   }
 
+  assertUnitEditPermission({
+    unit,
+    currentUserId,
+    actorRoleCodes: options.actorRoleCodes
+  });
+
   const duplicateMatches = await findDuplicateUnitsFromIdentifiers(
     buildIdentifierEntries(formData, unit.asset_number),
     unitId
@@ -2010,6 +2140,20 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
   const nextLotId = normalizeRequiredInteger(formData.lotId);
   const previousLotId = normalizeOptionalInteger(unit.lot_id);
   const lotChanged = Boolean(nextLotId && previousLotId && Number(nextLotId) !== Number(previousLotId));
+
+  await assertLotDestinationIsOpenOrCurrent({
+    unit,
+    nextLotId
+  });
+
+  if (lotChanged) {
+    await assertLotMovePermission({
+      unit,
+      nextLotId,
+      currentUserId,
+      actorRoleCodes: options.actorRoleCodes
+    });
+  }
 
   try {
     await connection.beginTransaction();
@@ -2056,20 +2200,368 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
   }
 }
 
-async function updateTechUnit(unitId, formData, currentUserId) {
+async function updateTechUnit(unitId, formData, currentUserId, options = {}) {
   return updateExistingTechUnit(unitId, formData, currentUserId, {
     recordLotHistory: true,
-    lotMoveNotes: 'Unit lot changed from the Tech Unit edit form.'
+    lotMoveNotes: 'Unit lot changed from the Tech Unit edit form.',
+    actorRoleCodes: options.actorRoleCodes
   });
 }
 
-async function useExistingTechUnit(unitId, formData, currentUserId) {
+async function useExistingTechUnit(unitId, formData, currentUserId, options = {}) {
   return updateExistingTechUnit(unitId, formData, currentUserId, {
     recordLotHistory: true,
-    lotMoveNotes: 'Duplicate detection confirmed this was an existing unit; unit record was updated instead of creating a duplicate.'
+    lotMoveNotes: 'Duplicate detection confirmed this was an existing unit; unit record was updated instead of creating a duplicate.',
+    actorRoleCodes: options.actorRoleCodes
   });
 }
 
+
+
+const UNIT_RELATED_TABLE_LABELS = {
+  unit_identifiers: 'Identifiers',
+  unit_specifications: 'Specifications',
+  unit_field_sources: 'Field-source records',
+  unit_grade_assessments: 'Grade records',
+  unit_outcomes: 'Pass/Fail records',
+  unit_memory_modules: 'Memory-module records',
+  unit_storage_devices: 'Storage-device records',
+  unit_cellular_modules: 'Cellular-module records',
+  unit_graphics_adapters: 'Graphics-adapter records',
+  unit_issue_entries: 'Issue records',
+  unit_issue_flags: 'Issue flags',
+  unit_comments: 'Comments',
+  unit_lot_history: 'Lot-move history',
+  unit_assignment_history: 'Assignment history',
+  unit_work_completions: 'Earned-weight records',
+  unit_override_requests: 'Override requests',
+  unit_lot_validation_overrides: 'Lot-validation overrides',
+  unit_qc_checks: 'QC records',
+  unit_status_history: 'Status history',
+  unit_support_tasks: 'Support-task records',
+  unit_takeover_requests: 'Takeover requests',
+  unit_work_sessions: 'Work sessions',
+  unit_completion_credits: 'Completion-credit records',
+  productivity_events: 'Productivity events',
+  scan_batch_items: 'Scan-batch entries'
+};
+
+function getUnitRelatedTableLabel(tableName) {
+  return UNIT_RELATED_TABLE_LABELS[tableName] || 'Related unit records';
+}
+
+async function listUnitRelatedTableReferences(executor = pool) {
+  const [rows] = await executor.query(
+    `
+      SELECT DISTINCT reference_rows.table_name, reference_rows.column_name
+      FROM (
+        SELECT
+          c.TABLE_NAME AS table_name,
+          c.COLUMN_NAME AS column_name
+        FROM information_schema.COLUMNS c
+        INNER JOIN information_schema.TABLES t
+          ON t.TABLE_SCHEMA = c.TABLE_SCHEMA
+         AND t.TABLE_NAME = c.TABLE_NAME
+        WHERE c.TABLE_SCHEMA = DATABASE()
+          AND t.TABLE_TYPE = 'BASE TABLE'
+          AND c.TABLE_NAME <> 'units'
+          AND c.COLUMN_NAME = 'unit_id'
+
+        UNION
+
+        SELECT
+          kcu.TABLE_NAME AS table_name,
+          kcu.COLUMN_NAME AS column_name
+        FROM information_schema.KEY_COLUMN_USAGE kcu
+        INNER JOIN information_schema.TABLES t
+          ON t.TABLE_SCHEMA = kcu.TABLE_SCHEMA
+         AND t.TABLE_NAME = kcu.TABLE_NAME
+        WHERE kcu.TABLE_SCHEMA = DATABASE()
+          AND t.TABLE_TYPE = 'BASE TABLE'
+          AND kcu.REFERENCED_TABLE_SCHEMA = DATABASE()
+          AND kcu.REFERENCED_TABLE_NAME = 'units'
+          AND kcu.TABLE_NAME <> 'units'
+      ) AS reference_rows
+      ORDER BY reference_rows.table_name, reference_rows.column_name
+    `
+  );
+
+  const grouped = new Map();
+
+  rows.forEach((row) => {
+    const tableName = String(row.table_name || '').trim();
+    const columnName = String(row.column_name || '').trim();
+
+    if (!tableName || !columnName) {
+      return;
+    }
+
+    if (!grouped.has(tableName)) {
+      grouped.set(tableName, []);
+    }
+
+    const columns = grouped.get(tableName);
+
+    if (!columns.includes(columnName)) {
+      columns.push(columnName);
+    }
+  });
+
+  return Array.from(grouped.entries()).map(([tableName, columnNames]) => ({
+    tableName,
+    columnNames,
+    label: getUnitRelatedTableLabel(tableName)
+  }));
+}
+
+function buildUnitReferenceWhereSql(columnNames = []) {
+  const safeColumns = Array.isArray(columnNames)
+    ? columnNames.filter(Boolean)
+    : [];
+
+  if (safeColumns.length === 0) {
+    return {
+      sql: '1 = 0',
+      valuesForUnitId: []
+    };
+  }
+
+  return {
+    sql: safeColumns
+      .map((columnName) => `${escapeIdentifier(columnName)} = ?`)
+      .join(' OR '),
+    valuesForUnitId: safeColumns.map(() => null)
+  };
+}
+
+async function getUnitRelatedRecordCounts(unitId, executor = pool) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+
+  if (!safeUnitId) {
+    return [];
+  }
+
+  const relatedTables = await listUnitRelatedTableReferences(executor);
+  const counts = [];
+
+  for (const relatedTable of relatedTables) {
+    const where = buildUnitReferenceWhereSql(relatedTable.columnNames);
+    const [rows] = await executor.query(
+      `
+        SELECT COUNT(*) AS record_count
+        FROM ${escapeIdentifier(relatedTable.tableName)}
+        WHERE ${where.sql}
+      `,
+      where.valuesForUnitId.map(() => safeUnitId)
+    );
+
+    const recordCount = Number(rows[0] && rows[0].record_count) || 0;
+
+    if (recordCount > 0) {
+      counts.push({
+        ...relatedTable,
+        recordCount
+      });
+    }
+  }
+
+  return counts;
+}
+
+async function getUnitRelatedTableDeletionOrder(relatedTables, executor = pool) {
+  const tableNames = relatedTables
+    .map((relatedTable) => relatedTable.tableName)
+    .filter(Boolean);
+
+  if (tableNames.length <= 1) {
+    return relatedTables;
+  }
+
+  const placeholders = tableNames.map(() => '?').join(', ');
+  const [foreignKeys] = await executor.query(
+    `
+      SELECT DISTINCT
+        TABLE_NAME AS child_table_name,
+        REFERENCED_TABLE_NAME AS parent_table_name
+      FROM information_schema.KEY_COLUMN_USAGE
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND REFERENCED_TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME IN (${placeholders})
+        AND REFERENCED_TABLE_NAME IN (${placeholders})
+    `,
+    [...tableNames, ...tableNames]
+  );
+
+  const remaining = new Map(relatedTables.map((relatedTable) => [relatedTable.tableName, relatedTable]));
+  const childTablesByParent = new Map();
+
+  foreignKeys.forEach((foreignKey) => {
+    const childTableName = String(foreignKey.child_table_name || '').trim();
+    const parentTableName = String(foreignKey.parent_table_name || '').trim();
+
+    if (!remaining.has(childTableName) || !remaining.has(parentTableName) || childTableName === parentTableName) {
+      return;
+    }
+
+    if (!childTablesByParent.has(parentTableName)) {
+      childTablesByParent.set(parentTableName, new Set());
+    }
+
+    childTablesByParent.get(parentTableName).add(childTableName);
+  });
+
+  const ordered = [];
+
+  while (remaining.size > 0) {
+    const ready = Array.from(remaining.keys())
+      .filter((tableName) => {
+        const childTables = childTablesByParent.get(tableName) || new Set();
+        return Array.from(childTables).every((childTableName) => !remaining.has(childTableName));
+      })
+      .sort();
+
+    const nextTables = ready.length > 0
+      ? ready
+      : [Array.from(remaining.keys()).sort()[0]];
+
+    nextTables.forEach((tableName) => {
+      ordered.push(remaining.get(tableName));
+      remaining.delete(tableName);
+    });
+  }
+
+  return ordered;
+}
+
+async function permanentlyDeleteTechUnit(unitId) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+
+  if (!safeUnitId) {
+    return {
+      deleted: false,
+      reason: 'invalid_unit'
+    };
+  }
+
+  const state = await getUnitTableState();
+
+  if (!state.exists || !state.primaryKeyColumn) {
+    return {
+      deleted: false,
+      reason: 'unit_table_unavailable'
+    };
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [unitRows] = await connection.query(
+      `
+        SELECT ${escapeIdentifier(state.primaryKeyColumn)} AS unit_id
+        FROM units
+        WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
+        FOR UPDATE
+      `,
+      [safeUnitId]
+    );
+
+    if (unitRows.length === 0) {
+      await connection.rollback();
+
+      return {
+        deleted: false,
+        reason: 'missing'
+      };
+    }
+
+    const relatedTables = await listUnitRelatedTableReferences(connection);
+    const deletionOrder = await getUnitRelatedTableDeletionOrder(relatedTables, connection);
+    const deletedRelatedRecords = [];
+
+    for (const relatedTable of deletionOrder) {
+      const where = buildUnitReferenceWhereSql(relatedTable.columnNames);
+      const [deleteResult] = await connection.query(
+        `
+          DELETE FROM ${escapeIdentifier(relatedTable.tableName)}
+          WHERE ${where.sql}
+        `,
+        where.valuesForUnitId.map(() => safeUnitId)
+      );
+
+      if (Number(deleteResult.affectedRows) > 0) {
+        deletedRelatedRecords.push({
+          tableName: relatedTable.tableName,
+          recordCount: Number(deleteResult.affectedRows)
+        });
+      }
+    }
+
+    for (const relatedTable of relatedTables) {
+      const where = buildUnitReferenceWhereSql(relatedTable.columnNames);
+      const [rows] = await connection.query(
+        `
+          SELECT COUNT(*) AS record_count
+          FROM ${escapeIdentifier(relatedTable.tableName)}
+          WHERE ${where.sql}
+        `,
+        where.valuesForUnitId.map(() => safeUnitId)
+      );
+
+      if (Number(rows[0] && rows[0].record_count) > 0) {
+        throw new Error(`Linked records remain in ${relatedTable.tableName}.`);
+      }
+    }
+
+    const [unitDeleteResult] = await connection.query(
+      `
+        DELETE FROM units
+        WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
+        LIMIT 1
+      `,
+      [safeUnitId]
+    );
+
+    if (Number(unitDeleteResult.affectedRows) !== 1) {
+      throw new Error('The unit record could not be permanently deleted.');
+    }
+
+    await connection.commit();
+
+    return {
+      deleted: true,
+      deletedRelatedRecordCount: deletedRelatedRecords.reduce(
+        (total, record) => total + record.recordCount,
+        0
+      )
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function getTechUnitPermanentDeletionPreviewById(unitId) {
+  const unit = await getTechUnitDeleteSummaryById(unitId);
+
+  if (!unit) {
+    return null;
+  }
+
+  const relatedRecords = await getUnitRelatedRecordCounts(unit.unitId);
+
+  return {
+    ...unit,
+    relatedRecords,
+    relatedRecordCount: relatedRecords.reduce(
+      (total, record) => total + record.recordCount,
+      0
+    )
+  };
+}
 
 async function getTechUnitDeleteSummaryById(unitId) {
   const safeUnitId = Number(unitId);
@@ -2193,6 +2685,1011 @@ async function archiveTechUnit(unitId, archivedByUserId) {
   };
 }
 
+
+async function recordUnitAssignmentHistory(connection, {
+  unitId,
+  fromUserId = null,
+  toUserId = null,
+  changedByUserId = null,
+  changeSource = 'manual',
+  overrideRequestId = null,
+  notes = null
+}) {
+  if (!await tableExists('unit_assignment_history')) {
+    return;
+  }
+
+  await connection.query(
+    `
+      INSERT INTO unit_assignment_history (
+        unit_id,
+        from_user_id,
+        to_user_id,
+        changed_by_user_id,
+        change_source,
+        override_request_id,
+        notes
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      normalizeRequiredInteger(unitId),
+      normalizeOptionalInteger(fromUserId),
+      normalizeOptionalInteger(toUserId),
+      normalizeOptionalInteger(changedByUserId),
+      normalizeText(changeSource) || 'manual',
+      normalizeOptionalInteger(overrideRequestId),
+      normalizeText(notes)
+    ]
+  );
+}
+
+async function assignTechUnit({ unitId, toUserId = null, changedByUserId = null, changeSource = 'manual', overrideRequestId = null, notes = null }) {
+  const state = await getUnitTableState();
+  const safeUnitId = normalizeRequiredInteger(unitId);
+
+  if (!safeUnitId || !state.exists || !state.primaryKeyColumn || !state.assignmentCapabilities.hasAssignedToUserId) {
+    return false;
+  }
+
+  const unit = await getUnitById(safeUnitId);
+
+  if (!unit) {
+    return false;
+  }
+
+  const normalizedToUserId = normalizeOptionalInteger(toUserId);
+  const normalizedChangedByUserId = normalizeOptionalInteger(changedByUserId);
+  const previousUserId = normalizeOptionalInteger(unit.assigned_to_user_id);
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const assignmentUpdates = ['assigned_to_user_id = ?'];
+    const assignmentValues = [normalizedToUserId];
+
+    if (state.assignmentCapabilities.hasAssignedAt) {
+      assignmentUpdates.push('assigned_at = ?');
+      assignmentValues.push(normalizedToUserId ? new Date() : null);
+    }
+
+    if (state.assignmentCapabilities.hasAssignmentUpdatedByUserId) {
+      assignmentUpdates.push('assignment_updated_by_user_id = ?');
+      assignmentValues.push(normalizedChangedByUserId);
+    }
+
+    await connection.query(
+      `
+        UPDATE units
+        SET ${assignmentUpdates.join(', ')}
+        WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
+        LIMIT 1
+      `,
+      [...assignmentValues, safeUnitId]
+    );
+
+    if (previousUserId !== normalizedToUserId) {
+      await recordUnitAssignmentHistory(connection, {
+        unitId: safeUnitId,
+        fromUserId: previousUserId,
+        toUserId: normalizedToUserId,
+        changedByUserId: normalizedChangedByUserId,
+        changeSource,
+        overrideRequestId,
+        notes
+      });
+    }
+
+    await connection.commit();
+
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function getResolvedProductionWeightForUnit(unit) {
+  if (!unit) {
+    return null;
+  }
+
+  const { lotMap } = await getLotMap();
+  const lot = lotMap.get(Number(unit.lot_id)) || null;
+  const [unitCategories, productionWeightOptions] = await Promise.all([
+    listConfigValuesByCategoryCodes(['unit_categories', 'unit_category', 'unit_types', 'unit_type']),
+    productionWeightModel.listProductionWeightOptions()
+  ]);
+  const unitCategory = unitCategories.find((category) => Number(category.id) === Number(unit.unit_category_config_value_id)) || null;
+  const details = getProductionWeightDetailsForUnit({
+    row: unit,
+    lot,
+    unitCategory,
+    productionWeightOptions
+  });
+
+  return productionWeightModel.normalizeWeightValue(details.effectiveWeight);
+}
+
+async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByUserId, creditSource = 'manual_completion', overrideRequestId = null, weightValue = null, notes = null }) {
+  if (!await tableExists('unit_work_completions')) {
+    throw new Error('The unit_work_completions table is not ready yet. Run the Step 6f.0 SQL migration first.');
+  }
+
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const safeCompletedByUserId = normalizeRequiredInteger(completedByUserId);
+  const safeRecordedByUserId = normalizeOptionalInteger(recordedByUserId);
+
+  if (!safeUnitId || !safeCompletedByUserId) {
+    throw new Error('A valid unit and completed-by user are required to record work completion.');
+  }
+
+  const unit = await getUnitById(safeUnitId);
+
+  if (!unit) {
+    throw new Error('The selected unit could not be found.');
+  }
+
+  const resolvedWeight = weightValue !== null && weightValue !== undefined
+    ? productionWeightModel.normalizeWeightValue(weightValue)
+    : await getResolvedProductionWeightForUnit(unit);
+
+  if (resolvedWeight === null || resolvedWeight < 0.10 || resolvedWeight > 10.00) {
+    throw new Error('A completion credit weight from 0.10 through 10.00 is required.');
+  }
+
+  const safeCreditSource = normalizeText(creditSource) || 'manual_completion';
+
+  await pool.query(
+    `
+      INSERT INTO unit_work_completions (
+        unit_id,
+        lot_id,
+        completed_by_user_id,
+        production_weight_value,
+        credit_source,
+        recorded_by_user_id,
+        override_request_id,
+        notes
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      safeUnitId,
+      normalizeOptionalInteger(unit.lot_id),
+      safeCompletedByUserId,
+      resolvedWeight,
+      safeCreditSource,
+      safeRecordedByUserId,
+      normalizeOptionalInteger(overrideRequestId),
+      normalizeText(notes)
+    ]
+  );
+
+  return true;
+}
+
+
+async function recordUnitAssignmentHistory(connection, {
+  unitId,
+  fromUserId = null,
+  toUserId = null,
+  changedByUserId = null,
+  changeSource = 'manual',
+  overrideRequestId = null,
+  notes = null
+}) {
+  if (!await tableExists('unit_assignment_history')) {
+    return;
+  }
+
+  await connection.query(
+    `
+      INSERT INTO unit_assignment_history (
+        unit_id,
+        from_user_id,
+        to_user_id,
+        changed_by_user_id,
+        change_source,
+        override_request_id,
+        notes
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      normalizeRequiredInteger(unitId),
+      normalizeOptionalInteger(fromUserId),
+      normalizeOptionalInteger(toUserId),
+      normalizeOptionalInteger(changedByUserId),
+      normalizeText(changeSource) || 'manual',
+      normalizeOptionalInteger(overrideRequestId),
+      normalizeText(notes)
+    ]
+  );
+}
+
+async function assignTechUnit({ unitId, toUserId = null, changedByUserId = null, changeSource = 'manual', overrideRequestId = null, notes = null }) {
+  const state = await getUnitTableState();
+  const safeUnitId = normalizeRequiredInteger(unitId);
+
+  if (!safeUnitId || !state.exists || !state.primaryKeyColumn || !state.assignmentCapabilities.hasAssignedToUserId) {
+    return false;
+  }
+
+  const unit = await getUnitById(safeUnitId);
+
+  if (!unit) {
+    return false;
+  }
+
+  const normalizedToUserId = normalizeOptionalInteger(toUserId);
+  const normalizedChangedByUserId = normalizeOptionalInteger(changedByUserId);
+  const previousUserId = normalizeOptionalInteger(unit.assigned_to_user_id);
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const assignmentUpdates = ['assigned_to_user_id = ?'];
+    const assignmentValues = [normalizedToUserId];
+
+    if (state.assignmentCapabilities.hasAssignedAt) {
+      assignmentUpdates.push('assigned_at = ?');
+      assignmentValues.push(normalizedToUserId ? new Date() : null);
+    }
+
+    if (state.assignmentCapabilities.hasAssignmentUpdatedByUserId) {
+      assignmentUpdates.push('assignment_updated_by_user_id = ?');
+      assignmentValues.push(normalizedChangedByUserId);
+    }
+
+    await connection.query(
+      `
+        UPDATE units
+        SET ${assignmentUpdates.join(', ')}
+        WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
+        LIMIT 1
+      `,
+      [...assignmentValues, safeUnitId]
+    );
+
+    if (previousUserId !== normalizedToUserId) {
+      await recordUnitAssignmentHistory(connection, {
+        unitId: safeUnitId,
+        fromUserId: previousUserId,
+        toUserId: normalizedToUserId,
+        changedByUserId: normalizedChangedByUserId,
+        changeSource,
+        overrideRequestId,
+        notes
+      });
+    }
+
+    await connection.commit();
+
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function getResolvedProductionWeightForUnit(unit) {
+  if (!unit) {
+    return null;
+  }
+
+  const { lotMap } = await getLotMap();
+  const lot = lotMap.get(Number(unit.lot_id)) || null;
+  const [unitCategories, productionWeightOptions] = await Promise.all([
+    listConfigValuesByCategoryCodes(['unit_categories', 'unit_category', 'unit_types', 'unit_type']),
+    productionWeightModel.listProductionWeightOptions()
+  ]);
+  const unitCategory = unitCategories.find((category) => Number(category.id) === Number(unit.unit_category_config_value_id)) || null;
+  const details = getProductionWeightDetailsForUnit({
+    row: unit,
+    lot,
+    unitCategory,
+    productionWeightOptions
+  });
+
+  return productionWeightModel.normalizeWeightValue(details.effectiveWeight);
+}
+
+async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByUserId, creditSource = 'manual_completion', overrideRequestId = null, weightValue = null, notes = null, actorRoleCodes = [] }) {
+  if (!await tableExists('unit_work_completions')) {
+    throw new Error('The unit_work_completions table is not ready yet. Run the Step 6f.0 SQL migration first.');
+  }
+
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const safeCompletedByUserId = normalizeRequiredInteger(completedByUserId);
+  const safeRecordedByUserId = normalizeOptionalInteger(recordedByUserId);
+
+  if (!safeUnitId || !safeCompletedByUserId) {
+    throw new Error('A valid unit and completed-by user are required to record work completion.');
+  }
+
+  const completionPreview = await getUnitWorkCompletionPreview(safeUnitId);
+
+  if (!completionPreview.ready) {
+    throw new Error(completionPreview.errorMessage || 'Lot work completion could not be recorded.');
+  }
+
+  const unit = completionPreview.unit;
+  assertUnitActionPermission({
+    unit,
+    currentUserId: safeCompletedByUserId,
+    actorRoleCodes
+  });
+
+  const resolvedWeight = weightValue !== null && weightValue !== undefined
+    ? productionWeightModel.normalizeWeightValue(weightValue)
+    : completionPreview.productionWeight;
+
+  if (resolvedWeight === null || resolvedWeight < 0.10 || resolvedWeight > 10.00) {
+    throw new Error('A completion credit weight from 0.10 through 10.00 is required.');
+  }
+
+  const safeCreditSource = normalizeText(creditSource) || 'manual_completion';
+  const completionColumns = await getTableColumns('unit_work_completions');
+  const supportsWorkCycleKey = hasColumn(completionColumns, 'work_cycle_key');
+  const workCycleKey = supportsWorkCycleKey && safeCreditSource === 'manual_completion'
+    ? await getCurrentLotWorkCycleKey(unit)
+    : null;
+  const insertColumns = [
+    'unit_id',
+    'lot_id',
+    'completed_by_user_id',
+    'production_weight_value',
+    'credit_source',
+    'recorded_by_user_id',
+    'override_request_id',
+    'notes'
+  ];
+  const insertValues = [
+    safeUnitId,
+    normalizeOptionalInteger(unit.lot_id),
+    safeCompletedByUserId,
+    resolvedWeight,
+    safeCreditSource,
+    safeRecordedByUserId,
+    normalizeOptionalInteger(overrideRequestId),
+    normalizeText(notes)
+  ];
+
+  if (supportsWorkCycleKey) {
+    insertColumns.push('work_cycle_key');
+    insertValues.push(workCycleKey);
+  }
+
+  try {
+    await pool.query(
+      `
+        INSERT INTO unit_work_completions (${insertColumns.map(escapeIdentifier).join(', ')})
+        VALUES (${insertColumns.map(() => '?').join(', ')})
+      `,
+      insertValues
+    );
+  } catch (error) {
+    if (error && error.code === 'ER_DUP_ENTRY' && workCycleKey) {
+      throw new Error('Lot work is already marked complete for this unit’s current lot stay.');
+    }
+
+    throw error;
+  }
+
+  return true;
+}
+
+
+async function getCurrentLotCycleRecord(unit) {
+  const unitId = normalizeRequiredInteger(unit && unit.unit_id);
+  const lotId = normalizeOptionalInteger(unit && unit.lot_id);
+
+  if (!unitId || !lotId || !await tableExists('unit_lot_history')) {
+    return null;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT unit_lot_history_id, moved_at
+      FROM unit_lot_history
+      WHERE unit_id = ?
+        AND to_lot_id = ?
+      ORDER BY moved_at DESC, unit_lot_history_id DESC
+      LIMIT 1
+    `,
+    [unitId, lotId]
+  );
+
+  return rows[0] || null;
+}
+
+async function getCurrentLotCycleStart(unit) {
+  const cycleRecord = await getCurrentLotCycleRecord(unit);
+
+  return cycleRecord && cycleRecord.moved_at
+    ? cycleRecord.moved_at
+    : (unit && unit.created_at ? unit.created_at : null);
+}
+
+async function getCurrentLotWorkCycleKey(unit) {
+  const unitId = normalizeRequiredInteger(unit && unit.unit_id);
+  const lotId = normalizeOptionalInteger(unit && unit.lot_id);
+
+  if (!unitId || !lotId) {
+    return null;
+  }
+
+  const cycleRecord = await getCurrentLotCycleRecord(unit);
+
+  return cycleRecord && cycleRecord.unit_lot_history_id
+    ? `move:${unitId}:${lotId}:${cycleRecord.unit_lot_history_id}`
+    : `initial:${unitId}:${lotId}`;
+}
+
+async function hasRecordedManualCompletionForCurrentLotCycle(unit) {
+  if (!unit || !await tableExists('unit_work_completions')) {
+    return false;
+  }
+
+  const unitId = normalizeRequiredInteger(unit.unit_id);
+  const lotId = normalizeOptionalInteger(unit.lot_id);
+
+  if (!unitId || !lotId) {
+    return false;
+  }
+
+  const cycleStart = await getCurrentLotCycleStart(unit);
+
+  if (!cycleStart) {
+    return false;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT unit_work_completion_id
+      FROM unit_work_completions
+      WHERE unit_id = ?
+        AND lot_id = ?
+        AND credit_source = 'manual_completion'
+        AND completed_at >= ?
+      ORDER BY completed_at DESC, unit_work_completion_id DESC
+      LIMIT 1
+    `,
+    [unitId, lotId, cycleStart]
+  );
+
+  return rows.length > 0;
+}
+
+
+async function getUnitWorkCompletionPreview(unitId) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const state = await getUnitTableState();
+
+  if (!safeUnitId || !state.exists || !state.primaryKeyColumn) {
+    return {
+      ready: false,
+      unit: null,
+      unitId: null,
+      unitLabel: 'Invalid unit',
+      lotName: 'Unknown lot',
+      productionWeight: null,
+      formattedProductionWeight: '—',
+      errorMessage: 'The selected unit ID is invalid.'
+    };
+  }
+
+  const unit = await getUnitById(safeUnitId);
+
+  if (!unit) {
+    return {
+      ready: false,
+      unit: null,
+      unitId: safeUnitId,
+      unitLabel: 'Unit not found',
+      lotName: 'Unknown lot',
+      productionWeight: null,
+      formattedProductionWeight: '—',
+      errorMessage: 'The selected unit could not be found.'
+    };
+  }
+
+  if (state.archiveCapabilities.hasIsArchived && Number(unit.is_archived) === 1) {
+    return {
+      ready: false,
+      unit,
+      unitId: safeUnitId,
+      unitLabel: getDisplayAssetTag(unit.asset_number) || `Unit #${safeUnitId}`,
+      lotName: 'No active lot',
+      productionWeight: null,
+      formattedProductionWeight: '—',
+      errorMessage: 'Parked units cannot have lot work completed until they return to an active lot.'
+    };
+  }
+
+  const lotId = normalizeOptionalInteger(unit.lot_id);
+
+  if (!lotId) {
+    return {
+      ready: false,
+      unit,
+      unitId: safeUnitId,
+      unitLabel: getDisplayAssetTag(unit.asset_number) || `Unit #${safeUnitId}`,
+      lotName: 'No active lot',
+      productionWeight: null,
+      formattedProductionWeight: '—',
+      errorMessage: 'This unit must be in an active lot before lot work can be completed.'
+    };
+  }
+
+  const { lotMap } = await getLotMap();
+  const lot = lotMap.get(lotId) || null;
+
+  if (!lot) {
+    return {
+      ready: false,
+      unit,
+      unitId: safeUnitId,
+      unitLabel: getDisplayAssetTag(unit.asset_number) || `Unit #${safeUnitId}`,
+      lotName: 'Lot not found',
+      productionWeight: null,
+      formattedProductionWeight: '—',
+      errorMessage: 'The unit’s current lot could not be found.'
+    };
+  }
+
+  const productionWeight = await getResolvedProductionWeightForUnit(unit);
+
+  if (productionWeight === null || productionWeight < 0.10 || productionWeight > 10.00) {
+    return {
+      ready: false,
+      unit,
+      unitId: safeUnitId,
+      unitLabel: getDisplayAssetTag(unit.asset_number) || `Unit #${safeUnitId}`,
+      lotName: lot.name || 'Current lot',
+      productionWeight: null,
+      formattedProductionWeight: '—',
+      errorMessage: 'This unit needs a production weight from 0.10 through 10.00 before lot work can be completed.'
+    };
+  }
+
+  if (await hasRecordedManualCompletionForCurrentLotCycle(unit)) {
+    return {
+      ready: false,
+      unit,
+      unitId: safeUnitId,
+      unitLabel: getDisplayAssetTag(unit.asset_number) || `Unit #${safeUnitId}`,
+      lotName: lot.name || 'Current lot',
+      productionWeight,
+      formattedProductionWeight: Number(productionWeight).toFixed(2),
+      errorMessage: 'Lot work is already marked complete for this unit’s current lot stay.'
+    };
+  }
+
+  return {
+    ready: true,
+    unit,
+    unitId: safeUnitId,
+    unitLabel: getDisplayAssetTag(unit.asset_number) || `Unit #${safeUnitId}`,
+    lotId,
+    lotName: lot.name || 'Current lot',
+    productionWeight,
+    formattedProductionWeight: Number(productionWeight).toFixed(2),
+    errorMessage: ''
+  };
+}
+
+
+function getWorkCreditSourceLabel(sourceCode) {
+  const source = String(sourceCode || '').trim();
+
+  if (source === 'manual_completion') {
+    return 'Work Complete';
+  }
+
+  if (source === 'override_prior_tech_credit') {
+    return 'Prior Tech credit';
+  }
+
+  return source
+    ? source.split('_').filter(Boolean).map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(' ')
+    : 'Recorded credit';
+}
+
+function getUserDisplayNameFromRow(row, prefix) {
+  const safePrefix = String(prefix || '').trim();
+  const firstName = row[`${safePrefix}_first_name`];
+  const lastName = row[`${safePrefix}_last_name`];
+  const email = row[`${safePrefix}_email`];
+  const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
+
+  return fullName || email || '';
+}
+
+async function getLatestWorkCompletionMapForUnits(unitIds) {
+  const ids = Array.isArray(unitIds)
+    ? [...new Set(unitIds.map((value) => normalizeRequiredInteger(value)).filter(Boolean))]
+    : [];
+  const result = new Map();
+
+  if (ids.length === 0 || !await tableExists('unit_work_completions')) {
+    return result;
+  }
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const [rows] = await pool.query(
+    `
+      SELECT
+        c.unit_work_completion_id,
+        c.unit_id,
+        c.lot_id,
+        c.completed_by_user_id,
+        c.completed_at,
+        c.production_weight_value,
+        c.credit_source,
+        l.name AS lot_name,
+        completed_by.first_name AS completed_by_first_name,
+        completed_by.last_name AS completed_by_last_name,
+        completed_by.email AS completed_by_email
+      FROM unit_work_completions c
+      INNER JOIN (
+        SELECT unit_id, MAX(unit_work_completion_id) AS latest_completion_id
+        FROM unit_work_completions
+        WHERE unit_id IN (${placeholders})
+        GROUP BY unit_id
+      ) latest_completion
+        ON latest_completion.latest_completion_id = c.unit_work_completion_id
+      LEFT JOIN lots l
+        ON l.lot_id = c.lot_id
+      LEFT JOIN users completed_by
+        ON completed_by.user_id = c.completed_by_user_id
+    `,
+    ids
+  );
+
+  rows.forEach((row) => {
+    result.set(Number(row.unit_id), {
+      unitWorkCompletionId: Number(row.unit_work_completion_id),
+      lotId: row.lot_id ? Number(row.lot_id) : null,
+      lotName: row.lot_name || 'No active lot',
+      completedByUserId: row.completed_by_user_id ? Number(row.completed_by_user_id) : null,
+      completedByName: getUserDisplayNameFromRow(row, 'completed_by') || 'Unknown user',
+      completedAt: row.completed_at,
+      productionWeight: row.production_weight_value !== null && row.production_weight_value !== undefined
+        ? Number(row.production_weight_value)
+        : null,
+      formattedProductionWeight: row.production_weight_value !== null && row.production_weight_value !== undefined
+        ? Number(row.production_weight_value).toFixed(2)
+        : '—',
+      creditSource: row.credit_source || '',
+      creditSourceLabel: getWorkCreditSourceLabel(row.credit_source)
+    });
+  });
+
+  return result;
+}
+
+async function getUnitWorkCompletionsForUser(unitId, userId) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const safeUserId = normalizeRequiredInteger(userId);
+
+  if (!safeUnitId || !safeUserId || !await tableExists('unit_work_completions')) {
+    return [];
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        c.unit_work_completion_id,
+        c.lot_id,
+        c.completed_at,
+        c.production_weight_value,
+        c.credit_source,
+        c.notes,
+        l.name AS lot_name
+      FROM unit_work_completions c
+      LEFT JOIN lots l
+        ON l.lot_id = c.lot_id
+      WHERE c.unit_id = ?
+        AND c.completed_by_user_id = ?
+      ORDER BY c.completed_at DESC, c.unit_work_completion_id DESC
+      LIMIT 100
+    `,
+    [safeUnitId, safeUserId]
+  );
+
+  return rows.map((row) => ({
+    unitWorkCompletionId: Number(row.unit_work_completion_id),
+    lotName: row.lot_name || 'No active lot',
+    completedAt: row.completed_at,
+    formattedProductionWeight: row.production_weight_value !== null && row.production_weight_value !== undefined
+      ? Number(row.production_weight_value).toFixed(2)
+      : '—',
+    creditSourceLabel: getWorkCreditSourceLabel(row.credit_source),
+    notes: row.notes || ''
+  }));
+}
+
+async function getUnitOperationalHistory(unitId) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const emptyHistory = {
+    workCompletions: [],
+    assignmentChanges: [],
+    lotMoves: []
+  };
+
+  if (!safeUnitId) {
+    return emptyHistory;
+  }
+
+  const [hasWorkCompletions, hasAssignmentHistory, hasLotHistory] = await Promise.all([
+    tableExists('unit_work_completions'),
+    tableExists('unit_assignment_history'),
+    tableExists('unit_lot_history')
+  ]);
+
+  const [workRows, assignmentRows, lotRows] = await Promise.all([
+    hasWorkCompletions
+      ? pool.query(
+        `
+          SELECT
+            c.unit_work_completion_id,
+            c.lot_id,
+            c.completed_by_user_id,
+            c.completed_at,
+            c.production_weight_value,
+            c.credit_source,
+            c.recorded_by_user_id,
+            c.notes,
+            l.name AS lot_name,
+            completed_by.first_name AS completed_by_first_name,
+            completed_by.last_name AS completed_by_last_name,
+            completed_by.email AS completed_by_email,
+            recorded_by.first_name AS recorded_by_first_name,
+            recorded_by.last_name AS recorded_by_last_name,
+            recorded_by.email AS recorded_by_email
+          FROM unit_work_completions c
+          LEFT JOIN lots l
+            ON l.lot_id = c.lot_id
+          LEFT JOIN users completed_by
+            ON completed_by.user_id = c.completed_by_user_id
+          LEFT JOIN users recorded_by
+            ON recorded_by.user_id = c.recorded_by_user_id
+          WHERE c.unit_id = ?
+          ORDER BY c.completed_at DESC, c.unit_work_completion_id DESC
+          LIMIT 100
+        `,
+        [safeUnitId]
+      )
+      : Promise.resolve([[]]),
+    hasAssignmentHistory
+      ? pool.query(
+        `
+          SELECT
+            h.unit_assignment_history_id,
+            h.from_user_id,
+            h.to_user_id,
+            h.changed_by_user_id,
+            h.change_source,
+            h.notes,
+            h.changed_at,
+            from_user.first_name AS from_user_first_name,
+            from_user.last_name AS from_user_last_name,
+            from_user.email AS from_user_email,
+            to_user.first_name AS to_user_first_name,
+            to_user.last_name AS to_user_last_name,
+            to_user.email AS to_user_email,
+            changed_by.first_name AS changed_by_first_name,
+            changed_by.last_name AS changed_by_last_name,
+            changed_by.email AS changed_by_email
+          FROM unit_assignment_history h
+          LEFT JOIN users from_user
+            ON from_user.user_id = h.from_user_id
+          LEFT JOIN users to_user
+            ON to_user.user_id = h.to_user_id
+          LEFT JOIN users changed_by
+            ON changed_by.user_id = h.changed_by_user_id
+          WHERE h.unit_id = ?
+          ORDER BY h.changed_at DESC, h.unit_assignment_history_id DESC
+          LIMIT 100
+        `,
+        [safeUnitId]
+      )
+      : Promise.resolve([[]]),
+    hasLotHistory
+      ? pool.query(
+        `
+          SELECT
+            h.unit_lot_history_id,
+            h.from_lot_id,
+            h.to_lot_id,
+            h.moved_by_user_id,
+            h.notes,
+            h.moved_at,
+            from_lot.name AS from_lot_name,
+            to_lot.name AS to_lot_name,
+            moved_by.first_name AS moved_by_first_name,
+            moved_by.last_name AS moved_by_last_name,
+            moved_by.email AS moved_by_email
+          FROM unit_lot_history h
+          LEFT JOIN lots from_lot
+            ON from_lot.lot_id = h.from_lot_id
+          LEFT JOIN lots to_lot
+            ON to_lot.lot_id = h.to_lot_id
+          LEFT JOIN users moved_by
+            ON moved_by.user_id = h.moved_by_user_id
+          WHERE h.unit_id = ?
+          ORDER BY h.moved_at DESC, h.unit_lot_history_id DESC
+          LIMIT 100
+        `,
+        [safeUnitId]
+      )
+      : Promise.resolve([[]])
+  ]);
+
+  return {
+    workCompletions: (workRows[0] || []).map((row) => ({
+      unitWorkCompletionId: Number(row.unit_work_completion_id),
+      lotName: row.lot_name || 'No active lot',
+      completedByName: getUserDisplayNameFromRow(row, 'completed_by') || 'Unknown user',
+      recordedByName: getUserDisplayNameFromRow(row, 'recorded_by') || '',
+      completedAt: row.completed_at,
+      productionWeight: row.production_weight_value !== null && row.production_weight_value !== undefined
+        ? Number(row.production_weight_value)
+        : null,
+      formattedProductionWeight: row.production_weight_value !== null && row.production_weight_value !== undefined
+        ? Number(row.production_weight_value).toFixed(2)
+        : '—',
+      creditSource: row.credit_source || '',
+      creditSourceLabel: getWorkCreditSourceLabel(row.credit_source),
+      notes: row.notes || ''
+    })),
+    assignmentChanges: (assignmentRows[0] || []).map((row) => ({
+      fromUserName: getUserDisplayNameFromRow(row, 'from_user') || 'Unassigned',
+      toUserName: getUserDisplayNameFromRow(row, 'to_user') || 'Unassigned',
+      changedByName: getUserDisplayNameFromRow(row, 'changed_by') || 'System',
+      changedAt: row.changed_at,
+      changeSource: row.change_source || 'manual',
+      notes: row.notes || ''
+    })),
+    lotMoves: (lotRows[0] || []).map((row) => ({
+      fromLotName: row.from_lot_name || 'No active lot',
+      toLotName: row.to_lot_name || 'No active lot',
+      movedByName: getUserDisplayNameFromRow(row, 'moved_by') || 'System',
+      movedAt: row.moved_at,
+      notes: row.notes || ''
+    }))
+  };
+}
+
+function hasElevatedLotMoveAuthority(actorRoleCodes) {
+  const roles = Array.isArray(actorRoleCodes) ? actorRoleCodes : [];
+
+  return roles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(String(roleCode || '').trim()));
+}
+
+function assertUnitActionPermission({ unit, currentUserId, actorRoleCodes }) {
+  if (hasElevatedLotMoveAuthority(actorRoleCodes)) {
+    return;
+  }
+
+  const safeCurrentUserId = normalizeRequiredInteger(currentUserId);
+  const assignedUserId = normalizeOptionalInteger(unit && unit.assigned_to_user_id);
+
+  if (!safeCurrentUserId || !assignedUserId || assignedUserId !== safeCurrentUserId) {
+    throw createLotMovePolicyError(
+      'BWT_UNIT_ACTION_NOT_ASSIGNED',
+      'You can record work only for a unit currently assigned to you.'
+    );
+  }
+}
+
+function assertUnitEditPermission({ unit, currentUserId, actorRoleCodes }) {
+  if (hasElevatedLotMoveAuthority(actorRoleCodes)) {
+    return;
+  }
+
+  const safeCurrentUserId = normalizeRequiredInteger(currentUserId);
+  const assignedUserId = normalizeOptionalInteger(unit && unit.assigned_to_user_id);
+
+  if (!safeCurrentUserId || !assignedUserId || assignedUserId !== safeCurrentUserId) {
+    throw createLotMovePolicyError(
+      'BWT_UNIT_EDIT_NOT_ASSIGNED',
+      'You can edit only units currently assigned to you.'
+    );
+  }
+}
+
+async function hasAnyRecordedManualCompletion(unitId) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+
+  if (!safeUnitId || !await tableExists('unit_work_completions')) {
+    return false;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT unit_work_completion_id
+      FROM unit_work_completions
+      WHERE unit_id = ?
+        AND credit_source = 'manual_completion'
+      LIMIT 1
+    `,
+    [safeUnitId]
+  );
+
+  return rows.length > 0;
+}
+
+function createLotMovePolicyError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+async function assertLotDestinationIsOpenOrCurrent({ unit, nextLotId }) {
+  const previousLotId = normalizeOptionalInteger(unit && unit.lot_id);
+  const normalizedNextLotId = normalizeRequiredInteger(nextLotId);
+
+  if (!normalizedNextLotId) {
+    throw createLotMovePolicyError(
+      'BWT_LOT_DESTINATION_NOT_OPEN',
+      'Choose an open, assignable lot.'
+    );
+  }
+
+  if (previousLotId && previousLotId === normalizedNextLotId) {
+    return;
+  }
+
+  const { assignableLots } = await getLotMap();
+  const isOpenAssignableLot = assignableLots.some((lot) => Number(lot.lot_id) === normalizedNextLotId);
+
+  if (!isOpenAssignableLot) {
+    throw createLotMovePolicyError(
+      'BWT_LOT_DESTINATION_NOT_OPEN',
+      'Closed, hidden, and parent/container lots cannot receive units. Choose an open child or standalone lot.'
+    );
+  }
+}
+
+async function assertLotMovePermission({ unit, nextLotId, currentUserId, actorRoleCodes }) {
+  const previousLotId = normalizeOptionalInteger(unit && unit.lot_id);
+  const normalizedNextLotId = normalizeRequiredInteger(nextLotId);
+
+  if (!previousLotId || !normalizedNextLotId || previousLotId === normalizedNextLotId) {
+    return;
+  }
+
+  if (hasElevatedLotMoveAuthority(actorRoleCodes)) {
+    return;
+  }
+
+  const currentUserIdNumber = normalizeRequiredInteger(currentUserId);
+  const assignedUserId = normalizeOptionalInteger(unit && unit.assigned_to_user_id);
+
+  if (!currentUserIdNumber || !assignedUserId || assignedUserId !== currentUserIdNumber) {
+    throw createLotMovePolicyError(
+      'BWT_LOT_MOVE_NOT_ASSIGNED',
+      'Only the Tech currently assigned to an unfinished unit may correct its lot directly.'
+    );
+  }
+
+  if (await hasAnyRecordedManualCompletion(unit.unit_id)) {
+    throw createLotMovePolicyError(
+      'BWT_LOT_MOVE_REQUIRES_APPROVAL',
+      'This unit already has recorded work. A Tech Lead, Management user, or Admin must move it to another lot.'
+    );
+  }
+}
+
 module.exports = {
   getBlankUnitFormData,
   getTechUnitFormOptions,
@@ -2205,10 +3702,19 @@ module.exports = {
   useExistingTechUnit,
   getUnitById,
   getTechUnitDeleteSummaryById,
+  getTechUnitPermanentDeletionPreviewById,
+  permanentlyDeleteTechUnit,
+  assignTechUnit,
+  getLatestWorkCompletionMapForUnits,
+  getUnitOperationalHistory,
+  getUnitWorkCompletionsForUser,
+  getUnitWorkCompletionPreview,
+  recordUnitWorkCompletion,
   archiveTechUnit,
   getAssetTagPrefix,
   getDisplayAssetTag,
   normalizeAssetTagInput,
   isAssignableLot,
-  getAssignableLots
+  getAssignableLots,
+  getBrowsableLots
 };

@@ -65,6 +65,14 @@
   const currentUserRoles = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
   const canDeleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const canApproveUnitOutcomes = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canCompleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
+  const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const currentUserId = currentUser && Number.isInteger(Number(currentUser.user_id))
+    ? Number(currentUser.user_id)
+    : null;
+  const isRegularTechUser = currentUserRoles.includes('tech')
+    && !currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const isRegularTechOverrideRequester = isRegularTechUser;
 
 
 
@@ -128,7 +136,7 @@
       <tr>
         <th>Unit / Weight</th>
         <th>Date</th>
-        <th>Latest Tech</th>
+        <th>Work / Assignment</th>
         <th>Identifiers</th>
         <th>Grade / Pass-Fail</th>
         <th>Unit Actions</th>
@@ -162,8 +170,10 @@
           const currentGradeLabel = currentGrade && currentGrade.gradeLabel ? currentGrade.gradeLabel : '—';
           const currentOutcomeLabel = currentOutcome && currentOutcome.outcomeLabel ? currentOutcome.outcomeLabel : '';
           const currentOutcomeClass = currentOutcome && currentOutcome.outcomeCode === 'pass' ? 'pass' : (currentOutcome && currentOutcome.outcomeCode === 'fail' ? 'fail' : '');
-          const latestTech = expanded.latestTech || null;
-          const latestTechName = latestTech && latestTech.displayName ? latestTech.displayName : '';
+          const assignedTechName = unit.assignedToName || 'Unassigned';
+          const isReadOnlySearchResult = Boolean(unit.isReadOnlyForCurrentUser);
+          const isAssignedToCurrentUser = Boolean(currentUserId && Number(unit.assignedToUserId) === currentUserId);
+          const canRequestUnitOverride = isRegularTechOverrideRequester && Boolean(currentUserId) && !isAssignedToCurrentUser;
           const unitCreatedDate = formatUnitCreatedDate(unit.createdAt);
           const unitCreatedTime = formatUnitCreatedTime(unit.createdAt);
         %>
@@ -183,6 +193,10 @@
                 <strong><%= unit.specSummary %></strong>
                 <small>
                   <span>Lot: <%= unit.lotName || '—' %></span>
+                  <% if (unit.isLotClosed) { %>
+                    <span aria-hidden="true">·</span>
+                    <span>Closed lot</span>
+                  <% } %>
                   <span aria-hidden="true">·</span>
                   <span>Category: <%= unit.categoryLabel || '—' %></span>
                   <% if (unit.isArchived) { %>
@@ -191,10 +205,7 @@
                   <% } %>
                 </small>
                 <span class="tech-unit-summary-weight-strip">
-                  <span class="tech-unit-summary-weight-value">Weight <strong><%= unit.formattedProductionWeight || '—' %></strong></span>
-                  <% if (unit.productionWeightSourceCode === 'unit_override') { %>
-                    <span class="tech-unit-summary-weight-source">Unit override</span>
-                  <% } %>
+                  <span class="tech-unit-summary-weight-value">Current lot weight <strong><%= unit.formattedCurrentLotWeight || '—' %></strong></span>
                 </span>
               </span>
             </button>
@@ -210,7 +221,10 @@
           </td>
 
           <td>
-            <span class="tech-unit-summary-tech-user"><%= latestTechName || 'Needs Tech User' %></span>
+            <span class="tech-unit-summary-work-stack">
+              <small class="tech-outcome-status">Assigned To</small>
+              <span class="tech-unit-summary-tech-user"><%= assignedTechName %></span>
+            </span>
           </td>
 
           <td>
@@ -244,6 +258,8 @@
                   <small class="tech-outcome-status">Approval Requested</small>
                 <% } else if (currentOutcome.isApproved && currentOutcome.approvedByName) { %>
                   <small class="tech-outcome-status">Approved by <%= currentOutcome.approvedByName %></small>
+                <% } else if (currentOutcome.approvalStatusCode === 'denied' && currentOutcome.approvedByName) { %>
+                  <small class="tech-outcome-status">Review declined by <%= currentOutcome.approvedByName %></small>
                 <% } %>
               <% } else { %>
                 <small class="tech-outcome-status">No Pass/Fail</small>
@@ -254,12 +270,21 @@
           <td>
             <% if (unit.unitId) { %>
               <div class="tech-summary-actions">
-                <button type="button" class="secondary-button tech-history-action-button" data-unit-panel-button data-panel="history" data-target="tech-unit-detail-<%= unit.unitId %>" data-no-row-toggle hx-get="/tech/units/<%= unit.unitId %>/history" hx-target="#tech-unit-history-content-<%= unit.unitId %>" hx-swap="innerHTML">
-                  History
-                </button>
-                <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" data-no-row-toggle>
-                  Edit
-                </a>
+                <% if (canCompleteTechUnits && !unit.isArchived && !isReadOnlySearchResult) { %>
+                  <a
+                    class="secondary-button"
+                    href="/tech/units/<%= unit.unitId %>/complete-work/modal"
+                    data-tech-modal-trigger
+                    data-no-row-toggle
+                  >
+                    Work Complete
+                  </a>
+                <% } %>
+                <% if (!isReadOnlySearchResult) { %>
+                  <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" data-no-row-toggle>
+                    Edit
+                  </a>
+                <% } %>
                 <% if (unit.isArchived) { %>
                   <span class="tech-chip">Archived</span>
                 <% } else if (canDeleteTechUnits) { %>
@@ -304,12 +329,62 @@
                       <% if (unit.isArchived) { %>
                         <span class="tech-chip">Archived</span>
                       <% } %>
+                      <% if (isReadOnlySearchResult) { %>
+                        <span class="tech-chip">Read-only search result</span>
+                      <% } %>
                     </div>
 
                     <% if (unit.unitId) { %>
-                      <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/override/modal" hx-get="/tech/units/<%= unit.unitId %>/override/modal" hx-target="#modal-root" hx-swap="innerHTML">
-                        Request Override
-                      </a>
+                      <% if (canRequestUnitOverride) { %>
+                        <a
+                          class="secondary-button"
+                          href="/tech/units/<%= unit.unitId %>/override/modal"
+                          data-tech-modal-trigger
+                          data-no-row-toggle
+                        >
+                          Request Override
+                        </a>
+                      <% } %>
+
+                      <% if (isRegularTechUser) { %>
+                        <button
+                          type="button"
+                          class="secondary-button tech-personal-credit-action-button"
+                          data-unit-panel-button
+                          data-panel="my-weight"
+                          data-no-row-toggle
+                          hx-get="/tech/units/<%= unit.unitId %>/my-weight-earned"
+                          hx-target="#tech-unit-my-weight-content-<%= unit.unitId %>"
+                          hx-swap="innerHTML"
+                        >
+                          My Weight Earned
+                        </button>
+                      <% } %>
+
+                      <% if (canViewUnitHistory) { %>
+                        <button
+                          type="button"
+                          class="secondary-button tech-history-action-button"
+                          data-unit-panel-button
+                          data-panel="history"
+                          data-no-row-toggle
+                          hx-get="/tech/units/<%= unit.unitId %>/history"
+                          hx-target="#tech-unit-history-content-<%= unit.unitId %>"
+                          hx-swap="innerHTML"
+                        >
+                          History
+                        </button>
+                      <% } %>
+                      <% if (canDeleteTechUnits) { %>
+                        <a
+                          class="secondary-button danger-button tech-permanent-delete-action-button"
+                          href="/tech/units/<%= unit.unitId %>/permanent-delete/modal"
+                          data-tech-modal-trigger
+                          data-no-row-toggle
+                        >
+                          Delete Unit Permanently
+                        </a>
+                      <% } %>
                     <% } %>
                   </div>
                 </div>
@@ -335,7 +410,17 @@
                     <dl class="tech-detail-list">
                       <div>
                         <dt>Lot</dt>
-                        <dd><%= unit.lotName || '—' %></dd>
+                        <dd>
+                          <%= unit.lotName || '—' %>
+                          <% if (unit.isLotClosed) { %>
+                            <span class="tech-chip">Closed</span>
+                          <% } %>
+                        </dd>
+                      </div>
+
+                      <div>
+                        <dt>Assigned Tech</dt>
+                        <dd><%= unit.assignedToName || 'Unassigned' %></dd>
                       </div>
 
                       <div>
@@ -344,14 +429,11 @@
                       </div>
 
                       <div>
-                        <dt>Production Weight</dt>
+                        <dt>Current Lot Weight</dt>
                         <dd>
                           <div class="tech-production-weight-detail">
                             <div class="tech-production-weight-detail-main">
-                              <strong><%= unit.formattedProductionWeight || '—' %></strong>
-                              <% if (unit.productionWeightSourceCode === 'unit_override') { %>
-                                <span class="tech-chip tech-production-weight-source-chip">Unit override</span>
-                              <% } %>
+                              <strong><%= unit.formattedCurrentLotWeight || '—' %></strong>
                             </div>
                           </div>
                         </dd>
@@ -421,11 +503,7 @@
                       <% if (currentOutcome && currentOutcome.isPendingApproval && canApproveUnitOutcomes) { %>
                         <div>
                           <dt>Review</dt>
-                          <dd>
-                            <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/outcome-approval/modal" hx-get="/tech/units/<%= unit.unitId %>/outcome-approval/modal" hx-target="#modal-root" hx-swap="innerHTML">
-                              Approve Pass/Fail
-                            </a>
-                          </dd>
+                          <dd><a href="/management/overrides?status=pending">Review in Overrides</a></dd>
                         </div>
                       <% } %>
 
@@ -783,11 +861,21 @@
                 <% } %>
                   </div>
 
-                  <div id="tech-unit-history-panel-<%= unit.unitId %>" class="tech-unit-panel-view" data-unit-panel-content="history" hidden>
-                    <div id="tech-unit-history-content-<%= unit.unitId %>" class="tech-history-panel-placeholder">
-                      <p>Click History to load this unit's audit history from the server.</p>
+                  <% if (isRegularTechUser) { %>
+                    <div id="tech-unit-my-weight-panel-<%= unit.unitId %>" class="tech-unit-panel-view" data-unit-panel-content="my-weight" hidden>
+                      <div id="tech-unit-my-weight-content-<%= unit.unitId %>" class="tech-history-panel-placeholder">
+                        <p>Select My Weight Earned to load your recorded work credit.</p>
+                      </div>
                     </div>
-                  </div>
+                  <% } %>
+
+                  <% if (canViewUnitHistory) { %>
+                    <div id="tech-unit-history-panel-<%= unit.unitId %>" class="tech-unit-panel-view" data-unit-panel-content="history" hidden>
+                      <div id="tech-unit-history-content-<%= unit.unitId %>" class="tech-history-panel-placeholder">
+                        <p>Select History to load this unit's audit history from the server.</p>
+                      </div>
+                    </div>
+                  <% } %>
                 </div>
               </div>
             </div>

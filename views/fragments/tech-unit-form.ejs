@@ -216,7 +216,7 @@
         <h3>Lot Assignment</h3>
       </div>
       <p>
-        Assign the unit to the child lot the tech is working on. Parent/container lots are not assignable.
+        Assign the unit to the open child or standalone lot the Tech is working on. Closed and parent/container lots cannot receive units.
         If an existing unit is confirmed during duplicate matching, changing the lot records a lot-movement history entry.
       </p>
     </div>
@@ -230,17 +230,20 @@
             <%
               const lotProductionWeightNumber = Number(lot.resolved_default_production_weight);
               const lotProductionWeightValue = Number.isFinite(lotProductionWeightNumber) ? lotProductionWeightNumber.toFixed(2) : '';
+              const lotOptionLabel = lot.isCurrentLotClosed
+                ? `${lot.lot_name} (Closed — current lot)`
+                : lot.lot_name;
             %>
             <option value="<%= lot.lot_id %>" data-production-weight="<%= lotProductionWeightValue %>" <%= selected(formData.lotId, lot.lot_id) %>>
-              <%= lot.lot_name %>
-              <% if (lot.lot_number) { %>
-                - Lot #<%= lot.lot_number %>
-              <% } %>
+              <%= lotOptionLabel %>
             </option>
           <% }) %>
         </select>
         <small class="field-hint">
-          Lots with child lots are containers and cannot receive units directly.
+          Closed lots cannot receive new or moved units. Lots with child lots are containers and cannot receive units directly.
+          <% if (formOptions.currentLotIsClosed) { %>
+            This unit remains in its current closed lot unless you select an open destination lot.
+          <% } %>
         </small>
       </label>
 

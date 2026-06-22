@@ -1,0 +1,57 @@
+<%
+  const safeCompletions = Array.isArray(completions) ? completions : [];
+  const safeErrorMessages = Array.isArray(errorMessages) ? errorMessages : [];
+%>
+
+<div class="tech-unit-history-panel tech-unit-personal-credit-panel">
+  <div class="tech-unit-history-panel-header">
+    <div>
+      <strong>My Weight Earned</strong>
+      <span>Only your recorded work credit for this unit is shown.</span>
+    </div>
+
+    <div class="tech-unit-history-panel-actions">
+      <span><%= safeCompletions.length %> record<%= safeCompletions.length === 1 ? '' : 's' %></span>
+      <button type="button" class="tech-detail-view-link" data-unit-panel-button data-panel="details">
+        Back to Details
+      </button>
+    </div>
+  </div>
+
+  <% if (safeErrorMessages.length > 0) { %>
+    <div class="message error">
+      <% safeErrorMessages.forEach((message) => { %>
+        <p><%= message %></p>
+      <% }) %>
+    </div>
+  <% } else if (safeCompletions.length === 0) { %>
+    <div class="message success">
+      <p>You do not have recorded work credit for this unit.</p>
+    </div>
+  <% } else { %>
+    <section class="tech-notes-section tech-notes-section--history">
+      <div class="tech-history-section-title">
+        <div>
+          <h3>My Earned Weight</h3>
+          <span><%= safeCompletions.length %> record<%= safeCompletions.length === 1 ? '' : 's' %></span>
+        </div>
+      </div>
+
+      <div class="tech-history-list">
+        <% safeCompletions.forEach((completion) => { %>
+          <article class="tech-history-row">
+            <div class="tech-history-meta">
+              <span class="tech-history-status is-current"><%= completion.creditSourceLabel || 'Work Complete' %></span>
+              <span><%= completion.lotName || 'No active lot' %></span>
+              <span><%= completion.completedAt ? formatDateTime(completion.completedAt) : 'No date recorded' %></span>
+            </div>
+            <div class="tech-history-summary">
+              <span>Weight Earned: <%= completion.formattedProductionWeight || '—' %></span>
+            </div>
+            <% if (completion.notes) { %><p class="tech-history-text"><%= completion.notes %></p><% } %>
+          </article>
+        <% }) %>
+      </div>
+    </section>
+  <% } %>
+</div>

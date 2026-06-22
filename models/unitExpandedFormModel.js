@@ -1,5 +1,6 @@
 const { pool } = require('./db');
 const unitOutcomeModel = require('./unitOutcomeModel');
+const overrideRequestModel = require('./overrideRequestModel');
 
 const DEFAULT_GRAPHICS_ROWS = [
   {
@@ -683,6 +684,32 @@ async function saveOutcome(connection, unitId, formData, currentUserId) {
     unitId,
     formData,
     currentUserId
+  });
+
+  const outcomeCode = unitOutcomeModel.normalizeOutcomeCode(formData.outcomeCode);
+
+  if (!outcomeCode) {
+    return;
+  }
+
+  const [unitRows] = await connection.query(
+    `
+      SELECT lot_id
+      FROM units
+      WHERE unit_id = ?
+      LIMIT 1
+    `,
+    [unitId]
+  );
+
+  await overrideRequestModel.syncOutcomeConfirmationRequestWithConnection(connection, {
+    unitId,
+    lotId: unitRows[0] ? unitRows[0].lot_id : null,
+    requestedByUserId: currentUserId,
+    outcomeCode,
+    outcomeNotes: formData.outcomeNotes,
+    requestNotes: formData.outcomeApprovalRequestNotes,
+    approvalRequested: unitOutcomeModel.normalizeApprovalRequested(formData.outcomeApprovalRequested)
   });
 }
 
