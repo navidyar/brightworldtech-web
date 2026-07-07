@@ -3,6 +3,7 @@
   <%- include('../partials/head', { pageTitle }) %>
   <link rel="stylesheet" href="/css/modal.css" />
   <link rel="stylesheet" href="/css/tech.css" />
+  <link rel="stylesheet" href="/css/tech-units-stage-a.css?v=20260707" />
   <script defer src="/js/modal.js"></script>
   <script defer src="/js/tech-units.js"></script>
   <script defer src="/js/tech-unit-form.js"></script>
@@ -15,30 +16,30 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell">
-          <section class="dashboard-hero accent-green">
+          <section class="tech-units-stage-a-page-heading">
             <div>
               <p class="eyebrow">Tech Unit Registry</p>
-              <h2>Tech Units</h2>
+              <h1>Tech Units</h1>
               <p>
-                Create, edit, search, and review unit records from the shared Unit Browser. Active units can only be assigned to open lots that do not have child lots; authorized users can separately review parked units.
+                Create, edit, search, and review unit records from the shared Unit Browser.
               </p>
             </div>
 
-            <div class="hero-badge">
-              <span>Loaded</span>
-              <strong id="tech-units-loaded-count"><%= result.supported ? formatNumber(result.units.length) : '—' %></strong>
-            </div>
+            <a class="primary-button tech-units-stage-a-create-button" href="/tech/units/new" hx-get="/tech/units/new/modal" hx-target="#modal-root" hx-swap="innerHTML">
+              Create Unit
+            </a>
           </section>
 
-          <section class="content-card">
-            <div class="content-header">
+          <section class="content-card tech-units-stage-a-browser-card">
+            <div class="content-header tech-units-stage-a-browser-header">
               <div>
                 <h2>Unit Browser</h2>
               </div>
 
-              <a class="primary-button" href="/tech/units/new" hx-get="/tech/units/new/modal" hx-target="#modal-root" hx-swap="innerHTML">
-                Create Unit
-              </a>
+              <p class="tech-units-stage-a-loaded-count" aria-live="polite">
+                <span>Loaded</span>
+                <strong id="tech-units-loaded-count"><%= result.supported ? formatNumber(result.units.length) : '—' %></strong>
+              </p>
             </div>
 
             <% if (successMessage) { %>
@@ -59,11 +60,11 @@
                 const canViewParkedUnits = pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
                 const isLast24HourDrilldown = filters.createdWindow === '24h';
               %>
-              <form class="tech-filter-form tech-filter-panel" method="get" action="/tech/units">
+              <form class="tech-filter-form tech-filter-panel tech-filter-panel--stage-a" method="get" action="/tech/units">
                 <div class="tech-filter-panel-header">
                   <div>
-                    <p class="eyebrow">Search & Filters</p>
-                    <h3>Scan or Search Units</h3>
+                    <h3>Search &amp; Filters</h3>
+                    <p>Scan or paste several Asset Tags, BIOS serials, or unit serials.</p>
                   </div>
 
                   <% if (canViewParkedUnits || isLast24HourDrilldown || filters.unitState === 'parked' || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
@@ -101,7 +102,7 @@
                     </small>
                   </label>
 
-                  <div class="tech-filter-grid" aria-label="Unit filters">
+                  <div class="tech-filter-grid <%= isRegularTechBrowserUser ? 'tech-filter-grid--regular-tech' : 'tech-filter-grid--tech-lead-plus' %>" aria-label="Unit filters">
                     <label class="form-field">
                       <span>Assignable Lot</span>
                       <select name="lotId" data-tech-filter-auto-submit>
@@ -110,7 +111,7 @@
                           <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>><%= lot.lot_name %></option>
                         <% }) %>
                       </select>
-                      <small class="field-hint">Closed lots remain available for review but cannot receive new or moved units. Lots with child lots are containers and are not assignable.</small>
+                      <small class="field-hint tech-filter-field-hint">Closed lots remain available for review but cannot receive new or moved units. Lots with child lots are containers and are not assignable.</small>
                     </label>
 
                     <label class="form-field">
@@ -160,7 +161,7 @@
                           <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="createdEndDate" value="<%= filters.createdEndDate || '' %>" />
                         </label>
                       </div>
-                      <small class="field-hint">Set both dates as needed, then choose Apply Filters.</small>
+                      <small class="field-hint tech-filter-field-hint">Set both dates as needed, then choose Apply Filters.</small>
                     </fieldset>
                   </div>
                 </div>
@@ -171,6 +172,10 @@
                     <p>This Unit Browser view is filtered to records created in the last 24 hours.</p>
                   </div>
                 <% } %>
+
+                <p class="tech-filter-stage-a-guidance">
+                  Selections apply immediately. Choose Apply Filters for Search Units and Created Date Range.
+                </p>
 
                 <div class="tech-filter-actions">
                   <button class="primary-button" type="submit">Apply Filters</button>

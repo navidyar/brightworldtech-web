@@ -4,6 +4,10 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
+## Reset Design Stage A — Tech Units Header & Filter Workspace Only
+
+Reset Design Stage A begins the Lookup-inspired visual migration from the restored stable baseline. It updates only the Tech Units page heading, Search & Filters workspace, and Unit Browser outer shell. The established Tech User option source, Tech Lead+ visibility, current-assignment filter behavior, filter names, HTMX events, model/controller queries, Unit Browser table, expanded detail panels, and action behavior remain unchanged. The new page-scoped stylesheet uses the approved Lookup form language: compact 39px controls, thinner blue-gray borders, 7px corners, small labels, a thin SVG select chevron, pale-blue panel headers, and restrained shadows. No database migration is required.
+
 Step 7h.3: Client-Side Live Request Filtering.
 
 Step 7h.3 loads the role-scoped Unit Requests for the selected status tab once, then narrows the existing queue in the browser as the reviewer types or chooses a Request Type. This matches the responsive Create Unit catalog-filtering interaction without debounced page refreshes, SQL searches, or caret interruptions. The selected Type and search phrase remain in the queue URL and are preserved through record navigation, return actions, and status-tab changes. No database migration is required.
