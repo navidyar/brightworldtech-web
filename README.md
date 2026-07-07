@@ -4,6 +4,16 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
+## Reset Design Stage F.2 — Metrics Section Structure & Date Control Normalization
+
+- Moves the **Search & Filters** and **Units** titles out of their working panels and places them directly above their respective containers, matching the compact section-label rhythm used by the Lookup Metrics Dashboard.
+- Keeps Search & Filters and the Units table as separate white, thin-bordered, restrained-shadow panels; removes the tall internal header bars and the redundant Shared Unit Browser label.
+- Shows the loaded count as a compact green **N loaded** status beside the external Units heading.
+- Consolidates standard form fields to the same final normal-weight Lookup control contract and gives the Created Date Range triggers one explicit component rule matching the regular selects: Inter/system font, `.86rem`, `400` weight, `#26384e` text, `39px` height, and the same border/radius/shadow.
+- Normalizes the Created Date Range fieldset/legend layout so its two date triggers align with the Tech User control on the shared second filter row. From and Through remain horizontal under their respective triggers.
+- Retains all existing Tech Units behavior, including Tech User option data and filter behavior, date parameters, Apply Filters, current role gates, HTMX loading, actions, table expansion, and database behavior.
+- No database migration is required.
+
 ## Reset Design Stage F.1 — Tech Units Detail and Access Refinement
 
 - Refines the clean `/tech/units` cutover without restoring legacy `tech.css`: the page heading is now **Tech Units Browser**, the Unit-row disclosure arrow is easier to notice, the nested Unit table has square internal corners, and summary action buttons remain on one horizontal line with table-only overflow on narrow screens.

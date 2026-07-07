@@ -18,7 +18,7 @@
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
   <link rel="stylesheet" href="/css/modal.css" />
-  <link rel="stylesheet" href="/css/tech-units-clean.css?v=20260708-stage-f1" />
+  <link rel="stylesheet" href="/css/tech-units-clean.css?v=20260708-stage-f2" />
   <script defer src="/js/modal.js"></script>
   <script defer src="/js/tech-units.js"></script>
   <script defer src="/js/tech-units-date-picker.js"></script>
@@ -58,11 +58,9 @@
                 const canViewParkedUnits = pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
                 const isLast24HourDrilldown = filters.createdWindow === '24h';
               %>
-              <form class="tech-filter-form tech-filter-panel tech-units-clean-filter-workspace" method="get" action="/tech/units">
-                <div class="tech-filter-panel-header">
-                  <div>
-                    <h3>Search &amp; Filters</h3>
-                  </div>
+              <section class="tech-units-clean-section tech-units-clean-filters-section" aria-labelledby="tech-units-filters-heading">
+                <div class="tech-units-clean-section-heading tech-units-clean-section-heading--filters">
+                  <h2 id="tech-units-filters-heading">Search &amp; Filters</h2>
 
                   <% if (canViewParkedUnits || isLast24HourDrilldown || filters.unitState === 'parked' || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
                     <div class="tech-filter-panel-header-actions">
@@ -90,7 +88,8 @@
                   <% } %>
                 </div>
 
-                <div class="tech-filter-layout">
+                <form class="tech-filter-form tech-filter-panel tech-units-clean-filter-workspace" method="get" action="/tech/units">
+                  <div class="tech-filter-layout">
                   <label class="form-field tech-filter-search-field">
                     <span>Search Units</span>
                     <textarea name="search" rows="5" placeholder="Scan or paste asset tags, BIOS serials, or unit serials — one per line"><%= filters.search %></textarea>
@@ -193,28 +192,28 @@
                   </div>
                 <% } %>
 
-                <div class="tech-filter-actions">
-                  <button class="primary-button" type="submit">Apply Filters</button>
-                  <a class="secondary-button" href="/tech/units">Clear</a>
-                </div>
-              </form>
-
-              <section class="tech-units-clean-results-workspace" aria-labelledby="tech-units-results-heading">
-                <div class="tech-units-clean-results-heading">
-                  <div>
-                    <p class="eyebrow">Shared Unit Browser</p>
-                    <h2 id="tech-units-results-heading">Units</h2>
+                  <div class="tech-filter-actions">
+                    <button class="primary-button" type="submit">Apply Filters</button>
+                    <a class="secondary-button" href="/tech/units">Clear</a>
                   </div>
+                </form>
+              </section>
+
+              <section class="tech-units-clean-section tech-units-clean-results-workspace" aria-labelledby="tech-units-results-heading">
+                <div class="tech-units-clean-section-heading tech-units-clean-section-heading--results">
+                  <h2 id="tech-units-results-heading">Units</h2>
 
                   <p class="tech-units-clean-loaded-count" aria-live="polite">
-                    <span>Loaded</span>
                     <strong id="tech-units-loaded-count"><%= result.supported ? formatNumber(result.units.length) : '—' %></strong>
+                    <span>loaded</span>
                   </p>
                 </div>
 
-                <div class="tech-table-shell" id="tech-units-list" hx-get="<%= tableUrl %>" hx-trigger="load, unit-saved from:body, unit-work-completed from:body, unit-permanently-deleted from:body, unit-parked from:body, unit-returned-active from:body" hx-swap="innerHTML">
-                  <div class="tech-loading-card">
-                    Loading units...
+                <div class="tech-units-clean-results-panel">
+                  <div class="tech-table-shell" id="tech-units-list" hx-get="<%= tableUrl %>" hx-trigger="load, unit-saved from:body, unit-work-completed from:body, unit-permanently-deleted from:body, unit-parked from:body, unit-returned-active from:body" hx-swap="innerHTML">
+                    <div class="tech-loading-card">
+                      Loading units...
+                    </div>
                   </div>
                 </div>
               </section>
