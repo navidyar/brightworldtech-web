@@ -4,16 +4,13 @@
 
 <div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close>
   <section class="modal-panel tech-unit-modal" role="dialog" aria-modal="true" aria-labelledby="tech-unit-modal-title" data-modal-explicit-close data-modal-escape-close>
-    <header class="modal-header">
-      <div>
-        <p class="eyebrow">Tech Unit</p>
-        <h2 id="tech-unit-modal-title"><%= isEditMode ? 'Edit Unit' : 'Create Unit' %></h2>
-      </div>
+    <header class="modal-header tech-unit-modal-header">
+      <h2 id="tech-unit-modal-title"><%= isEditMode ? 'Edit Unit' : 'Create Unit' %></h2>
 
       <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
     </header>
 
-    <div class="modal-body">
+    <div class="modal-body tech-unit-modal-body">
       <%- include('./tech-unit-form', {
         mode,
         formAction,

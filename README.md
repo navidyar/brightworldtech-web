@@ -4,6 +4,14 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
+## Reset Design Stage F.4 — Form Labels & Add/Edit Modal Simplification
+
+- Aligns the Tech Units filter-label rhythm: Search Units, standard select labels, and **Created Date Range** now use the same compact `.72rem / 650` Lookup-derived label style, 3px left inset, and 4px label-to-control gap.
+- Removes routine instructional copy from Create/Edit Unit in the rendered UI, including the numbered guide, section descriptions, field hints, and repeated module descriptions. Validation messages, duplicate-result controls, warnings, error messages, and the lot-assumption workflow-state message remain available.
+- Makes the modal itself the primary form container. Form-section titles now sit outside their individual white work panels; the prior blue in-panel section headers and visible parent-card treatment are removed.
+- Applies the same clean form structure to the full-page Create/Edit fallback, without loading legacy `tech.css` for that page.
+- Does not change form fields, field names, live model/processor/lot behavior, duplicate checks, catalog requests, validation, role scope, routes, controllers, models, JavaScript, or database behavior. No migration is required.
+
 ## Reset Design Stage F.3 — Exact Metrics Controls & Panel Shadows
 
 - Applies one scoped Metrics Dashboard control contract to the Tech Units Search Units textarea, all standard filter selects, and the app-controlled Created Date triggers: Inter/system font stack, `.86rem`, `600` emphasis, `#26384e` text, and consistent line height. The date labels now inherit the exact same text treatment as the adjacent controls.

@@ -2044,3 +2044,307 @@
   font-weight: inherit !important;
   line-height: inherit;
 }
+
+/* Reset Design Stage F.4 — form label rhythm and Add/Edit modal simplification.
+   The modal itself is the main visual container. Section headings sit outside their
+   individual white work panels, so trained users scan the form without nested header bars
+   or instructional copy. Existing helper anchors remain in the DOM for current JS behavior
+   but are intentionally not shown. */
+.tech-units-clean-page .tech-filter-search-field,
+.tech-units-clean-page .tech-filter-grid > .form-field {
+  gap: 0;
+}
+
+.tech-units-clean-page .tech-filter-search-field > span,
+.tech-units-clean-page .tech-filter-grid > .form-field > span,
+.tech-units-clean-page .tech-created-date-range > legend {
+  margin: 0 0 4px 3px;
+  padding: 0;
+  color: var(--tu-label);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: none;
+}
+
+.tech-units-clean-page .tech-created-date-range {
+  gap: 0;
+}
+
+.tech-units-clean-page .tech-created-date-range-inputs {
+  margin-top: 0;
+}
+
+.tech-unit-form-clean-page {
+  --tu-ink: #26384e;
+  --tu-heading: #27374c;
+  --tu-muted: #66778d;
+  --tu-label: #5e6f85;
+  --tu-line: #d6e1ed;
+  --tu-line-strong: #c9d6e4;
+  --tu-blue: #315e9d;
+  --tu-shadow: 0 8px 24px rgba(29, 44, 69, 0.08);
+  color: var(--tu-ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+.tech-unit-form-clean-page,
+.tech-unit-form-clean-page * {
+  box-sizing: border-box;
+}
+
+.tech-unit-form-clean-page-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin: 0 0 18px;
+  padding: 0 3px;
+}
+
+.tech-unit-form-clean-page-heading h1 {
+  margin: 0;
+  color: var(--tu-heading);
+  font-size: clamp(1.4rem, 1.8vw, 1.7rem);
+  font-weight: 650;
+  letter-spacing: -0.025em;
+  line-height: 1.18;
+}
+
+.tech-unit-form-clean-page .primary-button,
+.tech-unit-form-clean-page .secondary-button,
+.tech-unit-form-clean-page .danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 39px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  box-shadow: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.84rem;
+  font-weight: 650;
+  line-height: 1.2;
+  text-decoration: none;
+}
+
+.tech-unit-form-clean-page .secondary-button {
+  border-color: #b8c8da;
+  color: #314d70;
+  background: #ffffff;
+}
+
+.tech-unit-form-clean-page .secondary-button:hover {
+  border-color: #91add0;
+  background: #f7fbff;
+}
+
+#modal-root .tech-unit-modal.modal-panel {
+  width: min(1080px, 100%);
+  border: 1px solid var(--tu-line);
+  border-radius: 10px;
+  background: #f7f9fc;
+  box-shadow: 0 18px 48px rgba(22, 36, 56, 0.2);
+}
+
+#modal-root .tech-unit-modal .tech-unit-modal-header {
+  align-items: center;
+  padding: 16px 18px 0;
+  border: 0;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+}
+
+#modal-root .tech-unit-modal .tech-unit-modal-header h2 {
+  margin: 0;
+  color: var(--tu-heading);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 1.06rem;
+  font-weight: 650;
+  letter-spacing: -0.012em;
+  line-height: 1.25;
+}
+
+#modal-root .tech-unit-modal .modal-close-button {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid #c9d6e4;
+  border-radius: 7px;
+  color: #5e6f85;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+#modal-root .tech-unit-modal .modal-close-button:hover {
+  color: #31445e;
+  background: #f2f7ff;
+  transform: none;
+}
+
+#modal-root .tech-unit-modal .tech-unit-modal-body {
+  padding: 16px 18px 20px;
+  background: transparent;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form {
+  display: grid;
+  gap: 20px;
+  color: var(--tu-ink);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* The modal/fallback are already the parent container. Form sections are structural only. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section-header {
+  display: block;
+  margin: 0;
+  padding: 0 3px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section-header .eyebrow,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section-header > p,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-unit-form-guide,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .field-hint,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .workflow-item .content-header > div > p {
+  display: none;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section-header h3 {
+  margin: 0;
+  color: var(--tu-heading);
+  font-size: 0.93rem;
+  font-weight: 650;
+  letter-spacing: -0.008em;
+  line-height: 1.25;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .form-grid,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .workflow-list,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .tech-outcome-approval-box {
+  margin: 0;
+  padding: 14px;
+  border: 1px solid var(--tu-line);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(29, 44, 69, 0.045);
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .workflow-list {
+  display: grid;
+  gap: 10px;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .tech-outcome-approval-box {
+  display: grid;
+  gap: 12px;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-field {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-field > span,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-field > legend {
+  margin: 0 0 4px 3px;
+  padding: 0;
+  color: var(--tu-label);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: none;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-field-wide {
+  grid-column: 1 / -1;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="number"], input[type="date"], textarea, select:not([multiple])) {
+  color: #26384e;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 0.86rem;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .workflow-item {
+  margin: 0;
+  padding: 12px;
+  border: 1px solid #dfe7f0;
+  border-radius: 7px;
+  background: #fbfdff;
+  box-shadow: none;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .workflow-item .content-header {
+  margin-bottom: 10px !important;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .workflow-item .content-header strong {
+  color: #31445e;
+  font-size: 0.84rem;
+  font-weight: 650;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-actions,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .action-row {
+  margin-top: 0;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-lot-assumption-status {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid #d7e6f6;
+  border-radius: 7px;
+  color: #476c9a;
+  background: #f7fbff;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 760px) {
+  .tech-unit-form-clean-page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  #modal-root .tech-unit-modal .tech-unit-modal-header,
+  #modal-root .tech-unit-modal .tech-unit-modal-body {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
-  <link rel="stylesheet" href="/css/tech.css" />
+  <link rel="stylesheet" href="/css/tech-units-clean.css?v=20260708-stage-f4" />
   <script defer src="/js/tech-unit-form.js"></script>
 
   <body>
@@ -15,33 +15,13 @@
       <div class="app-main">
         <%- include('../partials/topbar', { pageTitle }) %>
 
-        <main class="content-shell">
-          <section class="dashboard-hero accent-green">
-            <div>
-              <p class="eyebrow">Step 2i.4</p>
-              <h2><%= isEditMode ? 'Edit Unit' : 'Create Unit' %></h2>
-              <p>
-                This is the full-page fallback. The normal Tech Units page uses a modal create/edit flow.
-              </p>
-            </div>
-
-            <div class="hero-badge">
-              <span>Mode</span>
-              <strong><%= isEditMode ? 'Edit' : 'Create' %></strong>
-            </div>
+        <main class="content-shell tech-unit-form-clean-page">
+          <section class="tech-unit-form-clean-page-heading">
+            <h1><%= isEditMode ? 'Edit Unit' : 'Create Unit' %></h1>
+            <a class="secondary-button" href="/tech/units">Back to Units</a>
           </section>
 
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Tech</p>
-                <h2><%= isEditMode ? 'Edit Unit Record' : 'New Unit Record' %></h2>
-              </div>
-
-              <a class="secondary-button" href="/tech/units">Back to Units</a>
-            </div>
-
-            <%- include('../fragments/tech-unit-form', {
+          <%- include('../fragments/tech-unit-form', {
               mode,
               formAction,
               formOptions,
@@ -52,7 +32,6 @@
               canRequestIntentionalDuplicate: typeof canRequestIntentionalDuplicate !== 'undefined' ? canRequestIntentionalDuplicate : false,
               isModal: false
             }) %>
-          </section>
         </main>
       </div>
     </div>
