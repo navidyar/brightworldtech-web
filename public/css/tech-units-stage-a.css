@@ -278,14 +278,14 @@
 
 .tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(1) { grid-column: 1; grid-row: 1; }
 .tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(2) { grid-column: 2; grid-row: 1; }
-.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(3) { grid-column: 1; grid-row: 2; }
-.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(4) { grid-column: 2; grid-row: 2; }
-.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > .tech-created-date-range { grid-column: 3; grid-row: 2; }
+.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(3) { grid-column: 3; grid-row: 1; }
+.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(4) { grid-column: 1; grid-row: 2; }
+.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > .tech-created-date-range { grid-column: 2 / span 2; grid-row: 2; }
 
 .tech-filter-panel--stage-a .tech-filter-grid--regular-tech > :nth-child(1) { grid-column: 1; grid-row: 1; }
 .tech-filter-panel--stage-a .tech-filter-grid--regular-tech > :nth-child(2) { grid-column: 2; grid-row: 1; }
-.tech-filter-panel--stage-a .tech-filter-grid--regular-tech > :nth-child(3) { grid-column: 1; grid-row: 2; }
-.tech-filter-panel--stage-a .tech-filter-grid--regular-tech > .tech-created-date-range { grid-column: 2 / span 2; grid-row: 2; }
+.tech-filter-panel--stage-a .tech-filter-grid--regular-tech > :nth-child(3) { grid-column: 3; grid-row: 1; }
+.tech-filter-panel--stage-a .tech-filter-grid--regular-tech > .tech-created-date-range { grid-column: 1 / span 2; grid-row: 2; }
 
 .tech-filter-panel--stage-a .tech-created-date-range-inputs {
   display: grid;
@@ -501,9 +501,9 @@
 .tech-filter-panel--stage-a .tech-created-date-picker-label {
   order: 2;
   margin: 0 0 0 3px;
-  color: #718197;
-  font-size: 0.67rem;
-  font-weight: 500;
+  color: #5e6f85;
+  font-size: 0.72rem;
+  font-weight: 650;
   line-height: 1.25;
 }
 
@@ -655,5 +655,306 @@
   .tech-filter-panel--stage-a .tech-created-date-picker:last-child .tech-created-date-calendar {
     right: auto;
     left: 0;
+  }
+}
+
+
+/* Reset Design Stage C — Lookup form, surface, and detail consistency.
+   This is a visual-only layer. It intentionally does not alter filter fields,
+   roles, queries, HTMX events, table data, actions, or calendar behavior. */
+.tech-units-stage-a-page-heading,
+.tech-units-stage-a-browser-card,
+.tech-units-stage-a-browser-card button,
+.tech-units-stage-a-browser-card input,
+.tech-units-stage-a-browser-card select,
+.tech-units-stage-a-browser-card textarea {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* Lookup Metrics Dashboard field contract: normal field values, compact labels. */
+.tech-filter-panel--stage-a .tech-filter-search-field > span,
+.tech-filter-panel--stage-a .tech-filter-grid .form-field > span,
+.tech-filter-panel--stage-a .tech-created-date-range > legend,
+.tech-filter-panel--stage-a .tech-created-date-picker-label {
+  margin-left: 3px;
+  color: #5e6f85;
+  font-size: 0.72rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.tech-filter-panel--stage-a input,
+.tech-filter-panel--stage-a select,
+.tech-filter-panel--stage-a textarea {
+  border-color: #c9d6e4;
+  border-radius: 7px !important;
+  color: #26384e;
+  font-size: 0.86rem;
+  font-weight: 400 !important;
+  letter-spacing: 0;
+}
+
+.tech-filter-panel--stage-a select {
+  font-weight: 400 !important;
+}
+
+.tech-filter-panel--stage-a textarea {
+  border-radius: 7px !important;
+}
+
+.tech-filter-panel--stage-a .tech-created-date-picker-trigger {
+  border-color: #c9d6e4;
+  border-radius: 7px;
+  color: #26384e;
+  font-family: inherit;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.tech-filter-panel--stage-a .tech-created-date-picker-trigger > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tech-filter-panel--stage-a .tech-created-date-range-inputs {
+  grid-template-columns: repeat(2, minmax(138px, 1fr));
+  align-items: start;
+}
+
+/* A wider viewport keeps Grade with Lot and Category. Narrower layouts reflow
+   whole groups first; From and Through retain one stable two-control row. */
+.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(1) { grid-column: 1; grid-row: 1; }
+.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(2) { grid-column: 2; grid-row: 1; }
+.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(3) { grid-column: 3; grid-row: 1; }
+.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(4) { grid-column: 1; grid-row: 2; }
+.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > .tech-created-date-range { grid-column: 2 / span 2; grid-row: 2; }
+.tech-filter-panel--stage-a .tech-filter-grid--regular-tech > :nth-child(1) { grid-column: 1; grid-row: 1; }
+.tech-filter-panel--stage-a .tech-filter-grid--regular-tech > :nth-child(2) { grid-column: 2; grid-row: 1; }
+.tech-filter-panel--stage-a .tech-filter-grid--regular-tech > :nth-child(3) { grid-column: 3; grid-row: 1; }
+.tech-filter-panel--stage-a .tech-filter-grid--regular-tech > .tech-created-date-range { grid-column: 1 / span 2; grid-row: 2; }
+
+.tech-units-stage-a-browser-card .tech-table-shell {
+  padding: 0;
+  border: 1px solid #d6e1ed;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 4px 14px rgba(29, 44, 69, 0.045);
+}
+
+.tech-units-stage-a-browser-card .tech-table-card {
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.tech-units-stage-a-browser-card .tech-units-table {
+  border: 0;
+  border-radius: 8px;
+  color: #26384e;
+  font-size: 0.86rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.tech-units-stage-a-browser-card .tech-units-table thead th {
+  border-top: 0;
+  border-bottom: 1px solid #d6e1ed;
+  background: #f6f9fc;
+  color: #5e6f85;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.035em;
+}
+
+.tech-units-stage-a-browser-card .tech-summary-row td,
+.tech-units-stage-a-browser-card .tech-detail-row td {
+  border-color: #dfe7f0;
+  background: #ffffff;
+}
+
+.tech-units-stage-a-browser-card .tech-summary-row:hover td {
+  background: #fbfdff;
+}
+
+.tech-units-stage-a-browser-card .tech-unit-toggle strong,
+.tech-units-stage-a-browser-card .tech-unit-summary-grade,
+.tech-units-stage-a-browser-card .tech-unit-summary-tech-user,
+.tech-units-stage-a-browser-card .tech-unit-summary-id-value {
+  color: #27374c;
+  font-weight: 650;
+}
+
+.tech-units-stage-a-browser-card .tech-unit-toggle small,
+.tech-units-stage-a-browser-card .tech-unit-summary-created,
+.tech-units-stage-a-browser-card .tech-unit-summary-identifiers,
+.tech-units-stage-a-browser-card .tech-outcome-status {
+  color: #66778d;
+  font-weight: 400;
+}
+
+/* Expanded mini-menu: one Lookup-like outer workspace and quiet inner sections. */
+.tech-units-stage-a-browser-card .tech-detail-offset {
+  padding: 10px 14px 14px 38px;
+}
+
+.tech-units-stage-a-browser-card .tech-detail-panel {
+  padding: 14px;
+  border: 1px solid #d6e1ed !important;
+  border-left: 1px solid #d6e1ed !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  box-shadow: 0 4px 14px rgba(29, 44, 69, 0.045) !important;
+}
+
+.tech-units-stage-a-browser-card .tech-detail-header {
+  margin: -14px -14px 12px;
+  padding: 11px 14px;
+  border: 0;
+  border-bottom: 1px solid #d6e1ed;
+  border-radius: 7px 7px 0 0;
+  background: #f6f9fc !important;
+}
+
+.tech-units-stage-a-browser-card .tech-detail-title strong {
+  color: #27374c;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.tech-units-stage-a-browser-card .tech-detail-title span {
+  color: #66778d;
+  font-size: 0.81rem;
+  font-weight: 400;
+}
+
+.tech-units-stage-a-browser-card .tech-detail-layout {
+  gap: 10px;
+}
+
+.tech-units-stage-a-browser-card .tech-detail-section,
+.tech-units-stage-a-browser-card .tech-notes-section,
+.tech-units-stage-a-browser-card .tech-override-history-section {
+  padding: 10px 11px;
+  border: 1px solid #d6e1ed !important;
+  border-top-width: 1px !important;
+  border-radius: 8px !important;
+  background: #fbfdff !important;
+  box-shadow: none !important;
+}
+
+.tech-units-stage-a-browser-card .tech-detail-section h3,
+.tech-units-stage-a-browser-card .tech-notes-section h3,
+.tech-units-stage-a-browser-card .tech-override-history-section h3,
+.tech-units-stage-a-browser-card .tech-history-section-title h3 {
+  color: #31445e;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.045em;
+}
+
+.tech-units-stage-a-browser-card .tech-detail-list,
+.tech-units-stage-a-browser-card .tech-override-history-list,
+.tech-units-stage-a-browser-card .tech-notes-section .workflow-list,
+.tech-units-stage-a-browser-card .tech-override-history-section .workflow-list {
+  border-top: 1px solid #dfe7f0;
+  background: transparent;
+}
+
+.tech-units-stage-a-browser-card .tech-detail-list div,
+.tech-units-stage-a-browser-card .tech-override-history-list div,
+.tech-units-stage-a-browser-card .tech-notes-section .workflow-item,
+.tech-units-stage-a-browser-card .tech-override-history-section .workflow-item {
+  margin: 0 !important;
+  padding: 6px 0;
+  border-bottom: 1px solid #e4ebf3;
+  border-radius: 0;
+  background: transparent !important;
+}
+
+.tech-units-stage-a-browser-card .tech-detail-list dt,
+.tech-units-stage-a-browser-card .tech-override-history-list dt,
+.tech-units-stage-a-browser-card .tech-note-block strong {
+  color: #5e6f85;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.tech-units-stage-a-browser-card .tech-detail-list dd,
+.tech-units-stage-a-browser-card .tech-override-history-list dd,
+.tech-units-stage-a-browser-card .tech-note-block p {
+  color: #26384e;
+  font-size: 0.84rem;
+  font-weight: 400;
+}
+
+.tech-units-stage-a-browser-card .tech-note-block {
+  border: 1px solid #dfe7f0;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.tech-units-stage-a-browser-card .tech-chip,
+.tech-units-stage-a-browser-card .tech-history-status {
+  border-radius: 6px;
+  font-weight: 650;
+}
+
+/* Separate History uses the same quiet 8px workspace, not a color-rotating card. */
+.tech-units-stage-a-browser-card .tech-notes-section--history,
+.tech-units-stage-a-browser-card .tech-override-history-section {
+  border-color: #d6e1ed !important;
+  background: #ffffff !important;
+}
+
+.tech-units-stage-a-browser-card .tech-history-row,
+.tech-units-stage-a-browser-card .tech-history-row:nth-child(even) {
+  margin: 0 !important;
+  border-color: #e0e7ef;
+  border-radius: 0;
+  background: #ffffff !important;
+  box-shadow: none !important;
+}
+
+.tech-units-stage-a-browser-card .tech-history-meta {
+  color: #26384e;
+  font-size: 0.84rem;
+  font-weight: 600;
+}
+
+.tech-units-stage-a-browser-card .tech-history-summary,
+.tech-units-stage-a-browser-card .tech-history-text,
+.tech-units-stage-a-browser-card .tech-history-section-title > span,
+.tech-units-stage-a-browser-card .tech-history-disclosure-count {
+  color: #66778d;
+  font-weight: 400;
+}
+
+.tech-units-stage-a-browser-card .tech-history-disclosure-heading {
+  color: #27374c;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+@media (max-width: 640px) {
+  .tech-filter-panel--stage-a .tech-created-date-range-inputs {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .tech-units-stage-a-browser-card .tech-detail-offset {
+    padding: 9px 10px 13px 24px;
+  }
+
+  .tech-units-stage-a-browser-card .tech-detail-panel {
+    padding: 12px;
+  }
+
+  .tech-units-stage-a-browser-card .tech-detail-header {
+    margin: -12px -12px 10px;
+    padding: 10px 12px;
   }
 }
