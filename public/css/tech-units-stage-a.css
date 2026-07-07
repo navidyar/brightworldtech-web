@@ -25,10 +25,21 @@
   --tech-units-line: #d6e1ed;
   --tech-units-control-line: #c9d6e4;
   --tech-units-blue: #315e9d;
-  --tech-units-blue-soft: #f4f8fe;
-  --tech-units-blue-header: #f6f9fc;
+  --tech-units-blue-soft: #eaf1fb;
+  --tech-units-blue-header: #eef5ff;
+  --tech-units-filter-surface: #f7fbff;
   --tech-units-surface: #ffffff;
   --tech-units-shadow: 0 4px 14px rgba(29, 44, 69, 0.045);
+}
+
+/* Typography follows the live Lookup Metrics Dashboard hierarchy: normal field values and measured 650 headings. */
+.tech-units-stage-a-browser-card .tech-unit-toggle strong,
+.tech-units-stage-a-browser-card .tech-unit-summary-grade,
+.tech-units-stage-a-browser-card .tech-unit-summary-tech-user,
+.tech-units-stage-a-browser-card .tech-unit-summary-id-value,
+.tech-units-stage-a-browser-card .tech-detail-title strong,
+.tech-units-stage-a-browser-card .tech-history-meta {
+  font-weight: 650;
 }
 
 /* Page heading: quiet, compact, and visually separate from the work area. */
@@ -156,7 +167,7 @@
   overflow: visible;
   border: 1px solid var(--tech-units-line);
   border-radius: 10px;
-  background: var(--tech-units-surface);
+  background: var(--tech-units-filter-surface);
   box-shadow: var(--tech-units-shadow);
 }
 
@@ -165,11 +176,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  min-height: 63px;
+  min-height: 50px;
   margin: 0;
-  padding: 12px 16px;
+  padding: 11px 16px;
   border: 0;
-  border-bottom: 1px solid var(--tech-units-line);
+  border-bottom: 1px solid #c9d9ec;
   background: var(--tech-units-blue-header);
 }
 
@@ -200,8 +211,8 @@
   padding: 4px 7px;
   border: 1px solid #d8e4f1;
   border-radius: 6px;
-  background: #f7fbff;
-  color: #5f7490;
+  background: #edf5ff;
+  color: #476c9a;
   font-size: 0.68rem;
   font-weight: 620;
   letter-spacing: 0.04em;
@@ -214,7 +225,7 @@
   gap: 18px 22px;
   align-items: start;
   margin: 0;
-  padding: 18px 16px 14px;
+  padding: 16px;
 }
 
 .tech-filter-panel--stage-a .tech-filter-search-field,
@@ -270,7 +281,7 @@
   color: var(--tech-units-ink);
   box-shadow: inset 0 1px 1px rgba(29, 44, 69, 0.025);
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   font-weight: 400;
   letter-spacing: 0;
   line-height: 1.35;
@@ -314,26 +325,6 @@
   outline-offset: 1px;
 }
 
-.tech-filter-panel--stage-a .field-hint {
-  display: block;
-  margin: 3px 0 0;
-  color: var(--tech-units-muted);
-  font-size: 0.76rem;
-  font-weight: 400;
-  line-height: 1.42;
-}
-
-.tech-filter-panel--stage-a .tech-filter-search-field .field-hint {
-  margin-top: 5px;
-}
-
-/* The filter sequence remains the existing sequence; only its visual grid is owned here. */
-.tech-filter-panel--stage-a .tech-filter-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px 10px;
-  min-width: 0;
-}
 
 .tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(1) { grid-column: 1; grid-row: 1; }
 .tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(2) { grid-column: 2; grid-row: 1; }
@@ -346,21 +337,37 @@
 .tech-filter-panel--stage-a .tech-filter-grid--regular-tech > .tech-created-date-range { grid-column: 1 / span 2; grid-row: 2; }
 
 .tech-filter-panel--stage-a .tech-created-date-range {
+  display: grid;
+  align-content: start;
+  gap: 4px;
   min-width: 0;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.tech-filter-panel--stage-a .tech-filter-grid--tech-lead-plus > :nth-child(4),
+.tech-filter-panel--stage-a .tech-created-date-range {
+  align-self: start;
 }
 
 .tech-filter-panel--stage-a .tech-created-date-range-inputs {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
   gap: 8px;
   min-width: 0;
+  min-height: 39px;
+  margin: 0;
 }
 
 /* Custom dates use the exact Metrics Dashboard visual pattern while preserving current inputs and Apply Filters behavior. */
 .tech-filter-panel--stage-a .tech-created-date-picker {
   position: relative;
   display: grid;
-  gap: 6px;
+  grid-template-rows: 39px auto;
+  gap: 4px;
   min-width: 0;
   color: var(--tech-units-label);
   font-size: 0.72rem;
@@ -381,7 +388,7 @@
   color: var(--tech-units-ink);
   box-shadow: inset 0 1px 1px rgba(29, 44, 69, 0.025);
   font: inherit;
-  font-size: 0.86rem;
+  font-size: 0.9rem;
   font-weight: 600;
   line-height: 1.25;
   text-align: left;
@@ -551,15 +558,6 @@
   text-decoration: underline;
 }
 
-.tech-filter-panel--stage-a .tech-filter-stage-a-guidance {
-  margin: 0 16px;
-  padding: 9px 0 0;
-  border-top: 1px solid #e1e8f0;
-  color: var(--tech-units-muted);
-  font-size: 0.75rem;
-  font-weight: 400;
-  line-height: 1.4;
-}
 
 .tech-filter-panel--stage-a .tech-filter-actions {
   display: flex;
@@ -569,6 +567,7 @@
   margin: 0;
   padding: 12px 16px 16px;
   border: 0;
+  border-top: 1px solid #dce7f2;
 }
 
 .tech-filter-panel--stage-a .tech-filter-actions .primary-button,
@@ -628,8 +627,8 @@
   padding: 9px 12px;
   border: 0;
   border-bottom: 1px solid #dbe5f0;
-  background: #fbfdff;
-  color: #5f7087;
+  background: #f4f8fe;
+  color: #52657e;
   font-size: 0.68rem;
   font-weight: 650;
   letter-spacing: 0.035em;
@@ -662,7 +661,7 @@
   padding: 0;
   border: 0;
   border-bottom: 1px solid #c5d7eb;
-  background: #f4f8fe;
+  background: #f2f7ff;
 }
 
 .tech-units-stage-a-browser-card .tech-unit-toggle {
@@ -717,8 +716,8 @@
   padding: 2px 5px;
   border: 1px solid #d6e1ed;
   border-radius: 4px;
-  background: #f7fbff;
-  color: #5f7490;
+  background: #edf5ff;
+  color: #476c9a;
   font-size: 0.68rem;
   font-weight: 620;
   letter-spacing: 0;
@@ -769,7 +768,7 @@
   border: 0;
   border-bottom: 1px solid var(--tech-units-line);
   border-radius: 0;
-  background: #eef5ff !important;
+  background: #eaf1fb !important;
 }
 
 .tech-units-stage-a-browser-card .tech-detail-title {
@@ -1063,10 +1062,6 @@
     padding: 14px 12px 12px;
   }
 
-  .tech-filter-panel--stage-a .tech-filter-stage-a-guidance {
-    margin-right: 12px;
-    margin-left: 12px;
-  }
 
   .tech-filter-panel--stage-a .tech-filter-actions {
     padding: 11px 12px 13px;

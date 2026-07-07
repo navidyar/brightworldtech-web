@@ -4,6 +4,14 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
+## Reset Design Stage E — Metrics Typography, Color, Date Alignment, and Form Simplification
+
+- Uses the current Lookup Metrics Dashboard hierarchy on Tech Units: normal-weight `.9rem` form values, compact `.72rem / 650` labels, and measured `650` emphasis for page/workspace headings and key values.
+- Applies the Metrics-style pale-blue utility palette without gradients: related soft-blue panel/header surfaces, darker blue-gray text, white editable controls, and one-pixel borders on every panel edge.
+- Keeps Assignable Lot, Category, and Grade together on the wide-screen first filter row. For Tech Lead+, Tech User and Created Date Range share the second row; the two date controls remain side-by-side at the same 39px height as the layout narrows.
+- Removes routine form helper copy from the Search & Filters workspace: the panel instruction, Search Units note, Assignable Lot note, Created Date Range note, and the selections/apply guidance. Labels, placeholders, From/Through captions, warnings, active-filter state, and action labels remain.
+- Does not change Tech User data/options or role gate, filters, date parameters, Apply Filters behavior, routes, HTMX events, actions, models, controllers, JavaScript, or database behavior. No migration is required.
+
 ## Reset Design Stage C — Lookup Form, Surface, and Detail Consistency
 
 - Applies the final Lookup Metrics Dashboard control treatment on Tech Units: normal-weight `.86rem` select/input/textarea values, compact `.72rem / 650` labels, `39px` controls, `7px` control corners, and the same thin blue SVG select chevron.

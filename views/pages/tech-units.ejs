@@ -19,7 +19,7 @@
   <%- include('../partials/head', { pageTitle }) %>
   <link rel="stylesheet" href="/css/modal.css" />
   <link rel="stylesheet" href="/css/tech.css" />
-  <link rel="stylesheet" href="/css/tech-units-stage-a.css?v=20260708-stage-d" />
+  <link rel="stylesheet" href="/css/tech-units-stage-a.css?v=20260708-stage-e" />
   <script defer src="/js/modal.js"></script>
   <script defer src="/js/tech-units.js"></script>
   <script defer src="/js/tech-units-date-picker.js"></script>
@@ -81,7 +81,6 @@
                 <div class="tech-filter-panel-header">
                   <div>
                     <h3>Search &amp; Filters</h3>
-                    <p>Scan or paste several Asset Tags, BIOS serials, or unit serials.</p>
                   </div>
 
                   <% if (canViewParkedUnits || isLast24HourDrilldown || filters.unitState === 'parked' || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
@@ -114,9 +113,6 @@
                   <label class="form-field tech-filter-search-field">
                     <span>Search Units</span>
                     <textarea name="search" rows="5" placeholder="Scan or paste asset tags, BIOS serials, or unit serials — one per line"><%= filters.search %></textarea>
-                    <small class="field-hint">
-                      Search one unit or several units at a time. Asset tags work with or without the <%= result.assetTagPrefix || 'BWT' %> prefix. Parked units are excluded from the Active view; authorized users can use the Show Parked Units toggle above to review them.
-                    </small>
                   </label>
 
                   <div class="tech-filter-grid <%= isRegularTechBrowserUser ? 'tech-filter-grid--regular-tech' : 'tech-filter-grid--tech-lead-plus' %>" aria-label="Unit filters">
@@ -128,7 +124,6 @@
                           <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>><%= lot.lot_name %></option>
                         <% }) %>
                       </select>
-                      <small class="field-hint tech-filter-field-hint">Closed lots remain available for review but cannot receive new or moved units. Lots with child lots are containers and are not assignable.</small>
                     </label>
 
                     <label class="form-field">
@@ -165,7 +160,7 @@
                       </label>
                     <% } %>
 
-                    <fieldset class="form-field tech-created-date-range" aria-describedby="tech-created-date-range-hint">
+                    <fieldset class="form-field tech-created-date-range">
                       <legend>Created Date Range</legend>
                       <div class="tech-created-date-range-inputs">
                         <div class="tech-created-date-picker" data-tech-created-date-picker>
@@ -206,7 +201,6 @@
                           </div>
                         </div>
                       </div>
-                      <small id="tech-created-date-range-hint" class="field-hint tech-filter-field-hint">Set both dates as needed, then choose Apply Filters.</small>
                     </fieldset>
                   </div>
                 </div>
@@ -217,10 +211,6 @@
                     <p>This Unit Browser view is filtered to records created in the last 24 hours.</p>
                   </div>
                 <% } %>
-
-                <p class="tech-filter-stage-a-guidance">
-                  Selections apply immediately. Choose Apply Filters for Search Units and Created Date Range.
-                </p>
 
                 <div class="tech-filter-actions">
                   <button class="primary-button" type="submit">Apply Filters</button>
