@@ -2077,7 +2077,9 @@
   margin-top: 0;
 }
 
-.tech-unit-form-clean-page {
+
+/* Stage F.5: the modal is the only outer form container. Individual sections own the visual grouping. */
+:is(#modal-root, .tech-unit-form-clean-page) {
   --tu-ink: #26384e;
   --tu-heading: #27374c;
   --tu-muted: #66778d;
@@ -2143,11 +2145,12 @@
   background: #f7fbff;
 }
 
+/* The modal itself is the parent surface. No tinted canvas sits behind the independent form panels. */
 #modal-root .tech-unit-modal.modal-panel {
   width: min(1080px, 100%);
   border: 1px solid var(--tu-line);
   border-radius: 10px;
-  background: #f7f9fc;
+  background: #ffffff;
   box-shadow: 0 18px 48px rgba(22, 36, 56, 0.2);
 }
 
@@ -2156,13 +2159,13 @@
   padding: 16px 18px 0;
   border: 0;
   border-radius: 10px 10px 0 0;
-  background: transparent;
+  background: #ffffff;
 }
 
 #modal-root .tech-unit-modal .tech-unit-modal-header h2 {
   margin: 0;
   color: var(--tu-heading);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: inherit;
   font-size: 1.06rem;
   font-weight: 650;
   letter-spacing: -0.012em;
@@ -2192,18 +2195,22 @@
 
 #modal-root .tech-unit-modal .tech-unit-modal-body {
   padding: 16px 18px 20px;
-  background: transparent;
+  background: #ffffff;
 }
 
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form {
   display: grid;
   gap: 20px;
   color: var(--tu-ink);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: inherit;
 }
 
-/* The modal/fallback are already the parent container. Form sections are structural only. */
+/* A section header is intentionally outside its own panel, matching the Metrics Dashboard hierarchy. */
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section {
+  --tuf-surface: #f8fbff;
+  --tuf-border: #d6e4f2;
+  --tuf-heading: #315e9d;
+  --tuf-work-item-border: #dce8f4;
   display: grid;
   gap: 8px;
   margin: 0;
@@ -2212,6 +2219,54 @@
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--assignment,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--identity {
+  --tuf-surface: #f7fbff;
+  --tuf-border: #cfe0ef;
+  --tuf-heading: #315e9d;
+  --tuf-work-item-border: #d9e7f3;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--catalog,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--processor,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--comments {
+  --tuf-surface: #faf8ff;
+  --tuf-border: #ddd5ef;
+  --tuf-heading: #5e4d8a;
+  --tuf-work-item-border: #e7e0f4;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--weight,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--cosmetic-issues {
+  --tuf-surface: #fffaf2;
+  --tuf-border: #ead9ac;
+  --tuf-heading: #8a6525;
+  --tuf-work-item-border: #f0e4c8;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--memory,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--storage,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--system {
+  --tuf-surface: #f4fbf9;
+  --tuf-border: #cbe5df;
+  --tuf-heading: #316d67;
+  --tuf-work-item-border: #d9eee9;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--hardware-issues {
+  --tuf-surface: #fff8f7;
+  --tuf-border: #ecd3cd;
+  --tuf-heading: #935649;
+  --tuf-work-item-border: #f3e1dc;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--outcome {
+  --tuf-surface: #f4fbf6;
+  --tuf-border: #cfe4d4;
+  --tuf-heading: #2e7047;
+  --tuf-work-item-border: #dceee0;
 }
 
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section-header {
@@ -2233,22 +2288,23 @@
 
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section-header h3 {
   margin: 0;
-  color: var(--tu-heading);
+  color: var(--tuf-heading);
   font-size: 0.93rem;
   font-weight: 650;
   letter-spacing: -0.008em;
   line-height: 1.25;
 }
 
+/* Each major section owns one light panel. The modal is not another panel behind it. */
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .form-grid,
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .workflow-list,
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .tech-outcome-approval-box {
   margin: 0;
   padding: 14px;
-  border: 1px solid var(--tu-line);
+  border: 1px solid var(--tuf-border);
   border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 4px 14px rgba(29, 44, 69, 0.045);
+  background: var(--tuf-surface);
+  box-shadow: 0 4px 14px rgba(29, 44, 69, 0.055);
 }
 
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .workflow-list {
@@ -2277,7 +2333,7 @@
   margin: 0 0 4px 3px;
   padding: 0;
   color: var(--tu-label);
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: inherit;
   font-size: 0.72rem;
   font-weight: 650;
   letter-spacing: 0;
@@ -2290,19 +2346,43 @@
 }
 
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="number"], input[type="date"], textarea, select:not([multiple])) {
+  min-height: 39px;
+  border: 1px solid #c9d6e4;
+  border-radius: 7px;
   color: #26384e;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background-color: #ffffff;
+  font-family: inherit;
   font-size: 0.86rem;
   font-weight: 400;
   line-height: 1.25;
 }
 
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form select:not([multiple]):not([hidden]) {
+  appearance: none;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4.25 6.25 3.75 3.5 3.75-3.5' stroke='%23315e9d' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="number"], input[type="date"], textarea, select:not([multiple])):focus-visible {
+  border-color: #315e9d;
+  outline: 3px solid rgba(49, 94, 157, 0.18);
+  outline-offset: 1px;
+}
+
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .workflow-item {
   margin: 0;
   padding: 12px;
-  border: 1px solid #dfe7f0;
+  border: 1px solid var(--tuf-work-item-border);
   border-radius: 7px;
-  background: #fbfdff;
+  background: #ffffff;
   box-shadow: none;
 }
 
@@ -2311,7 +2391,7 @@
 }
 
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .workflow-item .content-header strong {
-  color: #31445e;
+  color: var(--tuf-heading);
   font-size: 0.84rem;
   font-weight: 650;
 }
@@ -2330,6 +2410,64 @@
   background: #f7fbff;
   font-size: 0.78rem;
   line-height: 1.35;
+}
+
+/* Unit Outcome is one lightly rounded segmented control rather than a collection of pills. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-field {
+  display: grid;
+  gap: 0;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-options {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 39px;
+  overflow: hidden;
+  border: 1px solid #b9d8c3;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 37px;
+  margin: 0;
+  padding: 8px 13px;
+  border: 0;
+  border-radius: 0;
+  color: #47715a;
+  background: #ffffff;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option + .tech-outcome-option {
+  border-left: 1px solid #cce2d2;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option.active {
+  color: #2e7047;
+  background: #eaf7ed;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option:has(input:focus-visible) {
+  z-index: 1;
+  outline: 3px solid rgba(49, 94, 157, 0.18);
+  outline-offset: -3px;
 }
 
 @media (max-width: 760px) {

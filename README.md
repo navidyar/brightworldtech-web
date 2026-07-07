@@ -4,6 +4,14 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
+## Reset Design Stage F.5 — Add/Edit Form Panel Architecture
+
+- Makes the Create/Edit Unit modal itself the only outer form surface: the modal interior is now white, with no tinted parent canvas behind the section panels.
+- Gives every major Add/Edit section its own lightly separated Lookup-style panel with an outside heading, thin matching border, restrained shadow, and 8px rounded corners. Assignment/Identity use pale blue, Catalog/Processor/Comments use pale violet, Memory/Storage/System use pale teal, Issues/Weight use pale amber or rose, and Grade/Outcome use pale green.
+- Keeps all instructional helper text hidden while retaining validation errors, duplicate controls, warnings, and operational-state notices.
+- Refines Unit Outcome into one compact 7px rounded segmented control rather than separate pill-like choices.
+- Preserves every field name, field order, live model/processor/lot behavior, duplicate checks, catalog requests, validation, role scope, routes, controllers, models, JavaScript, and database behavior. No migration is required.
+
 ## Reset Design Stage F.4 — Form Labels & Add/Edit Modal Simplification
 
 - Aligns the Tech Units filter-label rhythm: Search Units, standard select labels, and **Created Date Range** now use the same compact `.72rem / 650` Lookup-derived label style, 3px left inset, and 4px label-to-control gap.
