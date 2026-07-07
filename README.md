@@ -1919,3 +1919,13 @@ Expected final message:
 ```text
 Step 6f.1 closed-lot lifecycle migration complete
 ```
+
+## Reset Design Stage D — Tech Units CSS Consolidation
+
+- Replaced the accumulated Stage A/B/C Tech Units stylesheet with one page-scoped Stage D visual layer.
+- Removed obsolete Unit Browser filter-art rules from `public/css/tech.css`: gradients, color-rotating field borders, five-pixel accents, forced filter shadows, and competing filter-card overrides.
+- Removed the forced three-pixel Unit Details top strips so Tech Units panels use a consistent thin border on all edges.
+- The final `/tech/units` visual system now uses the Lookup Metrics Dashboard palette and rhythm: white panels, pale-blue utility headers, thin blue-gray borders, restrained shadows, 10px outer corners, 8px detail workspaces, and 7px controls.
+- Consolidated form typography for this page: normal-weight `.86rem` field values, `.72rem / 650` labels, and the Lookup Metrics custom calendar styling.
+- Kept all Tech Units behavior unchanged: Tech User option source and role gate, filters, date parameters, Apply Filters behavior, routes, HTMX events, actions, models, controllers, and database behavior.
+- No SQL migration is required.
