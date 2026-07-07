@@ -4,6 +4,13 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
+## Reset Design Stage F.3 — Exact Metrics Controls & Panel Shadows
+
+- Applies one scoped Metrics Dashboard control contract to the Tech Units Search Units textarea, all standard filter selects, and the app-controlled Created Date triggers: Inter/system font stack, `.86rem`, `600` emphasis, `#26384e` text, and consistent line height. The date labels now inherit the exact same text treatment as the adjacent controls.
+- Reapplies the Lookup-style thin blue SVG chevron directly to the Tech Units select elements, including the same 16px icon, right-side inset, and `appearance: none` normalization.
+- Strengthens separation between the independent Search & Filters and Units workspaces with Lookup’s core panel shadow: `0 8px 24px rgba(29,44,69,.08)`, while retaining the existing thin borders and rounded corners.
+- Preserves all Tech Units behavior, including Tech User role/data/filtering, date range behavior, actions, HTMX, controllers, models, routes, and database behavior. No SQL migration is required.
+
 ## Reset Design Stage F.2 — Metrics Section Structure & Date Control Normalization
 
 - Moves the **Search & Filters** and **Units** titles out of their working panels and places them directly above their respective containers, matching the compact section-label rhythm used by the Lookup Metrics Dashboard.
