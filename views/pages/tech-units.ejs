@@ -18,7 +18,7 @@
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
   <link rel="stylesheet" href="/css/modal.css" />
-  <link rel="stylesheet" href="/css/tech-units-clean.css?v=20260708-stage-f" />
+  <link rel="stylesheet" href="/css/tech-units-clean.css?v=20260708-stage-f1" />
   <script defer src="/js/modal.js"></script>
   <script defer src="/js/tech-units.js"></script>
   <script defer src="/js/tech-units-date-picker.js"></script>
@@ -33,13 +33,7 @@
 
         <main class="content-shell tech-units-clean-page">
           <section class="tech-units-clean-page-heading">
-            <div>
-              <p class="eyebrow">Tech Unit Registry</p>
-              <h1>Tech Units</h1>
-              <p>
-                Create, edit, search, and review unit records from the shared Unit Browser.
-              </p>
-            </div>
+            <h1>Tech Units Browser</h1>
 
             <a class="primary-button tech-units-clean-create-button" href="/tech/units/new" hx-get="/tech/units/new/modal" hx-target="#modal-root" hx-swap="innerHTML">
               Create Unit

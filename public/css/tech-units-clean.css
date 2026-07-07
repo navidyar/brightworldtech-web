@@ -1814,3 +1814,178 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* Stage F.1 — focused visual and access refinements. */
+.tech-units-clean-page .tech-units-clean-page-heading {
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+/* Match Lookup's quiet editable-control text across selects, inputs, textareas, and date triggers. */
+.tech-units-clean-page :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="number"], input[type="date"], textarea, select:not([multiple]), .tech-created-date-picker-trigger) {
+  font-size: 0.86rem;
+  font-weight: 400;
+}
+
+/* The operational filter order is intentional: Lot, Category, Grade; then Tech User and date pair. */
+.tech-units-clean-page .tech-filter-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: auto auto;
+  gap: 14px 10px;
+}
+
+.tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(1),
+.tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(1) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(2),
+.tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(2) {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(3),
+.tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(3) {
+  grid-column: 3;
+  grid-row: 1;
+}
+
+.tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(4) {
+  grid-column: 1;
+  grid-row: 2;
+}
+
+.tech-units-clean-page .tech-filter-grid--tech-lead-plus > .tech-created-date-range {
+  grid-column: 2 / span 2;
+  grid-row: 2;
+}
+
+.tech-units-clean-page .tech-filter-grid--regular-tech > .tech-created-date-range {
+  grid-column: 1 / span 2;
+  grid-row: 2;
+}
+
+.tech-units-clean-page .tech-created-date-range {
+  align-self: start;
+}
+
+.tech-units-clean-page .tech-created-date-range > legend {
+  min-height: 0.9rem;
+}
+
+/* The outer Units workspace owns the rounded panel edge; the inner table stays square and flush. */
+.tech-units-clean-page .tech-table-card,
+.tech-units-clean-page .tech-table-card.table-card,
+.tech-units-clean-page .tech-table-shell,
+.tech-units-clean-page .tech-units-table,
+.tech-units-clean-page .tech-units-table thead,
+.tech-units-clean-page .tech-units-table thead tr,
+.tech-units-clean-page .tech-units-table thead th {
+  border-radius: 0;
+}
+
+.tech-units-clean-page .tech-table-card,
+.tech-units-clean-page .tech-table-card.table-card {
+  margin: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+/* The disclosure cue remains compact but is intentionally noticeable. */
+.tech-units-clean-page .tech-unit-toggle {
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 7px;
+}
+
+.tech-units-clean-page .tech-unit-toggle-icon {
+  min-width: 18px;
+  color: #58718e;
+  font-size: 0.96rem;
+}
+
+/* Keep summary actions together; the data table, not the action group, scrolls when width is tight. */
+.tech-units-clean-page .tech-units-table thead th:nth-child(6),
+.tech-units-clean-page .tech-summary-row td:nth-child(6) {
+  min-width: 154px;
+  white-space: nowrap;
+}
+
+.tech-units-clean-page .tech-summary-actions {
+  flex-wrap: nowrap;
+  width: max-content;
+}
+
+/* Section color carries through to the bold hierarchy inside each pale Unit Details workspace. */
+.tech-units-clean-page .tech-detail-section,
+.tech-units-clean-page .tech-notes-section,
+.tech-units-clean-page .tech-override-history-section {
+  --tu-section-heading: #506a86;
+  --tu-section-label: #607990;
+}
+
+.tech-units-clean-page :is(.tech-detail-section--identity, .tech-detail-section--identity-identifiers) {
+  --tu-section-heading: #416b98;
+  --tu-section-label: #537da8;
+}
+
+.tech-units-clean-page :is(.tech-detail-section--grade, .tech-notes-section--grade-history) {
+  --tu-section-heading: #397356;
+  --tu-section-label: #4f8969;
+}
+
+.tech-units-clean-page :is(.tech-detail-section--hardware, .tech-detail-section--memory-module, .tech-detail-section--storage-device, .tech-notes-section--memory, .tech-notes-section--storage) {
+  --tu-section-heading: #397282;
+  --tu-section-label: #4a8999;
+}
+
+.tech-units-clean-page :is(.tech-detail-section--checks, .tech-detail-section--graphics-adapter, .tech-detail-section--cellular-module, .tech-notes-section--graphics, .tech-notes-section--cellular) {
+  --tu-section-heading: #3d776c;
+  --tu-section-label: #508c80;
+}
+
+.tech-units-clean-page :is(.tech-detail-section--workflow, .tech-notes-section--issues, .tech-override-history-section) {
+  --tu-section-heading: #80611d;
+  --tu-section-label: #99752a;
+}
+
+.tech-units-clean-page :is(.tech-notes-section--comments, .tech-notes-section--history, .tech-notes-section--override) {
+  --tu-section-heading: #66548d;
+  --tu-section-label: #7a67a0;
+}
+
+.tech-units-clean-page .tech-detail-section h3,
+.tech-units-clean-page .tech-notes-section h3,
+.tech-units-clean-page .tech-override-history-section h3,
+.tech-units-clean-page .tech-history-section-title h3,
+.tech-units-clean-page .tech-detail-subheading {
+  color: var(--tu-section-heading);
+}
+
+.tech-units-clean-page .tech-detail-list dt,
+.tech-units-clean-page .tech-override-history-list dt,
+.tech-units-clean-page .tech-note-block strong,
+.tech-units-clean-page .field-hint strong {
+  color: var(--tu-section-label);
+}
+
+@media (max-width: 760px) {
+  .tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(1),
+  .tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(1),
+  .tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(2),
+  .tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(2),
+  .tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(3),
+  .tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(3),
+  .tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(4),
+  .tech-units-clean-page .tech-filter-grid--tech-lead-plus > .tech-created-date-range,
+  .tech-units-clean-page .tech-filter-grid--regular-tech > .tech-created-date-range {
+    grid-column: auto;
+    grid-row: auto;
+  }
+
+  .tech-units-clean-page .tech-filter-grid--tech-lead-plus > .tech-created-date-range,
+  .tech-units-clean-page .tech-filter-grid--regular-tech > .tech-created-date-range {
+    grid-column: 1 / -1;
+  }
+}

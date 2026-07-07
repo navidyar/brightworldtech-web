@@ -355,7 +355,7 @@ router.get(
 router.get(
   '/tech/units/:unitId/my-weight-earned',
   requireAuth,
-  requireRole(techRoles),
+  requireRole(techHistoryRoles),
   techController.renderMyUnitWeightPanel
 );
 

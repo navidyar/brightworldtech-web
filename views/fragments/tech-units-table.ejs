@@ -68,6 +68,7 @@
   const canApproveUnitOutcomes = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const canCompleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
   const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canViewTechWeightDetails = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const currentUserId = currentUser && Number.isInteger(Number(currentUser.user_id))
     ? Number(currentUser.user_id)
     : null;
@@ -356,7 +357,7 @@
                         </a>
                       <% } %>
 
-                      <% if (isRegularTechUser) { %>
+                      <% if (canViewTechWeightDetails) { %>
                         <button
                           type="button"
                           class="secondary-button tech-personal-credit-action-button"
@@ -871,7 +872,7 @@
                 <% } %>
                   </div>
 
-                  <% if (isRegularTechUser) { %>
+                  <% if (canViewTechWeightDetails) { %>
                     <div id="tech-unit-my-weight-panel-<%= unit.unitId %>" class="tech-unit-panel-view" data-unit-panel-content="my-weight" hidden>
                       <div id="tech-unit-my-weight-content-<%= unit.unitId %>" class="tech-history-panel-placeholder">
                         <p>Select My Weight Earned to load your recorded work credit.</p>

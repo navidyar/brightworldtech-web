@@ -4,6 +4,14 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
+## Reset Design Stage F.1 — Tech Units Detail and Access Refinement
+
+- Refines the clean `/tech/units` cutover without restoring legacy `tech.css`: the page heading is now **Tech Units Browser**, the Unit-row disclosure arrow is easier to notice, the nested Unit table has square internal corners, and summary action buttons remain on one horizontal line with table-only overflow on narrow screens.
+- Restores the intended wide-screen filter hierarchy: **Assignable Lot**, **Category**, and **Grade** share the first row; Tech Lead+ users see **Tech User** and the horizontal Created Date Range pair together on the second row. Both date triggers now use the same normal Lookup-style text treatment as standard select controls.
+- Uses each Unit Details workspace surface as its color source: compact section headings and emphasized labels use a darker related blue, green, teal, amber, or violet rather than one generic navy heading color.
+- Removes the My Weight Earned feature from regular-Tech access in both the rendered UI and direct endpoint authorization. Tech Lead+ retains the existing per-user My Weight Earned panel and underlying weight data; regular Tech dashboard aggregate charts remain unchanged.
+- No database migration is required.
+
 ## Reset Design Stage F — Tech Units Clean Lookup Cutover
 
 - Makes `/tech/units` the first fully migrated BWT page: it no longer loads legacy `tech.css`, preventing historical Tech Units selectors and `!important` rules from competing with the new visual system. Other Tech pages still retain their existing stylesheet until they are migrated deliberately.
