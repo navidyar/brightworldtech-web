@@ -4,6 +4,10 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
+## Reset Design Stage B — Tech Units Created Date Calendar
+
+Reset Design Stage B replaces only the Tech Units browser-native Created Date Range popup with the same app-controlled calendar pattern used by the Lookup Metrics Dashboard. The page still submits the established `createdStartDate` and `createdEndDate` values in `YYYY-MM-DD` format, and dates still take effect only when the user chooses Apply Filters. From and Through remain beneath their individual date triggers. Tech User scope/options, all other filters, role visibility, model/controller queries, table behavior, HTMX events, and database behavior remain unchanged. No database migration is required.
+
 ## Reset Design Stage A — Tech Units Header & Filter Workspace Only
 
 Reset Design Stage A begins the Lookup-inspired visual migration from the restored stable baseline. It updates only the Tech Units page heading, Search & Filters workspace, and Unit Browser outer shell. The established Tech User option source, Tech Lead+ visibility, current-assignment filter behavior, filter names, HTMX events, model/controller queries, Unit Browser table, expanded detail panels, and action behavior remain unchanged. The new page-scoped stylesheet uses the approved Lookup form language: compact 39px controls, thinner blue-gray borders, 7px corners, small labels, a thin SVG select chevron, pale-blue panel headers, and restrained shadows. No database migration is required.

@@ -1,3 +1,19 @@
+<%
+  const formatTechUnitsPickerDate = (value) => {
+    const normalized = String(value || '').slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
+      return 'Select date';
+    }
+
+    const date = new Date(`${normalized}T00:00:00.000Z`);
+    return Number.isNaN(date.getTime()) ? 'Select date' : new Intl.DateTimeFormat('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: 'UTC'
+    }).format(date);
+  };
+%>
 <!DOCTYPE html>
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
@@ -6,6 +22,7 @@
   <link rel="stylesheet" href="/css/tech-units-stage-a.css?v=20260707" />
   <script defer src="/js/modal.js"></script>
   <script defer src="/js/tech-units.js"></script>
+  <script defer src="/js/tech-units-date-picker.js"></script>
   <script defer src="/js/tech-unit-form.js"></script>
 
   <body>
@@ -148,20 +165,48 @@
                       </label>
                     <% } %>
 
-                    <fieldset class="form-field tech-created-date-range">
+                    <fieldset class="form-field tech-created-date-range" aria-describedby="tech-created-date-range-hint">
                       <legend>Created Date Range</legend>
                       <div class="tech-created-date-range-inputs">
-                        <label>
-                          <span>From</span>
-                          <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="createdStartDate" value="<%= filters.createdStartDate || '' %>" />
-                        </label>
+                        <div class="tech-created-date-picker" data-tech-created-date-picker>
+                          <input type="hidden" name="createdStartDate" value="<%= filters.createdStartDate || '' %>" data-tech-created-date-picker-input />
+                          <button class="tech-created-date-picker-trigger" type="button" data-tech-created-date-picker-trigger aria-haspopup="dialog" aria-expanded="false" aria-controls="tech-created-start-date-calendar">
+                            <span data-tech-created-date-picker-label><%= formatTechUnitsPickerDate(filters.createdStartDate) %></span>
+                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.25 8 10l4-3.75" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg>
+                          </button>
+                          <span class="tech-created-date-picker-label">From</span>
+                          <div id="tech-created-start-date-calendar" class="tech-created-date-calendar" data-tech-created-date-picker-popover role="dialog" aria-label="Choose From date" hidden>
+                            <div class="tech-created-date-calendar-heading">
+                              <button type="button" class="tech-created-date-calendar-nav" data-tech-created-date-picker-previous aria-label="Previous month">‹</button>
+                              <strong data-tech-created-date-picker-month-label></strong>
+                              <button type="button" class="tech-created-date-calendar-nav" data-tech-created-date-picker-next aria-label="Next month">›</button>
+                            </div>
+                            <div class="tech-created-date-calendar-weekdays" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+                            <div class="tech-created-date-calendar-days" data-tech-created-date-picker-grid role="grid" aria-label="Calendar days"></div>
+                            <div class="tech-created-date-calendar-footer"><button type="button" class="button-link" data-tech-created-date-picker-today>Today</button><button type="button" class="button-link" data-tech-created-date-picker-clear>Clear</button></div>
+                          </div>
+                        </div>
 
-                        <label>
-                          <span>Through</span>
-                          <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="createdEndDate" value="<%= filters.createdEndDate || '' %>" />
-                        </label>
+                        <div class="tech-created-date-picker" data-tech-created-date-picker>
+                          <input type="hidden" name="createdEndDate" value="<%= filters.createdEndDate || '' %>" data-tech-created-date-picker-input />
+                          <button class="tech-created-date-picker-trigger" type="button" data-tech-created-date-picker-trigger aria-haspopup="dialog" aria-expanded="false" aria-controls="tech-created-end-date-calendar">
+                            <span data-tech-created-date-picker-label><%= formatTechUnitsPickerDate(filters.createdEndDate) %></span>
+                            <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6.25 8 10l4-3.75" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.7"/></svg>
+                          </button>
+                          <span class="tech-created-date-picker-label">Through</span>
+                          <div id="tech-created-end-date-calendar" class="tech-created-date-calendar" data-tech-created-date-picker-popover role="dialog" aria-label="Choose Through date" hidden>
+                            <div class="tech-created-date-calendar-heading">
+                              <button type="button" class="tech-created-date-calendar-nav" data-tech-created-date-picker-previous aria-label="Previous month">‹</button>
+                              <strong data-tech-created-date-picker-month-label></strong>
+                              <button type="button" class="tech-created-date-calendar-nav" data-tech-created-date-picker-next aria-label="Next month">›</button>
+                            </div>
+                            <div class="tech-created-date-calendar-weekdays" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
+                            <div class="tech-created-date-calendar-days" data-tech-created-date-picker-grid role="grid" aria-label="Calendar days"></div>
+                            <div class="tech-created-date-calendar-footer"><button type="button" class="button-link" data-tech-created-date-picker-today>Today</button><button type="button" class="button-link" data-tech-created-date-picker-clear>Clear</button></div>
+                          </div>
+                        </div>
                       </div>
-                      <small class="field-hint tech-filter-field-hint">Set both dates as needed, then choose Apply Filters.</small>
+                      <small id="tech-created-date-range-hint" class="field-hint tech-filter-field-hint">Set both dates as needed, then choose Apply Filters.</small>
                     </fieldset>
                   </div>
                 </div>
