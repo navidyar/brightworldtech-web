@@ -135,7 +135,7 @@
   <table class="tech-units-table">
     <thead>
       <tr>
-        <th>Unit / Weight</th>
+        <th>Unit<%= isRegularTechUser ? '' : ' / Weight' %></th>
         <th>Date</th>
         <th>Work / Assignment</th>
         <th>Identifiers</th>
@@ -205,9 +205,11 @@
                     <span>Parked</span>
                   <% } %>
                 </small>
-                <span class="tech-unit-summary-weight-strip">
-                  <span class="tech-unit-summary-weight-value">Current lot weight <strong><%= unit.formattedCurrentLotWeight || '—' %></strong></span>
-                </span>
+                <% if (!isRegularTechUser) { %>
+                  <span class="tech-unit-summary-weight-strip">
+                    <span class="tech-unit-summary-weight-value">Current lot weight <strong><%= unit.formattedCurrentLotWeight || '—' %></strong></span>
+                  </span>
+                <% } %>
               </span>
             </button>
           </td>

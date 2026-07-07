@@ -4,6 +4,15 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
+## Reset Design Stage F — Tech Units Clean Lookup Cutover
+
+- Makes `/tech/units` the first fully migrated BWT page: it no longer loads legacy `tech.css`, preventing historical Tech Units selectors and `!important` rules from competing with the new visual system. Other Tech pages still retain their existing stylesheet until they are migrated deliberately.
+- Replaces the former Unit Browser parent card with two independent Lookup-style workspaces: **Search & Filters** and **Units**. Each uses a thin clear border, restrained shadow, slightly rounded Lookup corners, and an intentionally different pale utility surface.
+- Uses the final Lookup form-control contract consistently for the page: Inter/system stack, `.9rem / 600` input/select/textarea values, `.72rem / 650` labels, `39px` controls, `7px` corners, thin blue-gray borders, soft focus outlines, and the Lookup SVG select chevron.
+- Keeps Search Units alongside a two-row right-side control grid on wider screens. Assignable Lot and Category occupy the first row; Grade, Tech User (Tech Lead+ only), and the horizontal From/Through date pair occupy the second. Filter groups reflow before the date pair changes height.
+- Applies restrained contextual color without gradients: pale blue for the filter workspace, pale neutral blue for results, soft green for grade/outcome context, soft amber for workflow context, and soft violet for history/audit context.
+- Preserves every functional contract: Tech User source, Tech Lead+ visibility, current-assignment filtering, date parameters and Apply Filters behavior, HTMX events, row expansion, action locations, routes, models, controllers, JavaScript, and database behavior. No migration is required.
+
 ## Reset Design Stage E — Metrics Typography, Color, Date Alignment, and Form Simplification
 
 - Uses the current Lookup Metrics Dashboard hierarchy on Tech Units: normal-weight `.9rem` form values, compact `.72rem / 650` labels, and measured `650` emphasis for page/workspace headings and key values.

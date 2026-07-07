@@ -18,8 +18,7 @@
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
   <link rel="stylesheet" href="/css/modal.css" />
-  <link rel="stylesheet" href="/css/tech.css" />
-  <link rel="stylesheet" href="/css/tech-units-stage-a.css?v=20260708-stage-e" />
+  <link rel="stylesheet" href="/css/tech-units-clean.css?v=20260708-stage-f" />
   <script defer src="/js/modal.js"></script>
   <script defer src="/js/tech-units.js"></script>
   <script defer src="/js/tech-units-date-picker.js"></script>
@@ -32,8 +31,8 @@
       <div class="app-main">
         <%- include('../partials/topbar', { pageTitle }) %>
 
-        <main class="content-shell">
-          <section class="tech-units-stage-a-page-heading">
+        <main class="content-shell tech-units-clean-page">
+          <section class="tech-units-clean-page-heading">
             <div>
               <p class="eyebrow">Tech Unit Registry</p>
               <h1>Tech Units</h1>
@@ -42,32 +41,20 @@
               </p>
             </div>
 
-            <a class="primary-button tech-units-stage-a-create-button" href="/tech/units/new" hx-get="/tech/units/new/modal" hx-target="#modal-root" hx-swap="innerHTML">
+            <a class="primary-button tech-units-clean-create-button" href="/tech/units/new" hx-get="/tech/units/new/modal" hx-target="#modal-root" hx-swap="innerHTML">
               Create Unit
             </a>
           </section>
 
-          <section class="content-card tech-units-stage-a-browser-card">
-            <div class="content-header tech-units-stage-a-browser-header">
-              <div>
-                <h2>Unit Browser</h2>
-              </div>
+          <% if (successMessage) { %>
+            <div class="message success tech-units-clean-message"><%= successMessage %></div>
+          <% } %>
 
-              <p class="tech-units-stage-a-loaded-count" aria-live="polite">
-                <span>Loaded</span>
-                <strong id="tech-units-loaded-count"><%= result.supported ? formatNumber(result.units.length) : '—' %></strong>
-              </p>
+          <% if (!result.supported) { %>
+            <div class="message error tech-units-clean-message">
+              <p><%= result.message %></p>
             </div>
-
-            <% if (successMessage) { %>
-              <div class="message success"><%= successMessage %></div>
-            <% } %>
-
-            <% if (!result.supported) { %>
-              <div class="message error">
-                <p><%= result.message %></p>
-              </div>
-            <% } else { %>
+          <% } else { %>
               <%
                 const unitCategoryOptions = Array.isArray(result.unitCategories) ? result.unitCategories : [];
                 const overallGradeOptions = Array.isArray(result.overallGradeOptions) ? result.overallGradeOptions : [];
@@ -77,7 +64,7 @@
                 const canViewParkedUnits = pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
                 const isLast24HourDrilldown = filters.createdWindow === '24h';
               %>
-              <form class="tech-filter-form tech-filter-panel tech-filter-panel--stage-a" method="get" action="/tech/units">
+              <form class="tech-filter-form tech-filter-panel tech-units-clean-filter-workspace" method="get" action="/tech/units">
                 <div class="tech-filter-panel-header">
                   <div>
                     <h3>Search &amp; Filters</h3>
@@ -218,13 +205,26 @@
                 </div>
               </form>
 
-              <div class="tech-table-shell" id="tech-units-list" hx-get="<%= tableUrl %>" hx-trigger="load, unit-saved from:body, unit-work-completed from:body, unit-permanently-deleted from:body, unit-parked from:body, unit-returned-active from:body" hx-swap="innerHTML">
-                <div class="tech-loading-card">
-                  Loading units...
+              <section class="tech-units-clean-results-workspace" aria-labelledby="tech-units-results-heading">
+                <div class="tech-units-clean-results-heading">
+                  <div>
+                    <p class="eyebrow">Shared Unit Browser</p>
+                    <h2 id="tech-units-results-heading">Units</h2>
+                  </div>
+
+                  <p class="tech-units-clean-loaded-count" aria-live="polite">
+                    <span>Loaded</span>
+                    <strong id="tech-units-loaded-count"><%= result.supported ? formatNumber(result.units.length) : '—' %></strong>
+                  </p>
                 </div>
-              </div>
+
+                <div class="tech-table-shell" id="tech-units-list" hx-get="<%= tableUrl %>" hx-trigger="load, unit-saved from:body, unit-work-completed from:body, unit-permanently-deleted from:body, unit-parked from:body, unit-returned-active from:body" hx-swap="innerHTML">
+                  <div class="tech-loading-card">
+                    Loading units...
+                  </div>
+                </div>
+              </section>
             <% } %>
-          </section>
 
         </main>
 
