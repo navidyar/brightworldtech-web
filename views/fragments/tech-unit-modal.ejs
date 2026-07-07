@@ -2,8 +2,8 @@
   const isEditMode = mode === 'edit';
 %>
 
-<div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel tech-unit-modal" role="dialog" aria-modal="true" aria-labelledby="tech-unit-modal-title">
+<div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close>
+  <section class="modal-panel tech-unit-modal" role="dialog" aria-modal="true" aria-labelledby="tech-unit-modal-title" data-modal-explicit-close data-modal-escape-close>
     <header class="modal-header">
       <div>
         <p class="eyebrow">Tech Unit</p>
@@ -20,6 +20,9 @@
         formOptions,
         formData,
         errorMessages,
+        duplicateMatches: typeof duplicateMatches !== 'undefined' ? duplicateMatches : [],
+        duplicateCheckPerformed: typeof duplicateCheckPerformed !== 'undefined' ? duplicateCheckPerformed : false,
+        canRequestIntentionalDuplicate: typeof canRequestIntentionalDuplicate !== 'undefined' ? canRequestIntentionalDuplicate : false,
         isModal: true
       }) %>
     </div>

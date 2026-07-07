@@ -1,0 +1,1570 @@
+# BWTDallas App
+
+Internal operations portal for Bright World Technologies.
+
+## Current Step
+
+Step 7f.1: Clickable Request Records.
+
+Step 7f.1 removes the redundant **View Details** button from Unit Requests. Each request record now opens its detail page when the request content is clicked or activated with the keyboard, while a pending requester’s **Withdraw** control remains a separate protected action. The selected status filter is preserved. No database changes are required.
+
+Step 7f: Catalog Exception Workflow.
+
+Step 7f extends the shared Unit Requests area with controlled Model Catalog Addition and Processor Catalog Addition requests. Regular Tech users submit observed values from Create Unit; Tech Leads can inspect the shared queue, while Management/Admin approve or reject catalog changes. Approval creates or activates only the catalog value/mapping needed and never creates a Unit.
+
+Step 7e.3.3: Intentional Duplicate Request Flow Hotfix.
+
+Step 7e.3a: Unit Requests UI Refinement.
+
+Step 7e.3a gives the Unit Requests list and detail pages the same compact, structured work-area treatment as Unit Browser: responsive request rows, plain status text, a clearer review layout, and a readable request timeline. No workflow or database behavior changes.
+
+Step 7e.3 adds one role-aware Unit Requests area. Regular Tech users submit and track only their own Intentional Duplicate requests; Tech Leads, Management users, and Admins review the shared queue. A request does not create a Unit or Asset Tag until it is approved.
+
+Step 7e.3.1 fixes the `/unit-requests` GET page load when no request body exists. The controller now safely falls back to the default Pending status without trying to read `returnStatus` from an undefined request body.
+
+Step 7e.3.2 sends Create Unit data to the Intentional Duplicate request-modal route as URL-encoded form data, which the app’s existing Express parser supports. It also makes request-context extraction safe when a request has no body. This fixes the 500 error that occurred before the request modal could open. No database changes are required.
+
+Step 7e.3.3 keeps the Intentional Duplicate request modal closed until the Create Unit data passes server-side validation. It presents any missing required field messages inline with the matching-existing-unit result, processes HTMX attributes after the modal is inserted by the custom fetch path, closes the request modal after successful submission, and returns a pending-request confirmation to Create Unit. It also fixes the `matchedIdentifiers is not defined` submission error. No database changes are required.
+
+
+## Step 7f.1 — Clickable Request Records
+
+### What Changed
+
+- Removes the redundant **View Details** button from the Unit Requests queue.
+- Makes the request content area a real keyboard-accessible detail link, preserving the active status filter.
+- Lets request rows without a pending requester action open from the full row content area.
+- Keeps a regular Tech’s pending **Withdraw** action separate, so it cannot accidentally open the request detail page.
+- Adds a visible keyboard focus outline and pointer cursor for the record link.
+- Requires no database change.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests** as a reviewer and click a request record. Confirm its detail page opens and **Back to Unit Requests** returns to the same status tab.
+2. Use Tab to focus a request record, then press Enter. Confirm it opens the correct detail page with a visible focus outline before activation.
+3. As a regular Tech with a pending request, click the request content and confirm it opens details. Then click **Withdraw** and confirm only the withdrawal form submits.
+4. Narrow the browser window and confirm the linked request content and Withdraw action stack cleanly without horizontal page overflow.
+
+## Step 7f — Catalog Exception Workflow
+
+### What Changed
+
+- Adds **Request Missing Model** to Create Unit for regular Tech users after Manufacturer, Unit Category, and an unselected exact model name are present.
+- Adds **Request Processor Addition** to Create Unit for regular Tech users after a managed Unit Model is selected.
+- Adds Model Catalog and Processor Catalog request detail records beneath the existing shared `unit_requests` and event-history foundation.
+- Keeps the Tech-submitted observed wording immutable while the reviewer records separate canonical model/processor values on approval.
+- Allows Management/Admin approval to add or reactivate a Unit Model, or add/reactivate a Processor and map it only to the requested Unit Model.
+- Keeps Tech Leads able to inspect Catalog Exception requests, but prevents them from approving or rejecting managed catalog changes.
+- Does not allow a Catalog Exception approval to create a Unit or Asset Tag.
+
+### Required SQL
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < sql/2026-07-step-7f-catalog-exception-workflow.sql
+```
+
+Expected final message:
+
+```text
+Step 7f catalog exception workflow migration complete
+```
+
+### Post-Rebuild Checks
+
+1. As a regular Tech, type an exact missing Unit Model after selecting Manufacturer and Unit Category. Confirm **Request Missing Model** opens a styled request modal and creates a pending Model Catalog request, not a catalog entry.
+2. As a regular Tech, select a Unit Model and request an unavailable processor. Confirm the request captures the model, observed Processor Type, exact Processor value, and requester explanation.
+3. As a Tech Lead, confirm Catalog Exception requests are visible but have no approve/reject controls.
+4. As Management/Admin, approve a safe Model request with a canonical name. Confirm the model becomes selectable in Create Unit and the original observed wording remains visible in request history.
+5. As Management/Admin, approve a safe Processor request. Confirm the selected processor becomes available only for the requested Unit Model.
+6. Reject a Catalog Exception request with a note, and withdraw one as the requester. Confirm no catalog data changes.
+
+## Step 7e.3a — Unit Requests UI Refinement
+
+### What Changed
+
+- Reworks the list into a compact, responsive request queue with a structured header, subtle alternating rows, and plain color-coded status text.
+- Keeps request details, requester explanations, and history on the request detail page instead of crowding the main queue.
+- Adds a clearer list count, responsive filters, and consistently spaced action controls.
+- Refines detail cards, reviewer actions, and the event history into the existing work-area visual language.
+- Changes no request permissions, approval rules, data, or database schema.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests** as a Tech and as a reviewer; confirm the queue is compact, readable, and responsive.
+2. Change status filters and confirm the active filter is clear without using pill/bubble styling.
+3. Open a request detail; confirm matching-unit data, intake snapshot, reviewer actions, and event history remain accessible.
+4. Confirm a narrow browser window stacks row details and actions cleanly without horizontal page overflow.
+
+## Step 7e.3.3 — Intentional Duplicate Request Flow Hotfix
+
+### What Changed
+
+- Keeps **Request Intentional Duplicate** unavailable until Assignable Lot, Unit Category, and the existing default Unit Status are present.
+- Sends the full Create Unit form to the existing server-side validator before opening the reason modal, so malformed optional details also remain blocked.
+- Shows validation feedback inline with the matching existing unit instead of opening a Close-only modal.
+- Calls `htmx.process()` after the custom fetch path inserts the request modal, preventing the request form from falling back to an unstyled full-page submission.
+- Closes the request modal after successful submission and shows a pending-review confirmation, including a Unit Request link, in the Create Unit duplicate area.
+- Fixes the `matchedIdentifiers is not defined` typo during request creation.
+- Requires no database change.
+
+### Post-Rebuild Checks
+
+1. With a matching existing unit selected but no Unit Category, confirm **Request Intentional Duplicate** is unavailable and explains what must be selected.
+2. Select a catalog model or Unit Category. Confirm one click opens the styled reason modal.
+3. Submit a valid reason. Confirm the modal closes, Create Unit shows a pending-request confirmation, and no Unit or Asset Tag is created.
+4. Confirm the submitted request appears in **Unit Requests**.
+
+## Step 7e.3 — Unit Requests and Intentional Duplicate Requests
+
+### What Changed
+
+- Adds shared `unit_requests`, `unit_duplicate_requests`, and `unit_request_events` tables for future controlled request types.
+- Adds **Unit Requests** under Tech navigation.
+- Adds **Request Intentional Duplicate** to the matching-existing-unit panel for regular Tech users during Create Unit intake.
+- Captures the selected matching existing unit, destination lot, serial context, a full immutable intake snapshot, requester reason, and submission time.
+- Creates no Unit and no Asset Tag at submission time.
+- Lets the requester withdraw only their own pending request.
+- Lets Tech Leads, Management users, and Admins approve or reject requests; rejection requires a note, and a requester cannot approve their own request.
+- Rechecks the original destination lot at approval. It must still be active, open, and a leaf/assignable lot; approval never silently changes the requested lot.
+- Approval creates the requested Unit transactionally, assigns a new server-generated Asset Tag, preserves the original matching unit unchanged, and records the resulting Unit link and event timeline.
+- Keeps the shared request framework ready for later model and processor catalog-addition requests without enabling those request types yet.
+
+### Required SQL
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < sql/2026-07-step-7e3-unit-requests-intentional-duplicates.sql
+```
+
+Expected final message:
+
+```text
+Step 7e.3 Unit Requests and Intentional Duplicate migration complete
+```
+
+### Post-Rebuild Checks
+
+1. As a regular Tech, select a matching existing unit during Create Unit and submit a reasoned Intentional Duplicate request. Confirm no Unit or Asset Tag is created immediately.
+2. Confirm the Tech sees only their own request in **Unit Requests** and can withdraw it while pending.
+3. As Tech Lead, Management, or Admin, confirm the shared review queue shows the matching existing unit, immutable requested intake, requester explanation, and event history.
+4. Confirm rejection requires a note and records the reviewer decision.
+5. Approve a safe test request and confirm exactly one new Unit with a new Asset Tag is created in the originally requested lot; the matching existing unit remains unchanged.
+6. Confirm approval is blocked when the requested destination lot has become hidden, closed, or a parent/container lot.
+
+
+Step 7e.2a.3.1 corrects the Escape target lookup so the dialog itself, rather than its backdrop, receives the approved Escape-close behavior.
+
+Step 7e.2a.3.2 makes only the selected-lot assumption state visually distinct through the existing green and amber form colors, without a badge, border, or heavier font weight.
+
+
+Step 7e.2a.3.3 replaces the lot-assumption state colors with dedicated, visibly distinct muted deep-green and muted terracotta text colors. It changes no font weight, badge, border, or layout.
+
+
+Step 7e.2a.3.4 preserves the state span while no lot is selected. The previous update cleared the status element at initialization, which removed the colored state span before the user chose a lot. This hotfix restores that element when needed and preserves it for all later lot changes.
+
+## Step 7e.2a.3.4 — Lot Assumption State Markup Preservation Hotfix
+
+### What Changed
+
+- Stops clearing the selected-lot status markup when no lot is selected.
+- Restores the state span when an older in-page form instance no longer has it.
+- Allows the Step 7e.2a.3.3 deep-green and muted-terracotta state colors to apply reliably.
+- Requires no database change.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e2a3d-lot-assumption-state-markup-preservation-hotfix.diff
+```
+
+#### 2. Apply patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e2a3d-lot-assumption-state-markup-preservation-hotfix.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Focused Validation
+
+1. Open Create Unit with no Assignable Lot selected, then select a lot without duplicate-match assumption enabled; only **not enabled** should appear muted terracotta.
+2. Change to an enabled lot; only **enabled** should appear muted deep green.
+3. Clear/change the lot repeatedly and confirm the state word stays colored each time.
+
+## Step 7e.2a.3.3 — Lot Assumption State Visibility Hotfix
+
+### What Changed
+
+- Makes only **enabled** visibly deep green.
+- Makes only **not enabled** visibly muted terracotta.
+- Retains the normal supporting-text font weight, plain-text treatment, and responsive placement.
+- Requires no database change.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e2a3c-lot-assumption-state-visibility-hotfix.diff
+```
+
+#### 2. Apply patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e2a3c-lot-assumption-state-visibility-hotfix.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Focused Validation
+
+1. Select a lot with duplicate-match assumption enabled and confirm only **enabled** is visibly deep green.
+2. Select a lot without the setting and confirm only **not enabled** is visibly muted terracotta.
+3. Confirm the remainder of the sentence remains normal neutral supporting text with no added bold treatment.
+
+## Step 7e.2a.3.2 — Lot Assumption State Color Polish
+
+### What Changed
+
+- Keeps the selected-lot assumption sentence as ordinary supporting text.
+- Shows only **enabled** in the application’s dark green positive-state color.
+- Shows only **not enabled** in the application’s dark amber caution-state color.
+- Retains the existing font weight, responsive placement, and no-badge/no-border treatment.
+- Requires no database change.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e2a3b-lot-assumption-state-color-polish.diff
+```
+
+#### 2. Apply patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e2a3b-lot-assumption-state-color-polish.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Focused Validation
+
+1. Select a lot with duplicate-match assumption enabled and confirm only **enabled** is dark green.
+2. Select a lot without the setting and confirm only **not enabled** is dark amber.
+3. Confirm the rest of the sentence remains the normal supporting-text color and weight.
+
+
+## Step 7e.2a.3.1 — Modal Escape Target Hotfix
+
+### What Changed
+
+- Fixes the Escape handler to target the Create/Edit Unit dialog instead of its non-dismissible backdrop.
+- Preserves the existing first-Escape behavior for open Assignable Lot, Unit Model, or Processor option lists.
+- Keeps backdrop-click and focus-loss closure blocked.
+- Requires no database change.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e2a3a-modal-escape-target-hotfix.diff
+```
+
+#### 2. Apply patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e2a3a-modal-escape-target-hotfix.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Focused Validation
+
+1. Open Create Unit and press Escape with no selector list open; confirm the modal closes.
+2. Open Assignable Lot, Unit Model, or Processor options; confirm the first Escape closes only the list and a second Escape closes the modal.
+3. Confirm backdrop clicks still do not close the modal.
+
+
+## Step 7e.2a.3 — Unit Intake Modal Escape and Scrollbar Corner Polish
+
+### What Changed
+
+- Allows **Escape** to close Create Unit and Edit Unit after the form has no open searchable selector.
+- When Assignable Lot, Unit Model, or Processor options are open, the first **Escape** closes the open option list; a subsequent **Escape** closes the modal.
+- Continues to block backdrop-click and focus-loss closure for Create Unit and Edit Unit.
+- Keeps the outer dialog shell rounded and clips it cleanly; the inner form body now owns vertical scrolling so the scrollbar no longer visually squares the top-right or bottom-right modal corners.
+- Requires no database change.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e2a3-modal-escape-and-scrollbar-corner-polish.diff
+```
+
+#### 2. Apply patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e2a3-modal-escape-and-scrollbar-corner-polish.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Focused Validation
+
+1. Open Create Unit and Edit Unit. Confirm **Escape** closes the modal when no selector option list is open.
+2. Open Assignable Lot, Unit Model, or Processor options. Confirm the first **Escape** closes only that list and the second **Escape** closes the modal.
+3. Confirm backdrop clicks and focus changes still do not close the modal.
+4. Scroll a long form in a narrow viewport. Confirm scroll behavior remains normal and the modal shell keeps visibly rounded upper-right and lower-right corners.
+
+## Step 7e.2a.2 — Unit Intake Modal and ScanTools-Only Graphics Refinement
+
+### What Changed
+
+- Aligns the selected-lot duplicate-assumption sentence with the **Assignable Lot** control on wide screens, while retaining its normal stacked placement on narrow screens.
+- Uses muted contextual color for only **enabled** or **not enabled**, without a badge, bubble, or heavier bold treatment.
+- Refreshes compatible Processor Types and Processor values when a form opens with a selected Unit Model, including Edit Unit forms.
+- Removes Graphics Adapters from Create Unit and Edit Unit. ScanTools-imported graphics data remains available in the Unit Browser expanded details.
+- Ignores manually crafted graphics-adapter request fields, so manual forms cannot write ScanTools-owned graphics data.
+- Uses a normal-flow header and action area in Create/Edit Unit. Backdrop clicks and Escape no longer close those dialogs; X, Cancel, and successful saves retain their intended close behavior.
+- Requires no database change.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e2a2-unit-intake-modal-and-scantools-graphics-refinement.diff
+```
+
+#### 2. Apply patch
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e2a2-unit-intake-modal-and-scantools-graphics-refinement.diff
+```
+
+#### 3. Rebuild
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Focused Validation
+
+1. Open Create Unit and Edit Unit. Confirm clicks outside, Escape, and focus changes do not close either dialog. Confirm X, Cancel, and a successful save still close it.
+2. Scroll a long form on a small viewport. Confirm the header and action buttons remain in normal form flow and do not cover fields.
+3. Select a Unit Model, including on Edit Unit. Confirm compatible Processor Types refresh immediately.
+4. Confirm Graphics Adapters do not appear in Create Unit or Edit Unit. Confirm existing ScanTools graphics still appear in an expanded Unit Browser row.
+5. Select lots with and without duplicate-match assumption enabled. Confirm the contextual sentence aligns with the field and only the enabled/not enabled wording changes color.
+
+## Step 7e.2a.1 — Lot Context and Keyboard Language Cleanup
+
+### What Changed
+
+- Shows one plain-text status alongside the selected Assignable Lot during Create Unit: **Existing-unit assumption is enabled for this lot.** or **Existing-unit assumption is not enabled for this lot.** The status moves beneath the field on narrower layouts.
+- Keeps the status informational only. Existing server-side lot eligibility and duplicate-assumption checks remain authoritative.
+- Moves **OS Build** directly after **Operating System** and moves **BIOS Version** into OS Build’s former position.
+- Consolidates **US English** and **English US** into one active Keyboard Language option: **English US**. Existing unit specifications that used the duplicate US English value are reassigned to the retained active value before the duplicate is retired.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e2a1-lot-context-keyboard-language-cleanup.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e2a1-lot-context-keyboard-language-cleanup.diff
+```
+
+#### 3. Database backup — separate checkpoint
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+mkdir -p backup
+
+backup="backup/bwtdallas-before-step7e2a1-$(date +%Y%m%d-%H%M%S).sql"
+
+if docker compose exec -T mysql sh -lc 'mysqldump --no-tablespaces -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' > "$backup"; then
+  tail -n 3 "$backup"
+else
+  rm -f "$backup"
+  exit 1
+fi
+```
+
+#### 4. Database migration — Keyboard Language consolidation
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < sql/2026-07-step-7e2a1-lot-context-keyboard-language.sql
+```
+
+#### 5. Rebuild
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation
+
+1. In Create Unit, select one lot that enables duplicate-match assumption and one that does not. Confirm the plain-text status updates immediately and moves beneath the field at narrow viewport widths.
+2. Confirm the unit form still requires a listed Assignable Lot and changing the lot refreshes a displayed duplicate-check result.
+3. Confirm Expanded Specifications orders Operating System, OS Build, then BIOS Version.
+4. Confirm Keyboard Language offers **English US** only. Open an existing unit previously using US English and confirm it displays and saves as English US.
+
+## Step 7e.2a — Create Unit Intake Layout Refinement
+
+### What Changed
+
+- Moves **Lot Assignment** to the first Create Unit section so the destination work lot is chosen before serial identity and duplicate-assumption checks.
+- Replaces the fixed Assignable Lot dropdown with a searchable, controlled selector. Typed text must resolve to one listed assignable lot; server-side lot eligibility validation remains unchanged.
+- Refreshes duplicate-assumption eligibility when the selected work lot changes.
+- Moves **Unit Category** into **Manufacturer and Model**. A selected managed model continues to apply its mapped category automatically.
+- Removes the standalone **Operating System** section and includes Operating System with the BIOS, OS build, and diagnostic fields in **Expanded Specifications**.
+- Moves **Cosmetic Grade and Unit Pass/Fail** after Cosmetic Issues and Hardware Issues.
+- Removes **Production Weight** from Create Unit. Create requests ignore crafted production-weight override fields server-side; Edit Unit continues to show and allow existing role-limited weight controls.
+- Requires no database change.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e2a-create-unit-intake-layout-refinement.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e2a-create-unit-intake-layout-refinement.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation
+
+1. Open Create Unit and confirm Lot Assignment appears first. Search for and choose an eligible work lot; confirm the typed text must resolve to a listed lot before submission.
+2. Enter a known duplicate serial and confirm changing the selected work lot immediately refreshes the duplicate-assumption decision.
+3. Confirm Unit Category appears with Manufacturer and Unit Model. Choose a managed model and confirm its mapped category is applied.
+4. Confirm Create Unit has no Production Weight section or override inputs. Submit a normal test Create Unit and confirm the server still applies the normal internal default weight.
+5. Open Edit Unit and confirm its Production Weight section remains available according to the existing role rules.
+6. Confirm Operating System appears within Expanded Specifications and Cosmetic Grade appears after both issue sections.
+
+## Step 7e.2.1 — Duplicate Assumption Intake Recovery Hotfix
+
+### What Changed
+
+- Prevents a Create Unit submission with Unit Serial or BIOS Serial values from bypassing the current duplicate lookup while a blur-based check is still pending.
+- When a duplicate is confirmed during the final server-side save check, re-renders the Create Unit form with the controlled candidate panel rather than the retired legacy duplicate modal.
+- Groups matches by existing unit, so a unit whose Unit Serial and BIOS Serial contain the same value appears once, with both matching identifiers explained together.
+- Uses the controlled candidate lookup to display the actual current lot, assignment, Parked state, same-lot/closed-lot guard, and **Assume Existing Unit** action when eligible.
+- Requires no database change.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e2-duplicate-intake-recovery-hotfix.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e2-duplicate-intake-recovery-hotfix.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation
+
+1. As a regular Tech, select an enabled work lot and enter a known serial such as `KX81NNZ` for an Active unit in another open lot.
+2. Confirm the candidate appears once, displays its current lot, and offers **Assume Existing Unit** when eligible.
+3. Immediately submit after entering a matching serial without waiting for the blur request. Confirm the form remains open with the same controlled candidate panel instead of the legacy close-only duplicate modal.
+
+
+## Step 7e.2 — Controlled Existing Unit Assumption
+
+### What Changed
+
+- Adds a Management-controlled **Allow duplicate-match unit assumption** setting to each Lot. It is disabled by default for existing and new lots until Management intentionally enables it.
+- During **Create Unit** only, early Unit/BIOS Serial duplicate matches now show every candidate and explain whether it can be assumed into the currently selected work lot.
+- A regular Tech may assume a confirmed matching unit only when the selected destination lot is open, visible, assignable, and enabled for duplicate-match assumption.
+- Active units already in the selected destination lot cannot be assumed again. The UI directs the Tech to the existing Override workflow for intentional rework.
+- Active units currently in a closed lot cannot be assumed by a regular Tech and must use the Override workflow.
+- Parked units remain assumable even if their last-known lot was closed; assumption returns the unit to Active in the selected eligible work lot and assigns it to the acting Tech.
+- Assumption does not create a new Asset Tag or new unit. It updates only current lot/assignment state and records existing lot, assignment, and Parked-lifecycle history notes. Previous Work Complete credit remains unchanged.
+- The server rechecks serial evidence, role, destination eligibility, destination-lot policy, same-lot state, closed-source state, and Parked status inside the transaction.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e2-existing-unit-assumption.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e2-existing-unit-assumption.diff
+```
+
+#### 3. Database backup — separate checkpoint
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+mkdir -p backup
+
+backup="backup/bwtdallas-before-step7e2-$(date +%Y%m%d-%H%M%S).sql"
+
+if docker compose exec -T mysql sh -lc 'mysqldump --no-tablespaces -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' > "$backup"; then
+  tail -n 3 "$backup"
+else
+  rm -f "$backup"
+  exit 1
+fi
+```
+
+#### 4. Database migration — database changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < sql/2026-06-step-7e2-existing-unit-assumption.sql
+```
+
+Expected final message:
+
+```text
+Step 7e.2 existing unit assumption migration complete
+```
+
+#### 5. Rebuild — only after the migration succeeds
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation
+
+1. As Management or Admin, enable **Allow duplicate-match unit assumption** on one safe open leaf work lot.
+2. As a regular Tech, select that lot during Create Unit and enter a Unit Serial or BIOS Serial for a known active unit in a different open lot. Confirm the candidate can be selected and assumed.
+3. Confirm the assumed unit moves to the selected work lot, is assigned to the Tech, and no new Asset Tag is created.
+4. Confirm unit History records the duplicate serial assumption in lot and assignment history; prior Work Complete credit remains unchanged.
+5. Repeat with a Parked unit. Confirm it returns to Active in the selected work lot and is assigned to the Tech.
+6. Confirm an active unit already in the selected work lot cannot be assumed, and a closed-lot active unit shows Request Override rather than Assume Existing Unit.
+
+
+## Step 7e.1c — Processor Compatibility Catalog and Model Catalog Expansion
+
+### What Changed
+
+- Adds **Chrome** as a Unit Category for ChromeOS devices. Chrome models remain grouped under their actual manufacturers, including Acer, ASUS, Dell, HP, and Lenovo.
+- Expands the managed Model Catalog with Apple Intel and Apple Silicon Mac systems, ASUS business/consumer/ChromeOS families, Acer business/consumer/ChromeOS families, and common education/business Chrome models.
+- Changes the Unit Model selector to filter by **Manufacturer** first. Selecting a model applies its configured Unit Category, so Apple MacBook models remain discoverable even when the prior category selection was not MacBook.
+- Adds a model-to-processor compatibility table and seeds common Intel, AMD, Apple, Qualcomm, MediaTek, and Rockchip processor values.
+- Replaces the unrestricted Processor Model dropdown with a **Processor Type** control and searchable **Processor** selector. Both are restricted to catalog values mapped to the selected Unit Model.
+- Preserves existing historical unit model/processor combinations by importing every existing pairing into the compatibility table during the migration.
+- Typed processor text cannot be saved unless it resolves to a compatible catalog value. The server validates compatibility as well as the UI.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e1c-processor-compatibility-catalog.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e1c-processor-compatibility-catalog.diff
+```
+
+#### 3. Database backup — separate checkpoint
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+mkdir -p backup
+
+backup="backup/bwtdallas-before-step7e1c-$(date +%Y%m%d-%H%M%S).sql"
+
+docker compose exec -T mysql sh -lc 'mysqldump --no-tablespaces -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' > "$backup"
+```
+
+#### 4. Database migration — database changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < sql/2026-06-step-7e1c-processor-compatibility-catalog.sql
+```
+
+Expected final message:
+
+```text
+Step 7e.1c processor compatibility catalog migration complete
+```
+
+#### 5. Rebuild — only after the migration succeeds
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+## Step 7e.1b.1 — Model Selector Layering Hotfix
+
+### What Changed
+
+- Fixes the Unit Model suggestion list being clipped or covered by lower Unit form sections.
+- Raises the active Manufacturer and Model form section above later sections only while the combobox is open.
+- Temporarily allows the active section to show overflow so the complete options list remains usable.
+- Keeps the normal form-section clipping and stacking behavior after the list is closed.
+- No database migration is required.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e1b1-model-selector-layering-hotfix.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e1b1-model-selector-layering-hotfix.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+
+
+## Step 7e.1b — Model Selector Cleanup
+
+### What Changed
+
+- Replaces the separate Unit Model search input and model select list with one searchable **Unit Model** combobox.
+- The combobox stays disabled until a Manufacturer is selected, then lists only catalog models for that Manufacturer and the currently selected Unit Category.
+- Typing narrows the available catalog choices in the same field; choosing a result saves the selected catalog model ID.
+- Free text cannot be saved as an unapproved model. A typed value must match and resolve to a catalog model.
+- Existing inactive models remain visible for historical Edit Unit records, but inactive models are not offered for new selections.
+- No database migration is required.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e1b-model-selector-cleanup.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e1b-model-selector-cleanup.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+## Step 7e.1a — Manufacturer-Model Catalog
+
+### What Changed
+
+- Adds **Model Catalog** under Configuration for Admin-only management of unit models.
+- Models are scoped to a Manufacturer and Unit Category, can be created/edited/activated/deactivated, and remain visible on historical Edit Unit records when later deactivated.
+- Unit Create/Edit now requires a Manufacturer before models become selectable and provides a local model-search field to narrow the selected manufacturer/category list.
+- Seeds a curated refurbishment-oriented catalog for Dell, HP, Lenovo, Apple, and Microsoft business systems. Apple entries distinguish Intel and M-series variants where the silicon materially identifies the model.
+- Includes a safe schema/data migration that retains existing model rows and only adds missing catalog fields/seed rows.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e1a-unit-model-catalog.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e1a-unit-model-catalog.diff
+```
+
+#### 3. Database backup — recommended checkpoint
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+mkdir -p backup
+
+backup="backup/bwtdallas-before-step7e1a-$(date +%Y%m%d-%H%M%S).sql"
+
+if docker compose exec -T mysql sh -lc 'mysqldump --no-tablespaces -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' > "$backup"; then
+  tail -n 3 "$backup"
+else
+  rm -f "$backup"
+  exit 1
+fi
+```
+
+#### 4. Database migration — database changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < sql/2026-06-step-7e1a-unit-model-catalog.sql
+```
+
+Expected final message:
+
+```text
+Step 7e.1a unit model catalog migration complete
+```
+
+#### 5. Rebuild
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+## Step 7e.1 — Identifier Intake Controls
+
+### What Changed
+
+- Removes the editable Asset Tag field from Create Unit. Asset Tags are now generated only by the server when a genuinely new unit is created; crafted client submissions cannot supply one.
+- Shows the existing Asset Tag as read-only text in Edit Unit. Asset Tags remain permanent and cannot be changed through the form.
+- Normalizes Unit Serial and BIOS Serial values to uppercase for save and display while preserving case-insensitive, punctuation-insensitive duplicate comparison.
+- Checks both entered serial values against both stored serial types whenever either serial field loses focus during Create Unit, and enforces the same cross-field check again at final save.
+- Shows every matching candidate early, including Asset Tag, Active/Parked state, current lot when active, serial values, model, and CPU context.
+- Does not enable existing-unit assumption or movement yet. The former late `Use Existing Unit` shortcut is blocked server-side so the controlled assumption rules cannot be bypassed before Step 7e.2.
+- Includes a small data migration that uppercases existing Unit/BIOS serial display values and refreshes their normalized comparison values.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7e1-identifier-intake-controls.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7e1-identifier-intake-controls.diff
+```
+
+#### 3. Database backup — recommended checkpoint
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+mkdir -p backup
+
+backup="backup/bwtdallas-before-step7e1-$(date +%Y%m%d-%H%M%S).sql"
+
+if docker compose exec -T mysql sh -lc 'mysqldump --no-tablespaces -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' > "$backup"; then
+  tail -n 3 "$backup"
+else
+  rm -f "$backup"
+  exit 1
+fi
+```
+
+#### 4. Database migration — database changes only; do not rebuild yet
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < sql/2026-06-step-7e1-identifier-intake-controls.sql
+```
+
+Expected final message:
+
+```text
+Step 7e.1 identifier intake controls migration complete
+```
+
+#### 5. Rebuild — only after the migration succeeds
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation
+
+1. Open Create Unit and confirm no Asset Tag field is shown.
+2. Enter a Unit Serial or BIOS Serial using lowercase letters, leave the field, and confirm the field becomes uppercase.
+3. Confirm the early check searches both stored serial types and shows every matching candidate before the rest of the form is completed.
+4. Confirm a no-match result permits normal entry, while a matching serial still blocks accidental duplicate creation at final save.
+5. Open Edit Unit and confirm the Asset Tag is visible but cannot be changed.
+6. Confirm the prior direct duplicate-resolution route no longer updates or moves an existing unit.
+
+## Step 7d — Login Activity Audit
+
+### What Changed
+
+- Records each successful sign-in in `user_login_activity` with the account's primary role snapshot at sign-in time.
+- Adds **Management → Login Activity** for Admin and Management users only.
+- Defaults to the current Dallas-local day and supports viewing another past day.
+- Shows one row per user with their role at first sign-in, first sign-in time, most recent sign-in time, and total successful sign-ins for the selected day.
+- Login activity starts recording after this migration is deployed. Existing `users.last_login_at` data remains unchanged and is not fabricated into historical audit rows.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7d-login-activity-audit.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7d-login-activity-audit.diff
+```
+
+#### 3. Database backup — recommended checkpoint
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+mkdir -p backup
+
+backup="backup/bwtdallas-before-step7d-$(date +%Y%m%d-%H%M%S).sql"
+
+if docker compose exec -T mysql sh -lc 'mysqldump --no-tablespaces -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' > "$backup"; then
+  tail -n 3 "$backup"
+else
+  rm -f "$backup"
+  exit 1
+fi
+```
+
+#### 4. Database migration — database changes only; do not rebuild yet
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < sql/2026-06-step-7d-login-activity-audit.sql
+```
+
+Expected final message:
+
+```text
+Step 7d login activity audit migration complete
+```
+
+#### 5. Rebuild — only after the migration succeeds
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation
+
+1. Sign in with a non-production test account, then sign out and sign in again.
+2. As Admin or Management, open **Management → Login Activity**.
+3. Confirm the current Dallas-local date is selected and the account appears once with its first sign-in, most recent sign-in, and a successful sign-in count of `2`.
+4. Choose a different date and confirm the report changes without exposing the page to Tech Lead or Tech users.
+
+## Step 7b — Unit Browser Filter Interaction Cleanup
+
+### What Changed
+
+- The Assignable Lot, Category, Grade, Tech User, and authorized Show Parked Units controls now refresh the Unit Browser immediately when changed.
+- Search Units remains manual so a user can scan or paste one or more identifiers before selecting Apply Filters.
+- Created From and Created Through are now grouped in one **Created Date Range** container to show that they work together.
+- Date range changes remain manual; users set either or both dates, then choose Apply Filters.
+- The existing Clear action still returns the browser to its default Active Units view.
+- No database migration is required.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7b-unit-browser-filter-interaction-cleanup.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7b-unit-browser-filter-interaction-cleanup.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation
+
+1. Change Assignable Lot, Category, Grade, Tech User, or Show Parked Units and confirm the Unit Browser refreshes immediately while retaining current filters.
+2. Enter a Search Units value or a Created Date Range value and confirm nothing refreshes until Apply Filters is selected.
+3. Confirm Created From and Created Through appear together under Created Date Range and work correctly when one or both dates are supplied.
+4. Confirm Clear returns the browser to its default Active Units view.
+
+
+## Step 7c — Account Security Settings
+
+### What Changed
+
+- Limits newly created and reset passwords to **10 through 25 characters**. Server-side validation and the password form enforce the same range.
+- Adds the system-managed **Security Settings** configuration value `password_link_expiry_hours`, seeded to **1 hour**.
+- Admins can edit the password setup/reset link expiration from Configuration. The protected setting accepts only whole hours from **1 through 24**; its code, category, active state, label, and description remain system-managed.
+- Newly generated initial setup and password reset links use the current Configuration value. Existing generated links keep their original expiry time.
+- The `create-admin-link` script now uses the same configured expiration instead of an environment default.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step7c-account-security-settings.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step7c-account-security-settings.diff
+```
+
+#### 3. Database backup — recommended checkpoint
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+mkdir -p backup
+
+backup="backup/bwtdallas-before-step7c-$(date +%Y%m%d-%H%M%S).sql"
+
+docker compose exec -T mysql sh -lc 'mysqldump --no-tablespaces -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' > "$backup"
+
+tail -n 3 "$backup"
+```
+
+#### 4. Database migration — database changes only; do not rebuild yet
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < sql/2026-06-step-7c-account-security-settings.sql
+```
+
+Expected final message:
+
+```text
+Step 7c account security settings migration complete
+```
+
+#### 5. Rebuild — only after the migration succeeds
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation
+
+1. Open **Management → Configuration** as an Admin. Under **System and Access Configuration**, confirm **Security Settings** includes **Password Setup / Reset Link Expiration** with a default value of `1`.
+2. Edit the setting to another whole value such as `2`; confirm values below `1`, above `24`, decimals, and non-numeric text are rejected.
+3. Generate a setup or reset link and confirm the link page reports the configured number of hours. Restore the setting to `1` after testing if a different value was used.
+4. Open a setup/reset password link and confirm passwords shorter than 10 characters or longer than 25 characters are rejected; a 10–25 character password is accepted.
+
+## Step 7a — Navigation and Typography Cleanup
+
+### What Changed
+
+- Keeps the desktop sidebar permanently expanded with flat, full-width navigation rows.
+- Removes nested navigation-card treatment and collapsible group behavior; submenu indentation differentiates the second level.
+- Adds full-row hover and active states.
+- Keeps a compact mobile drawer for narrow screens without collapsing the internal navigation groups.
+- Reduces overly heavy navigation and heading treatment for a less cramped visual hierarchy.
+- No database migration was required.
+
+## Step 6f.5 — Final Step 6 Audit and Handoff Cleanup
+
+### Audit Result
+
+- **No application code or database changes are required.** The final audit found no remaining Step 6 defect that warrants changing approved behavior.
+- Park and Return routes are limited to Tech Lead, Management, and Admin, with model-level authority checks as a second safeguard.
+- A Park action clears only the current operational lot and assignment in one transaction, records the lifecycle event, and preserves identifiers, history, completed-work entries, and earned production credit.
+- Return to Active requires an open, visible, non-container destination lot. Assignment is optional and, when selected, is limited to an active Tech or Tech Lead.
+- Regular Tech users remain limited to Active Units. Server-side guards block Parked-unit edits, lot moves, assignments, Work Complete, Pass/Fail review, override requests and approvals, and direct Parked-unit earned-credit details.
+- Closed, hidden, and parent/container lots remain unavailable as new or Return-to-Active destinations.
+- The Unit Browser defaults to Active Units; authorized users can use the compact **Show Parked Units** toggle. A successful Return to Active redirects back to Active Units.
+- Static JavaScript syntax checks passed across the source tree. This audit is source-level; the completed browser validation of the Parked workflow remains the operational acceptance check.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step6f5-final-step6-audit-handoff.diff
+```
+
+#### 2. Apply the patch — documentation only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step6f5-final-step6-audit-handoff.diff
+```
+
+#### 3. Build
+
+No rebuild or SQL migration is needed because this patch changes `README.md` only.
+
+## Step 6f.4 — Unit Browser Lifecycle Toggle and Return Navigation
+
+### What Changed
+
+- Replaces the elevated-user **Unit State** dropdown with a compact **Show Parked Units** toggle in the Unit Browser filter header.
+- The toggle is visible only to Tech Lead, Management, and Admin. It is off by default for the Active Units view; regular Techs continue to see only Active Units and never receive the toggle.
+- Toggling the control automatically reloads the Unit Browser with the selected lifecycle view while retaining the other current filters.
+- A successful HTMX **Return to Active** now performs a full redirect to the default Active Units view and displays the existing success message, rather than leaving the user in the prior Parked Units view.
+- No database migration is required.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step6f4-unit-browser-lifecycle-toggle.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step6f4-unit-browser-lifecycle-toggle.diff
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation
+
+1. As Tech Lead, Management, or Admin, confirm the Unit Browser shows **Show Parked Units** as a compact toggle instead of the former Unit State dropdown.
+2. Confirm the default toggle-off view lists Active Units. Turn the toggle on and confirm it automatically loads Parked Units while retaining any other active filters.
+3. As a regular Tech, confirm the toggle remains absent and only Active Units can be viewed.
+4. As an authorized user, return a Parked unit to an eligible open lot. Confirm the browser redirects to the Active Units view with the returned unit available there.
+
+## Step 6f.3 — Parked Lifecycle Validation and Guard Hardening
+
+### What Changed
+
+- Validates the Step 6f.2 Active / Parked / Return to Active workflow without changing the approved lifecycle policy.
+- Treats a unit as Parked whenever either the authoritative `is_parked` field or retained legacy `is_archived` compatibility field is set. This keeps browser visibility and server-side lifecycle guards fail-safe if historical data is ever inconsistent.
+- Updates override approval to use that same compatibility-safe Parked check, so an approval cannot proceed for a unit that is Parked under either state field.
+- Blocks the direct **My Weight Earned** endpoint for a Parked unit when requested by a regular Tech. This closes a direct-route visibility bypass while preserving credit data and elevated-user access.
+- Confirms that Park and Return continue to preserve unit history and earned Work Complete credit, while parked records remain blocked from edit, assignment, completion, Pass/Fail review, and override workflows.
+- No database migration is required for this validation-and-hardening step.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step6f3-parked-lifecycle-validation.diff
+```
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step6f3-parked-lifecycle-validation.diff
+
+git diff --check
+```
+
+#### 3. Rebuild — no SQL is required
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Validation — BWT2300007
+
+1. Before changing the unit, record its current Active/Parked state, current lot, current assignment, and any existing Work Complete history so it can be returned to the same operational state after testing.
+2. As Tech Lead, Management, or Admin, Park the unit. Confirm it leaves **Active Units**, appears only under **Parked Units**, and has no current lot or assignment.
+3. Open the authorized History panel and confirm the Parked event retains the former lot and assignment. Confirm existing Work Complete credit remains present and unchanged.
+4. As a regular Tech, confirm the Parked Units filter is absent; direct Park/Return, Edit, Work Complete, and Override requests remain blocked. A direct request for **My Weight Earned** must not return Parked-unit credit details.
+5. As Tech Lead, Management, or Admin, return the unit to an open, assignable leaf lot. Test an optional assignment only with an active Tech or Tech Lead. Closed, hidden, and parent/container lots must be rejected.
+6. Confirm the returned unit can resume normal active workflows, then restore the unit to its original intended lot and assignment if the test changed them.
+
+## Step 6f.2 — Parked Units and Return to Active
+
+### What Changed
+
+- Replaces the user-facing archive workflow with **Park Unit** and **Return to Active**.
+- Adds explicit `is_parked`, `parked_at`, and `parked_by_user_id` fields on `units`.
+- Adds `unit_park_history` to retain each lifecycle transition, including prior/current lot, assignment, authorized actor, timestamp, and note.
+- Converts legacy archived units to Parked during the migration. The unit’s final known lot and assignment are written to history before the current operational values are cleared.
+- Limits Park and Return actions, routes, and Parked Unit browsing to **Tech Lead, Management, and Admin**. Regular Techs cannot access parked records or lifecycle routes.
+- Parking runs in one database transaction and clears the current lot and assignment. It does not delete identifiers, unit details, audit history, Work Complete records, or earned production credit.
+- Parked records are absent from the default Active Unit Browser. Authorized users can use the **Show Parked Units** toggle to review them.
+- Returning a unit to Active requires an eligible **open** destination lot and can optionally assign an active Tech or Tech Lead.
+- A parked unit cannot be edited, moved, assigned, marked Work Complete, reviewed for Pass/Fail, requested for override, or approved through override handoff until returned to Active.
+- Legacy Step 6f archive columns remain only for backwards compatibility and are synchronized by the new lifecycle. The application no longer presents Archive/Unarchive terminology.
+
+### Deployment
+
+#### 1. Patch dry-run — no file, database, or container changes
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch --dry-run -p1 < handoff/step6f2-parked-unit-lifecycle-clean.diff
+```
+
+Stop if any file is skipped, reversed, or fails to check.
+
+#### 2. Apply the patch — file changes only
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+patch --batch -p1 < handoff/step6f2-parked-unit-lifecycle-clean.diff
+
+git diff --check
+
+ls -l sql/2026-06-step-6f2-parked-unit-lifecycle.sql
+```
+
+The final `ls` command must show the migration file before any database command is run.
+
+#### 3. Database backup — separate recommended checkpoint
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+mkdir -p backup
+
+docker compose exec -T mysql sh -lc 'mysqldump --no-tablespaces -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  > "backup/bwtdallas-before-step6f2-$(date +%F-%H%M%S).sql"
+```
+
+#### 4. Database migration — database changes only; do not rebuild yet
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' \
+  < sql/2026-06-step-6f2-parked-unit-lifecycle.sql
+```
+
+Expected final message:
+
+```text
+Step 6f.2 parked-unit lifecycle migration complete
+```
+
+#### 5. Rebuild — only after the migration succeeds
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose up -d --build
+```
+
+### Post-Rebuild Checks
+
+1. As a Tech Lead, Management user, or Admin, open `/tech/units`, select an Active unit, and choose **Park Unit**.
+2. Confirm it disappears from Active Units and appears under **Parked Units** with no current lot or Tech assignment.
+3. Open the authorized History panel and verify that the Parked transition retains the former lot and assignment.
+4. Confirm a parked unit cannot be edited, moved, assigned, marked Work Complete, requested for override, or approved through override handoff.
+5. Confirm a regular Tech cannot choose Parked Units or access Park/Return routes directly.
+6. Return the unit to Active using an open, eligible destination lot; test once unassigned and once with an eligible Tech/Tech Lead selected.
+7. Confirm hidden, closed, and parent/container lots cannot be selected as return destinations.
+8. Confirm previously earned Work Complete credit remains unchanged after parking and return.
+9. With a legacy archived test record, confirm the migration converts it to Parked and retains its final known lot and assignment in lifecycle history.
+
+## Step 6f.0 Goal
+
+Dashboard productivity should be based on work that a Tech actually completed during the selected reporting period, not on the unit's current assigned user, current lot, current grade, or future movement history.
+
+## Step 6f.0 Changes
+
+- Adds explicit current assignment fields to `units`:
+  - `assigned_to_user_id`
+  - `assigned_at`
+  - `assignment_updated_by_user_id`
+- Backfills existing units so the current assignee starts as the original creator.
+- Adds `unit_assignment_history`.
+- Adds `unit_work_completions` for immutable production-credit events.
+- Adds a `Complete Work` action in the Tech Unit Browser.
+- Completion credit snapshots the unit, current lot, completed Tech, completion date/time, and resolved numeric production weight.
+- Updates Tech/Management dashboard productivity to read from `unit_work_completions` when the table exists.
+- Approved override requests now transfer current assignment to the requesting Tech.
+- Override approval can optionally give the prior Tech intentional custom credit.
+- Prior-Tech credit is manual-only, checkbox-gated, and must be between `0.10` and `10.00`.
+- Requires no support-task productivity records.
+
+## Important Direction Preserved
+
+- Support-task productivity remains deferred.
+- Current assignment is operational state only.
+- Record creator remains historical metadata.
+- Lot moves and assignment changes do not rewrite completed production credit.
+- Production credit is not automatically created by moving lots, grading, creating units, parking, or unassigning.
+- Patch files are applied from `/home/bwtdallas-webserver/app/`.
+- Zipped handoff files created for upload/reference are kept in `/home/bwtdallas-webserver/app/handoff/`.
+
+## Step 6f.0 Migration Hotfix
+
+- The Step 6f.0 child tables use `BIGINT` for `unit_id` to match the existing `units.unit_id` primary key.
+- `override_request_id` uses `BIGINT UNSIGNED` to match `unit_override_requests.unit_override_request_id`.
+- If the original migration stopped while creating the new tables, apply the Step 6f.0 migration type hotfix and rerun the same migration. The migration is safe to rerun because its earlier column and index operations are guarded.
+
+## Required SQL
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' < sql/2026-06-step-6f0-assignment-completion-foundation.sql
+```
+
+Expected final message:
+
+```text
+Step 6f.0 assignment and completion foundation migration complete
+```
+
+## Post-Rebuild Checks
+
+1. Run the Step 6f.0 SQL migration.
+2. Open `/tech/units` and confirm rows show the current assignment label.
+3. Confirm a newly created unit is assigned to the creator.
+4. Create an override request from another Tech.
+5. Approve the request and confirm the unit assignment transfers to the requesting Tech.
+6. During override approval, test the optional prior-Tech credit checkbox with a valid value such as `0.25`.
+7. Confirm invalid values such as `0.09`, `10.01`, or blank checked values are rejected.
+8. Use `Complete Work` on a non-critical unit and confirm the dashboards count that completed work.
+
+## Next Direction
+
+Step 6 is complete. Continue with **Step 7a — Browser Filter Interaction Cleanup**:
+
+- Automatically apply single-choice Unit Browser filters such as lot, category, grade, assigned Tech, and lifecycle view.
+- Keep manual **Apply Filters** for multi-value Asset Tag search and the grouped **Created Date Range** inputs.
+- Group **Created From** and **Created Through** under one date-range container without changing their existing filtering behavior.
+- Preserve the Active/Parked lifecycle policy and do not reintroduce Archive/Unarchive terminology.
+
+## Step 6f.0 Action-Flow Hotfix
+
+- Replaces the silent inline Complete Work post with an explicit **Mark Lot Work Complete** confirmation modal.
+- Completion credit is recorded for the signed-in user who confirms the work, not implicitly for the current assignee.
+- Shows the current lot, credited user, and resolved production weight before recording.
+- Prevents a second manual completion credit during the same stay in a lot; moving away and later returning begins a new eligible lot stay.
+- Keeps the success message visible after a completion and refreshes the Unit Browser.
+- Uses an explicit modal trigger and visible error state for **Request Override** and completion actions.
+
+## Step 6f.0.2 Completion and transfer safeguards
+
+- Renames the unit action to **Work Complete**.
+- Shows the latest credited Tech and credit source in the Unit Browser.
+- Labels the displayed row value as **Current lot weight** so it is not mistaken for a person’s earned credit.
+- Adds work-credit, assignment, and lot-move sections to Unit History.
+- Shows prior-Tech override credit with the credited person and approved weight.
+- Hides the prior-Tech custom-weight entry until the approval checkbox is selected, and clears the value when it is deselected.
+- Allows a Tech to correct the lot only while the unit is currently assigned to them and has no recorded Work Complete credit.
+- Requires Tech Lead, Management, or Admin to move a unit after Work Complete credit has been recorded.
+
+
+## Step 6f.0.3 History access and credited-work layout
+
+- Stacks the latest Work Complete weight underneath the latest credited Tech name in the Unit Browser.
+- Moves the lazy-loaded History action into the expanded Unit Details mini-menu.
+- Limits History visibility and its server route to Admin, Management, and Tech Lead users.
+- Regular Tech users receive neither the History control nor the history panel markup.
+- No SQL migration is required.
+
+## Step 6f.0.4: Completion Safeguards, Pass/Fail Confirmation Queue, and Tech Browser Scope
+
+This step corrects the completion and override workflows without rewriting historical earned-weight records.
+
+### What Changed
+
+- The Unit Browser now keeps current lot weight and unit override context under **Unit / Weight**.
+- The **Work / Assignment** column now shows the latest credited Tech and **Latest Weight Earned** as separate information.
+- History remains lazy-loaded only when an authorized user opens it from the unit mini-menu.
+- Work history is labeled **Earned Weight History**.
+- The database now prevents a new duplicate manual completion for the same unit during the same current lot stay. Existing historical records are retained for review.
+- A Pass/Fail confirmation request now creates a real pending record in `/management/overrides` while leaving the selected Pass/Fail result applied.
+- Tech Leads can access `/management/overrides` to review requests without receiving access to `/management/lots`.
+- Regular Tech users see their currently assigned active units by default, newest first. Searches may locate other units, but those results remain read-only other than request actions.
+- Prior-Tech custom credit is only available for manual Tech ownership override requests. Its field is hidden and disabled until the checkbox is selected, and the server ignores it for all other request types.
+
+### Required SQL
+
+Run after applying the patch:
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' < sql/2026-06-step-6f0-4-completion-safeguards.sql
+```
+
+Expected final message:
+
+```text
+Step 6f.0.4 completion safeguards migration complete
+```
+
+## Step 6f.0.4a — Current Lot Weight / Earned Weight Display Hotfix
+
+- Separates the configured **Current Lot Weight** from any unit-specific override.
+- Shows the configured lot weight under **Unit / Weight**.
+- Shows the unit override as its own value when present.
+- Leaves **Latest Weight Earned** tied only to the recorded completion-credit snapshot.
+- Prevents the current effective unit weight from being mistaken for earned credit.
+
+
+
+## Step 6f.0.4b — Weight Display Correction
+
+- Shows only the configured **Current Lot Weight** under `Unit / Weight`.
+- Removes redundant Unit Override display from the Unit / Weight summary and expanded detail.
+- Shows the unit's effective weight under **Latest Weight Earned** beside the credited Tech.
+- Keeps completion history and dashboard calculations based on the saved completion-credit snapshot.
+
+## Step 6f.0.4c — Override Ownership Guard
+
+- Hides `Request Override` when the current regular Tech is already assigned to the unit.
+- Shows `Request Override` only to a regular Tech viewing a unit assigned to another Tech or currently unassigned.
+- Enforces the same ownership check in both override modal and submission routes, preventing direct-request bypasses.
+- Tech Leads, Management, and Admin continue to manage assignments through their elevated operational workflow rather than filing Tech override requests.
+- No SQL migration is required.
+
+## Step 6f.0.4d — Override Handoff Assignment and Lot Selection
+
+- Shows **Assigned To** separately from the **Last Credited Tech** so a prior earned-weight record is never mistaken for the current assignment.
+- The earned value shown in the Unit Browser comes from the saved completion-credit record, not from the current lot weight.
+- When a manual Tech override involves a unit with recorded work, approval requires an open, assignable destination lot.
+- The approving Tech Lead, Management user, or Admin can select the current lot to keep the unit in place, or a different open child/leaf lot to move it as part of the same approval.
+- Approved assignment transfer and any approved lot move occur together and create assignment and lot-move history records.
+- Parent/container lots remain non-assignable; an old unit currently in a parent lot requires an assignable destination selection during a recorded-work override.
+- No SQL migration is required.
+
+
+
+## Step 6f.0.4f Permanent Unit Deletion
+
+- Tech Lead, Management, and Admin can permanently delete a unit from its expanded Unit Details mini-menu.
+- The permanent-delete modal requires typing `DELETE` exactly before the action can be submitted.
+- Deletion runs in one database transaction and removes the unit plus all linked rows detected through current database unit references.
+- If any linked row cannot be removed, the transaction rolls back so the unit and its records remain intact.
+- Permanent deletion intentionally removes associated earned-weight entries from dashboard totals because the unit is treated as never having been added.
+
+
+## Step 6f.1 — Closed Lot Lifecycle
+
+- Adds a reversible `is_closed` operational state to `lots`.
+- **Open** lots can receive units when they are visible and are not parent/container lots.
+- **Closed** lots remain visible for management review, unit history, and Unit Browser filtering.
+- Closed lots are removed from unit creation, direct lot-move, and override-handoff destination lists.
+- Existing units remain in a lot when it is closed; closing does not reassign, delete, or alter production credit.
+- Management and Admin can Close or Reopen a lot from `/management/lots`; Tech Leads remain blocked from that page.
+- A closed unit's current lot remains visible in an Edit Unit form only so the record can be preserved or moved to an open destination. It cannot be selected as a new destination.
+- Hidden remains separate from Closed: Hidden controls browsing visibility; Closed controls whether a lot can receive units.
+
+### Required SQL
+
+```bash
+cd /home/bwtdallas-webserver/app
+
+docker compose exec -T mysql sh -lc 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' < sql/2026-06-step-6f1-closed-lot-lifecycle.sql
+```
+
+Expected final message:
+
+```text
+Step 6f.1 closed-lot lifecycle migration complete
+```

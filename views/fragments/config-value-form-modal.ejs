@@ -9,6 +9,7 @@
     : '/management/config/values';
   const title = safeMode === 'edit' ? 'Edit Config Value' : 'Create Config Value';
   const submitLabel = safeMode === 'edit' ? 'Save Config Value' : 'Create Config Value';
+  const isPasswordLinkExpirySetting = Boolean(locals.isPasswordLinkExpirySetting);
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
@@ -32,64 +33,85 @@
       <% } %>
 
       <div class="message warning config-value-system-note">
-        <p>Config values can be used by existing units, lots, and app forms. Use active/inactive instead of deleting history. Codes should be changed only when you are sure no feature depends on the old code.</p>
+        <% if (isPasswordLinkExpirySetting) { %>
+          <p>This system security setting controls how long newly generated setup and reset links remain valid. Enter a whole number of hours from 1 through 24.</p>
+        <% } else { %>
+          <p>Config values can be used by existing units, lots, and app forms. Use active/inactive instead of deleting history. Codes should be changed only when you are sure no feature depends on the old code.</p>
+        <% } %>
       </div>
 
       <form class="app-form config-value-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML" autocomplete="off">
         <input type="hidden" name="includeInactive" value="<%= safeFormData.includeInactive || '0' %>" />
 
-        <div class="form-grid config-value-form-grid">
-          <label class="form-field">
-            <span>Category</span>
-            <select name="configCategoryId" required>
-              <option value="">Select category</option>
-              <% safeCategories.forEach((category) => { %>
-                <option value="<%= category.config_category_id %>" <%= String(safeFormData.configCategoryId || '') === String(category.config_category_id) ? 'selected' : '' %>>
-                  <%= category.label || category.code %><%= category.isActive ? '' : ' (Inactive category)' %>
-                </option>
-              <% }) %>
-            </select>
-            <small class="field-hint">Choose the group this value belongs to. Production weights, lot values, and unit workflow values should stay in their matching categories.</small>
-          </label>
+        <% if (isPasswordLinkExpirySetting) { %>
+          <input type="hidden" name="configCategoryId" value="<%= safeFormData.configCategoryId || '' %>" />
+          <input type="hidden" name="code" value="<%= safeFormData.code || '' %>" />
+          <input type="hidden" name="label" value="<%= safeFormData.label || '' %>" />
+          <input type="hidden" name="description" value="<%= safeFormData.description || '' %>" />
+          <input type="hidden" name="sortOrder" value="<%= safeFormData.sortOrder || '0' %>" />
+          <input type="hidden" name="isActive" value="1" />
+
+          <div class="form-grid config-value-form-grid">
+            <label class="form-field">
+              <span>Password setup/reset link expiration</span>
+              <input type="number" name="value" value="<%= safeFormData.value || '1' %>" min="1" max="24" step="1" inputmode="numeric" required autofocus />
+              <small class="field-hint">Whole hours. New setup and reset links expire after this period. Existing links keep the expiration they were issued with.</small>
+            </label>
+          </div>
+        <% } else { %>
+          <div class="form-grid config-value-form-grid">
+            <label class="form-field">
+              <span>Category</span>
+              <select name="configCategoryId" required>
+                <option value="">Select category</option>
+                <% safeCategories.forEach((category) => { %>
+                  <option value="<%= category.config_category_id %>" <%= String(safeFormData.configCategoryId || '') === String(category.config_category_id) ? 'selected' : '' %>>
+                    <%= category.label || category.code %><%= category.isActive ? '' : ' (Inactive category)' %>
+                  </option>
+                <% }) %>
+              </select>
+              <small class="field-hint">Choose the group this value belongs to. Production weights, lot values, and unit workflow values should stay in their matching categories.</small>
+            </label>
+
+            <label class="form-field">
+              <span>Code</span>
+              <input type="text" name="code" value="<%= safeFormData.code || '' %>" maxlength="120" placeholder="example_config_value" required />
+              <small class="field-hint">Stable app key. Use lowercase letters, numbers, underscores, or hyphens. Avoid changing this after the value is used.</small>
+            </label>
+
+            <label class="form-field">
+              <span>Label</span>
+              <input type="text" name="label" value="<%= safeFormData.label || '' %>" maxlength="120" placeholder="Example Config Value" required />
+              <small class="field-hint">Human-readable text shown in forms, tables, and dropdowns. This is safe to improve when wording needs cleanup.</small>
+            </label>
+
+            <label class="form-field">
+              <span>Value</span>
+              <input type="text" name="value" value="<%= safeFormData.value || '' %>" maxlength="120" placeholder="Optional stored value" />
+              <small class="field-hint">Optional stored value. For Production Weight Types, use the numeric weight value, such as 1.00, 0.50, or 0.33.</small>
+            </label>
+
+            <label class="form-field">
+              <span>Sort Order</span>
+              <input type="number" name="sortOrder" value="<%= safeFormData.sortOrder || '0' %>" step="1" inputmode="numeric" />
+              <small class="field-hint">Lower numbers display first inside the selected category. Use gaps like 10, 20, 30 when possible.</small>
+            </label>
+
+            <label class="checkbox-card config-value-active-toggle" for="configValueIsActive">
+              <input id="configValueIsActive" type="checkbox" name="isActive" value="1" <%= String(safeFormData.isActive || '0') === '1' ? 'checked' : '' %> />
+              <span>
+                <strong>Active</strong>
+                <small>Active values are available in normal app dropdowns. Turn this off to retire a value without deleting history.</small>
+              </span>
+            </label>
+          </div>
 
           <label class="form-field">
-            <span>Code</span>
-            <input type="text" name="code" value="<%= safeFormData.code || '' %>" maxlength="120" placeholder="example_config_value" required />
-            <small class="field-hint">Stable app key. Use lowercase letters, numbers, underscores, or hyphens. Avoid changing this after the value is used.</small>
+            <span>Description</span>
+            <textarea name="description" rows="4" maxlength="500" placeholder="Optional description for Management and Admin users."><%= safeFormData.description || '' %></textarea>
+            <small class="field-hint">Optional Admin-facing notes. Use this to explain when or why the value should be selected.</small>
           </label>
-
-          <label class="form-field">
-            <span>Label</span>
-            <input type="text" name="label" value="<%= safeFormData.label || '' %>" maxlength="120" placeholder="Example Config Value" required />
-            <small class="field-hint">Human-readable text shown in forms, tables, and dropdowns. This is safe to improve when wording needs cleanup.</small>
-          </label>
-
-          <label class="form-field">
-            <span>Value</span>
-            <input type="text" name="value" value="<%= safeFormData.value || '' %>" maxlength="120" placeholder="Optional stored value" />
-            <small class="field-hint">Optional stored value. For Production Weight Types, use the numeric weight value, such as 1.00, 0.50, or 0.33.</small>
-          </label>
-
-          <label class="form-field">
-            <span>Sort Order</span>
-            <input type="number" name="sortOrder" value="<%= safeFormData.sortOrder || '0' %>" step="1" inputmode="numeric" />
-            <small class="field-hint">Lower numbers display first inside the selected category. Use gaps like 10, 20, 30 when possible.</small>
-          </label>
-
-          <label class="checkbox-card config-value-active-toggle" for="configValueIsActive">
-            <input id="configValueIsActive" type="checkbox" name="isActive" value="1" <%= String(safeFormData.isActive || '0') === '1' ? 'checked' : '' %> />
-            <span>
-              <strong>Active</strong>
-              <small>Active values are available in normal app dropdowns. Turn this off to retire a value without deleting history.</small>
-            </span>
-          </label>
-        </div>
-
-        <label class="form-field">
-          <span>Description</span>
-          <textarea name="description" rows="4" maxlength="500" placeholder="Optional description for Management and Admin users."><%= safeFormData.description || '' %></textarea>
-          <small class="field-hint">Optional Admin-facing notes. Use this to explain when or why the value should be selected.</small>
-        </label>
+        <% } %>
 
         <div class="form-actions">
           <button type="submit" class="primary-button"><%= submitLabel %></button>

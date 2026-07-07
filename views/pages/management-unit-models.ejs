@@ -1,0 +1,64 @@
+<%
+  const selected = (actual, expected) => String(actual || '') === String(expected || '') ? 'selected' : '';
+  const checked = (value) => value ? 'checked' : '';
+  const noticeMessages = {
+    created: 'Unit model created.',
+    updated: 'Unit model updated.',
+    activated: 'Unit model activated.',
+    deactivated: 'Unit model deactivated.',
+    'not-found': 'The selected model was not found.'
+  };
+%>
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=step7f2-model-catalog-modal-repair'] }) %>
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+        <main class="content-shell">
+          <section class="dashboard-hero accent-slate">
+            <div>
+              <p class="eyebrow">Configuration</p>
+              <h2>Unit Model Catalog</h2>
+              <p>Maintain the manufacturer and category-specific models available on the Unit Create/Edit form. Inactive models remain visible on historical units but do not appear for new selection.</p>
+            </div>
+            <div class="hero-badge"><span>Visible Models</span><strong><%= formatNumber(models.filter((model) => model.isActive).length) %></strong></div>
+          </section>
+
+          <% if (notice && noticeMessages[notice]) { %>
+            <div class="message <%= notice === 'not-found' ? 'error' : 'success' %>"><p><%= noticeMessages[notice] %></p></div>
+          <% } %>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Catalog Filters</p>
+                <h2>Find a Model</h2>
+              </div>
+              <a class="primary-button" href="/management/config/models/new/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-get="/management/config/models/new/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-target="#modal-root" hx-swap="innerHTML">Add Unit Model</a>
+            </div>
+            <form class="app-form tech-filter-form" method="get" action="/management/config/models">
+              <label class="form-field"><span>Manufacturer</span><select name="manufacturerId"><option value="">All manufacturers</option><% manufacturers.forEach((manufacturer) => { %><option value="<%= manufacturer.id %>" <%= selected(filters.manufacturerId, manufacturer.id) %>><%= manufacturer.label %></option><% }) %></select></label>
+              <label class="form-field"><span>Unit Category</span><select name="unitCategoryConfigValueId"><option value="">All categories</option><% unitCategories.forEach((category) => { %><option value="<%= category.id %>" <%= selected(filters.unitCategoryConfigValueId, category.id) %>><%= category.label %></option><% }) %></select></label>
+              <label class="form-field"><span>Search</span><input type="search" name="search" value="<%= filters.search || '' %>" placeholder="e.g. 5400, 840 G8, T14s" /></label>
+              <label class="form-field"><span>Status</span><select name="includeInactive"><option value="0" <%= !filters.includeInactive ? 'selected' : '' %>>Active only</option><option value="1" <%= filters.includeInactive ? 'selected' : '' %>>Active and inactive</option></select></label>
+              <div class="tech-filter-actions"><button class="primary-button" type="submit">Apply Filters</button><a class="secondary-button" href="/management/config/models">Reset</a></div>
+            </form>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header"><div><p class="eyebrow">Catalog</p><h2><%= formatNumber(models.length) %> Model<%= models.length === 1 ? '' : 's' %></h2></div><a class="secondary-button" href="/management/config">Back to Config Values</a></div>
+            <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Manufacturer</th><th>Category</th><th>Model</th><th>Order</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+              <% if (models.length === 0) { %><tr><td colspan="6">No models match the current filters.</td></tr><% } %>
+              <% models.forEach((model) => { %><tr class="<%= model.isActive ? '' : 'config-value-row--inactive' %>"><td><strong><%= model.manufacturerName %></strong></td><td><%= model.unitCategoryLabel %></td><td><strong><%= model.modelName %></strong></td><td><%= model.sortOrder %></td><td><span class="pill <%= model.isActive ? 'good' : 'bad' %>"><%= model.isActive ? 'Active' : 'Inactive' %></span></td><td><div class="config-value-row-actions"><a class="secondary-button" href="/management/config/models/<%= model.id %>/edit/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-get="/management/config/models/<%= model.id %>/edit/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a><a class="secondary-button" href="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-get="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-target="#modal-root" hx-swap="innerHTML"><%= model.isActive ? 'Deactivate' : 'Activate' %></a></div></td></tr><% }) %>
+            </tbody></table></div></div>
+          </section>
+        </main>
+      </div>
+    </div>
+    <div id="modal-root"></div>
+    <script defer src="/js/modal.js?v=step7f2-modal-scroll-lock"></script>
+  </body>
+</html>

@@ -422,3 +422,147 @@
 .management-review-credit-weight[hidden] {
   display: none;
 }
+
+
+/* Step 7d Login Activity Audit. */
+.management-login-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.management-login-summary-card {
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: var(--surface);
+  box-shadow: var(--shadow-soft);
+}
+
+.management-login-summary-card strong,
+.management-login-summary-card span {
+  display: block;
+}
+
+.management-login-summary-card strong {
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 1.05rem;
+}
+
+.management-login-summary-card span {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.management-login-header {
+  gap: 16px;
+}
+
+.management-login-header > .secondary-button {
+  text-decoration: none;
+}
+
+.management-login-filter-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.management-login-filter-form .form-field {
+  min-width: 180px;
+  margin: 0;
+}
+
+.management-login-filter-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.management-login-filter-actions .secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.management-login-note {
+  margin: 14px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.management-login-table-card {
+  margin-top: 20px;
+}
+
+.management-login-user {
+  display: grid;
+  gap: 4px;
+}
+
+.management-login-user strong {
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.management-login-user span {
+  color: var(--muted);
+  font-size: 0.78rem;
+}
+
+.management-login-table-card table th:first-child,
+.management-login-table-card table td:first-child {
+  min-width: 210px;
+}
+
+.management-login-table-card table th:nth-child(2),
+.management-login-table-card table td:nth-child(2) {
+  min-width: 160px;
+}
+
+.management-login-table-card table th:nth-child(3),
+.management-login-table-card table td:nth-child(3),
+.management-login-table-card table th:nth-child(4),
+.management-login-table-card table td:nth-child(4) {
+  min-width: 150px;
+}
+
+.management-login-table-card table th:last-child,
+.management-login-table-card table td:last-child {
+  min-width: 130px;
+  text-align: right;
+}
+
+@media (max-width: 900px) {
+  .management-login-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .management-login-header {
+    align-items: stretch;
+  }
+
+  .management-login-header > .secondary-button {
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+  .management-login-filter-form,
+  .management-login-filter-actions,
+  .management-login-filter-actions > * {
+    width: 100%;
+  }
+
+  .management-login-filter-form .form-field {
+    min-width: 0;
+  }
+}

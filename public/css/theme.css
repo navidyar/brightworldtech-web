@@ -101,8 +101,7 @@ html[data-theme="hybrid"] .sidebar-brand {
 }
 
 html[data-theme="hybrid"] .brand-card {
-  border-color: #3b424d;
-  background: #2a2f37;
+  color: #f3f5f8;
 }
 
 html[data-theme="hybrid"] .brand-card p {
@@ -119,32 +118,36 @@ html[data-theme="hybrid"] .brand-mark {
   background: #343b46;
 }
 
-html[data-theme="hybrid"] .sidebar-group[open],
-html[data-theme="hybrid"] .sidebar-subnav {
-  border-color: #39404b;
-  background: rgba(42, 47, 55, 0.82);
-}
-
 html[data-theme="hybrid"] .sidebar-link,
-html[data-theme="hybrid"] .sidebar-group summary,
+html[data-theme="hybrid"] .sidebar-section-heading,
 html[data-theme="hybrid"] .sidebar-sublink {
   color: #dde2e9;
 }
 
 html[data-theme="hybrid"] .sidebar-link:hover,
-html[data-theme="hybrid"] .sidebar-link.active,
-html[data-theme="hybrid"] .sidebar-group summary:hover,
-html[data-theme="hybrid"] .sidebar-group[open] summary,
-html[data-theme="hybrid"] .sidebar-sublink.active {
-  border-color: rgba(182, 199, 221, 0.28);
+html[data-theme="hybrid"] .sidebar-section-heading:hover,
+html[data-theme="hybrid"] .sidebar-sublink:hover {
   color: #ffffff;
-  background: #343b46;
+  background: #303741;
 }
 
-html[data-theme="hybrid"] .sidebar-sublink:hover {
-  border-color: #454c57;
+html[data-theme="hybrid"] .sidebar-link.active,
+html[data-theme="hybrid"] .sidebar-section-heading.is-active {
   color: #ffffff;
-  background: #3a414d;
+  background: #343f4c;
+  box-shadow: inset 4px 0 0 #9bb8df;
+}
+
+html[data-theme="hybrid"] .sidebar-sublink.active {
+  border-left-color: #9bb8df;
+  color: #ffffff;
+  background: #303a46;
+}
+
+html[data-theme="hybrid"] .sidebar-sublink-muted,
+html[data-theme="hybrid"] .sidebar-sublink-muted:hover {
+  color: #9aa9bc;
+  background: transparent;
 }
 
 html[data-theme="hybrid"] .sidebar-icon {

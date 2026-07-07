@@ -384,6 +384,68 @@ async function deletePendingSetupUser(userId) {
   }
 }
 
+
+function formatRoleLabel(roleCode) {
+  const labels = {
+    admin: 'Admin',
+    management: 'Management',
+    tech_lead: 'Tech Lead',
+    tech: 'Tech',
+    unknown: 'Unknown'
+  };
+
+  return labels[roleCode] || String(roleCode || 'Unknown')
+    .split('_')
+    .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
+    .join(' ');
+}
+
+async function listLoginActivityForDay({ startAt, endAt }) {
+  const [rows] = await pool.query(
+    `
+      SELECT
+        ula.user_id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        SUBSTRING_INDEX(
+          GROUP_CONCAT(
+            ula.primary_role_code
+            ORDER BY ula.logged_in_at ASC, ula.user_login_activity_id ASC
+            SEPARATOR ','
+          ),
+          ',',
+          1
+        ) AS first_login_role_code,
+        MIN(ula.logged_in_at) AS first_login_at,
+        MAX(ula.logged_in_at) AS last_login_at,
+        COUNT(*) AS successful_login_count
+      FROM user_login_activity ula
+      INNER JOIN users u
+        ON u.user_id = ula.user_id
+      WHERE ula.logged_in_at >= ?
+        AND ula.logged_in_at < ?
+      GROUP BY
+        ula.user_id,
+        u.first_name,
+        u.last_name,
+        u.email
+      ORDER BY
+        first_login_at ASC,
+        u.last_name ASC,
+        u.first_name ASC,
+        u.email ASC
+    `,
+    [startAt, endAt]
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    first_login_role_label: formatRoleLabel(row.first_login_role_code),
+    successful_login_count: Number(row.successful_login_count || 0)
+  }));
+}
+
 module.exports = {
   listUsers,
   countUsersByActiveStatus,
@@ -392,5 +454,6 @@ module.exports = {
   updateUserWithRoles,
   deactivateUser,
   reactivateUser,
-  deletePendingSetupUser
+  deletePendingSetupUser,
+  listLoginActivityForDay
 };

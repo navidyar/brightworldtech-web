@@ -237,18 +237,14 @@
     toggleDetailRow(summaryRow.querySelector('[data-unit-detail-toggle]'));
   });
 
-  document.body.addEventListener('change', (event) => {
-    const unitStateToggle = event.target.closest('[data-unit-state-toggle]');
+  function submitAutoFilterControl(control) {
+    const filterForm = control.closest('.tech-filter-form');
 
-    if (!unitStateToggle) {
+    if (!filterForm || filterForm.dataset.autoFilterSubmitting === 'true') {
       return;
     }
 
-    const filterForm = unitStateToggle.closest('form');
-
-    if (!filterForm) {
-      return;
-    }
+    filterForm.dataset.autoFilterSubmitting = 'true';
 
     if (typeof filterForm.requestSubmit === 'function') {
       filterForm.requestSubmit();
@@ -256,6 +252,16 @@
     }
 
     filterForm.submit();
+  }
+
+  document.body.addEventListener('change', (event) => {
+    const autoFilterControl = event.target.closest('[data-tech-filter-auto-submit]');
+
+    if (!autoFilterControl) {
+      return;
+    }
+
+    submitAutoFilterControl(autoFilterControl);
   });
 
   document.body.addEventListener('unit-saved', () => {

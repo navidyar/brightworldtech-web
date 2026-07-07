@@ -329,34 +329,32 @@ async function appendGeneralComment(connection, unitId, formData, currentUserId)
   );
 }
 
-async function saveIssueDetailsForUnit({ unitId, formData, currentUserId }) {
+async function saveIssueDetailsForUnitWithConnection(connection, { unitId, formData, currentUserId }) {
   const safeUnitId = Number(unitId);
 
-  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0) {
+  if (!connection || !Number.isInteger(safeUnitId) || safeUnitId <= 0) {
     return;
   }
 
-  const issueTableReady = await tableExists(ISSUE_TABLE);
-  const commentTableReady = await tableExists(COMMENT_TABLE);
+  const issueTableReady = await tableExists(ISSUE_TABLE, connection);
+  const commentTableReady = await tableExists(COMMENT_TABLE, connection);
 
-  if (!issueTableReady && !commentTableReady) {
-    return;
+  if (issueTableReady) {
+    await replaceCurrentIssuesForArea(connection, safeUnitId, 'cosmetic', formData.cosmeticIssues || [], currentUserId);
+    await replaceCurrentIssuesForArea(connection, safeUnitId, 'hardware', formData.hardwareIssues || [], currentUserId);
   }
 
+  if (commentTableReady) {
+    await appendGeneralComment(connection, safeUnitId, formData || {}, currentUserId);
+  }
+}
+
+async function saveIssueDetailsForUnit({ unitId, formData, currentUserId }) {
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
-
-    if (issueTableReady) {
-      await replaceCurrentIssuesForArea(connection, safeUnitId, 'cosmetic', formData.cosmeticIssues || [], currentUserId);
-      await replaceCurrentIssuesForArea(connection, safeUnitId, 'hardware', formData.hardwareIssues || [], currentUserId);
-    }
-
-    if (commentTableReady) {
-      await appendGeneralComment(connection, safeUnitId, formData || {}, currentUserId);
-    }
-
+    await saveIssueDetailsForUnitWithConnection(connection, { unitId, formData, currentUserId });
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -370,5 +368,6 @@ module.exports = {
   getBlankIssueFormData,
   getIssueFormOptions,
   getIssueFormDataByUnitId,
-  saveIssueDetailsForUnit
+  saveIssueDetailsForUnit,
+  saveIssueDetailsForUnitWithConnection
 };

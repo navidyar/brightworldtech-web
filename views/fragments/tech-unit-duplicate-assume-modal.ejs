@@ -1,0 +1,126 @@
+<%
+  const safeCandidate = candidate || null;
+  const safeFormData = formData || {};
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const matchingIdentifiers = Array.isArray(safeCandidate && safeCandidate.matchedIdentifiers)
+    ? safeCandidate.matchedIdentifiers
+    : [];
+
+  function unitLabel() {
+    return safeCandidate && safeCandidate.assetTag
+      ? safeCandidate.assetTag
+      : 'Existing unit';
+  }
+
+  function sourceLotLabel() {
+    if (!safeCandidate || safeCandidate.isParked) {
+      return 'Parked — no current lot';
+    }
+
+    if (!safeCandidate.lotName) {
+      return 'No current lot';
+    }
+
+    return safeCandidate.isClosedLot
+      ? `${safeCandidate.lotName} (Closed)`
+      : safeCandidate.lotName;
+  }
+
+  function matchedByLabel() {
+    return matchingIdentifiers.map((identifier) => {
+      const sourceFields = Array.isArray(identifier.matchingInputs) && identifier.matchingInputs.length > 0
+        ? identifier.matchingInputs.join(' / ')
+        : 'Serial';
+      return `${sourceFields} matched ${identifier.identifierTypeLabel || 'serial identifier'}: ${identifier.identifierValue || '—'}`;
+    }).join('; ');
+  }
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel tech-unit-modal" role="dialog" aria-modal="true" aria-labelledby="tech-duplicate-assume-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Duplicate Match</p>
+        <h2 id="tech-duplicate-assume-title">Assume Existing Unit</h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeCandidate) { %>
+        <div class="message warning">
+          <p>
+            This does not create a new Asset Tag or unit record. It moves <strong><%= unitLabel() %></strong>
+            into your selected work lot and assigns it to you. Prior history and earned credit remain unchanged.
+          </p>
+        </div>
+
+        <div class="tech-override-summary tech-duplicate-assume-summary">
+          <dl>
+            <div>
+              <dt>Existing Unit</dt>
+              <dd><%= unitLabel() %></dd>
+            </div>
+            <div>
+              <dt>Current State</dt>
+              <dd><%= safeCandidate.isParked ? 'Parked' : 'Active' %></dd>
+            </div>
+            <div>
+              <dt>Current / Last Work Lot</dt>
+              <dd><%= sourceLotLabel() %></dd>
+            </div>
+            <div>
+              <dt>Current Assignment</dt>
+              <dd><%= safeCandidate.assignedToName || (safeCandidate.isParked ? 'Unassigned while Parked' : 'Unassigned') %></dd>
+            </div>
+            <div>
+              <dt>Matched By</dt>
+              <dd><%= matchedByLabel() || 'Serial match' %></dd>
+            </div>
+          </dl>
+        </div>
+
+        <% if (safeCandidate.duplicateAssumption && safeCandidate.duplicateAssumption.allowed) { %>
+          <form
+            class="app-form tech-duplicate-assume-form"
+            method="post"
+            action="/tech/units/<%= safeCandidate.unitId %>/assume-existing"
+            hx-post="/tech/units/<%= safeCandidate.unitId %>/assume-existing"
+            hx-target="#modal-root"
+            hx-swap="innerHTML"
+          >
+            <input type="hidden" name="unitSerialNumber" value="<%= safeFormData.unitSerialNumber %>" />
+            <input type="hidden" name="biosSerialNumber" value="<%= safeFormData.biosSerialNumber %>" />
+            <input type="hidden" name="destinationLotId" value="<%= safeFormData.destinationLotId %>" />
+            <input type="hidden" name="duplicateAssumptionNonce" value="<%= safeFormData.duplicateAssumptionNonce %>" />
+
+            <div class="message info">
+              <p><%= safeCandidate.duplicateAssumption.message %></p>
+            </div>
+
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Assume Existing Unit</button>
+              <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            </div>
+          </form>
+        <% } else { %>
+          <div class="form-actions">
+            <button type="button" class="primary-button" data-modal-close>Close</button>
+          </div>
+        <% } %>
+      <% } else { %>
+        <div class="form-actions">
+          <button type="button" class="primary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

@@ -5327,3 +5327,394 @@ textarea {
     width: 100%;
   }
 }
+
+/* Step 7b — Unit Browser filter interaction cleanup. */
+.tech-filter-panel select[data-tech-filter-auto-submit] {
+  cursor: pointer;
+}
+
+.tech-created-date-range {
+  min-width: 0;
+}
+
+.tech-filter-panel .tech-created-date-range {
+  display: block;
+}
+
+.tech-filter-panel .tech-created-date-range legend {
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.tech-created-date-range-inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.tech-created-date-range-inputs label {
+  min-width: 0;
+}
+
+.tech-created-date-range-inputs label > span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+}
+
+.tech-created-date-range-inputs input {
+  width: 100%;
+}
+
+.tech-filter-panel .tech-created-date-range .field-hint {
+  margin-top: 8px;
+}
+
+@media (max-width: 420px) {
+  .tech-created-date-range-inputs {
+    grid-template-columns: 1fr;
+  }
+}
+
+.tech-unit-asset-tag-readonly output {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--line) 62%, var(--form-section-accent) 38%);
+  border-radius: 8px;
+  background: color-mix(in srgb, #ffffff 58%, var(--form-section-tint) 42%);
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.tech-unit-duplicate-check-region:empty {
+  display: none;
+}
+
+.tech-unit-duplicate-check-region {
+  margin-top: 14px;
+}
+
+.tech-unit-duplicate-check-pending {
+  margin: 0;
+}
+
+.tech-unit-duplicate-check-region .message {
+  margin-bottom: 12px;
+}
+
+.tech-unit-duplicate-check-region .workflow-item {
+  align-items: flex-start;
+}
+
+
+/* Step 7e.2a — searchable Assignable Lot combobox. */
+.tech-assignable-lot-field {
+  align-content: start;
+}
+
+.app-form.tech-unit-form > .form-section.tech-assignable-lot-combobox-open {
+  z-index: 13;
+  overflow: visible;
+}
+
+.tech-assignable-lot-combobox {
+  position: relative;
+  z-index: 1;
+}
+
+.tech-assignable-lot-combobox-input {
+  width: 100%;
+}
+
+.tech-assignable-lot-options {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  max-height: 238px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgb(15 23 42 / 18%);
+}
+
+.tech-assignable-lot-option {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tech-assignable-lot-option:hover,
+.tech-assignable-lot-option:focus-visible,
+.tech-assignable-lot-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent-soft) 62%, var(--surface) 38%);
+  outline: none;
+}
+
+.tech-assignable-lot-options-empty {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+
+/* Step 7e.1b — single searchable Unit Model combobox */
+.tech-unit-model-field {
+  align-content: start;
+}
+
+.app-form.tech-unit-form > .form-section.tech-unit-model-combobox-open {
+  z-index: 12;
+  overflow: visible;
+}
+
+.tech-unit-model-combobox {
+  position: relative;
+  z-index: 1;
+}
+
+.tech-unit-model-combobox-input:disabled {
+  cursor: not-allowed;
+}
+
+.tech-unit-model-options {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  max-height: 238px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgb(15 23 42 / 18%);
+}
+
+.tech-unit-model-option {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tech-unit-model-option:hover,
+.tech-unit-model-option:focus-visible,
+.tech-unit-model-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent-soft) 62%, var(--surface) 38%);
+  outline: none;
+}
+
+.tech-unit-model-options-empty {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+
+/* Step 7e.1c — processor compatibility combobox */
+.tech-unit-processor-field {
+  align-content: start;
+}
+
+.app-form.tech-unit-form > .form-section.tech-unit-processor-combobox-open {
+  z-index: 12;
+  overflow: visible;
+}
+
+.tech-unit-processor-combobox {
+  position: relative;
+  z-index: 1;
+}
+
+.tech-unit-processor-combobox-input:disabled {
+  cursor: not-allowed;
+}
+
+.tech-unit-processor-options {
+  position: absolute;
+  z-index: 2;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  max-height: 238px;
+  overflow-y: auto;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 12px 28px rgb(15 23 42 / 18%);
+}
+
+.tech-unit-processor-option {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tech-unit-processor-option:hover,
+.tech-unit-processor-option:focus-visible,
+.tech-unit-processor-option[aria-selected="true"] {
+  background: color-mix(in srgb, var(--accent-soft) 62%, var(--surface) 38%);
+  outline: none;
+}
+
+.tech-unit-processor-options-empty {
+  margin: 0;
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+
+
+
+/* Step 7e.2a.1 — selected lot assumption context. */
+.tech-unit-form .tech-lot-assignment-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.8fr);
+  align-items: start;
+}
+
+.tech-unit-form .tech-lot-assumption-status {
+  align-self: start;
+  margin: 30px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.tech-unit-form .tech-lot-assumption-status [data-assignable-lot-assumption-status-state] {
+  color: inherit;
+  font-weight: inherit;
+}
+
+.tech-unit-form .tech-lot-assumption-status[data-status="enabled"] [data-assignable-lot-assumption-status-state] {
+  color: #2f6a4b;
+}
+
+/* Use dedicated deep but muted text colors so the state is clear without adding weight, a badge, or a border. */
+
+.tech-unit-form .tech-lot-assumption-status[data-status="disabled"] [data-assignable-lot-assumption-status-state] {
+  color: #9a5626;
+}
+
+@media (max-width: 760px) {
+  .tech-unit-form .tech-lot-assignment-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tech-unit-form .tech-lot-assumption-status {
+    margin: 0;
+  }
+}
+
+/* Step 7e.2a.2 — normal-flow actions in the long Create/Edit Unit dialog. */
+.tech-unit-modal .tech-unit-form .form-actions {
+  position: static;
+  z-index: auto;
+  margin: 20px 0 0;
+  padding: 16px 0 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (max-width: 720px) {
+  .tech-unit-modal .tech-unit-form .form-actions {
+    margin-right: 0;
+    margin-bottom: 0;
+    margin-left: 0;
+  }
+}
+
+/* Step 7e.2: controlled duplicate-assumption intake actions. */
+.tech-duplicate-candidate-card .tech-duplicate-candidate-actions {
+  margin-top: 12px;
+}
+
+.tech-duplicate-candidate-card .tech-duplicate-candidate-decision {
+  margin-bottom: 0;
+}
+
+.tech-duplicate-assume-summary {
+  margin: 16px 0;
+}
+
+.tech-duplicate-assume-form .message {
+  margin-top: 16px;
+}
+
+/* Step 7f — Catalog Exception requests remain controlled and secondary to normal managed selection. */
+.tech-catalog-request-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 9px 12px;
+  margin-top: 12px;
+}
+
+.tech-catalog-request-action .field-hint {
+  flex: 1 1 300px;
+  margin: 0;
+}
+
+.tech-catalog-request-action .message {
+  flex: 1 0 100%;
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .tech-catalog-request-action {
+    align-items: stretch;
+  }
+
+  .tech-catalog-request-action .secondary-button {
+    width: 100%;
+  }
+}

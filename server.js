@@ -11,12 +11,14 @@ const managementRoutes = require('./routes/management');
 const configRoutes = require('./routes/config');
 const lotRoutes = require('./routes/lots');
 const { createSessionStore } = require('./models/sessionStore');
+const unitRequestModel = require('./models/unitRequestModel');
 const { loadCurrentUser } = require('./middleware/authMiddleware');
 const { attachAccessLocals } = require('./middleware/accessMiddleware');
 const { escapeHtml, formatDateTime, formatDate, formatTime, formatNumber, formatWeight } = require('./views/partials/helpers');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const UNIT_REQUEST_RETENTION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
 if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
   throw new Error('SESSION_SECRET is required in production.');
@@ -65,6 +67,32 @@ app.use(managementRoutes);
 app.use(configRoutes);
 app.use(lotRoutes);
 
+function scheduleUnitRequestRetention() {
+  const runRetentionPass = async () => {
+    try {
+      const result = await unitRequestModel.archiveResolvedUnitRequests();
+
+      if (!result.supported) {
+        console.warn('Unit Request retention pass skipped because the Step 7h archive schema is not available yet.');
+        return;
+      }
+
+      if (result.archivedCount > 0) {
+        console.log(`Unit Request retention pass archived ${result.archivedCount} resolved request(s).`);
+      }
+    } catch (error) {
+      console.error('Unit Request retention pass failed:', error);
+    }
+  };
+
+  void runRetentionPass();
+  const retentionTimer = setInterval(() => {
+    void runRetentionPass();
+  }, UNIT_REQUEST_RETENTION_INTERVAL_MS);
+
+  retentionTimer.unref();
+}
+
 app.use((req, res) => {
   res.status(404).render('pages/not-found', {
     pageTitle: 'Page Not Found',
@@ -84,4 +112,5 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
+  scheduleUnitRequestRetention();
 });

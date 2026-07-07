@@ -2,6 +2,8 @@ const express = require('express');
 const managementController = require('../controllers/managementController');
 const overrideController = require('../controllers/overrideController');
 const techController = require('../controllers/techController');
+const unitRequestController = require('../controllers/unitRequestController');
+const catalogRequestController = require('../controllers/catalogRequestController');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -30,6 +32,13 @@ router.get(
   requireAuth,
   requireRole(managementRoles),
   managementController.renderInactiveUsersPage
+);
+
+router.get(
+  '/management/login-activity',
+  requireAuth,
+  requireRole(managementRoles),
+  managementController.renderLoginActivityPage
 );
 
 router.get(
@@ -146,6 +155,83 @@ router.post(
 );
 
 /*
+  Unit Requests
+
+  One role-aware request area. Regular Tech users see only their own requests;
+  Tech Leads, Management users, and Admins review the shared queue.
+*/
+
+router.get(
+  '/unit-requests',
+  requireAuth,
+  requireRole(techRoles),
+  unitRequestController.renderUnitRequestsPage
+);
+
+router.get(
+  '/unit-requests/:unitRequestId',
+  requireAuth,
+  requireRole(techRoles),
+  unitRequestController.renderUnitRequestDetail
+);
+
+router.post(
+  '/unit-requests/:unitRequestId/withdraw',
+  requireAuth,
+  requireRole(techRoles),
+  unitRequestController.withdrawUnitRequest
+);
+
+router.post(
+  '/unit-requests/:unitRequestId/approve',
+  requireAuth,
+  requireRole(overrideReviewRoles),
+  unitRequestController.approveUnitRequest
+);
+
+router.post(
+  '/unit-requests/:unitRequestId/reject',
+  requireAuth,
+  requireRole(overrideReviewRoles),
+  unitRequestController.rejectUnitRequest
+);
+
+/*
+  Tech catalog exception request routes
+
+  These routes render controlled request modals from Create Unit. They must remain
+  before the /tech/units/:unitId parameterized routes below.
+*/
+
+router.get(
+  '/tech/unit-catalog-requests/model/modal',
+  requireAuth,
+  requireRole(techRoles),
+  catalogRequestController.renderModelCatalogRequestModal
+);
+
+router.post(
+  '/tech/unit-catalog-requests/model',
+  requireAuth,
+  requireRole(techRoles),
+  catalogRequestController.createModelCatalogRequest
+);
+
+router.get(
+  '/tech/unit-catalog-requests/processor/modal',
+  requireAuth,
+  requireRole(techRoles),
+  catalogRequestController.renderProcessorCatalogRequestModal
+);
+
+router.post(
+  '/tech/unit-catalog-requests/processor',
+  requireAuth,
+  requireRole(techRoles),
+  catalogRequestController.createProcessorCatalogRequest
+);
+
+/*
   Tech routes
 
   Route order note:
@@ -165,6 +251,13 @@ router.get(
   requireAuth,
   requireRole(techRoles),
   techController.renderTechUnitsTable
+);
+
+router.get(
+  '/tech/units/duplicate-check',
+  requireAuth,
+  requireRole(techRoles),
+  techController.renderEarlySerialDuplicateCheck
 );
 
 router.get(
@@ -193,6 +286,41 @@ router.post(
   requireAuth,
   requireRole(techRoles),
   techController.createTechUnit
+);
+
+/*
+  Tech duplicate assumption routes
+
+  Route order note:
+  Keep these before other /tech/units/:unitId routes.
+*/
+
+router.get(
+  '/tech/units/:unitId/assume-existing/modal',
+  requireAuth,
+  requireRole(techRoles),
+  techController.renderDuplicateAssumeExistingUnitModal
+);
+
+router.post(
+  '/tech/units/:unitId/assume-existing',
+  requireAuth,
+  requireRole(techRoles),
+  techController.assumeExistingTechUnitFromDuplicateMatch
+);
+
+router.post(
+  '/tech/units/:unitId/intentional-duplicate-request/modal',
+  requireAuth,
+  requireRole(techRoles),
+  techController.renderIntentionalDuplicateRequestModal
+);
+
+router.post(
+  '/tech/units/:unitId/intentional-duplicate-request',
+  requireAuth,
+  requireRole(techRoles),
+  techController.createIntentionalDuplicateRequest
 );
 
 /*

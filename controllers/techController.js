@@ -1,5 +1,7 @@
+const crypto = require('crypto');
 const techUnitModel = require('../models/techUnitModel');
 const overrideRequestModel = require('../models/overrideRequestModel');
+const unitRequestModel = require('../models/unitRequestModel');
 const unitExpandedDetailModel = require('../models/unitExpandedDetailModel');
 const unitIssueEntryModel = require('../models/unitIssueEntryModel');
 const unitExpandedFormModel = require('../models/unitExpandedFormModel');
@@ -50,15 +52,52 @@ function userCanOverrideProductionWeight(req) {
     .some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
 }
 
-function markProductionWeightPermission(formData, formOptions) {
+function canRequestCatalogException(req) {
+  const roleCodes = getCurrentRoleCodes(req);
+
+  return roleCodes.includes('tech')
+    && !roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+}
+
+function markProductionWeightPermission(formData, formOptions, { allowOverrideInput = true } = {}) {
+  const canOverrideProductionWeight = Boolean(
+    allowOverrideInput
+    && formOptions
+    && formOptions.canOverrideProductionWeight
+  );
+
   return {
     ...formData,
-    canOverrideProductionWeight: Boolean(formOptions && formOptions.canOverrideProductionWeight)
+    productionWeightOverride: canOverrideProductionWeight ? formData.productionWeightOverride : '',
+    productionWeightNotes: canOverrideProductionWeight ? formData.productionWeightNotes : '',
+    canOverrideProductionWeight
   };
 }
 
 function isHtmxRequest(req) {
   return req.get('HX-Request') === 'true';
+}
+
+function getDuplicateAssumptionCreateNonce(req) {
+  if (!req || !req.session) {
+    return '';
+  }
+
+  if (!req.session.duplicateAssumptionCreateNonce) {
+    req.session.duplicateAssumptionCreateNonce = crypto.randomUUID();
+  }
+
+  return String(req.session.duplicateAssumptionCreateNonce);
+}
+
+function hasValidDuplicateAssumptionCreateNonce(req, nonce) {
+  return Boolean(
+    req
+    && req.session
+    && req.session.duplicateAssumptionCreateNonce
+    && nonce
+    && String(req.session.duplicateAssumptionCreateNonce) === String(nonce)
+  );
 }
 
 function getCurrentUserDisplayName(req) {
@@ -262,13 +301,6 @@ function getIssueDetailsFromRequest(req) {
 }
 
 
-function getGraphicsAdaptersFromRequest(req) {
-  return normalizeModuleRowsFromBody(req.body.graphicsAdapters).map((row) => ({
-    gpuTypeConfigValueId: normalizeModuleField(row.gpuTypeConfigValueId),
-    gpuModel: normalizeModuleField(row.gpuModel),
-    vramMb: normalizeModuleField(row.vramMb)
-  }));
-}
 
 function getExpandedDetailsFromRequest(req) {
   return {
@@ -284,7 +316,7 @@ function getExpandedDetailsFromRequest(req) {
     virusCheckStatusConfigValueId: normalizeModuleField(req.body.virusCheckStatusConfigValueId),
     driverCheckStatusConfigValueId: normalizeModuleField(req.body.driverCheckStatusConfigValueId),
     skinnedStatusConfigValueId: normalizeModuleField(req.body.skinnedStatusConfigValueId),
-    graphicsAdapters: getGraphicsAdaptersFromRequest(req),
+    graphicsAdapters: [],
     outcomeCode: normalizeModuleField(req.body.outcomeCode),
     outcomeNotes: normalizeModuleField(req.body.outcomeNotes),
     outcomeApprovalRequested: req.body.outcomeApprovalRequested ? '1' : '',
@@ -313,7 +345,14 @@ function getModuleTotalGb(rows) {
   }, 0);
 }
 
-function getUnitFormDataFromRequest(req) {
+function normalizeSerialInput(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toUpperCase();
+}
+
+function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
   const memoryModules = getMemoryModulesFromRequest(req);
   const storageDevices = getStorageDevicesFromRequest(req);
   const memoryTotalGb = getModuleTotalGb(memoryModules);
@@ -322,9 +361,10 @@ function getUnitFormDataFromRequest(req) {
   const expandedDetails = getExpandedDetailsFromRequest(req);
 
   return {
-    assetTag: String(req.body.assetTag || '').trim(),
-    unitSerialNumber: String(req.body.unitSerialNumber || '').trim(),
-    biosSerialNumber: String(req.body.biosSerialNumber || '').trim(),
+    assetTag: allowAssetTag ? String(req.body.assetTag || '').trim() : '',
+    duplicateAssumptionNonce: String(req.body.duplicateAssumptionNonce || '').trim(),
+    unitSerialNumber: normalizeSerialInput(req.body.unitSerialNumber),
+    biosSerialNumber: normalizeSerialInput(req.body.biosSerialNumber),
     lotId: String(req.body.lotId || '').trim(),
     unitCategoryConfigValueId: String(req.body.unitCategoryConfigValueId || '').trim(),
     currentUnitStatusConfigValueId: String(req.body.currentUnitStatusConfigValueId || '').trim(),
@@ -632,7 +672,7 @@ function validateExpandedDetails(formData) {
   return errors;
 }
 
-function validateUnitForm(formData, formOptions, mode) {
+async function validateUnitForm(formData, formOptions, mode) {
   const errors = [];
 
   if (!formOptions.supported) {
@@ -654,10 +694,6 @@ function validateUnitForm(formData, formOptions, mode) {
     errors.push('Unit status is required.');
   }
 
-  if (mode === 'create' && formData.assetTag && !techUnitModel.normalizeAssetTagInput(formData.assetTag)) {
-    errors.push(`Asset tag must be a positive number with or without the ${formOptions.assetTagPrefix} prefix.`);
-  }
-
   if (formData.unitSerialNumber.length > 150) {
     errors.push('Unit serial number must be 150 characters or fewer.');
   }
@@ -672,6 +708,21 @@ function validateUnitForm(formData, formOptions, mode) {
 
   if (formData.storageGb && !isPositiveInteger(formData.storageGb)) {
     errors.push('Storage GB must be a positive whole number.');
+  }
+
+  if (formData.processorModelId && !isPositiveInteger(formData.processorModelId)) {
+    errors.push('Choose a valid processor from the compatibility catalog.');
+  }
+
+  if (formData.unitModelId && formData.processorModelId && isPositiveInteger(formData.unitModelId) && isPositiveInteger(formData.processorModelId)) {
+    const processorCompatibility = await techUnitModel.getProcessorCompatibilityStatus({
+      unitModelId: formData.unitModelId,
+      processorModelId: formData.processorModelId
+    });
+
+    if (processorCompatibility.hasCatalog && !processorCompatibility.isSupported) {
+      errors.push('The selected processor is not listed as compatible with the chosen Unit Model. Choose a catalog-supported processor.');
+    }
   }
 
   if (!isPositiveOrZeroNumber(formData.processorSpeedGhz)) {
@@ -761,6 +812,512 @@ async function renderDuplicateUnitModal(res, { formOptions, formData, duplicateM
   });
 }
 
+async function getDuplicateAssumptionRecoveryView(req, formData) {
+  const unitSerialNumber = normalizeSerialInput(formData.unitSerialNumber).slice(0, 150);
+  const biosSerialNumber = normalizeSerialInput(formData.biosSerialNumber).slice(0, 150);
+  const destinationLotId = String(formData.lotId || '').trim();
+  const duplicateMatches = (unitSerialNumber || biosSerialNumber)
+    ? await techUnitModel.getDuplicateAssumptionCandidates({
+      unitSerialNumber,
+      biosSerialNumber,
+      destinationLotId,
+      actorRoleCodes: getCurrentRoleCodes(req)
+    })
+    : [];
+
+  return {
+    duplicateMatches,
+    duplicateCheckPerformed: true,
+    errorMessages: duplicateMatches.length > 0
+      ? ['An existing serial match was confirmed before this form could be saved. Select an eligible existing unit below or change the serial values.']
+      : ['An existing serial match was confirmed. Refresh the serial values and try the duplicate check again before creating a new unit.']
+  };
+}
+
+async function renderEarlySerialDuplicateCheck(req, res, next) {
+  try {
+    const unitSerialNumber = normalizeSerialInput(req.query.unitSerialNumber).slice(0, 150);
+    const biosSerialNumber = normalizeSerialInput(req.query.biosSerialNumber).slice(0, 150);
+    const hasSerialSearch = Boolean(unitSerialNumber || biosSerialNumber);
+    const destinationLotId = String(req.query.destinationLotId || '').trim();
+    const duplicateMatches = hasSerialSearch
+      ? await techUnitModel.getDuplicateAssumptionCandidates({
+        unitSerialNumber,
+        biosSerialNumber,
+        destinationLotId,
+        actorRoleCodes: getCurrentRoleCodes(req)
+      })
+      : [];
+
+    res.set('Cache-Control', 'no-store');
+
+    return res.render('fragments/tech-unit-duplicate-check', {
+      duplicateMatches,
+      hasSerialSearch,
+      destinationLotId,
+      canRequestIntentionalDuplicate: isRegularTechIntentionalDuplicateRequester(req)
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+function getDuplicateAssumptionRequestData(req) {
+  const query = req && req.query ? req.query : {};
+  const body = req && req.body ? req.body : {};
+
+  return {
+    unitSerialNumber: normalizeSerialInput(query.unitSerialNumber || body.unitSerialNumber || '').slice(0, 150),
+    biosSerialNumber: normalizeSerialInput(query.biosSerialNumber || body.biosSerialNumber || '').slice(0, 150),
+    destinationLotId: String(
+      query.destinationLotId
+      || body.destinationLotId
+      || query.lotId
+      || body.lotId
+      || ''
+    ).trim(),
+    duplicateAssumptionNonce: String(query.duplicateAssumptionNonce || body.duplicateAssumptionNonce || '').trim()
+  };
+}
+
+function buildDuplicateAssumeModalView({ candidate = null, formData = {}, errorMessages = [] } = {}) {
+  return {
+    candidate,
+    formData: {
+      unitSerialNumber: String(formData.unitSerialNumber || '').trim(),
+      biosSerialNumber: String(formData.biosSerialNumber || '').trim(),
+      destinationLotId: String(formData.destinationLotId || '').trim(),
+      duplicateAssumptionNonce: String(formData.duplicateAssumptionNonce || '').trim()
+    },
+    errorMessages: Array.isArray(errorMessages) ? errorMessages : []
+  };
+}
+
+function isRegularTechIntentionalDuplicateRequester(req) {
+  const roleCodes = getCurrentRoleCodes(req).map((roleCode) => String(roleCode || '').trim());
+
+  return roleCodes.includes('tech')
+    && !roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+}
+
+function getOptionLabel(options, selectedId) {
+  const option = (Array.isArray(options) ? options : [])
+    .find((candidate) => String(candidate.id) === String(selectedId));
+
+  return option ? String(option.label || option.name || option.modelName || '').trim() : '';
+}
+
+function buildIntentionalDuplicateRequestSnapshot({ formData, formOptions, candidate }) {
+  const selectedLot = (Array.isArray(formOptions.lots) ? formOptions.lots : [])
+    .find((lot) => String(lot.lot_id) === String(formData.lotId));
+  const selectedManufacturer = (Array.isArray(formOptions.manufacturers) ? formOptions.manufacturers : [])
+    .find((manufacturer) => String(manufacturer.id) === String(formData.manufacturerId));
+  const selectedModel = (Array.isArray(formOptions.unitModels) ? formOptions.unitModels : [])
+    .find((model) => String(model.id) === String(formData.unitModelId));
+  const selectedProcessor = (Array.isArray(formOptions.processorModels) ? formOptions.processorModels : [])
+    .find((processor) => String(processor.id) === String(formData.processorModelId));
+
+  const safeFormData = JSON.parse(JSON.stringify({
+    ...formData,
+    assetTag: '',
+    productionWeightOverride: '',
+    productionWeightNotes: '',
+    canOverrideProductionWeight: false,
+    graphicsAdapters: []
+  }));
+
+  return {
+    version: 1,
+    formData: safeFormData,
+    display: {
+      destinationLotName: selectedLot ? selectedLot.lot_name : 'Lot name not available',
+      unitCategoryLabel: getOptionLabel(formOptions.unitCategories, formData.unitCategoryConfigValueId) || '—',
+      manufacturerLabel: selectedManufacturer ? selectedManufacturer.name : '—',
+      modelLabel: selectedModel ? selectedModel.modelName : '—',
+      processorLabel: selectedProcessor ? selectedProcessor.label : '—',
+      operatingSystemLabel: getOptionLabel(formOptions.operatingSystems, formData.operatingSystemConfigValueId) || '—',
+      serialSummary: `Unit Serial: ${formData.unitSerialNumber || '—'}; BIOS Serial: ${formData.biosSerialNumber || '—'}`
+    },
+    capturedAt: new Date().toISOString(),
+    selectedMatchingUnitId: Number(candidate.unitId)
+  };
+}
+
+function buildMatchedUnitSnapshot(candidate) {
+  const matchingIdentifiers = Array.isArray(candidate && candidate.matchedIdentifiers)
+    ? candidate.matchedIdentifiers
+    : [];
+
+  return {
+    unitId: Number(candidate && candidate.unitId),
+    assetTag: candidate && candidate.assetTag ? candidate.assetTag : '',
+    isParked: Boolean(candidate && candidate.isParked),
+    lotName: candidate && candidate.lotName ? candidate.lotName : '',
+    unitSerialNumber: candidate && candidate.unitSerialNumber ? candidate.unitSerialNumber : '',
+    biosSerialNumber: candidate && candidate.biosSerialNumber ? candidate.biosSerialNumber : '',
+    modelSummary: candidate && candidate.modelSummary ? candidate.modelSummary : '',
+    cpuSummary: candidate && candidate.cpuSummary ? candidate.cpuSummary : '',
+    assignedToName: candidate && candidate.assignedToName ? candidate.assignedToName : '',
+    matchedIdentifiers: matchingIdentifiers
+  };
+}
+
+function parseIntentionalDuplicateSnapshot(value) {
+  try {
+    const snapshot = JSON.parse(String(value || ''));
+
+    if (!snapshot || typeof snapshot !== 'object' || !snapshot.formData || typeof snapshot.formData !== 'object') {
+      return null;
+    }
+
+    return snapshot;
+  } catch (error) {
+    return null;
+  }
+}
+
+function intentionalDuplicateModalResponseStatus(req, fallbackStatus) {
+  return isHtmxRequest(req) ? 200 : fallbackStatus;
+}
+
+function buildIntentionalDuplicateRequestModalView({
+  candidate = null,
+  formData = {},
+  intakeSnapshot = null,
+  requesterNote = '',
+  errorMessages = [],
+  successRequestId = null
+} = {}) {
+  return {
+    candidate,
+    formData: {
+      unitSerialNumber: String(formData.unitSerialNumber || '').trim(),
+      biosSerialNumber: String(formData.biosSerialNumber || '').trim(),
+      destinationLotId: String(formData.destinationLotId || formData.lotId || '').trim(),
+      duplicateAssumptionNonce: String(formData.duplicateAssumptionNonce || '').trim()
+    },
+    intakeSnapshotJson: intakeSnapshot ? JSON.stringify(intakeSnapshot) : '',
+    snapshotDisplay: intakeSnapshot && intakeSnapshot.display ? intakeSnapshot.display : {},
+    requesterNote: String(requesterNote || '').trim(),
+    errorMessages: Array.isArray(errorMessages) ? errorMessages : [],
+    successRequestId: successRequestId ? Number(successRequestId) : null
+  };
+}
+
+async function getDuplicateAssumptionCandidateForRequest(req, unitId) {
+  const formData = getDuplicateAssumptionRequestData(req);
+  const candidates = await techUnitModel.getDuplicateAssumptionCandidates({
+    ...formData,
+    actorRoleCodes: getCurrentRoleCodes(req)
+  });
+
+  return {
+    formData,
+    candidate: candidates.find((candidateRow) => Number(candidateRow.unitId) === Number(unitId)) || null
+  };
+}
+
+async function renderDuplicateAssumeExistingUnitModal(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render('fragments/tech-unit-duplicate-assume-modal', buildDuplicateAssumeModalView({
+        errorMessages: ['The selected existing unit is invalid. Refresh the serial check and try again.']
+      }));
+    }
+
+    const submittedNonce = String(req.query.duplicateAssumptionNonce || '').trim();
+
+    if (!hasValidDuplicateAssumptionCreateNonce(req, submittedNonce)) {
+      return res.status(403).render('fragments/tech-unit-duplicate-assume-modal', buildDuplicateAssumeModalView({
+        errorMessages: ['Open Create Unit again and refresh the serial match before assuming an existing unit.']
+      }));
+    }
+
+    const { formData, candidate } = await getDuplicateAssumptionCandidateForRequest(req, unitId);
+
+    if (!candidate) {
+      return res.status(409).render('fragments/tech-unit-duplicate-assume-modal', buildDuplicateAssumeModalView({
+        formData,
+        errorMessages: ['The selected unit no longer matches the serial values entered in this Create Unit form. Refresh the serial check and choose a current candidate.']
+      }));
+    }
+
+    const eligibility = candidate.duplicateAssumption || {};
+
+    if (!eligibility.allowed) {
+      return res.status(409).render('fragments/tech-unit-duplicate-assume-modal', buildDuplicateAssumeModalView({
+        candidate,
+        formData,
+        errorMessages: [eligibility.message || 'This unit cannot be assumed through Create Unit intake.']
+      }));
+    }
+
+    return res.render('fragments/tech-unit-duplicate-assume-modal', buildDuplicateAssumeModalView({
+      candidate,
+      formData
+    }));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function assumeExistingTechUnitFromDuplicateMatch(req, res, next) {
+  const unitId = Number(req.params.unitId);
+  const formData = getDuplicateAssumptionRequestData(req);
+
+  try {
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render('fragments/tech-unit-duplicate-assume-modal', buildDuplicateAssumeModalView({
+        formData,
+        errorMessages: ['The selected existing unit is invalid. Refresh the serial check and try again.']
+      }));
+    }
+
+    if (!hasValidDuplicateAssumptionCreateNonce(req, formData.duplicateAssumptionNonce)) {
+      return res.status(403).render('fragments/tech-unit-duplicate-assume-modal', buildDuplicateAssumeModalView({
+        formData,
+        errorMessages: ['This Create Unit assumption session is no longer valid. Open Create Unit again and refresh the serial match.']
+      }));
+    }
+
+    const result = await techUnitModel.assumeExistingTechUnitFromDuplicateMatch({
+      unitId,
+      ...formData,
+      assumedByUserId: req.currentUser.user_id,
+      actorRoleCodes: getCurrentRoleCodes(req)
+    });
+
+    // A Create Unit assumption is a one-time intake action. Rotate the session nonce
+    // after success so a stale duplicate-match panel cannot be reused to move another unit.
+    if (req.session) {
+      req.session.duplicateAssumptionCreateNonce = crypto.randomUUID();
+    }
+
+    const redirectUrl = `/tech/units?assumed=1&unitId=${encodeURIComponent(result.unitId)}`;
+
+    if (isHtmxRequest(req)) {
+      res.set('HX-Redirect', redirectUrl);
+      return res.send('');
+    }
+
+    return res.redirect(redirectUrl);
+  } catch (error) {
+    try {
+      const candidateContext = Number.isInteger(unitId) && unitId > 0
+        ? await getDuplicateAssumptionCandidateForRequest(req, unitId)
+        : { formData, candidate: null };
+
+      return res.status(409).render('fragments/tech-unit-duplicate-assume-modal', buildDuplicateAssumeModalView({
+        candidate: candidateContext.candidate,
+        formData: candidateContext.formData || formData,
+        errorMessages: [error.message || 'The existing unit could not be assumed.']
+      }));
+    } catch (renderError) {
+      return next(renderError);
+    }
+  }
+}
+
+async function renderIntentionalDuplicateRequestModal(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(400).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        errorMessages: ['The selected matching existing unit is invalid. Refresh the serial check and try again.']
+      }));
+    }
+
+    if (!isRegularTechIntentionalDuplicateRequester(req)) {
+      return res.status(403).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        errorMessages: ['Intentional Duplicate requests are available only to regular Tech users during Create Unit intake.']
+      }));
+    }
+
+    const requestData = getDuplicateAssumptionRequestData(req);
+
+    if (!hasValidDuplicateAssumptionCreateNonce(req, requestData.duplicateAssumptionNonce)) {
+      return res.status(403).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        formData: requestData,
+        errorMessages: ['Open Create Unit again and refresh the serial match before submitting an Intentional Duplicate request.']
+      }));
+    }
+
+    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req, { allowAssetTag: false }), formOptions, { allowOverrideInput: false });
+    const validationErrors = await validateUnitForm(formData, formOptions, 'create');
+    const { candidate } = await getDuplicateAssumptionCandidateForRequest(req, unitId);
+
+    if (!candidate) {
+      return res.status(409).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        formData: requestData,
+        errorMessages: ['The selected unit no longer matches the serial values in this Create Unit form. Refresh the serial check and choose the matching existing unit again.']
+      }));
+    }
+
+    if (validationErrors.length > 0) {
+      const errorMessages = ['Complete the required Create Unit details before requesting an intentional duplicate.', ...validationErrors];
+
+      if (isHtmxRequest(req)) {
+        res.set('X-BWT-Intentional-Duplicate-Readiness', 'invalid');
+
+        return res.status(422).render('fragments/tech-unit-intentional-duplicate-request-feedback', {
+          errorMessages
+        });
+      }
+
+      return res.status(400).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        candidate,
+        formData: requestData,
+        errorMessages
+      }));
+    }
+
+    const intakeSnapshot = buildIntentionalDuplicateRequestSnapshot({ formData, formOptions, candidate });
+
+    return res.render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+      candidate,
+      formData: requestData,
+      intakeSnapshot
+    }));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function createIntentionalDuplicateRequest(req, res, next) {
+  const unitId = Number(req.params.unitId);
+  const requestData = getDuplicateAssumptionRequestData(req);
+  const requestBody = req.body || {};
+  const requesterNote = String(requestBody.requesterNote || '').trim();
+
+  try {
+    if (!Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(intentionalDuplicateModalResponseStatus(req, 400)).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        formData: requestData,
+        errorMessages: ['The selected matching existing unit is invalid. Refresh the serial check and try again.']
+      }));
+    }
+
+    if (!isRegularTechIntentionalDuplicateRequester(req)) {
+      return res.status(intentionalDuplicateModalResponseStatus(req, 403)).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        formData: requestData,
+        errorMessages: ['Intentional Duplicate requests are available only to regular Tech users during Create Unit intake.']
+      }));
+    }
+
+    if (!hasValidDuplicateAssumptionCreateNonce(req, requestData.duplicateAssumptionNonce)) {
+      return res.status(intentionalDuplicateModalResponseStatus(req, 403)).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        formData: requestData,
+        errorMessages: ['This Create Unit request session is no longer valid. Open Create Unit again and refresh the serial match.']
+      }));
+    }
+
+    const intakeSnapshot = parseIntentionalDuplicateSnapshot(req.body.intakeSnapshotJson);
+
+    if (!intakeSnapshot) {
+      return res.status(intentionalDuplicateModalResponseStatus(req, 400)).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        formData: requestData,
+        requesterNote,
+        errorMessages: ['The intended intake snapshot could not be read. Close this window, complete Create Unit again, and reopen the request.']
+      }));
+    }
+
+    const formOptions = await getTechUnitFormOptionsWithIssues(req);
+    const formData = markProductionWeightPermission({
+      ...intakeSnapshot.formData,
+      assetTag: '',
+      duplicateAssumptionNonce: requestData.duplicateAssumptionNonce,
+      graphicsAdapters: []
+    }, formOptions, { allowOverrideInput: false });
+
+    const snapshotMatchesRequestContext = (
+      normalizeSerialInput(formData.unitSerialNumber) === requestData.unitSerialNumber
+      && normalizeSerialInput(formData.biosSerialNumber) === requestData.biosSerialNumber
+      && String(formData.lotId || '').trim() === String(requestData.destinationLotId || '').trim()
+    );
+
+    if (!snapshotMatchesRequestContext) {
+      return res.status(intentionalDuplicateModalResponseStatus(req, 409)).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        formData: requestData,
+        intakeSnapshot,
+        requesterNote,
+        errorMessages: ['The request no longer matches the Create Unit serials or selected lot. Close this request, refresh the serial check, and reopen it.']
+      }));
+    }
+
+    const validationErrors = await validateUnitForm(formData, formOptions, 'create');
+    const { candidate } = await getDuplicateAssumptionCandidateForRequest(req, unitId);
+
+    if (!candidate) {
+      return res.status(intentionalDuplicateModalResponseStatus(req, 409)).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        formData: requestData,
+        intakeSnapshot,
+        requesterNote,
+        errorMessages: ['The selected unit no longer matches the serial values in this Create Unit form. Refresh the serial check and choose the matching existing unit again.']
+      }));
+    }
+
+    if (validationErrors.length > 0) {
+      return res.status(intentionalDuplicateModalResponseStatus(req, 400)).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        candidate,
+        formData: requestData,
+        intakeSnapshot,
+        requesterNote,
+        errorMessages: ['The intake details changed or are no longer valid. Close this request, correct Create Unit, and reopen it.', ...validationErrors]
+      }));
+    }
+
+    const result = await unitRequestModel.createIntentionalDuplicateRequest({
+      requestedByUserId: req.currentUser.user_id,
+      matchedUnitId: candidate.unitId,
+      requestedDestinationLotId: formData.lotId,
+      requesterNote,
+      intakeSnapshot: {
+        ...intakeSnapshot,
+        formData
+      },
+      matchedUnitSnapshot: buildMatchedUnitSnapshot(candidate)
+    });
+
+    if (req.session) {
+      req.session.duplicateAssumptionCreateNonce = crypto.randomUUID();
+    }
+
+    if (isHtmxRequest(req)) {
+      res.set('HX-Trigger-After-Swap', JSON.stringify({
+        'intentional-duplicate-request-submitted': {
+          requestId: Number(result.unitRequestId),
+          requestUrl: `/unit-requests/${encodeURIComponent(result.unitRequestId)}`
+        }
+      }));
+
+      return res.send('');
+    }
+
+    return res.redirect(`/unit-requests/${encodeURIComponent(result.unitRequestId)}`);
+  } catch (error) {
+    try {
+      const candidateContext = Number.isInteger(unitId) && unitId > 0
+        ? await getDuplicateAssumptionCandidateForRequest(req, unitId)
+        : { formData: requestData, candidate: null };
+      const intakeSnapshot = parseIntentionalDuplicateSnapshot(req.body.intakeSnapshotJson);
+
+      return res.status(intentionalDuplicateModalResponseStatus(req, 400)).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
+        candidate: candidateContext.candidate,
+        formData: candidateContext.formData || requestData,
+        intakeSnapshot,
+        requesterNote,
+        errorMessages: [error.message || 'The Intentional Duplicate request could not be submitted.']
+      }));
+    } catch (renderError) {
+      return next(renderError);
+    }
+  }
+}
+
 async function getTechUnitFormOptionsWithIssues(req = null, options = {}) {
   const formOptions = await techUnitModel.getTechUnitFormOptions(options);
   const issueFormOptions = await unitIssueEntryModel.getIssueFormOptions();
@@ -770,7 +1327,8 @@ async function getTechUnitFormOptionsWithIssues(req = null, options = {}) {
     ...formOptions,
     ...issueFormOptions,
     ...expandedFormOptions,
-    canOverrideProductionWeight: userCanOverrideProductionWeight(req)
+    canOverrideProductionWeight: userCanOverrideProductionWeight(req),
+    canRequestCatalogException: canRequestCatalogException(req)
   };
 }
 
@@ -778,7 +1336,9 @@ async function getEditTechUnitFormOptionsWithIssues(req, unitId) {
   const unit = await techUnitModel.getUnitById(unitId);
 
   return getTechUnitFormOptionsWithIssues(req, {
-    includeCurrentLotId: unit && unit.lot_id ? unit.lot_id : null
+    includeCurrentLotId: unit && unit.lot_id ? unit.lot_id : null,
+    includeCurrentUnitModelId: unit && unit.unit_model_id ? unit.unit_model_id : null,
+    includeCurrentProcessorModelId: unit && unit.processor_model_id ? unit.processor_model_id : null
   });
 }
 
@@ -836,6 +1396,7 @@ async function getBlankFormDataWithDefaults(req = null) {
     formOptions,
     formData: {
       ...techUnitModel.getBlankUnitFormData(formOptions),
+      duplicateAssumptionNonce: getDuplicateAssumptionCreateNonce(req),
       ...unitIssueEntryModel.getBlankIssueFormData(),
       ...unitExpandedFormModel.getBlankExpandedFormData(),
       generalCommentTypeConfigValueId: formOptions.defaultCommentTypeConfigValueId || '',
@@ -867,7 +1428,9 @@ async function renderTechUnitsPage(req, res, next) {
                 ? 'Unit parked successfully. Its current lot and assignment were cleared while history and earned credit were retained.'
                 : req.query.returnedToActive === '1'
                   ? 'Unit returned to Active successfully.'
-                  : null
+                  : req.query.assumed === '1'
+                    ? 'Existing unit assumed successfully. Its current lot and assignment now reflect the selected work lot; prior history and earned credit were retained.'
+                    : null
     });
   } catch (error) {
     next(error);
@@ -1386,8 +1949,8 @@ async function renderNewTechUnitModal(req, res, next) {
 async function createTechUnit(req, res, next) {
   try {
     const formOptions = await getTechUnitFormOptionsWithIssues(req);
-    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
-    const errorMessages = validateUnitForm(formData, formOptions, 'create');
+    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req, { allowAssetTag: false }), formOptions, { allowOverrideInput: false });
+    const errorMessages = await validateUnitForm(formData, formOptions, 'create');
 
     if (errorMessages.length > 0) {
       return res.status(400).render('pages/tech-unit-form', {
@@ -1406,6 +1969,21 @@ async function createTechUnit(req, res, next) {
       await saveIssueDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
       await saveExpandedDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
     } catch (saveError) {
+      if (isDuplicateIdentifierError(saveError)) {
+        const duplicateRecovery = await getDuplicateAssumptionRecoveryView(req, formData);
+
+        return res.status(409).render('pages/tech-unit-form', {
+          pageTitle: 'Create Unit',
+          currentNav: 'tech-units',
+          mode: 'create',
+          formAction: '/tech/units',
+          formOptions,
+          formData,
+          canRequestIntentionalDuplicate: isRegularTechIntentionalDuplicateRequester(req),
+          ...duplicateRecovery
+        });
+      }
+
       const friendlyError = getFriendlySaveError(saveError, formOptions);
 
       if (friendlyError) {
@@ -1432,8 +2010,8 @@ async function createTechUnit(req, res, next) {
 async function createTechUnitModal(req, res, next) {
   try {
     const formOptions = await getTechUnitFormOptionsWithIssues(req);
-    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
-    const errorMessages = validateUnitForm(formData, formOptions, 'create');
+    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req, { allowAssetTag: false }), formOptions, { allowOverrideInput: false });
+    const errorMessages = await validateUnitForm(formData, formOptions, 'create');
 
     if (errorMessages.length > 0) {
       return res.render('fragments/tech-unit-modal', {
@@ -1452,11 +2030,16 @@ async function createTechUnitModal(req, res, next) {
       await saveExpandedDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
     } catch (saveError) {
       if (isDuplicateIdentifierError(saveError)) {
-        return renderDuplicateUnitModal(res, {
+        const duplicateRecovery = await getDuplicateAssumptionRecoveryView(req, formData);
+
+        return res.render('fragments/tech-unit-modal', {
+          pageTitle: 'Create Unit',
+          mode: 'create',
+          formAction: '/tech/units/modal',
           formOptions,
           formData,
-          duplicateMatches: getDuplicateMatches(saveError),
-          errorMessages: []
+          canRequestIntentionalDuplicate: isRegularTechIntentionalDuplicateRequester(req),
+          ...duplicateRecovery
         });
       }
 
@@ -1485,92 +2068,7 @@ async function createTechUnitModal(req, res, next) {
 
 async function useExistingTechUnitModal(req, res, next) {
   try {
-    const unitId = Number(req.params.unitId);
-
-    if (!Number.isInteger(unitId) || unitId <= 0) {
-      return res.status(400).render('fragments/tech-unit-modal', {
-        pageTitle: 'Unit Not Found',
-        mode: 'create',
-        formAction: '/tech/units/modal',
-        formOptions: {
-          supported: false,
-          message: 'The selected unit ID is invalid.',
-          assetTagPrefix: techUnitModel.getAssetTagPrefix(),
-          lots: [],
-          unitCategories: [],
-          unitStatuses: [],
-          manufacturers: [],
-          unitModels: [],
-          processorModels: [],
-          ramTypes: [],
-          storageTypes: [],
-          storageWipeStatuses: [],
-          operatingSystems: [],
-          cosmeticIssueTypes: [],
-          hardwareIssueTypes: [],
-          issueLocations: [],
-          issueSeverities: [],
-          commentTypes: [],
-          defaultCommentTypeConfigValueId: '',
-          overallGradeOptions: [],
-          absoluteStatusOptions: [],
-          physicalCameraStatusOptions: [],
-          touchscreenStatusOptions: [],
-          keyboardLanguageOptions: [],
-          diagnosticsStatusOptions: [],
-          virusCheckStatusOptions: [],
-          driverCheckStatusOptions: [],
-          skinnedStatusOptions: [],
-          gpuTypeOptions: []
-        },
-        formData: techUnitModel.getBlankUnitFormData(),
-        errorMessages: ['The selected unit ID is invalid.']
-      });
-    }
-
-    const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
-    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
-    const errorMessages = validateUnitForm(formData, formOptions, 'edit');
-
-    if (errorMessages.length > 0) {
-      return renderDuplicateUnitModal(res, {
-        formOptions,
-        formData,
-        duplicateMatches: [],
-        errorMessages
-      });
-    }
-
-    try {
-      await techUnitModel.useExistingTechUnit(unitId, formData, req.currentUser.user_id, { actorRoleCodes: getCurrentRoleCodes(req) });
-      await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
-      await saveExpandedDetailsIfPossible(unitId, formData, req.currentUser.user_id);
-    } catch (saveError) {
-      if (isDuplicateIdentifierError(saveError)) {
-        return renderDuplicateUnitModal(res, {
-          formOptions,
-          formData,
-          duplicateMatches: getDuplicateMatches(saveError),
-          errorMessages: ['Another matching unit was found while updating the existing unit. Review the matches before continuing.']
-        });
-      }
-
-      const friendlyError = getFriendlySaveError(saveError, formOptions);
-
-      if (friendlyError) {
-        return renderDuplicateUnitModal(res, {
-          formOptions,
-          formData,
-          duplicateMatches: [],
-          errorMessages: [friendlyError]
-        });
-      }
-
-      throw saveError;
-    }
-
-    res.set('HX-Trigger', 'unit-saved');
-    return res.send('');
+    return res.status(409).render('fragments/tech-unit-duplicate-resolution-unavailable');
   } catch (error) {
     next(error);
   }
@@ -1639,6 +2137,7 @@ async function renderEditTechUnitModal(req, res, next) {
           unitStatuses: [],
           manufacturers: [],
           unitModels: [],
+          processorBrands: [],
           processorModels: [],
           ramTypes: [],
           storageTypes: [],
@@ -1716,7 +2215,7 @@ async function updateTechUnit(req, res, next) {
 
     const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
     const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
-    const errorMessages = validateUnitForm(formData, formOptions, 'edit');
+    const errorMessages = await validateUnitForm(formData, formOptions, 'edit');
 
     if (errorMessages.length > 0) {
       return res.status(400).render('pages/tech-unit-form', {
@@ -1776,6 +2275,7 @@ async function updateTechUnitModal(req, res, next) {
           unitStatuses: [],
           manufacturers: [],
           unitModels: [],
+          processorBrands: [],
           processorModels: [],
           ramTypes: [],
           storageTypes: [],
@@ -1805,7 +2305,7 @@ async function updateTechUnitModal(req, res, next) {
 
     const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
     const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
-    const errorMessages = validateUnitForm(formData, formOptions, 'edit');
+    const errorMessages = await validateUnitForm(formData, formOptions, 'edit');
 
     if (errorMessages.length > 0) {
       return res.render('fragments/tech-unit-modal', {
@@ -1974,6 +2474,11 @@ module.exports = {
   renderPermanentDeleteTechUnitModal,
   permanentlyDeleteTechUnit,
   renderNewTechUnitPage,
+  renderEarlySerialDuplicateCheck,
+  renderDuplicateAssumeExistingUnitModal,
+  assumeExistingTechUnitFromDuplicateMatch,
+  renderIntentionalDuplicateRequestModal,
+  createIntentionalDuplicateRequest,
   renderNewTechUnitModal,
   createTechUnit,
   createTechUnitModal,

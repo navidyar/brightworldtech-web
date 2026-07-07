@@ -1,0 +1,57 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const isError = actionType === 'error';
+  const activating = actionType === 'activate';
+  const query = new URLSearchParams();
+  if (filters.manufacturerId) query.set('manufacturerId', String(filters.manufacturerId));
+  if (filters.unitCategoryConfigValueId) query.set('unitCategoryConfigValueId', String(filters.unitCategoryConfigValueId));
+  if (filters.includeInactive) query.set('includeInactive', '1');
+  if (filters.search) query.set('search', filters.search);
+  const queryString = query.toString();
+  const actionUrl = unitModel ? `/management/config/models/${unitModel.id}/${activating ? 'activate' : 'deactivate'}${queryString ? `?${queryString}` : ''}` : '';
+  const title = isError ? 'Model Not Found' : `${activating ? 'Activate' : 'Deactivate'} Unit Model`;
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel unit-model-modal unit-model-status-modal" role="dialog" aria-modal="true" aria-labelledby="unit-model-status-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Model Catalog</p>
+        <h2 id="unit-model-status-title"><%= title %></h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((message) => { %>
+            <p><%= message %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (unitModel) { %>
+        <div class="unit-model-confirm-card">
+          <p class="eyebrow">Selected Model</p>
+          <h3><%= unitModel.modelName %></h3>
+          <p><%= unitModel.manufacturerName %> · <%= unitModel.unitCategoryLabel %></p>
+        </div>
+
+        <p class="unit-model-confirm-copy"><%= activating ? 'Activating this model makes it available again for new unit intake.' : 'Deactivating this model hides it from new unit intake. Existing units retain the model in their historical records.' %></p>
+
+        <form method="post" action="<%= actionUrl %>" hx-post="<%= actionUrl %>" hx-target="#modal-root" hx-swap="innerHTML">
+          <div class="form-actions">
+            <button class="primary-button <%= activating ? '' : 'danger-button' %>" type="submit"><%= activating ? 'Activate Model' : 'Deactivate Model' %></button>
+            <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+          </div>
+        </form>
+      <% } else { %>
+        <div class="form-actions">
+          <button class="secondary-button" type="button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

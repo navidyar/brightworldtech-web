@@ -42,10 +42,6 @@
   const virusCheckStatusOptions = Array.isArray(formOptions.virusCheckStatusOptions) ? formOptions.virusCheckStatusOptions : [];
   const driverCheckStatusOptions = Array.isArray(formOptions.driverCheckStatusOptions) ? formOptions.driverCheckStatusOptions : [];
   const skinnedStatusOptions = Array.isArray(formOptions.skinnedStatusOptions) ? formOptions.skinnedStatusOptions : [];
-  const gpuTypeOptions = Array.isArray(formOptions.gpuTypeOptions) ? formOptions.gpuTypeOptions : [];
-  const graphicsRows = Array.isArray(formData.graphicsAdapters) && formData.graphicsAdapters.length > 0
-    ? formData.graphicsAdapters
-    : [{ gpuTypeConfigValueId: '', gpuModel: '', vramMb: '' }];
   const outcomeOptions = Array.isArray(formOptions.outcomeOptions) && formOptions.outcomeOptions.length > 0
     ? formOptions.outcomeOptions
     : [
@@ -64,6 +60,9 @@
   };
   const canOverrideProductionWeight = Boolean(formOptions.canOverrideProductionWeight && productionWeightCapabilities.hasProductionWeightOverride);
   const productionWeightHasUnitOverride = productionWeightDetails.sourceCode === 'unit_override' || Boolean(productionWeightDetails.hasOverride);
+  const initialDuplicateMatches = typeof duplicateMatches !== 'undefined' && Array.isArray(duplicateMatches) ? duplicateMatches : [];
+  const duplicateCheckWasForced = typeof duplicateCheckPerformed !== 'undefined' && Boolean(duplicateCheckPerformed);
+  const canRequestCatalogException = !isEditMode && Boolean(formOptions.canRequestCatalogException);
 
 
   function selected(currentValue, optionValue) {
@@ -137,13 +136,102 @@
   <input type="hidden" name="ramGb" value="<%= memoryTotalGb() || formData.ramGb || '' %>" data-memory-total-input />
   <input type="hidden" name="storageGb" value="<%= storageTotalGb() || formData.storageGb || '' %>" data-storage-total-input />
   <input type="hidden" name="currentUnitStatusConfigValueId" value="<%= formData.currentUnitStatusConfigValueId || formOptions.defaultUnitStatusId || '' %>" />
+  <% if (!isEditMode) { %>
+    <input type="hidden" name="duplicateAssumptionNonce" value="<%= formData.duplicateAssumptionNonce || '' %>" data-duplicate-assumption-nonce />
+  <% } %>
 
   <div class="tech-unit-form-guide" aria-label="Tech Unit form guide">
-    <span><strong>1</strong> Identity</span>
-    <span><strong>2</strong> Lot & Category</span>
-    <span><strong>3</strong> Weight</span>
-    <span><strong>4</strong> Grade & Specs</span>
-    <span><strong>5</strong> Issues & Comments</span>
+    <span><strong>1</strong> Lot Assignment</span>
+    <span><strong>2</strong> Unit Identity</span>
+    <span><strong>3</strong> Model & Specifications</span>
+    <span><strong>4</strong> Issues & Grade</span>
+    <span><strong>5</strong> Comments</span>
+  </div>
+
+  <div class="form-section">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Assignment</p>
+        <h3>Lot Assignment</h3>
+      </div>
+      <p>
+        Select the open child or standalone lot the Tech is working on before entering serials. Closed and parent/container lots cannot receive units.
+        The selected lot also controls whether a confirmed existing unit can be assumed during duplicate matching.
+      </p>
+    </div>
+
+    <div class="form-grid tech-lot-assignment-grid">
+      <%
+        const selectedAssignableLot = formOptions.lots.find((lot) => String(lot.lot_id) === String(formData.lotId || ''));
+        const selectedAssignableLotLabel = selectedAssignableLot
+          ? (selectedAssignableLot.isCurrentLotClosed
+            ? `${selectedAssignableLot.lot_name} (Closed — current lot)`
+            : selectedAssignableLot.lot_name)
+          : '';
+        const selectedAssignableLotAllowsAssumption = Boolean(
+          selectedAssignableLot
+          && Number(selectedAssignableLot.allow_duplicate_unit_assumption || 0) === 1
+        );
+      %>
+      <label class="form-field tech-assignable-lot-field">
+        <span>Assignable Lot</span>
+        <div class="tech-assignable-lot-combobox" data-assignable-lot-combobox>
+          <input
+            type="search"
+            class="tech-assignable-lot-combobox-input"
+            data-assignable-lot-combobox-input
+            value="<%= selectedAssignableLotLabel %>"
+            autocomplete="off"
+            placeholder="Search or select an assignable lot"
+            aria-label="Assignable Lot"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-required="true"
+          />
+          <select name="lotId" data-lot-select data-assignable-lot-catalog hidden aria-hidden="true" tabindex="-1">
+            <option value="">Select assignable lot</option>
+            <% formOptions.lots.forEach((lot) => { %>
+              <%
+                const lotProductionWeightNumber = Number(lot.resolved_default_production_weight);
+                const lotProductionWeightValue = Number.isFinite(lotProductionWeightNumber) ? lotProductionWeightNumber.toFixed(2) : '';
+                const lotOptionLabel = lot.isCurrentLotClosed
+                  ? `${lot.lot_name} (Closed — current lot)`
+                  : lot.lot_name;
+              %>
+              <option
+                value="<%= lot.lot_id %>"
+                data-production-weight="<%= lotProductionWeightValue %>"
+                data-allow-duplicate-unit-assumption="<%= Number(lot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0' %>"
+                <%= selected(formData.lotId, lot.lot_id) %>
+              >
+                <%= lotOptionLabel %>
+              </option>
+            <% }) %>
+          </select>
+          <div class="tech-assignable-lot-options" data-assignable-lot-options role="listbox" hidden></div>
+        </div>
+        <small class="field-hint" data-assignable-lot-hint>
+          Search by lot name, then choose a listed assignable lot. Closed lots and parent/container lots cannot receive units.
+          <% if (formOptions.currentLotIsClosed) { %>
+            This unit remains in its current closed lot unless you select an open destination lot.
+          <% } %>
+        </small>
+      </label>
+
+      <% if (!isEditMode) { %>
+        <p
+          class="tech-lot-assumption-status"
+          data-assignable-lot-assumption-status
+          data-status="<%= selectedAssignableLotAllowsAssumption ? 'enabled' : 'disabled' %>"
+          <%= selectedAssignableLot ? '' : 'hidden' %>
+          aria-live="polite"
+        >
+          Existing-unit assumption is
+          <span data-assignable-lot-assumption-status-state><%= selectedAssignableLotAllowsAssumption ? 'enabled' : 'not enabled' %></span>
+          for this lot.
+        </p>
+      <% } %>
+    </div>
   </div>
 
   <div class="form-section">
@@ -153,27 +241,19 @@
         <h3>Unit Identity</h3>
       </div>
       <p>
-        These fields help identify the physical unit and prevent duplicate records. Asset tags are the strongest match;
-        unit serial and BIOS serial are used when an asset tag is missing, removed, or not yet attached.
+        Asset tags are generated only after a new unit is created. Unit serial and BIOS serial are checked early for possible existing units,
+        using case-insensitive matching across both serial fields.
       </p>
     </div>
 
     <div class="form-grid">
-      <label class="form-field">
-        <span>Asset Tag</span>
-        <input
-          type="text"
-          name="assetTag"
-          value="<%= displayAssetTag(formData.assetTag) %>"
-          placeholder="<%= isEditMode ? '' : `${formOptions.assetTagPrefix || 'BWT'}2300001 or blank for auto-generate` %>"
-          autocomplete="off"
-          spellcheck="false"
-          <%= isEditMode ? 'disabled' : '' %>
-        />
-        <small class="field-hint">
-          Enter <%= formOptions.assetTagPrefix || 'BWT' %>2300001 or 2300001. Leave blank on create to auto-generate the next asset tag.
-        </small>
-      </label>
+      <% if (isEditMode) { %>
+        <div class="form-field tech-unit-asset-tag-readonly">
+          <span>Asset Tag</span>
+          <output><%= displayAssetTag(formData.assetTag) || '—' %></output>
+          <small class="field-hint">Asset tags are permanent and cannot be changed.</small>
+        </div>
+      <% } %>
 
       <label class="form-field">
         <span>Unit Serial Number</span>
@@ -185,9 +265,10 @@
           autocomplete="off"
           spellcheck="false"
           maxlength="150"
+          data-duplicate-check-serial
         />
         <small class="field-hint">
-          Usually copied from the device label or chassis. This is used for duplicate detection.
+          Usually copied from the device label or chassis. The system checks both serial types after you leave this field.
         </small>
       </label>
 
@@ -201,49 +282,87 @@
           autocomplete="off"
           spellcheck="false"
           maxlength="150"
+          data-duplicate-check-serial
         />
         <small class="field-hint">
-          BIOS serial is a stronger confirmation than the physical serial alone.
+          BIOS serial is checked against both stored serial types after you leave this field.
         </small>
       </label>
     </div>
+
+    <% if (!isEditMode) { %>
+      <div class="tech-unit-duplicate-check-region" data-duplicate-check-region aria-live="polite">
+        <% if (duplicateCheckWasForced) { %>
+          <%- include('./tech-unit-duplicate-check', {
+            duplicateMatches: initialDuplicateMatches,
+            hasSerialSearch: true,
+            destinationLotId: formData.lotId || '',
+            canRequestIntentionalDuplicate: typeof canRequestIntentionalDuplicate !== 'undefined' ? canRequestIntentionalDuplicate : false
+          }) %>
+        <% } %>
+      </div>
+    <% } %>
   </div>
 
   <div class="form-section">
     <div class="form-section-header">
       <div>
-        <p class="eyebrow">Assignment</p>
-        <h3>Lot Assignment</h3>
+        <p class="eyebrow">Model</p>
+        <h3>Manufacturer and Model</h3>
       </div>
       <p>
-        Assign the unit to the open child or standalone lot the Tech is working on. Closed and parent/container lots cannot receive units.
-        If an existing unit is confirmed during duplicate matching, changing the lot records a lot-movement history entry.
+        Select the manufacturer first, then search its managed model catalog. Choosing a model automatically applies its matching Unit Category.
       </p>
     </div>
 
     <div class="form-grid">
       <label class="form-field">
-        <span>Assignable Lot</span>
-        <select name="lotId" required data-lot-select>
-          <option value="">Select assignable lot</option>
-          <% formOptions.lots.forEach((lot) => { %>
-            <%
-              const lotProductionWeightNumber = Number(lot.resolved_default_production_weight);
-              const lotProductionWeightValue = Number.isFinite(lotProductionWeightNumber) ? lotProductionWeightNumber.toFixed(2) : '';
-              const lotOptionLabel = lot.isCurrentLotClosed
-                ? `${lot.lot_name} (Closed — current lot)`
-                : lot.lot_name;
-            %>
-            <option value="<%= lot.lot_id %>" data-production-weight="<%= lotProductionWeightValue %>" <%= selected(formData.lotId, lot.lot_id) %>>
-              <%= lotOptionLabel %>
+        <span>Manufacturer</span>
+        <select name="manufacturerId" data-manufacturer-select>
+          <option value="">Select manufacturer</option>
+          <% formOptions.manufacturers.forEach((manufacturer) => { %>
+            <option value="<%= manufacturer.id %>" <%= selected(formData.manufacturerId, manufacturer.id) %>>
+              <%= manufacturer.label %>
             </option>
           <% }) %>
         </select>
         <small class="field-hint">
-          Closed lots cannot receive new or moved units. Lots with child lots are containers and cannot receive units directly.
-          <% if (formOptions.currentLotIsClosed) { %>
-            This unit remains in its current closed lot unless you select an open destination lot.
-          <% } %>
+          Selecting a manufacturer loads only that manufacturer's model catalog.
+        </small>
+      </label>
+
+      <label class="form-field tech-unit-model-field">
+        <span>Unit Model</span>
+        <div class="tech-unit-model-combobox" data-unit-model-combobox>
+          <input
+            type="search"
+            class="tech-unit-model-combobox-input"
+            data-unit-model-combobox-input
+            autocomplete="off"
+            placeholder="Select manufacturer first"
+            aria-label="Unit Model"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            disabled
+          />
+          <input type="hidden" name="unitModelId" value="<%= formData.unitModelId || '' %>" data-unit-model-select />
+          <div class="tech-unit-model-options" data-unit-model-options role="listbox" hidden></div>
+          <select data-unit-model-catalog hidden aria-hidden="true" tabindex="-1">
+            <% formOptions.unitModels.forEach((unitModel) => { %>
+              <option
+                value="<%= unitModel.id %>"
+                data-manufacturer-id="<%= unitModel.manufacturerId || '' %>"
+                data-category-id="<%= unitModel.unitCategoryConfigValueId || '' %>"
+                data-model-active="<%= unitModel.isActive ? '1' : '0' %>"
+                <%= selected(formData.unitModelId, unitModel.id) %>
+              >
+                <%= unitModel.label %><%= unitModel.isActive ? '' : ' (Inactive)' %>
+              </option>
+            <% }) %>
+          </select>
+        </div>
+        <small class="field-hint" data-unit-model-hint>
+          Select a manufacturer to load its model catalog. Choosing a model sets the matching Unit Category.
         </small>
       </label>
 
@@ -258,13 +377,20 @@
           <% }) %>
         </select>
         <small class="field-hint">
-          Required. Selecting a model can auto-fill this if the model has a category.
+          Selecting a managed model applies its matching category. Choose a category manually only when no catalog model is selected.
         </small>
       </label>
-
     </div>
+
+    <% if (canRequestCatalogException) { %>
+      <div class="tech-catalog-request-action">
+        <button type="button" class="secondary-button" data-catalog-request-button="model" disabled aria-disabled="true">Request Missing Model</button>
+        <small class="field-hint" data-catalog-request-model-hint>Select Manufacturer and Unit Category, then type the exact model name that is missing from the managed catalog.</small>
+      </div>
+    <% } %>
   </div>
 
+<% if (isEditMode) { %>
   <div class="form-section form-section--production-weight">
     <div class="form-section-header">
       <div>
@@ -319,128 +445,7 @@
       </div>
     <% } %>
   </div>
-
-  <div class="form-section form-section--grade-outcome">
-    <div class="form-section-header">
-      <div>
-        <p class="eyebrow">Grade & Outcome</p>
-        <h3>Cosmetic Grade and Unit Pass/Fail</h3>
-      </div>
-      <p>
-        Cosmetic Grade A-D only describes appearance. Unit Pass/Fail describes the working condition and is tracked separately for completion reporting.
-      </p>
-    </div>
-
-    <% if (overallGradeOptions.length === 0) { %>
-      <div class="message error">
-        <p>Cosmetic Grade options are not ready yet. Run the Step 3g SQL migration to seed grade values.</p>
-      </div>
-    <% } %>
-
-    <% if (formOptions.outcomeOptionsSupported === false) { %>
-      <div class="message error">
-        <p>Unit Pass/Fail outcomes are not ready yet. Run the Step 4h SQL migration before saving unit outcomes.</p>
-      </div>
-    <% } %>
-
-    <div class="form-grid tech-grade-outcome-grid">
-      <label class="form-field">
-        <span>Cosmetic Grade</span>
-        <select name="overallGradeConfigValueId">
-          <option value="">Select cosmetic grade</option>
-          <% overallGradeOptions.forEach((gradeOption) => { %>
-            <option value="<%= gradeOption.id %>" <%= selected(formData.overallGradeConfigValueId, gradeOption.id) %>><%= gradeOption.label %></option>
-          <% }) %>
-        </select>
-        <small class="field-hint">A-D grade is cosmetic only and does not determine pass/fail by itself.</small>
-      </label>
-
-      <fieldset class="form-field tech-outcome-field">
-        <legend>Unit Outcome</legend>
-        <div class="tech-outcome-options" role="radiogroup" aria-label="Unit outcome">
-          <% outcomeOptions.forEach((outcomeOption) => { %>
-            <label class="tech-outcome-option <%= selectedOutcomeCode === outcomeOption.code ? 'active' : '' %>">
-              <input type="radio" name="outcomeCode" value="<%= outcomeOption.code %>" <%= selectedOutcomeCode === outcomeOption.code ? 'checked' : '' %> />
-              <span><%= outcomeOption.label %></span>
-            </label>
-          <% }) %>
-        </div>
-        <small class="field-hint">Pass/Fail is based on the working condition of the unit, including hardware issues and cosmetic grade.</small>
-      </fieldset>
-
-      <label class="form-field">
-        <span>Cosmetic Grade Notes</span>
-        <input type="text" name="overallGradeNotes" value="<%= formData.overallGradeNotes || '' %>" maxlength="500" placeholder="Optional cosmetic grade note" />
-      </label>
-
-      <label class="form-field">
-        <span>Outcome Notes</span>
-        <input type="text" name="outcomeNotes" value="<%= formData.outcomeNotes || '' %>" maxlength="500" placeholder="Optional Pass/Fail note" />
-      </label>
-    </div>
-
-    <div class="tech-outcome-approval-box">
-      <label class="tech-outcome-approval-check">
-        <input type="checkbox" name="outcomeApprovalRequested" value="1" <%= outcomeApprovalRequested ? 'checked' : '' %> />
-        <span>Request Management/Lead approval for this Pass/Fail decision</span>
-      </label>
-
-      <label class="form-field">
-        <span>Approval Request Notes</span>
-        <textarea name="outcomeApprovalRequestNotes" rows="3" maxlength="1000" placeholder="Explain why you want Management/Lead to approve this Pass/Fail decision."><%= formData.outcomeApprovalRequestNotes || '' %></textarea>
-      </label>
-    </div>
-  </div>
-
-  <div class="form-section">
-    <div class="form-section-header">
-      <div>
-        <p class="eyebrow">Model</p>
-        <h3>Manufacturer and Model</h3>
-      </div>
-      <p>
-        Model selection is separated from identity so techs can first confirm the physical unit, then record the make/model details.
-        The model dropdown filters by selected manufacturer and unit category.
-      </p>
-    </div>
-
-    <div class="form-grid">
-      <label class="form-field">
-        <span>Manufacturer</span>
-        <select name="manufacturerId" data-manufacturer-select>
-          <option value="">Select manufacturer</option>
-          <% formOptions.manufacturers.forEach((manufacturer) => { %>
-            <option value="<%= manufacturer.id %>" <%= selected(formData.manufacturerId, manufacturer.id) %>>
-              <%= manufacturer.label %>
-            </option>
-          <% }) %>
-        </select>
-        <small class="field-hint">
-          Selecting a manufacturer filters the model dropdown.
-        </small>
-      </label>
-
-      <label class="form-field">
-        <span>Unit Model</span>
-        <select name="unitModelId" data-unit-model-select>
-          <option value="">Select model</option>
-          <% formOptions.unitModels.forEach((unitModel) => { %>
-            <option
-              value="<%= unitModel.id %>"
-              data-manufacturer-id="<%= unitModel.manufacturerId || '' %>"
-              data-category-id="<%= unitModel.unitCategoryConfigValueId || '' %>"
-              <%= selected(formData.unitModelId, unitModel.id) %>
-            >
-              <%= unitModel.label %>
-            </option>
-          <% }) %>
-        </select>
-        <small class="field-hint" data-unit-model-hint>
-          Models can be filtered by manufacturer and category.
-        </small>
-      </label>
-    </div>
-  </div>
+<% } %>
 
   <div class="form-section">
     <div class="form-section-header">
@@ -456,21 +461,50 @@
 
     <div class="form-grid">
       <label class="form-field">
-        <span>Processor Model</span>
-        <select name="processorModelId" data-processor-model-select>
-          <option value="">Select processor</option>
-          <% formOptions.processorModels.forEach((processorModel) => { %>
-            <option
-              value="<%= processorModel.id %>"
-              data-base-speed-ghz="<%= processorModel.baseSpeedGhz || '' %>"
-              <%= selected(formData.processorModelId, processorModel.id) %>
-            >
-              <%= processorModel.label %>
-            </option>
+        <span>Processor Type</span>
+        <select data-processor-brand-select disabled>
+          <option value="">Select Unit Model first</option>
+          <% (formOptions.processorBrands || []).forEach((processorBrand) => { %>
+            <option value="<%= processorBrand.id %>"><%= processorBrand.label %></option>
           <% }) %>
         </select>
-        <small class="field-hint">
-          Choosing a processor can auto-fill speed if the base speed exists in the processor list.
+        <small class="field-hint" data-processor-brand-hint>
+          Processor types are limited to the selected Unit Model.
+        </small>
+      </label>
+
+      <label class="form-field tech-unit-processor-field">
+        <span>Processor</span>
+        <div class="tech-unit-processor-combobox" data-processor-combobox>
+          <input
+            type="search"
+            class="tech-unit-processor-combobox-input"
+            data-processor-combobox-input
+            autocomplete="off"
+            placeholder="Select Unit Model first"
+            aria-label="Processor"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            disabled
+          />
+          <input type="hidden" name="processorModelId" value="<%= formData.processorModelId || '' %>" data-processor-model-select />
+          <div class="tech-unit-processor-options" data-processor-options role="listbox" hidden></div>
+          <select data-processor-catalog hidden aria-hidden="true" tabindex="-1">
+            <% formOptions.processorModels.forEach((processorModel) => { %>
+              <option
+                value="<%= processorModel.id %>"
+                data-processor-brand-id="<%= processorModel.processorBrandId || '' %>"
+                data-compatible-unit-model-ids="<%= (processorModel.compatibleUnitModelIds || []).join(',') %>"
+                data-base-speed-ghz="<%= processorModel.baseSpeedGhz || '' %>"
+                <%= selected(formData.processorModelId, processorModel.id) %>
+              >
+                <%= processorModel.label %>
+              </option>
+            <% }) %>
+          </select>
+        </div>
+        <small class="field-hint" data-processor-model-hint>
+          Select a compatible Processor Type, then search its allowed processor values.
         </small>
       </label>
 
@@ -490,6 +524,13 @@
         </small>
       </label>
     </div>
+
+    <% if (canRequestCatalogException) { %>
+      <div class="tech-catalog-request-action">
+        <button type="button" class="secondary-button" data-catalog-request-button="processor" disabled aria-disabled="true">Request Processor Addition</button>
+        <small class="field-hint" data-catalog-request-processor-hint>Select a Unit Model first. Use this only when the observed Processor Type or Processor is unavailable for that model.</small>
+      </div>
+    <% } %>
   </div>
 
   <div class="form-section">
@@ -647,11 +688,11 @@
   <div class="form-section">
     <div class="form-section-header">
       <div>
-        <p class="eyebrow">Operating System</p>
-        <h3>OS Summary</h3>
+        <p class="eyebrow">Expanded Specifications</p>
+        <h3>Operating System, BIOS, and Status Fields</h3>
       </div>
       <p>
-        Operating system is kept separate from hardware because ELS intake may stop before OS installation, while full refurb lots may require OS details later.
+        Record operating-system, BIOS, and diagnostic values together. ScanTool-only cellular and band details stay visible in the expanded unit mini-menu.
       </p>
     </div>
 
@@ -667,32 +708,18 @@
           <% }) %>
         </select>
         <small class="field-hint">
-          OS build and diagnostics are now tracked in the Expanded Specifications section below.
+          Record the installed operating system when known. OS build and diagnostics are tracked in the fields below.
         </small>
-      </label>
-    </div>
-  </div>
-
-  <div class="form-section">
-    <div class="form-section-header">
-      <div>
-        <p class="eyebrow">Expanded Specifications</p>
-        <h3>BIOS, OS Build, and Status Fields</h3>
-      </div>
-      <p>
-        These fields hold manually editable expanded unit specification values. ScanTool-only cellular and band details stay visible in the expanded unit mini-menu.
-      </p>
-    </div>
-
-    <div class="form-grid">
-      <label class="form-field">
-        <span>BIOS Version</span>
-        <input type="text" name="biosVersion" value="<%= formData.biosVersion || '' %>" maxlength="100" placeholder="Example: 1.18.0" />
       </label>
 
       <label class="form-field">
         <span>OS Build</span>
         <input type="text" name="osBuild" value="<%= formData.osBuild || '' %>" maxlength="100" placeholder="Example: 23H2 / 22631" />
+      </label>
+
+      <label class="form-field">
+        <span>BIOS Version</span>
+        <input type="text" name="biosVersion" value="<%= formData.biosVersion || '' %>" maxlength="100" placeholder="Example: 1.18.0" />
       </label>
 
       <label class="form-field">
@@ -775,59 +802,6 @@
         </select>
       </label>
     </div>
-  </div>
-
-  <div class="form-section">
-    <div class="form-section-header">
-      <div>
-        <p class="eyebrow">Graphics</p>
-        <h3>Graphics Adapters</h3>
-      </div>
-      <p>
-        Graphics adapter information is ScanTool-only. These fields are visible for review but cannot be edited here.
-      </p>
-    </div>
-
-    <div class="workflow-list" data-module-list="graphicsAdapter">
-      <% graphicsRows.forEach((graphicsAdapter, index) => { %>
-        <article class="workflow-item slate tech-scantool-readonly-item" data-module-row="graphicsAdapter">
-          <span></span>
-          <div style="width: 100%;">
-            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
-              <div>
-                <strong>Graphics Adapter <span data-module-display-number><%= index + 1 %></span></strong>
-                <p>GPU type, model, and VRAM.</p>
-              </div>
-            </div>
-
-            <div class="form-grid">
-              <label class="form-field">
-                <span>GPU Type</span>
-                <input type="hidden" name="graphicsAdapters[<%= index %>][gpuTypeConfigValueId]" value="<%= graphicsAdapter.gpuTypeConfigValueId || '' %>" />
-                <select data-module-field disabled aria-disabled="true">
-                  <option value="">Select GPU type</option>
-                  <% gpuTypeOptions.forEach((gpuType) => { %>
-                    <option value="<%= gpuType.id %>" <%= selected(graphicsAdapter.gpuTypeConfigValueId, gpuType.id) %>><%= gpuType.label %></option>
-                  <% }) %>
-                </select>
-      </label>
-
-              <label class="form-field">
-                <span>GPU Model</span>
-                <input type="text" name="graphicsAdapters[<%= index %>][gpuModel]" value="<%= graphicsAdapter.gpuModel || '' %>" maxlength="150" placeholder="Example: Intel UHD Graphics" data-module-field readonly aria-readonly="true" />
-              </label>
-
-              <label class="form-field">
-                <span>VRAM MB</span>
-                <input type="number" name="graphicsAdapters[<%= index %>][vramMb]" value="<%= graphicsAdapter.vramMb || '' %>" min="0" step="1" placeholder="Example: 2048" data-module-field readonly aria-readonly="true" />
-              </label>
-            </div>
-          </div>
-        </article>
-      <% }) %>
-    </div>
-
-    <p class="field-hint tech-scantool-readonly-note">Graphics adapter rows are populated by ScanTools and are not editable in the manual unit form.</p>
   </div>
 
   <div class="form-section">
@@ -979,6 +953,78 @@
     </div>
   </div>
 
+  <div class="form-section form-section--grade-outcome">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Grade & Outcome</p>
+        <h3>Cosmetic Grade and Unit Pass/Fail</h3>
+      </div>
+      <p>
+        Cosmetic Grade A-D only describes appearance. Unit Pass/Fail describes the working condition and is tracked separately for completion reporting.
+      </p>
+    </div>
+
+    <% if (overallGradeOptions.length === 0) { %>
+      <div class="message error">
+        <p>Cosmetic Grade options are not ready yet. Run the Step 3g SQL migration to seed grade values.</p>
+      </div>
+    <% } %>
+
+    <% if (formOptions.outcomeOptionsSupported === false) { %>
+      <div class="message error">
+        <p>Unit Pass/Fail outcomes are not ready yet. Run the Step 4h SQL migration before saving unit outcomes.</p>
+      </div>
+    <% } %>
+
+    <div class="form-grid tech-grade-outcome-grid">
+      <label class="form-field">
+        <span>Cosmetic Grade</span>
+        <select name="overallGradeConfigValueId">
+          <option value="">Select cosmetic grade</option>
+          <% overallGradeOptions.forEach((gradeOption) => { %>
+            <option value="<%= gradeOption.id %>" <%= selected(formData.overallGradeConfigValueId, gradeOption.id) %>><%= gradeOption.label %></option>
+          <% }) %>
+        </select>
+        <small class="field-hint">A-D grade is cosmetic only and does not determine pass/fail by itself.</small>
+      </label>
+
+      <fieldset class="form-field tech-outcome-field">
+        <legend>Unit Outcome</legend>
+        <div class="tech-outcome-options" role="radiogroup" aria-label="Unit outcome">
+          <% outcomeOptions.forEach((outcomeOption) => { %>
+            <label class="tech-outcome-option <%= selectedOutcomeCode === outcomeOption.code ? 'active' : '' %>">
+              <input type="radio" name="outcomeCode" value="<%= outcomeOption.code %>" <%= selectedOutcomeCode === outcomeOption.code ? 'checked' : '' %> />
+              <span><%= outcomeOption.label %></span>
+            </label>
+          <% }) %>
+        </div>
+        <small class="field-hint">Pass/Fail is based on the working condition of the unit, including hardware issues and cosmetic grade.</small>
+      </fieldset>
+
+      <label class="form-field">
+        <span>Cosmetic Grade Notes</span>
+        <input type="text" name="overallGradeNotes" value="<%= formData.overallGradeNotes || '' %>" maxlength="500" placeholder="Optional cosmetic grade note" />
+      </label>
+
+      <label class="form-field">
+        <span>Outcome Notes</span>
+        <input type="text" name="outcomeNotes" value="<%= formData.outcomeNotes || '' %>" maxlength="500" placeholder="Optional Pass/Fail note" />
+      </label>
+    </div>
+
+    <div class="tech-outcome-approval-box">
+      <label class="tech-outcome-approval-check">
+        <input type="checkbox" name="outcomeApprovalRequested" value="1" <%= outcomeApprovalRequested ? 'checked' : '' %> />
+        <span>Request Management/Lead approval for this Pass/Fail decision</span>
+      </label>
+
+      <label class="form-field">
+        <span>Approval Request Notes</span>
+        <textarea name="outcomeApprovalRequestNotes" rows="3" maxlength="1000" placeholder="Explain why you want Management/Lead to approve this Pass/Fail decision."><%= formData.outcomeApprovalRequestNotes || '' %></textarea>
+      </label>
+    </div>
+  </div>
+
   <div class="form-section">
     <div class="form-section-header">
       <div>
@@ -1041,25 +1087,6 @@
           <label class="form-field"><span>Custom Issue</span><input type="text" name="hardwareIssues[__INDEX__][customIssueLabel]" maxlength="120" placeholder="Example: Cannot install OS" data-module-field /><small class="field-hint">Use this when the issue is not configured yet.</small></label>
           <label class="form-field"><span>Location</span><select name="hardwareIssues[__INDEX__][locationConfigValueId]" data-module-field><option value="">Select location</option><% issueLocations.forEach((location) => { %><option value="<%= location.id %>"><%= location.label %></option><% }) %></select></label>
           <label class="form-field"><span>Remarks</span><input type="text" name="hardwareIssues[__INDEX__][issueRemark]" maxlength="500" placeholder="Short note explaining the issue" data-module-field /></label>
-        </div>
-      </div>
-    </article>
-  </template>
-
-  <template data-module-template="graphicsAdapter">
-    <article class="workflow-item slate tech-scantool-readonly-item" data-module-row="graphicsAdapter">
-      <span></span>
-      <div style="width: 100%;">
-        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
-          <div>
-            <strong>Graphics Adapter <span data-module-display-number>__DISPLAY__</span></strong>
-            <p>GPU type, model, and VRAM.</p>
-          </div>
-        </div>
-        <div class="form-grid">
-          <label class="form-field"><span>GPU Type</span><input type="hidden" name="graphicsAdapters[__INDEX__][gpuTypeConfigValueId]" /><select data-module-field disabled aria-disabled="true"><option value="">Select GPU type</option><% gpuTypeOptions.forEach((gpuType) => { %><option value="<%= gpuType.id %>"><%= gpuType.label %></option><% }) %></select></label>
-          <label class="form-field"><span>GPU Model</span><input type="text" name="graphicsAdapters[__INDEX__][gpuModel]" maxlength="150" placeholder="Example: Intel UHD Graphics" data-module-field readonly aria-readonly="true" /></label>
-          <label class="form-field"><span>VRAM MB</span><input type="number" name="graphicsAdapters[__INDEX__][vramMb]" min="0" step="1" placeholder="Example: 2048" data-module-field readonly aria-readonly="true" /></label>
         </div>
       </div>
     </article>

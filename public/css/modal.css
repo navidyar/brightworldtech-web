@@ -8,6 +8,18 @@
   padding: 42px 18px;
   background: rgba(15, 23, 42, 0.54);
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.modal-open,
+body.modal-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.modal-open {
+  scrollbar-gutter: stable;
 }
 
 .modal-panel {
@@ -68,6 +80,24 @@
   padding: 18px 20px 20px;
 }
 
+.tech-unit-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+}
+
+.tech-unit-modal .modal-header {
+  position: static;
+  flex: 0 0 auto;
+}
+
+.tech-unit-modal .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
 .tech-unit-modal .app-form {
   gap: 14px;
 }
@@ -85,6 +115,10 @@
     border-radius: 14px;
   }
 
+  .tech-unit-modal {
+    max-height: calc(100dvh - 36px);
+  }
+
   .modal-header {
     border-radius: 14px 14px 0 0;
     padding: 14px;
@@ -94,3 +128,60 @@
     padding: 14px;
   }
 }
+
+/* Step 7f.2 Model Catalog modal repair. */
+.unit-model-modal {
+  width: min(760px, 100%);
+}
+
+.unit-model-status-modal {
+  width: min(620px, 100%);
+}
+
+.unit-model-form {
+  max-width: none;
+}
+
+.unit-model-confirm-card {
+  display: grid;
+  gap: 4px;
+  padding: 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+
+.unit-model-confirm-card h3,
+.unit-model-confirm-card p {
+  margin: 0;
+}
+
+.unit-model-confirm-copy {
+  margin: 14px 0 0;
+  color: var(--text);
+  font-size: 0.94rem;
+  line-height: 1.5;
+}
+
+.unit-model-status-modal .form-actions {
+  margin-top: 18px;
+}
+
+.unit-model-status-modal .danger-button {
+  border-color: var(--red);
+  color: #ffffff;
+  background: var(--red);
+  box-shadow: 0 8px 18px rgba(185, 28, 28, 0.14);
+}
+
+.unit-model-status-modal .danger-button:hover {
+  border-color: #991b1b;
+  background: #991b1b;
+}
+
+@media (max-width: 720px) {
+  .unit-model-confirm-card {
+    padding: 12px;
+  }
+}
+

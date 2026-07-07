@@ -22,7 +22,7 @@ async function main() {
   }
 
   const baseUrl = process.env.BASE_URL || 'https://bwtdallas.com';
-  const expiresInHours = Number(process.env.PASSWORD_SETUP_EXPIRES_HOURS || 24);
+  const expiresInHours = await authModel.getPasswordLinkExpiryHours();
 
   const user = await authModel.createUserWithRoles({
     firstName,

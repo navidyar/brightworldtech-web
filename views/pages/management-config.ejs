@@ -14,7 +14,8 @@
     'manufacturer_types',
     'processor_types',
     'user_roles',
-    'roles'
+    'roles',
+    'security_settings'
   ]);
 
   const getConfigCategoryCode = (category) => String(category && category.code ? category.code : '').toLowerCase();
@@ -23,6 +24,8 @@
     const categoryCode = getConfigCategoryCode(category);
     return systemConfigCategoryCodes.has(categoryCode) || isProductionWeightCategory(category);
   };
+  const isPasswordLinkExpirySetting = (category, value) => getConfigCategoryCode(category) === 'security_settings'
+    && String(value && value.code ? value.code : '').toLowerCase() === 'password_link_expiry_hours';
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -88,6 +91,7 @@
 
               <div class="config-values-actions">
                 <a class="primary-button" href="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Create Config Value</a>
+                <a class="secondary-button" href="/management/config/models">Manage Unit Models</a>
 
                 <% if (includeInactiveValues) { %>
                   <a class="secondary-button" href="/management/config">Hide inactive values</a>
@@ -256,7 +260,9 @@
                                       <div class="config-value-row-actions">
                                         <a class="secondary-button" href="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
 
-                                        <% if (value.isActive) { %>
+                                        <% if (isPasswordLinkExpirySetting(category, value)) { %>
+                                          <span class="pill config-pill-system">Required</span>
+                                        <% } else if (value.isActive) { %>
                                           <a class="secondary-button danger-button" href="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Deactivate</a>
                                         <% } else { %>
                                           <a class="secondary-button" href="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Activate</a>

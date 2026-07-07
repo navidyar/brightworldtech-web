@@ -1,0 +1,87 @@
+<%
+  const isEdit = mode === 'edit';
+  const selected = (actual, expected) => String(actual || '') === String(expected || '') ? 'selected' : '';
+  const query = new URLSearchParams();
+  if (filters.manufacturerId) query.set('manufacturerId', String(filters.manufacturerId));
+  if (filters.unitCategoryConfigValueId) query.set('unitCategoryConfigValueId', String(filters.unitCategoryConfigValueId));
+  if (filters.includeInactive) query.set('includeInactive', '1');
+  if (filters.search) query.set('search', filters.search);
+  const queryString = query.toString();
+  const formAction = isEdit ? `/management/config/models/${unitModel.id}/edit/modal${queryString ? `?${queryString}` : ''}` : `/management/config/models${queryString ? `?${queryString}` : ''}`;
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel unit-model-modal" role="dialog" aria-modal="true" aria-labelledby="unit-model-form-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Model Catalog</p>
+        <h2 id="unit-model-form-title"><%= isEdit ? 'Edit Unit Model' : 'Add Unit Model' %></h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (errorMessages.length > 0) { %>
+        <div class="message error">
+          <ul>
+            <% errorMessages.forEach((errorMessage) => { %>
+              <li><%= errorMessage %></li>
+            <% }) %>
+          </ul>
+        </div>
+      <% } %>
+
+      <form class="app-form unit-model-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML">
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Manufacturer</span>
+            <select name="manufacturerId" required>
+              <option value="">Select manufacturer</option>
+              <% formOptions.manufacturers.forEach((manufacturer) => { %>
+                <option value="<%= manufacturer.id %>" <%= selected(formData.manufacturerId, manufacturer.id) %>><%= manufacturer.label %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <label class="form-field">
+            <span>Unit Category</span>
+            <select name="unitCategoryConfigValueId" required>
+              <option value="">Select unit category</option>
+              <% formOptions.unitCategories.forEach((category) => { %>
+                <option value="<%= category.id %>" <%= selected(formData.unitCategoryConfigValueId, category.id) %>><%= category.label %></option>
+              <% }) %>
+            </select>
+          </label>
+        </div>
+
+        <label class="form-field">
+          <span>Model Name</span>
+          <input type="text" name="modelName" value="<%= formData.modelName || '' %>" maxlength="150" placeholder="Example: Latitude 5400" required />
+        </label>
+
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Sort Order</span>
+            <input type="number" name="sortOrder" value="<%= formData.sortOrder || 0 %>" step="1" />
+          </label>
+
+          <label class="form-field">
+            <span>Status</span>
+            <select name="isActive">
+              <option value="1" <%= formData.isActive === '1' ? 'selected' : '' %>>Active</option>
+              <option value="0" <%= formData.isActive === '0' ? 'selected' : '' %>>Inactive</option>
+            </select>
+          </label>
+        </div>
+
+        <p class="field-hint">Models are scoped to both manufacturer and unit category. Inactive models remain visible on historical Edit Unit records but do not appear for new selection.</p>
+
+        <div class="form-actions">
+          <button class="primary-button" type="submit"><%= isEdit ? 'Save Model' : 'Create Model' %></button>
+          <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

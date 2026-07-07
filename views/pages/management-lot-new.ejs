@@ -120,6 +120,32 @@
                 </div>
               </div>
 
+              <% if (formOptions.capabilities.hasDuplicateUnitAssumption) { %>
+                <div class="form-section">
+                  <div class="form-section-header">
+                    <div>
+                      <p class="eyebrow">Intake Controls</p>
+                      <h3>Duplicate Unit Assumption</h3>
+                    </div>
+                    <p>Choose whether regular Techs may assume a serial-matched Active unit from another open lot or a Parked unit into this work lot.</p>
+                  </div>
+
+                  <label class="checkbox-card" for="allowDuplicateUnitAssumption">
+                    <input
+                      id="allowDuplicateUnitAssumption"
+                      type="checkbox"
+                      name="allowDuplicateUnitAssumption"
+                      value="1"
+                      <%= formData.allowDuplicateUnitAssumption === '1' ? 'checked' : '' %>
+                    />
+                    <span>
+                      <strong>Allow duplicate-match unit assumption</strong>
+                      <small>Same-lot matches and units currently in closed lots remain blocked and must use an override. Parked units remain eligible to be assumed into this lot.</small>
+                    </span>
+                  </label>
+                </div>
+              <% } %>
+
               <% if (formOptions.capabilities.hasUnitAmountGoal || formOptions.capabilities.hasDeadline || formOptions.capabilities.hasLabelFormat) { %>
                 <div class="form-section">
                   <div class="form-section-header">

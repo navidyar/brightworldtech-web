@@ -13,8 +13,8 @@ function validatePassword(password, confirmPassword) {
     errors.push('Password must be at least 10 characters long.');
   }
 
-  if (password && password.length > 128) {
-    errors.push('Password must be 128 characters or fewer.');
+  if (password && password.length > 25) {
+    errors.push('Password must be 25 characters or fewer.');
   }
 
   if (password !== confirmPassword) {

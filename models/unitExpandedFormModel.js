@@ -761,22 +761,24 @@ async function saveGraphicsAdapters(connection, unitId, formData, currentUserId)
   await upsertManualFieldSources(connection, unitId, ['graphics_adapters'], currentUserId);
 }
 
-async function saveExpandedDetailsForUnit({ unitId, formData, currentUserId }) {
+async function saveExpandedDetailsForUnitWithConnection(connection, { unitId, formData, currentUserId }) {
   const safeUnitId = Number(unitId);
 
-  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0) {
+  if (!connection || !Number.isInteger(safeUnitId) || safeUnitId <= 0) {
     return;
   }
 
+  await saveUnitSpecifications(connection, safeUnitId, formData, currentUserId);
+  await saveOverallGrade(connection, safeUnitId, formData, currentUserId);
+  await saveOutcome(connection, safeUnitId, formData, currentUserId);
+}
+
+async function saveExpandedDetailsForUnit({ unitId, formData, currentUserId }) {
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
-
-    await saveUnitSpecifications(connection, safeUnitId, formData, currentUserId);
-    await saveOverallGrade(connection, safeUnitId, formData, currentUserId);
-    await saveOutcome(connection, safeUnitId, formData, currentUserId);
-
+    await saveExpandedDetailsForUnitWithConnection(connection, { unitId, formData, currentUserId });
     await connection.commit();
   } catch (error) {
     await connection.rollback();
@@ -790,5 +792,6 @@ module.exports = {
   getBlankExpandedFormData,
   getExpandedFormOptions,
   getExpandedFormDataByUnitId,
-  saveExpandedDetailsForUnit
+  saveExpandedDetailsForUnit,
+  saveExpandedDetailsForUnitWithConnection
 };

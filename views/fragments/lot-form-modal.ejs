@@ -52,6 +52,22 @@
             Unit override takes priority, then this lot's custom default, then the unit category default.
           </div>
 
+          <% if (safeFormOptions.capabilities.hasDuplicateUnitAssumption) { %>
+            <label class="checkbox-card lot-duplicate-assumption-card" for="allowDuplicateUnitAssumptionModal">
+              <input
+                id="allowDuplicateUnitAssumptionModal"
+                type="checkbox"
+                name="allowDuplicateUnitAssumption"
+                value="1"
+                <%= safeFormData.allowDuplicateUnitAssumption === '1' ? 'checked' : '' %>
+              />
+              <span>
+                <strong>Allow duplicate-match unit assumption</strong>
+                <small>Regular Techs creating units in this open work lot may assume a matching Active unit from another open lot or a Parked unit. Same-lot and closed-lot matches still require an override.</small>
+              </span>
+            </label>
+          <% } %>
+
           <div class="form-grid lot-form-grid">
             <label class="form-field">
               <span>Lot Name</span>

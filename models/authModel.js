@@ -1,5 +1,44 @@
 const { pool } = require('./db');
 
+const PASSWORD_LINK_EXPIRY_CATEGORY_CODE = 'security_settings';
+const PASSWORD_LINK_EXPIRY_VALUE_CODE = 'password_link_expiry_hours';
+const DEFAULT_PASSWORD_LINK_EXPIRY_HOURS = 1;
+const MIN_PASSWORD_LINK_EXPIRY_HOURS = 1;
+const MAX_PASSWORD_LINK_EXPIRY_HOURS = 24;
+
+function normalizePasswordLinkExpiryHours(value) {
+  const rawValue = String(value ?? '').trim();
+  const hours = Number.parseInt(rawValue, 10);
+
+  if (!/^\d+$/.test(rawValue) || !Number.isInteger(hours)) {
+    return DEFAULT_PASSWORD_LINK_EXPIRY_HOURS;
+  }
+
+  if (hours < MIN_PASSWORD_LINK_EXPIRY_HOURS || hours > MAX_PASSWORD_LINK_EXPIRY_HOURS) {
+    return DEFAULT_PASSWORD_LINK_EXPIRY_HOURS;
+  }
+
+  return hours;
+}
+
+async function getPasswordLinkExpiryHours() {
+  const [rows] = await pool.query(
+    `
+      SELECT cv.value
+      FROM config_values cv
+      INNER JOIN config_categories cc
+        ON cc.config_category_id = cv.config_category_id
+      WHERE cc.code = ?
+        AND cv.code = ?
+        AND cv.is_active = 1
+      LIMIT 1
+    `,
+    [PASSWORD_LINK_EXPIRY_CATEGORY_CODE, PASSWORD_LINK_EXPIRY_VALUE_CODE]
+  );
+
+  return normalizePasswordLinkExpiryHours(rows[0]?.value);
+}
+
 async function getConfigValueId(categoryCode, valueCode, connection = pool) {
   const [rows] = await connection.query(
     `
@@ -116,17 +155,71 @@ async function getUserByIdWithRoles(userId) {
 }
 
 async function recordSuccessfulLogin(userId) {
-  await pool.query(
-    `
-      UPDATE users
-      SET
-        failed_login_count = 0,
-        locked_until = NULL,
-        last_login_at = NOW()
-      WHERE user_id = ?
-    `,
-    [userId]
-  );
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [updateResult] = await connection.query(
+      `
+        UPDATE users
+        SET
+          failed_login_count = 0,
+          locked_until = NULL,
+          last_login_at = NOW()
+        WHERE user_id = ?
+      `,
+      [userId]
+    );
+
+    if (updateResult.affectedRows === 0) {
+      throw new Error('Unable to record login for a missing user.');
+    }
+
+    await connection.query(
+      `
+        INSERT INTO user_login_activity (
+          user_id,
+          primary_role_code,
+          logged_in_at
+        )
+        SELECT
+          u.user_id,
+          COALESCE(
+            (
+              SELECT r.code
+              FROM user_roles ur
+              INNER JOIN roles r
+                ON r.role_id = ur.role_id
+              WHERE ur.user_id = u.user_id
+                AND r.is_active = 1
+              ORDER BY
+                CASE r.code
+                  WHEN 'admin' THEN 10
+                  WHEN 'management' THEN 20
+                  WHEN 'tech_lead' THEN 30
+                  WHEN 'tech' THEN 40
+                  ELSE 999
+                END,
+                r.code
+              LIMIT 1
+            ),
+            'unknown'
+          ) AS primary_role_code,
+          NOW()
+        FROM users u
+        WHERE u.user_id = ?
+      `,
+      [userId]
+    );
+
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function recordFailedLogin(email) {
@@ -324,6 +417,11 @@ async function setPasswordFromLink({ userPasswordLinkId, userId, passwordHash })
 }
 
 module.exports = {
+  DEFAULT_PASSWORD_LINK_EXPIRY_HOURS,
+  MIN_PASSWORD_LINK_EXPIRY_HOURS,
+  MAX_PASSWORD_LINK_EXPIRY_HOURS,
+  normalizePasswordLinkExpiryHours,
+  getPasswordLinkExpiryHours,
   normalizeEmail,
   getUserByEmail,
   getUserByIdWithRoles,

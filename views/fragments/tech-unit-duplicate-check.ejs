@@ -1,0 +1,119 @@
+<%
+  const safeMatches = Array.isArray(duplicateMatches) ? duplicateMatches : [];
+  const canCreateIntentionalDuplicateRequest = typeof canRequestIntentionalDuplicate !== 'undefined' && Boolean(canRequestIntentionalDuplicate);
+
+  function displayAssetTag(match) {
+    return match && match.assetTag ? match.assetTag : 'Existing unit without an Asset Tag';
+  }
+
+  function statusLabel(match) {
+    return match && match.isParked ? 'Parked' : 'Active';
+  }
+
+  function lotLabel(match) {
+    if (!match || match.isParked) {
+      return 'No current lot';
+    }
+
+    if (!match.lotName) {
+      return 'No current lot';
+    }
+
+    return match.isClosedLot ? `${match.lotName} (Closed)` : match.lotName;
+  }
+
+  function matchedByLabel(match) {
+    const identifiers = Array.isArray(match && match.matchedIdentifiers) ? match.matchedIdentifiers : [];
+
+    return identifiers
+      .map((identifier) => {
+        const inputLabels = Array.isArray(identifier.matchingInputs) ? identifier.matchingInputs.join(' / ') : '';
+        const typeLabel = identifier.identifierTypeLabel || 'serial identifier';
+        const value = identifier.identifierValue || '—';
+
+        return `${inputLabels || 'Serial'} matched ${typeLabel}: ${value}`;
+      })
+      .join('; ');
+  }
+%>
+
+<div data-duplicate-check-result data-duplicate-match-count="<%= safeMatches.length %>">
+<% if (hasSerialSearch && safeMatches.length === 0) { %>
+  <div class="message success">
+    <p><strong>No existing Unit Serial or BIOS Serial matches were found.</strong> You can continue entering this unit.</p>
+  </div>
+<% } %>
+
+<% if (safeMatches.length > 0) { %>
+  <div class="message warning">
+    <p><strong>Possible existing unit<%= safeMatches.length === 1 ? '' : 's' %> found.</strong> Select the intended candidate before creating another record.</p>
+    <p>Assuming an existing unit never creates a new Asset Tag. The selected work lot must explicitly allow duplicate-match assumption.</p>
+  </div>
+
+  <div class="workflow-list">
+    <% safeMatches.forEach((match) => { %>
+      <% const assumption = match.duplicateAssumption || {}; %>
+      <article class="workflow-item warning tech-duplicate-candidate-card">
+        <span></span>
+        <div style="width: 100%;">
+          <strong><%= displayAssetTag(match) %> — <%= statusLabel(match) %></strong>
+          <p><%= matchedByLabel(match) %></p>
+          <p>Current lot: <strong><%= lotLabel(match) %></strong></p>
+
+          <div class="tech-override-summary" style="margin-top: 12px;">
+            <dl>
+              <div>
+                <dt>Unit Serial</dt>
+                <dd><%= match.unitSerialNumber || '—' %></dd>
+              </div>
+              <div>
+                <dt>BIOS Serial</dt>
+                <dd><%= match.biosSerialNumber || '—' %></dd>
+              </div>
+              <div>
+                <dt>Model</dt>
+                <dd><%= match.modelSummary || '—' %></dd>
+              </div>
+              <div>
+                <dt>CPU</dt>
+                <dd><%= match.cpuSummary || '—' %></dd>
+              </div>
+              <div>
+                <dt>Assigned To</dt>
+                <dd><%= match.assignedToName || (match.isParked ? 'Unassigned while Parked' : 'Unassigned') %></dd>
+              </div>
+            </dl>
+          </div>
+
+          <% if (assumption.allowed) { %>
+            <div class="message success tech-duplicate-candidate-decision" style="margin-top: 12px;">
+              <p><%= assumption.message %></p>
+            </div>
+            <div class="form-actions tech-duplicate-candidate-actions">
+              <button type="button" class="primary-button" data-duplicate-assume-unit-id="<%= match.unitId %>">Assume Existing Unit</button>
+              <% if (canCreateIntentionalDuplicateRequest) { %>
+                <button type="button" class="secondary-button" data-intentional-duplicate-request-unit-id="<%= match.unitId %>" disabled aria-disabled="true">Request Intentional Duplicate</button>
+                <small class="field-hint" data-intentional-duplicate-request-readiness>Complete the required Create Unit details before requesting an intentional duplicate.</small>
+              <% } %>
+            </div>
+          <% } else { %>
+            <div class="message <%= assumption.requiresOverride ? 'warning' : 'info' %> tech-duplicate-candidate-decision" style="margin-top: 12px;">
+              <p><%= assumption.message || 'This existing unit cannot be assumed through the current Create Unit workflow.' %></p>
+            </div>
+            <div class="form-actions tech-duplicate-candidate-actions">
+              <% if (assumption.requiresOverride && !match.isParked) { %>
+                <button type="button" class="secondary-button" data-duplicate-request-override-unit-id="<%= match.unitId %>">Request Override</button>
+              <% } %>
+              <% if (canCreateIntentionalDuplicateRequest) { %>
+                <button type="button" class="secondary-button" data-intentional-duplicate-request-unit-id="<%= match.unitId %>" disabled aria-disabled="true">Request Intentional Duplicate</button>
+                <small class="field-hint" data-intentional-duplicate-request-readiness>Complete the required Create Unit details before requesting an intentional duplicate.</small>
+              <% } %>
+              <a class="secondary-button" href="/tech/units?search=<%= encodeURIComponent(match.assetTag || '') %>">Open Existing Unit</a>
+            </div>
+          <% } %>
+        </div>
+      </article>
+    <% }) %>
+  </div>
+<% } %>
+</div>

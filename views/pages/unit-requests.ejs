@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <link rel="stylesheet" href="/css/tech.css" />
+  <link rel="stylesheet" href="/css/unit-requests.css" />
+  <script defer src="/js/unit-requests.js"></script>
+
+  <%
+    const buildUnitRequestQueueUrl = (nextStatus = statusFilter, nextRequestType = requestTypeFilter, nextSearchTerm = searchTerm) => {
+      const params = new URLSearchParams({
+        status: nextStatus || 'pending',
+        requestType: nextRequestType || 'all'
+      });
+
+      if (nextSearchTerm) {
+        params.set('search', nextSearchTerm);
+      }
+
+      return `/unit-requests?${params.toString()}`;
+    };
+
+    const buildUnitRequestDetailUrl = (unitRequestId) => {
+      const params = new URLSearchParams({
+        status: statusFilter || 'pending',
+        requestType: requestTypeFilter || 'all'
+      });
+
+      if (searchTerm) {
+        params.set('search', searchTerm);
+      }
+
+      return `/unit-requests/${encodeURIComponent(unitRequestId)}?${params.toString()}`;
+    };
+
+    const isArchivedQueue = statusFilter === 'archived';
+  %>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell unit-requests-page unit-request-queue-page">
+          <section class="dashboard-hero accent-green">
+            <div>
+              <p class="eyebrow">Controlled Requests</p>
+              <h2>Unit Requests</h2>
+              <p>
+                <% if (canReviewRequests) { %>
+                  Review Intentional Duplicate and Catalog Exception requests before records or managed catalog values change.
+                <% } else { %>
+                  Track your Intentional Duplicate and Catalog Exception requests. A request does not change a Unit or managed catalog until it is approved.
+                <% } %>
+              </p>
+            </div>
+          </section>
+
+          <section class="unit-request-workspace" aria-labelledby="unit-request-workspace-heading">
+            <div class="unit-request-workspace-heading">
+              <h3 id="unit-request-workspace-heading"><%= isArchivedQueue ? 'Archived Requests' : (canReviewRequests ? 'Review Queue' : 'Request History') %></h3>
+              <% if (canReviewRequests && !canManageCatalogRequests) { %>
+                <p class="unit-requests-content-summary">Tech Leads can review all requests. Management and Admin approve or reject Catalog Exception requests.</p>
+              <% } %>
+            </div>
+
+            <% if (result.supported) { %>
+              <div class="unit-request-tabs-panel">
+                <nav class="unit-request-tabs" aria-label="Unit Request status filters">
+                  <% ['pending', 'approved', 'rejected', 'withdrawn', 'all', 'archived'].forEach((status) => { %>
+                    <a href="<%= buildUnitRequestQueueUrl(status) %>" class="unit-request-tab <%= statusFilter === status ? 'active' : '' %>" data-unit-request-status-tab data-unit-request-status="<%= status %>">
+                      <%= status === 'pending' ? 'Pending' : status.charAt(0).toUpperCase() + status.slice(1) %>
+                    </a>
+                  <% }) %>
+                </nav>
+              </div>
+
+              <form id="unit-request-queue-filters" class="unit-request-queue-filters" method="get" action="/unit-requests" aria-label="Find Unit Requests" data-unit-request-filter-form>
+                <input type="hidden" name="status" value="<%= statusFilter %>" />
+
+                <div class="unit-request-search-toolbar">
+                  <label class="unit-request-control-label" for="unit-request-search">Search Requests</label>
+                  <div class="unit-request-search-row">
+                    <div class="unit-request-search-input-group">
+                      <input
+                        id="unit-request-search"
+                        type="search"
+                        name="search"
+                        value="<%= searchTerm %>"
+                        maxlength="150"
+                        placeholder="Request #, requester, Asset Tag, serial, model, processor, or lot"
+                        autocomplete="off"
+                        autofocus
+                        data-unit-request-search
+                      />
+                    </div>
+                    <a class="unit-request-filter-clear" href="<%= buildUnitRequestQueueUrl(statusFilter, 'all', '') %>" data-unit-request-filter-clear <%= requestTypeFilter !== 'all' || searchTerm ? '' : 'hidden' %>>Clear filters</a>
+                  </div>
+                </div>
+              </form>
+            <% } %>
+          </section>
+
+          <% if (successMessage) { %>
+            <div class="message success"><p><%= successMessage %></p></div>
+          <% } %>
+
+          <% if (errorMessages.length > 0) { %>
+            <div class="message error">
+              <% errorMessages.forEach((errorMessage) => { %><p><%= errorMessage %></p><% }) %>
+            </div>
+          <% } %>
+
+          <% if (!result.supported) { %>
+            <div class="message error"><p><%= result.message %></p></div>
+          <% } else { %>
+            <% if (result.message) { %><div class="message info"><p><%= result.message %></p></div><% } %>
+
+            <section class="unit-request-results-panel" aria-labelledby="unit-request-results-heading">
+              <div class="unit-request-results-header">
+                <h3 id="unit-request-results-heading">Requests</h3>
+                <p class="unit-request-results-count" aria-live="polite" data-unit-request-results-count><%= `${result.requests.length} ${result.requests.length === 1 ? 'request' : 'requests'} shown` %></p>
+              </div>
+
+              <div class="unit-request-results-controls">
+                <label class="unit-request-control-label" for="unit-request-type-filter">Request Type</label>
+                <div class="unit-request-type-filter-row">
+                  <select id="unit-request-type-filter" name="requestType" form="unit-request-queue-filters" data-unit-request-type-filter>
+                    <option value="all" <%= requestTypeFilter === 'all' ? 'selected' : '' %>>All Types</option>
+                    <option value="intentional_duplicate" <%= requestTypeFilter === 'intentional_duplicate' ? 'selected' : '' %>>Intentional Duplicate</option>
+                    <option value="model_catalog_addition" <%= requestTypeFilter === 'model_catalog_addition' ? 'selected' : '' %>>Model Catalog Addition</option>
+                    <option value="processor_catalog_addition" <%= requestTypeFilter === 'processor_catalog_addition' ? 'selected' : '' %>>Processor Catalog Addition</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="unit-request-list-shell">
+                <div class="unit-request-list-heading" aria-hidden="true">
+                  <span>Request</span>
+                  <span>Requested Context</span>
+                  <span><%= isArchivedQueue ? 'Archived' : 'Submitted' %></span>
+                  <span></span>
+                </div>
+
+                <div class="unit-request-list">
+                  <div class="unit-request-empty-state" data-unit-request-empty-state <%= result.requests.length === 0 ? '' : 'hidden' %>><p data-unit-request-empty-message>No <%= statusFilter === 'all' ? '' : statusFilter %> Unit Requests match the current filters.</p></div>
+
+                  <% result.requests.forEach((request) => { %>
+                    <%
+                      const canWithdrawFromQueue = !canReviewRequests && request.isPending;
+                      const requestSearchIndex = [
+                        request.unitRequestId,
+                        request.requestTypeLabel,
+                        request.statusLabel,
+                        request.requestedByName,
+                        request.matchedUnitLabel,
+                        request.matchedUnitCurrentLotName,
+                        request.requestedDestinationLotName,
+                        request.createdUnitLabel,
+                        request.createdUnitLotName,
+                        request.serialSummary,
+                        request.matchedUnitSnapshot?.display?.serialSummary,
+                        request.listContextPrimary,
+                        request.listContextSecondary,
+                        request.catalogContext?.manufacturerName,
+                        request.catalogContext?.unitCategoryLabel,
+                        request.catalogContext?.requestedModelName,
+                        request.catalogContext?.unitModelName,
+                        request.catalogContext?.requestedProcessorType,
+                        request.catalogContext?.requestedProcessorName
+                      ].filter((value) => value !== null && value !== undefined && String(value).trim() !== '').join(' ').toLocaleLowerCase();
+                    %>
+                    <article class="unit-request-row unit-request-row--<%= request.statusClass %>" data-unit-request-row data-unit-request-type="<%= request.requestType %>" data-unit-request-search-index="<%= requestSearchIndex %>">
+                      <a
+                        class="unit-request-row-main-link<%= canWithdrawFromQueue ? '' : ' unit-request-row-main-link--full' %>"
+                        href="<%= buildUnitRequestDetailUrl(request.unitRequestId) %>"
+                        data-unit-request-detail-link
+                        aria-label="Open Unit Request #<%= request.unitRequestId %>: <%= request.requestTypeLabel %>"
+                      >
+                        <div class="unit-request-row-request">
+                          <span class="unit-request-number">Request #<%= request.unitRequestId %></span>
+                          <strong><%= request.requestTypeLabel %></strong>
+                          <span class="unit-request-status <%= request.statusClass %>"><%= request.statusLabel %></span>
+                        </div>
+
+                        <dl class="unit-request-row-summary">
+                          <div>
+                            <dt><%= request.isIntentionalDuplicateRequest ? 'Matching Existing Unit' : 'Requested Context' %></dt>
+                            <dd><%= request.listContextPrimary %></dd>
+                          </div>
+                          <div>
+                            <dt><%= request.isIntentionalDuplicateRequest ? 'Requested Lot' : 'Requested Detail' %></dt>
+                            <dd><%= request.listContextSecondary || '—' %></dd>
+                          </div>
+                          <div>
+                            <dt><%= isArchivedQueue ? 'Archived' : 'Submitted' %></dt>
+                            <dd><%= isArchivedQueue
+                              ? (request.archivedAt ? formatDateTime(request.archivedAt) : '—')
+                              : (request.submittedAt ? formatDateTime(request.submittedAt) : '—') %></dd>
+                            <small><%= isArchivedQueue
+                              ? `Resolved by ${request.reviewedByName || request.requestedByName}`
+                              : `by ${request.requestedByName}` %></small>
+                          </div>
+                        </dl>
+                      </a>
+
+                      <% if (canWithdrawFromQueue) { %>
+                        <div class="unit-request-row-actions">
+                          <form method="post" action="/unit-requests/<%= request.unitRequestId %>/withdraw">
+                            <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                            <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" data-unit-request-return-type />
+                            <input type="hidden" name="returnSearch" value="<%= searchTerm %>" data-unit-request-return-search />
+                            <button class="secondary-button" type="submit">Withdraw</button>
+                          </form>
+                        </div>
+                      <% } %>
+                    </article>
+                  <% }) %>
+                </div>
+              </div>
+            </section>
+          <% } %>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

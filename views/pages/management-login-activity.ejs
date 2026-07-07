@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: [
+      '/css/management.css?v=step7d-login-activity'
+    ]
+  }) %>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="dashboard-hero">
+            <div>
+              <p class="eyebrow">Step 7d</p>
+              <h2>Login Activity</h2>
+              <p>Review successful sign-ins by day. Times are shown in Dallas local time.</p>
+            </div>
+
+            <div class="hero-badge">
+              <span>Access</span>
+              <strong>Admin / Management</strong>
+            </div>
+          </section>
+
+          <section class="management-login-summary-grid" aria-label="Login activity summary">
+            <article class="management-login-summary-card">
+              <p class="eyebrow">Selected Date</p>
+              <strong><%= formatDate(`${selectedDate}T12:00:00.000Z`) %></strong>
+              <span>Dallas local reporting date.</span>
+            </article>
+
+            <article class="management-login-summary-card">
+              <p class="eyebrow">Signed In</p>
+              <strong><%= formatNumber(signedInUserCount) %></strong>
+              <span>Unique users with a successful sign-in.</span>
+            </article>
+
+            <article class="management-login-summary-card">
+              <p class="eyebrow">Successful Sign-ins</p>
+              <strong><%= formatNumber(successfulLoginCount) %></strong>
+              <span>Total successful sessions recorded for the day.</span>
+            </article>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header management-login-header">
+              <div>
+                <p class="eyebrow">Daily Sign-in Audit</p>
+                <h2>Successful Login Activity</h2>
+              </div>
+
+              <a class="secondary-button" href="/management/users">Back to Users</a>
+            </div>
+
+            <form class="management-login-filter-form" method="get" action="/management/login-activity">
+              <div class="form-field">
+                <label for="login-activity-date">Date</label>
+                <input id="login-activity-date" type="date" name="date" value="<%= selectedDate %>" max="<%= todayDate %>" required />
+              </div>
+
+              <div class="management-login-filter-actions">
+                <button type="submit" class="primary-button">View Activity</button>
+                <% if (selectedDate !== todayDate) { %>
+                  <a class="secondary-button" href="/management/login-activity">Today</a>
+                <% } %>
+              </div>
+            </form>
+
+            <p class="management-login-note">
+              This audit begins recording successful sign-ins after Step 7d is deployed. A user appears once per selected day, with their first and most recent successful sign-in shown.
+            </p>
+
+            <div class="table-card management-login-table-card">
+              <table>
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Role at First Sign-in</th>
+                    <th>First Sign-in</th>
+                    <th>Most Recent Sign-in</th>
+                    <th>Successful Sign-ins</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <% if (loginActivity.length === 0) { %>
+                    <tr>
+                      <td colspan="5">No successful sign-ins were recorded for this date.</td>
+                    </tr>
+                  <% } %>
+
+                  <% loginActivity.forEach((activity) => { %>
+                    <tr>
+                      <td>
+                        <div class="management-login-user">
+                          <strong><%= activity.first_name %> <%= activity.last_name %></strong>
+                          <span><%= activity.email %></span>
+                        </div>
+                      </td>
+                      <td><span class="pill slate"><%= activity.first_login_role_label %></span></td>
+                      <td><%= formatTime(activity.first_login_at) %></td>
+                      <td><%= formatTime(activity.last_login_at) %></td>
+                      <td><%= formatNumber(activity.successful_login_count) %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

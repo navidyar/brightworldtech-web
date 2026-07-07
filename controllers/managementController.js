@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const authModel = require('../models/authModel');
 const managementModel = require('../models/managementModel');
 const accessPolicy = require('../config/accessPolicy');
+const { APP_DISPLAY_TIME_ZONE, formatDateKey, getDayRangeUtc } = require('../utils/timeZone');
 
 function hashToken(rawToken) {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -172,7 +173,7 @@ function getSafeUserId(req) {
 async function createSetupLinkForUser(user, createdByUserId = null) {
   const token = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashToken(token);
-  const expiresInHours = Number(process.env.PASSWORD_SETUP_EXPIRES_HOURS || 24);
+  const expiresInHours = await authModel.getPasswordLinkExpiryHours();
   const expiresAt = addHours(new Date(), expiresInHours);
 
   const hasExistingPassword = user.has_password === true || Number(user.has_password) === 1;
@@ -236,6 +237,33 @@ async function renderInactiveUsersPage(req, res, next) {
     });
   } catch (error) {
     next(error);
+  }
+}
+
+async function renderLoginActivityPage(req, res, next) {
+  try {
+    const todayDate = formatDateKey(new Date(), APP_DISPLAY_TIME_ZONE);
+    const requestedDate = String(req.query.date || '').trim();
+    const selectedDate = getDayRangeUtc(requestedDate) ? requestedDate : todayDate;
+    const dayRange = getDayRangeUtc(selectedDate);
+
+    const loginActivity = await managementModel.listLoginActivityForDay(dayRange);
+    const successfulLoginCount = loginActivity.reduce(
+      (total, activity) => total + Number(activity.successful_login_count || 0),
+      0
+    );
+
+    return res.render('pages/management-login-activity', {
+      pageTitle: 'Login Activity',
+      currentNav: 'management-login-activity',
+      selectedDate,
+      todayDate,
+      loginActivity,
+      signedInUserCount: loginActivity.length,
+      successfulLoginCount
+    });
+  } catch (error) {
+    return next(error);
   }
 }
 
@@ -723,6 +751,7 @@ async function deletePendingSetupUser(req, res, next) {
 module.exports = {
   renderUsersPage,
   renderInactiveUsersPage,
+  renderLoginActivityPage,
   renderNewUserPage,
   createUser,
   renderEditUserModal,

@@ -8,9 +8,15 @@
     accessibleDashboards.length === 1
       ? `/dashboards/${accessibleDashboards[0].key}`
       : '/';
+
+  const dashboardSectionActive =
+    currentNav === 'dashboard' || String(currentNav || '').startsWith('dashboard:');
+  const managementSectionActive =
+    ['management', 'management-login-activity', 'management-config', 'management-unit-models', 'management-lots', 'management-overrides'].includes(currentNav);
+  const techSectionActive = currentNav === 'tech-units' || currentNav === 'unit-requests' || currentNav === 'management-overrides';
 %>
 
-<aside class="sidebar">
+<aside class="sidebar" id="app-sidebar" aria-label="Primary navigation">
   <div class="sidebar-brand">
     <a href="/" class="brand-card">
       <div class="brand-mark">BWT</div>
@@ -23,136 +29,132 @@
 
   <nav class="sidebar-nav">
     <% if (accessibleDashboards.length > 1) { %>
-      <details class="sidebar-group" <%= currentNav === 'dashboard' || String(currentNav || '').startsWith('dashboard:') ? 'open' : '' %>>
-        <summary>
-          <span class="sidebar-icon">⌂</span>
+      <section class="sidebar-section <%= dashboardSectionActive ? 'is-active' : '' %>">
+        <div class="sidebar-section-heading <%= dashboardSectionActive ? 'is-active' : '' %>">
+          <span class="sidebar-icon" aria-hidden="true">⌂</span>
           <span>Dashboard</span>
-        </summary>
+        </div>
 
         <div class="sidebar-subnav">
           <% accessibleDashboards.forEach((dashboard) => { %>
-            <a href="/dashboards/<%= dashboard.key %>" class="sidebar-sublink <%= currentNav === `dashboard:${dashboard.key}` ? 'active' : '' %>">
-              <span class="submenu-dot <%= dashboard.accent || 'slate' %>"></span>
+            <a href="/dashboards/<%= dashboard.key %>" class="sidebar-sublink <%= currentNav === `dashboard:${dashboard.key}` ? 'active' : '' %>" <%= currentNav === `dashboard:${dashboard.key}` ? 'aria-current="page"' : '' %>>
               <span><%= dashboard.menuLabel || dashboard.title %></span>
             </a>
           <% }) %>
         </div>
-      </details>
+      </section>
     <% } else { %>
-      <a href="<%= dashboardHref %>" class="sidebar-link <%= currentNav === 'dashboard' || String(currentNav || '').startsWith('dashboard:') ? 'active' : '' %>">
-        <span class="sidebar-icon">⌂</span>
+      <a href="<%= dashboardHref %>" class="sidebar-link <%= dashboardSectionActive ? 'active' : '' %>" <%= dashboardSectionActive ? 'aria-current="page"' : '' %>>
+        <span class="sidebar-icon" aria-hidden="true">⌂</span>
         <span>Dashboard</span>
       </a>
     <% } %>
 
     <% if (canAccessMenuArea('admin')) { %>
-      <details class="sidebar-group">
-        <summary>
-          <span class="sidebar-icon">✦</span>
+      <section class="sidebar-section">
+        <div class="sidebar-section-heading">
+          <span class="sidebar-icon" aria-hidden="true">✦</span>
           <span>Admin</span>
-        </summary>
+        </div>
 
         <div class="sidebar-subnav">
-          <span class="sidebar-sublink sidebar-sublink-muted">
-            <span class="submenu-dot purple"></span>
-            <span>Admin tools planned</span>
-          </span>
+          <span class="sidebar-sublink sidebar-sublink-muted">Admin tools planned</span>
         </div>
-      </details>
+      </section>
     <% } %>
 
     <% if (canAccessMenuArea('management')) { %>
-      <details class="sidebar-group" <%= currentNav === 'management' || currentNav === 'management-config' || currentNav === 'management-lots' || currentNav === 'management-overrides' ? 'open' : '' %>>
-        <summary>
-          <span class="sidebar-icon">◎</span>
+      <section class="sidebar-section <%= managementSectionActive ? 'is-active' : '' %>">
+        <div class="sidebar-section-heading <%= managementSectionActive ? 'is-active' : '' %>">
+          <span class="sidebar-icon" aria-hidden="true">◎</span>
           <span>Management</span>
-        </summary>
+        </div>
 
         <div class="sidebar-subnav">
-          <a href="/management/users" class="sidebar-sublink <%= currentNav === 'management' ? 'active' : '' %>">
-            <span class="submenu-dot blue"></span>
+          <a href="/management/users" class="sidebar-sublink <%= currentNav === 'management' ? 'active' : '' %>" <%= currentNav === 'management' ? 'aria-current="page"' : '' %>>
             <span>Users</span>
           </a>
 
-          <a href="/management/lots" class="sidebar-sublink <%= currentNav === 'management-lots' ? 'active' : '' %>">
-            <span class="submenu-dot green"></span>
+          <a href="/management/login-activity" class="sidebar-sublink <%= currentNav === 'management-login-activity' ? 'active' : '' %>" <%= currentNav === 'management-login-activity' ? 'aria-current="page"' : '' %>>
+            <span>Login Activity</span>
+          </a>
+
+          <a href="/management/lots" class="sidebar-sublink <%= currentNav === 'management-lots' ? 'active' : '' %>" <%= currentNav === 'management-lots' ? 'aria-current="page"' : '' %>>
             <span>Lots</span>
           </a>
 
           <% if (currentRoles.includes('admin')) { %>
-            <a href="/management/config" class="sidebar-sublink <%= currentNav === 'management-config' ? 'active' : '' %>">
-              <span class="submenu-dot slate"></span>
+            <a href="/management/config" class="sidebar-sublink <%= currentNav === 'management-config' ? 'active' : '' %>" <%= currentNav === 'management-config' ? 'aria-current="page"' : '' %>>
               <span>Config Values</span>
+            </a>
+            <a href="/management/config/models" class="sidebar-sublink <%= currentNav === 'management-unit-models' ? 'active' : '' %>" <%= currentNav === 'management-unit-models' ? 'aria-current="page"' : '' %>>
+              <span>Model Catalog</span>
             </a>
           <% } %>
 
-          <a href="/management/overrides" class="sidebar-sublink <%= currentNav === 'management-overrides' ? 'active' : '' %>">
-            <span class="submenu-dot red"></span>
+          <a href="/management/overrides" class="sidebar-sublink <%= currentNav === 'management-overrides' ? 'active' : '' %>" <%= currentNav === 'management-overrides' ? 'aria-current="page"' : '' %>>
             <span>Overrides</span>
           </a>
         </div>
-      </details>
+      </section>
     <% } %>
 
     <% if (canAccessMenuArea('tech')) { %>
-      <details class="sidebar-group" <%= currentNav === 'tech-units' ? 'open' : '' %>>
-        <summary>
-          <span class="sidebar-icon">▣</span>
+      <section class="sidebar-section <%= techSectionActive ? 'is-active' : '' %>">
+        <div class="sidebar-section-heading <%= techSectionActive ? 'is-active' : '' %>">
+          <span class="sidebar-icon" aria-hidden="true">▣</span>
           <span>Tech</span>
-        </summary>
+        </div>
 
         <div class="sidebar-subnav">
-          <a href="/tech/units" class="sidebar-sublink <%= currentNav === 'tech-units' ? 'active' : '' %>">
-            <span class="submenu-dot green"></span>
+          <a href="/tech/units" class="sidebar-sublink <%= currentNav === 'tech-units' ? 'active' : '' %>" <%= currentNav === 'tech-units' ? 'aria-current="page"' : '' %>>
             <span>Units</span>
           </a>
+          <a href="/unit-requests" class="sidebar-sublink <%= currentNav === 'unit-requests' ? 'active' : '' %>" <%= currentNav === 'unit-requests' ? 'aria-current="page"' : '' %>>
+            <span>Unit Requests</span>
+          </a>
           <% if (currentRoles.includes('tech_lead') && !currentRoles.some((roleCode) => ['admin', 'management'].includes(roleCode))) { %>
-            <a href="/management/overrides" class="sidebar-sublink <%= currentNav === 'management-overrides' ? 'active' : '' %>">
-              <span class="submenu-dot red"></span>
+            <a href="/management/overrides" class="sidebar-sublink <%= currentNav === 'management-overrides' ? 'active' : '' %>" <%= currentNav === 'management-overrides' ? 'aria-current="page"' : '' %>>
               <span>Overrides</span>
             </a>
           <% } %>
         </div>
-      </details>
+      </section>
     <% } %>
 
     <% if (canAccessMenuArea('warehouse')) { %>
-      <details class="sidebar-group">
-        <summary>
-          <span class="sidebar-icon">◇</span>
+      <section class="sidebar-section">
+        <div class="sidebar-section-heading">
+          <span class="sidebar-icon" aria-hidden="true">◇</span>
           <span>Warehouse</span>
-        </summary>
+        </div>
 
         <div class="sidebar-subnav">
-          <span class="sidebar-sublink sidebar-sublink-muted">
-            <span class="submenu-dot slate"></span>
-            <span>Warehouse tools planned</span>
-          </span>
+          <span class="sidebar-sublink sidebar-sublink-muted">Warehouse tools planned</span>
         </div>
-      </details>
+      </section>
     <% } %>
 
     <% if (canAccessMenuArea('sales')) { %>
-      <details class="sidebar-group">
-        <summary>
-          <span class="sidebar-icon">◈</span>
+      <section class="sidebar-section">
+        <div class="sidebar-section-heading">
+          <span class="sidebar-icon" aria-hidden="true">◈</span>
           <span>Sales</span>
-        </summary>
+        </div>
 
         <div class="sidebar-subnav">
-          <span class="sidebar-sublink sidebar-sublink-muted">
-            <span class="submenu-dot red"></span>
-            <span>Sales tools planned</span>
-          </span>
+          <span class="sidebar-sublink sidebar-sublink-muted">Sales tools planned</span>
         </div>
-      </details>
+      </section>
     <% } %>
 
     <% if (canAccessMenuArea('database')) { %>
-      <a href="/database" class="sidebar-link <%= currentNav === 'database' ? 'active' : '' %>">
-        <span class="sidebar-icon">⚙</span>
+      <a href="/database" class="sidebar-link <%= currentNav === 'database' ? 'active' : '' %>" <%= currentNav === 'database' ? 'aria-current="page"' : '' %>>
+        <span class="sidebar-icon" aria-hidden="true">⚙</span>
         <span>Database Check</span>
       </a>
     <% } %>
   </nav>
 </aside>
+
+<button type="button" class="sidebar-backdrop" data-sidebar-backdrop aria-label="Close navigation" hidden></button>

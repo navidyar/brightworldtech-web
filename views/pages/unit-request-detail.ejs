@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <link rel="stylesheet" href="/css/tech.css" />
+  <link rel="stylesheet" href="/css/unit-requests.css" />
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell unit-requests-page">
+          <section class="dashboard-hero accent-green">
+            <div>
+              <p class="eyebrow"><%= request.requestTypeLabel %></p>
+              <h2>Unit Request #<%= request.unitRequestId %></h2>
+              <p>
+                <%= request.isIntentionalDuplicateRequest
+                  ? 'Review the matching existing record, immutable requested intake snapshot, and request history.'
+                  : 'Review the original observed catalog value, requester explanation, canonical approval details, and request history.' %>
+              </p>
+            </div>
+
+            <div class="hero-badge"><span>Status</span><strong><%= request.statusLabel %></strong></div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header unit-request-detail-header">
+              <div>
+                <p class="eyebrow">Request Summary</p>
+                <h2><%= request.requestTypeLabel %></h2>
+                <p class="unit-request-detail-meta">
+                  Requested by <%= request.requestedByName %> · <%= request.submittedAt ? formatDateTime(request.submittedAt) : '—' %>
+                  <% if (request.isArchived) { %> · Archived <%= request.archivedAt ? formatDateTime(request.archivedAt) : '—' %><% } %>
+                </p>
+              </div>
+              <a class="secondary-button" href="<%= unitRequestQueueUrl %>">Back to Unit Requests</a>
+            </div>
+
+            <% if (successMessage) { %><div class="message success"><p><%= successMessage %></p></div><% } %>
+            <% if (errorMessages.length > 0) { %><div class="message error"><% errorMessages.forEach((errorMessage) => { %><p><%= errorMessage %></p><% }) %></div><% } %>
+
+            <% if (request.isIntentionalDuplicateRequest) { %>
+              <div class="unit-request-detail-grid unit-request-detail-overview">
+                <section class="unit-request-detail-card">
+                  <p class="eyebrow">Matching Existing Unit</p>
+                  <h3><%= request.matchedUnitLabel %></h3>
+                  <dl class="unit-request-detail-list">
+                    <div><dt>Current / Last Lot</dt><dd><%= request.matchedUnitCurrentLotName %></dd></div>
+                    <div><dt>Unit Serial</dt><dd><%= request.matchedUnitSnapshot.unitSerialNumber || '—' %></dd></div>
+                    <div><dt>BIOS Serial</dt><dd><%= request.matchedUnitSnapshot.biosSerialNumber || '—' %></dd></div>
+                    <div><dt>Model</dt><dd><%= request.matchedUnitSnapshot.modelSummary || '—' %></dd></div>
+                    <div><dt>Processor</dt><dd><%= request.matchedUnitSnapshot.cpuSummary || '—' %></dd></div>
+                    <div><dt>Assigned To</dt><dd><%= request.matchedUnitSnapshot.assignedToName || 'Unassigned' %></dd></div>
+                  </dl>
+                </section>
+
+                <section class="unit-request-detail-card">
+                  <p class="eyebrow">Requested New Unit</p>
+                  <h3>Immutable Intake Snapshot</h3>
+                  <dl class="unit-request-detail-list">
+                    <div><dt>Destination Lot</dt><dd><%= request.snapshotDisplay.destinationLotName || request.requestedDestinationLotName %></dd></div>
+                    <div><dt>Category</dt><dd><%= request.snapshotDisplay.unitCategoryLabel || '—' %></dd></div>
+                    <div><dt>Manufacturer</dt><dd><%= request.snapshotDisplay.manufacturerLabel || '—' %></dd></div>
+                    <div><dt>Model</dt><dd><%= request.snapshotDisplay.modelLabel || '—' %></dd></div>
+                    <div><dt>Processor</dt><dd><%= request.snapshotDisplay.processorLabel || '—' %></dd></div>
+                    <div><dt>Operating System</dt><dd><%= request.snapshotDisplay.operatingSystemLabel || '—' %></dd></div>
+                    <div><dt>Serials</dt><dd><%= request.snapshotDisplay.serialSummary || '—' %></dd></div>
+                  </dl>
+                </section>
+              </div>
+            <% } else if (request.catalogContext && request.catalogContext.kind === 'model') { %>
+              <div class="unit-request-detail-grid unit-request-detail-overview">
+                <section class="unit-request-detail-card">
+                  <p class="eyebrow">Observed Model</p>
+                  <h3><%= request.catalogContext.requestedModelName %></h3>
+                  <dl class="unit-request-detail-list">
+                    <div><dt>Manufacturer</dt><dd><%= request.catalogContext.manufacturerName %></dd></div>
+                    <div><dt>Unit Category</dt><dd><%= request.catalogContext.unitCategoryLabel %></dd></div>
+                  </dl>
+                </section>
+                <section class="unit-request-detail-card">
+                  <p class="eyebrow">Canonical Approval Result</p>
+                  <h3><%= request.catalogContext.approvedModelName || 'Pending Review' %></h3>
+                  <dl class="unit-request-detail-list">
+                    <div><dt>Managed Unit Model</dt><dd><%= request.catalogContext.approvedUnitModelLabel || 'Not added yet' %></dd></div>
+                    <div><dt>Result</dt><dd><%= request.status === 'approved' ? 'Available for Create Unit selection' : 'No catalog change yet' %></dd></div>
+                  </dl>
+                </section>
+              </div>
+            <% } else if (request.catalogContext && request.catalogContext.kind === 'processor') { %>
+              <div class="unit-request-detail-grid unit-request-detail-overview">
+                <section class="unit-request-detail-card">
+                  <p class="eyebrow">Observed Processor</p>
+                  <h3><%= request.catalogContext.requestedProcessorName %></h3>
+                  <dl class="unit-request-detail-list">
+                    <div><dt>Processor Type</dt><dd><%= request.catalogContext.requestedProcessorType %></dd></div>
+                    <div><dt>Manufacturer</dt><dd><%= request.catalogContext.manufacturerName %></dd></div>
+                    <div><dt>Unit Model</dt><dd><%= request.catalogContext.unitModelName %></dd></div>
+                    <div><dt>Unit Category</dt><dd><%= request.catalogContext.unitCategoryLabel %></dd></div>
+                  </dl>
+                </section>
+                <section class="unit-request-detail-card">
+                  <p class="eyebrow">Canonical Approval Result</p>
+                  <h3><%= request.catalogContext.approvedProcessorModelLabel || 'Pending Review' %></h3>
+                  <dl class="unit-request-detail-list">
+                    <div><dt>Processor Type</dt><dd><%= request.catalogContext.approvedProcessorBrandName || 'Not selected yet' %></dd></div>
+                    <div><dt>Compatibility</dt><dd><%= request.status === 'approved' ? `Mapped to ${request.catalogContext.unitModelName}` : 'No catalog change yet' %></dd></div>
+                  </dl>
+                </section>
+              </div>
+            <% } %>
+
+            <section class="unit-request-detail-section">
+              <p class="eyebrow">Requester Explanation</p>
+              <p class="unit-request-requester-note"><%= request.requesterNote || 'No requester note entered.' %></p>
+            </section>
+
+            <% if (request.isIntentionalDuplicateRequest && request.createdUnitId) { %>
+              <section class="unit-request-detail-section">
+                <p class="eyebrow">Approval Result</p>
+                <p>Created Unit: <a href="/tech/units?search=<%= encodeURIComponent(request.createdUnitLabel || '') %>"><%= request.createdUnitLabel || `Unit #${request.createdUnitId}` %></a></p>
+              </section>
+            <% } %>
+
+            <% if (canReviewThisRequest && request.isPending) { %>
+              <section class="unit-request-review-panel">
+                <div>
+                  <p class="eyebrow">Reviewer Action</p>
+                  <h3>Approve or Reject</h3>
+                  <p>
+                    <%= request.isIntentionalDuplicateRequest
+                      ? 'Approval creates the requested new Unit in the original destination lot only if that lot is still open, visible, and assignable.'
+                      : 'Approval writes only the canonical catalog value or compatibility mapping shown here. It does not create a Unit.' %>
+                  </p>
+                </div>
+
+                <% if (request.isIntentionalDuplicateRequest) { %>
+                  <div class="unit-request-review-actions">
+                    <form method="post" action="/unit-requests/<%= request.unitRequestId %>/approve">
+                      <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                      <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                      <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                      <label class="form-field"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional approval context"></textarea></label>
+                      <button class="primary-button" type="submit">Approve and Create New Unit</button>
+                    </form>
+                    <form method="post" action="/unit-requests/<%= request.unitRequestId %>/reject">
+                      <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                      <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                      <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                      <label class="form-field"><span>Rejection Note</span><textarea name="reviewerNote" rows="3" minlength="3" maxlength="1000" required placeholder="Explain why this should not create a new unit."></textarea></label>
+                      <button class="secondary-button" type="submit">Reject Request</button>
+                    </form>
+                  </div>
+                <% } else if (request.catalogContext && request.catalogContext.kind === 'model') { %>
+                  <div class="unit-request-review-actions">
+                    <form method="post" action="/unit-requests/<%= request.unitRequestId %>/approve">
+                      <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                      <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                      <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                      <label class="form-field"><span>Canonical Unit Model Name</span><input type="text" name="approvedModelName" value="<%= request.catalogContext.requestedModelName %>" minlength="2" maxlength="150" required /></label>
+                      <label class="form-field"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional normalization or source note"></textarea></label>
+                      <button class="primary-button" type="submit">Approve Model Request</button>
+                    </form>
+                    <form method="post" action="/unit-requests/<%= request.unitRequestId %>/reject">
+                      <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                      <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                      <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                      <label class="form-field"><span>Rejection Note</span><textarea name="reviewerNote" rows="3" minlength="3" maxlength="1000" required placeholder="Explain why this model should not be added or reactivated."></textarea></label>
+                      <button class="secondary-button" type="submit">Reject Request</button>
+                    </form>
+                  </div>
+                <% } else if (request.catalogContext && request.catalogContext.kind === 'processor') { %>
+                  <div class="unit-request-review-actions">
+                    <form method="post" action="/unit-requests/<%= request.unitRequestId %>/approve">
+                      <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                      <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                      <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                      <div class="form-grid">
+                        <label class="form-field"><span>Canonical Processor Type</span><select name="approvedProcessorBrandId" required><option value="">Select Processor Type</option><% processorBrands.forEach((processorBrand) => { %><option value="<%= processorBrand.id %>"><%= processorBrand.label %></option><% }) %></select></label>
+                        <label class="form-field"><span>Canonical Processor</span><input type="text" name="approvedProcessorModelCode" value="<%= request.catalogContext.requestedProcessorName %>" minlength="2" maxlength="100" required /></label>
+                        <label class="form-field"><span>Processor Family <small>(optional)</small></span><input type="text" name="approvedProcessorFamily" maxlength="100" placeholder="Example: Core i5" /></label>
+                        <label class="form-field"><span>Generation <small>(optional)</small></span><input type="text" name="approvedProcessorGeneration" maxlength="50" placeholder="Example: 10th Gen" /></label>
+                        <label class="form-field"><span>Base Speed GHz <small>(optional)</small></span><input type="number" name="approvedProcessorBaseSpeedGhz" min="0" max="99.99" step="0.01" placeholder="Example: 1.60" /></label>
+                      </div>
+                      <label class="form-field"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional compatibility or normalization note"></textarea></label>
+                      <button class="primary-button" type="submit">Approve Processor Request</button>
+                    </form>
+                    <form method="post" action="/unit-requests/<%= request.unitRequestId %>/reject">
+                      <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                      <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                      <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                      <label class="form-field"><span>Rejection Note</span><textarea name="reviewerNote" rows="3" minlength="3" maxlength="1000" required placeholder="Explain why this processor should not be added or mapped."></textarea></label>
+                      <button class="secondary-button" type="submit">Reject Request</button>
+                    </form>
+                  </div>
+                <% } %>
+              </section>
+            <% } else if (canReviewRequests && request.isCatalogRequest && request.isPending && !canManageCatalogRequests) { %>
+              <section class="unit-request-detail-section">
+                <p class="eyebrow">Catalog Review Access</p>
+                <p>Tech Leads can inspect Catalog Exception requests, but only Management and Admin can approve or reject managed catalog changes.</p>
+              </section>
+            <% } else if (canWithdrawRequest) { %>
+              <section class="unit-request-review-panel">
+                <div><p class="eyebrow">Requester Action</p><h3>Withdraw Pending Request</h3><p>Withdrawing does not change any Unit record or catalog value and cannot be undone.</p></div>
+                <form method="post" action="/unit-requests/<%= request.unitRequestId %>/withdraw">
+                  <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                      <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                      <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                  <label class="form-field"><span>Withdrawal Note <small>(optional)</small></span><textarea name="withdrawalNote" rows="3" maxlength="1000" placeholder="Optional context"></textarea></label>
+                  <button class="secondary-button" type="submit">Withdraw Request</button>
+                </form>
+              </section>
+            <% } else if (!request.isPending && request.reviewerNote) { %>
+              <section class="unit-request-detail-section">
+                <p class="eyebrow">Reviewer Note</p>
+                <p class="unit-request-requester-note"><%= request.reviewerNote %></p>
+                <p class="table-muted-line"><%= request.reviewedByName || 'Reviewed' %> · <%= request.reviewedAt ? formatDateTime(request.reviewedAt) : '—' %></p>
+              </section>
+            <% } %>
+
+            <section class="unit-request-detail-section">
+              <p class="eyebrow">Request History</p>
+              <ol class="unit-request-event-list">
+                <% if (!request.events || request.events.length === 0) { %><li>No request history was recorded.</li><% } %>
+                <% (request.events || []).forEach((event) => { %>
+                  <li>
+                    <strong><%= event.eventType.charAt(0).toUpperCase() + event.eventType.slice(1) %></strong>
+                    <span><%= event.performedByName %> · <%= event.occurredAt ? formatDateTime(event.occurredAt) : '—' %></span>
+                    <% if (event.eventNote) { %><p><%= event.eventNote %></p><% } %>
+                  </li>
+                <% }) %>
+              </ol>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

@@ -81,7 +81,7 @@ function getConfigSection(categoryCode) {
     };
   }
 
-  if (code.includes('role') || code.includes('permission') || code.includes('access') || code.includes('user')) {
+  if (code.includes('role') || code.includes('permission') || code.includes('access') || code.includes('user') || code.includes('security')) {
     return {
       key: 'system-access',
       label: 'System and Access Configuration',

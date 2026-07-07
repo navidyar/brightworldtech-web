@@ -337,7 +337,8 @@ async function getLotSchemaCapabilities() {
     hasObjectives: Boolean(pickColumn(lotColumns, ['objectives', 'objective'])),
     hasNotes: Boolean(pickColumn(lotColumns, ['notes', 'note'])),
     hasLabelFormat: hasColumn(lotColumns, 'label_format'),
-    hasClosedState: hasColumn(lotColumns, 'is_closed')
+    hasClosedState: hasColumn(lotColumns, 'is_closed'),
+    hasDuplicateUnitAssumption: hasColumn(lotColumns, 'allow_duplicate_unit_assumption')
   };
 }
 
@@ -474,6 +475,14 @@ async function listLots(options = {}) {
     lotColumns,
     ['is_closed'],
     'is_closed',
+    '0'
+  );
+
+  const allowDuplicateUnitAssumptionSelect = selectExpression(
+    'l',
+    lotColumns,
+    ['allow_duplicate_unit_assumption'],
+    'allow_duplicate_unit_assumption',
     '0'
   );
 
@@ -644,6 +653,7 @@ async function listLots(options = {}) {
       ${labelFormatSelect},
       ${isActiveSelect},
       ${isClosedSelect},
+      ${allowDuplicateUnitAssumptionSelect},
       ${createdAtSelect},
       ${updatedAtSelect},
       ${unitCountSelect},
@@ -742,6 +752,7 @@ async function createLot(formData, currentUserId) {
   const objectives = String(formData.objectives || '').trim() || null;
   const notes = String(formData.notes || '').trim() || null;
   const labelFormat = String(formData.labelFormat || '').trim() || null;
+  const allowDuplicateUnitAssumption = formData.allowDuplicateUnitAssumption === '1' ? 1 : 0;
 
   if (hasColumn(lotColumns, 'lot_number')) {
     const nextLotNumber = await generateNextLotNumber();
@@ -785,6 +796,7 @@ async function createLot(formData, currentUserId) {
   addFirstAvailableColumn(['objectives', 'objective'], objectives);
   addFirstAvailableColumn(['notes', 'note'], notes);
   addColumn('label_format', labelFormat);
+  addColumn('allow_duplicate_unit_assumption', allowDuplicateUnitAssumption);
   addColumn('is_active', 1);
   addColumn('created_by_user_id', currentUserId || null);
   addColumn('updated_by_user_id', currentUserId || null);
@@ -846,6 +858,7 @@ async function updateLot(lotId, formData, currentUserId) {
   const objectives = String(formData.objectives || '').trim() || null;
   const notes = String(formData.notes || '').trim() || null;
   const labelFormat = String(formData.labelFormat || '').trim() || null;
+  const allowDuplicateUnitAssumption = formData.allowDuplicateUnitAssumption === '1' ? 1 : 0;
 
   addFirstAvailableColumn(['lot_name', 'name', 'title'], lotName);
   addColumn('parent_lot_id', parentLotId);
@@ -858,6 +871,7 @@ async function updateLot(lotId, formData, currentUserId) {
   addFirstAvailableColumn(['objectives', 'objective'], objectives);
   addFirstAvailableColumn(['notes', 'note'], notes);
   addColumn('label_format', labelFormat);
+  addColumn('allow_duplicate_unit_assumption', allowDuplicateUnitAssumption);
   addColumn('updated_by_user_id', currentUserId || null);
 
   if (hasColumn(lotColumns, 'requirement_policy_config_value_id')) {

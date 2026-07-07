@@ -1,0 +1,178 @@
+<%
+  const safeCandidate = candidate || null;
+  const safeFormData = formData || {};
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const display = snapshotDisplay || {};
+  const matchingIdentifiers = Array.isArray(safeCandidate && safeCandidate.matchedIdentifiers)
+    ? safeCandidate.matchedIdentifiers
+    : [];
+
+  function unitLabel() {
+    return safeCandidate && safeCandidate.assetTag
+      ? safeCandidate.assetTag
+      : 'Existing unit';
+  }
+
+  function currentLotLabel() {
+    if (!safeCandidate || safeCandidate.isParked) {
+      return 'Parked — no current lot';
+    }
+
+    return safeCandidate.lotName || 'No current lot';
+  }
+
+  function matchedByLabel() {
+    return matchingIdentifiers.map((identifier) => {
+      const sourceFields = Array.isArray(identifier.matchingInputs) && identifier.matchingInputs.length > 0
+        ? identifier.matchingInputs.join(' / ')
+        : 'Serial';
+      return `${sourceFields} matched ${identifier.identifierTypeLabel || 'serial identifier'}: ${identifier.identifierValue || '—'}`;
+    }).join('; ');
+  }
+%>
+
+<div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close data-modal-escape-close>
+  <section class="modal-panel tech-unit-modal unit-request-modal" role="dialog" aria-modal="true" aria-labelledby="tech-unit-intentional-duplicate-request-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Unit Request</p>
+        <h2 id="tech-unit-intentional-duplicate-request-title">Request Intentional Duplicate</h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (successRequestId) { %>
+        <div class="message success">
+          <p>Intentional Duplicate request #<%= successRequestId %> is pending review. No new Unit or Asset Tag was created.</p>
+        </div>
+
+        <div class="tech-override-summary">
+          <dl>
+            <div>
+              <dt>Matching Existing Unit</dt>
+              <dd><%= unitLabel() %></dd>
+            </div>
+            <div>
+              <dt>Requested Lot</dt>
+              <dd><%= display.destinationLotName || '—' %></dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>Pending Review</dd>
+            </div>
+          </dl>
+        </div>
+
+        <div class="form-actions">
+          <a class="primary-button" href="/unit-requests/<%= successRequestId %>">View Unit Request</a>
+          <button type="button" class="secondary-button" data-modal-close>Done</button>
+        </div>
+      <% } else { %>
+        <% if (safeErrors.length > 0) { %>
+          <div class="message error">
+            <% safeErrors.forEach((errorMessage) => { %>
+              <p><%= errorMessage %></p>
+            <% }) %>
+          </div>
+        <% } %>
+
+        <% if (safeCandidate) { %>
+          <div class="message warning">
+            <p>
+              Use this only when you have a separate physical unit that genuinely needs its own record.
+              Approval creates a new Unit and a new Asset Tag; the matching existing unit remains unchanged.
+            </p>
+          </div>
+
+          <div class="tech-override-summary">
+            <dl>
+              <div>
+                <dt>Matching Existing Unit</dt>
+                <dd><%= unitLabel() %></dd>
+              </div>
+              <div>
+                <dt>Current / Last Lot</dt>
+                <dd><%= currentLotLabel() %></dd>
+              </div>
+              <div>
+                <dt>Matched By</dt>
+                <dd><%= matchedByLabel() || 'Serial match' %></dd>
+              </div>
+              <div>
+                <dt>Assigned To</dt>
+                <dd><%= safeCandidate.assignedToName || (safeCandidate.isParked ? 'Unassigned while Parked' : 'Unassigned') %></dd>
+              </div>
+            </dl>
+          </div>
+
+          <% if (intakeSnapshotJson) { %>
+            <section class="unit-request-snapshot-summary" aria-label="Requested new unit summary">
+              <p class="eyebrow">Requested New Unit</p>
+              <dl class="tech-override-summary">
+                <div>
+                  <dt>Destination Lot</dt>
+                  <dd><%= display.destinationLotName || '—' %></dd>
+                </div>
+                <div>
+                  <dt>Model</dt>
+                  <dd><%= [display.manufacturerLabel, display.modelLabel].filter((value) => value && value !== '—').join(' · ') || '—' %></dd>
+                </div>
+                <div>
+                  <dt>Processor</dt>
+                  <dd><%= display.processorLabel || '—' %></dd>
+                </div>
+                <div>
+                  <dt>Category</dt>
+                  <dd><%= display.unitCategoryLabel || '—' %></dd>
+                </div>
+                <div>
+                  <dt>Operating System</dt>
+                  <dd><%= display.operatingSystemLabel || '—' %></dd>
+                </div>
+                <div>
+                  <dt>Serials</dt>
+                  <dd><%= display.serialSummary || '—' %></dd>
+                </div>
+              </dl>
+            </section>
+
+            <form
+              class="app-form unit-request-form"
+              method="post"
+              action="/tech/units/<%= safeCandidate.unitId %>/intentional-duplicate-request"
+              hx-post="/tech/units/<%= safeCandidate.unitId %>/intentional-duplicate-request"
+              hx-target="#modal-root"
+              hx-swap="innerHTML"
+            >
+              <input type="hidden" name="unitSerialNumber" value="<%= safeFormData.unitSerialNumber %>" />
+              <input type="hidden" name="biosSerialNumber" value="<%= safeFormData.biosSerialNumber %>" />
+              <input type="hidden" name="destinationLotId" value="<%= safeFormData.destinationLotId %>" />
+              <input type="hidden" name="duplicateAssumptionNonce" value="<%= safeFormData.duplicateAssumptionNonce %>" />
+              <input type="hidden" name="intakeSnapshotJson" value="<%= intakeSnapshotJson %>" />
+
+              <label class="form-field">
+                <span>Why does this require a separate Unit record?</span>
+                <textarea name="requesterNote" rows="5" minlength="10" maxlength="1000" required placeholder="Explain why the matching record is not the same physical unit."><%= requesterNote || '' %></textarea>
+                <small class="field-hint">At least 10 characters. The reviewer will compare this request with the matching existing unit.</small>
+              </label>
+
+              <div class="form-actions">
+                <button class="primary-button" type="submit">Send Intentional Duplicate Request</button>
+                <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+              </div>
+            </form>
+          <% } else { %>
+            <div class="form-actions">
+              <button type="button" class="primary-button" data-modal-close>Close</button>
+            </div>
+          <% } %>
+        <% } else { %>
+          <div class="form-actions">
+            <button type="button" class="primary-button" data-modal-close>Close</button>
+          </div>
+        <% } %>
+      <% } %>
+    </div>
+  </section>
+</div>

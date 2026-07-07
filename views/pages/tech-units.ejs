@@ -77,6 +77,7 @@
                               name="unitState"
                               value="parked"
                               data-unit-state-toggle
+                              data-tech-filter-auto-submit
                               <%= filters.unitState === 'parked' ? 'checked' : '' %>
                             />
                             <span class="tech-unit-state-toggle-track" aria-hidden="true"></span>
@@ -103,7 +104,7 @@
                   <div class="tech-filter-grid" aria-label="Unit filters">
                     <label class="form-field">
                       <span>Assignable Lot</span>
-                      <select name="lotId">
+                      <select name="lotId" data-tech-filter-auto-submit>
                         <option value="">All visible lots</option>
                         <% result.lots.forEach((lot) => { %>
                           <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>><%= lot.lot_name %></option>
@@ -114,7 +115,7 @@
 
                     <label class="form-field">
                       <span>Category</span>
-                      <select name="categoryId">
+                      <select name="categoryId" data-tech-filter-auto-submit>
                         <option value="">All categories</option>
                         <% unitCategoryOptions.forEach((category) => { %>
                           <option value="<%= category.id %>" <%= String(filters.categoryId) === String(category.id) ? 'selected' : '' %>><%= category.label %></option>
@@ -124,7 +125,7 @@
 
                     <label class="form-field">
                       <span>Grade</span>
-                      <select name="gradeFilter">
+                      <select name="gradeFilter" data-tech-filter-auto-submit>
                         <option value="">All grades</option>
                         <option value="current" <%= filters.gradeFilter === 'current' ? 'selected' : '' %>>Has current grade</option>
                         <option value="needs" <%= filters.gradeFilter === 'needs' ? 'selected' : '' %>>Needs grade</option>
@@ -137,7 +138,7 @@
                     <% if (!isRegularTechBrowserUser) { %>
                       <label class="form-field">
                         <span>Tech User</span>
-                        <select name="techUserId">
+                        <select name="techUserId" data-tech-filter-auto-submit>
                           <option value="">All Tech Users</option>
                           <% techUserOptions.forEach((techUser) => { %>
                             <option value="<%= techUser.id %>" <%= String(filters.techUserId) === String(techUser.id) ? 'selected' : '' %>><%= techUser.label %> (<%= formatNumber(techUser.count) %>)</option>
@@ -146,15 +147,21 @@
                       </label>
                     <% } %>
 
-                    <label class="form-field">
-                      <span>Created From</span>
-                      <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="createdStartDate" value="<%= filters.createdStartDate || '' %>" />
-                    </label>
+                    <fieldset class="form-field tech-created-date-range">
+                      <legend>Created Date Range</legend>
+                      <div class="tech-created-date-range-inputs">
+                        <label>
+                          <span>From</span>
+                          <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="createdStartDate" value="<%= filters.createdStartDate || '' %>" />
+                        </label>
 
-                    <label class="form-field">
-                      <span>Created Through</span>
-                      <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="createdEndDate" value="<%= filters.createdEndDate || '' %>" />
-                    </label>
+                        <label>
+                          <span>Through</span>
+                          <input type="date" data-date-picker-only inputmode="none" autocomplete="off" name="createdEndDate" value="<%= filters.createdEndDate || '' %>" />
+                        </label>
+                      </div>
+                      <small class="field-hint">Set both dates as needed, then choose Apply Filters.</small>
+                    </fieldset>
                   </div>
                 </div>
 

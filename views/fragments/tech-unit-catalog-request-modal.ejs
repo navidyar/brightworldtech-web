@@ -1,0 +1,112 @@
+<%
+  const safeKind = requestKind === 'processor' ? 'processor' : 'model';
+  const safeContext = context || {};
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const isModelRequest = safeKind === 'model';
+  const title = isModelRequest ? 'Request Model Addition' : 'Request Processor Addition';
+  const description = isModelRequest
+    ? 'This creates a review request only. It does not add a model or create a Unit until Management or Admin approves it.'
+    : 'This creates a review request only. It does not change the processor catalog or create a Unit until Management or Admin approves it.';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close data-modal-escape-close>
+  <section class="modal-panel tech-unit-modal unit-request-modal" role="dialog" aria-modal="true" aria-labelledby="catalog-request-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Catalog Exception</p>
+        <h2 id="catalog-request-title"><%= title %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (successRequestId) { %>
+        <div class="message success">
+          <p><%= title %> #<%= successRequestId %> is pending review. No catalog value was changed.</p>
+        </div>
+        <div class="form-actions">
+          <a class="primary-button" href="/unit-requests/<%= successRequestId %>">View Unit Request</a>
+          <button type="button" class="secondary-button" data-modal-close>Done</button>
+        </div>
+      <% } else { %>
+        <% if (safeErrors.length > 0) { %>
+          <div class="message error">
+            <% safeErrors.forEach((errorMessage) => { %><p><%= errorMessage %></p><% }) %>
+          </div>
+        <% } %>
+
+        <% if (safeContext.manufacturerName || safeContext.unitModelName) { %>
+          <div class="message info">
+            <p><%= description %></p>
+          </div>
+        <% } %>
+
+        <% if (isModelRequest && safeErrors.length === 0 && safeContext.manufacturerName && safeContext.unitCategoryLabel && safeContext.requestedModelName) { %>
+          <div class="tech-override-summary">
+            <dl>
+              <div><dt>Manufacturer</dt><dd><%= safeContext.manufacturerName %></dd></div>
+              <div><dt>Unit Category</dt><dd><%= safeContext.unitCategoryLabel %></dd></div>
+              <div><dt>Observed Model</dt><dd><%= safeContext.requestedModelName %></dd></div>
+              <% if (safeContext.inactiveMatch) { %><div><dt>Existing Catalog State</dt><dd>Inactive model found; approval can reactivate it.</dd></div><% } %>
+            </dl>
+          </div>
+
+          <form class="app-form unit-request-form" method="post" action="/tech/unit-catalog-requests/model" hx-post="/tech/unit-catalog-requests/model" hx-target="#modal-root" hx-swap="innerHTML">
+            <input type="hidden" name="manufacturerId" value="<%= safeContext.manufacturerId %>" />
+            <input type="hidden" name="unitCategoryConfigValueId" value="<%= safeContext.unitCategoryConfigValueId %>" />
+            <input type="hidden" name="requestedModelName" value="<%= safeContext.requestedModelName %>" />
+
+            <label class="form-field">
+              <span>Where was this exact model name observed?</span>
+              <textarea name="requesterNote" rows="4" minlength="10" maxlength="1000" required placeholder="Example: Model printed on the chassis and confirmed in BIOS."><%= requesterNote || '' %></textarea>
+              <small class="field-hint">At least 10 characters. The original observed model wording remains part of the request history.</small>
+            </label>
+
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Send Model Request</button>
+              <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            </div>
+          </form>
+        <% } else if (!isModelRequest && safeErrors.length === 0 && safeContext.unitModelName) { %>
+          <div class="tech-override-summary">
+            <dl>
+              <div><dt>Manufacturer</dt><dd><%= safeContext.manufacturerName %></dd></div>
+              <div><dt>Unit Model</dt><dd><%= safeContext.unitModelName %></dd></div>
+              <div><dt>Unit Category</dt><dd><%= safeContext.unitCategoryLabel %></dd></div>
+            </dl>
+          </div>
+
+          <form class="app-form unit-request-form" method="post" action="/tech/unit-catalog-requests/processor" hx-post="/tech/unit-catalog-requests/processor" hx-target="#modal-root" hx-swap="innerHTML">
+            <input type="hidden" name="unitModelId" value="<%= safeContext.unitModelId %>" />
+
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Observed Processor Type</span>
+                <input type="text" name="requestedProcessorType" value="<%= requestedProcessorType || '' %>" maxlength="100" required placeholder="Example: Intel, AMD, Apple, Qualcomm" />
+              </label>
+              <label class="form-field">
+                <span>Observed Processor</span>
+                <input type="text" name="requestedProcessorName" value="<%= requestedProcessorName || '' %>" maxlength="150" required placeholder="Exact value from BIOS or ScanTools" />
+              </label>
+            </div>
+
+            <label class="form-field">
+              <span>Where was this processor observed?</span>
+              <textarea name="requesterNote" rows="4" minlength="10" maxlength="1000" required placeholder="Example: BIOS CPU string and ScanTools output both report this processor."><%= requesterNote || '' %></textarea>
+              <small class="field-hint">At least 10 characters. Approval can add a processor or map an existing processor only to this Unit Model.</small>
+            </label>
+
+            <div class="form-actions">
+              <button class="primary-button" type="submit">Send Processor Request</button>
+              <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            </div>
+          </form>
+        <% } else { %>
+          <div class="form-actions">
+            <button type="button" class="primary-button" data-modal-close>Close</button>
+          </div>
+        <% } %>
+      <% } %>
+    </div>
+  </section>
+</div>

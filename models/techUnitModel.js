@@ -110,7 +110,9 @@ async function getTableColumns(tableName) {
     'config_values',
     'manufacturers',
     'unit_models',
+    'processor_brands',
     'processor_models',
+    'unit_model_processor_options',
     'unit_identifiers',
     'unit_memory_modules',
     'unit_storage_devices',
@@ -253,7 +255,8 @@ async function listManufacturers() {
   }));
 }
 
-async function listUnitModels() {
+async function listUnitModels(options = {}) {
+  const includeUnitModelId = normalizeOptionalInteger(options.includeUnitModelId);
   const columns = await getTableColumns('unit_models');
 
   if (!hasColumn(columns, 'unit_model_id')) {
@@ -270,7 +273,12 @@ async function listUnitModels() {
     return [];
   }
 
-  const activeFilter = hasColumn(columns, 'is_active') ? 'WHERE um.is_active = 1' : '';
+  const activeFilter = hasColumn(columns, 'is_active')
+    ? includeUnitModelId
+      ? 'WHERE (um.is_active = 1 OR um.unit_model_id = ?)'
+      : 'WHERE um.is_active = 1'
+    : '';
+  const activeParams = hasColumn(columns, 'is_active') && includeUnitModelId ? [includeUnitModelId] : [];
   const manufacturerJoin = hasManufacturerId
     ? `
       LEFT JOIN manufacturers m
@@ -302,17 +310,18 @@ async function listUnitModels() {
         ${categorySelect}
         um.${escapeIdentifier(modelColumn)} AS model_name,
         ${modelNumberSelect}
-        ${modelIdentifierSelect}
+        ${modelIdentifierSelect},
+        ${hasColumn(columns, 'is_active') ? 'um.is_active' : '1'} AS is_active
       FROM unit_models um
       ${manufacturerJoin}
       ${activeFilter}
       ORDER BY manufacturer_name, model_name, model_number
-    `
+    `,
+    activeParams
   );
 
   return rows.map((row) => {
     const details = [
-      row.manufacturer_name,
       row.model_number,
       row.model_identifier
     ].filter(Boolean);
@@ -322,13 +331,47 @@ async function listUnitModels() {
       manufacturerId: row.manufacturer_id ? Number(row.manufacturer_id) : null,
       unitCategoryConfigValueId: row.unit_category_config_value_id ? Number(row.unit_category_config_value_id) : null,
       label: details.length > 0 ? `${row.model_name} (${details.join(' · ')})` : row.model_name,
-      shortLabel: row.model_name
+      shortLabel: row.model_name,
+      isActive: Number(row.is_active) === 1
     };
   });
 }
 
-async function listProcessorModels() {
+async function listProcessorBrands() {
+  const columns = await getTableColumns('processor_brands');
+
+  if (!hasColumn(columns, 'processor_brand_id')) {
+    return [];
+  }
+
+  const labelColumn = pickColumn(columns, ['name', 'brand_name', 'label']);
+
+  if (!labelColumn) {
+    return [];
+  }
+
+  const activeFilter = hasColumn(columns, 'is_active') ? 'WHERE is_active = 1' : '';
+  const [rows] = await pool.query(
+    `
+      SELECT
+        processor_brand_id,
+        ${escapeIdentifier(labelColumn)} AS label
+      FROM processor_brands
+      ${activeFilter}
+      ORDER BY label
+    `
+  );
+
+  return rows.map((row) => ({
+    id: Number(row.processor_brand_id),
+    label: row.label
+  }));
+}
+
+async function listProcessorModels(options = {}) {
+  const includeProcessorModelId = normalizeOptionalInteger(options.includeProcessorModelId);
   const columns = await getTableColumns('processor_models');
+  const compatibilityColumns = await getTableColumns('unit_model_processor_options');
 
   if (!hasColumn(columns, 'processor_model_id')) {
     return [];
@@ -344,21 +387,44 @@ async function listProcessorModels() {
     return [];
   }
 
-  const activeFilter = hasColumn(columns, 'is_active') ? 'WHERE is_active = 1' : '';
+  const hasCompatibilityMap = hasColumn(compatibilityColumns, 'unit_model_id')
+    && hasColumn(compatibilityColumns, 'processor_model_id');
+  const compatibilityActiveCondition = hasCompatibilityMap && hasColumn(compatibilityColumns, 'is_active')
+    ? 'AND umpo.is_active = 1'
+    : '';
+  const activeFilter = hasColumn(columns, 'is_active')
+    ? includeProcessorModelId
+      ? 'WHERE (pm.is_active = 1 OR pm.processor_model_id = ?)'
+      : 'WHERE pm.is_active = 1'
+    : '';
+  const activeParams = hasColumn(columns, 'is_active') && includeProcessorModelId ? [includeProcessorModelId] : [];
+  const compatibilityJoin = hasCompatibilityMap
+    ? `LEFT JOIN unit_model_processor_options umpo ON umpo.processor_model_id = pm.processor_model_id ${compatibilityActiveCondition}`
+    : '';
+  const compatibilitySelect = hasCompatibilityMap
+    ? "GROUP_CONCAT(DISTINCT umpo.unit_model_id ORDER BY umpo.unit_model_id SEPARATOR ',') AS compatible_unit_model_ids"
+    : 'NULL AS compatible_unit_model_ids';
+  const groupBy = hasCompatibilityMap
+    ? `GROUP BY pm.processor_model_id, ${brandIdColumn ? `pm.${escapeIdentifier(brandIdColumn)},` : ''} ${familyColumn ? `pm.${escapeIdentifier(familyColumn)},` : ''} pm.${escapeIdentifier(modelColumn)}, ${speedColumn ? `pm.${escapeIdentifier(speedColumn)},` : ''} ${generationColumn ? `pm.${escapeIdentifier(generationColumn)}` : 'pm.processor_model_id'}`
+    : '';
 
   const [rows] = await pool.query(
     `
       SELECT
-        processor_model_id,
-        ${brandIdColumn ? escapeIdentifier(brandIdColumn) : 'NULL'} AS processor_brand_id,
-        ${familyColumn ? escapeIdentifier(familyColumn) : 'NULL'} AS processor_family,
-        ${escapeIdentifier(modelColumn)} AS model_code,
-        ${speedColumn ? escapeIdentifier(speedColumn) : 'NULL'} AS base_speed_ghz,
-        ${generationColumn ? escapeIdentifier(generationColumn) : 'NULL'} AS generation
-      FROM processor_models
+        pm.processor_model_id,
+        ${brandIdColumn ? `pm.${escapeIdentifier(brandIdColumn)}` : 'NULL'} AS processor_brand_id,
+        ${familyColumn ? `pm.${escapeIdentifier(familyColumn)}` : 'NULL'} AS processor_family,
+        pm.${escapeIdentifier(modelColumn)} AS model_code,
+        ${speedColumn ? `pm.${escapeIdentifier(speedColumn)}` : 'NULL'} AS base_speed_ghz,
+        ${generationColumn ? `pm.${escapeIdentifier(generationColumn)}` : 'NULL'} AS generation,
+        ${compatibilitySelect}
+      FROM processor_models pm
+      ${compatibilityJoin}
       ${activeFilter}
+      ${groupBy}
       ORDER BY processor_family, model_code, generation
-    `
+    `,
+    activeParams
   );
 
   return rows.map((row) => {
@@ -373,9 +439,42 @@ async function listProcessorModels() {
       processorBrandId: row.processor_brand_id ? Number(row.processor_brand_id) : null,
       label: details.length > 0 ? `${row.model_code} (${details.join(' · ')})` : row.model_code,
       shortLabel: row.model_code,
-      baseSpeedGhz: row.base_speed_ghz
+      baseSpeedGhz: row.base_speed_ghz,
+      compatibleUnitModelIds: String(row.compatible_unit_model_ids || '')
+        .split(',')
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value > 0)
     };
   });
+}
+
+async function getProcessorCompatibilityStatus({ unitModelId, processorModelId }) {
+  const normalizedUnitModelId = normalizeOptionalInteger(unitModelId);
+  const normalizedProcessorModelId = normalizeOptionalInteger(processorModelId);
+  const compatibilityColumns = await getTableColumns('unit_model_processor_options');
+
+  if (!normalizedUnitModelId || !normalizedProcessorModelId) {
+    return { isSupported: true, hasCatalog: false };
+  }
+
+  if (!hasColumn(compatibilityColumns, 'unit_model_id') || !hasColumn(compatibilityColumns, 'processor_model_id')) {
+    return { isSupported: true, hasCatalog: false };
+  }
+
+  const activeFilter = hasColumn(compatibilityColumns, 'is_active') ? 'AND is_active = 1' : '';
+  const [rows] = await pool.query(
+    `
+      SELECT 1
+      FROM unit_model_processor_options
+      WHERE unit_model_id = ?
+        AND processor_model_id = ?
+        ${activeFilter}
+      LIMIT 1
+    `,
+    [normalizedUnitModelId, normalizedProcessorModelId]
+  );
+
+  return { isSupported: rows.length > 0, hasCatalog: true };
 }
 
 async function getUnitTableState() {
@@ -521,8 +620,8 @@ async function getLotMap() {
   };
 }
 
-async function generateNextAssetNumber() {
-  const [rows] = await pool.query(
+async function generateNextAssetNumber(connection = pool) {
+  const [rows] = await connection.query(
     `
       SELECT COALESCE(MAX(asset_number), ?) + 1 AS next_asset_number
       FROM units
@@ -722,7 +821,10 @@ function getBlankStorageDeviceRows() {
 }
 
 function normalizeIdentifierText(value) {
-  const trimmed = String(value || '').trim().replace(/\s+/g, ' ');
+  const trimmed = String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toUpperCase();
 
   return trimmed || null;
 }
@@ -788,6 +890,8 @@ function mapById(items) {
 async function getTechUnitFormOptions(options = {}) {
   const state = await getUnitTableState();
   const includeCurrentLotId = normalizeOptionalInteger(options.includeCurrentLotId);
+  const includeCurrentUnitModelId = normalizeOptionalInteger(options.includeCurrentUnitModelId);
+  const includeCurrentProcessorModelId = normalizeOptionalInteger(options.includeCurrentProcessorModelId);
   const { assignableLots, lotMap } = await getLotMap();
   const currentLot = includeCurrentLotId ? lotMap.get(includeCurrentLotId) || null : null;
   const currentLotIsSelectable = currentLot
@@ -813,6 +917,7 @@ async function getTechUnitFormOptions(options = {}) {
     operatingSystems,
     manufacturers,
     unitModels,
+    processorBrands,
     processorModels,
     productionWeightOptions
   ] = await Promise.all([
@@ -823,8 +928,9 @@ async function getTechUnitFormOptions(options = {}) {
     listConfigValuesByCategoryCodes(['storage_wipe_statuses', 'storage_wipe_status', 'wipe_statuses', 'wipe_status']),
     listConfigValuesByCategoryCodes(['operating_systems', 'operating_system']),
     listManufacturers(),
-    listUnitModels(),
-    listProcessorModels(),
+    listUnitModels({ includeUnitModelId: includeCurrentUnitModelId }),
+    listProcessorBrands(),
+    listProcessorModels({ includeProcessorModelId: includeCurrentProcessorModelId }),
     productionWeightModel.listProductionWeightOptions()
   ]);
 
@@ -860,6 +966,7 @@ async function getTechUnitFormOptions(options = {}) {
     operatingSystems,
     manufacturers,
     unitModels,
+    processorBrands,
     processorModels,
     productionWeightOptions,
     productionWeightCapabilities: state.productionWeightCapabilities
@@ -1077,8 +1184,8 @@ async function getUnitFormDataById(unitId, formOptions = null) {
 
   return {
     assetTag: unit.asset_number ? getDisplayAssetTag(unit.asset_number) : '',
-    unitSerialNumber,
-    biosSerialNumber,
+    unitSerialNumber: normalizeIdentifierText(unitSerialNumber) || '',
+    biosSerialNumber: normalizeIdentifierText(biosSerialNumber) || '',
     lotId: unit.lot_id ? String(unit.lot_id) : '',
     unitCategoryConfigValueId: unit.unit_category_config_value_id ? String(unit.unit_category_config_value_id) : '',
     currentUnitStatusConfigValueId: unit.current_unit_status_config_value_id
@@ -1262,6 +1369,7 @@ async function listTechUnits(filters = {}) {
     operatingSystems,
     manufacturers,
     unitModels,
+    processorBrands,
     processorModels,
     overallGradeOptions,
     techUserOptions,
@@ -1679,6 +1787,10 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
   }
 
   const typeMap = await getIdentifierTypeMap(connection);
+  const serialTypeIds = ['unit_serial_number', 'bios_serial_number']
+    .map((typeCode) => typeMap.get(typeCode))
+    .filter(Boolean);
+  const serialTypeCodes = new Set(['unit_serial_number', 'bios_serial_number']);
   const clauses = [];
   const params = [];
 
@@ -1686,6 +1798,12 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
     const typeId = typeMap.get(entry.typeCode);
 
     if (!typeId || !entry.normalizedValue) {
+      return;
+    }
+
+    if (serialTypeCodes.has(entry.typeCode) && serialTypeIds.length > 0) {
+      clauses.push(`(ui.identifier_type_config_value_id IN (${serialTypeIds.map(() => '?').join(', ')}) AND ui.normalized_value = ?)`);
+      params.push(...serialTypeIds, entry.normalizedValue);
       return;
     }
 
@@ -1822,6 +1940,507 @@ async function findDuplicateUnitsForForm(formData, options = {}) {
   const identifierEntries = buildIdentifierEntries(formData, suppliedAssetNumber);
 
   return findDuplicateUnitsFromIdentifiers(identifierEntries, options.excludeUnitId || null);
+}
+
+function buildDuplicateCandidateSummary(row) {
+  const cpuNameParts = [
+    row.processor_brand_label,
+    row.processor_label
+  ].filter(Boolean);
+
+  const cpuSummary = [
+    cpuNameParts.join(' ').trim(),
+    row.processor_speed_ghz ? `@ ${row.processor_speed_ghz}GHz` : ''
+  ].filter(Boolean).join(' ');
+
+  const modelParts = [
+    row.manufacturer_label,
+    row.model_label
+  ].filter(Boolean);
+
+  return {
+    unitId: Number(row.unit_id),
+    assetNumber: row.asset_number ? Number(row.asset_number) : null,
+    assetTag: row.asset_number ? getDisplayAssetTag(row.asset_number) : '',
+    lotId: row.lot_id ? Number(row.lot_id) : null,
+    lotName: row.lot_name || '',
+    isParked: Number(row.is_parked || 0) === 1 || Number(row.is_archived || 0) === 1,
+    isClosedLot: Number(row.lot_is_closed || 0) === 1,
+    unitSerialNumber: normalizeIdentifierText(row.unit_serial_number) || '',
+    biosSerialNumber: normalizeIdentifierText(row.bios_serial_number) || '',
+    modelSummary: modelParts.length > 0 ? modelParts.join(' · ') : '',
+    cpuSummary,
+    assignedToUserId: row.assigned_to_user_id ? Number(row.assigned_to_user_id) : null,
+    assignedToName: [row.assigned_first_name, row.assigned_last_name].filter(Boolean).join(' ').trim() || row.assigned_email || '',
+    matchedIdentifiers: []
+  };
+}
+
+async function findSerialDuplicateCandidates({ unitSerialNumber = '', biosSerialNumber = '' } = {}, connection = pool) {
+  const inputValues = [
+    { field: 'unitSerialNumber', label: 'Unit Serial', normalizedValue: normalizeIdentifierComparableValue(unitSerialNumber) },
+    { field: 'biosSerialNumber', label: 'BIOS Serial', normalizedValue: normalizeIdentifierComparableValue(biosSerialNumber) }
+  ].filter((entry) => entry.normalizedValue);
+
+  const normalizedValues = [...new Set(inputValues.map((entry) => entry.normalizedValue))];
+
+  if (!await tableExists('unit_identifiers') || normalizedValues.length === 0) {
+    return [];
+  }
+
+  const typeMap = await getIdentifierTypeMap(connection);
+  const serialTypeIds = ['unit_serial_number', 'bios_serial_number']
+    .map((typeCode) => typeMap.get(typeCode))
+    .filter(Boolean);
+
+  if (serialTypeIds.length === 0) {
+    return [];
+  }
+
+  const [rows] = await connection.query(
+    `
+      SELECT
+        ui.unit_identifier_id,
+        ui.unit_id,
+        ui.identifier_value,
+        ui.normalized_value,
+        cv.code AS identifier_type_code,
+        cv.label AS identifier_type_label,
+        u.asset_number,
+        u.lot_id,
+        u.assigned_to_user_id,
+        COALESCE(u.is_parked, 0) AS is_parked,
+        COALESCE(u.is_archived, 0) AS is_archived,
+        l.name AS lot_name,
+        COALESCE(l.is_closed, 0) AS lot_is_closed,
+        (
+          SELECT ui_unit_serial.identifier_value
+          FROM unit_identifiers ui_unit_serial
+          JOIN config_values cv_unit_serial
+            ON cv_unit_serial.config_value_id = ui_unit_serial.identifier_type_config_value_id
+          JOIN config_categories cc_unit_serial
+            ON cc_unit_serial.config_category_id = cv_unit_serial.config_category_id
+          WHERE ui_unit_serial.unit_id = u.unit_id
+            AND cc_unit_serial.code = 'unit_identifier_types'
+            AND cv_unit_serial.code = 'unit_serial_number'
+          ORDER BY ui_unit_serial.unit_identifier_id DESC
+          LIMIT 1
+        ) AS unit_serial_number,
+        (
+          SELECT ui_bios_serial.identifier_value
+          FROM unit_identifiers ui_bios_serial
+          JOIN config_values cv_bios_serial
+            ON cv_bios_serial.config_value_id = ui_bios_serial.identifier_type_config_value_id
+          JOIN config_categories cc_bios_serial
+            ON cc_bios_serial.config_category_id = cv_bios_serial.config_category_id
+          WHERE ui_bios_serial.unit_id = u.unit_id
+            AND cc_bios_serial.code = 'unit_identifier_types'
+            AND cv_bios_serial.code = 'bios_serial_number'
+          ORDER BY ui_bios_serial.unit_identifier_id DESC
+          LIMIT 1
+        ) AS bios_serial_number,
+        m.name AS manufacturer_label,
+        um.model_name AS model_label,
+        pb.name AS processor_brand_label,
+        pm.model_code AS processor_label,
+        u.processor_speed_ghz,
+        assigned_user.first_name AS assigned_first_name,
+        assigned_user.last_name AS assigned_last_name,
+        assigned_user.email AS assigned_email
+      FROM unit_identifiers ui
+      JOIN config_values cv
+        ON cv.config_value_id = ui.identifier_type_config_value_id
+      JOIN units u
+        ON u.unit_id = ui.unit_id
+      LEFT JOIN lots l
+        ON l.lot_id = u.lot_id
+      LEFT JOIN manufacturers m
+        ON m.manufacturer_id = u.manufacturer_id
+      LEFT JOIN unit_models um
+        ON um.unit_model_id = u.unit_model_id
+      LEFT JOIN processor_models pm
+        ON pm.processor_model_id = u.processor_model_id
+      LEFT JOIN processor_brands pb
+        ON pb.processor_brand_id = pm.processor_brand_id
+      LEFT JOIN users assigned_user
+        ON assigned_user.user_id = u.assigned_to_user_id
+      WHERE ui.identifier_type_config_value_id IN (${serialTypeIds.map(() => '?').join(', ')})
+        AND ui.normalized_value IN (${normalizedValues.map(() => '?').join(', ')})
+      ORDER BY u.unit_id ASC, ui.unit_identifier_id ASC
+      LIMIT 40
+    `,
+    [...serialTypeIds, ...normalizedValues]
+  );
+
+  const candidates = new Map();
+
+  rows.forEach((row) => {
+    const unitId = Number(row.unit_id);
+
+    if (!candidates.has(unitId)) {
+      candidates.set(unitId, buildDuplicateCandidateSummary(row));
+    }
+
+    const matchingInputs = inputValues
+      .filter((entry) => entry.normalizedValue === row.normalized_value)
+      .map((entry) => entry.label);
+
+    candidates.get(unitId).matchedIdentifiers.push({
+      identifierTypeCode: row.identifier_type_code || '',
+      identifierTypeLabel: row.identifier_type_label || 'Serial identifier',
+      identifierValue: normalizeIdentifierText(row.identifier_value) || '',
+      matchingInputs
+    });
+  });
+
+  return [...candidates.values()];
+}
+
+function isRegularTechDuplicateAssumptionActor(actorRoleCodes) {
+  const safeRoleCodes = Array.isArray(actorRoleCodes)
+    ? actorRoleCodes.map((roleCode) => String(roleCode || '').trim())
+    : [];
+
+  const hasElevatedRole = safeRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+
+  return safeRoleCodes.includes('tech') && !hasElevatedRole;
+}
+
+function createDuplicateAssumptionError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function getDuplicateAssumptionEligibility({
+  candidate,
+  destinationLot = null,
+  destinationIsAssignable = false,
+  lotAssumptionPolicyAvailable = false,
+  actorRoleCodes = []
+} = {}) {
+  if (!isRegularTechDuplicateAssumptionActor(actorRoleCodes)) {
+    return {
+      allowed: false,
+      requiresOverride: false,
+      code: 'BWT_DUPLICATE_ASSUMPTION_ROLE_REQUIRED',
+      message: 'Existing-unit assumption is available only to regular Tech users during Create Unit intake. Tech Leads, Management, and Admin should use the Unit Browser workflow.'
+    };
+  }
+
+  if (!lotAssumptionPolicyAvailable) {
+    return {
+      allowed: false,
+      requiresOverride: false,
+      code: 'BWT_DUPLICATE_ASSUMPTION_MIGRATION_REQUIRED',
+      message: 'Duplicate unit assumption is not ready yet. Run the Step 7e.2 database migration first.'
+    };
+  }
+
+  if (!destinationLot) {
+    return {
+      allowed: false,
+      requiresOverride: false,
+      code: 'BWT_DUPLICATE_ASSUMPTION_DESTINATION_REQUIRED',
+      message: 'Select an open work lot before assessing whether this existing unit can be assumed.'
+    };
+  }
+
+  if (!destinationIsAssignable) {
+    return {
+      allowed: false,
+      requiresOverride: false,
+      code: 'BWT_DUPLICATE_ASSUMPTION_DESTINATION_INVALID',
+      message: 'The selected work lot is no longer open, visible, and assignable.'
+    };
+  }
+
+  if (Number(destinationLot.allow_duplicate_unit_assumption || 0) !== 1) {
+    return {
+      allowed: false,
+      requiresOverride: false,
+      code: 'BWT_DUPLICATE_ASSUMPTION_DESTINATION_DISABLED',
+      message: 'The selected work lot does not allow duplicate-match unit assumption. Choose an enabled work lot or use the override workflow.'
+    };
+  }
+
+  if (!candidate || !candidate.unitId) {
+    return {
+      allowed: false,
+      requiresOverride: false,
+      code: 'BWT_DUPLICATE_ASSUMPTION_CANDIDATE_INVALID',
+      message: 'The selected duplicate candidate could not be verified.'
+    };
+  }
+
+  if (candidate.isParked) {
+    return {
+      allowed: true,
+      requiresOverride: false,
+      code: '',
+      message: 'This Parked unit can be returned directly into the selected work lot and assigned to you.'
+    };
+  }
+
+  if (!candidate.lotId) {
+    return {
+      allowed: false,
+      requiresOverride: false,
+      code: 'BWT_DUPLICATE_ASSUMPTION_SOURCE_INVALID',
+      message: 'This Active unit has no current lot. Use the Unit Browser so an elevated user can correct its operational state.'
+    };
+  }
+
+  if (Number(candidate.lotId) === Number(destinationLot.lot_id)) {
+    return {
+      allowed: false,
+      requiresOverride: true,
+      code: 'BWT_DUPLICATE_ASSUMPTION_SAME_LOT',
+      message: 'This unit is already Active in the selected work lot. It cannot be assumed again in the same lot because that could lead to duplicate processing or credit. Request an override when intentional rework is needed.'
+    };
+  }
+
+  if (candidate.isClosedLot) {
+    return {
+      allowed: false,
+      requiresOverride: true,
+      code: 'BWT_DUPLICATE_ASSUMPTION_CLOSED_SOURCE',
+      message: 'This unit is currently in a closed lot. A regular Tech must request an override instead of assuming it directly.'
+    };
+  }
+
+  return {
+    allowed: true,
+    requiresOverride: false,
+    code: '',
+    message: 'This existing unit can be assumed into the selected work lot and assigned to you.'
+  };
+}
+
+async function getDuplicateAssumptionCandidates({
+  unitSerialNumber = '',
+  biosSerialNumber = '',
+  destinationLotId = null,
+  actorRoleCodes = []
+} = {}) {
+  const [candidates, lotColumns, lotState] = await Promise.all([
+    findSerialDuplicateCandidates({ unitSerialNumber, biosSerialNumber }),
+    getTableColumns('lots'),
+    getLotMap()
+  ]);
+
+  const safeDestinationLotId = normalizeOptionalInteger(destinationLotId);
+  const destinationLot = safeDestinationLotId ? lotState.lotMap.get(safeDestinationLotId) || null : null;
+  const destinationIsAssignable = safeDestinationLotId
+    ? lotState.assignableLots.some((lot) => Number(lot.lot_id) === safeDestinationLotId)
+    : false;
+  const lotAssumptionPolicyAvailable = hasColumn(lotColumns, 'allow_duplicate_unit_assumption');
+
+  return candidates.map((candidate) => ({
+    ...candidate,
+    duplicateAssumption: getDuplicateAssumptionEligibility({
+      candidate,
+      destinationLot,
+      destinationIsAssignable,
+      lotAssumptionPolicyAvailable,
+      actorRoleCodes
+    })
+  }));
+}
+
+function getDuplicateMatchNote(candidate) {
+  const matched = Array.isArray(candidate && candidate.matchedIdentifiers)
+    ? candidate.matchedIdentifiers
+    : [];
+  const summary = matched
+    .map((identifier) => {
+      const inputs = Array.isArray(identifier.matchingInputs) && identifier.matchingInputs.length > 0
+        ? identifier.matchingInputs.join(' / ')
+        : 'Serial';
+      const label = identifier.identifierTypeLabel || 'serial identifier';
+      const value = identifier.identifierValue || '—';
+
+      return `${inputs} matched ${label}: ${value}`;
+    })
+    .join('; ');
+
+  return summary || 'A matching Unit Serial or BIOS Serial was confirmed.';
+}
+
+async function assumeExistingTechUnitFromDuplicateMatch({
+  unitId,
+  unitSerialNumber = '',
+  biosSerialNumber = '',
+  destinationLotId,
+  assumedByUserId,
+  actorRoleCodes = []
+}) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const safeDestinationLotId = normalizeRequiredInteger(destinationLotId);
+  const safeAssumedByUserId = normalizeRequiredInteger(assumedByUserId);
+  const state = await getUnitTableState();
+  const lotColumns = await getTableColumns('lots');
+
+  if (!safeUnitId || !safeDestinationLotId || !safeAssumedByUserId) {
+    throw createDuplicateAssumptionError('BWT_DUPLICATE_ASSUMPTION_INPUT_INVALID', 'Select an existing unit and an eligible work lot before assuming the unit.');
+  }
+
+  if (!isRegularTechDuplicateAssumptionActor(actorRoleCodes)) {
+    throw createDuplicateAssumptionError('BWT_DUPLICATE_ASSUMPTION_ROLE_REQUIRED', 'Existing-unit assumption is available only to regular Tech users during Create Unit intake.');
+  }
+
+  if (!hasColumn(lotColumns, 'allow_duplicate_unit_assumption')) {
+    throw createDuplicateAssumptionError('BWT_DUPLICATE_ASSUMPTION_MIGRATION_REQUIRED', 'Duplicate unit assumption is not ready yet. Run the Step 7e.2 database migration first.');
+  }
+
+  if (!state.exists || !state.primaryKeyColumn || !state.assignmentCapabilities.hasAssignedToUserId || !state.parkingCapabilities.hasIsParked) {
+    throw createDuplicateAssumptionError('BWT_DUPLICATE_ASSUMPTION_SCHEMA_REQUIRED', 'The required unit assignment and Parked lifecycle fields are not ready.');
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const candidates = await findSerialDuplicateCandidates({ unitSerialNumber, biosSerialNumber }, connection);
+    const originalCandidate = candidates.find((candidate) => Number(candidate.unitId) === safeUnitId) || null;
+
+    if (!originalCandidate) {
+      throw createDuplicateAssumptionError('BWT_DUPLICATE_ASSUMPTION_MATCH_REQUIRED', 'The selected unit no longer matches the serial values entered in this Create Unit form. Refresh the serial check and choose a matching candidate.');
+    }
+
+    const [lockedRows] = await connection.query(
+      `
+        SELECT
+          u.*,
+          COALESCE(l.is_closed, 0) AS current_lot_is_closed
+        FROM units u
+        LEFT JOIN lots l
+          ON l.lot_id = u.lot_id
+        WHERE u.${escapeIdentifier(state.primaryKeyColumn)} = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [safeUnitId]
+    );
+
+    const lockedUnit = lockedRows[0] || null;
+
+    if (!lockedUnit) {
+      throw createDuplicateAssumptionError('BWT_DUPLICATE_ASSUMPTION_NOT_FOUND', 'The selected existing unit could not be found.');
+    }
+
+    const refreshedCandidate = {
+      ...originalCandidate,
+      lotId: normalizeOptionalInteger(lockedUnit.lot_id),
+      isParked: isUnitParked(lockedUnit),
+      isClosedLot: Number(lockedUnit.current_lot_is_closed || 0) === 1,
+      assignedToUserId: normalizeOptionalInteger(lockedUnit.assigned_to_user_id)
+    };
+
+    const lotState = await getLotMap();
+    const destinationLot = lotState.lotMap.get(safeDestinationLotId) || null;
+    const destinationIsAssignable = lotState.assignableLots.some((lot) => Number(lot.lot_id) === safeDestinationLotId);
+    const eligibility = getDuplicateAssumptionEligibility({
+      candidate: refreshedCandidate,
+      destinationLot,
+      destinationIsAssignable,
+      lotAssumptionPolicyAvailable: true,
+      actorRoleCodes
+    });
+
+    if (!eligibility.allowed) {
+      throw createDuplicateAssumptionError(eligibility.code || 'BWT_DUPLICATE_ASSUMPTION_BLOCKED', eligibility.message);
+    }
+
+    const wasParked = refreshedCandidate.isParked;
+    const previousLotId = normalizeOptionalInteger(lockedUnit.lot_id);
+    const previousAssignedToUserId = normalizeOptionalInteger(lockedUnit.assigned_to_user_id);
+    const matchNote = getDuplicateMatchNote(originalCandidate);
+    const assumptionNote = `Assumed through duplicate serial intake. ${matchNote}`;
+    const updates = ['lot_id = ?', 'assigned_to_user_id = ?'];
+    const values = [safeDestinationLotId, safeAssumedByUserId];
+
+    if (state.assignmentCapabilities.hasAssignedAt) {
+      updates.push('assigned_at = ?');
+      values.push(new Date());
+    }
+
+    if (state.assignmentCapabilities.hasAssignmentUpdatedByUserId) {
+      updates.push('assignment_updated_by_user_id = ?');
+      values.push(safeAssumedByUserId);
+    }
+
+    if (wasParked) {
+      updates.push('is_parked = 0', 'parked_at = NULL', 'parked_by_user_id = NULL');
+
+      if (state.legacyArchiveCapabilities.hasIsArchived) {
+        updates.push('is_archived = 0');
+      }
+
+      if (state.legacyArchiveCapabilities.hasArchivedAt) {
+        updates.push('archived_at = NULL');
+      }
+
+      if (state.legacyArchiveCapabilities.hasArchivedByUserId) {
+        updates.push('archived_by_user_id = NULL');
+      }
+    }
+
+    await connection.query(
+      `
+        UPDATE units
+        SET ${updates.join(', ')}
+        WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
+        LIMIT 1
+      `,
+      [...values, safeUnitId]
+    );
+
+    await recordUnitLotHistory(connection, {
+      unitId: safeUnitId,
+      fromLotId: wasParked ? null : previousLotId,
+      toLotId: safeDestinationLotId,
+      movedByUserId: safeAssumedByUserId,
+      notes: assumptionNote
+    });
+
+    if (wasParked || previousAssignedToUserId !== safeAssumedByUserId) {
+      await recordUnitAssignmentHistory(connection, {
+        unitId: safeUnitId,
+        fromUserId: wasParked ? null : previousAssignedToUserId,
+        toUserId: safeAssumedByUserId,
+        changedByUserId: safeAssumedByUserId,
+        changeSource: 'duplicate_assumption',
+        notes: assumptionNote
+      });
+    }
+
+    if (wasParked) {
+      await recordUnitParkHistory(connection, {
+        unitId: safeUnitId,
+        eventType: 'returned_to_active',
+        toLotId: safeDestinationLotId,
+        toAssignedToUserId: safeAssumedByUserId,
+        changedByUserId: safeAssumedByUserId,
+        notes: `Unit returned to Active through duplicate serial assumption. ${matchNote} Historical work and credit records were retained without changes.`
+      });
+    }
+
+    await connection.commit();
+
+    return {
+      unitId: safeUnitId,
+      assetTag: originalCandidate.assetTag || getDisplayAssetTag(lockedUnit.asset_number),
+      destinationLotName: destinationLot.lot_name || '',
+      wasParked
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function saveUnitIdentifier(connection, unitId, typeMap, entry) {
@@ -2097,6 +2716,47 @@ function buildWritePayload(formData, currentUserId, mode, assetNumber, unitColum
   };
 }
 
+async function createIntentionalDuplicateTechUnitWithConnection(connection, formData, currentUserId) {
+  const state = await getUnitTableState();
+
+  if (!connection || !state.exists || !state.primaryKeyColumn) {
+    throw new Error('The units table or primary key column was not found.');
+  }
+
+  const { assignableLots } = await getLotMap();
+  const requestedLotId = normalizeRequiredInteger(formData && formData.lotId);
+
+  if (!assignableLots.some((lot) => Number(lot.lot_id) === requestedLotId)) {
+    throw createLotMovePolicyError(
+      'BWT_LOT_DESTINATION_NOT_OPEN',
+      'Closed, hidden, and parent/container lots cannot receive new units. Choose an open child or standalone lot.'
+    );
+  }
+
+  const assetNumber = await generateNextAssetNumber(connection);
+  const payload = buildWritePayload(formData, currentUserId, 'create', assetNumber, state.columns);
+  const placeholders = payload.columns.map(() => '?').join(', ');
+  const columnSql = payload.columns.map(escapeIdentifier).join(', ');
+
+  const [result] = await connection.query(
+    `
+      INSERT INTO units (${columnSql})
+      VALUES (${placeholders})
+    `,
+    payload.values
+  );
+
+  const unitId = Number(result.insertId);
+
+  await saveUnitIdentifiers(connection, unitId, formData, assetNumber);
+  await saveUnitModuleRows(connection, unitId, formData, currentUserId);
+
+  return {
+    unitId,
+    assetNumber
+  };
+}
+
 async function createTechUnit(formData, currentUserId) {
   const state = await getUnitTableState();
 
@@ -2104,8 +2764,7 @@ async function createTechUnit(formData, currentUserId) {
     throw new Error('The units table or primary key column was not found.');
   }
 
-  const suppliedAssetNumber = normalizeAssetTagInput(formData.assetTag);
-  const assetNumber = suppliedAssetNumber || await generateNextAssetNumber();
+  const assetNumber = await generateNextAssetNumber();
   const duplicateMatches = await findDuplicateUnitsFromIdentifiers(buildIdentifierEntries(formData, assetNumber));
 
   if (duplicateMatches.length > 0) {
@@ -4196,8 +4855,12 @@ module.exports = {
   getUnitFormDataById,
   listTechUnits,
   findDuplicateUnitsForForm,
+  findSerialDuplicateCandidates,
+  getDuplicateAssumptionCandidates,
+  assumeExistingTechUnitFromDuplicateMatch,
   getDuplicateUnitMessage,
   createTechUnit,
+  createIntentionalDuplicateTechUnitWithConnection,
   updateTechUnit,
   useExistingTechUnit,
   getUnitById,
@@ -4219,5 +4882,6 @@ module.exports = {
   normalizeAssetTagInput,
   isAssignableLot,
   getAssignableLots,
-  getBrowsableLots
+  getBrowsableLots,
+  getProcessorCompatibilityStatus
 };

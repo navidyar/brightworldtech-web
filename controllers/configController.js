@@ -1,5 +1,33 @@
 const configModel = require('../models/configModel');
 
+const PASSWORD_LINK_EXPIRY_CATEGORY_CODE = 'security_settings';
+const PASSWORD_LINK_EXPIRY_VALUE_CODE = 'password_link_expiry_hours';
+const MIN_PASSWORD_LINK_EXPIRY_HOURS = 1;
+const MAX_PASSWORD_LINK_EXPIRY_HOURS = 24;
+
+function isPasswordLinkExpirySetting(configValue) {
+  return Boolean(
+    configValue
+    && configValue.category_code === PASSWORD_LINK_EXPIRY_CATEGORY_CODE
+    && configValue.code === PASSWORD_LINK_EXPIRY_VALUE_CODE
+  );
+}
+
+function parsePasswordLinkExpiryHours(value) {
+  const rawValue = String(value ?? '').trim();
+  const hours = Number.parseInt(rawValue, 10);
+
+  if (!/^\d+$/.test(rawValue) || !Number.isInteger(hours)) {
+    return null;
+  }
+
+  if (hours < MIN_PASSWORD_LINK_EXPIRY_HOURS || hours > MAX_PASSWORD_LINK_EXPIRY_HOURS) {
+    return null;
+  }
+
+  return hours;
+}
+
 function parseIncludeInactiveFlag(value) {
   return value === '1' || value === 'true' || value === 'yes' || value === 'on';
 }
@@ -98,6 +126,7 @@ async function validateConfigValueForm(formData, options = {}) {
   const errorMessages = [];
   const configCategoryId = parsePositiveInteger(formData.configCategoryId);
   const configValueId = options.configValueId ? Number(options.configValueId) : null;
+  const protectedSecuritySetting = isPasswordLinkExpirySetting(options.configValue);
 
   if (!configCategoryId) {
     errorMessages.push('Choose a configuration category.');
@@ -137,6 +166,14 @@ async function validateConfigValueForm(formData, options = {}) {
     errorMessages.push('Description must be 500 characters or less.');
   }
 
+  if (protectedSecuritySetting) {
+    const expiryHours = parsePasswordLinkExpiryHours(formData.value);
+
+    if (expiryHours === null) {
+      errorMessages.push(`Password setup/reset link expiration must be a whole number from ${MIN_PASSWORD_LINK_EXPIRY_HOURS} through ${MAX_PASSWORD_LINK_EXPIRY_HOURS} hours.`);
+    }
+  }
+
   return errorMessages;
 }
 
@@ -173,7 +210,8 @@ async function renderNewConfigValueModal(req, res, next) {
       formData: getInitialConfigValueFormData({
         categoryId: req.query.categoryId,
         includeInactiveValues
-      })
+      }),
+      isPasswordLinkExpirySetting: false
     });
   } catch (error) {
     next(error);
@@ -192,7 +230,8 @@ async function createConfigValue(req, res, next) {
         configValue: null,
         categories,
         errorMessages,
-        formData
+        formData,
+        isPasswordLinkExpirySetting: false
       });
     }
 
@@ -238,7 +277,8 @@ async function renderEditConfigValueModal(req, res, next) {
       configValue,
       categories,
       errorMessages: [],
-      formData: getInitialConfigValueFormData({ configValue, includeInactiveValues })
+      formData: getInitialConfigValueFormData({ configValue, includeInactiveValues }),
+      isPasswordLinkExpirySetting: isPasswordLinkExpirySetting(configValue)
     });
   } catch (error) {
     next(error);
@@ -256,7 +296,18 @@ async function updateConfigValue(req, res, next) {
       return sendHtmxRedirect(req, res, getConfigReturnUrl(formData.includeInactive === '1', 'error=not_found'));
     }
 
-    const errorMessages = await validateConfigValueForm(formData, { configValueId });
+    const protectedSecuritySetting = isPasswordLinkExpirySetting(configValue);
+
+    if (protectedSecuritySetting) {
+      formData.configCategoryId = String(configValue.config_category_id);
+      formData.code = configValue.code;
+      formData.label = configValue.label || configValue.code;
+      formData.description = configValue.description || '';
+      formData.sortOrder = String(configValue.sort_order ?? 0);
+      formData.isActive = '1';
+    }
+
+    const errorMessages = await validateConfigValueForm(formData, { configValueId, configValue });
 
     if (errorMessages.length > 0) {
       return res.status(400).render('fragments/config-value-form-modal', {
@@ -264,7 +315,8 @@ async function updateConfigValue(req, res, next) {
         configValue,
         categories,
         errorMessages,
-        formData
+        formData,
+        isPasswordLinkExpirySetting: protectedSecuritySetting
       });
     }
 
@@ -305,6 +357,15 @@ async function renderConfigValueStatusModal(req, res, next) {
       });
     }
 
+    if (actionType === 'deactivate' && isPasswordLinkExpirySetting(configValue)) {
+      return res.status(400).render('fragments/config-value-status-modal', {
+        actionType: 'error',
+        configValue,
+        includeInactiveValues,
+        errorMessages: ['Password setup/reset link expiration is a required system security setting and cannot be deactivated. Edit its hour value instead.']
+      });
+    }
+
     return res.render('fragments/config-value-status-modal', {
       actionType,
       configValue,
@@ -325,6 +386,15 @@ async function updateConfigValueStatus(req, res, next) {
 
     if (!configValue) {
       return sendHtmxRedirect(req, res, getConfigReturnUrl(includeInactiveValues, 'error=not_found'));
+    }
+
+    if (!shouldActivate && isPasswordLinkExpirySetting(configValue)) {
+      return res.status(400).render('fragments/config-value-status-modal', {
+        actionType: 'error',
+        configValue,
+        includeInactiveValues,
+        errorMessages: ['Password setup/reset link expiration is a required system security setting and cannot be deactivated. Edit its hour value instead.']
+      });
     }
 
     await configModel.setConfigValueActive(configValueId, shouldActivate);

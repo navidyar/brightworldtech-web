@@ -47,6 +47,9 @@
               formOptions,
               formData,
               errorMessages,
+              duplicateMatches: typeof duplicateMatches !== 'undefined' ? duplicateMatches : [],
+              duplicateCheckPerformed: typeof duplicateCheckPerformed !== 'undefined' ? duplicateCheckPerformed : false,
+              canRequestIntentionalDuplicate: typeof canRequestIntentionalDuplicate !== 'undefined' ? canRequestIntentionalDuplicate : false,
               isModal: false
             }) %>
           </section>
