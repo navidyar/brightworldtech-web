@@ -4,6 +4,12 @@ Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
+## Reset Design Stage F.5.1 — Add/Edit Form Parent Container Removal
+
+- Removes the remaining visible `app-form` parent-card styling from Create/Edit Unit in both modal and full-page fallback contexts, so the modal/page area contains only the independent section panels.
+- Resets the form wrapper itself to transparent, borderless, padding-free grid spacing while keeping each child section panel's Lookup-style border, shadow, color family, and rounded corners.
+- Preserves all form field names, field order, validation, duplicate controls, catalog requests, lot logic, model/processor behavior, routes, controllers, JavaScript, and database behavior. No migration is required.
+
 ## Reset Design Stage F.5 — Add/Edit Form Panel Architecture
 
 - Makes the Create/Edit Unit modal itself the only outer form surface: the modal interior is now white, with no tinted parent canvas behind the section panels.
