@@ -1,3 +1,14 @@
+# BWTDallas Webserver
+
+## Reset Design Stage F.5.2 — Add/Edit White Island Panels
+
+- Changed the Add/Edit Unit modal/page backdrop to a Lookup-style soft gray canvas while keeping the modal itself as the only outer container.
+- Converted the individual Add/Edit form sections to white island panels with more pronounced thin borders and restrained Metrics Dashboard-style shadows.
+- Removed colored panel backgrounds as the default section treatment; section color remains limited to headings, borders, selected/semantic states, warnings, and validation.
+- Kept each section heading outside its panel and retained the F.5.1 no-parent-card form wrapper behavior.
+- Updated the Tech Units clean stylesheet cache version to `20260708-stage-f5-2`.
+- No JavaScript, controller, model, route, field-name, field-order, duplicate-check, catalog-request, permission, or database behavior changed.
+
 # BWTDallas App
 
 Internal operations portal for Bright World Technologies.
