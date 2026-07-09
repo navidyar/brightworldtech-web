@@ -10,11 +10,10 @@
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel lot-modal lot-visibility-modal" role="dialog" aria-modal="true" aria-labelledby="lot-visibility-modal-title">
+  <section class="modal-panel site-clean-modal lot-modal lot-visibility-modal" role="dialog" aria-modal="true" aria-labelledby="lot-visibility-modal-title">
     <header class="modal-header">
       <div>
-        <p class="eyebrow"><%= isUnhide ? 'Unhide Lot' : 'Hide Lot' %></p>
-        <h2 id="lot-visibility-modal-title"><%= actionLabel %>: <%= lotName %>?</h2>
+        <h2 id="lot-visibility-modal-title"><%= actionLabel %> <%= lotName %>?</h2>
       </div>
 
       <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
@@ -57,19 +56,19 @@
           <div class="message error">
             <p>Lot visibility cannot be changed because the lots table does not support hidden lots yet.</p>
           </div>
-          <div class="action-row">
+          <div class="form-actions">
             <button type="button" class="secondary-button" data-modal-close>Close</button>
           </div>
         <% } else { %>
           <form method="post" action="<%= actionPath %>" hx-post="<%= actionPath %>" hx-target="#modal-root" hx-swap="innerHTML">
-            <div class="action-row">
+            <div class="form-actions">
               <button type="submit" class="<%= isUnhide ? 'primary-button' : 'secondary-button danger-button' %>"><%= actionLabel %></button>
               <button type="button" class="secondary-button" data-modal-close>Cancel</button>
             </div>
           </form>
         <% } %>
       <% } else { %>
-        <div class="action-row">
+        <div class="form-actions">
           <button type="button" class="secondary-button" data-modal-close>Close</button>
         </div>
       <% } %>

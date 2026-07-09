@@ -95,63 +95,60 @@
       <div class="app-main">
         <%- include('../partials/topbar', { pageTitle }) %>
 
-        <main class="content-shell">
-          <section class="dashboard-hero accent-green">
-            <div>
-              <p class="eyebrow">Lot Management</p>
-              <h2>Lots</h2>
-              <p>
-                Review lots in parent/child order without using a separate tree panel.
-                Parent lots, sub-lots, unit goals, requirements, and statuses are shown in one compact browser.
-              </p>
-            </div>
+        <main class="content-shell lot-management-page">
+          <section class="page-heading lot-management-page-heading">
+            <h1>Lot Management</h1>
+          </section>
 
-            <div class="hero-badge">
-              <span>Total Lots</span>
+          <section class="lot-summary-panel" aria-label="Lot totals">
+            <div class="lot-summary-primary">
+              <span>Total lots</span>
               <strong><%= formatNumber(summary.lotCount) %></strong>
+              <small>All lot records currently available to Management</small>
+            </div>
+
+            <div class="lot-summary-stats">
+              <article>
+                <span class="lot-summary-icon" aria-hidden="true">◉</span>
+                <span><small>Visible lots</small><strong><%= formatNumber(summary.activeLotCount) %></strong></span>
+              </article>
+
+              <article>
+                <span class="lot-summary-icon" aria-hidden="true">◌</span>
+                <span><small>Closed lots</small><strong><%= formatNumber(summary.closedLotCount || 0) %></strong></span>
+              </article>
+
+              <article>
+                <span class="lot-summary-icon" aria-hidden="true">◒</span>
+                <span><small>Hidden lots</small><strong><%= formatNumber(summary.hiddenLotCount || 0) %></strong></span>
+              </article>
+
+              <article>
+                <span class="lot-summary-icon" aria-hidden="true">▤</span>
+                <span><small>Units in lots</small><strong><%= formatNumber(summary.totalUnits) %></strong></span>
+              </article>
+
+              <article>
+                <span class="lot-summary-icon" aria-hidden="true">✓</span>
+                <span><small>Requirements</small><strong><%= formatNumber(summary.totalRequirements) %></strong></span>
+              </article>
             </div>
           </section>
 
-          <section class="dashboard-grid">
-            <article class="dashboard-card">
-              <p class="card-label">Visible Lots</p>
-              <h3><%= formatNumber(summary.activeLotCount) %></h3>
-              <p>Lots shown in normal workflows and review tools.</p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Closed Lots</p>
-              <h3><%= formatNumber(summary.closedLotCount || 0) %></h3>
-              <p>Kept for review but unavailable as unit destinations.</p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Hidden Lots</p>
-              <h3><%= formatNumber(summary.hiddenLotCount || 0) %></h3>
-              <p>Administratively suppressed from normal lot browsing.</p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Units in Lots</p>
-              <h3><%= formatNumber(summary.totalUnits) %></h3>
-              <p>Units currently connected to all lots.</p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Requirements</p>
-              <h3><%= formatNumber(summary.totalRequirements) %></h3>
-              <p>Lot requirement records currently found.</p>
-            </article>
-          </section>
-
-          <section class="content-card">
-            <div class="content-header">
+          <section class="site-clean-section lot-browser-section">
+            <div class="site-clean-section-heading lot-browser-header">
               <div>
-                <p class="eyebrow">Management</p>
                 <h2>Lot Browser</h2>
               </div>
 
-              <a class="primary-button" href="/management/lots/new/modal" hx-get="/management/lots/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Create Lot</a>
+              <div class="lot-browser-header-actions site-clean-actions">
+                <% if (showHidden) { %>
+                  <a class="secondary-button" href="/management/lots">Hide Hidden Lots</a>
+                <% } else { %>
+                  <a class="secondary-button" href="/management/lots?showHidden=1">Show Hidden Lots</a>
+                <% } %>
+                <a class="primary-button" href="/management/lots/new/modal" hx-get="/management/lots/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Create Lot</a>
+              </div>
             </div>
 
             <% if (successMessage) { %>
@@ -159,26 +156,6 @@
                 <%= successMessage %>
               </div>
             <% } %>
-
-            <div class="lot-browser-note">
-              <strong>Expandable hierarchy:</strong>
-              Root lots are shown first. Use the arrow beside a lot name to reveal its direct child lots inline. Child lots can be expanded again when they contain deeper levels.
-            </div>
-
-            <div class="lot-visibility-toolbar">
-              <div>
-                <strong><%= showHidden ? 'Showing visible and hidden lots' : 'Showing visible lots only' %></strong>
-                <span>Closed lots remain visible for review; hidden lots are preserved for reporting and historical reference.</span>
-              </div>
-
-              <% if (showHidden) { %>
-                <a class="secondary-button" href="/management/lots">Hide Hidden Lots</a>
-              <% } else { %>
-                <a class="secondary-button" href="/management/lots?showHidden=1">Show Hidden Lots</a>
-              <% } %>
-            </div>
-
-            <h2 class="section-title"><%= showHidden ? 'Lots — Visible and Hidden' : 'Lots' %></h2>
 
             <div class="table-card">
               <table class="management-lots-table">
@@ -331,38 +308,6 @@
                   <% }) %>
                 </tbody>
               </table>
-            </div>
-          </section>
-
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Lot Configuration</p>
-                <h2>Visibility Behavior</h2>
-              </div>
-            </div>
-
-            <div class="workflow-list">
-              <div class="workflow-item active">
-                <span></span>
-                <div>
-                  <strong>Visible lots</strong>
-                  <p>
-                    Visible lots appear in the normal Lot Browser and in normal lot assignment dropdowns.
-                  </p>
-                </div>
-              </div>
-
-              <div class="workflow-item slate">
-                <span></span>
-                <div>
-                  <strong>Hidden lots</strong>
-                  <p>
-                    Hidden lots remain in history and reporting, but they are removed from normal selection lists.
-                    Use Show Hidden Lots when Management needs to review or unhide them.
-                  </p>
-                </div>
-              </div>
             </div>
           </section>
         </main>

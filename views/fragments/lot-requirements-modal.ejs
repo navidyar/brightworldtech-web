@@ -1,0 +1,87 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeRequirements = Array.isArray(requirements) ? requirements : [];
+  const safeLot = lot || null;
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal lot-modal lot-requirements-list-modal" role="dialog" aria-modal="true" aria-labelledby="lot-requirements-modal-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="lot-requirements-modal-title">Requirements</h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeLot) { %>
+        <div class="lot-requirements-modal-toolbar site-clean-actions">
+          <a class="primary-button" href="/management/lots/<%= safeLot.lot_id %>/requirements/new/modal" hx-get="/management/lots/<%= safeLot.lot_id %>/requirements/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Add Requirement</a>
+        </div>
+      <% } %>
+
+      <div class="table-card lot-requirements-table-card lot-requirements-modal-table-card">
+        <table>
+          <colgroup>
+            <col class="requirements-field-column" />
+            <col class="requirements-rule-column" />
+            <col class="requirements-value-column" />
+            <col class="requirements-status-column" />
+            <col class="requirements-notes-column" />
+            <col class="requirements-actions-column" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th>Field</th>
+              <th>Rule</th>
+              <th>Value</th>
+              <th>Status</th>
+              <th>Notes</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <% if (safeRequirements.length === 0) { %>
+              <tr>
+                <td colspan="6">No requirements have been added to this lot yet.</td>
+              </tr>
+            <% } %>
+
+            <% safeRequirements.forEach((requirement) => { %>
+              <tr>
+                <td><%= requirement.requirement_key || '—' %></td>
+                <td><%= requirement.operator_code || 'equals' %></td>
+                <td><%= requirement.required_value || '—' %></td>
+                <td>
+                  <% if (Number(requirement.is_active) === 1) { %>
+                    <span class="pill good">Active</span>
+                  <% } else { %>
+                    <span class="pill bad">Inactive</span>
+                  <% } %>
+                </td>
+                <td><%= requirement.notes || '—' %></td>
+                <td>
+                  <% if (safeLot) { %>
+                    <a class="secondary-button" href="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-get="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                  <% } else { %>
+                    —
+                  <% } %>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</div>

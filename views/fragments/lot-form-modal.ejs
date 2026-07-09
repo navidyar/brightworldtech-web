@@ -12,10 +12,9 @@
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel lot-modal" role="dialog" aria-modal="true" aria-labelledby="lot-form-modal-title">
+  <section class="modal-panel site-clean-modal lot-modal" role="dialog" aria-modal="true" aria-labelledby="lot-form-modal-title">
     <header class="modal-header">
       <div>
-        <p class="eyebrow">Management</p>
         <h2 id="lot-form-modal-title"><%= title %></h2>
       </div>
 
@@ -37,38 +36,30 @@
         </div>
       <% } %>
 
-      <form class="app-form lot-form-modal-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML" data-lot-form>
+      <form class="app-form app-form-clean lot-form-modal-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML" data-lot-form>
         <div class="form-section">
           <div class="form-section-header">
             <div>
-              <p class="eyebrow">Identity</p>
               <h3>Lot Identity</h3>
             </div>
-            <p>Name, type, and optional parent lot.</p>
           </div>
-
-          <div class="lot-weight-note">
-            <strong>Production weight order:</strong>
-            Unit override takes priority, then this lot's custom default, then the unit category default.
-          </div>
-
-          <% if (safeFormOptions.capabilities.hasDuplicateUnitAssumption) { %>
-            <label class="checkbox-card lot-duplicate-assumption-card" for="allowDuplicateUnitAssumptionModal">
-              <input
-                id="allowDuplicateUnitAssumptionModal"
-                type="checkbox"
-                name="allowDuplicateUnitAssumption"
-                value="1"
-                <%= safeFormData.allowDuplicateUnitAssumption === '1' ? 'checked' : '' %>
-              />
-              <span>
-                <strong>Allow duplicate-match unit assumption</strong>
-                <small>Regular Techs creating units in this open work lot may assume a matching Active unit from another open lot or a Parked unit. Same-lot and closed-lot matches still require an override.</small>
-              </span>
-            </label>
-          <% } %>
 
           <div class="form-grid lot-form-grid">
+            <% if (safeFormOptions.capabilities.hasDuplicateUnitAssumption) { %>
+              <label class="lot-inline-option form-field-wide" for="allowDuplicateUnitAssumptionModal">
+                <input
+                  id="allowDuplicateUnitAssumptionModal"
+                  type="checkbox"
+                  name="allowDuplicateUnitAssumption"
+                  value="1"
+                  <%= safeFormData.allowDuplicateUnitAssumption === '1' ? 'checked' : '' %>
+                />
+                <span>
+                  <strong>Allow duplicate-match unit assumption</strong>
+                  <small>Affects duplicate-match behavior for regular Techs in this lot.</small>
+                </span>
+              </label>
+            <% } %>
             <label class="form-field">
               <span>Lot Name</span>
               <input type="text" name="lotName" value="<%= safeFormData.lotName || '' %>" maxlength="120" placeholder="Example: Dell Latitude 5400 - Customer Lot" required />
@@ -87,8 +78,7 @@
                     <% } %>
                   <% }) %>
                 </select>
-                <small class="field-hint">Hidden lots are not available as new parent choices.</small>
-              </label>
+                </label>
             <% } %>
 
             <% if (safeFormOptions.capabilities.hasLotType) { %>
@@ -130,9 +120,6 @@
                     <% } %>
                   <% }) %>
                 </datalist>
-                <small class="field-hint">
-                  Optional custom lot-level default. Leave blank to use the unit category default. Examples: Laptop 1.00, Desktop 0.50, Mac 3.00.
-                </small>
               </label>
             <% } else if (safeFormOptions.capabilities.hasDefaultProductionWeightConfigValueId) { %>
               <label class="form-field">
@@ -145,9 +132,6 @@
                     </option>
                   <% }) %>
                 </select>
-                <small class="field-hint">
-                  Optional lot-level default. Leave blank to use the unit category default weight.
-                </small>
               </label>
             <% } %>
           </div>
@@ -157,23 +141,19 @@
           <div class="form-section">
             <div class="form-section-header">
               <div>
-                <p class="eyebrow">Planning</p>
                 <h3>Lot Planning</h3>
               </div>
-              <p>Goal, deadline, and label format.</p>
             </div>
 
-            <% if (safeFormOptions.capabilities.hasUnitAmountGoal) { %>
-              <label class="checkbox-card" for="hasUnlimitedGoalModal">
-                <input id="hasUnlimitedGoalModal" type="checkbox" name="hasUnlimitedGoal" value="1" data-lot-unlimited-toggle <%= safeFormData.hasUnlimitedGoal === '1' ? 'checked' : '' %> />
-                <span>
-                  <strong>Unlimited / Open Lot</strong>
-                  <small>Use this when Management does not want a strict unit amount goal.</small>
-                </span>
-              </label>
-            <% } %>
-
             <div class="form-grid lot-form-grid">
+              <% if (safeFormOptions.capabilities.hasUnitAmountGoal) { %>
+                <label class="lot-inline-option form-field-wide" for="hasUnlimitedGoalModal">
+                  <input id="hasUnlimitedGoalModal" type="checkbox" name="hasUnlimitedGoal" value="1" data-lot-unlimited-toggle <%= safeFormData.hasUnlimitedGoal === '1' ? 'checked' : '' %> />
+                  <span>
+                    <strong>Unlimited / Open Lot</strong>
+                  </span>
+                </label>
+              <% } %>
               <% if (safeFormOptions.capabilities.hasUnitAmountGoal) { %>
                 <label class="form-field" data-lot-goal-field>
                   <span>Unit Amount Goal</span>
@@ -192,9 +172,6 @@
                 <label class="form-field">
                   <span>Label Format</span>
                   <input type="text" name="labelFormat" value="<%= safeFormData.labelFormat || '' %>" maxlength="120" placeholder="Example: Standard BWT Laptop Label" />
-                  <small class="field-hint">
-                    Optional note for the label style or print template this lot should use later. It does not print labels by itself yet.
-                  </small>
                 </label>
               <% } %>
             </div>
@@ -205,10 +182,8 @@
           <div class="form-section">
             <div class="form-section-header">
               <div>
-                <p class="eyebrow">Notes</p>
                 <h3>Instructions</h3>
               </div>
-              <p>Internal guidance for Management, Leads, and future Tech workflows.</p>
             </div>
 
             <div class="form-grid single-column">

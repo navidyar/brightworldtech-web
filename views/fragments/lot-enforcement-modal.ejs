@@ -1,0 +1,186 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeSummary = enforcementSummary || null;
+  const safeValidationReport = validationReport || null;
+  const safeRequirementValidationSummary = Array.isArray(requirementValidationSummary) ? requirementValidationSummary : [];
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal lot-modal lot-enforcement-modal" role="dialog" aria-modal="true" aria-labelledby="lot-enforcement-modal-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="lot-enforcement-modal-title">Enforcement Preview</h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } else if (safeSummary) { %>
+        <div class="enforcement-banner <%= safeSummary.policyStatus %>">
+          <div>
+            <span><%= safeSummary.enforcementModeLabel %></span>
+            <strong><%= safeSummary.policyLabel %></strong>
+            <p><%= safeSummary.policyMessage %></p>
+          </div>
+        </div>
+
+        <div class="validation-note">
+          <strong>Preview only:</strong>
+          <%= safeSummary.enforcementModeMessage %>
+        </div>
+
+        <div class="enforcement-summary-grid">
+          <article class="enforcement-summary-card allowed">
+            <span>Would Allow</span>
+            <strong><%= formatNumber(safeSummary.allowedCount) %></strong>
+          </article>
+
+          <article class="enforcement-summary-card blocked">
+            <span>Would Block</span>
+            <strong><%= formatNumber(safeSummary.blockedCount) %></strong>
+          </article>
+
+          <article class="enforcement-summary-card review">
+            <span>Needs Review</span>
+            <strong><%= formatNumber(safeSummary.reviewCount) %></strong>
+          </article>
+
+          <article class="enforcement-summary-card override">
+            <span>Override Needed</span>
+            <strong><%= formatNumber(safeSummary.overrideRequiredCount) %></strong>
+          </article>
+        </div>
+
+        <% if (safeValidationReport) { %>
+          <div class="lot-enforcement-modal-section-heading">
+            <h3>Validation Check</h3>
+          </div>
+
+          <div class="validation-note">
+            <strong>Read-only preview:</strong>
+            <%= safeValidationReport.message %>
+          </div>
+
+          <div class="modal-validation-check-row" aria-label="Validation check totals">
+            <span class="accepted"><small>Accepted</small><strong><%= formatNumber(safeValidationReport.acceptedCount) %></strong></span>
+            <span class="rejected"><small>Rejected</small><strong><%= formatNumber(safeValidationReport.rejectedCount) %></strong></span>
+            <span class="review"><small>Needs Review</small><strong><%= formatNumber(safeValidationReport.needsReviewCount) %></strong></span>
+            <span class="open"><small>Open</small><strong><%= formatNumber(safeValidationReport.openCount) %></strong></span>
+          </div>
+        <% } %>
+
+        <% if (safeRequirementValidationSummary.length > 0) { %>
+          <div class="lot-enforcement-modal-section-heading">
+            <h3>Requirement Breakdown</h3>
+          </div>
+
+          <div class="table-card validation-table-card lot-enforcement-modal-table-card lot-requirement-breakdown-table-card">
+            <table>
+              <colgroup>
+                <col class="requirement-breakdown-field-column" />
+                <col class="requirement-breakdown-rule-column" />
+                <col class="requirement-breakdown-value-column" />
+                <col class="requirement-breakdown-count-column" />
+                <col class="requirement-breakdown-count-column" />
+                <col class="requirement-breakdown-count-column" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Rule</th>
+                  <th>Value</th>
+                  <th>Passed</th>
+                  <th>Rejected</th>
+                  <th>Review</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                <% safeRequirementValidationSummary.forEach((summaryRow) => { %>
+                  <tr>
+                    <td>
+                      <strong><%= summaryRow.requirementLabel %></strong>
+                      <% if (summaryRow.notes) { %>
+                        <br />
+                        <span class="table-muted-line"><%= summaryRow.notes %></span>
+                      <% } %>
+                    </td>
+                    <td><%= summaryRow.operatorLabel %></td>
+                    <td><%= summaryRow.requiredValue || '—' %></td>
+                    <td><span class="validation-mini-count accepted"><%= formatNumber(summaryRow.acceptedCount) %></span></td>
+                    <td><span class="validation-mini-count rejected"><%= formatNumber(summaryRow.rejectedCount) %></span></td>
+                    <td><span class="validation-mini-count review"><%= formatNumber(summaryRow.needsReviewCount) %></span></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } %>
+
+        <% if (safeSummary.unitDecisions.length > 0) { %>
+          <div class="lot-enforcement-modal-section-heading">
+            <h3>Unit Enforcement Decisions</h3>
+          </div>
+
+          <div class="table-card validation-table-card lot-enforcement-modal-table-card">
+            <table>
+              <colgroup>
+                <col class="enforcement-unit-column" />
+                <col class="enforcement-decision-column" />
+                <col class="enforcement-reason-column" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Unit</th>
+                  <th>Decision</th>
+                  <th>Reason</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                <% safeSummary.unitDecisions.forEach((unitDecision) => { %>
+                  <tr>
+                    <td>
+                      <strong><%= unitDecision.label %></strong>
+                      <br />
+                      <span class="table-muted-line"><%= unitDecision.subLabel %></span>
+                    </td>
+
+                    <td>
+                      <div class="modal-decision-stack">
+                        <span class="validation-badge <%= unitDecision.validationStatus %>">
+                          <%= unitDecision.validationStatusLabel %>
+                        </span>
+                        <span class="enforcement-badge <%= unitDecision.decision %>">
+                          <%= unitDecision.decisionLabel %>
+                        </span>
+                        <% if (unitDecision.requiresOverride) { %>
+                          <span class="pill bad">Override required</span>
+                        <% } else { %>
+                          <span class="pill good">No override</span>
+                        <% } %>
+                      </div>
+                    </td>
+
+                    <td><%= unitDecision.message %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        <% } else { %>
+          <div class="message success">
+            <p>No unit enforcement decisions are available yet because this lot currently has no units to check.</p>
+          </div>
+        <% } %>
+      <% } %>
+    </div>
+  </section>
+</div>

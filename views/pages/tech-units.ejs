@@ -18,7 +18,7 @@
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
   <link rel="stylesheet" href="/css/modal.css" />
-  <link rel="stylesheet" href="/css/tech-units-clean.css?v=20260708-stage-f5-2" />
+  <link rel="stylesheet" href="/css/tech-units-clean.css?v=20260708-unit-details-r1" />
   <script defer src="/js/modal.js"></script>
   <script defer src="/js/tech-units.js"></script>
   <script defer src="/js/tech-units-date-picker.js"></script>
@@ -51,44 +51,31 @@
           <% } else { %>
               <%
                 const unitCategoryOptions = Array.isArray(result.unitCategories) ? result.unitCategories : [];
-                const overallGradeOptions = Array.isArray(result.overallGradeOptions) ? result.overallGradeOptions : [];
+                const gradeFilterOptions = Array.isArray(result.gradeFilterOptions) ? result.gradeFilterOptions : [];
                 const techUserOptions = Array.isArray(result.techUserOptions) ? result.techUserOptions : [];
+                const pagination = result.pagination || {};
                 const pageRoleCodes = Array.isArray(currentRoles) ? currentRoles : [];
                 const isRegularTechBrowserUser = pageRoleCodes.includes('tech') && !pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
                 const canViewParkedUnits = pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
                 const isLast24HourDrilldown = filters.createdWindow === '24h';
+                const isGradeFilterSelected = (grade) => String(filters.gradeFilter || '') === String(grade.filterValue || '');
               %>
               <section class="tech-units-clean-section tech-units-clean-filters-section" aria-labelledby="tech-units-filters-heading">
                 <div class="tech-units-clean-section-heading tech-units-clean-section-heading--filters">
                   <h2 id="tech-units-filters-heading">Search &amp; Filters</h2>
 
-                  <% if (canViewParkedUnits || isLast24HourDrilldown || filters.unitState === 'parked' || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
+                  <% if (isLast24HourDrilldown || filters.unitState === 'parked' || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
                     <div class="tech-filter-panel-header-actions">
-                      <% if (canViewParkedUnits) { %>
-                        <label class="tech-unit-state-toggle">
-                          <span class="tech-unit-state-toggle-label">Show Parked Units</span>
-                          <span class="tech-unit-state-toggle-control">
-                            <input
-                              type="checkbox"
-                              name="unitState"
-                              value="parked"
-                              data-unit-state-toggle
-                              data-tech-filter-auto-submit
-                              <%= filters.unitState === 'parked' ? 'checked' : '' %>
-                            />
-                            <span class="tech-unit-state-toggle-track" aria-hidden="true"></span>
-                          </span>
-                        </label>
-                      <% } %>
-
-                      <% if (isLast24HourDrilldown || filters.unitState === 'parked' || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
-                        <span class="tech-filter-active-pill">Filtered View</span>
-                      <% } %>
+                      <span class="tech-filter-active-pill">Filtered View</span>
                     </div>
                   <% } %>
                 </div>
 
                 <form class="tech-filter-form tech-filter-panel tech-units-clean-filter-workspace" method="get" action="/tech/units">
+                  <input type="hidden" name="perPage" value="<%= pagination.perPageParam || filters.perPage || '50' %>" />
+                  <% if (filters.sort) { %>
+                    <input type="hidden" name="sort" value="<%= filters.sort %>" />
+                  <% } %>
                   <div class="tech-filter-layout">
                   <label class="form-field tech-filter-search-field">
                     <span>Search Units</span>
@@ -120,10 +107,8 @@
                       <span>Grade</span>
                       <select name="gradeFilter" data-tech-filter-auto-submit>
                         <option value="">All grades</option>
-                        <option value="current" <%= filters.gradeFilter === 'current' ? 'selected' : '' %>>Has current grade</option>
-                        <option value="needs" <%= filters.gradeFilter === 'needs' ? 'selected' : '' %>>Needs grade</option>
-                        <% overallGradeOptions.forEach((grade) => { %>
-                          <option value="grade:<%= grade.id %>" <%= filters.gradeFilter === `grade:${grade.id}` ? 'selected' : '' %>>Grade <%= grade.label %></option>
+                        <% gradeFilterOptions.forEach((grade) => { %>
+                          <option value="<%= grade.filterValue %>" <%= isGradeFilterSelected(grade) ? 'selected' : '' %>><%= grade.label %></option>
                         <% }) %>
                       </select>
                     </label>
@@ -134,7 +119,7 @@
                         <select name="techUserId" data-tech-filter-auto-submit>
                           <option value="">All Tech Users</option>
                           <% techUserOptions.forEach((techUser) => { %>
-                            <option value="<%= techUser.id %>" <%= String(filters.techUserId) === String(techUser.id) ? 'selected' : '' %>><%= techUser.label %> (<%= formatNumber(techUser.count) %>)</option>
+                            <option value="<%= techUser.id %>" <%= String(filters.techUserId) === String(techUser.id) ? 'selected' : '' %>><%= techUser.label %></option>
                           <% }) %>
                         </select>
                       </label>
@@ -193,8 +178,29 @@
                 <% } %>
 
                   <div class="tech-filter-actions">
-                    <button class="primary-button" type="submit">Apply Filters</button>
-                    <a class="secondary-button" href="/tech/units">Clear</a>
+                    <% if (canViewParkedUnits) { %>
+                      <label class="tech-unit-state-toggle">
+                        <span class="tech-unit-state-toggle-control">
+                          <input
+                            type="checkbox"
+                            name="unitState"
+                            value="parked"
+                            data-unit-state-toggle
+                            data-tech-filter-auto-submit
+                            <%= filters.unitState === 'parked' ? 'checked' : '' %>
+                          />
+                          <span class="tech-unit-state-toggle-track" aria-hidden="true"></span>
+                        </span>
+                        <span class="tech-unit-state-toggle-label">Show Parked Units</span>
+                      </label>
+                    <% } else { %>
+                      <span aria-hidden="true"></span>
+                    <% } %>
+
+                    <span class="tech-filter-action-buttons">
+                      <button class="primary-button" type="submit">Apply Filters</button>
+                      <a class="secondary-button" href="/tech/units">Clear</a>
+                    </span>
                   </div>
                 </form>
               </section>
@@ -204,8 +210,8 @@
                   <h2 id="tech-units-results-heading">Units</h2>
 
                   <p class="tech-units-clean-loaded-count" aria-live="polite">
-                    <strong id="tech-units-loaded-count"><%= result.supported ? formatNumber(result.units.length) : '—' %></strong>
-                    <span>loaded</span>
+                    <strong id="tech-units-loaded-count"><%= result.supported && pagination.totalRows !== undefined ? formatNumber(pagination.totalRows) : '—' %></strong>
+                    <span>matching</span>
                   </p>
                 </div>
 

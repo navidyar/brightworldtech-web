@@ -26,7 +26,10 @@ function buildTechUnitsTableUrl(filters) {
     'createdStartDate',
     'createdEndDate',
     'createdWindow',
-    'unitState'
+    'unitState',
+    'sort',
+    'page',
+    'perPage'
   ];
 
   passthroughKeys.forEach((key) => {
@@ -149,6 +152,9 @@ function getFiltersFromRequest(req) {
     createdEndDate: String(req.query.createdEndDate || '').trim(),
     createdWindow: String(req.query.createdWindow || '').trim(),
     unitState: String(req.query.unitState || 'active').trim(),
+    sort: String(req.query.sort || '').trim(),
+    page: String(req.query.page || '').trim(),
+    perPage: String(req.query.perPage || '').trim(),
     currentUserId: req && req.currentUser ? req.currentUser.user_id : null,
     restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req),
     canViewParkedUnits: canViewParkedUnits(req)
@@ -204,10 +210,35 @@ async function attachExpandedUnitDetails(result) {
   };
 }
 
+async function attachLatestWorkCompletion(result) {
+  if (!result || !result.supported || !Array.isArray(result.units) || result.units.length === 0) {
+    return result;
+  }
+
+  const unitIds = result.units
+    .map((unit) => Number(unit.unitId))
+    .filter((unitId) => Number.isInteger(unitId) && unitId > 0);
+
+  if (unitIds.length === 0) {
+    return result;
+  }
+
+  const latestCompletionMap = await techUnitModel.getLatestWorkCompletionMapForUnits(unitIds);
+
+  return {
+    ...result,
+    units: result.units.map((unit) => ({
+      ...unit,
+      latestWorkCompletion: latestCompletionMap.get(Number(unit.unitId)) || null
+    }))
+  };
+}
+
 async function buildTechUnitsResult(filters) {
   const rawResult = await techUnitModel.listTechUnits(filters);
+  const expandedResult = await attachExpandedUnitDetails(rawResult);
 
-  return attachExpandedUnitDetails(rawResult);
+  return attachLatestWorkCompletion(expandedResult);
 }
 
 function normalizeModuleRowsFromBody(value) {
@@ -1414,14 +1445,14 @@ async function renderTechUnitsPage(req, res, next) {
       pageTitle: 'Tech Units',
       currentNav: 'tech-units',
       result,
-      filters,
-      tableUrl: buildTechUnitsTableUrl(filters),
+      filters: result.filters || filters,
+      tableUrl: buildTechUnitsTableUrl(result.filters || filters),
       successMessage: req.query.created === '1'
         ? 'Unit created successfully.'
         : req.query.updated === '1'
           ? 'Unit updated successfully.'
           : req.query.completed === '1'
-            ? 'Work completion recorded successfully.'
+            ? 'Unit completion recorded successfully.'
             : req.query.deleted === '1'
               ? 'Unit and all linked records were permanently deleted.'
               : req.query.parked === '1'
@@ -1444,7 +1475,7 @@ async function renderTechUnitsTable(req, res, next) {
 
     return res.render('fragments/tech-units-table', {
       result,
-      filters
+      filters: result.filters || filters
     });
   } catch (error) {
     next(error);
@@ -1571,7 +1602,7 @@ async function completeTechUnitWork(req, res, next) {
       completedByUserId: req.currentUser.user_id,
       recordedByUserId: req.currentUser.user_id,
       creditSource: 'manual_completion',
-      notes: 'Lot work completion recorded from the Tech Unit Browser.',
+      notes: 'Unit completion recorded from the Tech Unit Browser.',
       actorRoleCodes: getCurrentRoleCodes(req)
     });
 
@@ -1583,7 +1614,7 @@ async function completeTechUnitWork(req, res, next) {
         buildCompleteWorkModalView({
           preview,
           req,
-          successMessage: 'Lot work completion was recorded successfully.'
+          successMessage: 'Unit completion was recorded successfully.'
         })
       );
     }
@@ -1596,7 +1627,7 @@ async function completeTechUnitWork(req, res, next) {
         buildCompleteWorkModalView({
           preview,
           req,
-          errorMessages: [error.message || 'Lot work completion could not be recorded.']
+          errorMessages: [error.message || 'Unit completion could not be recorded.']
         })
       );
     }

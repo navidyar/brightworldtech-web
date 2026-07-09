@@ -1007,6 +1007,73 @@ async function deleteLot(req, res, next) {
   }
 }
 
+async function renderLotRequirementsModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return res.status(404).render('fragments/lot-requirements-modal', {
+        lot: null,
+        requirements: [],
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const lotDetailViewData = await getLotDetailViewData(lotId);
+
+    if (!lotDetailViewData) {
+      return res.status(404).render('fragments/lot-requirements-modal', {
+        lot: null,
+        requirements: [],
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    return res.render('fragments/lot-requirements-modal', {
+      lot: lotDetailViewData.lot,
+      requirements: lotDetailViewData.requirements,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderLotEnforcementModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return res.status(404).render('fragments/lot-enforcement-modal', {
+        enforcementSummary: null,
+        validationReport: null,
+        requirementValidationSummary: [],
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    const lotDetailViewData = await getLotDetailViewData(lotId);
+
+    if (!lotDetailViewData) {
+      return res.status(404).render('fragments/lot-enforcement-modal', {
+        enforcementSummary: null,
+        validationReport: null,
+        requirementValidationSummary: [],
+        errorMessages: ['The selected lot could not be found.']
+      });
+    }
+
+    return res.render('fragments/lot-enforcement-modal', {
+      enforcementSummary: lotDetailViewData.enforcementSummary,
+      validationReport: lotDetailViewData.validationReport,
+      requirementValidationSummary: lotDetailViewData.requirementValidationSummary,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function renderNewLotRequirementModal(req, res, next) {
   try {
     const lotId = Number(req.params.lotId);
@@ -1146,6 +1213,8 @@ module.exports = {
   renderDeleteLotModal,
   deleteLot,
   renderLotDetailPage,
+  renderLotRequirementsModal,
+  renderLotEnforcementModal,
   renderNewLotRequirementModal,
   createLotRequirement,
   renderEditLotRequirementModal,

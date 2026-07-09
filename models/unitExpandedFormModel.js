@@ -171,7 +171,13 @@ async function listConfigValuesByCategoryCodes(categoryCodes, connection = pool)
 
 
 function normalizeGradeToken(value) {
-  return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/^(cosmetic_)?grade_/, '')
+    .replace(/_grade$/, '');
 }
 
 function isNotYetGradedToken(value) {
@@ -243,7 +249,7 @@ async function getExpandedFormOptions() {
     skinnedStatusOptions,
     gpuTypeOptions
   ] = await Promise.all([
-    listConfigValuesByCategoryCodes(['overall_unit_grades', 'unit_grades', 'unit_grade']),
+    listConfigValuesByCategoryCodes(['cosmetic_grades', 'overall_unit_grades', 'unit_grades', 'unit_grade']),
     listConfigValuesByCategoryCodes(['absolute_statuses', 'absolute_status']),
     listConfigValuesByCategoryCodes(['physical_camera_statuses', 'camera_statuses', 'physical_camera_status']),
     listConfigValuesByCategoryCodes(['touchscreen_statuses', 'touchscreen_status']),

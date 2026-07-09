@@ -1,4 +1,183 @@
+Management Lots Refinement 13: Lot State Context Rail.
+- Moves the short Lot Context metadata into the right side of the top Lot State summary panel, avoiding the overly compressed inline-row layout from the reverted trial while saving a full page section.
+- Keeps the existing Lot State stat blocks readable, preserves the small square stat icons, and changes Validation Check counts to soft colored count pills instead of colored left bars.
+- Keeps Direct Child Lots as a separate simple section only when child lots exist and leaves all detail-page tables/table rows unchanged. No database migration is required.
+
+Management Lots Refinement 11: Validation Check Row.
+- Moves the visible Unit-to-Lot Validation Summary off the main lot detail page and replaces it with a compact second-row "Validation Check" inside the top Lot State summary panel.
+- Keeps the full requirement pass/fail breakdown available inside the Enforcement Preview modal under Requirement Breakdown, alongside the existing enforcement decision preview.
+- Preserves table-like modal views and leaves the main lot detail page tables/table rows unchanged. No database migration is required.
+
+Management Lots Refinement 10: Enforcement Modal Overflow Fix.
+- Keeps the Enforcement Preview modal in a table-like layout while removing the remaining horizontal scrollbar pressure.
+- Constrains the enforcement modal body, summary grid, and modal-only table to the modal width, allows policy text and reasons to wrap, and stacks decision badges inside the Decision cell instead of forcing that column wider.
+- Leaves Requirements modal structure, main lot detail tables, and all table rows unchanged. No database migration is required.
+
+Management Lots Refinement 9: Modal Table Fit Cleanup.
+- Keeps Requirements and Enforcement Preview modal content in table-like views instead of replacing them with cards.
+- Removes the modal-only horizontal scrollbar pressure by using fixed modal table layout, wrapping long values/reasons/notes, and tighter column sizing.
+- Shortens the Requirements header labels and consolidates the Enforcement Preview unit decision columns into Unit / Decision / Reason while preserving the same validation, decision, and override information.
+- Leaves the main lot detail page tables/table rows unchanged. No database migration is required.
+
+Step 7m.7: Management Lots Detail Enforcement Preview Modal.
+- Moved the individual lot Requirement Enforcement Preview / Unit Enforcement Decisions content off the main detail page into a dedicated HTMX modal.
+- Added an Enforcement Preview action beside Requirements on `/management/lots/:id` so the future enforcement exploration remains accessible without adding main-page noise.
+- Added the `/management/lots/:lotId/enforcement/modal` route, controller renderer, and modal fragment while leaving existing lot detail tables/table rows unchanged.
+- No database migration required.
+
+## Management Lots Refinement 6 — Requirement Rules Modal
+
+- Moves the editable Lot Requirement Rules list out of the main `/management/lots/:id` page and into a clean modal opened from a compact `Requirements` action in the lot detail heading.
+- Keeps Add Requirement and Edit Requirement flows inside the modal stack while preserving the existing routes, validation, HTMX behavior, and post-save redirects.
+- Moves success/error notices that previously lived in the visible requirements section up near the top of the lot detail page so requirement create/edit feedback is still visible after redirects.
+- Leaves the existing page tables and table rows unchanged; this step only removes the rules-management section from the main page and adds a modal list shell. No database migration is required.
+
+## Management Lots Refinement 5 — Individual Lot Detail Global Cleanup
+
+Refines `/management/lots/:id` to follow the same non-table global styling direction as the Lots browser cleanup. The lot detail page now uses the shared `page-heading`, Lookup-style summary row, and `site-clean-section` / `site-clean-actions` patterns instead of the older dashboard hero, hero badge, dashboard-card grid, content-card headers, and eyebrow labels. The old Step 2i preview helper block was removed from the operational page. Close/reopen, hide/unhide, and delete lot modals now opt into the shared clean modal/button contract. Existing tables and table rows were intentionally left unchanged for a later table-specific pass.
+
+## Management Lots Refinement 4 — Shared Action Buttons and Section Shell
+
+- Normalizes `/management/lots` non-table action buttons to the shared clean button contract from the current `/tech/units` direction: 39px controls, 7px corners, medium 650 font weight, restrained hover states, and no legacy pill/button bubble treatment.
+- Promotes reusable `.site-clean-section`, `.site-clean-section-heading`, and `.site-clean-actions` styles in `work-area.css` so management pages can opt into the same heading/action rhythm without touching table rows.
+- Converts the Lot Browser wrapper from a bordered content-card shell into a clean section heading above the existing table panel, reducing the container-within-container feel while preserving the current Lots table and row styling.
+- Aligns clean modal action buttons and close buttons with the current Tech Units modal direction by making regular modal actions solid blue, square-cornered, and borderless; danger actions remain red.
+- Updates the shared work-area stylesheet cache-buster. No database migration is required.
+
+## Management Lots Refinement 3 — Global Container and Modal Cleanup
+
+- Applies the shared clean modal/form container pattern to `/management/lots` create/edit lot and requirement modals, reusing the current Tech Units direction of one modal shell, compact section labels, and one white panel per form section.
+- Removes remaining routine modal eyebrow labels, section helper copy, field hints, the production-weight note bubble, and separate checkbox-card bubbles from the Lot modals while preserving the underlying form fields and validation behavior.
+- Moves the hidden-lot visibility action into the Lot Browser header beside Create Lot and removes the separate toolbar/redundant Lots section title above the table.
+- Leaves the Lots table and row styling unchanged for a later table-specific pass. No database migration is required.
+
+## Tech Units Unit Details R.1 — Fluid Multi-Column Readability Pass
+
+- Updates the expanded `/tech/units` Unit Details workspace so each detail section uses responsive multi-column label/value fields instead of long label/value rows with unused horizontal space.
+- Keeps the change focused on layout/readability only: no route, controller, JavaScript, permission, workflow, or database behavior changes are included.
+- Rebalances the expanded detail panel with a quieter header, compact white section panels, smaller labels, stronger values, auto-fit section grids, and responsive breakpoints that reflow from three/two columns down to smaller multi-column groups before stacking on narrow screens.
+- Aligns role visibility with the current Tech Units summary contract by keeping Current Lot Weight hidden from regular Tech users inside expanded Unit Details as well as the summary row.
+- Hides the routine ScanTool-only cellular helper text from the expanded read-only view while preserving the actual cellular/WWAN data display when present.
+
+## Management Lots Refinement 1 — Lookup-Style Summary Cleanup
+## Management Lots Refinement 2 — Header Text Cleanup
+
+- Replaces the old two-tier `/management/lots` hero copy with a single `Lot Management` page heading using the shared `.page-heading` title style based on the current `/tech/units` heading treatment.
+- Removes the routine hierarchy instruction text and lot visibility explanation text from the Lot Browser card while keeping the visible/hidden lot toggle action.
+- Removes the `Management` eyebrow label above `Lot Browser` and leaves the Lots table markup/styling unchanged for a later global table refinement pass. No database migration is required.
+
+
+- Replaces the bulky `/management/lots` hero badge and top dashboard-card count bubbles with a compact Lookup Metrics Dashboard-inspired summary panel.
+- Preserves the existing lot totals: total lots, visible lots, closed lots, hidden lots, units in lots, and requirements.
+- Removes the bottom `Lot Configuration / Visibility Behavior` training/help section so the page stays focused on the operational Lot Browser.
+- Adds page-scoped Lots CSS for the compact summary row using the same thin blue border, pale blue gradient, restrained typography, small icon boxes, and responsive behavior direction as the Lookup metrics summary row. No database migration is required.
+
+## Reset Design Stage F.5.16 — Tech Units Header Sorting Toggle Correction
+
+- Updates the `/tech/units` sortable table headers so each sortable header toggles between its forward and reverse ordering when clicked again, while preserving active filters and pagination options.
+- Date now toggles between newest-first and oldest-first; Work / Assignment toggles assigned Tech names from A-Z and Z-A with unassigned units remaining last.
+- Grade now toggles between A/B/C/D/E before Not Yet Graded and the reverse order; Pass-Fail toggles between Pass-first and Fail-first while records without an outcome remain last.
+- Removes the visible A-Z/A-D/Pass text indicators from the table headers and uses a compact active-direction arrow instead. No database migration is required.
+
+## Reset Design Stage F.5.15 — Tech Units Header Sorting Foundation
+
+- Adds sortable header controls to `/tech/units` while preserving the filtered pagination foundation from F.5.14. Sorting is carried in the query string as `sort=` and paging links preserve the active sort.
+- Enables Date sorting as latest-created first, Work / Assignment sorting by assigned Tech first name A-Z with unassigned units last, Grade sorting from A through D/E with Not Yet Graded/ungraded records last, and Pass-Fail sorting with Pass before Fail.
+- Runs sorting at the SQL row-query level before pagination so each page is drawn from the correctly sorted filtered result set instead of only sorting the visible page.
+- Adds shared table-sort link styling in `work-area.css` so other record tables can reuse the same sortable-header treatment when we roll pagination/sorting out sitewide.
+- Updates cache versions to `20260708-stage-f5-15`. No database migration is required.
+
+## Reset Design Stage F.5.14 — Tech Units Pagination Foundation
+
+- Adds filtered pagination to `/tech/units` with 50, 100, 250, 500, and All units-per-page options; the default page size is 50.
+- Uses one shared pagination partial and shared `work-area.css` pagination styles so the same pattern can be reused by other record-table pages later instead of becoming a Tech Units-only design.
+- Adds pagination controls above and below the Tech Units table so users can move between pages without scrolling through the entire current page first.
+- Runs the row query and matching-count query through the same filter conditions so page counts respect active filters such as lot, category, grade, Tech User, created date, search, and parked-unit mode.
+- Preserves the selected units-per-page value when filters are changed, resets filtered submissions back to page 1, supports `perPage=all`, and updates cache versions to `20260708-stage-f5-14`. No database migration is required.
+
+## Reset Design Stage F.5.13 — Tech Units Grade and Tech User Filter Source Correction
+
+- Fixes the Tech Units Browser filter option source ordering so Processor Brand, Processor Model, Grade, Tech User, and Production Weight data no longer shift into the wrong dropdowns.
+- Restores the Grade filter to use cosmetic letter-grade options and adds an explicit `Not Yet Graded` option that maps to units with no current grade assessment.
+- Restores the Tech User filter to show actual Tech user names and filters by the unit ownership/assignment field instead of production-weight/category labels.
+- Hardens the Parked Units mode so activating it shows the parked inventory instead of inheriting active-view search, lot, category, grade, Tech, or date filters. No database schema changes are included.
+
 # BWTDallas Webserver
+
+## Reset Design Stage F.5.12 — Tech Units Filter and Completion Action Corrections
+
+- Corrects the `/tech/units` Grade filter so it only presents actual cosmetic grade values such as A, B, C, D, and E instead of status-style "Has current grade" / "Needs grade" choices.
+- Restores Tech User filtering to the displayed unit ownership pattern: assigned Tech first, with a creator fallback for older records that do not have `assigned_to_user_id` populated yet. The dropdown now presents Tech names without count text.
+- Hardens parked-unit browsing by ignoring active-lot and Tech ownership filters while viewing parked units, so the Show Parked Units toggle returns parked records that had lot/assignment cleared when parked.
+- Changes the completion action label from "Work Complete" to "Unit Complete" before completion, then shows the disabled "Print Label" placeholder in that same action position only after a unit has a recorded manual completion.
+- Updates unit-completion modal/history wording from Work Complete to Unit Complete where visible. No database migration is required.
+
+## Reset Design Stage F.5.11 v2 — Tech Units Filter Bugfixes and Sitewide Date/Radio Polish
+
+- Restores the `/tech/units` Grade filter to the cosmetic-grade option set by reading `cosmetic_grades` first and matching equivalent legacy grade IDs where older grade categories still exist.
+- Tightens the Tech User filter so current schemas filter by the unit's assigned Tech (`assigned_to_user_id`) rather than creator fallback ownership.
+- Moves Show Parked Units into the Search & Filters action row beside Apply Filters/Clear so the value is submitted with the form; checked state requests only parked units.
+- Adds a disabled Unit Actions `Print Label` button as the visible placeholder for the upcoming label-printing workflow without introducing a broken route.
+- Removes the focus aura from radio-option focus sitewide while leaving normal blue focus for regular form fields; the compact Show Parked toggle also opts out of checkbox focus glow.
+- Replaces native `input[type="date"]` calendars with a reusable site date picker that mirrors the Tech Units Created Date Range calendar. Week/month fields keep their native picker behavior for now.
+- Updates shared and Tech Units CSS/JS cache versions to `20260708-stage-f5-11-v2`. No database migration is required.
+
+## Reset Design Stage F.5.10 — Whole-Site Form Field Contract Hardening
+
+- Extends the shared form-field value typography and focus treatment from F.5.8/F.5.9 to the remaining standard date-style controls, including week, month, and datetime-local fields used by metrics/reporting screens.
+- Promotes the shared form field contract as the sitewide source of truth for normal inputs, selects, textareas, custom field triggers, and radio/checkbox option text instead of relying on page-specific Add/Edit or browser-only overrides.
+- Keeps labels, hints, descriptions, buttons, tables, and non-form controls outside the field-value contract, while preserving the single blue focus border plus soft glow for accessible keyboard focus.
+- Updates the shared work-area stylesheet cache URL and the Tech Units clean stylesheet cache version to `20260708-stage-f5-10`. No route, JavaScript, validation, permission, or database behavior changes are included.
+
+## Reset Design Stage F.5.9 — Sitewide Form Field Focus Polish
+
+- Adds the missing focus portion on top of F.5.8: normal form fields now use one clean blue border plus a soft outer blue glow instead of the double-border/native-outline effect.
+- Applies the same focus contract to text/search/email/password/number/date/time/tel/url inputs, textareas, single-select fields, custom field triggers, and radio/checkbox option labels.
+- Keeps the F.5.8 sitewide field-value typography contract intact and avoids Add/Edit-only typography exceptions.
+- Updates the shared work-area stylesheet cache URL and the Tech Units clean stylesheet cache version to `20260708-stage-f5-9`. No route, JavaScript, validation, permission, or database behavior changes are included.
+
+## Reset Design Stage F.5.8 — Sitewide Form Field Value Typography Contract
+
+- Replaces the prior narrow Add/Edit typography follow-up with a sitewide form-field value typography contract based on the visible value text used by the Tech Units Browser select fields: Inter/system stack, `0.86rem`, `600` weight, neutral field ink, and `1.25` line height.
+- Applies the same value text contract to text/search/email/password/number/date/time/tel/url inputs, textareas, single-select fields, custom field triggers, and radio/checkbox option text.
+- Keeps field labels, help text, and descriptive secondary copy separate from field values, so labels remain labels and option descriptions remain muted/help-style text.
+- Updates the shared work-area stylesheet cache URL and the Tech Units clean stylesheet cache version to `20260708-stage-f5-8`. No route, JavaScript, validation, permission, or database behavior changes are included.
+
+## Reset Design Stage F.5.7 — Add/Edit Field Typography Correction
+
+- Restores the Unit Outcome Pass/Fail radio labels to a restrained bold weight instead of the lighter F.5.6 treatment.
+- Aligns Add/Edit form labels and control text with the Tech Units Browser field typography contract: inherited Inter font, neutral field ink, compact label sizing, and normal control text weight.
+- Keeps the corrected F.5.5 Unit Outcome layout: no extra nested option container, visible radio controls, and rounded corners only on the existing Unit Outcome field/container.
+- Updates the Tech Units clean stylesheet cache version to `20260708-stage-f5-7`. No route, JavaScript, validation, permission, or database behavior changes are included.
+
+## Reset Design Stage F.5.6 — Unit Outcome Label Weight Polish
+
+- Softens the Unit Outcome Pass/Fail radio-label text so it uses the same restrained medium-bold treatment as the rest of the Add/Edit form controls.
+- Preserves the F.5.5 corrected Unit Outcome structure: no extra nested container, rounded existing fieldset/container, larger visible radio buttons, and one selectable `outcomeCode` option.
+- Updates the Tech Units clean stylesheet cache version to `20260708-stage-f5-6`. No route, JavaScript, validation, permission, or database behavior changes are included.
+
+## Reset Design Stage F.5.5 — Unit Outcome Radio Correction
+
+- Corrects the Add/Edit Unit Outcome polish by removing the extra bordered container around the radio choices.
+- Applies the rounded-corner treatment to the existing Unit Outcome fieldset/container instead of adding another visual box inside it.
+- Keeps Unit Outcome as regular radio controls with larger visible radio buttons and separated labels, while preserving the existing `outcomeCode` field name and one-choice-only behavior.
+- Leaves the F.5.4 neutral border, dark heading, and borderless modal action-button refinements in place. No route, JavaScript, validation, or database behavior changes are included.
+
+## Reset Design Stage F.5.4 — Add/Edit Modal Button and Outcome Polish
+
+- Removes visible borders from Add/Edit Unit modal action controls while preserving the Metrics Dashboard blue fill treatment from the prior modal polish step.
+- Normalizes Add/Edit form island-panel and nested workflow borders to one neutral Lookup-style border family instead of per-section semantic border colors.
+- Changes Add/Edit form section headings and nested workflow headings to a consistent dark gray rather than section-specific colors.
+- Reworks Unit Outcome from a butted segmented button group back into a true radio-control presentation with larger visible radio buttons, separated rounded options, and one selectable outcome through the existing `outcomeCode` radio field.
+- Rounds the small Unit Outcome option container and preserves all existing form field names, routes, permissions, validation, duplicate checks, catalog-request behavior, JavaScript, and database behavior. No migration is required.
+
+## Reset Design Stage F.5.3 — Add/Edit Modal Header and Action Polish
+
+- Extends the Lookup-style gray modal canvas behind the Create/Edit Unit title strip so the header and form body share one continuous soft-gray backdrop.
+- Vertically centers the modal title and close button inside the header area.
+- Standardizes Add/Edit Unit modal action controls to the Metrics Dashboard blue button treatment, including secondary actions and the X close button.
+- Normalizes modal body sizing and side spacing so the white island panels sit centered with equal left and right padding.
+- Preserves all form fields, field names, validation, duplicate controls, catalog requests, permissions, routes, controllers, JavaScript behavior, and database behavior. No migration is required.
 
 ## Reset Design Stage F.5.2 — Add/Edit White Island Panels
 

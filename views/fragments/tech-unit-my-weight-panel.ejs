@@ -41,7 +41,7 @@
         <% safeCompletions.forEach((completion) => { %>
           <article class="tech-history-row">
             <div class="tech-history-meta">
-              <span class="tech-history-status is-current"><%= completion.creditSourceLabel || 'Work Complete' %></span>
+              <span class="tech-history-status is-current"><%= completion.creditSourceLabel || 'Unit Complete' %></span>
               <span><%= completion.lotName || 'No active lot' %></span>
               <span><%= completion.completedAt ? formatDateTime(completion.completedAt) : 'No date recorded' %></span>
             </div>

@@ -2,7 +2,20 @@ const { pool } = require('./db');
 const lotModel = require('./lotModel');
 const productionWeightModel = require('./productionWeightModel');
 
-const UNIT_LIMIT = 100;
+const DEFAULT_UNIT_PAGE_SIZE = 50;
+const UNIT_PAGE_SIZE_OPTIONS = [50, 100, 250, 500];
+const UNIT_PAGE_SIZE_ALL = 'all';
+const DEFAULT_UNIT_SORT = 'date_desc';
+const UNIT_SORT_OPTIONS = new Set([
+  'date_desc',
+  'date_asc',
+  'tech_az',
+  'tech_za',
+  'grade_asc',
+  'grade_desc',
+  'outcome_pass_first',
+  'outcome_fail_first'
+]);
 const MAX_SEARCH_TERMS = 100;
 const ASSET_NUMBER_START = 2300000;
 
@@ -13,6 +26,13 @@ const MEMORY_INSTALL_TYPE_OPTIONS = [
 ];
 
 const DEFAULT_MEMORY_INSTALL_TYPE_CODE = 'removable_module';
+
+const COSMETIC_GRADE_CATEGORY_CODES = [
+  'cosmetic_grades',
+  'overall_unit_grades',
+  'unit_grades',
+  'unit_grade'
+];
 
 const VALID_MEMORY_INSTALL_TYPE_CODES = new Set(MEMORY_INSTALL_TYPE_OPTIONS.map((option) => option.code));
 
@@ -887,6 +907,120 @@ function mapById(items) {
   return map;
 }
 
+function normalizeGradeToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .replace(/^(cosmetic_)?grade_/, '')
+    .replace(/_grade$/, '');
+}
+
+function isNotYetGradedToken(value) {
+  return ['n_a', 'na', 'not_applicable', 'not_yet_graded', 'not_graded', 'ungraded'].includes(normalizeGradeToken(value));
+}
+
+function normalizeCosmeticGradeOptions(options) {
+  const safeOptions = Array.isArray(options) ? options : [];
+  const groups = new Map();
+
+  safeOptions.forEach((option) => {
+    const isNotYetGraded = [option.code, option.value, option.label].some(isNotYetGradedToken);
+    const displayLabel = isNotYetGraded ? 'Not Yet Graded' : (option.label || option.code || option.value || '');
+    const tokenCandidates = [displayLabel, option.code, option.value, option.label]
+      .map(normalizeGradeToken)
+      .filter(Boolean);
+    const gradeToken = isNotYetGraded ? 'not_yet_graded' : tokenCandidates[0];
+
+    if (!gradeToken) {
+      return;
+    }
+
+    if (!groups.has(gradeToken)) {
+      groups.set(gradeToken, {
+        ...option,
+        label: displayLabel,
+        filterIds: []
+      });
+    }
+
+    const group = groups.get(gradeToken);
+    const id = Number(option.id);
+
+    if (Number.isInteger(id) && id > 0 && !group.filterIds.includes(id)) {
+      group.filterIds.push(id);
+    }
+  });
+
+  return Array.from(groups.values());
+}
+
+function getCosmeticGradeFilterIds(gradeOptions, selectedGradeId) {
+  const safeGradeId = normalizePositiveFilterId(selectedGradeId);
+
+  if (!safeGradeId) {
+    return [];
+  }
+
+  const selectedOption = (Array.isArray(gradeOptions) ? gradeOptions : [])
+    .find((option) => Number(option.id) === safeGradeId || (Array.isArray(option.filterIds) && option.filterIds.includes(safeGradeId)));
+
+  if (!selectedOption || !Array.isArray(selectedOption.filterIds) || selectedOption.filterIds.length === 0) {
+    return [safeGradeId];
+  }
+
+  return selectedOption.filterIds;
+}
+
+function getCosmeticGradeSortRank(option = {}) {
+  const token = normalizeGradeToken(option.label || option.code || option.value);
+  const baseGrade = token.match(/^[a-z]/)?.[0] || '';
+
+  if (baseGrade && baseGrade.length === 1) {
+    const letterRank = baseGrade.charCodeAt(0) - 'a'.charCodeAt(0);
+    const suffixRank = token.includes('plus') ? 0 : token.includes('minus') ? 2 : 1;
+
+    return (letterRank * 10) + suffixRank;
+  }
+
+  return 999;
+}
+
+function buildCosmeticGradeFilterOptions(overallGradeOptions) {
+  const gradeOptions = (Array.isArray(overallGradeOptions) ? overallGradeOptions : [])
+    .filter((option) => !isNotYetGradedToken(option.code) && !isNotYetGradedToken(option.value) && !isNotYetGradedToken(option.label))
+    .map((option) => ({
+      ...option,
+      filterValue: `grade:${option.id}`
+    }))
+    .sort((left, right) => {
+      const rankDifference = getCosmeticGradeSortRank(left) - getCosmeticGradeSortRank(right);
+
+      if (rankDifference !== 0) {
+        return rankDifference;
+      }
+
+      return String(left.label || left.code || '').localeCompare(String(right.label || right.code || ''));
+    });
+
+  return [
+    ...gradeOptions,
+    {
+      id: 'needs',
+      label: 'Not Yet Graded',
+      filterValue: 'needs',
+      filterIds: []
+    }
+  ];
+}
+
+function getUnitOwnerUserSql(state, tableAlias = 'u') {
+  return state && state.assignmentCapabilities && state.assignmentCapabilities.hasAssignedToUserId
+    ? `${tableAlias}.assigned_to_user_id`
+    : `${tableAlias}.created_by_user_id`;
+}
+
 async function getTechUnitFormOptions(options = {}) {
   const state = await getUnitTableState();
   const includeCurrentLotId = normalizeOptionalInteger(options.includeCurrentLotId);
@@ -1251,9 +1385,7 @@ async function listTechUsersWithUnits() {
   }
 
   const parkedFilter = `AND ${getUnitParkedSql(unitState, 'u')} = 0`;
-  const assignmentColumn = unitState.assignmentCapabilities.hasAssignedToUserId
-    ? 'u.assigned_to_user_id'
-    : 'u.created_by_user_id';
+  const assignmentUserExpression = getUnitOwnerUserSql(unitState, 'u');
 
   const [rows] = await pool.query(
     `
@@ -1265,8 +1397,8 @@ async function listTechUsersWithUnits() {
         COUNT(u.unit_id) AS unit_count
       FROM users
       INNER JOIN units u
-        ON ${assignmentColumn} = users.user_id
-      WHERE ${assignmentColumn} IS NOT NULL
+        ON ${assignmentUserExpression} = users.user_id
+      WHERE ${assignmentUserExpression} IS NOT NULL
         ${parkedFilter}
       GROUP BY users.user_id, users.first_name, users.last_name, users.email
       ORDER BY users.first_name, users.last_name, users.email
@@ -1344,6 +1476,197 @@ function normalizePositiveFilterId(value) {
   return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : null;
 }
 
+
+function normalizeUnitPageSize(value) {
+  const normalizedValue = String(value || '').trim().toLowerCase();
+
+  if (normalizedValue === UNIT_PAGE_SIZE_ALL) {
+    return {
+      isAll: true,
+      perPage: null,
+      perPageParam: UNIT_PAGE_SIZE_ALL,
+      perPageLabel: 'All'
+    };
+  }
+
+  const numericValue = Number(normalizedValue);
+  const perPage = UNIT_PAGE_SIZE_OPTIONS.includes(numericValue)
+    ? numericValue
+    : DEFAULT_UNIT_PAGE_SIZE;
+
+  return {
+    isAll: false,
+    perPage,
+    perPageParam: String(perPage),
+    perPageLabel: String(perPage)
+  };
+}
+
+
+function normalizeUnitSort(value) {
+  const normalizedValue = String(value || '').trim().toLowerCase();
+
+  return UNIT_SORT_OPTIONS.has(normalizedValue) ? normalizedValue : DEFAULT_UNIT_SORT;
+}
+
+function getCurrentGradeJoinSql(gradeAssessmentsTableIsReady) {
+  if (!gradeAssessmentsTableIsReady) {
+    return '';
+  }
+
+  return `
+      LEFT JOIN (
+        SELECT unit_id, overall_grade_config_value_id
+        FROM (
+          SELECT
+            uga.unit_id,
+            uga.overall_grade_config_value_id,
+            ROW_NUMBER() OVER (
+              PARTITION BY uga.unit_id
+              ORDER BY uga.assessed_at DESC, uga.unit_grade_assessment_id DESC
+            ) AS row_rank
+          FROM unit_grade_assessments uga
+          WHERE uga.is_current = 1
+        ) ranked_current_grades
+        WHERE row_rank = 1
+      ) current_grade
+        ON current_grade.unit_id = u.unit_id
+      LEFT JOIN config_values current_grade_value
+        ON current_grade_value.config_value_id = current_grade.overall_grade_config_value_id`;
+}
+
+function getCurrentOutcomeJoinSql(outcomesTableIsReady) {
+  if (!outcomesTableIsReady) {
+    return '';
+  }
+
+  return `
+      LEFT JOIN (
+        SELECT unit_id, outcome_code
+        FROM (
+          SELECT
+            uo.unit_id,
+            uo.outcome_code,
+            ROW_NUMBER() OVER (
+              PARTITION BY uo.unit_id
+              ORDER BY uo.selected_at DESC, uo.unit_outcome_id DESC
+            ) AS row_rank
+          FROM unit_outcomes uo
+          WHERE uo.is_current = 1
+        ) ranked_current_outcomes
+        WHERE row_rank = 1
+      ) current_outcome
+        ON current_outcome.unit_id = u.unit_id`;
+}
+
+function getGradeSortRankSql() {
+  const gradeValueSql = "LOWER(COALESCE(current_grade_value.label, current_grade_value.code, current_grade_value.value, ''))";
+
+  return `
+        CASE
+          WHEN current_grade_value.config_value_id IS NULL THEN 100
+          WHEN ${gradeValueSql} REGEXP 'not[^a-z0-9]*yet[^a-z0-9]*graded|not[^a-z0-9]*graded|ungraded|n/?a' THEN 100
+          WHEN ${gradeValueSql} LIKE 'a%' THEN 10
+          WHEN ${gradeValueSql} LIKE 'b%' THEN 20
+          WHEN ${gradeValueSql} LIKE 'c%' THEN 30
+          WHEN ${gradeValueSql} LIKE 'd%' THEN 40
+          WHEN ${gradeValueSql} LIKE 'e%' THEN 50
+          ELSE 70
+        END`;
+}
+
+function getUnitOrderBySql(sort, { gradeAssessmentsTableIsReady = false, outcomesTableIsReady = false } = {}) {
+  const normalizedSort = normalizeUnitSort(sort);
+
+  if (normalizedSort === 'date_asc') {
+    return `
+      ORDER BY u.created_at ASC, u.unit_id ASC`;
+  }
+
+  if (normalizedSort === 'tech_az' || normalizedSort === 'tech_za') {
+    const techDirection = normalizedSort === 'tech_za' ? 'DESC' : 'ASC';
+
+    return `
+      ORDER BY
+        CASE
+          WHEN assigned_user.first_name IS NULL
+            AND assigned_user.last_name IS NULL
+            AND assigned_user.email IS NULL THEN 1
+          ELSE 0
+        END ASC,
+        LOWER(COALESCE(assigned_user.first_name, '')) ${techDirection},
+        LOWER(COALESCE(assigned_user.last_name, '')) ${techDirection},
+        LOWER(COALESCE(assigned_user.email, '')) ${techDirection},
+        u.created_at DESC,
+        u.unit_id DESC`;
+  }
+
+  if ((normalizedSort === 'grade_asc' || normalizedSort === 'grade_desc') && gradeAssessmentsTableIsReady) {
+    const gradeDirection = normalizedSort === 'grade_desc' ? 'DESC' : 'ASC';
+    const labelDirection = normalizedSort === 'grade_desc' ? 'DESC' : 'ASC';
+
+    return `
+      ORDER BY
+        ${getGradeSortRankSql()} ${gradeDirection},
+        LOWER(COALESCE(current_grade_value.label, current_grade_value.code, current_grade_value.value, '')) ${labelDirection},
+        u.created_at DESC,
+        u.unit_id DESC`;
+  }
+
+  if ((normalizedSort === 'outcome_pass_first' || normalizedSort === 'outcome_fail_first') && outcomesTableIsReady) {
+    const passRank = normalizedSort === 'outcome_fail_first' ? 20 : 10;
+    const failRank = normalizedSort === 'outcome_fail_first' ? 10 : 20;
+
+    return `
+      ORDER BY
+        CASE current_outcome.outcome_code
+          WHEN 'pass' THEN ${passRank}
+          WHEN 'fail' THEN ${failRank}
+          ELSE 90
+        END ASC,
+        u.created_at DESC,
+        u.unit_id DESC`;
+  }
+
+  return `
+      ORDER BY u.created_at DESC, u.unit_id DESC`;
+}
+
+function buildUnitPagination(filters = {}, totalRows = 0) {
+  const normalizedTotalRows = Math.max(0, Number(totalRows) || 0);
+  const pageSize = normalizeUnitPageSize(filters.perPage);
+  const totalPages = pageSize.isAll
+    ? 1
+    : Math.max(1, Math.ceil(normalizedTotalRows / pageSize.perPage));
+  const requestedPage = Number(filters.page);
+  const safeRequestedPage = Number.isInteger(requestedPage) && requestedPage > 0 ? requestedPage : 1;
+  const page = pageSize.isAll ? 1 : Math.min(safeRequestedPage, totalPages);
+  const offset = pageSize.isAll ? 0 : (page - 1) * pageSize.perPage;
+  const startRow = normalizedTotalRows === 0 ? 0 : offset + 1;
+  const endRow = pageSize.isAll
+    ? normalizedTotalRows
+    : Math.min(offset + pageSize.perPage, normalizedTotalRows);
+
+  return {
+    page,
+    perPage: pageSize.perPage,
+    perPageParam: pageSize.perPageParam,
+    perPageLabel: pageSize.perPageLabel,
+    pageSizeOptions: UNIT_PAGE_SIZE_OPTIONS.map((option) => ({
+      value: String(option),
+      label: String(option)
+    })).concat([{ value: UNIT_PAGE_SIZE_ALL, label: 'All' }]),
+    isAll: pageSize.isAll,
+    totalRows: normalizedTotalRows,
+    totalPages,
+    offset,
+    startRow,
+    endRow,
+    hasPreviousPage: !pageSize.isAll && page > 1,
+    hasNextPage: !pageSize.isAll && page < totalPages
+  };
+}
+
 async function listTechUnits(filters = {}) {
   const state = await getUnitTableState();
 
@@ -1354,7 +1677,7 @@ async function listTechUnits(filters = {}) {
       units: [],
       filters,
       lots: [],
-      unitLimit: UNIT_LIMIT
+      pagination: buildUnitPagination(filters, 0)
     };
   }
 
@@ -1371,7 +1694,7 @@ async function listTechUnits(filters = {}) {
     unitModels,
     processorBrands,
     processorModels,
-    overallGradeOptions,
+    rawOverallGradeOptions,
     techUserOptions,
     productionWeightOptions
   ] = await Promise.all([
@@ -1382,8 +1705,9 @@ async function listTechUnits(filters = {}) {
     listConfigValuesByCategoryCodes(['operating_systems', 'operating_system']),
     listManufacturers(),
     listUnitModels(),
+    listProcessorBrands(),
     listProcessorModels(),
-    listConfigValuesByCategoryCodes(['overall_unit_grades']),
+    listConfigValuesByCategoryCodes(COSMETIC_GRADE_CATEGORY_CODES),
     listTechUsersWithUnits(),
     productionWeightModel.listProductionWeightOptions()
   ]);
@@ -1398,10 +1722,13 @@ async function listTechUnits(filters = {}) {
   const manufacturerMap = mapById(manufacturers);
   const unitModelMap = mapById(unitModels);
   const processorModelMap = mapById(processorModels);
+  const overallGradeOptions = normalizeCosmeticGradeOptions(rawOverallGradeOptions);
+  const gradeFilterOptions = buildCosmeticGradeFilterOptions(overallGradeOptions);
 
   const where = [];
   const params = [];
   const gradeAssessmentsTableIsReady = await tableExists('unit_grade_assessments');
+  const outcomesTableIsReady = await tableExists('unit_outcomes');
   const searchTerms = getSearchTerms(filters.search);
   const canViewParkedUnits = filters.canViewParkedUnits === true;
   const requestedUnitState = String(filters.unitState || 'active').trim().toLowerCase();
@@ -1412,15 +1739,15 @@ async function listTechUnits(filters = {}) {
   const createdEndDate = normalizeDashboardDrilldownDate(filters.createdEndDate);
   const createdWindow = String(filters.createdWindow || '').trim();
   const gradeFilter = String(filters.gradeFilter || '').trim();
+  const sort = normalizeUnitSort(filters.sort);
   const currentUserId = normalizePositiveFilterId(filters.currentUserId);
   const restrictToCurrentAssignment = filters.restrictToCurrentAssignment === true && Boolean(currentUserId) && searchTerms.length === 0;
-  const assignmentColumnSql = state.assignmentCapabilities.hasAssignedToUserId
-    ? 'u.assigned_to_user_id'
-    : 'u.created_by_user_id';
+  const isParkedUnitState = unitState === 'parked';
+  const ownershipUserSql = getUnitOwnerUserSql(state, 'u');
 
-  where.push(`${getUnitParkedSql(state, 'u')} = ${unitState === 'parked' ? '1' : '0'}`);
+  where.push(`${getUnitParkedSql(state, 'u')} = ${isParkedUnitState ? '1' : '0'}`);
 
-  if (filters.lotId) {
+  if (!isParkedUnitState && filters.lotId) {
     const lotId = Number(filters.lotId);
 
     if (Number.isInteger(lotId) && lotId > 0 && filterLotIds.has(String(lotId))) {
@@ -1429,36 +1756,36 @@ async function listTechUnits(filters = {}) {
     }
   }
 
-  if (categoryFilterId) {
+  if (!isParkedUnitState && categoryFilterId) {
     where.push('u.unit_category_config_value_id = ?');
     params.push(categoryFilterId);
   }
 
-  if (techUserFilterId) {
-    where.push(`${assignmentColumnSql} = ?`);
+  if (!isParkedUnitState && techUserFilterId) {
+    where.push(`${ownershipUserSql} = ?`);
     params.push(techUserFilterId);
   }
 
-  if (restrictToCurrentAssignment) {
-    where.push(`${assignmentColumnSql} = ?`);
+  if (!isParkedUnitState && restrictToCurrentAssignment) {
+    where.push(`${ownershipUserSql} = ?`);
     params.push(currentUserId);
   }
 
-  if (createdStartDate) {
+  if (!isParkedUnitState && createdStartDate) {
     where.push('u.created_at >= ?');
     params.push(`${createdStartDate} 00:00:00`);
   }
 
-  if (createdEndDate) {
+  if (!isParkedUnitState && createdEndDate) {
     where.push('u.created_at < DATE_ADD(?, INTERVAL 1 DAY)');
     params.push(`${createdEndDate} 00:00:00`);
   }
 
-  if (createdWindow === '24h') {
+  if (!isParkedUnitState && createdWindow === '24h') {
     where.push('u.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)');
   }
 
-  if (gradeAssessmentsTableIsReady && gradeFilter === 'needs') {
+  if (!isParkedUnitState && gradeAssessmentsTableIsReady && gradeFilter === 'needs') {
     where.push(`
       NOT EXISTS (
         SELECT 1
@@ -1467,7 +1794,7 @@ async function listTechUnits(filters = {}) {
           AND uga_filter.is_current = 1
       )
     `);
-  } else if (gradeAssessmentsTableIsReady && gradeFilter === 'current') {
+  } else if (!isParkedUnitState && gradeAssessmentsTableIsReady && gradeFilter === 'current') {
     where.push(`
       EXISTS (
         SELECT 1
@@ -1476,24 +1803,24 @@ async function listTechUnits(filters = {}) {
           AND uga_filter.is_current = 1
       )
     `);
-  } else if (gradeAssessmentsTableIsReady && gradeFilter.startsWith('grade:')) {
-    const gradeFilterId = normalizePositiveFilterId(gradeFilter.replace('grade:', ''));
+  } else if (!isParkedUnitState && gradeAssessmentsTableIsReady && gradeFilter.startsWith('grade:')) {
+    const gradeFilterIds = getCosmeticGradeFilterIds(overallGradeOptions, gradeFilter.replace('grade:', ''));
 
-    if (gradeFilterId) {
+    if (gradeFilterIds.length > 0) {
       where.push(`
         EXISTS (
           SELECT 1
           FROM unit_grade_assessments uga_filter
           WHERE uga_filter.unit_id = u.unit_id
             AND uga_filter.is_current = 1
-            AND uga_filter.overall_grade_config_value_id = ?
+            AND uga_filter.overall_grade_config_value_id IN (${gradeFilterIds.map(() => '?').join(', ')})
         )
       `);
-      params.push(gradeFilterId);
+      params.push(...gradeFilterIds);
     }
   }
 
-  if (searchTerms.length > 0) {
+  if (!isParkedUnitState && searchTerms.length > 0) {
     const isMultiSearch = searchTerms.length > 1;
     const searchGroups = [];
 
@@ -1562,14 +1889,7 @@ async function listTechUnits(filters = {}) {
   }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
-
-  const [rows] = await pool.query(
-    `
-      SELECT
-        u.*,
-        assigned_user.first_name AS assigned_first_name,
-        assigned_user.last_name AS assigned_last_name,
-        assigned_user.email AS assigned_email
+  const unitFromSql = `
       FROM units u
       LEFT JOIN manufacturers m
         ON m.manufacturer_id = u.manufacturer_id
@@ -1590,12 +1910,35 @@ async function listTechUnits(filters = {}) {
       LEFT JOIN config_values cv_os
         ON cv_os.config_value_id = u.operating_system_config_value_id
       LEFT JOIN users assigned_user
-        ON assigned_user.user_id = ${state.assignmentCapabilities.hasAssignedToUserId ? 'u.assigned_to_user_id' : 'u.created_by_user_id'}
+        ON assigned_user.user_id = ${ownershipUserSql}
+      ${getCurrentGradeJoinSql(gradeAssessmentsTableIsReady)}
+      ${getCurrentOutcomeJoinSql(outcomesTableIsReady)}
       ${whereSql}
-      ORDER BY u.created_at DESC, u.unit_id DESC
-      LIMIT ?
+  `;
+
+  const [countRows] = await pool.query(
+    `
+      SELECT COUNT(*) AS total_rows
+      ${unitFromSql}
     `,
-    [...params, UNIT_LIMIT]
+    params
+  );
+  const pagination = buildUnitPagination(filters, countRows && countRows[0] ? countRows[0].total_rows : 0);
+  const rowLimitSql = pagination.isAll ? '' : 'LIMIT ? OFFSET ?';
+  const rowParams = pagination.isAll ? params : [...params, pagination.perPage, pagination.offset];
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        u.*,
+        assigned_user.first_name AS assigned_first_name,
+        assigned_user.last_name AS assigned_last_name,
+        assigned_user.email AS assigned_email
+      ${unitFromSql}
+      ${getUnitOrderBySql(sort, { gradeAssessmentsTableIsReady, outcomesTableIsReady })}
+      ${rowLimitSql}
+    `,
+    rowParams
   );
 
   const units = rows.map((row) => {
@@ -1698,15 +2041,28 @@ async function listTechUnits(filters = {}) {
     units,
     filters: {
       ...filters,
-      unitState
+      search: isParkedUnitState ? '' : filters.search,
+      lotId: isParkedUnitState ? '' : filters.lotId,
+      categoryId: isParkedUnitState ? '' : filters.categoryId,
+      gradeFilter: isParkedUnitState ? '' : filters.gradeFilter,
+      techUserId: isParkedUnitState ? '' : filters.techUserId,
+      createdStartDate: isParkedUnitState ? '' : filters.createdStartDate,
+      createdEndDate: isParkedUnitState ? '' : filters.createdEndDate,
+      createdWindow: isParkedUnitState ? '' : filters.createdWindow,
+      unitState,
+      sort,
+      page: String(pagination.page),
+      perPage: pagination.perPageParam
     },
     unitState,
     canViewParkedUnits,
     lots: filterLots,
     unitCategories,
     overallGradeOptions,
+    gradeFilterOptions,
+    rawOverallGradeOptions,
     techUserOptions,
-    unitLimit: UNIT_LIMIT
+    pagination
   };
 }
 
@@ -4396,7 +4752,7 @@ function getWorkCreditSourceLabel(sourceCode) {
   const source = String(sourceCode || '').trim();
 
   if (source === 'manual_completion') {
-    return 'Work Complete';
+    return 'Unit Complete';
   }
 
   if (source === 'override_prior_tech_credit') {

@@ -1,0 +1,129 @@
+<%
+  const safePagination = pagination || {};
+  const safeFilters = filters || {};
+  const safeBasePath = basePath || '';
+  const safeLabel = itemLabel || 'records';
+  const formatPaginationNumber = typeof formatNumber === 'function'
+    ? formatNumber
+    : (value) => new Intl.NumberFormat('en-US').format(Number(value) || 0);
+  const safePageSizeLabel = pageSizeLabel || 'Rows per page';
+  const queryKeys = [
+    'search',
+    'lotId',
+    'categoryId',
+    'gradeFilter',
+    'techUserId',
+    'createdStartDate',
+    'createdEndDate',
+    'createdWindow',
+    'unitState',
+    'sort'
+  ];
+
+  const page = Number(safePagination.page || 1);
+  const totalPages = Number(safePagination.totalPages || 1);
+  const totalRows = Number(safePagination.totalRows || 0);
+  const startRow = Number(safePagination.startRow || 0);
+  const endRow = Number(safePagination.endRow || 0);
+  const pageSizeOptions = Array.isArray(safePagination.pageSizeOptions) ? safePagination.pageSizeOptions : [];
+  const currentPerPage = String(safePagination.perPageParam || '50');
+  const isAll = safePagination.isAll === true;
+
+  const makePaginationUrl = (overrides = {}) => {
+    const params = new URLSearchParams();
+
+    queryKeys.forEach((key) => {
+      const value = safeFilters[key];
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        params.set(key, String(value));
+      }
+    });
+
+    const nextPerPage = overrides.perPage !== undefined ? String(overrides.perPage) : currentPerPage;
+    const nextPage = overrides.page !== undefined ? String(overrides.page) : String(page);
+
+    if (nextPerPage) {
+      params.set('perPage', nextPerPage);
+    }
+
+    if (nextPage && nextPage !== '1') {
+      params.set('page', nextPage);
+    }
+
+    const queryString = params.toString();
+    return queryString ? `${safeBasePath}?${queryString}` : safeBasePath;
+  };
+
+  const pageNumbers = [];
+  if (!isAll && totalPages > 1) {
+    const candidates = new Set([1, totalPages, page - 2, page - 1, page, page + 1, page + 2]);
+    [...candidates]
+      .filter((candidate) => candidate >= 1 && candidate <= totalPages)
+      .sort((a, b) => a - b)
+      .forEach((candidate) => pageNumbers.push(candidate));
+  }
+
+  let previousPageNumber = null;
+%>
+
+<nav class="table-pagination <%= modifierClass || '' %>" aria-label="<%= ariaLabel || 'Table pagination' %>">
+  <div class="table-pagination__summary" aria-live="polite">
+    <% if (totalRows > 0) { %>
+      Showing <strong><%= formatPaginationNumber(startRow) %>&ndash;<%= formatPaginationNumber(endRow) %></strong> of <strong><%= formatPaginationNumber(totalRows) %></strong> matching <%= safeLabel %>
+    <% } else { %>
+      No matching <%= safeLabel %>
+    <% } %>
+  </div>
+
+  <div class="table-pagination__tools">
+    <form class="table-pagination__page-size" method="get" action="<%= safeBasePath %>">
+      <% queryKeys.forEach((key) => { %>
+        <% const value = safeFilters[key]; %>
+        <% if (value !== undefined && value !== null && String(value).trim() !== '') { %>
+          <input type="hidden" name="<%= key %>" value="<%= value %>" />
+        <% } %>
+      <% }) %>
+      <span><%= safePageSizeLabel %></span>
+      <select name="perPage" onchange="this.form.submit()" aria-label="<%= safePageSizeLabel %>">
+        <% pageSizeOptions.forEach((option) => { %>
+          <option value="<%= option.value %>" <%= currentPerPage === String(option.value) ? 'selected' : '' %>><%= option.label %></option>
+        <% }) %>
+      </select>
+    </form>
+
+    <div class="table-pagination__links" aria-label="Pages">
+      <% if (!isAll && totalPages > 1) { %>
+        <% if (safePagination.hasPreviousPage) { %>
+          <a class="table-pagination__link" href="<%= makePaginationUrl({ page: 1 }) %>">First</a>
+          <a class="table-pagination__link" href="<%= makePaginationUrl({ page: page - 1 }) %>">Previous</a>
+        <% } else { %>
+          <span class="table-pagination__link is-disabled" aria-disabled="true">First</span>
+          <span class="table-pagination__link is-disabled" aria-disabled="true">Previous</span>
+        <% } %>
+
+        <% pageNumbers.forEach((pageNumber) => { %>
+          <% if (previousPageNumber !== null && pageNumber - previousPageNumber > 1) { %>
+            <span class="table-pagination__ellipsis" aria-hidden="true">&hellip;</span>
+          <% } %>
+          <% previousPageNumber = pageNumber; %>
+
+          <% if (pageNumber === page) { %>
+            <span class="table-pagination__link is-active" aria-current="page"><%= formatPaginationNumber(pageNumber) %></span>
+          <% } else { %>
+            <a class="table-pagination__link" href="<%= makePaginationUrl({ page: pageNumber }) %>"><%= formatPaginationNumber(pageNumber) %></a>
+          <% } %>
+        <% }) %>
+
+        <% if (safePagination.hasNextPage) { %>
+          <a class="table-pagination__link" href="<%= makePaginationUrl({ page: page + 1 }) %>">Next</a>
+          <a class="table-pagination__link" href="<%= makePaginationUrl({ page: totalPages }) %>">Last</a>
+        <% } else { %>
+          <span class="table-pagination__link is-disabled" aria-disabled="true">Next</span>
+          <span class="table-pagination__link is-disabled" aria-disabled="true">Last</span>
+        <% } %>
+      <% } else { %>
+        <span class="table-pagination__link is-active" aria-current="page">1</span>
+      <% } %>
+    </div>
+  </div>
+</nav>

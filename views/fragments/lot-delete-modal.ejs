@@ -6,10 +6,9 @@
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel lot-modal lot-delete-modal" role="dialog" aria-modal="true" aria-labelledby="lot-delete-modal-title">
+  <section class="modal-panel site-clean-modal lot-modal lot-delete-modal" role="dialog" aria-modal="true" aria-labelledby="lot-delete-modal-title">
     <header class="modal-header">
       <div>
-        <p class="eyebrow">Delete Lot</p>
         <h2 id="lot-delete-modal-title">Delete <%= lotName %>?</h2>
       </div>
 
@@ -37,7 +36,7 @@
 
         <% if (safeSummary.canDelete) { %>
           <form method="post" action="/management/lots/<%= safeLot.lot_id %>/delete" hx-post="/management/lots/<%= safeLot.lot_id %>/delete" hx-target="#modal-root" hx-swap="innerHTML">
-            <div class="action-row">
+            <div class="form-actions">
               <button type="submit" class="secondary-button danger-button">Delete Lot</button>
               <button type="button" class="secondary-button" data-modal-close>Cancel</button>
             </div>
@@ -46,12 +45,12 @@
           <div class="message error">
             <p>This lot cannot be deleted until all attached units and child lots are removed.</p>
           </div>
-          <div class="action-row">
+          <div class="form-actions">
             <button type="button" class="secondary-button" data-modal-close>Close</button>
           </div>
         <% } %>
       <% } else { %>
-        <div class="action-row">
+        <div class="form-actions">
           <button type="button" class="secondary-button" data-modal-close>Close</button>
         </div>
       <% } %>

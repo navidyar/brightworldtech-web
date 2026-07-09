@@ -140,6 +140,14 @@
   background: #fff1f1;
 }
 
+.tech-units-clean-page .secondary-button:disabled,
+.tech-units-clean-page .secondary-button[aria-disabled="true"],
+#modal-root .secondary-button:disabled,
+#modal-root .secondary-button[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
 .tech-units-clean-create-button {
   flex: 0 0 auto;
 }
@@ -303,8 +311,7 @@
 }
 
 .tech-units-clean-page .tech-unit-state-toggle input:focus-visible + .tech-unit-state-toggle-track {
-  outline: 3px solid rgba(49, 94, 157, 0.2);
-  outline-offset: 2px;
+  outline: none;
 }
 
 .tech-units-clean-page .tech-filter-layout {
@@ -352,8 +359,8 @@
 }
 
 /* Standard fields use the same final Metrics form text contract. */
-.tech-units-clean-page :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="number"], input[type="date"], textarea, select:not([multiple])),
-#modal-root :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="number"], input[type="date"], textarea, select:not([multiple])) {
+.tech-units-clean-page :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="number"], input[type="date"], input[type="time"], input[type="week"], input[type="month"], input[type="datetime-local"], textarea, select:not([multiple])),
+#modal-root :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="week"], input[type="month"], input[type="datetime-local"], input[type="tel"], input[type="url"], textarea, select:not([multiple]), .site-date-picker-trigger) {
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -403,11 +410,19 @@
   background-size: 16px 16px;
 }
 
-.tech-units-clean-page :is(input, textarea, select, .tech-created-date-picker-trigger):focus-visible,
-#modal-root :is(input, textarea, select, button):focus-visible {
+.tech-units-clean-page :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="week"], input[type="month"], input[type="datetime-local"], input[type="tel"], input[type="url"], textarea, select, .tech-created-date-picker-trigger, .site-date-picker-trigger):focus-visible,
+#modal-root :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="week"], input[type="month"], input[type="datetime-local"], input[type="tel"], input[type="url"], textarea, select, button):focus-visible {
   border-color: #315e9d;
-  outline: 3px solid rgba(49, 94, 157, 0.2);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: var(--form-field-focus-shadow, 0 0 0 3px rgba(49, 94, 157, 0.16));
+}
+
+.tech-units-clean-page input[type="radio"]:focus-visible,
+.tech-units-clean-page input[type="checkbox"]:focus-visible,
+#modal-root input[type="radio"]:focus-visible,
+#modal-root input[type="checkbox"]:focus-visible {
+  outline: none;
+  box-shadow: none;
 }
 
 .tech-units-clean-page :is(input, textarea, select):disabled,
@@ -680,11 +695,18 @@
 .tech-units-clean-page .tech-filter-actions {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   margin: 12px 0 0;
   padding: 12px 0 0;
   border-top: 1px solid #dce7f2;
+}
+
+.tech-units-clean-page .tech-filter-action-buttons {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 /* Metrics Dashboard results pattern: label outside, table in its own white panel. */
@@ -1774,6 +1796,12 @@
   }
 
   .tech-units-clean-page .tech-filter-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+
+  .tech-units-clean-page .tech-filter-action-buttons {
     justify-content: flex-start;
   }
 
@@ -2365,7 +2393,7 @@
   grid-column: 1 / -1;
 }
 
-:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="number"], input[type="date"], textarea, select:not([multiple])) {
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="week"], input[type="month"], input[type="datetime-local"], input[type="tel"], input[type="url"], textarea, select:not([multiple]), .site-date-picker-trigger) {
   min-height: 39px;
   border: 1px solid #c9d6e4;
   border-radius: 7px;
@@ -2391,10 +2419,10 @@
   background-size: 16px 16px;
 }
 
-:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="number"], input[type="date"], textarea, select:not([multiple])):focus-visible {
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="week"], input[type="month"], input[type="datetime-local"], input[type="tel"], input[type="url"], textarea, select:not([multiple]), .site-date-picker-trigger):focus-visible {
   border-color: #315e9d;
-  outline: 3px solid rgba(49, 94, 157, 0.18);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: var(--form-field-focus-shadow, 0 0 0 3px rgba(49, 94, 157, 0.16));
 }
 
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .workflow-item {
@@ -2484,10 +2512,10 @@
   background: #eaf7ed;
 }
 
-:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option:has(input:focus-visible) {
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option:has(input:is(:focus, :focus-visible)) {
   z-index: 1;
-  outline: 3px solid rgba(49, 94, 157, 0.18);
-  outline-offset: -3px;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 @media (max-width: 760px) {
@@ -2504,5 +2532,514 @@
 
   :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Reset Design Stage F.5.3 — Add/Edit modal header, action color, and side-spacing polish. */
+#modal-root .tech-unit-modal.modal-panel {
+  background: #f5f7fa;
+}
+
+#modal-root .tech-unit-modal .tech-unit-modal-header {
+  min-height: 62px;
+  align-items: center;
+  box-sizing: border-box;
+  padding: 14px 18px 12px;
+  border-bottom: 0;
+  background: #f5f7fa;
+}
+
+#modal-root .tech-unit-modal .tech-unit-modal-header h2 {
+  margin: 0;
+  line-height: 1.25;
+}
+
+#modal-root .tech-unit-modal .tech-unit-modal-body {
+  box-sizing: border-box;
+  padding: 0 18px 20px;
+  background: #f5f7fa;
+}
+
+#modal-root .tech-unit-modal .tech-unit-form {
+  width: 100%;
+  max-width: 100%;
+  margin-right: auto;
+  margin-left: auto;
+  box-sizing: border-box;
+}
+
+#modal-root .tech-unit-modal .tech-unit-form .form-section,
+#modal-root .tech-unit-modal .tech-unit-form .form-section > .form-grid,
+#modal-root .tech-unit-modal .tech-unit-form .form-section > .workflow-list,
+#modal-root .tech-unit-modal .tech-unit-form .form-section > .tech-outcome-approval-box {
+  box-sizing: border-box;
+}
+
+#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button),
+#modal-root .tech-unit-modal .modal-close-button {
+  border-color: #315e9d;
+  color: #ffffff;
+  background: #315e9d;
+  box-shadow: none;
+}
+
+#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button):hover,
+#modal-root .tech-unit-modal .modal-close-button:hover {
+  border-color: #274f84;
+  color: #ffffff;
+  background: #274f84;
+  box-shadow: 0 3px 9px rgba(49, 94, 157, 0.18);
+  transform: none;
+}
+
+#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button):focus-visible,
+#modal-root .tech-unit-modal .modal-close-button:focus-visible {
+  outline: 3px solid rgba(49, 94, 157, 0.22);
+  outline-offset: 2px;
+}
+
+@media (max-width: 760px) {
+  #modal-root .tech-unit-modal .tech-unit-modal-header {
+    min-height: 58px;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+
+  #modal-root .tech-unit-modal .tech-unit-modal-body {
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+}
+
+
+/* Reset Design Stage F.5.4 — Add/Edit modal neutral borders, borderless actions, and radio outcome polish. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section {
+  --tuf-border: #d6e1ed;
+  --tuf-heading: #3f4e63;
+  --tuf-work-item-border: #e0e6ef;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .form-grid,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .workflow-list,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section > .tech-outcome-approval-box {
+  border-color: #d6e1ed;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .workflow-item {
+  border-color: #e0e6ef;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section-header h3,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .workflow-item .content-header strong {
+  color: #3f4e63;
+}
+
+#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button),
+#modal-root .tech-unit-modal .modal-close-button {
+  border-color: transparent;
+}
+
+#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button):hover,
+#modal-root .tech-unit-modal .modal-close-button:hover {
+  border-color: transparent;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-options {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: auto;
+  max-width: 100%;
+  min-height: 0;
+  padding: 10px;
+  overflow: visible;
+  border: 1px solid #d6e1ed;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 9px;
+  min-height: 42px;
+  padding: 9px 13px;
+  border: 1px solid #e0e6ef;
+  border-radius: 9px;
+  color: #26384e;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option + .tech-outcome-option {
+  border-left: 1px solid #e0e6ef;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option input {
+  position: static;
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  opacity: 1;
+  pointer-events: auto;
+  accent-color: #315e9d;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option.active {
+  border-color: #97aecf;
+  color: #26384e;
+  background: #f7fbff;
+  box-shadow: 0 0 0 2px rgba(49, 94, 157, 0.08);
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option:has(input:is(:focus, :focus-visible)) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Reset Design Stage F.5.5 — correct Unit Outcome radio layout without an extra nested container. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-field {
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 10px 11px 12px;
+  border: 1px solid #d6e1ed;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-field > legend {
+  margin: 0 0 2px;
+  padding: 0 4px;
+  color: #5a6678;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  width: auto;
+  max-width: 100%;
+  min-height: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 8px;
+  min-height: 30px;
+  margin: 0;
+  padding: 2px 8px 2px 0;
+  border: 0;
+  border-radius: 999px;
+  color: #26384e;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option + .tech-outcome-option {
+  border-left: 0;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option input {
+  position: static;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  opacity: 1;
+  pointer-events: auto;
+  accent-color: #315e9d;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option.active {
+  border-color: transparent;
+  color: #26384e;
+  background: transparent;
+  box-shadow: none;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option:has(input:is(:focus, :focus-visible)) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Reset Design Stage F.5.10 — keep Add/Edit form values on the sitewide form-field contract. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-field > span,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-field > legend {
+  color: var(--tu-label);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.25;
+  text-transform: none;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="week"], input[type="month"], input[type="datetime-local"], input[type="tel"], input[type="url"], textarea, select:not([multiple]), .site-date-picker-trigger) {
+  color: var(--form-field-value-ink, #26384e) !important;
+  font-family: var(--form-field-value-font-family, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif) !important;
+  font-size: var(--form-field-value-font-size, 0.86rem) !important;
+  font-weight: var(--form-field-value-font-weight, 600) !important;
+  letter-spacing: 0 !important;
+  line-height: var(--form-field-value-line-height, 1.25) !important;
+}
+
+
+
+/* Reset Design Stage F.5.11 v2 — compact state toggles and radio labels should not inherit field focus glow. */
+.tech-units-clean-page .tech-unit-state-toggle:has(input:is(:focus, :focus-visible)) {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Unit Details R.1 — fluid multi-column read-only details workspace.
+   The expanded /tech/units detail row should scan like a compact summary, not a long form. */
+.tech-units-clean-page .tech-detail-panel {
+  border-color: #cbd9e9;
+  border-radius: 9px;
+}
+
+.tech-units-clean-page .tech-detail-header {
+  padding: 10px 12px;
+  border-bottom-color: #d9e5f1;
+  background: #f8fbff;
+}
+
+.tech-units-clean-page .tech-detail-title strong {
+  font-size: 0.9rem;
+}
+
+.tech-units-clean-page .tech-detail-title span {
+  font-size: 0.75rem;
+}
+
+.tech-units-clean-page .tech-unit-panel-stack {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.tech-units-clean-page .tech-unit-panel-view[data-unit-panel-content="details"] {
+  display: grid;
+  gap: 10px;
+}
+
+.tech-units-clean-page .tech-detail-layout,
+.tech-units-clean-page .tech-detail-layout--identity-grade,
+.tech-units-clean-page .tech-module-pair-layout {
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.tech-units-clean-page .tech-detail-layout--identity-grade {
+  grid-template-columns: repeat(auto-fit, minmax(min(360px, 100%), 1fr));
+}
+
+.tech-units-clean-page .tech-detail-section,
+.tech-units-clean-page .tech-notes-section,
+.tech-units-clean-page .tech-override-history-section {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px;
+  border-color: #d5e0ec;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 4px 12px rgba(29, 44, 69, 0.035);
+}
+
+.tech-units-clean-page .tech-detail-section h3,
+.tech-units-clean-page .tech-notes-section h3,
+.tech-units-clean-page .tech-override-history-section h3,
+.tech-units-clean-page .tech-history-section-title h3 {
+  margin: 0;
+  color: #3f4e63;
+  font-size: 0.77rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.tech-units-clean-page .tech-detail-subheading {
+  margin: 2px 0 -2px;
+  color: #607188;
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.tech-units-clean-page .tech-detail-list,
+.tech-units-clean-page .tech-override-history-list,
+.tech-units-clean-page .workflow-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(148px, 100%), 1fr));
+  gap: 8px;
+  border-top: 0;
+}
+
+.tech-units-clean-page .tech-detail-section--checks .tech-detail-list,
+.tech-units-clean-page .tech-detail-section--identity .tech-detail-list,
+.tech-units-clean-page .tech-detail-section--identity-identifiers .tech-detail-list {
+  grid-template-columns: repeat(auto-fit, minmax(min(138px, 100%), 1fr));
+}
+
+.tech-units-clean-page .tech-detail-list div,
+.tech-units-clean-page .tech-override-history-list div,
+.tech-units-clean-page .workflow-item {
+  display: grid;
+  grid-template-columns: 1fr;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid #e0e8f1;
+  border-radius: 6px;
+  background: #fbfdff;
+}
+
+.tech-units-clean-page .tech-detail-list div:last-child,
+.tech-units-clean-page .tech-override-history-list div:last-child,
+.tech-units-clean-page .workflow-item:last-child {
+  border-bottom: 1px solid #e0e8f1;
+}
+
+.tech-units-clean-page .tech-detail-list dt,
+.tech-units-clean-page .tech-override-history-list dt,
+.tech-units-clean-page .tech-note-block strong {
+  color: #65758a;
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.tech-units-clean-page .tech-detail-list dd,
+.tech-units-clean-page .tech-override-history-list dd,
+.tech-units-clean-page .tech-note-block p {
+  color: #24364b;
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.28;
+}
+
+.tech-units-clean-page .tech-detail-list dd :is(a, .tech-chip, .tech-outcome-pill) {
+  font-weight: 650;
+}
+
+.tech-units-clean-page .tech-current-module-layout,
+.tech-units-clean-page .tech-notes-section--memory > .tech-detail-layout,
+.tech-units-clean-page .tech-notes-section--storage > .tech-detail-layout,
+.tech-units-clean-page .tech-notes-section--graphics > .tech-detail-layout {
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 8px;
+}
+
+.tech-units-clean-page .tech-current-module-layout > .tech-detail-section,
+.tech-units-clean-page .tech-module-pair-layout > .tech-detail-section,
+.tech-units-clean-page .tech-notes-section--memory > .tech-detail-layout > .tech-detail-section,
+.tech-units-clean-page .tech-notes-section--storage > .tech-detail-layout > .tech-detail-section,
+.tech-units-clean-page .tech-notes-section--graphics > .tech-detail-layout > .tech-detail-section {
+  padding: 8px;
+  border-color: #dbe4ef;
+  background: #fbfdff;
+  box-shadow: none;
+}
+
+.tech-units-clean-page .tech-notes-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
+  gap: 8px;
+}
+
+.tech-units-clean-page .tech-note-block {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 9px;
+  border-color: #dfe7f0;
+  border-radius: 6px;
+  background: #fbfdff;
+}
+
+.tech-units-clean-page .tech-comment-history-list {
+  border-color: #dde5ef;
+  background: #ffffff;
+}
+
+.tech-units-clean-page .tech-comment-history-row {
+  padding: 8px 9px;
+  border-bottom-color: #e6edf5;
+}
+
+.tech-units-clean-page .tech-comment-history-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: #64748a;
+  font-size: 0.7rem;
+}
+
+.tech-units-clean-page .tech-comment-history-text {
+  margin-top: 4px;
+  color: #28394f;
+  font-size: 0.8rem;
+  line-height: 1.38;
+}
+
+.tech-units-clean-page .field-hint {
+  margin: 0;
+  color: #6a7b90;
+  font-size: 0.74rem;
+  line-height: 1.35;
+}
+
+.tech-units-clean-page .tech-notes-section--cellular > .field-hint {
+  display: none;
+}
+
+@media (min-width: 1180px) {
+  .tech-units-clean-page .tech-detail-layout {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tech-units-clean-page .tech-detail-layout--identity-grade,
+  .tech-units-clean-page .tech-module-pair-layout {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .tech-units-clean-page .tech-detail-layout,
+  .tech-units-clean-page .tech-detail-layout--identity-grade,
+  .tech-units-clean-page .tech-module-pair-layout {
+    grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
+  }
+
+  .tech-units-clean-page .tech-detail-layout > :last-child {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  .tech-units-clean-page .tech-detail-offset {
+    padding: 8px 8px 10px 18px;
+  }
+
+  .tech-units-clean-page .tech-unit-panel-stack {
+    padding: 10px;
+  }
+
+  .tech-units-clean-page .tech-detail-list,
+  .tech-units-clean-page .tech-override-history-list,
+  .tech-units-clean-page .workflow-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr));
   }
 }

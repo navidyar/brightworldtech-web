@@ -78,6 +78,63 @@
 
 
 
+  const activeSort = String((filters && filters.sort) || 'date_desc');
+  const sortQueryKeys = [
+    'search',
+    'lotId',
+    'categoryId',
+    'gradeFilter',
+    'techUserId',
+    'createdStartDate',
+    'createdEndDate',
+    'createdWindow',
+    'unitState',
+    'perPage'
+  ];
+
+  function makeUnitSortUrl(sortValue) {
+    const params = new URLSearchParams();
+    const safeFilters = filters || {};
+
+    sortQueryKeys.forEach((key) => {
+      const value = safeFilters[key];
+
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        params.set(key, String(value));
+      }
+    });
+
+    params.set('sort', sortValue);
+
+    const queryString = params.toString();
+
+    return queryString ? `/tech/units?${queryString}` : '/tech/units';
+  }
+
+  function nextSortValue(forwardSortValue, reverseSortValue) {
+    return activeSort === forwardSortValue ? reverseSortValue : forwardSortValue;
+  }
+
+  function sortLinkClass(forwardSortValue, reverseSortValue) {
+    return `table-sort-link${[forwardSortValue, reverseSortValue].includes(activeSort) ? ' is-active' : ''}`;
+  }
+
+  function sortAriaCurrent(forwardSortValue, reverseSortValue) {
+    return [forwardSortValue, reverseSortValue].includes(activeSort) ? 'page' : null;
+  }
+
+  function sortDirectionIndicator(forwardSortValue, reverseSortValue, forwardIndicator = '↑', reverseIndicator = '↓') {
+    if (activeSort === forwardSortValue) {
+      return forwardIndicator;
+    }
+
+    if (activeSort === reverseSortValue) {
+      return reverseIndicator;
+    }
+
+    return '';
+  }
+
   const appDisplayTimeZone = 'America/Chicago';
 
   function formatUnitCreatedDate(value) {
@@ -130,17 +187,41 @@
   }
 %>
 
-<strong id="tech-units-loaded-count" hx-swap-oob="true"><%= result && result.units ? formatNumber(result.units.length) : '—' %></strong>
+<strong id="tech-units-loaded-count" hx-swap-oob="true"><%= result && result.pagination ? formatNumber(result.pagination.totalRows) : (result && result.units ? formatNumber(result.units.length) : '—') %></strong>
+
+<%- include('../partials/table-pagination', { pagination: result.pagination, filters, basePath: '/tech/units', itemLabel: 'units', pageSizeLabel: 'Units per page', modifierClass: 'table-pagination--top', ariaLabel: 'Top unit pagination' }) %>
 
 <div class="table-card tech-table-card">
   <table class="tech-units-table">
     <thead>
       <tr>
         <th>Unit<%= isRegularTechUser ? '' : ' / Weight' %></th>
-        <th>Date</th>
-        <th>Work / Assignment</th>
+        <th>
+          <a class="<%= sortLinkClass('date_desc', 'date_asc') %>" href="<%= makeUnitSortUrl(nextSortValue('date_desc', 'date_asc')) %>" <%= sortAriaCurrent('date_desc', 'date_asc') ? 'aria-current="page"' : '' %>>
+            Date
+            <% if (sortDirectionIndicator('date_desc', 'date_asc', '↓', '↑')) { %><span aria-hidden="true"><%= sortDirectionIndicator('date_desc', 'date_asc', '↓', '↑') %></span><% } %>
+          </a>
+        </th>
+        <th>
+          <a class="<%= sortLinkClass('tech_az', 'tech_za') %>" href="<%= makeUnitSortUrl(nextSortValue('tech_az', 'tech_za')) %>" <%= sortAriaCurrent('tech_az', 'tech_za') ? 'aria-current="page"' : '' %>>
+            Work / Assignment
+            <% if (sortDirectionIndicator('tech_az', 'tech_za')) { %><span aria-hidden="true"><%= sortDirectionIndicator('tech_az', 'tech_za') %></span><% } %>
+          </a>
+        </th>
         <th>Identifiers</th>
-        <th>Grade / Pass-Fail</th>
+        <th>
+          <span class="table-sort-group" aria-label="Grade and pass-fail sorting">
+            <a class="<%= sortLinkClass('grade_asc', 'grade_desc') %>" href="<%= makeUnitSortUrl(nextSortValue('grade_asc', 'grade_desc')) %>" <%= sortAriaCurrent('grade_asc', 'grade_desc') ? 'aria-current="page"' : '' %>>
+              Grade
+              <% if (sortDirectionIndicator('grade_asc', 'grade_desc')) { %><span aria-hidden="true"><%= sortDirectionIndicator('grade_asc', 'grade_desc') %></span><% } %>
+            </a>
+            <span class="table-sort-group__separator" aria-hidden="true">/</span>
+            <a class="<%= sortLinkClass('outcome_pass_first', 'outcome_fail_first') %>" href="<%= makeUnitSortUrl(nextSortValue('outcome_pass_first', 'outcome_fail_first')) %>" <%= sortAriaCurrent('outcome_pass_first', 'outcome_fail_first') ? 'aria-current="page"' : '' %>>
+              Pass-Fail
+              <% if (sortDirectionIndicator('outcome_pass_first', 'outcome_fail_first')) { %><span aria-hidden="true"><%= sortDirectionIndicator('outcome_pass_first', 'outcome_fail_first') %></span><% } %>
+            </a>
+          </span>
+        </th>
         <th>Unit Actions</th>
       </tr>
     </thead>
@@ -275,14 +356,27 @@
             <% if (unit.unitId) { %>
               <div class="tech-summary-actions">
                 <% if (canCompleteTechUnits && !unit.isParked && !isReadOnlySearchResult) { %>
-                  <a
-                    class="secondary-button"
-                    href="/tech/units/<%= unit.unitId %>/complete-work/modal"
-                    data-tech-modal-trigger
-                    data-no-row-toggle
-                  >
-                    Work Complete
-                  </a>
+                  <% if (unit.latestWorkCompletion) { %>
+                    <button
+                      type="button"
+                      class="secondary-button tech-print-label-action-button"
+                      data-no-row-toggle
+                      disabled
+                      aria-disabled="true"
+                      title="Label printing will be connected in the label-printing step."
+                    >
+                      Print Label
+                    </button>
+                  <% } else { %>
+                    <a
+                      class="secondary-button"
+                      href="/tech/units/<%= unit.unitId %>/complete-work/modal"
+                      data-tech-modal-trigger
+                      data-no-row-toggle
+                    >
+                      Unit Complete
+                    </a>
+                  <% } %>
                 <% } %>
                 <% if (!unit.isParked && !isReadOnlySearchResult) { %>
                   <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" data-no-row-toggle>
@@ -325,7 +419,7 @@
                 <div class="tech-detail-header">
                   <div class="tech-detail-title">
                     <strong>Unit Details</strong>
-                    <span>Identity, grade/pass-fail, hardware, workflow, modules, issues, and comments.</span>
+                    <span><%= assetTagValue %> · <%= unit.specSummary || 'Unit record' %></span>
                   </div>
 
                   <div class="tech-detail-actions">
@@ -439,16 +533,18 @@
                         <dd><%= unit.categoryLabel || '—' %></dd>
                       </div>
 
-                      <div>
-                        <dt>Current Lot Weight</dt>
-                        <dd>
-                          <div class="tech-production-weight-detail">
-                            <div class="tech-production-weight-detail-main">
-                              <strong><%= unit.formattedCurrentLotWeight || '—' %></strong>
+                      <% if (!isRegularTechUser) { %>
+                        <div>
+                          <dt>Current Lot Weight</dt>
+                          <dd>
+                            <div class="tech-production-weight-detail">
+                              <div class="tech-production-weight-detail-main">
+                                <strong><%= unit.formattedCurrentLotWeight || '—' %></strong>
+                              </div>
                             </div>
-                          </div>
-                        </dd>
-                      </div>
+                          </dd>
+                        </div>
+                      <% } %>
                     </dl>
 
                     <p class="tech-detail-subheading">Identifiers</p>
@@ -897,11 +993,4 @@
   </table>
 </div>
 
-<% if (result.units.length >= result.unitLimit) { %>
-  <div class="message error">
-    <p>
-      This view is limited to <%= formatNumber(result.unitLimit) %> units for safety.
-      We can add pagination later.
-    </p>
-  </div>
-<% } %>
+<%- include('../partials/table-pagination', { pagination: result.pagination, filters, basePath: '/tech/units', itemLabel: 'units', pageSizeLabel: 'Units per page', modifierClass: 'table-pagination--bottom', ariaLabel: 'Bottom unit pagination' }) %>

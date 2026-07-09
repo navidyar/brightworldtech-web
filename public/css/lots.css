@@ -1,18 +1,130 @@
-.lot-browser-note {
-  margin-top: 14px;
-  padding: 10px 12px;
-  border: 1px solid var(--line-soft);
-  border-left: 4px solid var(--blue);
+/* Management Lots summary panel: adapted from the Lookup Metrics Dashboard stats row. */
+.lot-summary-panel {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(238px, 0.82fr) minmax(0, 2.18fr);
+  gap: 20px 28px;
+  align-items: center;
+  margin: 0;
+  padding: 18px 20px;
+  border: 1px solid #bcd4f2;
   border-radius: 10px;
-  color: var(--muted);
-  background: var(--surface-soft);
-  font-size: 0.86rem;
-  line-height: 1.45;
+  background: linear-gradient(104deg, #f7fbff 0%, #f2f8ff 56%, #fbfdff 100%);
+  box-shadow: 0 4px 14px rgba(34, 77, 135, 0.055);
 }
 
-.lot-browser-note strong {
-  color: var(--text);
+.lot-summary-primary {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
 }
+
+.lot-summary-primary > span {
+  color: #293a51;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+.lot-summary-primary > strong {
+  color: #245ba6;
+  font-size: 1.7rem;
+  font-weight: 650;
+  letter-spacing: -0.035em;
+  line-height: 1;
+}
+
+.lot-summary-primary > small {
+  color: #6a7a8e;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.lot-summary-stats {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px 16px;
+}
+
+.lot-summary-stats article {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.lot-summary-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 27px;
+  width: 27px;
+  height: 27px;
+  border: 1px solid #bed4f3;
+  border-radius: 7px;
+  color: #2865b8;
+  background: #fafdff;
+  font-size: 0.85rem;
+  font-weight: 650;
+}
+
+.lot-summary-stats article > span:last-child {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lot-summary-stats small {
+  overflow: hidden;
+  color: #64758a;
+  font-size: 0.7rem;
+  font-weight: 560;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lot-summary-stats strong {
+  overflow: hidden;
+  color: #28384d;
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1280px) {
+  .lot-summary-panel {
+    grid-template-columns: minmax(195px, 0.7fr) minmax(0, 2.3fr);
+  }
+
+  .lot-summary-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 940px) {
+  .lot-summary-panel {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .lot-summary-panel {
+    gap: 15px;
+    padding: 16px;
+  }
+
+  .lot-summary-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 11px;
+  }
+}
+
+.lot-browser-header {
+  align-items: center;
+}
+
 
 .lot-parent-row td {
   background: var(--surface);
@@ -771,35 +883,7 @@ table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-n
   white-space: nowrap;
 }
 
-/* Step 5b lot visibility controls. */
-.lot-visibility-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--line-soft);
-  border-radius: 12px;
-  background: var(--surface-soft);
-}
-
-.lot-visibility-toolbar div {
-  display: grid;
-  gap: 3px;
-}
-
-.lot-visibility-toolbar strong {
-  color: var(--text);
-  font-size: 0.92rem;
-}
-
-.lot-visibility-toolbar span {
-  color: var(--muted);
-  font-size: 0.82rem;
-  line-height: 1.35;
-}
-
+/* Step 5b lot visibility controls moved into the Lot Browser header. */
 .lot-hidden-row td {
   background: color-mix(in srgb, var(--surface-soft) 78%, #f59e0b 8%);
 }
@@ -810,18 +894,6 @@ table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-n
 
 .lot-visibility-summary {
   border-left-color: #f59e0b;
-}
-
-@media (max-width: 760px) {
-  .lot-visibility-toolbar {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .lot-visibility-toolbar .secondary-button {
-    justify-content: center;
-    width: 100%;
-  }
 }
 
 /* Step 5f.1 lot weight and hierarchy UI correction. */
@@ -869,6 +941,44 @@ table tr.lot-hidden-row td {
   min-height: 30px;
   padding: 6px 9px;
   font-size: 0.78rem;
+}
+
+.lot-inline-option {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+  padding: 5px 3px 3px;
+  color: #26384e;
+}
+
+.lot-inline-option input[type="checkbox"] {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  margin: 1px 0 0;
+  accent-color: #315e9d;
+}
+
+.lot-inline-option > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lot-inline-option strong {
+  color: #26384e;
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.lot-inline-option small {
+  color: #66778d;
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.35;
 }
 
 .lot-weight-note {
@@ -1570,4 +1680,708 @@ table tr.lot-hidden-row td {
 
 .lot-closure-summary {
   border-left-color: #b7798f;
+}
+
+/* Management Lots Refinement 5 — individual lot detail global-style cleanup. */
+.lot-detail-page {
+  display: grid;
+  gap: 14px;
+}
+
+.lot-detail-page .lot-breadcrumbs {
+  margin: 0;
+  padding: 0 3px;
+}
+
+.lot-detail-page-heading {
+  align-items: center;
+  margin: 0;
+}
+
+.lot-detail-page-heading h1 {
+  overflow-wrap: anywhere;
+}
+
+.lot-detail-action-bar {
+  margin: 0;
+}
+
+.lot-detail-summary-panel {
+  margin: 0;
+}
+
+.lot-detail-summary-panel .lot-summary-stats {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.lot-detail-summary-panel .lot-summary-stats strong {
+  white-space: normal;
+}
+
+.lot-detail-section {
+  margin-top: 0;
+}
+
+.lot-detail-section .section-title {
+  margin: 8px 3px 0;
+  color: #2d3f56;
+  font-size: 0.9rem;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+
+.lot-detail-section > :is(.enforcement-banner, .validation-note, .enforcement-summary-grid, .validation-summary-grid, .lot-context-grid, .unit-validation-list, .table-card, .message) {
+  margin-top: 0;
+}
+
+.lot-detail-section > :is(.section-title, .table-card, .unit-validation-list) + :is(.table-card, .message) {
+  margin-top: 8px;
+}
+
+.enforcement-banner,
+.validation-note,
+.lot-context-card,
+.compact-lot-item,
+.enforcement-summary-card,
+.validation-summary-card,
+.unit-validation-item,
+.lot-delete-summary {
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.enforcement-banner,
+.validation-note,
+.lot-context-card,
+.compact-lot-item,
+.enforcement-summary-card,
+.validation-summary-card {
+  border-left-width: 1px;
+}
+
+.enforcement-banner,
+.validation-note {
+  padding: 11px 12px;
+  background: #ffffff;
+}
+
+.enforcement-summary-grid,
+.validation-summary-grid,
+.lot-context-grid {
+  gap: 8px;
+}
+
+.enforcement-summary-card,
+.validation-summary-card,
+.lot-context-card {
+  padding: 10px 12px;
+  background: #ffffff;
+}
+
+.enforcement-summary-card span,
+.validation-summary-card span,
+.lot-context-card span,
+.enforcement-banner span {
+  font-weight: 650;
+  letter-spacing: 0.03em;
+}
+
+.enforcement-summary-card strong,
+.validation-summary-card strong {
+  font-size: 1.08rem;
+  font-weight: 650;
+}
+
+.compact-lot-list {
+  margin-top: 0;
+}
+
+.compact-lot-item {
+  padding: 9px 11px;
+  border-left-width: 1px;
+  transform: none;
+}
+
+.compact-lot-item:hover {
+  transform: none;
+}
+
+.lot-requirements-table-card {
+  margin-top: 0;
+}
+
+.modal-panel.site-clean-modal .lot-delete-summary {
+  padding: 12px;
+  border-color: #d7e3ef;
+  background: #ffffff;
+}
+
+.modal-panel.site-clean-modal .lot-delete-counts span {
+  border-radius: 7px;
+  font-weight: 650;
+}
+
+.modal-panel.site-clean-modal .lot-delete-summary dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+.modal-panel.site-clean-modal .lot-delete-summary dl div {
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border: 1px solid #d7e3ef;
+  border-radius: 7px;
+  background: #fbfdff;
+}
+
+.modal-panel.site-clean-modal .lot-delete-summary dt {
+  color: #64758a;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.modal-panel.site-clean-modal .lot-delete-summary dd {
+  margin: 0;
+  color: #28384d;
+  font-size: 0.95rem;
+  font-weight: 650;
+}
+
+@media (max-width: 1280px) {
+  .lot-detail-summary-panel .lot-summary-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .lot-detail-page-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .modal-panel.site-clean-modal .lot-delete-summary dl {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Management Lots Refinement 6 — move lot requirements into a modal. */
+.lot-requirements-list-modal {
+  width: min(980px, calc(100vw - 24px));
+}
+
+.modal-panel.site-clean-modal .lot-requirements-modal-toolbar {
+  justify-content: flex-end;
+  margin: 0 0 10px;
+}
+
+.modal-panel.site-clean-modal .lot-requirements-modal-table-card {
+  max-height: min(56vh, 520px);
+  margin-top: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.modal-panel.site-clean-modal :is(.lot-requirements-modal-table-card, .lot-enforcement-modal-table-card) table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.modal-panel.site-clean-modal :is(.lot-requirements-modal-table-card, .lot-enforcement-modal-table-card) th,
+.modal-panel.site-clean-modal :is(.lot-requirements-modal-table-card, .lot-enforcement-modal-table-card) td {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+
+.modal-panel.site-clean-modal :is(.lot-requirements-modal-table-card, .lot-enforcement-modal-table-card) th {
+  white-space: normal;
+}
+
+.modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-field-column {
+  width: 18%;
+}
+
+.modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-rule-column {
+  width: 14%;
+}
+
+.modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-value-column {
+  width: 23%;
+}
+
+.modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-status-column {
+  width: 12%;
+}
+
+.modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-notes-column {
+  width: 21%;
+}
+
+.modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-actions-column {
+  width: 12%;
+}
+
+.modal-panel.site-clean-modal .lot-requirements-modal-table-card td:last-child {
+  white-space: nowrap;
+}
+
+.lot-enforcement-modal {
+  width: min(1120px, calc(100vw - 28px));
+}
+
+.lot-enforcement-modal-section-heading {
+  margin-top: 18px;
+}
+
+.lot-enforcement-modal-section-heading h3 {
+  margin: 0 0 8px;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 750;
+}
+
+.lot-enforcement-modal-table-card {
+  max-height: min(52vh, 560px);
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.modal-panel.site-clean-modal .lot-enforcement-modal-table-card .enforcement-unit-column {
+  width: 28%;
+}
+
+.modal-panel.site-clean-modal .lot-enforcement-modal-table-card .enforcement-decision-column {
+  width: 24%;
+}
+
+.modal-panel.site-clean-modal .lot-enforcement-modal-table-card .enforcement-reason-column {
+  width: 48%;
+}
+
+.modal-decision-stack {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: center;
+}
+
+@media (max-width: 760px) {
+  .modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-field-column {
+    width: 20%;
+  }
+
+  .modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-rule-column {
+    width: 16%;
+  }
+
+  .modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-value-column {
+    width: 24%;
+  }
+
+  .modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-status-column {
+    width: 13%;
+  }
+
+  .modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-notes-column {
+    width: 17%;
+  }
+
+  .modal-panel.site-clean-modal .lot-requirements-modal-table-card .requirements-actions-column {
+    width: 10%;
+  }
+}
+
+/* Management Lots Refinement 10 — keep enforcement modal table-like without horizontal scroll. */
+.lot-enforcement-modal,
+.lot-enforcement-modal .modal-body,
+.lot-enforcement-modal .enforcement-banner,
+.lot-enforcement-modal .validation-note,
+.lot-enforcement-modal .enforcement-summary-grid,
+.lot-enforcement-modal .lot-enforcement-modal-table-card,
+.lot-enforcement-modal .lot-enforcement-modal-table-card table,
+.lot-enforcement-modal .lot-enforcement-modal-table-card :is(thead, tbody, tr, th, td) {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.lot-enforcement-modal .modal-body {
+  overflow-x: hidden;
+}
+
+.lot-enforcement-modal .enforcement-banner,
+.lot-enforcement-modal .validation-note {
+  overflow-wrap: anywhere;
+}
+
+.lot-enforcement-modal .enforcement-summary-grid {
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+}
+
+.modal-panel.site-clean-modal .lot-enforcement-modal-table-card {
+  width: 100%;
+  overflow-x: clip;
+}
+
+.modal-panel.site-clean-modal .lot-enforcement-modal-table-card table {
+  min-width: 0 !important;
+  max-width: 100%;
+}
+
+.modal-panel.site-clean-modal .lot-enforcement-modal-table-card :is(th, td) {
+  white-space: normal;
+  overflow: hidden;
+  text-overflow: clip;
+}
+
+.modal-panel.site-clean-modal .lot-enforcement-modal-table-card .enforcement-unit-column {
+  width: 26%;
+}
+
+.modal-panel.site-clean-modal .lot-enforcement-modal-table-card .enforcement-decision-column {
+  width: 30%;
+}
+
+.modal-panel.site-clean-modal .lot-enforcement-modal-table-card .enforcement-reason-column {
+  width: 44%;
+}
+
+.lot-enforcement-modal .modal-decision-stack {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 5px;
+  align-items: start;
+}
+
+.lot-enforcement-modal .modal-decision-stack :is(.validation-badge, .enforcement-badge, .pill) {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  justify-content: flex-start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: left;
+  line-height: 1.25;
+}
+
+@media (max-width: 720px) {
+  .lot-enforcement-modal {
+    width: min(100%, calc(100vw - 20px));
+  }
+
+  .modal-panel.site-clean-modal .lot-enforcement-modal-table-card :is(th, td) {
+    padding-right: 7px;
+    padding-left: 7px;
+    font-size: 0.78rem;
+  }
+
+  .modal-panel.site-clean-modal .lot-enforcement-modal-table-card .enforcement-unit-column {
+    width: 28%;
+  }
+
+  .modal-panel.site-clean-modal .lot-enforcement-modal-table-card .enforcement-decision-column {
+    width: 34%;
+  }
+
+  .modal-panel.site-clean-modal .lot-enforcement-modal-table-card .enforcement-reason-column {
+    width: 38%;
+  }
+}
+
+/* Management Lots Refinement 11 — compact Validation Check row and modal breakdown. */
+.lot-validation-check-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(190px, 0.7fr) minmax(0, 2.3fr);
+  gap: 10px 18px;
+  align-items: center;
+  padding-top: 12px;
+  border-top: 1px solid rgba(156, 181, 212, 0.55);
+}
+
+.lot-validation-check-label {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lot-validation-check-label span {
+  color: #293a51;
+  font-size: 0.86rem;
+  font-weight: 650;
+}
+
+.lot-validation-check-label small {
+  overflow: hidden;
+  color: #64758a;
+  font-size: 0.72rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lot-validation-check-stats,
+.modal-validation-check-row {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 12px;
+  min-width: 0;
+}
+
+.lot-validation-check-stats > span,
+.modal-validation-check-row > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  padding-left: 9px;
+  border-left: 3px solid #94a3b8;
+}
+
+.lot-validation-check-stats small,
+.modal-validation-check-row small {
+  overflow: hidden;
+  color: #64758a;
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.lot-validation-check-stats strong,
+.modal-validation-check-row strong {
+  color: #28384d;
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.lot-validation-check-stats .accepted,
+.modal-validation-check-row .accepted {
+  border-left-color: var(--green);
+}
+
+.lot-validation-check-stats .rejected,
+.modal-validation-check-row .rejected {
+  border-left-color: var(--red);
+}
+
+.lot-validation-check-stats .review,
+.modal-validation-check-row .review {
+  border-left-color: var(--yellow);
+}
+
+.lot-validation-check-stats .open,
+.modal-validation-check-row .open {
+  border-left-color: var(--slate);
+}
+
+.modal-validation-check-row {
+  margin-top: 10px;
+}
+
+.lot-requirement-breakdown-table-card {
+  max-height: min(34vh, 360px);
+}
+
+.modal-panel.site-clean-modal .lot-requirement-breakdown-table-card .requirement-breakdown-field-column {
+  width: 28%;
+}
+
+.modal-panel.site-clean-modal .lot-requirement-breakdown-table-card .requirement-breakdown-rule-column {
+  width: 17%;
+}
+
+.modal-panel.site-clean-modal .lot-requirement-breakdown-table-card .requirement-breakdown-value-column {
+  width: 22%;
+}
+
+.modal-panel.site-clean-modal .lot-requirement-breakdown-table-card .requirement-breakdown-count-column {
+  width: 11%;
+}
+
+@media (max-width: 940px) {
+  .lot-validation-check-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 620px) {
+  .lot-validation-check-stats,
+  .modal-validation-check-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Management Lots Refinement 13 — move Lot Context into the Lot State panel without inline compression. */
+.lot-state-context-panel {
+  grid-template-columns: minmax(0, 2.35fr) minmax(230px, 0.75fr);
+  align-items: stretch;
+  gap: 16px 18px;
+}
+
+.lot-state-main {
+  display: grid;
+  gap: 13px;
+  min-width: 0;
+}
+
+.lot-state-overview {
+  display: grid;
+  grid-template-columns: minmax(170px, 0.55fr) minmax(0, 2.45fr);
+  gap: 14px 18px;
+  align-items: center;
+  min-width: 0;
+}
+
+.lot-state-overview .lot-summary-stats {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lot-state-context {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 13px;
+  border: 1px solid rgba(188, 212, 242, 0.72);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.lot-state-context h2 {
+  margin: 0;
+  color: #293a51;
+  font-size: 0.86rem;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+}
+
+.lot-state-context dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.lot-state-context dl > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lot-state-context dt {
+  color: #64758a;
+  font-size: 0.68rem;
+  font-weight: 650;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.lot-state-context dd {
+  margin: 0;
+  color: #28384d;
+  font-size: 0.87rem;
+  font-weight: 650;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.lot-state-context a {
+  color: #245ba6;
+  text-decoration: none;
+}
+
+.lot-state-context a:hover {
+  text-decoration: underline;
+}
+
+.lot-validation-check-row {
+  padding-top: 11px;
+}
+
+.lot-validation-check-label span {
+  font-size: 0.84rem;
+}
+
+.lot-validation-check-stats > span,
+.modal-validation-check-row > span {
+  justify-items: center;
+  gap: 6px;
+  padding-left: 0;
+  border-left: 0;
+}
+
+.lot-validation-check-stats small,
+.modal-validation-check-row small {
+  font-size: 0.66rem;
+  letter-spacing: 0.055em;
+  text-align: center;
+}
+
+.lot-validation-check-stats strong,
+.modal-validation-check-row strong {
+  display: inline-grid;
+  place-items: center;
+  min-width: 38px;
+  min-height: 22px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.lot-validation-check-stats .accepted strong,
+.modal-validation-check-row .accepted strong {
+  color: var(--green);
+  background: var(--green-bg);
+}
+
+.lot-validation-check-stats .rejected strong,
+.modal-validation-check-row .rejected strong {
+  color: var(--red);
+  background: var(--red-bg);
+}
+
+.lot-validation-check-stats .review strong,
+.modal-validation-check-row .review strong {
+  color: var(--yellow);
+  background: var(--yellow-bg);
+}
+
+.lot-validation-check-stats .open strong,
+.modal-validation-check-row .open strong {
+  color: var(--slate);
+  background: var(--slate-bg);
+}
+
+@media (max-width: 1080px) {
+  .lot-state-context-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .lot-state-context dl {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 940px) {
+  .lot-state-overview {
+    grid-template-columns: 1fr;
+  }
+
+  .lot-state-overview .lot-summary-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .lot-state-context dl {
+    grid-template-columns: 1fr;
+  }
 }

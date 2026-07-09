@@ -14,7 +14,7 @@
       <div class="app-main">
         <%- include('../partials/topbar', { pageTitle }) %>
 
-        <main class="content-shell">
+        <main class="content-shell lot-detail-page">
           <nav class="lot-breadcrumbs" aria-label="Lot breadcrumb">
             <a href="/management/lots">Lots</a>
 
@@ -29,18 +29,29 @@
             <% }) %>
           </nav>
 
-          <section class="dashboard-hero accent-green">
+          <section class="page-heading lot-detail-page-heading">
             <div>
-              <p class="eyebrow">Lot Details</p>
-              <h2 class="lot-detail-title"><%= lot.lot_name %></h2>
-              <p>
-                Review lot details, requirements, attached units, and validation previews from a cleaner Management view.
-              </p>
+              <h1><%= lot.lot_name %></h1>
             </div>
 
-            <div class="hero-badge">
-              <span><%= Number(lot.is_closed) === 1 ? 'Closed Lot' : 'Open Lot' %></span>
-              <strong><%= enforcementSummary.policyLabel %></strong>
+            <div class="lot-detail-action-bar site-clean-actions">
+              <a class="secondary-button" href="/management/lots<%= Number(lot.is_active) === 1 ? '' : '?showHidden=1' %>">Back to Lots</a>
+              <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
+              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-target="#modal-root" hx-swap="innerHTML">Requirements</a>
+              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/enforcement/modal" hx-get="/management/lots/<%= lot.lot_id %>/enforcement/modal" hx-target="#modal-root" hx-swap="innerHTML">Enforcement Preview</a>
+              <% if (Number(lot.is_closed) === 1) { %>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-target="#modal-root" hx-swap="innerHTML">Reopen Lot</a>
+              <% } else { %>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/close/modal" hx-get="/management/lots/<%= lot.lot_id %>/close/modal" hx-target="#modal-root" hx-swap="innerHTML">Close Lot</a>
+              <% } %>
+              <% if (Number(lot.is_active) === 1) { %>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal" hx-target="#modal-root" hx-swap="innerHTML">Hide Lot</a>
+              <% } else { %>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-get="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-target="#modal-root" hx-swap="innerHTML">Unhide Lot</a>
+              <% } %>
+              <% if (Number(lot.unitCount || 0) === 0 && lotRelationships.directChildLots.length === 0) { %>
+                <a class="secondary-button danger-button" href="/management/lots/<%= lot.lot_id %>/delete/modal" hx-get="/management/lots/<%= lot.lot_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Lot</a>
+              <% } %>
             </div>
           </section>
 
@@ -56,336 +67,147 @@
             </div>
           <% } %>
 
-          <div class="lot-detail-action-bar">
-            <a class="secondary-button" href="/management/lots<%= Number(lot.is_active) === 1 ? '' : '?showHidden=1' %>">Back to Lots</a>
-            <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
-            <% if (Number(lot.is_closed) === 1) { %>
-              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-target="#modal-root" hx-swap="innerHTML">Reopen Lot</a>
-            <% } else { %>
-              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/close/modal" hx-get="/management/lots/<%= lot.lot_id %>/close/modal" hx-target="#modal-root" hx-swap="innerHTML">Close Lot</a>
-            <% } %>
-            <% if (Number(lot.is_active) === 1) { %>
-              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal" hx-target="#modal-root" hx-swap="innerHTML">Hide Lot</a>
-            <% } else { %>
-              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-get="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-target="#modal-root" hx-swap="innerHTML">Unhide Lot</a>
-            <% } %>
-            <% if (Number(lot.unitCount || 0) === 0 && lotRelationships.directChildLots.length === 0) { %>
-              <a class="secondary-button danger-button" href="/management/lots/<%= lot.lot_id %>/delete/modal" hx-get="/management/lots/<%= lot.lot_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Lot</a>
-            <% } %>
-          </div>
-
-          <section class="dashboard-grid lot-detail-summary-grid">
-            <article class="dashboard-card">
-              <p class="card-label">Lot State</p>
-              <h3><%= Number(lot.is_closed) === 1 ? 'Closed' : 'Open' %></h3>
-              <p><%= Number(lot.is_closed) === 1 ? 'Reviewable, but unavailable as a unit destination.' : 'Available as a unit destination when visible and not a parent/container lot.' %></p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Visibility</p>
-              <h3><%= Number(lot.is_active) === 1 ? 'Visible' : 'Hidden' %></h3>
-              <p><%= Number(lot.is_active) === 1 ? 'Shown in normal lot browsers.' : 'Hidden from normal lot browsers and assignment dropdowns.' %></p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Lot Type</p>
-              <h3><%= lot.lot_type_label || '—' %></h3>
-              <p>Lot profile and planning details.</p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Units</p>
-              <h3><%= formatNumber(lot.unitCount) %></h3>
-              <p>
-                <% if (lot.isUnlimited) { %>
-                  Open / unlimited lot.
-                <% } else { %>
-                  Goal: <%= formatNumber(lot.unitGoal) %> units.
-                <% } %>
-              </p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Progress</p>
-              <h3>
-                <% if (lot.isUnlimited) { %>
-                  Open
-                <% } else { %>
-                  <%= formatNumber(lot.progressPercent) %>%
-                <% } %>
-              </h3>
-              <p>
-                <% if (Number(lot.is_closed) === 1) { %>
-                  Closed lots cannot receive more units.
-                <% } else if (lot.isFull) { %>
-                  This lot has reached its unit goal.
-                <% } else { %>
-                  This lot can still accept more units.
-                <% } %>
-              </p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Default Weight</p>
-              <h3>
-                <% if (lot.resolved_default_production_weight !== null && lot.resolved_default_production_weight !== undefined) { %>
-                  <%= formatWeight(lot.resolved_default_production_weight) %>
-                <% } else { %>
-                  Category
-                <% } %>
-              </h3>
-              <p>
-                <% if (lot.default_production_weight !== null && lot.default_production_weight !== undefined) { %>
-                  Custom lot default. Unit overrides still take priority.
-                <% } else if (lot.default_production_weight_label) { %>
-                  Preset lot default: <%= lot.default_production_weight_label %>.
-                <% } else { %>
-                  Uses unit category default weights.
-                <% } %>
-              </p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Created</p>
-              <h3><%= formatDate(lot.created_at) %></h3>
-              <p><%= formatTime(lot.created_at) %> Central time.</p>
-            </article>
-          </section>
-
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Enforcement</p>
-                <h2>Requirement Enforcement Preview</h2>
-              </div>
+          <% if (successMessage) { %>
+            <div class="message success">
+              <%= successMessage %>
             </div>
+          <% } %>
 
-            <div class="enforcement-banner <%= enforcementSummary.policyStatus %>">
-              <div>
-                <span><%= enforcementSummary.enforcementModeLabel %></span>
-                <strong><%= enforcementSummary.policyLabel %></strong>
-                <p><%= enforcementSummary.policyMessage %></p>
-              </div>
+          <% if (errorMessages.length > 0) { %>
+            <div class="message error">
+              <% errorMessages.forEach((errorMessage) => { %>
+                <p><%= errorMessage %></p>
+              <% }) %>
             </div>
+          <% } %>
 
-            <div class="validation-note">
-              <strong>Important:</strong>
-              <%= enforcementSummary.enforcementModeMessage %>
-            </div>
+          <section class="lot-summary-panel lot-detail-summary-panel lot-state-context-panel" aria-label="Lot detail totals">
+            <div class="lot-state-main">
+              <div class="lot-state-overview">
+                <div class="lot-summary-primary">
+                  <span>Lot state</span>
+                  <strong><%= Number(lot.is_closed) === 1 ? 'Closed' : 'Open' %></strong>
+                  <small><%= enforcementSummary.policyLabel %></small>
+                </div>
 
-            <div class="enforcement-summary-grid">
-              <article class="enforcement-summary-card allowed">
-                <span>Would Allow</span>
-                <strong><%= formatNumber(enforcementSummary.allowedCount) %></strong>
-              </article>
+                <div class="lot-summary-stats">
+                  <article>
+                    <span class="lot-summary-icon" aria-hidden="true">◉</span>
+                    <span><small>Visibility</small><strong><%= Number(lot.is_active) === 1 ? 'Visible' : 'Hidden' %></strong></span>
+                  </article>
 
-              <article class="enforcement-summary-card blocked">
-                <span>Would Block</span>
-                <strong><%= formatNumber(enforcementSummary.blockedCount) %></strong>
-              </article>
+                  <article>
+                    <span class="lot-summary-icon" aria-hidden="true">▤</span>
+                    <span><small>Lot type</small><strong><%= lot.lot_type_label || '—' %></strong></span>
+                  </article>
 
-              <article class="enforcement-summary-card review">
-                <span>Needs Review</span>
-                <strong><%= formatNumber(enforcementSummary.reviewCount) %></strong>
-              </article>
+                  <article>
+                    <span class="lot-summary-icon" aria-hidden="true">#</span>
+                    <span><small>Units</small><strong><%= formatNumber(lot.unitCount) %></strong></span>
+                  </article>
 
-              <article class="enforcement-summary-card override">
-                <span>Override Needed</span>
-                <strong><%= formatNumber(enforcementSummary.overrideRequiredCount) %></strong>
-              </article>
-            </div>
+                  <article>
+                    <span class="lot-summary-icon" aria-hidden="true">%</span>
+                    <span>
+                      <small>Progress</small>
+                      <strong>
+                        <% if (lot.isUnlimited) { %>
+                          Open
+                        <% } else { %>
+                          <%= formatNumber(lot.progressPercent) %>%
+                        <% } %>
+                      </strong>
+                    </span>
+                  </article>
 
-            <% if (enforcementSummary.unitDecisions.length > 0) { %>
-              <h2 class="section-title">Unit Enforcement Decisions</h2>
+                  <article>
+                    <span class="lot-summary-icon" aria-hidden="true">×</span>
+                    <span>
+                      <small>Default weight</small>
+                      <strong>
+                        <% if (lot.resolved_default_production_weight !== null && lot.resolved_default_production_weight !== undefined) { %>
+                          <%= formatWeight(lot.resolved_default_production_weight) %>
+                        <% } else { %>
+                          Category
+                        <% } %>
+                      </strong>
+                    </span>
+                  </article>
 
-              <div class="table-card validation-table-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Unit</th>
-                      <th>Validation</th>
-                      <th>Decision</th>
-                      <th>Override</th>
-                      <th>Reason</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    <% enforcementSummary.unitDecisions.forEach((unitDecision) => { %>
-                      <tr>
-                        <td>
-                          <strong><%= unitDecision.label %></strong>
-                          <br />
-                          <span class="table-muted-line"><%= unitDecision.subLabel %></span>
-                        </td>
-
-                        <td>
-                          <span class="validation-badge <%= unitDecision.validationStatus %>">
-                            <%= unitDecision.validationStatusLabel %>
-                          </span>
-                        </td>
-
-                        <td>
-                          <span class="enforcement-badge <%= unitDecision.decision %>">
-                            <%= unitDecision.decisionLabel %>
-                          </span>
-                        </td>
-
-                        <td>
-                          <% if (unitDecision.requiresOverride) { %>
-                            <span class="pill bad">Required</span>
-                          <% } else { %>
-                            <span class="pill good">Not needed</span>
-                          <% } %>
-                        </td>
-
-                        <td><%= unitDecision.message %></td>
-                      </tr>
-                    <% }) %>
-                  </tbody>
-                </table>
+                  <article>
+                    <span class="lot-summary-icon" aria-hidden="true">＋</span>
+                    <span><small>Created</small><strong><%= formatDate(lot.created_at) %></strong></span>
+                  </article>
+                </div>
               </div>
-            <% } else { %>
-              <div class="message success">
-                <p>No unit enforcement decisions are available yet because this lot currently has no units to check.</p>
-              </div>
-            <% } %>
-          </section>
 
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Relationship</p>
-                <h2>Lot Context</h2>
-              </div>
-            </div>
-
-            <div class="lot-context-grid">
-              <article class="lot-context-card">
-                <span>Parent Lot</span>
-
-                <% if (lotRelationships.parentLot) { %>
-                  <strong>
-                    <a href="/management/lots/<%= lotRelationships.parentLot.lot_id %>">
-                      <%= lotRelationships.parentLot.lot_name %>
-                    </a>
-                  </strong>
+              <div class="lot-validation-check-row" aria-label="Validation check">
+                <div class="lot-validation-check-label">
+                  <span>Validation Check</span>
                   <small>
-                    This lot is a child/sub-lot under the parent shown above.
+                    <%= formatNumber(validationReport.requirementCount) %> active requirements ·
+                    <%= formatNumber(validationReport.unitsChecked) %> units checked
                   </small>
-                <% } else { %>
-                  <strong>No parent</strong>
-                  <small>This is a top-level parent lot.</small>
-                <% } %>
-              </article>
+                </div>
 
-              <article class="lot-context-card">
-                <span>Child Lots</span>
-                <strong><%= formatNumber(lotRelationships.directChildLots.length) %></strong>
-                <small>Direct sub-lots under this lot.</small>
-              </article>
-
-              <article class="lot-context-card">
-                <span>Sibling Lots</span>
-                <strong><%= formatNumber(lotRelationships.siblingLots.length) %></strong>
-                <small>Other lots under the same parent.</small>
-              </article>
+                <div class="lot-validation-check-stats">
+                  <span class="accepted"><small>Accepted</small><strong><%= formatNumber(validationReport.acceptedCount) %></strong></span>
+                  <span class="rejected"><small>Rejected</small><strong><%= formatNumber(validationReport.rejectedCount) %></strong></span>
+                  <span class="review"><small>Needs Review</small><strong><%= formatNumber(validationReport.needsReviewCount) %></strong></span>
+                  <span class="open"><small>Open</small><strong><%= formatNumber(validationReport.openCount) %></strong></span>
+                </div>
+              </div>
             </div>
 
-            <% if (lotRelationships.directChildLots.length > 0) { %>
-              <h2 class="section-title">Direct Child Lots</h2>
+            <aside class="lot-state-context" aria-label="Lot context">
+              <h2>Lot Context</h2>
+              <dl>
+                <div>
+                  <dt>Parent Lot</dt>
+                  <dd>
+                    <% if (lotRelationships.parentLot) { %>
+                      <a href="/management/lots/<%= lotRelationships.parentLot.lot_id %>">
+                        <%= lotRelationships.parentLot.lot_name %>
+                      </a>
+                    <% } else { %>
+                      Root lot
+                    <% } %>
+                  </dd>
+                </div>
+
+                <div>
+                  <dt>Child Lots</dt>
+                  <dd><%= formatNumber(lotRelationships.directChildLots.length) %></dd>
+                </div>
+
+                <div>
+                  <dt>Sibling Lots</dt>
+                  <dd><%= formatNumber(lotRelationships.siblingLots.length) %></dd>
+                </div>
+              </dl>
+            </aside>
+          </section>
+
+          <% if (lotRelationships.directChildLots.length > 0) { %>
+            <section class="site-clean-section lot-detail-section">
+              <div class="site-clean-section-heading">
+                <h2>Direct Child Lots</h2>
+              </div>
 
               <div class="compact-lot-list">
                 <% lotRelationships.directChildLots.forEach((childLot) => { %>
                   <a href="/management/lots/<%= childLot.lot_id %>" class="compact-lot-item">
                     <strong class="lot-display-name"><%= childLot.lot_name %></strong>
-                      <span><%= childLot.lot_type_label || 'No type' %><%= Number(childLot.is_active) === 1 ? '' : ' · Hidden' %></span>
+                    <span><%= childLot.lot_type_label || 'No type' %><%= Number(childLot.is_active) === 1 ? '' : ' · Hidden' %></span>
                   </a>
                 <% }) %>
               </div>
-            <% } %>
-          </section>
+            </section>
+          <% } %>
 
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Validation</p>
-                <h2>Unit-to-Lot Validation Summary</h2>
-              </div>
-            </div>
-
-            <div class="validation-note">
-              <strong>Read-only preview:</strong>
-              <%= validationReport.message %>
-            </div>
-
-            <div class="validation-summary-grid">
-              <article class="validation-summary-card accepted">
-                <span>Accepted</span>
-                <strong><%= formatNumber(validationReport.acceptedCount) %></strong>
-              </article>
-
-              <article class="validation-summary-card rejected">
-                <span>Rejected</span>
-                <strong><%= formatNumber(validationReport.rejectedCount) %></strong>
-              </article>
-
-              <article class="validation-summary-card review">
-                <span>Needs Review</span>
-                <strong><%= formatNumber(validationReport.needsReviewCount) %></strong>
-              </article>
-
-              <article class="validation-summary-card open">
-                <span>Open</span>
-                <strong><%= formatNumber(validationReport.openCount) %></strong>
-              </article>
-            </div>
-
-            <% if (requirementValidationSummary.length > 0) { %>
-              <h2 class="section-title">Requirement Pass / Fail Summary</h2>
-
-              <div class="table-card validation-table-card">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Requirement</th>
-                      <th>Rule</th>
-                      <th>Required Value</th>
-                      <th>Passed</th>
-                      <th>Rejected</th>
-                      <th>Needs Review</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    <% requirementValidationSummary.forEach((summaryRow) => { %>
-                      <tr>
-                        <td>
-                          <strong><%= summaryRow.requirementLabel %></strong>
-                          <% if (summaryRow.notes) { %>
-                            <br />
-                            <span class="table-muted-line"><%= summaryRow.notes %></span>
-                          <% } %>
-                        </td>
-                        <td><%= summaryRow.operatorLabel %></td>
-                        <td><%= summaryRow.requiredValue || '—' %></td>
-                        <td><span class="validation-mini-count accepted"><%= formatNumber(summaryRow.acceptedCount) %></span></td>
-                        <td><span class="validation-mini-count rejected"><%= formatNumber(summaryRow.rejectedCount) %></span></td>
-                        <td><span class="validation-mini-count review"><%= formatNumber(summaryRow.needsReviewCount) %></span></td>
-                      </tr>
-                    <% }) %>
-                  </tbody>
-                </table>
-              </div>
-            <% } %>
-          </section>
-
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Units</p>
-                <h2>Units Inside This Lot</h2>
-              </div>
+          <section class="site-clean-section lot-detail-section">
+            <div class="site-clean-section-heading">
+              <h2>Units Inside This Lot</h2>
             </div>
 
             <% if (!validationReport.supported) { %>
@@ -469,104 +291,7 @@
             <% } %>
           </section>
 
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Requirements</p>
-                <h2>Lot Requirement Rules</h2>
-              </div>
 
-              <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/requirements/new/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Add Requirement</a>
-            </div>
-
-            <% if (successMessage) { %>
-              <div class="message success">
-                <%= successMessage %>
-              </div>
-            <% } %>
-
-            <% if (errorMessages.length > 0) { %>
-              <div class="message error">
-                <% errorMessages.forEach((errorMessage) => { %>
-                  <p><%= errorMessage %></p>
-                <% }) %>
-              </div>
-            <% } %>
-
-            <div class="table-card" style="margin-top: 20px;">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Requirement</th>
-                    <th>Rule</th>
-                    <th>Required Value</th>
-                    <th>Status</th>
-                    <th>Notes</th>
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-
-                <tbody>
-                  <% if (requirements.length === 0) { %>
-                    <tr>
-                      <td colspan="6">No requirements have been added to this lot yet.</td>
-                    </tr>
-                  <% } %>
-
-                  <% requirements.forEach((requirement) => { %>
-                    <tr>
-                      <td><%= requirement.requirement_key || '—' %></td>
-                      <td><%= requirement.operator_code || 'equals' %></td>
-                      <td><%= requirement.required_value || '—' %></td>
-                      <td>
-                        <% if (Number(requirement.is_active) === 1) { %>
-                          <span class="pill good">Active</span>
-                        <% } else { %>
-                          <span class="pill bad">Inactive</span>
-                        <% } %>
-                      </td>
-                      <td><%= requirement.notes || '—' %></td>
-                      <td>
-                        <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
-                      </td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
-            </div>
-          </section>
-
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Next</p>
-                <h2>Step 2i Preview</h2>
-              </div>
-            </div>
-
-            <div class="workflow-list">
-              <div class="workflow-item active">
-                <span></span>
-                <div>
-                  <strong>Tech unit creation/editing foundation</strong>
-                  <p>
-                    Next we can start the Tech workflow where users create or edit units and see lot validation
-                    feedback before saving.
-                  </p>
-                </div>
-              </div>
-
-              <div class="workflow-item slate">
-                <span></span>
-                <div>
-                  <strong>Management override workflow</strong>
-                  <p>
-                    After unit creation is connected, we can add override request and approval tracking.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </section>
         </main>
 
         <div id="modal-root"></div>

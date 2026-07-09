@@ -106,6 +106,20 @@ router.post(
 );
 
 router.get(
+  '/management/lots/:lotId/requirements/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotRequirementsModal
+);
+
+router.get(
+  '/management/lots/:lotId/enforcement/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotEnforcementModal
+);
+
+router.get(
   '/management/lots/:lotId/requirements/new/modal',
   requireAuth,
   requireRole(lotManagementRoles),

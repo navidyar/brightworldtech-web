@@ -8,8 +8,8 @@
   <section class="modal-panel tech-complete-work-modal" role="dialog" aria-modal="true" aria-labelledby="tech-complete-work-title">
     <div class="modal-header">
       <div>
-        <p class="eyebrow">Lot Work Completion</p>
-        <h2 id="tech-complete-work-title">Confirm Work Complete</h2>
+        <p class="eyebrow">Unit Completion</p>
+        <h2 id="tech-complete-work-title">Confirm Unit Complete</h2>
       </div>
 
       <button type="button" class="modal-close" data-modal-close aria-label="Close modal">×</button>
@@ -72,7 +72,7 @@
         </div>
 
         <p class="field-hint">
-          This records the work you performed in the current lot. It does not change the unit’s assignment, lot, grade, or Pass/Fail status.
+          This records the unit completion credit for the current lot. It does not change the unit’s assignment, lot, grade, or Pass/Fail status.
         </p>
 
         <% if (canSubmit) { %>
@@ -85,7 +85,7 @@
             hx-swap="innerHTML"
           >
             <div class="form-actions">
-              <button class="primary-button" type="submit">Record Completion</button>
+              <button class="primary-button" type="submit">Confirm Unit Complete</button>
               <button type="button" class="secondary-button" data-modal-close>Cancel</button>
             </div>
           </form>
