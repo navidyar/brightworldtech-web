@@ -1,12 +1,338 @@
+## Reset Design Stage Favicon Pack V6 — Final Approved Lime Monitor Icon
+
+- Installs the final approved BWTDallas favicon pack using the user-approved bright lime rounded-square icon with a medium-thickness navy monitor outline and a larger centered navy `B`.
+- Uses transparent outer corners for browser favicon assets so the icon sits cleanly on dark or light browser tabs without a white edge or halo.
+- Adds or replaces `favicon.svg`, `favicon.ico`, `favicon-16x16.png`, `favicon-32x32.png`, `favicon-48x48.png`, `apple-touch-icon.png`, `favicon-192x192.png`, `favicon-512x512.png`, and `site.webmanifest`, and registers them in `views/partials/head.ejs` with a cache-busted version token.
+- Preserves all routes, controllers, models, database behavior, CSS, and JavaScript behavior. No migration is required.
+
+Management Lots Refinement 13: Lot State Context Rail.
+- Moves the short Lot Context metadata into the right side of the top Lot State summary panel, avoiding the overly compressed inline-row layout from the reverted trial while saving a full page section.
+- Keeps the existing Lot State stat blocks readable, preserves the small square stat icons, and changes Validation Check counts to soft colored count pills instead of colored left bars.
+- Keeps Direct Child Lots as a separate simple section only when child lots exist and leaves all detail-page tables/table rows unchanged. No database migration is required.
+
+Management Lots Refinement 11: Validation Check Row.
+- Moves the visible Unit-to-Lot Validation Summary off the main lot detail page and replaces it with a compact second-row "Validation Check" inside the top Lot State summary panel.
+- Keeps the full requirement pass/fail breakdown available inside the Enforcement Preview modal under Requirement Breakdown, alongside the existing enforcement decision preview.
+- Preserves table-like modal views and leaves the main lot detail page tables/table rows unchanged. No database migration is required.
+
+Management Lots Refinement 10: Enforcement Modal Overflow Fix.
+- Keeps the Enforcement Preview modal in a table-like layout while removing the remaining horizontal scrollbar pressure.
+- Constrains the enforcement modal body, summary grid, and modal-only table to the modal width, allows policy text and reasons to wrap, and stacks decision badges inside the Decision cell instead of forcing that column wider.
+- Leaves Requirements modal structure, main lot detail tables, and all table rows unchanged. No database migration is required.
+
+Management Lots Refinement 9: Modal Table Fit Cleanup.
+- Keeps Requirements and Enforcement Preview modal content in table-like views instead of replacing them with cards.
+- Removes the modal-only horizontal scrollbar pressure by using fixed modal table layout, wrapping long values/reasons/notes, and tighter column sizing.
+- Shortens the Requirements header labels and consolidates the Enforcement Preview unit decision columns into Unit / Decision / Reason while preserving the same validation, decision, and override information.
+- Leaves the main lot detail page tables/table rows unchanged. No database migration is required.
+
+Step 7m.7: Management Lots Detail Enforcement Preview Modal.
+- Moved the individual lot Requirement Enforcement Preview / Unit Enforcement Decisions content off the main detail page into a dedicated HTMX modal.
+- Added an Enforcement Preview action beside Requirements on `/management/lots/:id` so the future enforcement exploration remains accessible without adding main-page noise.
+- Added the `/management/lots/:lotId/enforcement/modal` route, controller renderer, and modal fragment while leaving existing lot detail tables/table rows unchanged.
+- No database migration required.
+
+## Management Lots Refinement 6 — Requirement Rules Modal
+
+- Moves the editable Lot Requirement Rules list out of the main `/management/lots/:id` page and into a clean modal opened from a compact `Requirements` action in the lot detail heading.
+- Keeps Add Requirement and Edit Requirement flows inside the modal stack while preserving the existing routes, validation, HTMX behavior, and post-save redirects.
+- Moves success/error notices that previously lived in the visible requirements section up near the top of the lot detail page so requirement create/edit feedback is still visible after redirects.
+- Leaves the existing page tables and table rows unchanged; this step only removes the rules-management section from the main page and adds a modal list shell. No database migration is required.
+
+## Management Lots Refinement 5 — Individual Lot Detail Global Cleanup
+
+Refines `/management/lots/:id` to follow the same non-table global styling direction as the Lots browser cleanup. The lot detail page now uses the shared `page-heading`, Lookup-style summary row, and `site-clean-section` / `site-clean-actions` patterns instead of the older dashboard hero, hero badge, dashboard-card grid, content-card headers, and eyebrow labels. The old Step 2i preview helper block was removed from the operational page. Close/reopen, hide/unhide, and delete lot modals now opt into the shared clean modal/button contract. Existing tables and table rows were intentionally left unchanged for a later table-specific pass.
+
+## Management Lots Refinement 4 — Shared Action Buttons and Section Shell
+
+- Normalizes `/management/lots` non-table action buttons to the shared clean button contract from the current `/tech/units` direction: 39px controls, 7px corners, medium 650 font weight, restrained hover states, and no legacy pill/button bubble treatment.
+- Promotes reusable `.site-clean-section`, `.site-clean-section-heading`, and `.site-clean-actions` styles in `work-area.css` so management pages can opt into the same heading/action rhythm without touching table rows.
+- Converts the Lot Browser wrapper from a bordered content-card shell into a clean section heading above the existing table panel, reducing the container-within-container feel while preserving the current Lots table and row styling.
+- Aligns clean modal action buttons and close buttons with the current Tech Units modal direction by making regular modal actions solid blue, square-cornered, and borderless; danger actions remain red.
+- Updates the shared work-area stylesheet cache-buster. No database migration is required.
+
+## Management Lots Refinement 3 — Global Container and Modal Cleanup
+
+- Applies the shared clean modal/form container pattern to `/management/lots` create/edit lot and requirement modals, reusing the current Tech Units direction of one modal shell, compact section labels, and one white panel per form section.
+- Removes remaining routine modal eyebrow labels, section helper copy, field hints, the production-weight note bubble, and separate checkbox-card bubbles from the Lot modals while preserving the underlying form fields and validation behavior.
+- Moves the hidden-lot visibility action into the Lot Browser header beside Create Lot and removes the separate toolbar/redundant Lots section title above the table.
+- Leaves the Lots table and row styling unchanged for a later table-specific pass. No database migration is required.
+
+## Tech Units Unit Details R.1 — Fluid Multi-Column Readability Pass
+
+- Updates the expanded `/tech/units` Unit Details workspace so each detail section uses responsive multi-column label/value fields instead of long label/value rows with unused horizontal space.
+- Keeps the change focused on layout/readability only: no route, controller, JavaScript, permission, workflow, or database behavior changes are included.
+- Rebalances the expanded detail panel with a quieter header, compact white section panels, smaller labels, stronger values, auto-fit section grids, and responsive breakpoints that reflow from three/two columns down to smaller multi-column groups before stacking on narrow screens.
+- Aligns role visibility with the current Tech Units summary contract by keeping Current Lot Weight hidden from regular Tech users inside expanded Unit Details as well as the summary row.
+- Hides the routine ScanTool-only cellular helper text from the expanded read-only view while preserving the actual cellular/WWAN data display when present.
+
+## Management Lots Refinement 1 — Lookup-Style Summary Cleanup
+## Management Lots Refinement 2 — Header Text Cleanup
+
+- Replaces the old two-tier `/management/lots` hero copy with a single `Lot Management` page heading using the shared `.page-heading` title style based on the current `/tech/units` heading treatment.
+- Removes the routine hierarchy instruction text and lot visibility explanation text from the Lot Browser card while keeping the visible/hidden lot toggle action.
+- Removes the `Management` eyebrow label above `Lot Browser` and leaves the Lots table markup/styling unchanged for a later global table refinement pass. No database migration is required.
+
+
+- Replaces the bulky `/management/lots` hero badge and top dashboard-card count bubbles with a compact Lookup Metrics Dashboard-inspired summary panel.
+- Preserves the existing lot totals: total lots, visible lots, closed lots, hidden lots, units in lots, and requirements.
+- Removes the bottom `Lot Configuration / Visibility Behavior` training/help section so the page stays focused on the operational Lot Browser.
+- Adds page-scoped Lots CSS for the compact summary row using the same thin blue border, pale blue gradient, restrained typography, small icon boxes, and responsive behavior direction as the Lookup metrics summary row. No database migration is required.
+
+## Reset Design Stage F.5.16 — Tech Units Header Sorting Toggle Correction
+
+- Updates the `/tech/units` sortable table headers so each sortable header toggles between its forward and reverse ordering when clicked again, while preserving active filters and pagination options.
+- Date now toggles between newest-first and oldest-first; Work / Assignment toggles assigned Tech names from A-Z and Z-A with unassigned units remaining last.
+- Grade now toggles between A/B/C/D/E before Not Yet Graded and the reverse order; Pass-Fail toggles between Pass-first and Fail-first while records without an outcome remain last.
+- Removes the visible A-Z/A-D/Pass text indicators from the table headers and uses a compact active-direction arrow instead. No database migration is required.
+
+## Reset Design Stage F.5.15 — Tech Units Header Sorting Foundation
+
+- Adds sortable header controls to `/tech/units` while preserving the filtered pagination foundation from F.5.14. Sorting is carried in the query string as `sort=` and paging links preserve the active sort.
+- Enables Date sorting as latest-created first, Work / Assignment sorting by assigned Tech first name A-Z with unassigned units last, Grade sorting from A through D/E with Not Yet Graded/ungraded records last, and Pass-Fail sorting with Pass before Fail.
+- Runs sorting at the SQL row-query level before pagination so each page is drawn from the correctly sorted filtered result set instead of only sorting the visible page.
+- Adds shared table-sort link styling in `work-area.css` so other record tables can reuse the same sortable-header treatment when we roll pagination/sorting out sitewide.
+- Updates cache versions to `20260708-stage-f5-15`. No database migration is required.
+
+## Reset Design Stage F.5.14 — Tech Units Pagination Foundation
+
+- Adds filtered pagination to `/tech/units` with 50, 100, 250, 500, and All units-per-page options; the default page size is 50.
+- Uses one shared pagination partial and shared `work-area.css` pagination styles so the same pattern can be reused by other record-table pages later instead of becoming a Tech Units-only design.
+- Adds pagination controls above and below the Tech Units table so users can move between pages without scrolling through the entire current page first.
+- Runs the row query and matching-count query through the same filter conditions so page counts respect active filters such as lot, category, grade, Tech User, created date, search, and parked-unit mode.
+- Preserves the selected units-per-page value when filters are changed, resets filtered submissions back to page 1, supports `perPage=all`, and updates cache versions to `20260708-stage-f5-14`. No database migration is required.
+
+## Reset Design Stage F.5.13 — Tech Units Grade and Tech User Filter Source Correction
+
+- Fixes the Tech Units Browser filter option source ordering so Processor Brand, Processor Model, Grade, Tech User, and Production Weight data no longer shift into the wrong dropdowns.
+- Restores the Grade filter to use cosmetic letter-grade options and adds an explicit `Not Yet Graded` option that maps to units with no current grade assessment.
+- Restores the Tech User filter to show actual Tech user names and filters by the unit ownership/assignment field instead of production-weight/category labels.
+- Hardens the Parked Units mode so activating it shows the parked inventory instead of inheriting active-view search, lot, category, grade, Tech, or date filters. No database schema changes are included.
+
+# BWTDallas Webserver
+
+## Reset Design Stage F.5.12 — Tech Units Filter and Completion Action Corrections
+
+- Corrects the `/tech/units` Grade filter so it only presents actual cosmetic grade values such as A, B, C, D, and E instead of status-style "Has current grade" / "Needs grade" choices.
+- Restores Tech User filtering to the displayed unit ownership pattern: assigned Tech first, with a creator fallback for older records that do not have `assigned_to_user_id` populated yet. The dropdown now presents Tech names without count text.
+- Hardens parked-unit browsing by ignoring active-lot and Tech ownership filters while viewing parked units, so the Show Parked Units toggle returns parked records that had lot/assignment cleared when parked.
+- Changes the completion action label from "Work Complete" to "Unit Complete" before completion, then shows the disabled "Print Label" placeholder in that same action position only after a unit has a recorded manual completion.
+- Updates unit-completion modal/history wording from Work Complete to Unit Complete where visible. No database migration is required.
+
+## Reset Design Stage F.5.11 v2 — Tech Units Filter Bugfixes and Sitewide Date/Radio Polish
+
+- Restores the `/tech/units` Grade filter to the cosmetic-grade option set by reading `cosmetic_grades` first and matching equivalent legacy grade IDs where older grade categories still exist.
+- Tightens the Tech User filter so current schemas filter by the unit's assigned Tech (`assigned_to_user_id`) rather than creator fallback ownership.
+- Moves Show Parked Units into the Search & Filters action row beside Apply Filters/Clear so the value is submitted with the form; checked state requests only parked units.
+- Adds a disabled Unit Actions `Print Label` button as the visible placeholder for the upcoming label-printing workflow without introducing a broken route.
+- Removes the focus aura from radio-option focus sitewide while leaving normal blue focus for regular form fields; the compact Show Parked toggle also opts out of checkbox focus glow.
+- Replaces native `input[type="date"]` calendars with a reusable site date picker that mirrors the Tech Units Created Date Range calendar. Week/month fields keep their native picker behavior for now.
+- Updates shared and Tech Units CSS/JS cache versions to `20260708-stage-f5-11-v2`. No database migration is required.
+
+## Reset Design Stage F.5.10 — Whole-Site Form Field Contract Hardening
+
+- Extends the shared form-field value typography and focus treatment from F.5.8/F.5.9 to the remaining standard date-style controls, including week, month, and datetime-local fields used by metrics/reporting screens.
+- Promotes the shared form field contract as the sitewide source of truth for normal inputs, selects, textareas, custom field triggers, and radio/checkbox option text instead of relying on page-specific Add/Edit or browser-only overrides.
+- Keeps labels, hints, descriptions, buttons, tables, and non-form controls outside the field-value contract, while preserving the single blue focus border plus soft glow for accessible keyboard focus.
+- Updates the shared work-area stylesheet cache URL and the Tech Units clean stylesheet cache version to `20260708-stage-f5-10`. No route, JavaScript, validation, permission, or database behavior changes are included.
+
+## Reset Design Stage F.5.9 — Sitewide Form Field Focus Polish
+
+- Adds the missing focus portion on top of F.5.8: normal form fields now use one clean blue border plus a soft outer blue glow instead of the double-border/native-outline effect.
+- Applies the same focus contract to text/search/email/password/number/date/time/tel/url inputs, textareas, single-select fields, custom field triggers, and radio/checkbox option labels.
+- Keeps the F.5.8 sitewide field-value typography contract intact and avoids Add/Edit-only typography exceptions.
+- Updates the shared work-area stylesheet cache URL and the Tech Units clean stylesheet cache version to `20260708-stage-f5-9`. No route, JavaScript, validation, permission, or database behavior changes are included.
+
+## Reset Design Stage F.5.8 — Sitewide Form Field Value Typography Contract
+
+- Replaces the prior narrow Add/Edit typography follow-up with a sitewide form-field value typography contract based on the visible value text used by the Tech Units Browser select fields: Inter/system stack, `0.86rem`, `600` weight, neutral field ink, and `1.25` line height.
+- Applies the same value text contract to text/search/email/password/number/date/time/tel/url inputs, textareas, single-select fields, custom field triggers, and radio/checkbox option text.
+- Keeps field labels, help text, and descriptive secondary copy separate from field values, so labels remain labels and option descriptions remain muted/help-style text.
+- Updates the shared work-area stylesheet cache URL and the Tech Units clean stylesheet cache version to `20260708-stage-f5-8`. No route, JavaScript, validation, permission, or database behavior changes are included.
+
+## Reset Design Stage F.5.7 — Add/Edit Field Typography Correction
+
+- Restores the Unit Outcome Pass/Fail radio labels to a restrained bold weight instead of the lighter F.5.6 treatment.
+- Aligns Add/Edit form labels and control text with the Tech Units Browser field typography contract: inherited Inter font, neutral field ink, compact label sizing, and normal control text weight.
+- Keeps the corrected F.5.5 Unit Outcome layout: no extra nested option container, visible radio controls, and rounded corners only on the existing Unit Outcome field/container.
+- Updates the Tech Units clean stylesheet cache version to `20260708-stage-f5-7`. No route, JavaScript, validation, permission, or database behavior changes are included.
+
+## Reset Design Stage F.5.6 — Unit Outcome Label Weight Polish
+
+- Softens the Unit Outcome Pass/Fail radio-label text so it uses the same restrained medium-bold treatment as the rest of the Add/Edit form controls.
+- Preserves the F.5.5 corrected Unit Outcome structure: no extra nested container, rounded existing fieldset/container, larger visible radio buttons, and one selectable `outcomeCode` option.
+- Updates the Tech Units clean stylesheet cache version to `20260708-stage-f5-6`. No route, JavaScript, validation, permission, or database behavior changes are included.
+
+## Reset Design Stage F.5.5 — Unit Outcome Radio Correction
+
+- Corrects the Add/Edit Unit Outcome polish by removing the extra bordered container around the radio choices.
+- Applies the rounded-corner treatment to the existing Unit Outcome fieldset/container instead of adding another visual box inside it.
+- Keeps Unit Outcome as regular radio controls with larger visible radio buttons and separated labels, while preserving the existing `outcomeCode` field name and one-choice-only behavior.
+- Leaves the F.5.4 neutral border, dark heading, and borderless modal action-button refinements in place. No route, JavaScript, validation, or database behavior changes are included.
+
+## Reset Design Stage F.5.4 — Add/Edit Modal Button and Outcome Polish
+
+- Removes visible borders from Add/Edit Unit modal action controls while preserving the Metrics Dashboard blue fill treatment from the prior modal polish step.
+- Normalizes Add/Edit form island-panel and nested workflow borders to one neutral Lookup-style border family instead of per-section semantic border colors.
+- Changes Add/Edit form section headings and nested workflow headings to a consistent dark gray rather than section-specific colors.
+- Reworks Unit Outcome from a butted segmented button group back into a true radio-control presentation with larger visible radio buttons, separated rounded options, and one selectable outcome through the existing `outcomeCode` radio field.
+- Rounds the small Unit Outcome option container and preserves all existing form field names, routes, permissions, validation, duplicate checks, catalog-request behavior, JavaScript, and database behavior. No migration is required.
+
+## Reset Design Stage F.5.3 — Add/Edit Modal Header and Action Polish
+
+- Extends the Lookup-style gray modal canvas behind the Create/Edit Unit title strip so the header and form body share one continuous soft-gray backdrop.
+- Vertically centers the modal title and close button inside the header area.
+- Standardizes Add/Edit Unit modal action controls to the Metrics Dashboard blue button treatment, including secondary actions and the X close button.
+- Normalizes modal body sizing and side spacing so the white island panels sit centered with equal left and right padding.
+- Preserves all form fields, field names, validation, duplicate controls, catalog requests, permissions, routes, controllers, JavaScript behavior, and database behavior. No migration is required.
+
+## Reset Design Stage F.5.2 — Add/Edit White Island Panels
+
+- Changed the Add/Edit Unit modal/page backdrop to a Lookup-style soft gray canvas while keeping the modal itself as the only outer container.
+- Converted the individual Add/Edit form sections to white island panels with more pronounced thin borders and restrained Metrics Dashboard-style shadows.
+- Removed colored panel backgrounds as the default section treatment; section color remains limited to headings, borders, selected/semantic states, warnings, and validation.
+- Kept each section heading outside its panel and retained the F.5.1 no-parent-card form wrapper behavior.
+- Updated the Tech Units clean stylesheet cache version to `20260708-stage-f5-2`.
+- No JavaScript, controller, model, route, field-name, field-order, duplicate-check, catalog-request, permission, or database behavior changed.
+
 # BWTDallas App
 
 Internal operations portal for Bright World Technologies.
 
 ## Current Step
 
+## Reset Design Stage F.5.1 — Add/Edit Form Parent Container Removal
+
+- Removes the remaining visible `app-form` parent-card styling from Create/Edit Unit in both modal and full-page fallback contexts, so the modal/page area contains only the independent section panels.
+- Resets the form wrapper itself to transparent, borderless, padding-free grid spacing while keeping each child section panel's Lookup-style border, shadow, color family, and rounded corners.
+- Preserves all form field names, field order, validation, duplicate controls, catalog requests, lot logic, model/processor behavior, routes, controllers, JavaScript, and database behavior. No migration is required.
+
+## Reset Design Stage F.5 — Add/Edit Form Panel Architecture
+
+- Makes the Create/Edit Unit modal itself the only outer form surface: the modal interior is now white, with no tinted parent canvas behind the section panels.
+- Gives every major Add/Edit section its own lightly separated Lookup-style panel with an outside heading, thin matching border, restrained shadow, and 8px rounded corners. Assignment/Identity use pale blue, Catalog/Processor/Comments use pale violet, Memory/Storage/System use pale teal, Issues/Weight use pale amber or rose, and Grade/Outcome use pale green.
+- Keeps all instructional helper text hidden while retaining validation errors, duplicate controls, warnings, and operational-state notices.
+- Refines Unit Outcome into one compact 7px rounded segmented control rather than separate pill-like choices.
+- Preserves every field name, field order, live model/processor/lot behavior, duplicate checks, catalog requests, validation, role scope, routes, controllers, models, JavaScript, and database behavior. No migration is required.
+
+## Reset Design Stage F.4 — Form Labels & Add/Edit Modal Simplification
+
+- Aligns the Tech Units filter-label rhythm: Search Units, standard select labels, and **Created Date Range** now use the same compact `.72rem / 650` Lookup-derived label style, 3px left inset, and 4px label-to-control gap.
+- Removes routine instructional copy from Create/Edit Unit in the rendered UI, including the numbered guide, section descriptions, field hints, and repeated module descriptions. Validation messages, duplicate-result controls, warnings, error messages, and the lot-assumption workflow-state message remain available.
+- Makes the modal itself the primary form container. Form-section titles now sit outside their individual white work panels; the prior blue in-panel section headers and visible parent-card treatment are removed.
+- Applies the same clean form structure to the full-page Create/Edit fallback, without loading legacy `tech.css` for that page.
+- Does not change form fields, field names, live model/processor/lot behavior, duplicate checks, catalog requests, validation, role scope, routes, controllers, models, JavaScript, or database behavior. No migration is required.
+
+## Reset Design Stage F.3 — Exact Metrics Controls & Panel Shadows
+
+- Applies one scoped Metrics Dashboard control contract to the Tech Units Search Units textarea, all standard filter selects, and the app-controlled Created Date triggers: Inter/system font stack, `.86rem`, `600` emphasis, `#26384e` text, and consistent line height. The date labels now inherit the exact same text treatment as the adjacent controls.
+- Reapplies the Lookup-style thin blue SVG chevron directly to the Tech Units select elements, including the same 16px icon, right-side inset, and `appearance: none` normalization.
+- Strengthens separation between the independent Search & Filters and Units workspaces with Lookup’s core panel shadow: `0 8px 24px rgba(29,44,69,.08)`, while retaining the existing thin borders and rounded corners.
+- Preserves all Tech Units behavior, including Tech User role/data/filtering, date range behavior, actions, HTMX, controllers, models, routes, and database behavior. No SQL migration is required.
+
+## Reset Design Stage F.2 — Metrics Section Structure & Date Control Normalization
+
+- Moves the **Search & Filters** and **Units** titles out of their working panels and places them directly above their respective containers, matching the compact section-label rhythm used by the Lookup Metrics Dashboard.
+- Keeps Search & Filters and the Units table as separate white, thin-bordered, restrained-shadow panels; removes the tall internal header bars and the redundant Shared Unit Browser label.
+- Shows the loaded count as a compact green **N loaded** status beside the external Units heading.
+- Consolidates standard form fields to the same final normal-weight Lookup control contract and gives the Created Date Range triggers one explicit component rule matching the regular selects: Inter/system font, `.86rem`, `400` weight, `#26384e` text, `39px` height, and the same border/radius/shadow.
+- Normalizes the Created Date Range fieldset/legend layout so its two date triggers align with the Tech User control on the shared second filter row. From and Through remain horizontal under their respective triggers.
+- Retains all existing Tech Units behavior, including Tech User option data and filter behavior, date parameters, Apply Filters, current role gates, HTMX loading, actions, table expansion, and database behavior.
+- No database migration is required.
+
+## Reset Design Stage F.1 — Tech Units Detail and Access Refinement
+
+- Refines the clean `/tech/units` cutover without restoring legacy `tech.css`: the page heading is now **Tech Units Browser**, the Unit-row disclosure arrow is easier to notice, the nested Unit table has square internal corners, and summary action buttons remain on one horizontal line with table-only overflow on narrow screens.
+- Restores the intended wide-screen filter hierarchy: **Assignable Lot**, **Category**, and **Grade** share the first row; Tech Lead+ users see **Tech User** and the horizontal Created Date Range pair together on the second row. Both date triggers now use the same normal Lookup-style text treatment as standard select controls.
+- Uses each Unit Details workspace surface as its color source: compact section headings and emphasized labels use a darker related blue, green, teal, amber, or violet rather than one generic navy heading color.
+- Removes the My Weight Earned feature from regular-Tech access in both the rendered UI and direct endpoint authorization. Tech Lead+ retains the existing per-user My Weight Earned panel and underlying weight data; regular Tech dashboard aggregate charts remain unchanged.
+- No database migration is required.
+
+## Reset Design Stage F — Tech Units Clean Lookup Cutover
+
+- Makes `/tech/units` the first fully migrated BWT page: it no longer loads legacy `tech.css`, preventing historical Tech Units selectors and `!important` rules from competing with the new visual system. Other Tech pages still retain their existing stylesheet until they are migrated deliberately.
+- Replaces the former Unit Browser parent card with two independent Lookup-style workspaces: **Search & Filters** and **Units**. Each uses a thin clear border, restrained shadow, slightly rounded Lookup corners, and an intentionally different pale utility surface.
+- Uses the final Lookup form-control contract consistently for the page: Inter/system stack, `.9rem / 600` input/select/textarea values, `.72rem / 650` labels, `39px` controls, `7px` corners, thin blue-gray borders, soft focus outlines, and the Lookup SVG select chevron.
+- Keeps Search Units alongside a two-row right-side control grid on wider screens. Assignable Lot and Category occupy the first row; Grade, Tech User (Tech Lead+ only), and the horizontal From/Through date pair occupy the second. Filter groups reflow before the date pair changes height.
+- Applies restrained contextual color without gradients: pale blue for the filter workspace, pale neutral blue for results, soft green for grade/outcome context, soft amber for workflow context, and soft violet for history/audit context.
+- Preserves every functional contract: Tech User source, Tech Lead+ visibility, current-assignment filtering, date parameters and Apply Filters behavior, HTMX events, row expansion, action locations, routes, models, controllers, JavaScript, and database behavior. No migration is required.
+
+## Reset Design Stage E — Metrics Typography, Color, Date Alignment, and Form Simplification
+
+- Uses the current Lookup Metrics Dashboard hierarchy on Tech Units: normal-weight `.9rem` form values, compact `.72rem / 650` labels, and measured `650` emphasis for page/workspace headings and key values.
+- Applies the Metrics-style pale-blue utility palette without gradients: related soft-blue panel/header surfaces, darker blue-gray text, white editable controls, and one-pixel borders on every panel edge.
+- Keeps Assignable Lot, Category, and Grade together on the wide-screen first filter row. For Tech Lead+, Tech User and Created Date Range share the second row; the two date controls remain side-by-side at the same 39px height as the layout narrows.
+- Removes routine form helper copy from the Search & Filters workspace: the panel instruction, Search Units note, Assignable Lot note, Created Date Range note, and the selections/apply guidance. Labels, placeholders, From/Through captions, warnings, active-filter state, and action labels remain.
+- Does not change Tech User data/options or role gate, filters, date parameters, Apply Filters behavior, routes, HTMX events, actions, models, controllers, JavaScript, or database behavior. No migration is required.
+
+## Reset Design Stage C — Lookup Form, Surface, and Detail Consistency
+
+- Applies the final Lookup Metrics Dashboard control treatment on Tech Units: normal-weight `.86rem` select/input/textarea values, compact `.72rem / 650` labels, `39px` controls, `7px` control corners, and the same thin blue SVG select chevron.
+- Keeps the Lookup date-trigger emphasis (`.86rem / 600`) while preserving the existing app-controlled Created Date calendar and Apply Filters workflow.
+- Places Assignable Lot, Category, and Grade together on the wide-screen first filter row. Tech User and Created Date Range remain together beneath them for Tech Lead+; whole filter groups reflow before either date control changes height.
+- Removes visual gradients, thick top section strips, and color-rotating inner cards from the Tech Units table workspace, expanded mini-menu, and History area.
+- Uses consistent Lookup-like panel hierarchy: `10px` outer panels, `8px` mini-menu/history workspaces, `7px` controls, and `6px` inner items.
+- Does not change Tech User data/options, role visibility, filters, queries, HTMX behavior, actions, controllers, models, or database behavior. No migration is required.
+
+## Reset Design Stage B — Tech Units Created Date Calendar
+
+Reset Design Stage B replaces only the Tech Units browser-native Created Date Range popup with the same app-controlled calendar pattern used by the Lookup Metrics Dashboard. The page still submits the established `createdStartDate` and `createdEndDate` values in `YYYY-MM-DD` format, and dates still take effect only when the user chooses Apply Filters. From and Through remain beneath their individual date triggers. Tech User scope/options, all other filters, role visibility, model/controller queries, table behavior, HTMX events, and database behavior remain unchanged. No database migration is required.
+
+## Reset Design Stage A — Tech Units Header & Filter Workspace Only
+
+Reset Design Stage A begins the Lookup-inspired visual migration from the restored stable baseline. It updates only the Tech Units page heading, Search & Filters workspace, and Unit Browser outer shell. The established Tech User option source, Tech Lead+ visibility, current-assignment filter behavior, filter names, HTMX events, model/controller queries, Unit Browser table, expanded detail panels, and action behavior remain unchanged. The new page-scoped stylesheet uses the approved Lookup form language: compact 39px controls, thinner blue-gray borders, 7px corners, small labels, a thin SVG select chevron, pale-blue panel headers, and restrained shadows. No database migration is required.
+
+Step 7h.3: Client-Side Live Request Filtering.
+
+Step 7h.3 loads the role-scoped Unit Requests for the selected status tab once, then narrows the existing queue in the browser as the reviewer types or chooses a Request Type. This matches the responsive Create Unit catalog-filtering interaction without debounced page refreshes, SQL searches, or caret interruptions. The selected Type and search phrase remain in the queue URL and are preserved through record navigation, return actions, and status-tab changes. No database migration is required.
+
+Step 7h.2.5: Enter-to-Search Queue Simplification.
+
+Step 7h.2.5 keeps instant filtering for Request Type but removes automatic text-search reloads while typing. Search Requests now submits only when the reviewer presses Enter, so spaces, slow typing, and a complete phrase remain uninterrupted. After the normal page refresh, focus returns to the end of the submitted search phrase. No database migration is required.
+
+Step 7h.2.4: Search Caret Placement Fix.
+
+Step 7h.2.4 keeps the Unit Requests queue search focused after a refresh and places the caret after the existing search phrase, allowing a reviewer to continue typing without moving the cursor manually. No database migration is required.
+
+Step 7h.2.3: Persistent Queue Search Focus.
+
+Step 7h.2.3 keeps the Unit Requests queue ready for scanner- and keyboard-first review by focusing Search Requests whenever the queue page opens or returns from browser history. It does not add any focus-stealing event listeners while a reviewer is actively using another control. No database migration is required.
+
+Step 7h.2.2: Verified Search SQL & Exact Metrics Control Fidelity.
+
+Step 7h.2.2 corrects the remaining Unit Requests search failure and matches the current Lookup Metrics Dashboard dropdown treatment exactly. The queue search now uses the live lots-table `name` column, and Request Type uses Lookup’s custom SVG chevron rather than a browser-native arrow. No database migration is required.
+
+Step 7h.2: Lookup-Style Unit Request Controls.
+
+Step 7h.2 brings the current Lookup project’s labeled-toolbar form language to Unit Requests: compact labels, 42px blue-gray bordered controls, 8px corners, and soft group focus rings. Search stays below the status tabs; Request Type moves into its own streamlined control row beneath the Requests heading. All existing immediate filtering, ordering, archival, and access behavior remains unchanged.
+
+Step 7h.1: Instant Request Queue Filtering.
+
+Step 7h.1 removes the separate Apply Filters step from Unit Requests. Request Type now sits in the Requests header and refreshes immediately when selected; Search Requests refreshes automatically after a short pause or immediately with Enter. The existing Clear filters link resets both filters without changing the selected status tab.
+
+Step 7h: Unit Request Ordering & Retention.
+
+Step 7h keeps normal Unit Request queue views ordered oldest to newest by submission time, moves resolved requests to Archived automatically 30 days after review or withdrawal, and preserves them indefinitely for requester- and reviewer-scoped history. The normal All tab excludes archived requests; Archived is newest to oldest by archive time.
+
+Step 7g.3: Lookup Typography Fidelity.
+
+Step 7g.3 aligns the Unit Requests queue typography with the current Lookup project: the shared Inter font stack, smaller operational type, Lookup-matched charcoal-blue emphasis colors, and 620–650 weights for queue headings, request titles, metadata, and filter labels. No request behavior or database data changes.
+
+Step 7g.2: Lookup-Fidelity Unit Request Queue Rework.
+
+Step 7g.2 replaces the oversized, bubble-like Step 7g.1 presentation with a thinner Lookup-style request workspace and results panel. It uses smaller typography, pale-blue utility headers, thin borders, compact controls, restrained shadows, and a flush request table while preserving all Unit Request behavior. No database changes are required.
+
+Step 7g: Unit Request Queue Triage.
+
+Step 7g adds Request Type and compact search filters to Unit Requests, preserves the full queue context when changing status, opening a record, or completing a request action, and clarifies the filtered request count. No database changes are required.
+
 Step 7f.1: Clickable Request Records.
 
 Step 7f.1 removes the redundant **View Details** button from Unit Requests. Each request record now opens its detail page when the request content is clicked or activated with the keyboard, while a pending requester’s **Withdraw** control remains a separate protected action. The selected status filter is preserved. No database changes are required.
+
+Step 7f.2: Model Catalog Modal Repair.
+
+Step 7f.2 restores the shared modal structure for Add/Edit Unit Model and Activate/Deactivate Model dialogs. It also prevents the catalog page from scrolling behind an open modal. No workflow behavior or database data changes.
 
 Step 7f: Catalog Exception Workflow.
 
@@ -27,6 +353,272 @@ Step 7e.3.2 sends Create Unit data to the Intentional Duplicate request-modal ro
 Step 7e.3.3 keeps the Intentional Duplicate request modal closed until the Create Unit data passes server-side validation. It presents any missing required field messages inline with the matching-existing-unit result, processes HTMX attributes after the modal is inserted by the custom fetch path, closes the request modal after successful submission, and returns a pending-request confirmation to Create Unit. It also fixes the `matchedIdentifiers is not defined` submission error. No database changes are required.
 
 
+
+## Step 7h.3 — Client-Side Live Request Filtering
+
+### What Changed
+
+- Loads the role-scoped requests for the selected status tab once, then filters only that authorized in-page list.
+- Filters **Search Requests** on every keystroke without a debounce timer, page navigation, SQL search, focus reset, or caret movement.
+- Filters **Request Type** in the browser immediately, matching the Create Unit catalog-filtering behavior.
+- Searches request number, requester, Asset Tag, serial summary/context, model, processor, and lot context across the loaded queue.
+- Updates the visible request count and empty state in place.
+- Keeps the current Type and exact typed phrase, including a trailing space, in the queue URL, record links, Withdraw return values, status-tab links, and browser-history return path.
+- Keeps the server responsible for role scope, selected status tab, and archived visibility; the browser only narrows already-authorized records.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests**, type `Dell Latitude ` slowly, and keep typing. Confirm the rows narrow immediately with no reload and the caret remains after the trailing space.
+2. Search by request number, requester, Asset Tag, serial context, model, processor, and lot. Confirm each narrows the loaded status-tab list.
+3. Change **Request Type** while text is present. Confirm the rows and count update instantly without moving focus to Search Requests.
+4. Click a request after typing a phrase and return with Back to Unit Requests. Confirm the phrase and Type remain applied.
+5. Select a different status tab. Confirm the current Type and search phrase carry to that status view and filter its freshly loaded records in place.
+6. Use **Clear filters**. Confirm Search Requests is cleared, All Types is selected, the full current status list returns, and Search Requests is focused.
+
+
+## Step 7h.2.5 — Enter-to-Search Queue Simplification
+
+### What Changed
+
+- Removes the debounced automatic request-list refresh while text is being entered in **Search Requests**.
+- Keeps **Request Type** immediate: selecting a type still submits the queue filter right away.
+- Lets the browser submit a text search only when the reviewer presses **Enter**.
+- Preserves unfinished phrases, spaces, and slow typing without an intermediate reload or caret interruption.
+- Keeps the existing search-first focus behavior after an Enter search or Type-driven refresh, with the caret restored after the submitted phrase.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests** and type `Dell Latitude ` slowly, including the trailing space. Confirm the page does not refresh while you type.
+2. Continue typing `5420`, then press **Enter**. Confirm the queue searches for the complete phrase and the refreshed field shows `Dell Latitude 5420|`.
+3. Search for a multi-word requester, model, processor, or lot phrase. Confirm spaces are preserved until **Enter** is pressed.
+4. Change **Request Type**. Confirm that filter still applies immediately without needing Enter.
+5. Use **Clear filters** and confirm the normal queue context resets without a delayed reload.
+
+
+## Step 7h.2.4 — Search Caret Placement Fix
+
+### What Changed
+
+- Keeps **Search Requests** focused after each normal Unit Requests queue refresh.
+- Places the caret at the end of the current search phrase after focus is restored, rather than before its first character.
+- Preserves the visible search phrase without selecting or overwriting it, so a search for `Dell` returns as `Dell|`.
+- Retains the existing behavior that does not interrupt Request Type interaction, row selection, or normal Tab navigation.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests** and type `Dell` in **Search Requests**. Wait for the automatic refresh.
+2. Confirm the refreshed search field shows `Dell` with the caret immediately after the final `l`.
+3. Type another character without clicking in the field. Confirm it appends to the existing phrase rather than inserting at the beginning.
+4. Press Enter after entering a phrase and confirm the same end-of-text caret placement after the refreshed page loads.
+5. Change **Request Type** while a search phrase is present. Confirm the queue refreshes, Search Requests regains focus, and the caret remains after the existing phrase.
+
+
+## Step 7h.2.3 — Persistent Queue Search Focus
+
+### What Changed
+
+- Adds native `autofocus` support to **Search Requests** so the queue is immediately ready for typing when `/unit-requests` opens.
+- Adds a small client-side focus helper that restores Search Requests after normal queue navigation and browser-history restoration from a request detail page.
+- Uses `preventScroll` so restoring focus does not move the reviewer away from their current queue position.
+- Does not attach focus behavior to Request Type, row clicks, or Tab navigation; focus is restored only on page entry and browser history display.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests** directly. Confirm the Search Requests caret is ready without clicking inside the field.
+2. Type a search term and wait for the automatic refresh. Confirm the refreshed page returns focus to Search Requests.
+3. Change **Request Type**. Confirm the selected filter applies and focus returns to Search Requests after the page refresh.
+4. Open a request record, use **Back to Unit Requests**, and confirm the queue search field is focused with the prior status, type, and search context preserved.
+5. Use Tab to move through Request Type, Clear filters, and a request record. Confirm focus is not pulled back to Search Requests while navigating those controls.
+
+
+## Step 7h.2.2 — Verified Search SQL & Exact Metrics Control Fidelity
+
+### What Changed
+
+- Corrects the Unit Requests search query using the exact live error: the `lots` table uses `name`, not `lot_name`. Searching a destination lot now uses `requested_destination_lot.name`, preventing the 500 error during debounced or Enter-triggered search.
+- Retains the JSON snapshot text casts introduced in Step 7h.2.1, so Asset Tag and serial context remain searchable.
+- Replaces the incorrect browser-native select approach with the exact current Lookup Metrics Dashboard control primitive: a `39px` field, `.9rem / 600` text, `7px` corners, Lookup focus outline, and its `16px` blue SVG chevron positioned at the right edge.
+- Uses `background-color` for the select field so the Lookup chevron remains visible.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests**, type any characters into **Search Requests**, and wait for the automatic refresh. Confirm the queue refreshes normally rather than showing the generic 500 page.
+2. Search by a known destination lot name and confirm matching Intentional Duplicate requests are returned.
+3. Compare **Request Type** with **Lookup → Metrics Dashboard → Report controls → Date range**. Confirm both use the same thin blue SVG down-chevron, size, right-side spacing, border, and focus outline.
+4. Change Request Type and press Enter in Search Requests. Confirm instant filtering and URL context still work.
+
+
+## Step 7h.2.1 — Request Search Hotfix & Metrics Select Fidelity
+
+### What Changed
+
+- Added JSON snapshot text casts for searchable duplicate-request intake data. The remaining live destination-lot column mismatch is corrected in Step 7h.2.2.
+- Preserved search coverage for request number, requester, Asset Tag, serial context, requested model/processor wording, and destination lot.
+- Attempted a browser-native Request Type arrow treatment; Step 7h.2.2 replaces it with Lookup’s actual custom SVG chevron.
+- Aligns the Unit Requests control labels with the Metrics Dashboard’s compact `.72rem / 650` label treatment.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests**, type a distinctive word into **Search Requests**, and wait briefly. Confirm results refresh instead of showing a 500 error.
+2. Search for an Asset Tag or serial value known to be present in an Intentional Duplicate request snapshot. Confirm the request remains discoverable.
+3. Press Enter in Search Requests and confirm the current status and Request Type context are preserved.
+4. Open the **Request Type** selector and compare its native down-arrow, field spacing, and focus behavior with **Lookup → Metrics Dashboard → Report controls → Date range**.
+5. Change Request Type and confirm instant filtering still works.
+
+
+## Step 7h.2 — Lookup-Style Unit Request Controls
+
+### What Changed
+
+- Replaces the remaining generic Unit Requests form treatment with the current Lookup project’s labeled-toolbar control pattern.
+- Gives **Search Requests** and **Request Type** compact labels above their fields, 42px control height, Lookup-style blue-gray borders, `8px` corners, and restrained soft-blue focus rings.
+- Keeps Search in the Review Queue workspace beneath the status tabs, while Request Type moves into its own slim control row beneath the Requests heading.
+- Keeps **Clear filters** as a plain text action beside Search Requests rather than turning it into a button.
+- Retains immediate Request Type filtering, debounced search, Enter-to-search, URL context, request ordering, archived views, access scope, and clickable request records.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests** and confirm Search Requests has a compact label above a 42px field with a blue-gray border and small corner radius.
+2. Click into Search Requests and Request Type. Confirm each control group receives a soft blue focus ring without changing its layout.
+3. Confirm Request Type appears below the Requests heading in its own compact control row, not inline with the heading or result count.
+4. Change Request Type, type a search phrase, press Enter, and use **Clear filters**. Confirm filtering remains immediate and all queue context is preserved.
+5. Check a narrow browser width. Search and Clear filters should stack cleanly, while Request Type remains full-width within its control row.
+
+
+## Step 7h.1 — Instant Request Queue Filtering
+
+### What Changed
+
+- Removes the separate **Apply Filters** button from the Unit Requests queue.
+- Moves **Request Type** into the Requests panel header beside the filtered result count, keeping the quick type control where users are actively reviewing records.
+- Refreshes the queue immediately when Request Type changes, while preserving the selected status tab and current search phrase.
+- Refreshes Search Requests automatically after a brief pause while typing, avoiding a page reload for every keystroke.
+- Lets Enter submit the current search immediately.
+- Keeps **Clear filters** as a direct reset for both Request Type and Search Requests without changing the selected status tab.
+- Preserves existing request access scope, queue ordering, archived behavior, URL context, clickable records, and protected Withdraw controls.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests** and confirm there is no Apply Filters button.
+2. Change the **Type** selector in the Requests header. Confirm the queue refreshes immediately and the selected status tab and search phrase remain intact.
+3. Type a distinctive search term. Confirm the queue refreshes after a short pause; press Enter with another term and confirm it refreshes immediately.
+4. Clear the search with the browser search-field clear control or delete the text. Confirm the current status/type queue returns after the brief pause.
+5. Use **Clear filters** and confirm it resets both Type and Search Requests while keeping the current status tab.
+6. Open a matching record and return with **Back to Unit Requests**. Confirm the active status, Type, and search phrase are still preserved.
+
+## Step 7h — Unit Request Ordering & Retention
+
+### What Changed
+
+- Adds the `unit_requests.archived_at` timestamp and the archive-retention index through `sql/2026-07-step-7h-unit-request-retention.sql`.
+- Sorts Pending, Approved, Rejected, Withdrawn, and All queue views oldest to newest by submitted time, with request ID as the tie-breaker.
+- Adds an **Archived** tab. Archived records remain fully viewable and retain their original status, request details, and request history.
+- Keeps archived records out of all normal queue views, including **All**, so everyday review lists contain only active operational history.
+- Uses a startup catch-up pass and a daily in-process retention pass to archive only Approved, Rejected, and Withdrawn requests whose `reviewed_at` timestamp is at least 30 days old. Pending requests are never auto-archived.
+- Sorts the Archived tab newest to oldest by archive time and displays the archive timestamp in place of the normal submitted-time column.
+- Preserves existing requester/reviewer access scope and filter/search context. There are no manual archive or restore controls in this step.
+
+### Post-Rebuild Checks
+
+1. Run `sql/2026-07-step-7h-unit-request-retention.sql` before rebuilding the application.
+2. Open **Unit Requests** and confirm Pending, Approved, Rejected, Withdrawn, and All are ordered oldest to newest by submission time.
+3. Confirm the **Archived** tab appears, uses newest-to-oldest archive ordering, and keeps Request Type/Search filters working.
+4. Confirm **All** excludes archived requests, while an archived request remains viewable from the Archived tab with its detail and history intact.
+5. Confirm a Pending request remains visible regardless of age. For a safe retention test, use a non-production copy or a resolved request older than 30 days; after rebuild, inspect the app log for any `Unit Request retention pass archived ...` message.
+
+
+## Step 7g.3 — Lookup Typography Fidelity
+
+### What Changed
+
+- Retains the shared Inter font stack already used by both applications and aligns Unit Requests queue emphasis with the current Lookup styles.
+- Uses Lookup-matched charcoal-blue text colors and `650` weights for workspace/results headings, `640` for request titles, and `620–630` for filter labels, metadata labels, and compact support text.
+- Reduces the visual heaviness of the status tabs, filter labels, table headings, request numbers, and metadata without making operational values faint.
+- Keeps the existing pale-blue panels, filters, clickable request records, permissions, request actions, and responsive behavior unchanged.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests** and compare the queue headings, Request Type/Search labels, tabs, request titles, and metadata to the Lookup project. Confirm the text is smaller, less heavy, and uses the same charcoal-blue / muted-blue hierarchy.
+2. Confirm request titles remain easy to scan, while labels such as Request Type, Submitted, and Requested Context read as quiet metadata rather than bold section headings.
+3. Confirm Apply Filters, Clear, and Withdraw remain legible and keep their existing behavior.
+4. Switch status tabs, apply a search, open a record, and return to the queue. Confirm no filtering, URL-context, or clickable-row behavior changes.
+
+
+## Step 7g.2 — Lookup-Fidelity Unit Request Queue Rework
+
+### What Changed
+
+- Replaces the three oversized queue cards with one compact **Review Queue** workspace and one **Requests** results panel.
+- Removes the repeated Review Queue, Filter the Queue, Find Requests, Results, and Requests heading stack so the page has less visual and textual weight.
+- Uses Lookup-style panel proportions: `10px` corners, thin neutral borders, smaller headings and labels, pale-blue utility headers, and restrained shadows.
+- Keeps the status tabs and filters inside one workspace; labels identify the controls without adding another card or explanatory block.
+- Changes the count to plain header text such as **4 requests shown** instead of a bordered count bubble.
+- Makes the request table flush with the Results panel, removes alternating row fills and colored left rails, and uses simple dividers plus a light hover state.
+- Gives queue-only filter controls and Withdraw compact Lookup-style corners and sizing without changing global buttons elsewhere in the application.
+- Keeps all request filtering, search, URL context, clickable-record behavior, permissions, and actions unchanged.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests** at desktop width. Confirm the page reads as the page heading, one Review Queue workspace, then one Requests results panel.
+2. Confirm the workspace and results panel use thin borders, pale-blue headers, smaller text, and restrained shadows without rounded sub-cards or count bubbles.
+3. Confirm status tabs, Request Type, Search Requests, Apply Filters, and Clear retain all existing behavior.
+4. Confirm request rows are flat with simple dividers, retain clickable record access, and keep a pending Tech Withdraw control separate.
+5. Narrow the browser window. Confirm tabs scroll horizontally when needed, filters stack cleanly, and no horizontal page overflow appears.
+
+
+## Step 7g.1 — Lookup-Style Unit Request Queue Layout
+
+### What Changed
+
+- Rebuilds the queue page into three clearly separated operational areas: **Review Queue**, **Find Requests**, and **Results**.
+- Moves the filtered count into the Results header, replacing the detached page-level count box.
+- Gives each area a thin neutral border, restrained shadow, and more internal spacing so tabs, filters, and table results no longer read as one compressed block.
+- Adds a dedicated filter-panel heading and keeps Request Type, Search Requests, and Clear aligned as one intentional control group.
+- Gives the Results panel its own heading, compact count summary, and a slightly roomier empty state.
+- Keeps the existing clickable request records, status tabs, filters, search behavior, URL context, permissions, and request actions unchanged.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests** at a wide desktop width. Confirm the page reads in order as Review Queue, Find Requests, and Results, with visible but restrained borders and shadows separating each area.
+2. Confirm the count appears in the Results panel header and updates correctly when changing a status tab, Request Type, or search phrase.
+3. Confirm Request Type, Search Requests, Apply Filters, and Clear remain aligned and usable without crowding at normal desktop width.
+4. Confirm a request record still opens from its linked content area and a pending Tech Withdraw action remains separate.
+5. Narrow the browser window. Confirm the tabs scroll horizontally when necessary, the filters stack cleanly, and the Results count moves below its heading without horizontal page overflow.
+
+
+## Step 7g — Unit Request Queue Triage
+
+### What Changed
+
+- Adds a compact **Request Type** filter for All Types, Intentional Duplicate, Model Catalog Addition, and Processor Catalog Addition.
+- Adds a queue search for request number, requester, matching Asset Tag or serial context, requested model or processor wording, and destination lot.
+- Keeps the existing status tabs and preserves the selected Request Type and search phrase when switching status tabs.
+- Preserves the status, Request Type, and search phrase when opening a request, returning to the queue, or submitting Withdraw, Approve, or Reject from the request detail page.
+- Replaces the ambiguous numeric badge with a clear filtered count such as **Showing 4 requests**.
+- Keeps queue actions unchanged: reviewers still open a record before Approve or Reject, and a regular Tech’s pending Withdraw action remains its own protected control.
+- Requires no database migration.
+
+### Post-Rebuild Checks
+
+1. Open **Unit Requests** as a reviewer. Change Request Type and confirm only that request type is shown.
+2. Search by a request number, requester, a known matching Asset Tag in `BWT########` form, a serial fragment, a catalog model/processor term, and a destination lot. Confirm each relevant request can be found.
+3. Combine a status tab, Request Type, and search phrase. Open a request, then use **Back to Unit Requests**. Confirm all three filters are still present.
+4. From a filtered detail page, approve or reject a safe request. Confirm the resulting detail page and Back link retain the same queue context.
+5. As a regular Tech, withdraw a safe pending request from a filtered queue. Confirm the queue context remains after the request is withdrawn.
+6. Narrow the browser window and confirm the Request Type, search field, and filter actions stack cleanly without horizontal page overflow.
+
+
 ## Step 7f.1 — Clickable Request Records
 
 ### What Changed
@@ -44,6 +636,26 @@ Step 7e.3.3 keeps the Intentional Duplicate request modal closed until the Creat
 2. Use Tab to focus a request record, then press Enter. Confirm it opens the correct detail page with a visible focus outline before activation.
 3. As a regular Tech with a pending request, click the request content and confirm it opens details. Then click **Withdraw** and confirm only the withdrawal form submits.
 4. Narrow the browser window and confirm the linked request content and Withdraw action stack cleanly without horizontal page overflow.
+
+
+## Step 7f.2 — Model Catalog Modal Repair
+
+### What Changed
+
+- Rebuilds the Add Unit Model and Edit Unit Model fragments with the application-standard `modal-panel`, header, close button, and padded body structure.
+- Rebuilds the Activate/Deactivate confirmation dialog with a compact selected-model summary card and normal confirmation spacing.
+- Gives the Deactivate action a clear destructive treatment while keeping Activate as the normal primary action.
+- Locks the background page and contains backdrop scrolling whenever any modal is open, so the Model Catalog table cannot move behind an active dialog.
+- Updates the Model Catalog page asset versions so browsers load the repaired modal CSS and JavaScript immediately after rebuild.
+- Requires no database migration and changes no catalog permissions or save behavior.
+
+### Post-Rebuild Checks
+
+1. Open **Add Unit Model** and **Edit**. Confirm each dialog is centered, padded, readable, and has a standard close button and action row.
+2. Leave a required field blank and submit. Confirm validation remains inside the styled dialog.
+3. Open **Deactivate** for an active model. Confirm the selected model summary is visible, the Deactivate button is clearly destructive, and Cancel/close dismiss the dialog.
+4. With any Model Catalog dialog open, try to scroll the page behind it. Confirm the background catalog remains locked while the dialog/backdrop handles its own scrolling.
+5. Activate a safe inactive model and deactivate a safe active model. Confirm the existing status-change behavior and filters still work.
 
 ## Step 7f — Catalog Exception Workflow
 
@@ -1568,3 +2180,22 @@ Expected final message:
 ```text
 Step 6f.1 closed-lot lifecycle migration complete
 ```
+
+## Reset Design Stage D — Tech Units CSS Consolidation
+
+- Replaced the accumulated Stage A/B/C Tech Units stylesheet with one page-scoped Stage D visual layer.
+- Removed obsolete Unit Browser filter-art rules from `public/css/tech.css`: gradients, color-rotating field borders, five-pixel accents, forced filter shadows, and competing filter-card overrides.
+- Removed the forced three-pixel Unit Details top strips so Tech Units panels use a consistent thin border on all edges.
+- The final `/tech/units` visual system now uses the Lookup Metrics Dashboard palette and rhythm: white panels, pale-blue utility headers, thin blue-gray borders, restrained shadows, 10px outer corners, 8px detail workspaces, and 7px controls.
+- Consolidated form typography for this page: normal-weight `.86rem` field values, `.72rem / 650` labels, and the Lookup Metrics custom calendar styling.
+- Kept all Tech Units behavior unchanged: Tech User option source and role gate, filters, date parameters, Apply Filters behavior, routes, HTMX events, actions, models, controllers, and database behavior.
+- No SQL migration is required.
+
+## Favicon Refresh — Lime Monitor B
+
+- Adds a high-contrast SVG favicon at `public/favicon.svg`.
+- Uses a lime green background matched to the latest supplied reference color.
+- Uses a simplified dark navy monitor and bold `B` mark for browser-tab readability at small favicon sizes.
+- Registers the favicon and browser theme color in the shared head partial so it appears across the application.
+- No SQL migration is required.
+

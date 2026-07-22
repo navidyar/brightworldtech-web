@@ -1,3 +1,10 @@
+## Reset Design Stage Favicon Pack V6 — Final Approved Lime Monitor Icon
+
+- Installs the final approved BWTDallas favicon pack using the user-approved bright lime rounded-square icon with a medium-thickness navy monitor outline and a larger centered navy `B`.
+- Uses transparent outer corners for browser favicon assets so the icon sits cleanly on dark or light browser tabs without a white edge or halo.
+- Adds or replaces `favicon.svg`, `favicon.ico`, `favicon-16x16.png`, `favicon-32x32.png`, `favicon-48x48.png`, `apple-touch-icon.png`, `favicon-192x192.png`, `favicon-512x512.png`, and `site.webmanifest`, and registers them in `views/partials/head.ejs` with a cache-busted version token.
+- Preserves all routes, controllers, models, database behavior, CSS, and JavaScript behavior. No migration is required.
+
 Management Lots Refinement 13: Lot State Context Rail.
 - Moves the short Lot Context metadata into the right side of the top Lot State summary panel, avoiding the overly compressed inline-row layout from the reverted trial while saving a full page section.
 - Keeps the existing Lot State stat blocks readable, preserves the small square stat icons, and changes Validation Check counts to soft colored count pills instead of colored left bars.
@@ -2183,3 +2190,12 @@ Step 6f.1 closed-lot lifecycle migration complete
 - Consolidated form typography for this page: normal-weight `.86rem` field values, `.72rem / 650` labels, and the Lookup Metrics custom calendar styling.
 - Kept all Tech Units behavior unchanged: Tech User option source and role gate, filters, date parameters, Apply Filters behavior, routes, HTMX events, actions, models, controllers, and database behavior.
 - No SQL migration is required.
+
+## Favicon Refresh — Lime Monitor B
+
+- Adds a high-contrast SVG favicon at `public/favicon.svg`.
+- Uses a lime green background matched to the latest supplied reference color.
+- Uses a simplified dark navy monitor and bold `B` mark for browser-tab readability at small favicon sizes.
+- Registers the favicon and browser theme color in the shared head partial so it appears across the application.
+- No SQL migration is required.
+

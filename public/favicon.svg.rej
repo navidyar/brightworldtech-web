@@ -1,0 +1,14 @@
+--- public/favicon.svg
++++ public/favicon.svg
+@@ -1,7 +1,8 @@
+ <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+   <title id="title">BWTDallas favicon</title>
+-  <desc id="desc">A dark navy letter B inside a monitor on a bright lime green background.</desc>
++  <desc id="desc">A dark navy letter B inside a thin-line monitor on a bright lime green background.</desc>
+   <rect width="64" height="64" rx="14" fill="#A6F000"/>
+-  <path fill="#071A3A" fill-rule="evenodd" d="M14 12h36a5 5 0 0 1 5 5v25a5 5 0 0 1-5 5H38v5h7a2.5 2.5 0 0 1 0 5H19a2.5 2.5 0 0 1 0-5h7v-5H14a5 5 0 0 1-5-5V17a5 5 0 0 1 5-5Zm2 7v21h32V19H16Z"/>
+-  <text x="32" y="36" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-size="29" font-weight="900" fill="#071A3A" dominant-baseline="middle">B</text>
++  <rect x="12.5" y="13" width="39" height="29" rx="4.5" fill="none" stroke="#071A3A" stroke-width="4"/>
++  <path d="M32 42v8M23 53h18" fill="none" stroke="#071A3A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
++  <text x="32" y="30.6" text-anchor="middle" font-family="Inter, Arial, Helvetica, sans-serif" font-size="27" font-weight="850" fill="#071A3A" dominant-baseline="middle">B</text>
+ </svg>

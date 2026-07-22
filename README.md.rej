@@ -1,0 +1,11 @@
+--- README.md	2026-07-16 18:28:25.000000000 +0000
++++ README.md	2026-07-16 21:30:33.088628004 +0000
+@@ -1343,7 +1343,7 @@
+ 
+ The standalone Lookup application now uses a dedicated purple BWT favicon across all pages.
+ 
+-- The browser icon uses a high-contrast white BWT mark on a purple background.
++- The browser icon uses a smooth vector-style white BWT mark on a purple background with rounded corners optimized for favicon rendering.
+ - The shared site head publishes the favicon consistently on login, Lookup, Duplicates, Sources, and Metrics pages.
+ - The browser theme color is set to the same purple family for supported mobile and installed-browser surfaces.
+ - The favicon is stored under `app/public/favicon.svg` and is included automatically in the application image during the normal app rebuild.
