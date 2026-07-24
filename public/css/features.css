@@ -29,3 +29,125 @@
 #modal-root:empty {
   display: none !important;
 }
+
+/* Tech Unit Lot-requirement workflow. This is feature-specific presentation;
+   the shared visual tokens continue to come from theme.css and app.css. */
+.tech-unit-form [data-lot-requirement-workflow-region] {
+  grid-column: 1 / -1;
+  min-width: 0;
+}
+
+.tech-lot-requirement-workflow {
+  display: grid;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid var(--color-border, #cdd7e4);
+  border-radius: var(--radius-panel, 8px);
+  background: var(--color-surface, #fff);
+  box-shadow: var(--shadow-panel, 0 1px 2px rgb(15 23 42 / 5%));
+}
+
+.tech-lot-requirement-workflow--accepted,
+.tech-lot-requirement-workflow--open {
+  border-color: #9dcbb1;
+  background: #f3fbf6;
+}
+
+.tech-lot-requirement-workflow--warning,
+.tech-lot-requirement-workflow--needs_review {
+  border-color: #e5c27a;
+  background: #fffaf0;
+}
+
+.tech-lot-requirement-workflow--rejected,
+.tech-lot-requirement-workflow--error {
+  border-color: #e3a3a3;
+  background: #fff6f6;
+}
+
+.tech-lot-requirement-workflow__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tech-lot-requirement-workflow__header strong {
+  display: block;
+  color: var(--color-heading, #28384c);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.tech-lot-requirement-workflow__header p,
+.tech-lot-requirement-workflow__summary,
+.tech-lot-requirement-workflow__blocked-note,
+.tech-lot-requirement-workflow__acceptance {
+  margin: 3px 0 0;
+  color: var(--color-text-muted, #5f6c7c);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.tech-lot-requirement-workflow__counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: var(--color-text-muted, #5f6c7c);
+  font-size: 0.8rem;
+}
+
+.tech-lot-requirement-workflow__issues {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tech-lot-requirement-workflow__issues li {
+  color: var(--color-text, #243043);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.tech-lot-requirement-workflow__blocked-note {
+  color: #9f2424;
+  font-weight: 650;
+}
+
+.tech-unit-form [data-unit-form-field-key].has-lot-requirement-error,
+.tech-unit-form [data-unit-form-field-key].has-lot-requirement-warning {
+  border-radius: 7px;
+  outline: 2px solid transparent;
+  outline-offset: 3px;
+}
+
+.tech-unit-form [data-unit-form-field-key].has-lot-requirement-error {
+  outline-color: rgb(190 47 47 / 32%);
+}
+
+.tech-unit-form [data-unit-form-field-key].has-lot-requirement-warning {
+  outline-color: rgb(191 126 24 / 30%);
+}
+
+.tech-unit-form [data-unit-form-field-key].has-lot-requirement-error :is(input, select, textarea),
+.tech-unit-form [data-unit-form-field-key].has-lot-requirement-error .searchable-select-input {
+  border-color: #bf3e3e !important;
+}
+
+.tech-unit-form [data-unit-form-field-key].has-lot-requirement-warning :is(input, select, textarea),
+.tech-unit-form [data-unit-form-field-key].has-lot-requirement-warning .searchable-select-input {
+  border-color: #c78a27 !important;
+}
+
+@media (max-width: 680px) {
+  .tech-lot-requirement-workflow__header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tech-lot-requirement-workflow__header .status-pill {
+    align-self: flex-start;
+  }
+}

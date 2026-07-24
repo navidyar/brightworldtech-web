@@ -132,10 +132,14 @@
   </div>
 <% } %>
 
-<form class="app-form tech-unit-form" method="post" action="<%= formAction %>" data-tech-unit-form data-unit-form-mode="<%= mode %>" data-lot-unit-form-profile-url="/tech/units/lot-form-profile" <%- htmxAttrs %>>
+<form class="app-form tech-unit-form" method="post" action="<%= formAction %>" data-tech-unit-form data-unit-form-mode="<%= mode %>" data-lot-unit-form-profile-url="/tech/units/lot-form-profile" data-lot-requirement-preview-url="/tech/units/lot-requirement-preview" <%- htmxAttrs %>>
   <input type="hidden" name="ramGb" data-unit-form-companion-key="memory_modules" value="<%= memoryTotalGb() || formData.ramGb || '' %>" data-memory-total-input />
   <input type="hidden" name="storageGb" data-unit-form-companion-key="storage_devices" value="<%= storageTotalGb() || formData.storageGb || '' %>" data-storage-total-input />
   <input type="hidden" name="currentUnitStatusConfigValueId" value="<%= formData.currentUnitStatusConfigValueId || formOptions.defaultUnitStatusId || '' %>" />
+  <input type="hidden" name="lotRequirementMode" value="<%= mode %>" />
+  <% if (isEditMode) { %>
+    <input type="hidden" name="lotRequirementUnitId" value="<%= formData.unitId || '' %>" />
+  <% } %>
   <% if (!isEditMode) { %>
     <input type="hidden" name="duplicateAssumptionNonce" value="<%= formData.duplicateAssumptionNonce || '' %>" data-duplicate-assumption-nonce />
   <% } %>
@@ -213,6 +217,12 @@
       <p class="field-hint tech-lot-form-profile-status" data-lot-unit-form-profile-status data-status="idle" aria-live="polite">
         Select an assignable Lot to apply its field visibility and requirement settings.
       </p>
+
+      <div class="tech-lot-requirement-workflow-region" data-lot-requirement-workflow-region aria-live="polite">
+        <%- include('./tech-unit-lot-requirement-workflow', {
+          lotRequirementWorkflow: typeof lotRequirementWorkflow !== 'undefined' ? lotRequirementWorkflow : null
+        }) %>
+      </div>
 
       <% if (!isEditMode) { %>
         <p

@@ -17,6 +17,19 @@
   const LOT_UNIT_FORM_PROFILE_REFRESH_INTERVAL_MS = 30000;
   const LOT_UNIT_FORM_PROFILE_SUBMIT_VERIFICATION_MAX_AGE_MS = 5000;
   const LOT_UNIT_FORM_PROFILE_STORAGE_KEY = 'bwt-lot-unit-form-profile-updated';
+  const LOT_REQUIREMENT_WORKFLOW_REFRESH_DELAY_MS = 350;
+  const LOT_REQUIREMENT_WORKFLOW_SUBMIT_VERIFICATION_MAX_AGE_MS = 5000;
+  const LOT_REQUIREMENT_WORKFLOW_STORAGE_KEY = 'bwt-lot-requirements-updated';
+  const LOT_REQUIREMENT_WRAPPER_KEYS = Object.freeze({
+    unit_type: 'unit_category',
+    manufacturer: 'manufacturer',
+    model: 'unit_model',
+    processor: 'processor_model',
+    ram_gb: 'memory_modules',
+    ram_type: 'memory_modules',
+    storage_gb: 'storage_devices',
+    storage_type: 'storage_devices'
+  });
 
   function getLotUnitFormProfileStatus(form) {
     return form ? form.querySelector('[data-lot-unit-form-profile-status]') : null;
@@ -595,6 +608,7 @@
       `${statusPrefix} ${requiredCount} required and ${hiddenCount} hidden field${hiddenCount === 1 ? '' : 's'}. Values are retained when fields become hidden.`,
       'applied'
     );
+    scheduleLotRequirementWorkflowRefresh(form, { immediate: true, background: true });
   }
 
   async function refreshLotUnitFormProfile(form, options = {}) {
@@ -712,6 +726,304 @@
         refreshLotUnitFormProfile(form, { background: true, ...options });
       }
     });
+  }
+
+  function getLotRequirementWorkflowRegion(form) {
+    return form ? form.querySelector('[data-lot-requirement-workflow-region]') : null;
+  }
+
+  function getLotRequirementWorkflowElement(form) {
+    const region = getLotRequirementWorkflowRegion(form);
+    return region ? region.querySelector('[data-lot-requirement-workflow]') : null;
+  }
+
+  function clearLotRequirementFieldStates(form) {
+    if (!form) {
+      return;
+    }
+
+    form.querySelectorAll('.has-lot-requirement-error, .has-lot-requirement-warning').forEach((wrapper) => {
+      wrapper.classList.remove('has-lot-requirement-error', 'has-lot-requirement-warning');
+    });
+  }
+
+  function resetLotRequirementWorkflow(form) {
+    const region = getLotRequirementWorkflowRegion(form);
+
+    if (!region) {
+      return;
+    }
+
+    if (form._lotRequirementWorkflowAbortController) {
+      form._lotRequirementWorkflowAbortController.abort();
+      delete form._lotRequirementWorkflowAbortController;
+    }
+
+    delete form.dataset.lotRequirementWorkflowVerifiedAt;
+    delete form.dataset.lotRequirementWorkflowVerifiedLotId;
+    delete form.dataset.lotRequirementWorkflowVerifiedFingerprint;
+    clearLotRequirementFieldStates(form);
+    region.innerHTML = `
+      <div class="tech-lot-requirement-workflow tech-lot-requirement-workflow--neutral" data-lot-requirement-workflow data-save-allowed="1" data-status="idle" data-policy-code="">
+        <div class="tech-lot-requirement-workflow__header">
+          <div><strong>Lot Requirements</strong><p>Select an assignable Lot to check the current Unit values.</p></div>
+          <span class="status-pill muted">Waiting</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function getLotRequirementFormFingerprint(form) {
+    if (!form) {
+      return '';
+    }
+
+    const entries = [];
+    const formData = new FormData(form);
+
+    formData.forEach((value, key) => {
+      if (typeof value === 'string' && key !== 'duplicateAssumptionNonce') {
+        entries.push(`${key}=${value}`);
+      }
+    });
+
+    return entries.sort().join('&');
+  }
+
+  function buildLotRequirementPreviewRequestBody(form) {
+    const params = new URLSearchParams();
+
+    new FormData(form).forEach((value, key) => {
+      if (typeof value === 'string') {
+        params.append(key, value);
+      }
+    });
+
+    return params;
+  }
+
+  function parseLotRequirementWorkflowMarkup(markup) {
+    const holder = document.createElement('template');
+    holder.innerHTML = String(markup || '').trim();
+    const workflow = holder.content.querySelector('[data-lot-requirement-workflow]');
+
+    if (!workflow) {
+      throw new Error('The selected Lot returned an invalid requirement result.');
+    }
+
+    return {
+      markup: holder.innerHTML,
+      saveAllowed: workflow.getAttribute('data-save-allowed') === '1',
+      status: workflow.getAttribute('data-status') || 'unknown',
+      policyCode: workflow.getAttribute('data-policy-code') || '',
+      issues: Array.from(workflow.querySelectorAll('[data-lot-requirement-issue]')).map((issue) => ({
+        requirementKey: issue.getAttribute('data-requirement-key') || '',
+        status: issue.getAttribute('data-requirement-status') || ''
+      }))
+    };
+  }
+
+  function applyLotRequirementFieldStates(form, result) {
+    clearLotRequirementFieldStates(form);
+
+    if (!form || !result || !Array.isArray(result.issues)) {
+      return;
+    }
+
+    const strictBlocked = !result.saveAllowed && result.policyCode === 'strict';
+
+    result.issues.forEach((issue) => {
+      const wrapperKey = LOT_REQUIREMENT_WRAPPER_KEYS[issue.requirementKey];
+      const wrapper = wrapperKey
+        ? form.querySelector(`[data-unit-form-field-key="${wrapperKey}"]`)
+        : null;
+
+      if (!wrapper || wrapper.hidden) {
+        return;
+      }
+
+      wrapper.classList.add(strictBlocked ? 'has-lot-requirement-error' : 'has-lot-requirement-warning');
+    });
+  }
+
+  function applyLotRequirementWorkflowMarkup(form, markup) {
+    const region = getLotRequirementWorkflowRegion(form);
+    const result = parseLotRequirementWorkflowMarkup(markup);
+
+    if (!region) {
+      return result;
+    }
+
+    region.innerHTML = result.markup;
+    applyLotRequirementFieldStates(form, result);
+    return result;
+  }
+
+  async function refreshLotRequirementWorkflow(form, options = {}) {
+    if (!form) {
+      return { ok: false, saveAllowed: false };
+    }
+
+    const lotSelect = getAssignableLotCatalog(form);
+    const lotId = lotSelect ? String(lotSelect.value || '').trim() : '';
+    const region = getLotRequirementWorkflowRegion(form);
+
+    if (!lotId) {
+      resetLotRequirementWorkflow(form);
+      return { ok: true, saveAllowed: true, status: 'idle' };
+    }
+
+    if (!region) {
+      return { ok: false, saveAllowed: false };
+    }
+
+    if (form._lotRequirementWorkflowAbortController) {
+      form._lotRequirementWorkflowAbortController.abort();
+    }
+
+    const abortController = new AbortController();
+    form._lotRequirementWorkflowAbortController = abortController;
+    const background = Boolean(options.background);
+
+    if (!background) {
+      region.setAttribute('aria-busy', 'true');
+    }
+
+    try {
+      const requestBody = buildLotRequirementPreviewRequestBody(form);
+      const response = await fetch(
+        form.getAttribute('data-lot-requirement-preview-url') || '/tech/units/lot-requirement-preview',
+        {
+          method: 'POST',
+          headers: {
+            'HX-Request': 'true',
+            'Accept': 'text/html',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+          },
+          body: requestBody.toString(),
+          cache: 'no-store',
+          signal: abortController.signal
+        }
+      );
+      const markup = await response.text();
+      const currentLotId = String(getAssignableLotCatalog(form)?.value || '').trim();
+
+      if (form._lotRequirementWorkflowAbortController !== abortController || currentLotId !== lotId) {
+        return { ok: false, saveAllowed: false, stale: true };
+      }
+
+      const result = applyLotRequirementWorkflowMarkup(form, markup);
+
+      if (!response.ok) {
+        return {
+          ok: false,
+          ...result,
+          httpStatus: response.status,
+          serverRenderedError: true
+        };
+      }
+
+      form.dataset.lotRequirementWorkflowCheckedAt = String(Date.now());
+      return { ok: true, ...result };
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return { ok: false, saveAllowed: false, aborted: true };
+      }
+
+      clearLotRequirementFieldStates(form);
+      region.innerHTML = `
+        <div class="tech-lot-requirement-workflow tech-lot-requirement-workflow--error" data-lot-requirement-workflow data-save-allowed="0" data-status="error" data-policy-code="strict">
+          <div class="tech-lot-requirement-workflow__header">
+            <div><strong>Lot requirements could not be checked</strong><p>Saving is paused until the latest requirements can be verified.</p></div>
+            <span class="status-pill danger">Unavailable</span>
+          </div>
+        </div>
+      `;
+      return { ok: false, saveAllowed: false, error };
+    } finally {
+      region.removeAttribute('aria-busy');
+
+      if (form._lotRequirementWorkflowAbortController === abortController) {
+        delete form._lotRequirementWorkflowAbortController;
+      }
+    }
+  }
+
+  function scheduleLotRequirementWorkflowRefresh(form, options = {}) {
+    if (!form) {
+      return;
+    }
+
+    delete form.dataset.lotRequirementWorkflowVerifiedAt;
+    delete form.dataset.lotRequirementWorkflowVerifiedLotId;
+    delete form.dataset.lotRequirementWorkflowVerifiedFingerprint;
+
+    if (form._lotRequirementWorkflowRefreshTimer) {
+      window.clearTimeout(form._lotRequirementWorkflowRefreshTimer);
+    }
+
+    form._lotRequirementWorkflowRefreshTimer = window.setTimeout(() => {
+      delete form._lotRequirementWorkflowRefreshTimer;
+      refreshLotRequirementWorkflow(form, { background: Boolean(options.background) });
+    }, options.immediate ? 0 : LOT_REQUIREMENT_WORKFLOW_REFRESH_DELAY_MS);
+  }
+
+  function refreshOpenLotRequirementWorkflows(options = {}) {
+    if (document.visibilityState === 'hidden') {
+      return;
+    }
+
+    document.querySelectorAll('[data-tech-unit-form]').forEach((form) => {
+      const lotSelect = getAssignableLotCatalog(form);
+
+      if (lotSelect && lotSelect.value) {
+        refreshLotRequirementWorkflow(form, { background: true, ...options });
+      }
+    });
+  }
+
+  function isLotRequirementWorkflowControl(control) {
+    const name = control ? String(control.name || '') : '';
+
+    return Boolean(
+      name === 'lotId'
+      || name === 'unitCategoryConfigValueId'
+      || name === 'manufacturerId'
+      || name === 'unitModelId'
+      || name === 'processorModelId'
+      || name === 'ramGb'
+      || name === 'ramTypeConfigValueId'
+      || name === 'storageGb'
+      || name === 'storageTypeConfigValueId'
+      || /^memoryModules\[\d+\]\[(sizeGb|ramTypeConfigValueId)\]$/.test(name)
+      || /^storageDevices\[\d+\]\[(sizeGb|storageTypeConfigValueId)\]$/.test(name)
+    );
+  }
+
+  function revealLotRequirementWorkflowIssue(form) {
+    if (!form) {
+      return;
+    }
+
+    const firstVisibleWrapper = form.querySelector('.has-lot-requirement-error:not([hidden])');
+    const target = firstVisibleWrapper || getLotRequirementWorkflowRegion(form);
+
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+    const focusTarget = firstVisibleWrapper
+      ? firstVisibleWrapper.querySelector('input:not([type="hidden"]), select, textarea')
+      : null;
+
+    if (focusTarget && !focusTarget.disabled) {
+      try {
+        focusTarget.focus({ preventScroll: true });
+      } catch (error) {
+        focusTarget.focus();
+      }
+    }
   }
 
   function normalizeSerialInput(input) {
@@ -1116,6 +1428,7 @@
     updateProductionWeightPreview(form);
     refreshDuplicateCheckForSelectedLot(form);
     refreshLotUnitFormProfile(form);
+    scheduleLotRequirementWorkflowRefresh(form, { immediate: true });
   }
 
   function resolveExactAssignableLotMatch(form) {
@@ -1313,6 +1626,7 @@
 
     setUnitModelInputValidity(form, '');
     updateCatalogRequestControls(form);
+    scheduleLotRequirementWorkflowRefresh(form);
   }
 
   function getVisibleUnitModelOptions(form, includeSelectedOption, ignoreSearch) {
@@ -1451,6 +1765,7 @@
     setUnitModelInputValidity(form, '');
     applySelectedModelMetadata(form);
     closeUnitModelOptions(form);
+    scheduleLotRequirementWorkflowRefresh(form);
   }
 
   function resolveExactUnitModelMatch(form) {
@@ -1641,6 +1956,7 @@
     }
 
     setProcessorInputValidity(form, '');
+    scheduleLotRequirementWorkflowRefresh(form);
   }
 
   function syncProcessorBrandChoices(form, preserveSelection) {
@@ -1808,6 +2124,7 @@
     setProcessorInputValidity(form, '');
     applySelectedProcessorMetadata(form, false);
     closeProcessorOptions(form);
+    scheduleLotRequirementWorkflowRefresh(form);
   }
 
   function resolveExactProcessorMatch(form) {
@@ -2283,6 +2600,7 @@
     updateIntentionalDuplicateRequestControls(form);
     updateCatalogRequestControls(form);
     refreshLotUnitFormProfile(form);
+    scheduleLotRequirementWorkflowRefresh(form, { immediate: true, background: true });
 
     const processorSpeedInput = form.querySelector('[data-processor-speed-input]');
 
@@ -2387,6 +2705,10 @@
 
     if (validationControl && getFormFromElement(validationControl)) {
       clearResolvedValidationError(validationControl);
+
+      if (isLotRequirementWorkflowControl(validationControl)) {
+        scheduleLotRequirementWorkflowRefresh(getFormFromElement(validationControl));
+      }
     }
 
     const modelFilterSelect = event.target.closest('[data-manufacturer-select], [data-unit-category-select]');
@@ -2411,6 +2733,7 @@
       updateProductionWeightPreview(form);
       refreshDuplicateCheckForSelectedLot(form);
       refreshLotUnitFormProfile(form);
+      scheduleLotRequirementWorkflowRefresh(form, { immediate: true });
       return;
     }
 
@@ -2450,6 +2773,10 @@
 
     if (validationControl && getFormFromElement(validationControl)) {
       clearResolvedValidationError(validationControl);
+
+      if (isLotRequirementWorkflowControl(validationControl)) {
+        scheduleLotRequirementWorkflowRefresh(getFormFromElement(validationControl));
+      }
     }
 
     const repeatableField = event.target.closest('[data-module-field]');
@@ -2778,6 +3105,74 @@
   document.addEventListener('submit', (event) => {
     const form = event.target.closest('[data-tech-unit-form]');
 
+    if (!form) {
+      return;
+    }
+
+    const lotSelect = getAssignableLotCatalog(form);
+
+    if (!lotSelect || !lotSelect.value) {
+      return;
+    }
+
+    const selectedLotId = String(lotSelect.value);
+    const currentFingerprint = getLotRequirementFormFingerprint(form);
+    const verifiedAt = Number(form.dataset.lotRequirementWorkflowVerifiedAt || 0);
+    const verifiedLotId = String(form.dataset.lotRequirementWorkflowVerifiedLotId || '');
+    const verifiedFingerprint = String(form.dataset.lotRequirementWorkflowVerifiedFingerprint || '');
+    const verificationIsCurrent = verifiedLotId === selectedLotId
+      && verifiedFingerprint === currentFingerprint
+      && verifiedAt > 0
+      && (Date.now() - verifiedAt) <= LOT_REQUIREMENT_WORKFLOW_SUBMIT_VERIFICATION_MAX_AGE_MS;
+
+    if (verificationIsCurrent) {
+      const workflow = getLotRequirementWorkflowElement(form);
+
+      if (workflow && workflow.getAttribute('data-save-allowed') === '0') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        revealLotRequirementWorkflowIssue(form);
+      }
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (form.dataset.lotRequirementWorkflowSubmitPending === 'true') {
+      return;
+    }
+
+    form.dataset.lotRequirementWorkflowSubmitPending = 'true';
+    const submitter = event.submitter || null;
+
+    refreshLotRequirementWorkflow(form, { background: true }).then((result) => {
+      delete form.dataset.lotRequirementWorkflowSubmitPending;
+
+      if (!result || !result.ok || !result.saveAllowed) {
+        revealLotRequirementWorkflowIssue(form);
+        return;
+      }
+
+      form.dataset.lotRequirementWorkflowVerifiedAt = String(Date.now());
+      form.dataset.lotRequirementWorkflowVerifiedLotId = selectedLotId;
+      form.dataset.lotRequirementWorkflowVerifiedFingerprint = getLotRequirementFormFingerprint(form);
+
+      if (typeof form.requestSubmit === 'function') {
+        try {
+          form.requestSubmit(submitter || undefined);
+        } catch (error) {
+          form.requestSubmit();
+        }
+      } else {
+        form.submit();
+      }
+    });
+  }, true);
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target.closest('[data-tech-unit-form]');
+
     if (!form || !form.querySelector('[data-duplicate-assumption-nonce]')) {
       return;
     }
@@ -2913,13 +3308,16 @@
       const form = getFormFromElement(addButton);
       const rowType = addButton.getAttribute('data-add-module-row');
       addModuleRow(form, rowType);
+      scheduleLotRequirementWorkflowRefresh(form);
       return;
     }
 
     const removeButton = event.target.closest('[data-remove-module-row]');
 
     if (removeButton) {
+      const form = getFormFromElement(removeButton);
       removeModuleRow(removeButton);
+      scheduleLotRequirementWorkflowRefresh(form);
     }
   });
 
@@ -2929,23 +3327,30 @@
     if (!window._lotUnitFormProfileRefreshInterval) {
       window._lotUnitFormProfileRefreshInterval = window.setInterval(() => {
         refreshOpenLotUnitForms();
+        refreshOpenLotRequirementWorkflows();
       }, LOT_UNIT_FORM_PROFILE_REFRESH_INTERVAL_MS);
     }
   });
 
   window.addEventListener('focus', () => {
     refreshOpenLotUnitForms({ force: true });
+    refreshOpenLotRequirementWorkflows();
   });
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') {
       refreshOpenLotUnitForms({ force: true });
+      refreshOpenLotRequirementWorkflows();
     }
   });
 
   window.addEventListener('storage', (event) => {
     if (event.key === LOT_UNIT_FORM_PROFILE_STORAGE_KEY) {
       refreshOpenLotUnitForms({ force: true });
+    }
+
+    if (event.key === LOT_REQUIREMENT_WORKFLOW_STORAGE_KEY) {
+      refreshOpenLotRequirementWorkflows();
     }
   });
 

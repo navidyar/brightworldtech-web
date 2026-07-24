@@ -7,7 +7,9 @@ const unitIssueEntryModel = require('../models/unitIssueEntryModel');
 const unitExpandedFormModel = require('../models/unitExpandedFormModel');
 const unitOutcomeModel = require('../models/unitOutcomeModel');
 const lotUnitFormProfileModel = require('../models/lotUnitFormProfileModel');
+const techLotRequirementModel = require('../models/techLotRequirementModel');
 const { buildUnitFormProfilePresentation } = require('../services/unitFormProfilePresentation');
+const { getBlockingMessage: getLotRequirementBlockingMessage } = require('../services/techLotRequirementWorkflow');
 
 const VALID_MEMORY_INSTALL_TYPE_CODES = new Set([
   'removable_module',
@@ -1386,6 +1388,7 @@ async function buildEditFormData(unitId, formOptions) {
   const expandedFormData = await unitExpandedFormModel.getExpandedFormDataByUnitId(unitId);
 
   return {
+    unitId: String(unitId),
     ...unitFormData,
     ...issueFormData,
     ...expandedFormData,
@@ -1420,6 +1423,44 @@ async function saveExpandedDetailsIfPossible(unitId, formData, currentUserId) {
     formData,
     currentUserId
   });
+}
+
+async function buildLotRequirementWorkflowForForm({
+  formData,
+  formOptions,
+  unitId = null
+} = {}) {
+  const lotId = Number(formData && formData.lotId);
+
+  if (!Number.isSafeInteger(lotId) || lotId <= 0 || !isAssignableLotId(lotId, formOptions)) {
+    return null;
+  }
+
+  return techLotRequirementModel.buildWorkflowForForm({
+    lotId,
+    unitId,
+    formData,
+    formOptions
+  });
+}
+
+function appendLotRequirementBlockingError(errorMessages, workflow) {
+  const message = getLotRequirementBlockingMessage(workflow);
+
+  if (message && !errorMessages.includes(message)) {
+    errorMessages.push(message);
+  }
+
+  return errorMessages;
+}
+
+function getLotRequirementPreviewUnitId(req) {
+  const mode = String(req && req.body ? req.body.lotRequirementMode || '' : '').trim().toLowerCase();
+  const unitId = Number(req && req.body ? req.body.lotRequirementUnitId : 0);
+
+  return mode === 'edit' && Number.isSafeInteger(unitId) && unitId > 0
+    ? unitId
+    : null;
 }
 
 async function getBlankFormDataWithDefaults(req = null) {
@@ -2028,6 +2069,53 @@ async function renderLotUnitFormProfile(req, res, next) {
   }
 }
 
+async function renderLotRequirementWorkflowPreview(req, res, next) {
+  try {
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+
+    const unitId = getLotRequirementPreviewUnitId(req);
+    const formOptions = unitId
+      ? await getEditTechUnitFormOptionsWithIssues(req, unitId)
+      : await getTechUnitFormOptionsWithIssues(req);
+    const formData = markProductionWeightPermission(
+      getUnitFormDataFromRequest(req, { allowAssetTag: false }),
+      formOptions,
+      { allowOverrideInput: false }
+    );
+    const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({
+      formData,
+      formOptions,
+      unitId
+    });
+
+    return res.render('fragments/tech-unit-lot-requirement-workflow', {
+      lotRequirementWorkflow
+    });
+  } catch (error) {
+    if (error && error.code === 'BWT_LOT_NOT_FOUND') {
+      return res.status(404).render('fragments/tech-unit-lot-requirement-workflow', {
+        lotRequirementWorkflow: null,
+        lotRequirementError: error.message
+      });
+    }
+
+    console.error('Tech Unit Lot requirement preview failed:', error);
+
+    const databaseSetupError = error && (
+      error.code === 'ER_NO_SUCH_TABLE'
+      || error.code === 'ER_BAD_FIELD_ERROR'
+    );
+    const errorMessage = databaseSetupError
+      ? 'The Lot requirement database setup is incomplete. Ask an administrator to verify the latest Lots migrations.'
+      : 'The live Lot requirement check could not be completed. Refresh the form and try again.';
+
+    return res.status(500).render('fragments/tech-unit-lot-requirement-workflow', {
+      lotRequirementWorkflow: null,
+      lotRequirementError: errorMessage
+    });
+  }
+}
+
 async function renderNewTechUnitPage(req, res, next) {
   try {
     const { formOptions, formData } = await getBlankFormDataWithDefaults(req);
@@ -2068,6 +2156,8 @@ async function createTechUnit(req, res, next) {
     const formOptions = await getTechUnitFormOptionsWithIssues(req);
     const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req, { allowAssetTag: false }), formOptions, { allowOverrideInput: false });
     const errorMessages = await validateUnitForm(formData, formOptions, 'create');
+    const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({ formData, formOptions });
+    appendLotRequirementBlockingError(errorMessages, lotRequirementWorkflow);
 
     if (errorMessages.length > 0) {
       return res.status(400).render('pages/tech-unit-form', {
@@ -2077,6 +2167,7 @@ async function createTechUnit(req, res, next) {
         formAction: '/tech/units',
         formOptions,
         formData,
+        lotRequirementWorkflow,
         errorMessages
       });
     }
@@ -2096,6 +2187,7 @@ async function createTechUnit(req, res, next) {
           formAction: '/tech/units',
           formOptions,
           formData,
+          lotRequirementWorkflow,
           canRequestIntentionalDuplicate: isRegularTechIntentionalDuplicateRequester(req),
           ...duplicateRecovery
         });
@@ -2111,6 +2203,7 @@ async function createTechUnit(req, res, next) {
           formAction: '/tech/units',
           formOptions,
           formData,
+          lotRequirementWorkflow,
           errorMessages: [friendlyError]
         });
       }
@@ -2129,6 +2222,8 @@ async function createTechUnitModal(req, res, next) {
     const formOptions = await getTechUnitFormOptionsWithIssues(req);
     const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req, { allowAssetTag: false }), formOptions, { allowOverrideInput: false });
     const errorMessages = await validateUnitForm(formData, formOptions, 'create');
+    const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({ formData, formOptions });
+    appendLotRequirementBlockingError(errorMessages, lotRequirementWorkflow);
 
     if (errorMessages.length > 0) {
       return res.render('fragments/tech-unit-modal', {
@@ -2137,6 +2232,7 @@ async function createTechUnitModal(req, res, next) {
         formAction: '/tech/units/modal',
         formOptions,
         formData,
+        lotRequirementWorkflow,
         errorMessages
       });
     }
@@ -2155,6 +2251,7 @@ async function createTechUnitModal(req, res, next) {
           formAction: '/tech/units/modal',
           formOptions,
           formData,
+          lotRequirementWorkflow,
           canRequestIntentionalDuplicate: isRegularTechIntentionalDuplicateRequester(req),
           ...duplicateRecovery
         });
@@ -2169,6 +2266,7 @@ async function createTechUnitModal(req, res, next) {
           formAction: '/tech/units/modal',
           formOptions,
           formData,
+          lotRequirementWorkflow,
           errorMessages: [friendlyError]
         });
       }
@@ -2222,6 +2320,12 @@ async function renderEditTechUnitPage(req, res, next) {
       });
     }
 
+    const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({
+      formData,
+      formOptions,
+      unitId
+    });
+
     return res.render('pages/tech-unit-form', {
       pageTitle: 'Edit Unit',
       currentNav: 'tech-units',
@@ -2229,6 +2333,7 @@ async function renderEditTechUnitPage(req, res, next) {
       formAction: `/tech/units/${unitId}`,
       formOptions,
       formData,
+      lotRequirementWorkflow,
       errorMessages: []
     });
   } catch (error) {
@@ -2306,12 +2411,19 @@ async function renderEditTechUnitModal(req, res, next) {
       });
     }
 
+    const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({
+      formData,
+      formOptions,
+      unitId
+    });
+
     return res.render('fragments/tech-unit-modal', {
       pageTitle: 'Edit Unit',
       mode: 'edit',
       formAction: `/tech/units/${unitId}/modal`,
       formOptions,
       formData,
+      lotRequirementWorkflow,
       errorMessages: []
     });
   } catch (error) {
@@ -2331,8 +2443,17 @@ async function updateTechUnit(req, res, next) {
     }
 
     const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
-    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
+    const formData = {
+      unitId: String(unitId),
+      ...markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions)
+    };
     const errorMessages = await validateUnitForm(formData, formOptions, 'edit');
+    const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({
+      formData,
+      formOptions,
+      unitId
+    });
+    appendLotRequirementBlockingError(errorMessages, lotRequirementWorkflow);
 
     if (errorMessages.length > 0) {
       return res.status(400).render('pages/tech-unit-form', {
@@ -2342,6 +2463,7 @@ async function updateTechUnit(req, res, next) {
         formAction: `/tech/units/${unitId}`,
         formOptions,
         formData,
+        lotRequirementWorkflow,
         errorMessages
       });
     }
@@ -2361,6 +2483,7 @@ async function updateTechUnit(req, res, next) {
           formAction: `/tech/units/${unitId}`,
           formOptions,
           formData,
+          lotRequirementWorkflow,
           errorMessages: [friendlyError]
         });
       }
@@ -2421,8 +2544,17 @@ async function updateTechUnitModal(req, res, next) {
     }
 
     const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
-    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions);
+    const formData = {
+      unitId: String(unitId),
+      ...markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions)
+    };
     const errorMessages = await validateUnitForm(formData, formOptions, 'edit');
+    const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({
+      formData,
+      formOptions,
+      unitId
+    });
+    appendLotRequirementBlockingError(errorMessages, lotRequirementWorkflow);
 
     if (errorMessages.length > 0) {
       return res.render('fragments/tech-unit-modal', {
@@ -2431,6 +2563,7 @@ async function updateTechUnitModal(req, res, next) {
         formAction: `/tech/units/${unitId}/modal`,
         formOptions,
         formData,
+        lotRequirementWorkflow,
         errorMessages
       });
     }
@@ -2449,6 +2582,7 @@ async function updateTechUnitModal(req, res, next) {
           formAction: `/tech/units/${unitId}/modal`,
           formOptions,
           formData,
+          lotRequirementWorkflow,
           errorMessages: [friendlyError]
         });
       }
@@ -2593,6 +2727,7 @@ module.exports = {
   permanentlyDeleteTechUnit,
   renderNewTechUnitPage,
   renderLotUnitFormProfile,
+  renderLotRequirementWorkflowPreview,
   renderEarlySerialDuplicateCheck,
   renderDuplicateAssumeExistingUnitModal,
   assumeExistingTechUnitFromDuplicateMatch,

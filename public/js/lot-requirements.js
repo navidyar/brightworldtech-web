@@ -1,4 +1,6 @@
 (function () {
+  const LOT_REQUIREMENT_WORKFLOW_STORAGE_KEY = 'bwt-lot-requirements-updated';
+
   function parseOptions(form) {
     const modalScript = form.closest('.modal-body')?.querySelector('[data-requirement-value-options-json]');
     const pageScript = document.getElementById('requirement-value-options-json');
@@ -192,5 +194,24 @@
 
   document.addEventListener('htmx:afterSwap', (event) => {
     initialize(event.target || document);
+  });
+
+  document.body.addEventListener('htmx:afterRequest', (event) => {
+    const requestConfig = event.detail?.requestConfig;
+    const path = String(requestConfig?.path || '');
+    const verb = String(requestConfig?.verb || '').toLowerCase();
+
+    if (!event.detail?.successful || verb !== 'post' || !path.includes('/requirements')) {
+      return;
+    }
+
+    try {
+      window.localStorage.setItem(
+        LOT_REQUIREMENT_WORKFLOW_STORAGE_KEY,
+        JSON.stringify({ path, updatedAt: Date.now() })
+      );
+    } catch (error) {
+      // Storage can be unavailable in restricted browsing modes. Focus and interval refreshes remain active.
+    }
   });
 })();

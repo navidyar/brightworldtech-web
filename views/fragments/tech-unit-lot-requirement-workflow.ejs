@@ -1,0 +1,86 @@
+<%
+  const workflow = typeof lotRequirementWorkflow !== 'undefined' ? lotRequirementWorkflow : null;
+  const errorMessage = typeof lotRequirementError !== 'undefined' ? String(lotRequirementError || '') : '';
+  const failedOrReviewChecks = workflow && Array.isArray(workflow.issueChecks) ? workflow.issueChecks : [];
+  const passedCount = workflow && Array.isArray(workflow.checks)
+    ? workflow.checks.filter((check) => check.status === 'accepted').length
+    : 0;
+  const saveAllowed = workflow ? Boolean(workflow.saveAllowed) : !errorMessage;
+  const status = workflow ? workflow.status : (errorMessage ? 'error' : 'idle');
+  const tone = workflow ? workflow.tone : (errorMessage ? 'error' : 'neutral');
+%>
+<div
+  class="tech-lot-requirement-workflow tech-lot-requirement-workflow--<%= tone %>"
+  data-lot-requirement-workflow
+  data-save-allowed="<%= saveAllowed ? '1' : '0' %>"
+  data-status="<%= status %>"
+  data-policy-code="<%= workflow ? workflow.policyCode : '' %>"
+>
+  <% if (errorMessage) { %>
+    <div class="tech-lot-requirement-workflow__header">
+      <div>
+        <strong>Lot requirements could not be checked</strong>
+        <p><%= errorMessage %></p>
+      </div>
+      <span class="status-pill danger">Unavailable</span>
+    </div>
+  <% } else if (!workflow) { %>
+    <div class="tech-lot-requirement-workflow__header">
+      <div>
+        <strong>Lot Requirements</strong>
+        <p>Select an assignable Lot to check the current Unit values.</p>
+      </div>
+      <span class="status-pill muted">Waiting</span>
+    </div>
+  <% } else { %>
+    <div class="tech-lot-requirement-workflow__header">
+      <div>
+        <strong><%= workflow.headline %></strong>
+        <p><%= workflow.message %></p>
+      </div>
+      <div class="tech-lot-requirement-workflow__summary">
+        <span class="status-pill <%= workflow.tone === 'error' ? 'danger' : workflow.tone === 'warning' ? 'warning' : workflow.tone === 'success' ? 'success' : workflow.tone === 'override' ? 'info' : 'muted' %>">
+          <%= workflow.statusLabel %>
+        </span>
+        <small><%= workflow.policyLabel %> policy</small>
+      </div>
+    </div>
+
+    <div class="tech-lot-requirement-workflow__counts">
+      <span><strong><%= workflow.requirementCount %></strong> requirement<%= workflow.requirementCount === 1 ? '' : 's' %></span>
+      <span><strong><%= passedCount %></strong> passed</span>
+      <span><strong><%= workflow.issueCount %></strong> issue<%= workflow.issueCount === 1 ? '' : 's' %></span>
+    </div>
+
+    <% if (workflow.managementAccepted && workflow.validationOverride) { %>
+      <div class="tech-lot-requirement-workflow__acceptance">
+        <strong>Management acceptance is current.</strong>
+        <span><%= workflow.validationOverride.reason || 'No reason recorded.' %></span>
+      </div>
+    <% } %>
+
+    <% if (failedOrReviewChecks.length > 0) { %>
+      <ul class="tech-lot-requirement-workflow__issues">
+        <% failedOrReviewChecks.forEach((check) => { %>
+          <li
+            data-lot-requirement-issue
+            data-requirement-key="<%= check.requirementKey %>"
+            data-requirement-status="<%= check.status %>"
+          >
+            <div>
+              <strong><%= check.requirementLabel %></strong>
+              <span><%= check.message %></span>
+            </div>
+            <small>Required: <%= check.requiredValue || '—' %> · Current: <%= check.actualValue || '—' %></small>
+          </li>
+        <% }) %>
+      </ul>
+    <% } %>
+
+    <% if (!workflow.saveAllowed) { %>
+      <p class="tech-lot-requirement-workflow__blocked-note">
+        Saving is blocked for this Strict Lot. Correct the highlighted values or choose another Lot. Management acceptance for an existing Unit is handled from the Lot Details page.
+      </p>
+    <% } %>
+  <% } %>
+</div>
