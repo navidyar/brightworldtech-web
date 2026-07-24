@@ -3043,3 +3043,71 @@
     grid-template-columns: repeat(auto-fit, minmax(min(132px, 100%), 1fr));
   }
 }
+
+/* Lots-controlled Unit form profile — Stage 4 */
+.tech-unit-form [data-unit-form-required-indicator] {
+  color: var(--red);
+  font-weight: 800;
+}
+
+.tech-unit-form .tech-lot-form-profile-status {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.tech-unit-form .tech-lot-form-profile-status[data-status="loading"] {
+  color: var(--muted);
+}
+
+.tech-unit-form .tech-lot-form-profile-status[data-status="applied"] {
+  color: var(--blue);
+}
+
+.tech-unit-form .tech-lot-form-profile-status[data-status="error"] {
+  color: var(--red);
+  font-weight: 650;
+}
+
+/* Stage 4 corrective behavior: honor profile hiding despite form display rules. */
+.tech-unit-form [data-unit-form-field-key][hidden],
+.tech-unit-form [data-unit-form-follows-key][hidden],
+.tech-unit-form [data-unit-form-auto-collapse][hidden] {
+  display: none !important;
+}
+
+/* Stage 4 corrective validation: keep the first invalid field visible and obvious. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .has-unit-form-validation-error :is(
+  input:not([type="hidden"]),
+  textarea,
+  select:not([hidden]),
+  .tech-assignable-lot-combobox-input,
+  .tech-unit-model-combobox-input,
+  .tech-unit-processor-combobox-input
+) {
+  border-color: #c62828 !important;
+  box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.14) !important;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .has-unit-form-validation-error .tech-outcome-options {
+  border-color: #c62828 !important;
+  box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.14) !important;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-section.has-unit-form-validation-error > :is(.form-grid, .workflow-list, .tech-outcome-approval-box) {
+  border-color: #c62828 !important;
+  box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.12) !important;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .unit-form-field-error {
+  display: block;
+  grid-column: 1 / -1;
+  margin: 5px 2px 0;
+  color: #a61b1b;
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .has-unit-form-validation-error {
+  scroll-margin-block: 96px;
+}

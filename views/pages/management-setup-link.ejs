@@ -1,7 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle }) %>
-  <link rel="stylesheet" href="/css/copy-link.css" />
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: ['/css/copy-link.css']
+  }) %>
   <script defer src="/js/copy-link.js"></script>
 
   <body>

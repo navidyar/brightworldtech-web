@@ -59,8 +59,8 @@
 
             <% safeRequirements.forEach((requirement) => { %>
               <tr>
-                <td><%= requirement.requirement_key || '—' %></td>
-                <td><%= requirement.operator_code || 'equals' %></td>
+                <td><%= requirement.requirement_label || requirement.requirement_key || '—' %></td>
+                <td><%= requirement.operator_label || requirement.operator_code || 'Equals' %></td>
                 <td><%= requirement.required_value || '—' %></td>
                 <td>
                   <% if (Number(requirement.is_active) === 1) { %>
@@ -72,7 +72,10 @@
                 <td><%= requirement.notes || '—' %></td>
                 <td>
                   <% if (safeLot) { %>
-                    <a class="secondary-button" href="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-get="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                    <div class="lot-requirement-row-actions">
+                      <a class="secondary-button" href="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-get="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                      <a class="secondary-button danger-button" href="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/delete/modal" hx-get="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete</a>
+                    </div>
                   <% } else { %>
                     —
                   <% } %>

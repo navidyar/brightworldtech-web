@@ -1,3 +1,68 @@
+## Stage 5D — Management Acceptance and Direct Unit View
+
+- Removes the separate **Enforcement Preview** button, route, controller action, and modal. The authoritative requirement evaluator remains available for current Lot details and future `/tech/units` enforcement.
+- Moves each Unit's colored requirement indicator to the left side of its Lot-detail row.
+- Turns the displayed `BWT...` Asset Tag into a new-tab link to the single-Unit `/tech/units/:unitId` view page.
+- Adds a dedicated single-Unit Tech Units view that opens the existing detailed Unit record without opening the Edit form.
+- Allows only Admin and Management users to accept a rejected or review-required Unit for its current Lot.
+- Requires a reason of 500 characters or fewer and records the approving user and approval time.
+- Keeps the original failed/review checks visible and labels the effective result **Accepted by Management**.
+- Allows Management to revoke an active acceptance.
+- Binds each acceptance to both the active Lot-requirement signature and the Unit's current Lot-assignment signature. It expires when requirements change, the Unit leaves the Lot, or the Unit returns after a Lot-history event.
+- Adds schema columns for the signatures, revocation metadata, and expiration time.
+
+Apply and validate the Stage 5D migration:
+
+```bash
+bash scripts/apply-stage-5d-lot-validation-management-acceptance.sh
+docker compose exec -T app npm run validate:lot-validation-overrides
+```
+
+Rollback before relying on stored acceptances:
+
+```bash
+bash scripts/rollback-stage-5d-lot-validation-management-acceptance.sh
+```
+
+## Stage 5C — Per-Unit Requirement Indicator, Technician Context, and Details Modal
+
+- Replaces the inline expandable requirement tables on the Lot detail page with compact colored status links for each Unit.
+- Opens a dedicated HTMX modal that explains every requirement result, including required value, actual value, authoritative source, status, and explanation.
+- Shows the unique technicians who worked on each Unit using `unit_work_completions` and `unit_work_sessions`, rather than inferring work solely from the current assignment.
+- Distinguishes a recorded completion from one or more work sessions in the Unit details modal.
+- Displays `No technician activity recorded` when neither work source contains a record for the Unit.
+- Normalizes all Asset Tags used by the Lot validation/detail and Enforcement Preview data to exactly one uppercase `BWT` prefix, including numeric identifier values stored without the prefix.
+- Keeps the Lot tree, Unit-form behavior, Requirements editor, Enforcement Preview policy logic, database schema, and saved data unchanged.
+- No SQL migration is required.
+
+## Stage 5B — Normalized Unit Validation Reader and Lot Detail Repair
+
+- Replaces the legacy Lot-validation reader that searched for serials, model data, memory, and storage in obsolete or incorrect `units` columns.
+- Reads Asset Tags and serials from `unit_identifiers`, with `units.asset_number` as the permanent Asset Tag fallback.
+- Reads Unit Category, Manufacturer, Unit Model, and Processor through their actual foreign-key catalogs.
+- Totals current rows in `unit_memory_modules` and `unit_storage_devices`; falls back to the existing Unit summary columns only when no current normalized rows exist.
+- Compares catalog requirements by stored IDs rather than display text, so labels can change without altering requirement results.
+- Treats missing Unit values as a clear rejection and reserves Needs Review for incomplete/unsupported stored requirements.
+- Repairs the Lot-detail Unit row grid so the caret, identity, and result badge occupy stable columns instead of producing blank ghost rows.
+- Displays friendly requirement/rule labels and the authoritative data source in expanded Unit checks.
+- Makes `npm run validate:lot-requirements` self-route into the running app container when host `node_modules` are absent.
+- Adds `npm run validate:lot-validation` to execute the normalized reader across every current Lot and verify that every returned Unit has a usable identity.
+- Does not yet add the per-Unit issue modal, consolidate Enforcement Preview, or enforce Lot requirements in `/tech/units`.
+- No SQL migration is required.
+
+## Stage 5A — Lot Requirement Persistence Repair
+
+- Repairs the existing Requirements modal so create and edit operations use the actual `lot_requirements` schema instead of attempting to write nonexistent generic text columns.
+- Adds a central Lot requirement registry aligned with the configured requirement types and comparison operators already present in the database.
+- Stores Unit Type, Memory Type, and Storage Type through `requirement_config_value_id`; Manufacturer through `manufacturer_id`; Model through `unit_model_id`; Processor through `processor_model_id`; and Memory/Storage sizes through `requirement_number`.
+- Clears obsolete value columns when an existing requirement changes from one field type to another, preventing stale hidden values from controlling later validation.
+- Loads standardized requirement choices from the existing Unit Category, Manufacturer, Unit Model, Processor Model, RAM Type, and Storage Type catalogs.
+- Limits each field to comparison operators that can be represented correctly by the current schema: exact match for catalog fields and exact/minimum/maximum for numeric size fields.
+- Preserves old `ram_size`, `storage_size`, `processor_model`, `minimum`, and `maximum` submissions through explicit normalization aliases.
+- Adds `npm run validate:lot-requirements` to verify the live schema, joins, saved values, and any incomplete legacy rows.
+- Does not yet repair the Lot detail unit-validation reader, Enforcement Preview decisions, or Tech Units enforcement. Those are intentionally separated into later stages.
+- No database migration is required.
+
 ## Reset Design Stage Favicon Pack V6 — Final Approved Lime Monitor Icon
 
 - Installs the final approved BWTDallas favicon pack using the user-approved bright lime rounded-square icon with a medium-thickness navy monitor outline and a larger centered navy `B`.
@@ -2199,3 +2264,206 @@ Step 6f.1 closed-lot lifecycle migration complete
 - Registers the favicon and browser theme color in the shared head partial so it appears across the application.
 - No SQL migration is required.
 
+
+## Lots-Controlled Unit Form — Stage 1B Authoritative Field Registry
+
+- Adds `config/unitFormFieldRegistry.js` as the authoritative inventory for all 54 controls and workflows identified in the Stage 1A `/tech/units` Add/Edit form audit.
+- Defines stable field keys, form sections, rule types, default visibility/requirement metadata, preservation policies, parent relationships, protected controls, and dependency declarations.
+- Keeps Assignable Lot, Current Unit Status, Duplicate Assumption Nonce, Asset Tag, Unit Category, permission-controlled production-weight controls, workflow actions, hidden system companions, legacy fields, and the future Graphics Adapters section outside Lot rule control.
+- Keeps repeatable Memory, Storage, Cosmetic Issue, and Hardware Issue controls configurable only at the section level for the first implementation version; child-row controls are cataloged but cannot be configured independently.
+- Adds registry validation for duplicate/invalid keys, unknown sections, invalid metadata values, missing parents, protected-field conflicts, repeatable-section semantics, and broken dependency references.
+- Adds `npm run validate:unit-form-registry` plus focused Node tests under `config/unitFormFieldRegistry.test.js`.
+- The registry validates when imported, but Stage 1B does **not** import it from live application runtime paths. Controllers, models, EJS, browser JavaScript, Lots behavior, database structure, and CSS remain unchanged.
+- No SQL migration is required.
+
+## Lots-Controlled Unit Form — Stage 2 Rules Storage and Inheritance Resolver
+
+- Adds `lot_unit_form_field_rules` for per-Lot visibility and requirement overrides keyed to the Stage 1B authoritative field registry.
+- Supports independent `inherit`, `visible`/`hidden`, and `required`/`optional` modes so child Lots only override the settings that differ from their parents.
+- Rejects empty override rows and direct `Hidden + Required` combinations at both the database and resolver layers.
+- Adds a pure root-to-leaf inheritance resolver with dependency propagation, source tracking, hidden-required suppression, and cycle/input validation.
+- Adds a database model that loads the selected Lot's complete ancestry and all applicable rules before resolving its effective profile.
+- Adds focused Node tests plus `npm run validate:lot-unit-form-profiles`, which validates the migrated schema and resolves every current Lot.
+- Adds apply and rollback helper scripts so the Stage 2 table can be managed without manually composing Docker database commands.
+- Stage 2 stores and resolves configuration only. It does **not** add a Lots configuration interface or change `/tech/units`, server-side Unit validation, Lots hierarchy behavior, CSS, or current data.
+
+### Required SQL
+
+After applying the patch, run:
+
+```bash
+cd /home/bwtdallas-webserver/app
+bash scripts/apply-stage-2-lot-unit-form-rules.sh
+```
+
+Expected final message:
+
+```text
+Stage 2 lot-controlled Unit form rules migration complete
+```
+
+Stage 2 can be rolled back before later stages begin with:
+
+```bash
+cd /home/bwtdallas-webserver/app
+bash scripts/rollback-stage-2-lot-unit-form-rules.sh
+```
+
+## Lots-Controlled Unit Form — Stage 3 Lots Configuration Interface
+
+- Adds a **Configure Unit Form** action to each individual Lot detail page for Management and Admin users who already have access to `/management/lots`.
+- Adds a full-height, responsive configuration modal grouped by the Stage 1B Unit form sections.
+- Allows each configurable field or repeatable section to independently choose:
+  - Visibility: `Inherit`, `Visible`, or `Hidden`.
+  - Requirement: `Inherit`, `Required`, or `Optional` when that field supports requirement rules.
+- Shows the currently saved effective visibility, requirement, inheritance source, hidden-required suppression, and dependency-forced behavior for each field.
+- Adds field/section search plus **Reset This Lot to Inherit**, which removes this Lot's stored overrides after Save while preserving parent and application defaults.
+- Prevents unknown/protected fields, invalid modes, empty override rows, and direct `Hidden + Required` combinations from being stored.
+- Saves all direct rules for one Lot transactionally while retaining each existing rule's original creation metadata through upserts.
+- Adds focused normalization and database-model tests. The complete Node test suite now contains 24 tests.
+- Does not modify the existing Lots tree, caret expansion, row navigation, Lot operational requirements, Unit Add/Edit rendering, Unit validation, or any Unit data.
+- No SQL migration is required because Stage 3 uses the Stage 2 `lot_unit_form_field_rules` table.
+
+### Stage 3 manual verification gate
+
+Before beginning Stage 4, verify all of the following on at least one root Lot and one child Lot:
+
+1. `/management/lots` still expands and collapses parent, child, and grandchild rows normally; caret clicks do not navigate and row clicks still open the Lot.
+2. The Lot detail action bar still exposes every prior action and now also opens **Configure Unit Form**.
+3. The modal fits within the desktop viewport, keeps its header/actions visible, and scrolls only the grouped field area.
+4. Search matches both field names and section names and hides empty sections.
+5. Saving a root-Lot override reloads the Lot detail with a success message and reopens with the saved direct setting and effective source `This lot`.
+6. A child Lot displays inherited parent settings and identifies the parent Lot as the source.
+7. Setting both controls back to `Inherit` and saving removes that Lot's direct override.
+8. Selecting `Required` while directly `Hidden`, or `Hidden` while directly `Required`, is corrected in the browser and remains rejected by the server if bypassed.
+9. The modal remains usable on a narrow/mobile viewport, including the table's horizontal scroll area and full-width action buttons.
+10. `/tech/units` Add/Edit forms remain visually and functionally unchanged because Stage 3 does not connect the profile to the live form.
+
+No old CSS declarations are removed in Stage 3. The new modal-specific declarations remain isolated in the existing Lots feature stylesheet until the approved three-file CSS consolidation reaches this component.
+
+## Lots-Controlled Unit Form — Stage 4 Dynamic Add/Edit Form Profile
+
+- Connects the saved Stage 2/3 Lot form profile to the live `/tech/units` Add/Edit form in the browser.
+- Adds a protected HTML-fragment endpoint at `/tech/units/lot-form-profile?lotId=...`; no JSON API is introduced.
+- Applies the selected Lot's effective inherited profile whenever the Assignable Lot changes, including custom-combobox selection, native select changes, full-page forms, and HTMX modal forms.
+- Shows or hides all 26 Lot-configurable fields/sections and adds browser-level required behavior for visible fields.
+- Supports required repeatable sections with first-version completeness rules:
+  - Memory: at least one row with a positive size.
+  - Storage: at least one row with a positive size.
+  - Cosmetic Issues: at least one row with issue type, severity, and location.
+  - Hardware Issues: at least one row with a configured issue or custom issue name.
+- Displays a live profile status beside Assignable Lot, including required and hidden field counts.
+- Preserves values when a field becomes hidden. On Create, hidden named controls are temporarily disabled so stale values are not submitted; switching back to a visible profile restores the controls and their entered values. On Edit, hidden controls remain submitted so the current save path cannot erase existing serials, specifications, modules, issues, grades, outcomes, or comments before Stage 5 adds explicit server-side managed/unmanaged preservation.
+- Falls back safely to showing every configurable field as optional if the profile request fails or the Lot selection is cleared.
+- Adds `npm run validate:unit-form-bindings`, which verifies that every Lot-configurable registry key is bound exactly once in the live EJS form and that no unknown keys are present.
+- Does not change the Lots tree, caret behavior, Lot rule editor, database schema, server-side Unit requirement enforcement, or save-model behavior.
+- No SQL migration is required.
+
+### Stage 4 manual verification gate
+
+Before beginning Stage 5, test both **Create Unit** and **Edit Unit** in the full page and modal:
+
+1. Select a Lot with no overrides and confirm all configurable fields remain visible and optional.
+2. Select a Lot with hidden and required rules; confirm the status line updates, hidden controls disappear, and required fields receive an asterisk and browser validation.
+3. Switch between two Lots with different profiles and confirm entered values reappear unchanged when their fields become visible again.
+4. Clear or type over the custom Lot selection and confirm all configurable fields return to visible/optional defaults.
+5. Verify required Unit Model and Processor rules work with their searchable comboboxes and dependency-forced Manufacturer/Unit Model fields.
+6. Verify required Memory, Storage, Cosmetic Issue, and Hardware Issue sections reject an empty/incomplete section and accept at least one complete meaningful row.
+7. Add and remove repeatable rows while required and confirm validation follows the current rows.
+8. Edit a Unit containing values in fields that the selected Lot hides, save it, reopen it, and confirm those existing values were not erased.
+9. Confirm serial duplicate checking, model/processor filtering, production-weight preview, catalog requests, outcome controls, module totals, and HTMX modal save/close behavior remain functional.
+10. Test a narrow/mobile viewport and confirm hidden sections do not leave large gaps and required markers/status text remain readable.
+
+No old CSS declarations are removed in Stage 4. The only added declarations style the required marker and profile status. Do not remove or consolidate existing Unit-form CSS until this gate is approved.
+
+### Stage 4 corrective patch — profile hiding and validation focus
+
+- Ensures Lot-profile `hidden` state wins over the Unit form's grid/display declarations for configurable fields, dependent controls, and automatically collapsed sections.
+- Replaces unreliable native invalid-field scrolling with a first-invalid-field handler that centers and focuses the missing field in both modal and full-page forms.
+- Adds a red field/section border and an inline validation message that clears when the field becomes valid.
+- Keeps all Stage 4 value-preservation and submission behavior unchanged.
+- No SQL migration is required.
+
+
+### Stage 4 follow-up: live Lot-profile refresh and repeat validation focus
+
+Open Add/Edit Unit forms now recheck their selected Lot profile every 30 seconds while visible, whenever the browser tab regains focus, after a configuration save in another tab of the same browser, and immediately before submission. Changed settings are applied without clearing entered values. A failed final profile check blocks saving rather than submitting against stale rules. Repeated invalid submissions now consistently reveal, focus, and mark the first unresolved field.
+
+### Stage 4 follow-up: empty Create Unit identity section
+
+The Create Unit form now automatically collapses the Unit Identity section when both Unit Serial Number and BIOS Serial Number are hidden by the selected Lot profile. Edit Unit continues to keep the section visible so an existing permanent Asset Tag remains available even when both serial fields are hidden. No database, save behavior, or Lots-tree behavior changes are included.
+
+## Lots-Controlled Unit Form — Stage 4.5
+
+New Lots now start hidden by default so Management can finish configuration before technicians can use them.
+
+- The application explicitly inserts new Lots with `is_active = 0`.
+- The database default for `lots.is_active` is also changed to `0` as a safety backstop.
+- Existing Lots are not changed by the migration.
+- After creation, Management is redirected directly to the new hidden Lot detail page.
+- Saving Unit Form Configuration, requirements, or other settings never unhides the Lot.
+- The existing **Unhide Lot** action is the only way to make the Lot available manually.
+
+Apply the database default migration after applying the Stage 4.5 patch:
+
+```bash
+bash scripts/apply-stage-4-5-new-lots-hidden-by-default.sh
+bash scripts/validate-stage-4-5-new-lots-hidden-by-default.sh
+```
+
+Rollback only the database default with:
+
+```bash
+bash scripts/rollback-stage-4-5-new-lots-hidden-by-default.sh
+```
+
+
+
+### Stage 5D corrective — requirement deletion and status-label layout
+
+- Requirements can now be deleted through a confirmation modal from the Requirements list.
+- Deleting a requirement recalculates Lot validation and naturally expires prior Management acceptances because the requirement signature changes.
+- The left-side Unit validation indicator now gives long labels, including `Accepted by Management`, enough width and allows the badge text to wrap without covering the issue count.
+- No database migration is required.
+
+### Lots Lookup-style typography preview
+
+The Management Lots browser, individual Lot detail page, and their HTMX modals now opt into a temporary typography preview adapted from the Google Sheets Lookup `/metrics/dashboard`. The preview is scoped by `body.lots-lookup-typography-preview` and changes only type scale, weight, and text colors. It does not alter the Lot hierarchy, caret hit area, row navigation, validation behavior, or layout. If approved, these values will become the starting point for the shared `theme.css` / `app.css` sitewide typography system; the scoped preview block will then be removed rather than duplicated.
+
+### Lots Lookup-style full UI projection preview
+
+The approved Lookup `/metrics/dashboard` visual language now extends beyond typography to the complete Management Lots interface. `body.lots-lookup-ui-preview` scopes Lookup-style buttons, form controls, panels, tables, status treatments, messages, modal shells, and responsive states to the Lots browser, Lot details, full-page Create Lot route, and Lots HTMX modals. Requirement Edit/Delete actions use the Lookup compact-button dimensions and weight. The existing `body.lots-lookup-typography-preview` class remains during this review period so the typography and full-component previews can be evaluated together.
+
+This is still a Lots-only preview. It does not alter the protected Lot tree hierarchy, caret hit area, expand/collapse behavior, row navigation, routes, validation, permissions, or database behavior. No old CSS declarations are removed. After approval, the accepted values should be moved into the planned shared `theme.css`, `app.css`, and `features.css` architecture before sitewide rollout.
+
+## Shared Lookup-derived UI foundation — system-wide preview
+
+The approved Management Lots preview is now promoted into the shared three-file CSS architecture:
+
+- `public/css/theme.css` owns the Lookup-derived colors, typography, radii, shadows, form-value settings, and compatibility aliases used by the existing application.
+- `public/css/app.css` owns reusable visual presentation for headings, actions, controls, panels, tables, messages, statuses, modals, authentication screens, and pagination.
+- `public/css/features.css` owns only cross-feature safety rules that must win over visual CSS, including HTML hidden state, Lots descendant-row hiding, Lot-controlled Unit-form hiding, and an empty modal mount.
+
+Legacy and page-specific stylesheets remain loaded. They are now loaded before `app.css`, while `features.css` loads last. This permits a system-wide visual preview without deleting feature mechanics or older declarations before manual testing.
+
+Use:
+
+```bash
+npm run validate:shared-css
+```
+
+The validator confirms that page styles load before the shared visual layer, the feature safety layer loads last, normal pages do not add stylesheets after the shared head partial, and protected Lots/Unit-form selectors have not leaked into `app.css`.
+
+### System-wide visual and functional test gate
+
+Do not remove legacy declarations until the relevant area is approved. Test the following groups separately:
+
+1. **Application shell and authentication** — Login, password setup, sidebar, topbar, navigation states, logout, and narrow-screen sidebar behavior.
+2. **Dashboards** — Main dashboard and each role dashboard, including filters, metric panels, drilldowns, charts, links, and responsive layouts.
+3. **Management** — Users, user creation, configuration, model catalog, login activity, overrides, setup links, tables, forms, and modals.
+4. **Lots** — Browser hierarchy, caret hit area, expand/collapse, row navigation, Lot details, Requirements, Unit Form Configuration, visibility/state actions, Unit statuses, and Management acceptance.
+5. **Tech Units** — Browser filters, Create/Edit full page and modal, searchable selectors, repeatable rows, duplicate checks, calculations, Lot-profile hiding/requirements, validation focus, saves, and single-Unit view.
+6. **Unit Requests** — Queue tabs, filtering, search, request detail, actions, archive states, and narrow-screen behavior.
+7. **Error and empty states** — 404, application error, no-results messages, validation messages, disabled controls, and loading indicators.
+
+After each group is approved, its duplicate visual declarations can be inventoried and removed in a separate cleanup patch. Functional selectors must remain until their owning feature is explicitly migrated and retested.

@@ -16,13 +16,17 @@
 %>
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle }) %>
-  <link rel="stylesheet" href="/css/modal.css" />
-  <link rel="stylesheet" href="/css/tech-units-clean.css?v=20260708-unit-details-r1" />
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: [
+      '/css/modal.css',
+      '/css/tech-units-clean.css?v=20260722-stage4-lot-profile'
+    ]
+  }) %>
   <script defer src="/js/modal.js"></script>
   <script defer src="/js/tech-units.js"></script>
   <script defer src="/js/tech-units-date-picker.js"></script>
-  <script defer src="/js/tech-unit-form.js"></script>
+  <script defer src="/js/tech-unit-form.js?v=20260722-stage4-lot-profile"></script>
 
   <body>
     <div class="app-shell">

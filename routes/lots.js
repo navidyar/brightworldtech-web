@@ -113,13 +113,6 @@ router.get(
 );
 
 router.get(
-  '/management/lots/:lotId/enforcement/modal',
-  requireAuth,
-  requireRole(lotManagementRoles),
-  lotController.renderLotEnforcementModal
-);
-
-router.get(
   '/management/lots/:lotId/requirements/new/modal',
   requireAuth,
   requireRole(lotManagementRoles),
@@ -145,6 +138,55 @@ router.post(
   requireAuth,
   requireRole(lotManagementRoles),
   lotController.updateLotRequirementModal
+);
+
+router.get(
+  '/management/lots/:lotId/requirements/:requirementId/delete/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderDeleteLotRequirementModal
+);
+
+router.post(
+  '/management/lots/:lotId/requirements/:requirementId/delete',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.deleteLotRequirement
+);
+
+router.get(
+  '/management/lots/:lotId/unit-form/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotUnitFormRulesModalPage
+);
+
+router.post(
+  '/management/lots/:lotId/unit-form/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.updateLotUnitFormRules
+);
+
+router.get(
+  '/management/lots/:lotId/units/:unitId/validation/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotUnitValidationModal
+);
+
+router.post(
+  '/management/lots/:lotId/units/:unitId/validation/accept',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.acceptLotUnitValidationOverride
+);
+
+router.post(
+  '/management/lots/:lotId/units/:unitId/validation/overrides/:overrideId/revoke',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.revokeLotUnitValidationOverride
 );
 
 router.get(

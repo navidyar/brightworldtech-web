@@ -1,0 +1,622 @@
+/*
+ * BWTDallas shared application presentation.
+ *
+ * This file contains visual rules that are intended to be reused throughout
+ * the application. Feature mechanics remain in the existing feature files and
+ * in features.css. During the migration period, legacy stylesheets remain in
+ * place and are loaded before this file.
+ */
+
+/* Final shared aliases load after work-area.css so its legacy !important
+   typography rules resolve to the approved Lookup values. */
+:root {
+  --form-field-value-ink: var(--ui-field-ink);
+  --form-field-value-font-family: var(--ui-font-family);
+  --form-field-value-font-size: 0.9rem;
+  --form-field-value-font-weight: 600;
+  --form-field-value-line-height: 1.25;
+  --form-field-focus-border: var(--ui-blue);
+  --form-field-focus-ring: var(--ui-focus-ring);
+  --site-action-blue: var(--ui-blue);
+  --site-action-blue-hover: var(--ui-blue-dark);
+  --site-action-border: var(--ui-line-strong);
+  --site-action-secondary-ink: #314d70;
+  --site-action-danger-border: #d9a8b2;
+  --site-action-danger-ink: var(--ui-red);
+}
+
+/* Base typography and links */
+body {
+  color: var(--ui-ink);
+  background: var(--ui-page);
+  font-family: var(--ui-font-family);
+  font-size: var(--ui-body-size);
+  line-height: var(--ui-line-height);
+}
+
+body :is(button, input, select, textarea) {
+  font-family: inherit;
+}
+
+.content-shell :is(h1, h2, h3, h4),
+.modal-panel :is(h1, h2, h3, h4),
+.auth-panel :is(h1, h2, h3, h4) {
+  color: var(--ui-heading);
+}
+
+.content-shell h1,
+.content-shell .page-heading h1 {
+  font-size: clamp(1.58rem, 2.65vw, 2.1rem);
+  font-weight: 660;
+  letter-spacing: -0.032em;
+  line-height: 1.12;
+}
+
+.content-shell :is(.dashboard-hero h2, .content-header h2, .section-title) {
+  font-size: clamp(1.35rem, 2.2vw, 1.72rem);
+  font-weight: 660;
+  letter-spacing: -0.025em;
+  line-height: 1.16;
+}
+
+.content-shell :is(.site-clean-section-heading h2, .form-section-header h3, .dashboard-card h3, .status-card h2, .role-dashboard-card h3),
+.modal-panel :is(.form-section-header h3, .modal-section-title) {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.content-shell :is(p, small, .muted, .table-muted-line, .field-hint),
+.modal-panel :is(p, small, .muted, .table-muted-line, .field-hint) {
+  color: var(--ui-muted);
+}
+
+.content-shell a:not(.primary-button):not(.secondary-button):not(.danger-button):not(.logout-button):not(.unit-validation-indicator),
+.modal-panel a:not(.primary-button):not(.secondary-button):not(.danger-button) {
+  color: var(--ui-blue);
+}
+
+.eyebrow {
+  margin: 0 0 4px;
+  color: var(--ui-blue);
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+/* Shell and navigation typography */
+.topbar h1 {
+  font-size: 1.18rem;
+  font-weight: 660;
+  letter-spacing: -0.018em;
+}
+
+.topbar-kicker,
+.sidebar-brand p {
+  font-weight: 650;
+}
+
+.sidebar-link,
+.sidebar-section-heading {
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.sidebar-sublink {
+  font-size: 0.86rem;
+  font-weight: 560;
+}
+
+.sidebar-link.active,
+.sidebar-section-heading.is-active,
+.sidebar-sublink.active {
+  font-weight: 650;
+}
+
+.user-chip strong {
+  font-weight: 650;
+}
+
+/* Shared surfaces */
+:is(
+  .content-card,
+  .dashboard-card,
+  .status-card,
+  .role-dashboard-card,
+  .dashboard-panel-card,
+  .management-metric-plan-card,
+  .unit-request-detail-card,
+  .record-card,
+  .auth-panel
+) {
+  border-color: var(--ui-line);
+  border-radius: var(--ui-radius-panel);
+  background: var(--ui-surface);
+  box-shadow: var(--ui-shadow);
+}
+
+:is(.content-card, .dashboard-card, .status-card, .dashboard-panel-card, .management-metric-plan-card) {
+  padding: 18px;
+}
+
+.dashboard-hero {
+  border-color: var(--ui-line);
+  border-radius: var(--ui-radius-panel);
+  background: linear-gradient(104deg, #f7fbff 0%, #f2f8ff 56%, #fbfdff 100%);
+  box-shadow: var(--ui-shadow-compact);
+}
+
+.hero-badge {
+  border-color: #c8d8ec;
+  border-radius: var(--ui-radius-control);
+  background: #fbfdff;
+  box-shadow: none;
+}
+
+.content-header {
+  border-color: var(--ui-line);
+}
+
+/* Shared actions */
+:is(
+  .primary-button,
+  .secondary-button,
+  .danger-button,
+  .auth-submit,
+  .button
+) {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-button);
+  box-shadow: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-decoration: none;
+  transition: background-color 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+:is(.primary-button, .auth-submit, .button-primary) {
+  border-color: var(--ui-blue);
+  background: var(--ui-blue);
+  color: #fff;
+}
+
+:is(.primary-button, .auth-submit, .button-primary):hover {
+  border-color: var(--ui-blue-dark);
+  background: var(--ui-blue-dark);
+  color: #fff;
+}
+
+:is(.secondary-button, .button-secondary) {
+  border-color: var(--ui-line-strong);
+  background: #fff;
+  color: var(--ui-ink);
+}
+
+:is(.secondary-button, .button-secondary):hover {
+  border-color: #aab8ca;
+  background: #f1f4f8;
+  color: var(--ui-ink);
+}
+
+:is(.danger-button, .button-danger) {
+  border-color: #d9a8b2;
+  background: #fff;
+  color: var(--ui-red);
+}
+
+:is(.danger-button, .button-danger):hover {
+  border-color: #cf8e9d;
+  background: var(--ui-red-soft);
+  color: var(--ui-red);
+}
+
+:is(.primary-button, .secondary-button, .danger-button, .auth-submit, .button):focus-visible {
+  outline: 3px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}
+
+:is(.primary-button, .secondary-button, .danger-button, .auth-submit, .button)[disabled],
+:is(.primary-button, .secondary-button, .danger-button, .auth-submit, .button).is-disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+:is(
+  .table-card,
+  .lot-row-actions,
+  .lot-requirement-row-actions,
+  .management-table-actions,
+  .tech-row-actions,
+  .unit-request-actions
+) :is(.primary-button, .secondary-button, .danger-button, .button),
+.button-small {
+  min-height: 32px;
+  padding: 6px 9px;
+  border-radius: var(--ui-radius-button);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+:is(.form-actions, .modal-actions, .action-row, .button-group) {
+  gap: 10px;
+}
+
+/* Shared form controls */
+body :is(
+  input:not([type]),
+  input[type="text"],
+  input[type="search"],
+  input[type="password"],
+  input[type="email"],
+  input[type="number"],
+  input[type="date"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="time"],
+  input[type="week"],
+  input[type="month"],
+  input[type="datetime-local"],
+  textarea,
+  select:not([multiple]),
+  .site-date-picker-trigger,
+  .tech-created-date-picker-trigger
+) {
+  min-height: 39px;
+  border-color: var(--ui-control-border);
+  border-radius: var(--ui-radius-control);
+  background-color: #fff;
+  color: var(--ui-field-ink);
+  box-shadow: inset 0 1px 1px rgba(29, 44, 69, 0.025);
+}
+
+body :is(
+  input:not([type]),
+  input[type="text"],
+  input[type="search"],
+  input[type="password"],
+  input[type="email"],
+  input[type="number"],
+  input[type="date"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="time"],
+  input[type="week"],
+  input[type="month"],
+  input[type="datetime-local"],
+  textarea
+) {
+  padding: 8px 12px;
+}
+
+body select:not([multiple]):not([hidden]) {
+  appearance: none;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4.5 6 3.5 3.5L11.5 6' stroke='%23476c9a' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+}
+
+body textarea {
+  line-height: 1.45;
+}
+
+body :is(input, textarea)::placeholder {
+  color: #71839a;
+  opacity: 1;
+}
+
+body :is(input, select, textarea, .site-date-picker-trigger, .tech-created-date-picker-trigger):focus-visible {
+  border-color: var(--ui-blue);
+  outline: 3px solid var(--ui-focus-ring);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+body :is(input, select, textarea):disabled {
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+body :is(input[type="checkbox"], input[type="radio"]) {
+  accent-color: var(--ui-blue);
+}
+
+.form-field {
+  gap: 7px;
+}
+
+.form-field > :is(span, label, legend):first-child,
+.stack-form > label,
+.textarea-label {
+  color: #5e7086;
+  font-size: 0.78rem;
+  font-weight: 650;
+  letter-spacing: 0;
+}
+
+.field-hint,
+.form-field > small {
+  color: var(--ui-muted);
+  font-size: 0.76rem;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.form-section {
+  border-color: var(--ui-line);
+  border-radius: 9px;
+  background: #fbfdff;
+  box-shadow: none;
+}
+
+.form-section-header {
+  border-color: var(--ui-line);
+}
+
+:is(.checkbox-card, .workflow-item) {
+  border-color: #d5e0eb;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: none;
+}
+
+:is(.checkbox-card, .workflow-item):hover {
+  border-color: #b9cde5;
+  background: #fbfdff;
+}
+
+/* Shared tables */
+.table-card,
+.responsive-table {
+  border-color: var(--ui-line);
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(29, 44, 69, 0.03);
+}
+
+.content-shell table,
+.modal-panel table {
+  color: var(--ui-ink);
+  background: #fff;
+  font-size: 0.84rem;
+}
+
+.content-shell :is(th, td),
+.modal-panel :is(th, td) {
+  padding: 9px 10px;
+  border-color: var(--ui-line);
+  line-height: 1.4;
+  vertical-align: top;
+}
+
+.content-shell th,
+.modal-panel th {
+  color: #5d7087;
+  background: #fbfdff;
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.025em;
+  text-transform: none;
+}
+
+.content-shell td,
+.modal-panel td {
+  color: #29394e;
+  font-size: 0.82rem;
+  font-weight: 400;
+}
+
+.content-shell tbody tr:hover td,
+.modal-panel tbody tr:hover td {
+  background: #fcfdff;
+}
+
+/* Messages and statuses */
+.message,
+.notice {
+  padding: 11px 12px;
+  border-width: 1px;
+  border-style: solid;
+  border-radius: 7px;
+  box-shadow: none;
+  font-size: 0.84rem;
+  font-weight: 400;
+  line-height: 1.45;
+}
+
+:is(.message.success, .notice-success) {
+  border-color: #bddfc9;
+  background: var(--ui-green-soft);
+  color: var(--ui-green);
+}
+
+:is(.message.error, .notice-error) {
+  border-color: #efbdc8;
+  background: var(--ui-red-soft);
+  color: var(--ui-red);
+}
+
+:is(.message.warning, .notice-warning) {
+  border-color: #ecd89c;
+  background: var(--ui-yellow-soft);
+  color: var(--ui-yellow);
+}
+
+:is(.message.info, .notice-info) {
+  border-color: #c8d8ec;
+  background: var(--ui-blue-soft);
+  color: #254b82;
+}
+
+:is(
+  .pill,
+  .status,
+  .validation-badge,
+  .enforcement-badge,
+  .tech-chip,
+  .metric-category,
+  .management-status-pill
+) {
+  min-width: 0;
+  padding: 3px 7px;
+  border-radius: 999px;
+  font-size: 0.76rem;
+  font-weight: 650;
+  letter-spacing: 0;
+  line-height: 1.25;
+}
+
+:is(.pill.good, .validation-badge.accepted, .status-succeeded, .status.complete) {
+  color: var(--ui-green);
+  background: var(--ui-green-soft);
+}
+
+:is(.pill.bad, .validation-badge.rejected, .status-failed) {
+  color: var(--ui-red);
+  background: var(--ui-red-soft);
+}
+
+:is(.pill.warning, .validation-badge.needs_review, .status-partial) {
+  color: var(--ui-yellow);
+  background: var(--ui-yellow-soft);
+}
+
+:is(.pill.muted, .validation-badge.open, .status-disabled) {
+  color: #616a76;
+  background: #edf0f4;
+}
+
+/* Shared modal presentation. Positioning, stacking, scrolling, and HTMX
+   lifecycle remain owned by modal.css and feature stylesheets. */
+.modal-backdrop {
+  background: rgba(15, 29, 48, 0.58);
+  backdrop-filter: blur(2px);
+}
+
+.modal-panel {
+  border-color: #b9cde5;
+  border-radius: 13px;
+  background: #fff;
+  color: var(--ui-ink);
+  box-shadow: 0 24px 68px rgba(16, 36, 62, 0.28);
+}
+
+.modal-header {
+  gap: 16px;
+  padding: 18px 20px 14px;
+  border-color: #dbe5f0;
+  background: #fbfdff;
+}
+
+.modal-header h2 {
+  margin: 0;
+  color: var(--ui-heading);
+  font-size: 1.08rem;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+}
+
+.modal-header p {
+  color: var(--ui-muted);
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
+.modal-close-button {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #54677e;
+  box-shadow: none;
+  font-size: 1.2rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.modal-close-button:hover {
+  border-color: #c9d8e8;
+  background: #f2f7fd;
+  color: #2f609e;
+}
+
+.modal-body {
+  padding: 16px 20px 20px;
+  background: #fff;
+  color: var(--ui-ink);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+/* Auth and error surfaces */
+.auth-panel {
+  padding: 28px;
+}
+
+.auth-logo-mark,
+.brand-mark {
+  border-color: #c8d8ec;
+  border-radius: 8px;
+  color: var(--ui-blue-dark);
+  background: var(--ui-blue-soft);
+  font-weight: 750;
+}
+
+.auth-kicker {
+  color: var(--ui-blue);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+.auth-panel h1 {
+  font-size: 1.72rem;
+  font-weight: 660;
+  letter-spacing: -0.03em;
+}
+
+/* Pagination */
+:is(.table-pagination__link, .pagination-link, .pagination-button) {
+  border-color: var(--ui-line-strong);
+  border-radius: var(--ui-radius-button);
+  background: #fff;
+  color: var(--ui-ink);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+:is(.table-pagination__link, .pagination-link, .pagination-button):hover {
+  background: #f1f4f8;
+}
+
+:is(.table-pagination__link, .pagination-link, .pagination-button).active,
+:is(.table-pagination__link, .pagination-link, .pagination-button)[aria-current="page"] {
+  border-color: var(--ui-blue);
+  background: var(--ui-blue);
+  color: #fff;
+}
+
+@media (max-width: 760px) {
+  :is(.content-card, .dashboard-card, .status-card, .dashboard-panel-card, .management-metric-plan-card) {
+    padding: 14px;
+  }
+
+  .modal-header {
+    padding: 16px;
+  }
+
+  .modal-body {
+    padding: 14px 16px 16px;
+  }
+}

@@ -132,9 +132,9 @@
   </div>
 <% } %>
 
-<form class="app-form tech-unit-form" method="post" action="<%= formAction %>" data-tech-unit-form <%- htmxAttrs %>>
-  <input type="hidden" name="ramGb" value="<%= memoryTotalGb() || formData.ramGb || '' %>" data-memory-total-input />
-  <input type="hidden" name="storageGb" value="<%= storageTotalGb() || formData.storageGb || '' %>" data-storage-total-input />
+<form class="app-form tech-unit-form" method="post" action="<%= formAction %>" data-tech-unit-form data-unit-form-mode="<%= mode %>" data-lot-unit-form-profile-url="/tech/units/lot-form-profile" <%- htmxAttrs %>>
+  <input type="hidden" name="ramGb" data-unit-form-companion-key="memory_modules" value="<%= memoryTotalGb() || formData.ramGb || '' %>" data-memory-total-input />
+  <input type="hidden" name="storageGb" data-unit-form-companion-key="storage_devices" value="<%= storageTotalGb() || formData.storageGb || '' %>" data-storage-total-input />
   <input type="hidden" name="currentUnitStatusConfigValueId" value="<%= formData.currentUnitStatusConfigValueId || formOptions.defaultUnitStatusId || '' %>" />
   <% if (!isEditMode) { %>
     <input type="hidden" name="duplicateAssumptionNonce" value="<%= formData.duplicateAssumptionNonce || '' %>" data-duplicate-assumption-nonce />
@@ -210,6 +210,10 @@
         </small>
       </label>
 
+      <p class="field-hint tech-lot-form-profile-status" data-lot-unit-form-profile-status data-status="idle" aria-live="polite">
+        Select an assignable Lot to apply its field visibility and requirement settings.
+      </p>
+
       <% if (!isEditMode) { %>
         <p
           class="tech-lot-assumption-status"
@@ -226,7 +230,7 @@
     </div>
   </div>
 
-  <div class="form-section tech-form-section--identity">
+  <div class="form-section tech-form-section--identity"<% if (!isEditMode) { %> data-unit-form-auto-collapse<% } %>>
     <div class="form-section-header">
       <div>
         <p class="eyebrow">Identity</p>
@@ -247,7 +251,7 @@
         </div>
       <% } %>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="unit_serial_number">
         <span>Unit Serial Number</span>
         <input
           type="text"
@@ -264,7 +268,7 @@
         </small>
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="bios_serial_number">
         <span>BIOS Serial Number</span>
         <input
           type="text"
@@ -308,7 +312,7 @@
     </div>
 
     <div class="form-grid">
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="manufacturer">
         <span>Manufacturer</span>
         <select name="manufacturerId" data-manufacturer-select>
           <option value="">Select manufacturer</option>
@@ -323,7 +327,7 @@
         </small>
       </label>
 
-      <label class="form-field tech-unit-model-field">
+      <label class="form-field tech-unit-model-field" data-unit-form-field-key="unit_model">
         <span>Unit Model</span>
         <div class="tech-unit-model-combobox" data-unit-model-combobox>
           <input
@@ -375,7 +379,7 @@
     </div>
 
     <% if (canRequestCatalogException) { %>
-      <div class="tech-catalog-request-action">
+      <div class="tech-catalog-request-action" data-unit-form-follows-key="unit_model">
         <button type="button" class="secondary-button" data-catalog-request-button="model" disabled aria-disabled="true">Request Missing Model</button>
         <small class="field-hint" data-catalog-request-model-hint>Select Manufacturer and Unit Category, then type the exact model name that is missing from the managed catalog.</small>
       </div>
@@ -439,7 +443,7 @@
   </div>
 <% } %>
 
-  <div class="form-section tech-form-section--processor">
+  <div class="form-section tech-form-section--processor" data-unit-form-auto-collapse>
     <div class="form-section-header">
       <div>
         <p class="eyebrow">CPU</p>
@@ -452,7 +456,7 @@
     </div>
 
     <div class="form-grid">
-      <label class="form-field">
+      <label class="form-field" data-unit-form-follows-key="processor_model">
         <span>Processor Type</span>
         <select data-processor-brand-select disabled>
           <option value="">Select Unit Model first</option>
@@ -465,7 +469,7 @@
         </small>
       </label>
 
-      <label class="form-field tech-unit-processor-field">
+      <label class="form-field tech-unit-processor-field" data-unit-form-field-key="processor_model">
         <span>Processor</span>
         <div class="tech-unit-processor-combobox" data-processor-combobox>
           <input
@@ -500,7 +504,7 @@
         </small>
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="processor_speed_ghz">
         <span>Processor Speed GHz</span>
         <input
           type="number"
@@ -518,14 +522,14 @@
     </div>
 
     <% if (canRequestCatalogException) { %>
-      <div class="tech-catalog-request-action">
+      <div class="tech-catalog-request-action" data-unit-form-follows-key="processor_model">
         <button type="button" class="secondary-button" data-catalog-request-button="processor" disabled aria-disabled="true">Request Processor Addition</button>
         <small class="field-hint" data-catalog-request-processor-hint>Select a Unit Model first. Use this only when the observed Processor Type or Processor is unavailable for that model.</small>
       </div>
     <% } %>
   </div>
 
-  <div class="form-section tech-form-section--memory">
+  <div class="form-section tech-form-section--memory" data-unit-form-field-key="memory_modules" data-unit-form-repeatable-type="memory">
     <div class="form-section-header">
       <div>
         <p class="eyebrow">Memory</p>
@@ -601,7 +605,7 @@
     </div>
   </div>
 
-  <div class="form-section tech-form-section--storage">
+  <div class="form-section tech-form-section--storage" data-unit-form-field-key="storage_devices" data-unit-form-repeatable-type="storage">
     <div class="form-section-header">
       <div>
         <p class="eyebrow">Storage</p>
@@ -677,7 +681,7 @@
     </div>
   </div>
 
-  <div class="form-section tech-form-section--system">
+  <div class="form-section tech-form-section--system" data-unit-form-auto-collapse>
     <div class="form-section-header">
       <div>
         <p class="eyebrow">Expanded Specifications</p>
@@ -689,7 +693,7 @@
     </div>
 
     <div class="form-grid">
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="operating_system">
         <span>Operating System</span>
         <select name="operatingSystemConfigValueId">
           <option value="">Select OS</option>
@@ -704,17 +708,17 @@
         </small>
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="os_build">
         <span>OS Build</span>
         <input type="text" name="osBuild" value="<%= formData.osBuild || '' %>" maxlength="100" placeholder="Example: 23H2 / 22631" />
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="bios_version">
         <span>BIOS Version</span>
         <input type="text" name="biosVersion" value="<%= formData.biosVersion || '' %>" maxlength="100" placeholder="Example: 1.18.0" />
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="absolute_status">
         <span>Absolute Status</span>
         <select name="absoluteStatusConfigValueId">
           <option value="">Select status</option>
@@ -724,7 +728,7 @@
         </select>
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="physical_camera_status">
         <span>Physical Camera</span>
         <select name="physicalCameraStatusConfigValueId">
           <option value="">Select status</option>
@@ -734,7 +738,7 @@
         </select>
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="touchscreen_status">
         <span>Touchscreen</span>
         <select name="touchscreenStatusConfigValueId">
           <option value="">Select status</option>
@@ -744,7 +748,7 @@
         </select>
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="keyboard_language">
         <span>Keyboard Language</span>
         <select name="keyboardLanguageConfigValueId">
           <option value="">Select language</option>
@@ -754,7 +758,7 @@
         </select>
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="complete_diagnostics">
         <span>Complete Diagnostics</span>
         <select name="completeDiagnosticsStatusConfigValueId">
           <option value="">Select status</option>
@@ -764,7 +768,7 @@
         </select>
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="virus_check">
         <span>Virus Check</span>
         <select name="virusCheckStatusConfigValueId">
           <option value="">Select status</option>
@@ -774,7 +778,7 @@
         </select>
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="driver_check">
         <span>Driver Check</span>
         <select name="driverCheckStatusConfigValueId">
           <option value="">Select status</option>
@@ -784,7 +788,7 @@
         </select>
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="skinned_status">
         <span>Skinned</span>
         <select name="skinnedStatusConfigValueId">
           <option value="">Select status</option>
@@ -796,7 +800,7 @@
     </div>
   </div>
 
-  <div class="form-section tech-form-section--cosmetic-issues">
+  <div class="form-section tech-form-section--cosmetic-issues" data-unit-form-field-key="cosmetic_issues" data-unit-form-repeatable-type="cosmeticIssue">
     <div class="form-section-header">
       <div>
         <p class="eyebrow">Cosmetic Issues</p>
@@ -872,7 +876,7 @@
     </div>
   </div>
 
-  <div class="form-section tech-form-section--hardware-issues">
+  <div class="form-section tech-form-section--hardware-issues" data-unit-form-field-key="hardware_issues" data-unit-form-repeatable-type="hardwareIssue">
     <div class="form-section-header">
       <div>
         <p class="eyebrow">Hardware Issues</p>
@@ -945,7 +949,7 @@
     </div>
   </div>
 
-  <div class="form-section form-section--grade-outcome tech-form-section--outcome">
+  <div class="form-section form-section--grade-outcome tech-form-section--outcome" data-unit-form-auto-collapse>
     <div class="form-section-header">
       <div>
         <p class="eyebrow">Grade & Outcome</p>
@@ -969,7 +973,7 @@
     <% } %>
 
     <div class="form-grid tech-grade-outcome-grid">
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="overall_grade">
         <span>Cosmetic Grade</span>
         <select name="overallGradeConfigValueId">
           <option value="">Select cosmetic grade</option>
@@ -980,7 +984,7 @@
         <small class="field-hint">A-D grade is cosmetic only and does not determine pass/fail by itself.</small>
       </label>
 
-      <fieldset class="form-field tech-outcome-field">
+      <fieldset class="form-field tech-outcome-field" data-unit-form-field-key="unit_outcome">
         <legend>Unit Outcome</legend>
         <div class="tech-outcome-options" role="radiogroup" aria-label="Unit outcome">
           <% outcomeOptions.forEach((outcomeOption) => { %>
@@ -993,18 +997,18 @@
         <small class="field-hint">Pass/Fail is based on the working condition of the unit, including hardware issues and cosmetic grade.</small>
       </fieldset>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="overall_grade_notes">
         <span>Cosmetic Grade Notes</span>
         <input type="text" name="overallGradeNotes" value="<%= formData.overallGradeNotes || '' %>" maxlength="500" placeholder="Optional cosmetic grade note" />
       </label>
 
-      <label class="form-field">
+      <label class="form-field" data-unit-form-field-key="outcome_notes">
         <span>Outcome Notes</span>
         <input type="text" name="outcomeNotes" value="<%= formData.outcomeNotes || '' %>" maxlength="500" placeholder="Optional Pass/Fail note" />
       </label>
     </div>
 
-    <div class="tech-outcome-approval-box">
+    <div class="tech-outcome-approval-box" data-unit-form-follows-key="unit_outcome">
       <label class="tech-outcome-approval-check">
         <input type="checkbox" name="outcomeApprovalRequested" value="1" <%= outcomeApprovalRequested ? 'checked' : '' %> />
         <span>Request Management/Lead approval for this Pass/Fail decision</span>
@@ -1017,7 +1021,7 @@
     </div>
   </div>
 
-  <div class="form-section tech-form-section--comments">
+  <div class="form-section tech-form-section--comments" data-unit-form-auto-collapse>
     <div class="form-section-header">
       <div>
         <p class="eyebrow">Comments</p>
@@ -1028,10 +1032,10 @@
       </p>
     </div>
 
-    <input type="hidden" name="generalCommentTypeConfigValueId" value="<%= generalCommentTypeConfigValueId %>" />
+    <input type="hidden" name="generalCommentTypeConfigValueId" data-unit-form-companion-key="general_comment" value="<%= generalCommentTypeConfigValueId %>" />
 
     <div class="form-grid">
-      <label class="form-field form-field-wide">
+      <label class="form-field form-field-wide" data-unit-form-field-key="general_comment">
         <span>General Comment</span>
         <textarea name="generalCommentText" rows="4" maxlength="2000" placeholder="Add a new general comment. Leave blank if no new comment is needed."><%= formData.generalCommentText || '' %></textarea>
         <small class="field-hint">Hardware and cosmetic issue comments should be entered in their matching issue rows above.</small>

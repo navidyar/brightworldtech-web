@@ -6,6 +6,8 @@ const unitExpandedDetailModel = require('../models/unitExpandedDetailModel');
 const unitIssueEntryModel = require('../models/unitIssueEntryModel');
 const unitExpandedFormModel = require('../models/unitExpandedFormModel');
 const unitOutcomeModel = require('../models/unitOutcomeModel');
+const lotUnitFormProfileModel = require('../models/lotUnitFormProfileModel');
+const { buildUnitFormProfilePresentation } = require('../services/unitFormProfilePresentation');
 
 const VALID_MEMORY_INSTALL_TYPE_CODES = new Set([
   'removable_module',
@@ -1482,6 +1484,56 @@ async function renderTechUnitsTable(req, res, next) {
   }
 }
 
+
+async function renderTechUnitDetailPage(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isSafeInteger(unitId) || unitId <= 0) {
+      return res.status(404).render('pages/not-found', {
+        pageTitle: 'Unit Not Found',
+        requestedPath: req.originalUrl
+      });
+    }
+
+    const unitRecord = await techUnitModel.getUnitById(unitId);
+
+    if (!unitRecord) {
+      return res.status(404).render('pages/not-found', {
+        pageTitle: 'Unit Not Found',
+        requestedPath: req.originalUrl
+      });
+    }
+
+    const filters = {
+      unitId: String(unitId),
+      unitState: Number(unitRecord.is_parked || 0) === 1 ? 'parked' : 'active',
+      page: '1',
+      perPage: '10',
+      currentUserId: req.currentUser.user_id,
+      restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req),
+      canViewParkedUnits: canViewParkedUnits(req)
+    };
+    const result = await buildTechUnitsResult(filters);
+
+    if (!result.supported || !Array.isArray(result.units) || result.units.length !== 1) {
+      return res.status(404).render('pages/not-found', {
+        pageTitle: 'Unit Not Found',
+        requestedPath: req.originalUrl
+      });
+    }
+
+    return res.render('pages/tech-unit-detail', {
+      pageTitle: result.units[0].assetTag || `Unit ${unitId}`,
+      currentNav: 'tech-units',
+      result,
+      filters
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function renderTechUnitHistoryPanel(req, res, next) {
   try {
     const unitId = Number(req.params.unitId);
@@ -1939,6 +1991,40 @@ async function permanentlyDeleteTechUnit(req, res, next) {
         errorMessages: ['The unit could not be permanently deleted. No records were removed.']
       })
     );
+  }
+}
+
+async function renderLotUnitFormProfile(req, res, next) {
+  try {
+    const lotId = Number(req.query.lotId);
+
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return res.status(400).render('fragments/tech-unit-form-profile', {
+        profile: null,
+        errorMessage: 'Choose a valid Lot before loading its Unit form settings.'
+      });
+    }
+
+    const resolvedProfile = await lotUnitFormProfileModel.getEffectiveUnitFormProfileForLot(lotId);
+    const profile = buildUnitFormProfilePresentation(resolvedProfile);
+
+    return res.render('fragments/tech-unit-form-profile', {
+      profile,
+      errorMessage: ''
+    });
+  } catch (error) {
+    if (error instanceof lotUnitFormProfileModel.LotUnitFormProfileDataError) {
+      const statusCode = error.code === 'LOT_NOT_FOUND' ? 404 : 409;
+
+      return res.status(statusCode).render('fragments/tech-unit-form-profile', {
+        profile: null,
+        errorMessage: error.message
+      });
+    }
+
+    return next(error);
   }
 }
 
@@ -2494,6 +2580,7 @@ async function approveOutcomeRequest(req, res, next) {
 module.exports = {
   renderTechUnitsPage,
   renderTechUnitsTable,
+  renderTechUnitDetailPage,
   renderTechUnitHistoryPanel,
   renderMyUnitWeightPanel,
   renderCompleteTechUnitWorkModal,
@@ -2505,6 +2592,7 @@ module.exports = {
   renderPermanentDeleteTechUnitModal,
   permanentlyDeleteTechUnit,
   renderNewTechUnitPage,
+  renderLotUnitFormProfile,
   renderEarlySerialDuplicateCheck,
   renderDuplicateAssumeExistingUnitModal,
   assumeExistingTechUnitFromDuplicateMatch,

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: [
+      '/css/modal.css',
+      '/css/tech-units-clean.css?v=20260723-stage5d-unit-view'
+    ]
+  }) %>
+  <script defer src="/js/modal.js"></script>
+  <script defer src="/js/tech-units.js"></script>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell tech-units-clean-page tech-unit-detail-page">
+          <section class="tech-units-clean-page-heading">
+            <div>
+              <h1>Unit Details</h1>
+              <p>Complete Unit record</p>
+            </div>
+
+            <a class="secondary-button" href="/tech/units">Back to Tech Units</a>
+          </section>
+
+          <%- include('../fragments/tech-units-table', {
+            result,
+            filters,
+            singleUnitView: true
+          }) %>
+        </main>
+
+        <div id="modal-root"></div>
+      </div>
+    </div>
+  </body>
+</html>

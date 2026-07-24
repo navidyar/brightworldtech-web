@@ -235,7 +235,7 @@ router.post(
   Tech routes
 
   Route order note:
-  Keep /tech/units/table, /tech/units/new/modal, and /tech/units/new
+  Keep /tech/units/table, /tech/units/lot-form-profile, /tech/units/new/modal, and /tech/units/new
   before parameterized routes like /tech/units/:unitId/edit/modal.
 */
 
@@ -251,6 +251,13 @@ router.get(
   requireAuth,
   requireRole(techRoles),
   techController.renderTechUnitsTable
+);
+
+router.get(
+  '/tech/units/lot-form-profile',
+  requireAuth,
+  requireRole(techRoles),
+  techController.renderLotUnitFormProfile
 );
 
 router.get(
@@ -456,6 +463,13 @@ router.get(
   requireAuth,
   requireRole(techRoles),
   techController.renderEditTechUnitPage
+);
+
+router.get(
+  '/tech/units/:unitId',
+  requireAuth,
+  requireRole(techRoles),
+  techController.renderTechUnitDetailPage
 );
 
 router.post(

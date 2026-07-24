@@ -42,9 +42,34 @@
     });
   }
 
+  function updateOperatorOptions(operatorSelect, allowedOperators) {
+    const allowedSet = new Set(Array.isArray(allowedOperators) ? allowedOperators : []);
+    let firstAllowedValue = '';
+    let selectedIsAllowed = false;
+
+    Array.from(operatorSelect.options).forEach((option) => {
+      const allowed = allowedSet.has(option.value);
+      option.disabled = !allowed;
+      option.hidden = !allowed;
+
+      if (allowed && !firstAllowedValue) {
+        firstAllowedValue = option.value;
+      }
+
+      if (allowed && option.selected) {
+        selectedIsAllowed = true;
+      }
+    });
+
+    if (!selectedIsAllowed && firstAllowedValue) {
+      operatorSelect.value = firstAllowedValue;
+    }
+  }
+
   function updateRequirementValueField({
     optionsByKey,
     requirementSelect,
+    operatorSelect,
     selectWrap,
     selectInput,
     selectHint,
@@ -53,9 +78,11 @@
     fieldHint
   }) {
     const selectedRequirementKey = requirementSelect.value;
-    const optionSet = optionsByKey[selectedRequirementKey];
+    const optionSet = optionsByKey[selectedRequirementKey] || null;
 
-    if (!selectedRequirementKey || !optionSet || optionSet.type !== 'select' || !Array.isArray(optionSet.options) || optionSet.options.length === 0) {
+    updateOperatorOptions(operatorSelect, optionSet?.allowedOperators || []);
+
+    if (!selectedRequirementKey || !optionSet) {
       selectWrap.hidden = true;
       selectInput.disabled = true;
       selectInput.required = false;
@@ -65,34 +92,57 @@
       textInput.required = true;
 
       if (fieldHint) {
-        fieldHint.textContent = selectedRequirementKey
-          ? 'No standardized values were found yet, so this requirement uses free text.'
-          : 'Select a field to see whether standardized values are available.';
+        fieldHint.textContent = 'Select a requirement field to load its supported values and rules.';
       }
 
       return;
     }
 
-    const currentTextValue = textInput.value;
+    if (optionSet.type === 'select') {
+      const currentValue = textInput.value || selectInput.value;
+      populateSelect(selectInput, optionSet.options || [], currentValue);
 
-    populateSelect(selectInput, optionSet.options, currentTextValue);
+      selectWrap.hidden = false;
+      selectInput.disabled = false;
+      selectInput.required = true;
 
-    selectWrap.hidden = false;
-    selectInput.disabled = false;
-    selectInput.required = true;
+      textWrap.hidden = true;
+      textInput.disabled = true;
+      textInput.required = false;
 
-    textWrap.hidden = true;
-    textInput.disabled = true;
-    textInput.required = false;
+      if (selectHint) {
+        selectHint.textContent = optionSet.options?.length > 0
+          ? `Values loaded from ${optionSet.source || 'the application catalog'}.`
+          : 'No active values are available for this requirement yet.';
+      }
 
-    if (selectHint) {
-      selectHint.textContent = optionSet.source === 'fallback'
-        ? 'Fallback values are being used until config values are added.'
-        : `Values loaded from config category: ${optionSet.source}.`;
+      if (fieldHint) {
+        fieldHint.textContent = 'Choose one standardized value. Only supported rules are shown.';
+      }
+
+      return;
+    }
+
+    selectWrap.hidden = true;
+    selectInput.disabled = true;
+    selectInput.required = false;
+
+    textWrap.hidden = false;
+    textInput.disabled = false;
+    textInput.required = true;
+    textInput.type = 'number';
+    textInput.min = '0.01';
+    textInput.step = '0.01';
+    textInput.placeholder = selectedRequirementKey === 'ram_gb'
+      ? 'Example: 16'
+      : 'Example: 512';
+
+    if (/^[a-z_]+:\d+$/.test(textInput.value)) {
+      textInput.value = '';
     }
 
     if (fieldHint) {
-      fieldHint.textContent = 'Standardized values are available for this requirement.';
+      fieldHint.textContent = 'Enter a total size in GB. Minimum and maximum comparisons are available.';
     }
   }
 
@@ -103,6 +153,7 @@
 
     const optionsByKey = parseOptions(form);
     const requirementSelect = form.querySelector('[data-requirement-key]');
+    const operatorSelect = form.querySelector('[data-requirement-operator]');
     const selectWrap = form.querySelector('[data-required-value-select-wrap]');
     const selectInput = form.querySelector('[data-required-value-select]');
     const selectHint = form.querySelector('[data-required-value-select-hint]');
@@ -110,13 +161,14 @@
     const textInput = form.querySelector('[data-required-value-text]');
     const fieldHint = form.querySelector('[data-requirement-field-hint]');
 
-    if (!requirementSelect || !selectWrap || !selectInput || !textWrap || !textInput) {
+    if (!requirementSelect || !operatorSelect || !selectWrap || !selectInput || !textWrap || !textInput) {
       return;
     }
 
     const update = () => updateRequirementValueField({
       optionsByKey,
       requirementSelect,
+      operatorSelect,
       selectWrap,
       selectInput,
       selectHint,

@@ -1,0 +1,31 @@
+/*
+ * BWTDallas feature-safety layer.
+ *
+ * Only cross-feature behavior that must survive visual restyling belongs here.
+ * Page-specific mechanics continue to live in their existing feature files
+ * until each migration test gate is approved.
+ */
+
+/* HTML hidden state must beat older layout selectors such as display:grid. */
+[hidden] {
+  display: none !important;
+}
+
+/* Protected Lots hierarchy behavior. Do not add visual rules for the caret,
+   indentation, row hit areas, or navigation here. Those remain in lots.css. */
+.management-lots-table tr.lot-tree-row-hidden {
+  display: none !important;
+}
+
+/* Protected Lot-controlled Unit-form behavior. Hidden fields and automatically
+   empty sections must remain collapsed even when older form CSS sets display. */
+.tech-unit-form [data-unit-form-field-key][hidden],
+.tech-unit-form [data-unit-form-follows-key][hidden],
+.tech-unit-form [data-unit-form-auto-collapse][hidden] {
+  display: none !important;
+}
+
+/* An empty HTMX modal mount must not intercept pointer or keyboard input. */
+#modal-root:empty {
+  display: none !important;
+}

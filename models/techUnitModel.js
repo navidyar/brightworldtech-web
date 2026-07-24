@@ -1741,11 +1741,17 @@ async function listTechUnits(filters = {}) {
   const gradeFilter = String(filters.gradeFilter || '').trim();
   const sort = normalizeUnitSort(filters.sort);
   const currentUserId = normalizePositiveFilterId(filters.currentUserId);
+  const requestedUnitId = normalizePositiveFilterId(filters.unitId);
   const restrictToCurrentAssignment = filters.restrictToCurrentAssignment === true && Boolean(currentUserId) && searchTerms.length === 0;
   const isParkedUnitState = unitState === 'parked';
   const ownershipUserSql = getUnitOwnerUserSql(state, 'u');
 
   where.push(`${getUnitParkedSql(state, 'u')} = ${isParkedUnitState ? '1' : '0'}`);
+
+  if (requestedUnitId) {
+    where.push('u.unit_id = ?');
+    params.push(requestedUnitId);
+  }
 
   if (!isParkedUnitState && filters.lotId) {
     const lotId = Number(filters.lotId);

@@ -1,0 +1,217 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeUnit = unit || null;
+  const safeLot = lot || null;
+  const safeRequirementCount = Number(requirementCount || 0);
+  const issueCount = safeUnit
+    ? Number((safeUnit.failedChecks || []).length) + Number((safeUnit.reviewChecks || []).length)
+    : 0;
+  const technicalStatus = safeUnit
+    ? String(safeUnit.technicalStatus || safeUnit.status || '')
+    : '';
+  const technicalStatusLabel = safeUnit
+    ? String(safeUnit.technicalStatusLabel || safeUnit.statusLabel || '')
+    : '';
+  const activeOverride = safeUnit && safeUnit.validationOverride
+    ? safeUnit.validationOverride
+    : null;
+  const canAcceptException = safeUnit
+    && ['rejected', 'needs_review'].includes(technicalStatus)
+    && !safeUnit.isManagementAccepted;
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal lot-modal lot-unit-validation-modal" role="dialog" aria-modal="true" aria-labelledby="lot-unit-validation-modal-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="lot-unit-validation-modal-title">Unit Requirement Details</h2>
+        <% if (safeLot && safeUnit) { %>
+          <p><%= safeLot.lot_name %> · <%= safeUnit.label %></p>
+        <% } %>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeUnit) { %>
+        <div class="lot-unit-validation-modal-summary">
+          <div>
+            <span>Unit</span>
+            <strong>
+              <a href="/tech/units/<%= safeUnit.unitId %>" target="_blank" rel="noopener"><%= safeUnit.label %></a>
+            </strong>
+            <small><%= safeUnit.subLabel %></small>
+          </div>
+
+          <div>
+            <span>Technicians</span>
+            <strong><%= safeUnit.technicianSummary %></strong>
+            <small>
+              <% if ((safeUnit.technicians || []).length === 0) { %>
+                No work-session or completion activity has been recorded.
+              <% } else { %>
+                Based on work-session and completion records.
+              <% } %>
+            </small>
+          </div>
+
+          <div>
+            <span>Validation</span>
+            <strong class="validation-badge <%= safeUnit.status %>"><%= safeUnit.statusLabel %></strong>
+            <small>
+              <% if (safeUnit.isManagementAccepted) { %>
+                Technical result: <%= technicalStatusLabel %> · <%= formatNumber(issueCount) %> issue<%= issueCount === 1 ? '' : 's' %> accepted.
+              <% } else if (issueCount === 0) { %>
+                No requirement issues found.
+              <% } else { %>
+                <%= formatNumber(issueCount) %> issue<%= issueCount === 1 ? '' : 's' %> found.
+              <% } %>
+            </small>
+          </div>
+        </div>
+
+        <% if (activeOverride) { %>
+          <section class="lot-unit-validation-modal-section lot-unit-management-acceptance" aria-label="Management acceptance">
+            <div class="lot-unit-validation-modal-section-heading">
+              <h3>Management Acceptance</h3>
+              <% if (safeUnit.isManagementAccepted) { %>
+                <span class="validation-badge accepted_override">Active</span>
+              <% } else { %>
+                <span class="validation-badge accepted">On file</span>
+              <% } %>
+            </div>
+
+            <dl class="lot-unit-management-acceptance-details">
+              <div>
+                <dt>Approved by</dt>
+                <dd><%= activeOverride.approvedByName %></dd>
+              </div>
+              <div>
+                <dt>Approved</dt>
+                <dd><%= activeOverride.approvedAt ? formatDateTime(activeOverride.approvedAt) : '—' %></dd>
+              </div>
+              <div class="lot-unit-management-acceptance-reason">
+                <dt>Reason</dt>
+                <dd><%= activeOverride.reason %></dd>
+              </div>
+            </dl>
+
+            <form
+              method="post"
+              action="/management/lots/<%= safeLot.lot_id %>/units/<%= safeUnit.unitId %>/validation/overrides/<%= activeOverride.overrideId %>/revoke"
+              hx-post="/management/lots/<%= safeLot.lot_id %>/units/<%= safeUnit.unitId %>/validation/overrides/<%= activeOverride.overrideId %>/revoke"
+              hx-target="#modal-root"
+              hx-swap="innerHTML"
+              class="lot-unit-management-acceptance-revoke-form"
+            >
+              <button type="submit" class="secondary-button danger-button">Revoke Management Acceptance</button>
+            </form>
+          </section>
+        <% } %>
+
+        <% if ((safeUnit.technicians || []).length > 0) { %>
+          <section class="lot-unit-validation-modal-section" aria-label="Technician activity">
+            <h3>Technician Activity</h3>
+            <div class="lot-unit-technician-list">
+              <% safeUnit.technicians.forEach((technician) => { %>
+                <article>
+                  <strong><%= technician.displayName %></strong>
+                  <span>
+                    <% if (technician.completedUnit) { %>
+                      Completed unit
+                    <% } %>
+                    <% if (technician.completedUnit && technician.workSessionCount > 0) { %> · <% } %>
+                    <% if (technician.workSessionCount > 0) { %>
+                      <%= formatNumber(technician.workSessionCount) %> work session<%= technician.workSessionCount === 1 ? '' : 's' %>
+                    <% } %>
+                  </span>
+                </article>
+              <% }) %>
+            </div>
+          </section>
+        <% } %>
+
+        <section class="lot-unit-validation-modal-section" aria-label="Requirement results">
+          <h3>Requirement Results</h3>
+
+          <% if (safeRequirementCount === 0) { %>
+            <div class="message success">
+              <p>No active requirements exist for this Lot.</p>
+            </div>
+          <% } else { %>
+            <div class="table-card lot-unit-validation-modal-table-card">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Requirement</th>
+                    <th>Rule</th>
+                    <th>Required</th>
+                    <th>Actual</th>
+                    <th>Result</th>
+                    <th>Explanation</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <% safeUnit.checks.forEach((check) => { %>
+                    <tr>
+                      <td><%= check.requirementLabel || check.requirementKey %></td>
+                      <td><%= check.operatorLabel || check.operatorCode %></td>
+                      <td><%= check.requiredValue || '—' %></td>
+                      <td>
+                        <%= check.actualValue || '—' %>
+                        <% if (check.sourceLabel && check.sourceLabel !== '—') { %>
+                          <br />
+                          <span class="table-muted-line">Source: <%= check.sourceLabel %></span>
+                        <% } %>
+                      </td>
+                      <td><span class="validation-badge <%= check.status %>"><%= check.statusLabel %></span></td>
+                      <td><%= check.message %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          <% } %>
+        </section>
+
+        <% if (canAcceptException) { %>
+          <section class="lot-unit-validation-modal-section lot-unit-management-acceptance-form-section" aria-label="Accept Unit exception">
+            <h3>Accept Unit Anyway</h3>
+            <p>
+              This acceptance applies only while the Unit remains in this Lot and the Lot requirements remain unchanged.
+              The technical issues above will remain visible.
+            </p>
+
+            <form
+              method="post"
+              action="/management/lots/<%= safeLot.lot_id %>/units/<%= safeUnit.unitId %>/validation/accept"
+              hx-post="/management/lots/<%= safeLot.lot_id %>/units/<%= safeUnit.unitId %>/validation/accept"
+              hx-target="#modal-root"
+              hx-swap="innerHTML"
+              class="app-form lot-unit-management-acceptance-form"
+            >
+              <label>
+                <span>Reason <strong aria-hidden="true">*</strong></span>
+                <textarea name="reason" rows="3" maxlength="500" required></textarea>
+              </label>
+
+              <div class="modal-actions">
+                <button type="submit" class="primary-button">Accept Unit Anyway</button>
+              </div>
+            </form>
+          </section>
+        <% } %>
+      <% } %>
+    </div>
+  </section>
+</div>

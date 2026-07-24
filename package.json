@@ -8,7 +8,14 @@
     "dev": "node server.js",
     "create-admin-link": "node scripts/createAdminSetupLink.js",
     "test": "node --test",
-    "test:coverage": "node --test --experimental-test-coverage"
+    "test:coverage": "node --test --experimental-test-coverage",
+    "validate:shared-css": "node scripts/validateSharedCssFoundation.js",
+    "validate:unit-form-registry": "node scripts/validateUnitFormFieldRegistry.js",
+    "validate:lot-unit-form-profiles": "node scripts/validateLotUnitFormProfiles.js",
+    "validate:unit-form-bindings": "node scripts/validateUnitFormFieldBindings.js",
+    "validate:lot-requirements": "bash scripts/runLotRequirementValidation.sh",
+    "validate:lot-validation": "bash scripts/runLotValidationReaderValidation.sh",
+    "validate:lot-validation-overrides": "bash scripts/runStage5dLotValidationOverrideValidation.sh"
   },
   "dependencies": {
     "argon2": "^0.41.1",

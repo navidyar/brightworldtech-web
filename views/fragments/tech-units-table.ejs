@@ -62,6 +62,7 @@
     return rawValue;
   }
 
+  const isSingleUnitViewPage = typeof singleUnitView !== 'undefined' && Boolean(singleUnitView);
   const currentUserRoles = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
   const canDeleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const canManageUnitLifecycle = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
@@ -187,9 +188,11 @@
   }
 %>
 
-<strong id="tech-units-loaded-count" hx-swap-oob="true"><%= result && result.pagination ? formatNumber(result.pagination.totalRows) : (result && result.units ? formatNumber(result.units.length) : '—') %></strong>
+<% if (!isSingleUnitViewPage) { %>
+  <strong id="tech-units-loaded-count" hx-swap-oob="true"><%= result && result.pagination ? formatNumber(result.pagination.totalRows) : (result && result.units ? formatNumber(result.units.length) : '—') %></strong>
 
-<%- include('../partials/table-pagination', { pagination: result.pagination, filters, basePath: '/tech/units', itemLabel: 'units', pageSizeLabel: 'Units per page', modifierClass: 'table-pagination--top', ariaLabel: 'Top unit pagination' }) %>
+  <%- include('../partials/table-pagination', { pagination: result.pagination, filters, basePath: '/tech/units', itemLabel: 'units', pageSizeLabel: 'Units per page', modifierClass: 'table-pagination--top', ariaLabel: 'Top unit pagination' }) %>
+<% } %>
 
 <div class="table-card tech-table-card">
   <table class="tech-units-table">
@@ -268,10 +271,10 @@
               class="tech-unit-toggle tech-unit-summary-toggle"
               data-unit-detail-toggle
               data-target="tech-unit-detail-<%= unit.unitId %>"
-              aria-expanded="false"
+              aria-expanded="<%= isSingleUnitViewPage ? 'true' : 'false' %>"
               aria-controls="tech-unit-detail-<%= unit.unitId %>"
             >
-              <span class="tech-unit-toggle-icon" aria-hidden="true">▸</span>
+              <span class="tech-unit-toggle-icon" aria-hidden="true"><%= isSingleUnitViewPage ? '▾' : '▸' %></span>
               <span class="tech-unit-summary-spec">
                 <strong><%= unit.specSummary %></strong>
                 <small>
@@ -412,7 +415,7 @@
           </td>
         </tr>
 
-        <tr class="tech-detail-row" id="tech-unit-detail-<%= unit.unitId %>" hidden>
+        <tr class="tech-detail-row" id="tech-unit-detail-<%= unit.unitId %>" <%= isSingleUnitViewPage ? '' : 'hidden' %>>
           <td colspan="6">
             <div class="tech-detail-offset">
               <div class="tech-detail-panel" data-unit-detail-panel>
@@ -993,4 +996,6 @@
   </table>
 </div>
 
-<%- include('../partials/table-pagination', { pagination: result.pagination, filters, basePath: '/tech/units', itemLabel: 'units', pageSizeLabel: 'Units per page', modifierClass: 'table-pagination--bottom', ariaLabel: 'Bottom unit pagination' }) %>
+<% if (!isSingleUnitViewPage) { %>
+  <%- include('../partials/table-pagination', { pagination: result.pagination, filters, basePath: '/tech/units', itemLabel: 'units', pageSizeLabel: 'Units per page', modifierClass: 'table-pagination--bottom', ariaLabel: 'Bottom unit pagination' }) %>
+<% } %>

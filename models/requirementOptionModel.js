@@ -1,181 +1,183 @@
+'use strict';
+
 const { pool } = require('./db');
+const { getLotRequirementField } = require('../config/lotRequirementRegistry');
 
-const REQUIREMENT_OPTION_CATEGORY_MAP = {
-  unit_type: ['unit_types', 'unit_type', 'unit_categories', 'unit_category'],
-  manufacturer: ['manufacturers', 'manufacturer', 'makes', 'make', 'brands', 'brand'],
-  model: ['unit_models', 'unit_model', 'models', 'model'],
-  ram_size: ['ram_sizes', 'ram_size', 'memory_sizes', 'memory_size'],
-  ram_type: ['ram_types', 'ram_type', 'memory_types', 'memory_type'],
-  storage_size: ['storage_sizes', 'storage_size', 'ssd_sizes', 'ssd_size', 'drive_sizes', 'drive_size'],
-  storage_type: ['storage_types', 'storage_type', 'ssd_types', 'ssd_type', 'drive_types', 'drive_type'],
-  processor_brand: ['processor_brands', 'processor_brand', 'cpu_brands', 'cpu_brand'],
-  processor_model: ['processor_models', 'processor_model', 'cpu_models', 'cpu_model', 'processors', 'processor'],
-  touchscreen: ['touchscreen_options', 'touchscreen', 'yes_no_options', 'yes_no', 'boolean_options']
-};
+const CONFIG_CATEGORY_CODES_BY_SOURCE = Object.freeze({
+  unit_type: ['unit_categories', 'unit_category'],
+  ram_type: ['ram_types', 'ram_type'],
+  storage_type: ['storage_types', 'storage_type']
+});
 
-const FALLBACK_OPTIONS = {
-  touchscreen: [
-    {
-      value: 'yes',
-      label: 'Yes',
-      code: 'yes',
-      source: 'fallback'
-    },
-    {
-      value: 'no',
-      label: 'No',
-      code: 'no',
-      source: 'fallback'
-    },
-    {
-      value: 'any',
-      label: 'Any / Either',
-      code: 'any',
-      source: 'fallback'
-    }
-  ]
-};
-
-async function getColumnSet(tableName) {
-  const allowedTables = ['config_categories', 'config_values'];
-
-  if (!allowedTables.includes(tableName)) {
-    throw new Error(`Unsupported table for requirement option inspection: ${tableName}`);
-  }
-
+async function listConfigValueOptions(categoryCodes) {
+  const placeholders = categoryCodes.map(() => '?').join(', ');
+  const orderPlaceholders = categoryCodes.map(() => '?').join(', ');
   const [rows] = await pool.query(
     `
-      SELECT COLUMN_NAME AS columnName
-      FROM information_schema.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ?
-    `,
-    [tableName]
-  );
-
-  return new Set(rows.map((row) => row.columnName));
-}
-
-function hasColumn(columns, columnName) {
-  return columns.has(columnName);
-}
-
-function pickColumn(columns, candidates) {
-  return candidates.find((columnName) => columns.has(columnName)) || null;
-}
-
-async function listValuesForCategoryCodes(categoryCodes) {
-  const categoryColumns = await getColumnSet('config_categories');
-  const valueColumns = await getColumnSet('config_values');
-
-  if (!hasColumn(categoryColumns, 'config_category_id') || !hasColumn(categoryColumns, 'code')) {
-    return {
-      categoryCode: null,
-      options: []
-    };
-  }
-
-  if (!hasColumn(valueColumns, 'config_value_id') || !hasColumn(valueColumns, 'config_category_id') || !hasColumn(valueColumns, 'code')) {
-    return {
-      categoryCode: null,
-      options: []
-    };
-  }
-
-  const valueLabelColumn = pickColumn(valueColumns, ['label', 'name']);
-  const valueDescriptionColumn = pickColumn(valueColumns, ['description']);
-  const valueSortColumn = pickColumn(valueColumns, ['sort_order']);
-  const valueActiveColumn = pickColumn(valueColumns, ['is_active']);
-
-  const categoryPlaceholders = categoryCodes.map(() => '?').join(', ');
-  const categoryOrderPlaceholders = categoryCodes.map(() => '?').join(', ');
-
-  const [categoryRows] = await pool.query(
-    `
       SELECT
-        config_category_id,
-        code
-      FROM config_categories
-      WHERE code IN (${categoryPlaceholders})
-      ORDER BY FIELD(code, ${categoryOrderPlaceholders})
+        cv.config_value_id,
+        cv.code,
+        cv.label,
+        cc.code AS category_code
+      FROM config_values cv
+      JOIN config_categories cc
+        ON cc.config_category_id = cv.config_category_id
+      WHERE cc.code IN (${placeholders})
+        AND cv.is_active = 1
+      ORDER BY
+        FIELD(cc.code, ${orderPlaceholders}),
+        cv.sort_order,
+        cv.label,
+        cv.code
     `,
     [...categoryCodes, ...categoryCodes]
   );
 
-  for (const category of categoryRows) {
-    const activeFilter = valueActiveColumn ? 'AND is_active = 1' : '';
-    const labelExpression = valueLabelColumn ? `\`${valueLabelColumn}\`` : '`code`';
-    const descriptionExpression = valueDescriptionColumn ? `\`${valueDescriptionColumn}\`` : 'NULL';
-    const sortExpression = valueSortColumn ? `\`${valueSortColumn}\`` : '0';
+  return rows.map((row) => ({
+    value: `config_value:${row.config_value_id}`,
+    label: row.label || row.code,
+    code: row.code,
+    source: row.category_code
+  }));
+}
 
-    const [valueRows] = await pool.query(
-      `
-        SELECT
-          config_value_id,
-          code,
-          ${labelExpression} AS label,
-          ${descriptionExpression} AS description,
-          ${sortExpression} AS sort_order
-        FROM config_values
-        WHERE config_category_id = ?
-          ${activeFilter}
-        ORDER BY sort_order, label, code
-      `,
-      [category.config_category_id]
-    );
+async function listManufacturerOptions() {
+  const [rows] = await pool.query(`
+    SELECT manufacturer_id, code, name
+    FROM manufacturers
+    WHERE is_active = 1
+    ORDER BY name, code
+  `);
 
-    if (valueRows.length > 0) {
-      return {
-        categoryCode: category.code,
-        options: valueRows.map((row) => ({
-          value: row.label || row.code,
-          label: row.label || row.code,
-          code: row.code,
-          description: row.description || '',
-          configValueId: row.config_value_id,
-          source: category.code
-        }))
-      };
+  return rows.map((row) => ({
+    value: `manufacturer:${row.manufacturer_id}`,
+    label: row.name || row.code,
+    code: row.code,
+    source: 'manufacturers'
+  }));
+}
+
+async function listUnitModelOptions() {
+  const [rows] = await pool.query(`
+    SELECT
+      um.unit_model_id,
+      um.model_name,
+      um.model_number,
+      m.name AS manufacturer_name,
+      category.label AS category_label
+    FROM unit_models um
+    JOIN manufacturers m
+      ON m.manufacturer_id = um.manufacturer_id
+    JOIN config_values category
+      ON category.config_value_id = um.unit_category_config_value_id
+    WHERE um.is_active = 1
+    ORDER BY m.name, um.sort_order, um.model_name, um.model_number
+  `);
+
+  return rows.map((row) => {
+    const detailParts = [row.manufacturer_name, row.category_label].filter(Boolean);
+    const modelLabel = row.model_number
+      ? `${row.model_name} (${row.model_number})`
+      : row.model_name;
+
+    return {
+      value: `unit_model:${row.unit_model_id}`,
+      label: detailParts.length > 0 ? `${detailParts.join(' · ')} · ${modelLabel}` : modelLabel,
+      code: String(row.unit_model_id),
+      source: 'unit_models'
+    };
+  });
+}
+
+async function listProcessorModelOptions() {
+  const [rows] = await pool.query(`
+    SELECT
+      pm.processor_model_id,
+      pm.processor_family,
+      pm.model_code,
+      pm.base_speed_ghz,
+      pb.name AS brand_name
+    FROM processor_models pm
+    JOIN processor_brands pb
+      ON pb.processor_brand_id = pm.processor_brand_id
+    WHERE pm.is_active = 1
+      AND pb.is_active = 1
+    ORDER BY pb.name, pm.processor_family, pm.model_code, pm.base_speed_ghz
+  `);
+
+  return rows.map((row) => {
+    const labelParts = [row.brand_name, row.processor_family, row.model_code].filter(Boolean);
+
+    if (row.base_speed_ghz !== null && row.base_speed_ghz !== undefined) {
+      labelParts.push(`${Number(row.base_speed_ghz).toFixed(2)} GHz`);
     }
+
+    return {
+      value: `processor_model:${row.processor_model_id}`,
+      label: labelParts.join(' · '),
+      code: row.model_code,
+      source: 'processor_models'
+    };
+  });
+}
+
+async function listOptionsForSource(optionSource) {
+  if (!optionSource) {
+    return [];
   }
 
-  return {
-    categoryCode: null,
-    options: []
-  };
+  if (CONFIG_CATEGORY_CODES_BY_SOURCE[optionSource]) {
+    return listConfigValueOptions(CONFIG_CATEGORY_CODES_BY_SOURCE[optionSource]);
+  }
+
+  if (optionSource === 'manufacturer') {
+    return listManufacturerOptions();
+  }
+
+  if (optionSource === 'model') {
+    return listUnitModelOptions();
+  }
+
+  if (optionSource === 'processor') {
+    return listProcessorModelOptions();
+  }
+
+  return [];
 }
 
 async function getRequirementValueOptionsByKey(requirementKeys) {
   const optionMap = {};
 
   for (const requirementKey of requirementKeys) {
-    const categoryCodes = REQUIREMENT_OPTION_CATEGORY_MAP[requirementKey] || [];
-    const result = await listValuesForCategoryCodes(categoryCodes);
+    const definition = getLotRequirementField(requirementKey);
 
-    if (result.options.length > 0) {
+    if (!definition) {
       optionMap[requirementKey] = {
-        type: 'select',
-        source: result.categoryCode,
-        options: result.options
+        type: 'unsupported',
+        source: null,
+        options: [],
+        allowedOperators: []
       };
-
       continue;
     }
 
-    if (FALLBACK_OPTIONS[requirementKey]) {
-      optionMap[requirementKey] = {
-        type: 'select',
-        source: 'fallback',
-        options: FALLBACK_OPTIONS[requirementKey]
+    if (definition.storageKind === 'number') {
+      optionMap[definition.key] = {
+        type: 'number',
+        source: 'numeric',
+        options: [],
+        allowedOperators: [...definition.allowedOperators]
       };
-
       continue;
     }
 
-    optionMap[requirementKey] = {
-      type: 'text',
-      source: null,
-      options: []
+    const options = await listOptionsForSource(definition.optionSource);
+
+    optionMap[definition.key] = {
+      type: 'select',
+      source: options[0]?.source || definition.optionSource,
+      options,
+      allowedOperators: [...definition.allowedOperators]
     };
   }
 

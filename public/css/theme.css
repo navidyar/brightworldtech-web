@@ -1,3 +1,77 @@
+/* BWTDallas shared Lookup-derived design tokens. */
+:root {
+  --ui-font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --ui-body-size: 0.88rem;
+  --ui-line-height: 1.45;
+
+  --ui-ink: #243043;
+  --ui-heading: #28384c;
+  --ui-muted: #5f6c7c;
+  --ui-muted-soft: #6d7d90;
+  --ui-line: #d8dee8;
+  --ui-line-strong: #b8c4d3;
+  --ui-surface: #ffffff;
+  --ui-surface-soft: #fafbfd;
+  --ui-page: #f5f7fa;
+
+  --ui-blue: #315e9d;
+  --ui-blue-dark: #274d81;
+  --ui-blue-soft: #eaf1fb;
+  --ui-green: #21643b;
+  --ui-green-soft: #e9f5ed;
+  --ui-red: #8c2335;
+  --ui-red-soft: #fbecef;
+  --ui-yellow: #7c5900;
+  --ui-yellow-soft: #fff4d6;
+
+  --ui-control-border: #c9d6e4;
+  --ui-field-ink: #26384e;
+  --ui-focus-ring: rgba(49, 94, 157, 0.2);
+  --ui-radius-button: 6px;
+  --ui-radius-control: 7px;
+  --ui-radius-panel: 10px;
+  --ui-shadow: 0 8px 24px rgba(29, 44, 69, 0.08);
+  --ui-shadow-compact: 0 4px 14px rgba(29, 44, 69, 0.06);
+
+  /* Compatibility aliases used by the existing application stylesheets. */
+  --page-bg: var(--ui-page);
+  --surface: var(--ui-surface);
+  --surface-soft: var(--ui-surface-soft);
+  --text: var(--ui-ink);
+  --muted: var(--ui-muted);
+  --muted-2: #94a3b8;
+  --line: var(--ui-line);
+  --line-soft: #e8edf4;
+  --row-hover: #f5f8fc;
+  --blue: var(--ui-blue);
+  --blue-dark: var(--ui-blue-dark);
+  --blue-soft: var(--ui-blue-soft);
+  --green: var(--ui-green);
+  --green-bg: var(--ui-green-soft);
+  --yellow: var(--ui-yellow);
+  --yellow-bg: var(--ui-yellow-soft);
+  --red: var(--ui-red);
+  --red-bg: var(--ui-red-soft);
+  --shadow: var(--ui-shadow);
+  --radius: var(--ui-radius-panel);
+  --radius-sm: var(--ui-radius-control);
+
+  --form-field-value-ink: var(--ui-field-ink);
+  --form-field-value-font-family: var(--ui-font-family);
+  --form-field-value-font-size: 0.9rem;
+  --form-field-value-font-weight: 600;
+  --form-field-value-line-height: 1.25;
+  --form-field-focus-border: var(--ui-blue);
+  --form-field-focus-ring: var(--ui-focus-ring);
+
+  --site-action-blue: var(--ui-blue);
+  --site-action-blue-hover: var(--ui-blue-dark);
+  --site-action-border: var(--ui-line-strong);
+  --site-action-secondary-ink: #314d70;
+  --site-action-danger-border: #d9a8b2;
+  --site-action-danger-ink: var(--ui-red);
+}
+
 :root {
   --theme-toggle-bg: #ffffff;
   --theme-toggle-text: #1e3a8a;
@@ -50,31 +124,31 @@
 html[data-theme="hybrid"] {
   color-scheme: light;
 
-  --page-bg: #eef1f5;
-  --surface: #ffffff;
-  --surface-soft: #f8fafc;
-  --text: #172033;
-  --muted: #64748b;
+  --page-bg: var(--ui-page);
+  --surface: var(--ui-surface);
+  --surface-soft: var(--ui-surface-soft);
+  --text: var(--ui-ink);
+  --muted: var(--ui-muted);
   --muted-2: #94a3b8;
-  --line: #d8dee8;
+  --line: var(--ui-line);
   --line-soft: #e8edf4;
   --row-hover: #f5f8fc;
 
-  --blue: #315f9c;
-  --blue-dark: #1f3f70;
-  --blue-soft: #eef3f9;
+  --blue: var(--ui-blue);
+  --blue-dark: var(--ui-blue-dark);
+  --blue-soft: var(--ui-blue-soft);
 
-  --green: #15803d;
-  --green-bg: #f4fbf6;
+  --green: var(--ui-green);
+  --green-bg: var(--ui-green-soft);
 
-  --yellow: #b45309;
-  --yellow-bg: #fffaf0;
+  --yellow: var(--ui-yellow);
+  --yellow-bg: var(--ui-yellow-soft);
 
   --orange: #c2410c;
   --orange-bg: #fff8f2;
 
-  --red: #b91c1c;
-  --red-bg: #fff7f7;
+  --red: var(--ui-red);
+  --red-bg: var(--ui-red-soft);
 
   --purple: #7c3aed;
   --purple-bg: #faf7ff;

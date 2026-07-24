@@ -1,8 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle }) %>
-  <link rel="stylesheet" href="/css/tech.css" />
-  <link rel="stylesheet" href="/css/unit-requests.css" />
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: [
+      '/css/tech.css',
+      '/css/unit-requests.css'
+    ]
+  }) %>
   <script defer src="/js/unit-requests.js"></script>
 
   <%

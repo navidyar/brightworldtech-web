@@ -1,13 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle }) %>
-  <link rel="stylesheet" href="/css/lots.css" />
-  <link rel="stylesheet" href="/css/modal.css" />
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: [
+      '/css/lots.css',
+      '/css/modal.css'
+    ]
+  }) %>
   <script defer src="/js/modal.js"></script>
   <script defer src="/js/lot-form.js"></script>
   <script defer src="/js/lot-browser-tree.js"></script>
 
-  <body>
+  <body class="lots-lookup-typography-preview lots-lookup-ui-preview">
     <%
       const lotsById = new Map();
       const childLotsByParentId = new Map();

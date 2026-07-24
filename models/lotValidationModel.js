@@ -1,581 +1,285 @@
+'use strict';
+
 const { pool } = require('./db');
 const lotModel = require('./lotModel');
+const lotValidationOverrideModel = require('./lotValidationOverrideModel');
+const {
+  buildUnitSnapshots,
+  evaluateUnitSnapshot
+} = require('../services/lotRequirementEvaluator');
+const {
+  applyManagementAcceptance,
+  buildRequirementSignature
+} = require('../services/lotValidationOverridePolicy');
 
 const UNIT_LIMIT = 250;
 
-const UNIT_FIELD_MAPPINGS = {
-  unit_type: [
-    'unit_type_config_value_id',
-    'unit_type',
-    'type_config_value_id',
-    'type',
-    'category_config_value_id',
-    'category'
-  ],
-  manufacturer: [
-    'manufacturer_config_value_id',
-    'manufacturer',
-    'make_config_value_id',
-    'make',
-    'brand_config_value_id',
-    'brand'
-  ],
-  model: [
-    'unit_model_config_value_id',
-    'model_config_value_id',
-    'unit_model',
-    'model',
-    'model_name'
-  ],
-  ram_size: [
-    'ram_size_config_value_id',
-    'ram_config_value_id',
-    'ram_size',
-    'ram_gb',
-    'memory_gb',
-    'memory_size'
-  ],
-  ram_type: [
-    'ram_type_config_value_id',
-    'ram_type',
-    'memory_type'
-  ],
-  storage_size: [
-    'storage_size_config_value_id',
-    'ssd_size_config_value_id',
-    'storage_size',
-    'ssd_size',
-    'storage_gb',
-    'ssd_gb',
-    'drive_size'
-  ],
-  storage_type: [
-    'storage_type_config_value_id',
-    'ssd_type_config_value_id',
-    'storage_type',
-    'ssd_type',
-    'drive_type'
-  ],
-  processor_brand: [
-    'processor_brand_config_value_id',
-    'processor_brand',
-    'cpu_brand_config_value_id',
-    'cpu_brand'
-  ],
-  processor_model: [
-    'processor_model_config_value_id',
-    'processor_model',
-    'cpu_model_config_value_id',
-    'cpu_model',
-    'processor',
-    'cpu'
-  ],
-  touchscreen: [
-    'touchscreen_config_value_id',
-    'touchscreen',
-    'is_touchscreen',
-    'has_touchscreen'
-  ]
-};
+function buildPlaceholders(values) {
+  return values.map(() => '?').join(', ');
+}
 
-const UNIT_IDENTIFIER_COLUMNS = [
-  'bwt_asset_tag',
-  'asset_tag',
-  'unit_asset_tag',
-  'serial_number',
-  'unit_serial_number',
-  'bios_serial_number',
-  'name',
-  'unit_name'
-];
-
-async function getColumnSet(tableName) {
-  const allowedTables = ['units', 'config_values'];
-
-  if (!allowedTables.includes(tableName)) {
-    throw new Error(`Unsupported table for validation column inspection: ${tableName}`);
-  }
-
-  const [rows] = await pool.query(
+async function listBaseUnitRowsForLot(lotId, connection = pool) {
+  const [rows] = await connection.query(
     `
-      SELECT COLUMN_NAME AS columnName
-      FROM information_schema.COLUMNS
-      WHERE TABLE_SCHEMA = DATABASE()
-        AND TABLE_NAME = ?
-    `,
-    [tableName]
-  );
-
-  return new Set(rows.map((row) => row.columnName));
-}
-
-function hasColumn(columns, columnName) {
-  return columns.has(columnName);
-}
-
-function pickColumn(columns, candidates) {
-  return candidates.find((columnName) => columns.has(columnName)) || null;
-}
-
-function normalizeText(value) {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ');
-}
-
-function normalizeComparableText(value) {
-  return normalizeText(value)
-    .replace(/[^a-z0-9.]+/g, '');
-}
-
-function parseNumber(value) {
-  const match = String(value ?? '').match(/-?\d+(\.\d+)?/);
-
-  if (!match) {
-    return null;
-  }
-
-  const parsed = Number(match[0]);
-
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeBooleanLike(value) {
-  const normalized = normalizeText(value);
-
-  if (['1', 'true', 'yes', 'y', 'touch', 'touchscreen', 'has touch', 'has touchscreen'].includes(normalized)) {
-    return 'yes';
-  }
-
-  if (['0', 'false', 'no', 'n', 'non-touch', 'non touch', 'notouch', 'no touch', 'no touchscreen'].includes(normalized)) {
-    return 'no';
-  }
-
-  if (['any', 'either', 'n/a', 'na', 'not required'].includes(normalized)) {
-    return 'any';
-  }
-
-  return normalized;
-}
-
-function isConfigValueColumn(columnName) {
-  return columnName.endsWith('_config_value_id') || columnName === 'config_value_id';
-}
-
-async function getConfigValueMap() {
-  const configColumns = await getColumnSet('config_values');
-
-  if (!hasColumn(configColumns, 'config_value_id')) {
-    return new Map();
-  }
-
-  const labelExpression = hasColumn(configColumns, 'label')
-    ? 'label'
-    : hasColumn(configColumns, 'name')
-      ? 'name'
-      : 'code';
-
-  const [rows] = await pool.query(`
-    SELECT
-      config_value_id,
-      code,
-      ${labelExpression} AS label
-    FROM config_values
-  `);
-
-  const configValueMap = new Map();
-
-  rows.forEach((row) => {
-    configValueMap.set(Number(row.config_value_id), {
-      config_value_id: Number(row.config_value_id),
-      code: row.code,
-      label: row.label || row.code
-    });
-  });
-
-  return configValueMap;
-}
-
-function getDisplayValueFromUnit(unit, columnName, configValueMap) {
-  const rawValue = unit[columnName];
-
-  if (rawValue === null || rawValue === undefined || rawValue === '') {
-    return null;
-  }
-
-  if (isConfigValueColumn(columnName)) {
-    const configValue = configValueMap.get(Number(rawValue));
-
-    if (configValue) {
-      return {
-        rawValue,
-        displayValue: configValue.label || configValue.code,
-        comparableValues: [
-          configValue.label,
-          configValue.code,
-          rawValue
-        ].filter(Boolean)
-      };
-    }
-  }
-
-  return {
-    rawValue,
-    displayValue: String(rawValue),
-    comparableValues: [rawValue]
-  };
-}
-
-function getActualRequirementValue(unit, requirementKey, unitColumns, configValueMap) {
-  const candidateColumns = UNIT_FIELD_MAPPINGS[requirementKey] || [];
-
-  for (const columnName of candidateColumns) {
-    if (!hasColumn(unitColumns, columnName)) {
-      continue;
-    }
-
-    const value = getDisplayValueFromUnit(unit, columnName, configValueMap);
-
-    if (value) {
-      return {
-        isSupported: true,
-        sourceColumn: columnName,
-        rawValue: value.rawValue,
-        displayValue: value.displayValue,
-        comparableValues: value.comparableValues
-      };
-    }
-  }
-
-  return {
-    isSupported: false,
-    sourceColumn: null,
-    rawValue: null,
-    displayValue: null,
-    comparableValues: []
-  };
-}
-
-function compareValues({
-  requirementKey,
-  operatorCode,
-  requiredValue,
-  actualValue
-}) {
-  if (!actualValue.isSupported) {
-    return {
-      passed: false,
-      status: 'needs_review',
-      message: 'No matching unit column was found for this requirement.'
-    };
-  }
-
-  const normalizedOperator = normalizeText(operatorCode || 'equals');
-  const requiredText = String(requiredValue ?? '').trim();
-  const actualText = String(actualValue.displayValue ?? '').trim();
-
-  if (!requiredText) {
-    return {
-      passed: false,
-      status: 'needs_review',
-      message: 'Requirement is missing a required value.'
-    };
-  }
-
-  if (!actualText) {
-    return {
-      passed: false,
-      status: 'rejected',
-      message: 'Unit does not have a value for this requirement.'
-    };
-  }
-
-  if (requirementKey === 'touchscreen') {
-    const requiredBoolean = normalizeBooleanLike(requiredText);
-    const actualBoolean = normalizeBooleanLike(actualText);
-
-    if (requiredBoolean === 'any') {
-      return {
-        passed: true,
-        status: 'accepted',
-        message: 'Touchscreen can be either yes or no.'
-      };
-    }
-
-    return {
-      passed: requiredBoolean === actualBoolean,
-      status: requiredBoolean === actualBoolean ? 'accepted' : 'rejected',
-      message: requiredBoolean === actualBoolean
-        ? 'Touchscreen requirement matched.'
-        : `Expected ${requiredText}, found ${actualText}.`
-    };
-  }
-
-  const requiredNumber = parseNumber(requiredText);
-  const actualNumber = parseNumber(actualText);
-  const bothNumeric = requiredNumber !== null && actualNumber !== null;
-
-  if (normalizedOperator === 'minimum' || normalizedOperator === 'min' || normalizedOperator === 'at_least') {
-    if (!bothNumeric) {
-      return {
-        passed: false,
-        status: 'needs_review',
-        message: 'Minimum comparison needs numeric values.'
-      };
-    }
-
-    return {
-      passed: actualNumber >= requiredNumber,
-      status: actualNumber >= requiredNumber ? 'accepted' : 'rejected',
-      message: actualNumber >= requiredNumber
-        ? 'Minimum requirement matched.'
-        : `Expected at least ${requiredText}, found ${actualText}.`
-    };
-  }
-
-  if (normalizedOperator === 'maximum' || normalizedOperator === 'max' || normalizedOperator === 'at_most') {
-    if (!bothNumeric) {
-      return {
-        passed: false,
-        status: 'needs_review',
-        message: 'Maximum comparison needs numeric values.'
-      };
-    }
-
-    return {
-      passed: actualNumber <= requiredNumber,
-      status: actualNumber <= requiredNumber ? 'accepted' : 'rejected',
-      message: actualNumber <= requiredNumber
-        ? 'Maximum requirement matched.'
-        : `Expected at most ${requiredText}, found ${actualText}.`
-    };
-  }
-
-  const normalizedRequired = normalizeText(requiredText);
-  const normalizedActualValues = actualValue.comparableValues.map(normalizeText);
-  const compactRequired = normalizeComparableText(requiredText);
-  const compactActualValues = actualValue.comparableValues.map(normalizeComparableText);
-
-  if (normalizedOperator === 'contains') {
-    const passed = normalizedActualValues.some((value) => value.includes(normalizedRequired)) ||
-      compactActualValues.some((value) => value.includes(compactRequired));
-
-    return {
-      passed,
-      status: passed ? 'accepted' : 'rejected',
-      message: passed
-        ? 'Contains requirement matched.'
-        : `Expected value to contain ${requiredText}, found ${actualText}.`
-    };
-  }
-
-  if (normalizedOperator === 'not_equals' || normalizedOperator === 'not equal' || normalizedOperator === 'not') {
-    const matched = normalizedActualValues.includes(normalizedRequired) ||
-      compactActualValues.includes(compactRequired);
-
-    return {
-      passed: !matched,
-      status: !matched ? 'accepted' : 'rejected',
-      message: !matched
-        ? 'Not-equals requirement matched.'
-        : `Expected value different from ${requiredText}, found ${actualText}.`
-    };
-  }
-
-  if (bothNumeric && ['ram_size', 'storage_size'].includes(requirementKey)) {
-    return {
-      passed: actualNumber === requiredNumber,
-      status: actualNumber === requiredNumber ? 'accepted' : 'rejected',
-      message: actualNumber === requiredNumber
-        ? 'Numeric size requirement matched.'
-        : `Expected ${requiredText}, found ${actualText}.`
-    };
-  }
-
-  const matched = normalizedActualValues.includes(normalizedRequired) ||
-    compactActualValues.includes(compactRequired);
-
-  return {
-    passed: matched,
-    status: matched ? 'accepted' : 'rejected',
-    message: matched
-      ? 'Requirement matched.'
-      : `Expected ${requiredText}, found ${actualText}.`
-  };
-}
-
-async function listUnitsForLot(lotId, unitColumns) {
-  if (!hasColumn(unitColumns, 'lot_id')) {
-    return {
-      supported: false,
-      units: []
-    };
-  }
-
-  const orderColumn = pickColumn(unitColumns, [
-    'created_at',
-    'updated_at',
-    'unit_id',
-    'id'
-  ]);
-
-  const orderSql = orderColumn
-    ? `ORDER BY \`${orderColumn}\` DESC`
-    : '';
-
-  const [units] = await pool.query(
-    `
-      SELECT *
-      FROM units
-      WHERE lot_id = ?
-      ${orderSql}
+      SELECT
+        u.unit_id,
+        u.asset_number,
+        u.lot_id,
+        u.unit_category_config_value_id,
+        unit_category.code AS unit_category_code,
+        COALESCE(unit_category.label, unit_category.code) AS unit_category_label,
+        u.manufacturer_id,
+        manufacturer.name AS manufacturer_name,
+        u.unit_model_id,
+        unit_model.model_name,
+        unit_model.model_number,
+        CONCAT_WS(
+          ' · ',
+          manufacturer.name,
+          unit_model.model_name,
+          NULLIF(unit_model.model_number, '')
+        ) AS model_display_label,
+        u.processor_model_id,
+        processor_brand.name AS processor_brand_name,
+        processor_model.processor_family,
+        processor_model.model_code AS processor_model_code,
+        CONCAT_WS(
+          ' · ',
+          processor_brand.name,
+          NULLIF(processor_model.processor_family, ''),
+          processor_model.model_code
+        ) AS processor_display_label,
+        u.ram_gb,
+        u.ram_type_config_value_id,
+        ram_type.code AS ram_type_code,
+        COALESCE(ram_type.label, ram_type.code) AS ram_type_label,
+        u.storage_gb,
+        u.storage_type_config_value_id,
+        storage_type.code AS storage_type_code,
+        COALESCE(storage_type.label, storage_type.code) AS storage_type_label,
+        u.created_at,
+        u.updated_at,
+        latest_lot_history.unit_lot_history_id AS latest_lot_history_id,
+        latest_lot_history.moved_at AS latest_lot_moved_at
+      FROM units u
+      LEFT JOIN unit_lot_history latest_lot_history
+        ON latest_lot_history.unit_lot_history_id = (
+          SELECT MAX(history_lookup.unit_lot_history_id)
+          FROM unit_lot_history history_lookup
+          WHERE history_lookup.unit_id = u.unit_id
+        )
+      LEFT JOIN config_values unit_category
+        ON unit_category.config_value_id = u.unit_category_config_value_id
+      LEFT JOIN manufacturers manufacturer
+        ON manufacturer.manufacturer_id = u.manufacturer_id
+      LEFT JOIN unit_models unit_model
+        ON unit_model.unit_model_id = u.unit_model_id
+      LEFT JOIN processor_models processor_model
+        ON processor_model.processor_model_id = u.processor_model_id
+      LEFT JOIN processor_brands processor_brand
+        ON processor_brand.processor_brand_id = processor_model.processor_brand_id
+      LEFT JOIN config_values ram_type
+        ON ram_type.config_value_id = u.ram_type_config_value_id
+      LEFT JOIN config_values storage_type
+        ON storage_type.config_value_id = u.storage_type_config_value_id
+      WHERE u.lot_id = ?
+      ORDER BY u.created_at DESC, u.unit_id DESC
       LIMIT ?
     `,
-    [lotId, UNIT_LIMIT]
+    [Number(lotId), UNIT_LIMIT]
   );
 
-  return {
-    supported: true,
-    units
-  };
+  return rows;
 }
 
-function getUnitDisplayName(unit, unitColumns, configValueMap) {
-  const unitIdColumn = pickColumn(unitColumns, ['unit_id', 'id']);
-  const unitId = unitIdColumn ? unit[unitIdColumn] : null;
-
-  for (const columnName of UNIT_IDENTIFIER_COLUMNS) {
-    if (!hasColumn(unitColumns, columnName)) {
-      continue;
-    }
-
-    const value = getDisplayValueFromUnit(unit, columnName, configValueMap);
-
-    if (value && value.displayValue) {
-      return {
-        unitId,
-        label: value.displayValue,
-        subLabel: 'Primary identifier'
-      };
-    }
+async function listIdentifierRowsForUnits(unitIds, connection = pool) {
+  if (unitIds.length === 0) {
+    return [];
   }
 
-  return {
-    unitId,
-    label: 'Unit without primary identifier',
-    subLabel: 'No primary identifier found'
-  };
+  const [rows] = await connection.query(
+    `
+      SELECT
+        ui.unit_id,
+        ui.identifier_value,
+        ui.is_primary,
+        identifier_type.code AS identifier_type_code,
+        COALESCE(identifier_type.label, identifier_type.code) AS identifier_type_label
+      FROM unit_identifiers ui
+      JOIN config_values identifier_type
+        ON identifier_type.config_value_id = ui.identifier_type_config_value_id
+      WHERE ui.unit_id IN (${buildPlaceholders(unitIds)})
+      ORDER BY
+        ui.unit_id,
+        ui.is_primary DESC,
+        identifier_type.sort_order,
+        ui.unit_identifier_id DESC
+    `,
+    unitIds
+  );
+
+  return rows;
 }
 
-function summarizeUnitValidation(checks, requirementCount) {
-  if (requirementCount === 0) {
-    return 'open';
+async function listMemoryRowsForUnits(unitIds, connection = pool) {
+  if (unitIds.length === 0) {
+    return [];
   }
 
-  if (checks.some((check) => check.status === 'rejected')) {
-    return 'rejected';
-  }
+  const [rows] = await connection.query(
+    `
+      SELECT
+        memory.unit_id,
+        memory.size_gb,
+        memory.ram_type_config_value_id,
+        ram_type.code AS ram_type_code,
+        COALESCE(ram_type.label, ram_type.code) AS ram_type_label
+      FROM unit_memory_modules memory
+      LEFT JOIN config_values ram_type
+        ON ram_type.config_value_id = memory.ram_type_config_value_id
+      WHERE memory.unit_id IN (${buildPlaceholders(unitIds)})
+        AND memory.is_current = 1
+      ORDER BY memory.unit_id, memory.slot_label, memory.unit_memory_module_id
+    `,
+    unitIds
+  );
 
-  if (checks.some((check) => check.status === 'needs_review')) {
-    return 'needs_review';
-  }
-
-  return 'accepted';
+  return rows;
 }
 
-function getStatusLabel(status) {
-  if (status === 'accepted') {
-    return 'Accepted';
+async function listStorageRowsForUnits(unitIds, connection = pool) {
+  if (unitIds.length === 0) {
+    return [];
   }
 
-  if (status === 'rejected') {
-    return 'Rejected';
-  }
+  const [rows] = await connection.query(
+    `
+      SELECT
+        storage.unit_id,
+        storage.size_gb,
+        storage.storage_type_config_value_id,
+        storage_type.code AS storage_type_code,
+        COALESCE(storage_type.label, storage_type.code) AS storage_type_label
+      FROM unit_storage_devices storage
+      LEFT JOIN config_values storage_type
+        ON storage_type.config_value_id = storage.storage_type_config_value_id
+      WHERE storage.unit_id IN (${buildPlaceholders(unitIds)})
+        AND storage.is_current = 1
+      ORDER BY storage.unit_id, storage.slot_label, storage.unit_storage_device_id
+    `,
+    unitIds
+  );
 
-  if (status === 'needs_review') {
-    return 'Needs Review';
-  }
-
-  if (status === 'open') {
-    return 'Open';
-  }
-
-  return 'Unknown';
+  return rows;
 }
 
-async function buildLotValidationReport(lotId) {
-  const unitColumns = await getColumnSet('units');
-  const configValueMap = await getConfigValueMap();
-  const requirements = await lotModel.listLotRequirements(lotId);
+async function listTechnicianRowsForUnits(unitIds, connection = pool) {
+  if (unitIds.length === 0) {
+    return [];
+  }
+
+  const placeholders = buildPlaceholders(unitIds);
+  const [rows] = await connection.query(
+    `
+      SELECT
+        technician_activity.unit_id,
+        technician_activity.user_id,
+        technician_activity.first_name,
+        technician_activity.last_name,
+        technician_activity.activity_type,
+        technician_activity.activity_at
+      FROM (
+        SELECT
+          completion.unit_id,
+          completion.completed_by_user_id AS user_id,
+          user.first_name,
+          user.last_name,
+          'completion' AS activity_type,
+          completion.completed_at AS activity_at
+        FROM unit_work_completions completion
+        JOIN users user
+          ON user.user_id = completion.completed_by_user_id
+        WHERE completion.unit_id IN (${placeholders})
+
+        UNION ALL
+
+        SELECT
+          work_session.unit_id,
+          work_session.tech_user_id AS user_id,
+          user.first_name,
+          user.last_name,
+          'work_session' AS activity_type,
+          COALESCE(work_session.ended_at, work_session.started_at) AS activity_at
+        FROM unit_work_sessions work_session
+        JOIN users user
+          ON user.user_id = work_session.tech_user_id
+        WHERE work_session.unit_id IN (${placeholders})
+      ) technician_activity
+      ORDER BY
+        technician_activity.unit_id,
+        technician_activity.activity_at,
+        technician_activity.user_id
+    `,
+    [...unitIds, ...unitIds]
+  );
+
+  return rows;
+}
+
+async function listUnitSnapshotsForLot(lotId, connection = pool) {
+  const baseRows = await listBaseUnitRowsForLot(lotId, connection);
+  const unitIds = baseRows
+    .map((row) => Number(row.unit_id))
+    .filter((unitId) => Number.isSafeInteger(unitId) && unitId > 0);
+
+  const [identifierRows, memoryRows, storageRows, technicianRows] = await Promise.all([
+    listIdentifierRowsForUnits(unitIds, connection),
+    listMemoryRowsForUnits(unitIds, connection),
+    listStorageRowsForUnits(unitIds, connection),
+    listTechnicianRowsForUnits(unitIds, connection)
+  ]);
+
+  return buildUnitSnapshots({
+    baseRows,
+    identifierRows,
+    memoryRows,
+    storageRows,
+    technicianRows
+  });
+}
+
+async function buildLotValidationReport(lotId, connection = pool) {
+  const [requirements, unitSnapshots] = await Promise.all([
+    lotModel.listLotRequirements(lotId),
+    listUnitSnapshotsForLot(lotId, connection)
+  ]);
   const activeRequirements = requirements.filter((requirement) => Number(requirement.is_active) === 1);
-  const unitsResult = await listUnitsForLot(lotId, unitColumns);
-
-  if (!unitsResult.supported) {
-    return {
-      supported: false,
-      message: 'The units table does not have a lot_id column, so lot validation cannot run yet.',
-      requirementCount: activeRequirements.length,
-      unitsChecked: 0,
-      unitLimit: UNIT_LIMIT,
-      acceptedCount: 0,
-      rejectedCount: 0,
-      needsReviewCount: 0,
-      openCount: 0,
-      units: []
-    };
-  }
-
-  const validatedUnits = unitsResult.units.map((unit) => {
-    const unitDisplay = getUnitDisplayName(unit, unitColumns, configValueMap);
-
-    const checks = activeRequirements.map((requirement) => {
-      const requirementKey = String(requirement.requirement_key || '').trim();
-      const actualValue = getActualRequirementValue(unit, requirementKey, unitColumns, configValueMap);
-
-      const comparison = compareValues({
-        requirementKey,
-        operatorCode: requirement.operator_code || 'equals',
-        requiredValue: requirement.required_value,
-        actualValue
-      });
-
-      return {
-        requirementKey,
-        operatorCode: requirement.operator_code || 'equals',
-        requiredValue: requirement.required_value || '',
-        actualValue: actualValue.displayValue || '—',
-        sourceColumn: actualValue.sourceColumn || '—',
-        passed: comparison.passed,
-        status: comparison.status,
-        statusLabel: getStatusLabel(comparison.status),
-        message: comparison.message
-      };
-    });
-
-    const status = summarizeUnitValidation(checks, activeRequirements.length);
-
-    return {
-      unitId: unitDisplay.unitId,
-      label: unitDisplay.label,
-      subLabel: unitDisplay.subLabel,
-      status,
-      statusLabel: getStatusLabel(status),
-      checks,
-      failedChecks: checks.filter((check) => check.status === 'rejected'),
-      reviewChecks: checks.filter((check) => check.status === 'needs_review')
-    };
+  const requirementSignature = buildRequirementSignature(activeRequirements);
+  const overrideMap = await lotValidationOverrideModel.getActiveOverrideMapForLot({
+    lotId,
+    unitSnapshots,
+    requirementSignature,
+    connection
+  });
+  const validatedUnits = unitSnapshots.map((unitSnapshot) => {
+    const evaluatedUnit = evaluateUnitSnapshot(unitSnapshot, activeRequirements);
+    return applyManagementAcceptance(
+      evaluatedUnit,
+      overrideMap.get(Number(unitSnapshot.unitId)) || null
+    );
   });
 
   return {
     supported: true,
     message: activeRequirements.length === 0
       ? 'This lot has no active requirements. Units are treated as open until requirements are added.'
-      : 'Validation preview compares units in this lot against active lot requirements.',
+      : 'Validation compares current normalized unit data against the active lot requirements.',
     requirementCount: activeRequirements.length,
+    requirementSignature,
     unitsChecked: validatedUnits.length,
     unitLimit: UNIT_LIMIT,
     acceptedCount: validatedUnits.filter((unit) => unit.status === 'accepted').length,
+    acceptedOverrideCount: validatedUnits.filter((unit) => unit.status === 'accepted_override').length,
     rejectedCount: validatedUnits.filter((unit) => unit.status === 'rejected').length,
     needsReviewCount: validatedUnits.filter((unit) => unit.status === 'needs_review').length,
     openCount: validatedUnits.filter((unit) => unit.status === 'open').length,
@@ -584,5 +288,12 @@ async function buildLotValidationReport(lotId) {
 }
 
 module.exports = {
-  buildLotValidationReport
+  UNIT_LIMIT,
+  buildLotValidationReport,
+  listBaseUnitRowsForLot,
+  listIdentifierRowsForUnits,
+  listMemoryRowsForUnits,
+  listStorageRowsForUnits,
+  listTechnicianRowsForUnits,
+  listUnitSnapshotsForLot
 };

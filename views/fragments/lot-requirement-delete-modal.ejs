@@ -1,0 +1,64 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeLot = lot || null;
+  const safeRequirement = requirement || null;
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal lot-modal lot-requirement-delete-modal" role="dialog" aria-modal="true" aria-labelledby="lot-requirement-delete-modal-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="lot-requirement-delete-modal-title">Delete Requirement?</h2>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeLot && safeRequirement) { %>
+        <p>
+          This permanently removes the requirement from <strong><%= safeLot.lot_name %></strong>.
+          Unit results will be recalculated, and existing Management acceptances for this Lot will no longer apply because the requirement configuration changed.
+        </p>
+
+        <dl class="lot-requirement-delete-summary">
+          <div>
+            <dt>Field</dt>
+            <dd><%= safeRequirement.requirement_label || safeRequirement.requirement_key || '—' %></dd>
+          </div>
+          <div>
+            <dt>Rule</dt>
+            <dd><%= safeRequirement.operator_label || safeRequirement.operator_code || 'Equals' %></dd>
+          </div>
+          <div>
+            <dt>Value</dt>
+            <dd><%= safeRequirement.required_value || '—' %></dd>
+          </div>
+          <div>
+            <dt>Notes</dt>
+            <dd><%= safeRequirement.notes || '—' %></dd>
+          </div>
+        </dl>
+
+        <form method="post" action="/management/lots/<%= safeLot.lot_id %>/requirements/<%= safeRequirement.lot_requirement_id %>/delete" hx-post="/management/lots/<%= safeLot.lot_id %>/requirements/<%= safeRequirement.lot_requirement_id %>/delete" hx-target="#modal-root" hx-swap="innerHTML">
+          <div class="form-actions">
+            <button type="submit" class="secondary-button danger-button">Delete Requirement</button>
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          </div>
+        </form>
+      <% } else { %>
+        <div class="form-actions">
+          <button type="button" class="secondary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

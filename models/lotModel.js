@@ -1,6 +1,16 @@
 const crypto = require('crypto');
 const { pool } = require('./db');
 const productionWeightModel = require('./productionWeightModel');
+const { getNewLotInitialActiveValue } = require('../services/lotCreationPolicy');
+const {
+  normalizeOperatorCode,
+  normalizeRequirementKey
+} = require('../config/lotRequirementRegistry');
+const {
+  VALUE_COLUMN_NAMES,
+  buildRequirementValuePayload,
+  getRequirementValueToken
+} = require('../services/lotRequirementPersistence');
 
 const INSPECTABLE_TABLES = [
   'lots',
@@ -797,7 +807,14 @@ async function createLot(formData, currentUserId) {
   addFirstAvailableColumn(['notes', 'note'], notes);
   addColumn('label_format', labelFormat);
   addColumn('allow_duplicate_unit_assumption', allowDuplicateUnitAssumption);
-  addColumn('is_active', 1);
+
+  if (!hasColumn(lotColumns, 'is_active')) {
+    throw new Error(
+      'Cannot create a Lot safely because lots.is_active is required to keep new Lots hidden until they are manually unhidden.'
+    );
+  }
+
+  addColumn('is_active', getNewLotInitialActiveValue());
   addColumn('created_by_user_id', currentUserId || null);
   addColumn('updated_by_user_id', currentUserId || null);
 
@@ -1144,260 +1161,127 @@ async function deleteLotIfEmpty(lotId) {
 }
 
 async function listLotRequirements(lotId) {
-  const requirementColumns = await getColumnSet('lot_requirements');
-
-  if (!hasColumn(requirementColumns, 'lot_id')) {
-    return [];
-  }
-
-  const hasRequirementTypeConfigValueId = hasColumn(requirementColumns, 'requirement_type_config_value_id');
-  const hasRequiredConfigValueId = hasColumn(requirementColumns, 'required_config_value_id');
-
-  const requirementIdColumn = pickColumn(requirementColumns, ['lot_requirement_id', 'requirement_id', 'id']);
-
-  const requirementIdSelect = selectExpression(
-    'lr',
-    requirementColumns,
-    ['lot_requirement_id', 'requirement_id', 'id'],
-    'lot_requirement_id',
-    'NULL'
-  );
-
-  const requirementKeyColumn = pickColumn(requirementColumns, [
-    'requirement_key',
-    'requirement_code',
-    'field_name',
-    'requirement_type_code'
-  ]);
-
-  const requirementKeySelect = hasRequirementTypeConfigValueId
-    ? `
-      COALESCE(
-        requirement_type.code,
-        ${requirementKeyColumn ? `lr.\`${requirementKeyColumn}\`` : 'NULL'}
-      ) AS requirement_key
-    `
-    : selectExpression(
-      'lr',
-      requirementColumns,
-      ['requirement_key', 'requirement_code', 'field_name', 'requirement_type_code'],
-      'requirement_key',
-      'NULL'
-    );
-
-  const operatorSelect = selectExpression(
-    'lr',
-    requirementColumns,
-    ['operator_code', 'comparison_operator', 'operator'],
-    'operator_code',
-    "'equals'"
-  );
-
-  const textValueColumn = pickColumn(requirementColumns, [
-    'required_value_text',
-    'value_text',
-    'required_text',
-    'text_value',
-    'requirement_value',
-    'value'
-  ]);
-
-  const numberValueColumn = pickColumn(requirementColumns, [
-    'required_value_number',
-    'value_number',
-    'required_number',
-    'number_value'
-  ]);
-
-  const requiredValueExpressionParts = [];
-
-  if (hasRequiredConfigValueId) {
-    requiredValueExpressionParts.push('required_value.label');
-    requiredValueExpressionParts.push('required_value.code');
-  }
-
-  if (textValueColumn) {
-    requiredValueExpressionParts.push(`lr.\`${textValueColumn}\``);
-  }
-
-  if (numberValueColumn) {
-    requiredValueExpressionParts.push(`CAST(lr.\`${numberValueColumn}\` AS CHAR)`);
-  }
-
-  requiredValueExpressionParts.push('NULL');
-
-  const requiredValueSelect = `COALESCE(${requiredValueExpressionParts.join(', ')}) AS required_value`;
-
-  const isRequiredSelect = selectExpression(
-    'lr',
-    requirementColumns,
-    ['is_required'],
-    'is_required',
-    '1'
-  );
-
-  const isActiveSelect = selectExpression(
-    'lr',
-    requirementColumns,
-    ['is_active'],
-    'is_active',
-    '1'
-  );
-
-  const notesSelect = selectExpression(
-    'lr',
-    requirementColumns,
-    ['notes', 'note'],
-    'notes',
-    'NULL'
-  );
-
-  const createdAtSelect = selectExpression(
-    'lr',
-    requirementColumns,
-    ['created_at'],
-    'created_at',
-    'NULL'
-  );
-
-  const requirementTypeJoin = hasRequirementTypeConfigValueId
-    ? `
-      LEFT JOIN config_values requirement_type
-        ON requirement_type.config_value_id = lr.requirement_type_config_value_id
-    `
-    : '';
-
-  const requiredValueJoin = hasRequiredConfigValueId
-    ? `
-      LEFT JOIN config_values required_value
-        ON required_value.config_value_id = lr.required_config_value_id
-    `
-    : '';
-
-  let orderExpression = '1';
-
-  if (hasColumn(requirementColumns, 'sort_order') && requirementIdColumn) {
-    orderExpression = `lr.sort_order, lr.\`${requirementIdColumn}\``;
-  } else if (hasColumn(requirementColumns, 'sort_order')) {
-    orderExpression = 'lr.sort_order';
-  } else if (hasColumn(requirementColumns, 'created_at')) {
-    orderExpression = 'lr.created_at DESC';
-  }
-
   const [rows] = await pool.query(
     `
       SELECT
-        ${requirementIdSelect},
+        lr.lot_requirement_id,
         lr.lot_id,
-        ${requirementKeySelect},
-        ${operatorSelect},
-        ${requiredValueSelect},
-        ${isRequiredSelect},
-        ${isActiveSelect},
-        ${notesSelect},
-        ${createdAtSelect}
+        lr.requirement_type_config_value_id,
+        requirement_type.code AS requirement_key,
+        requirement_type.label AS requirement_label,
+        lr.comparison_operator_config_value_id,
+        COALESCE(comparison_operator.code, 'equals') AS operator_code,
+        COALESCE(comparison_operator.label, 'Equals') AS operator_label,
+        lr.requirement_config_value_id,
+        lr.manufacturer_id,
+        lr.unit_model_id,
+        lr.processor_model_id,
+        lr.requirement_text,
+        lr.requirement_number,
+        COALESCE(
+          requirement_value.label,
+          manufacturer.name,
+          CONCAT_WS(
+            ' · ',
+            model_manufacturer.name,
+            unit_model.model_name,
+            NULLIF(unit_model.model_number, '')
+          ),
+          CONCAT_WS(
+            ' · ',
+            processor_brand.name,
+            NULLIF(processor_model.processor_family, ''),
+            processor_model.model_code
+          ),
+          lr.requirement_text,
+          CAST(lr.requirement_number AS CHAR)
+        ) AS required_value,
+        lr.is_required,
+        1 AS is_active,
+        lr.notes,
+        lr.created_at
       FROM lot_requirements lr
-      ${requirementTypeJoin}
-      ${requiredValueJoin}
+      JOIN config_values requirement_type
+        ON requirement_type.config_value_id = lr.requirement_type_config_value_id
+      LEFT JOIN config_values comparison_operator
+        ON comparison_operator.config_value_id = lr.comparison_operator_config_value_id
+      LEFT JOIN config_values requirement_value
+        ON requirement_value.config_value_id = lr.requirement_config_value_id
+      LEFT JOIN manufacturers manufacturer
+        ON manufacturer.manufacturer_id = lr.manufacturer_id
+      LEFT JOIN unit_models unit_model
+        ON unit_model.unit_model_id = lr.unit_model_id
+      LEFT JOIN manufacturers model_manufacturer
+        ON model_manufacturer.manufacturer_id = unit_model.manufacturer_id
+      LEFT JOIN processor_models processor_model
+        ON processor_model.processor_model_id = lr.processor_model_id
+      LEFT JOIN processor_brands processor_brand
+        ON processor_brand.processor_brand_id = processor_model.processor_brand_id
       WHERE lr.lot_id = ?
-      ORDER BY ${orderExpression}
+      ORDER BY lr.created_at, lr.lot_requirement_id
     `,
-    [lotId]
+    [Number(lotId)]
   );
 
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    requirement_key: normalizeRequirementKey(row.requirement_key),
+    operator_code: normalizeOperatorCode(row.operator_code),
+    required_value: row.requirement_number !== null && row.requirement_number !== undefined
+      ? String(Number(row.requirement_number))
+      : row.required_value,
+    required_value_token: getRequirementValueToken(row)
+  }));
 }
 
 async function createLotRequirement(lotId, formData, currentUserId) {
   const requirementColumns = await getColumnSet('lot_requirements');
+  const requirementKey = normalizeRequirementKey(formData.requirementKey);
+  const operatorCode = normalizeOperatorCode(formData.operatorCode);
+  const requirementTypeConfigValueId = await findConfigValueIdByCode(
+    ['lot_requirement_types'],
+    requirementKey
+  );
+  const comparisonOperatorConfigValueId = await findConfigValueIdByCode(
+    ['comparison_operators'],
+    operatorCode
+  );
 
+  if (!requirementTypeConfigValueId) {
+    throw new Error(`No lot requirement type is configured for ${requirementKey}.`);
+  }
+
+  if (!comparisonOperatorConfigValueId) {
+    throw new Error(`No comparison operator is configured for ${operatorCode}.`);
+  }
+
+  const valuePayload = buildRequirementValuePayload(requirementKey, formData.requiredValue);
   const columns = [];
   const placeholders = [];
   const values = [];
 
-  function addColumn(columnName, value) {
-    if (!hasColumn(requirementColumns, columnName)) {
-      return false;
+  function addColumn(columnName, value, { includeNull = false } = {}) {
+    if (!hasColumn(requirementColumns, columnName) || (value === null && !includeNull)) {
+      return;
     }
 
     columns.push(`\`${columnName}\``);
     placeholders.push('?');
     values.push(value);
-
-    return true;
   }
-
-  function addFirstAvailableColumn(candidateColumns, value) {
-    const columnName = pickColumn(requirementColumns, candidateColumns);
-
-    if (!columnName) {
-      return false;
-    }
-
-    return addColumn(columnName, value);
-  }
-
-  const requirementKey = String(formData.requirementKey || '').trim();
-  const operatorCode = String(formData.operatorCode || 'equals').trim();
-  const requiredValue = String(formData.requiredValue || '').trim();
-  const notes = String(formData.notes || '').trim() || null;
-  const requiredValueAsNumber = Number(requiredValue);
 
   addColumn('lot_id', Number(lotId));
+  addColumn('requirement_type_config_value_id', requirementTypeConfigValueId);
+  addColumn('comparison_operator_config_value_id', comparisonOperatorConfigValueId);
 
-  const addedRequirementKey = addFirstAvailableColumn(
-    ['requirement_key', 'requirement_code', 'field_name', 'requirement_type_code'],
-    requirementKey
-  );
-
-  if (hasColumn(requirementColumns, 'requirement_type_config_value_id')) {
-    const requirementTypeConfigValueId = await findConfigValueIdByCode(
-      ['lot_requirement_types', 'requirement_types'],
-      requirementKey
-    );
-
-    if (requirementTypeConfigValueId) {
-      addColumn('requirement_type_config_value_id', requirementTypeConfigValueId);
-    } else if (!addedRequirementKey) {
-      throw new Error(
-        'The lot_requirements table expects requirement_type_config_value_id, but no matching config value was found. Add lot requirement type config values or add a text requirement_key column.'
-      );
-    }
-  } else if (!addedRequirementKey) {
-    throw new Error(
-      'The lot_requirements table does not have a compatible requirement key column. Expected one of: requirement_key, requirement_code, field_name, requirement_type_code.'
-    );
-  }
-
-  addFirstAvailableColumn(['operator_code', 'comparison_operator', 'operator'], operatorCode);
-
-  const addedTextValue = addFirstAvailableColumn(
-    ['required_value_text', 'value_text', 'required_text', 'text_value', 'requirement_value', 'value'],
-    requiredValue
-  );
-
-  if (!Number.isNaN(requiredValueAsNumber)) {
-    addFirstAvailableColumn(
-      ['required_value_number', 'value_number', 'required_number', 'number_value'],
-      requiredValueAsNumber
-    );
-  }
-
-  if (!addedTextValue && Number.isNaN(requiredValueAsNumber)) {
-    throw new Error(
-      'The lot_requirements table does not have a compatible text value column. Expected one of: required_value_text, value_text, required_text, text_value, requirement_value, value.'
-    );
-  }
+  VALUE_COLUMN_NAMES.forEach((columnName) => {
+    addColumn(columnName, valuePayload[columnName]);
+  });
 
   addColumn('is_required', 1);
-  addColumn('is_active', 1);
-  addFirstAvailableColumn(['notes', 'note'], notes);
+  addColumn('notes', String(formData.notes || '').trim() || null);
   addColumn('created_by_user_id', currentUserId || null);
   addColumn('updated_by_user_id', currentUserId || null);
-
-  if (columns.length === 0) {
-    throw new Error('No compatible lot requirement columns were found.');
-  }
 
   const [result] = await pool.query(
     `
@@ -1431,87 +1315,50 @@ async function updateLotRequirement(lotId, requirementId, formData, currentUserI
     throw new Error('The lot_requirements table does not have a compatible requirement ID column.');
   }
 
+  const requirementKey = normalizeRequirementKey(formData.requirementKey);
+  const operatorCode = normalizeOperatorCode(formData.operatorCode);
+  const requirementTypeConfigValueId = await findConfigValueIdByCode(
+    ['lot_requirement_types'],
+    requirementKey
+  );
+  const comparisonOperatorConfigValueId = await findConfigValueIdByCode(
+    ['comparison_operators'],
+    operatorCode
+  );
+
+  if (!requirementTypeConfigValueId) {
+    throw new Error(`No lot requirement type is configured for ${requirementKey}.`);
+  }
+
+  if (!comparisonOperatorConfigValueId) {
+    throw new Error(`No comparison operator is configured for ${operatorCode}.`);
+  }
+
+  const valuePayload = buildRequirementValuePayload(requirementKey, formData.requiredValue);
   const assignments = [];
   const values = [];
 
   function addColumn(columnName, value) {
     if (!hasColumn(requirementColumns, columnName)) {
-      return false;
+      return;
     }
 
     assignments.push(`\`${columnName}\` = ?`);
     values.push(value);
-
-    return true;
   }
 
-  function addFirstAvailableColumn(candidateColumns, value) {
-    const columnName = pickColumn(requirementColumns, candidateColumns);
+  addColumn('requirement_type_config_value_id', requirementTypeConfigValueId);
+  addColumn('comparison_operator_config_value_id', comparisonOperatorConfigValueId);
 
-    if (!columnName) {
-      return false;
-    }
+  VALUE_COLUMN_NAMES.forEach((columnName) => {
+    addColumn(columnName, valuePayload[columnName]);
+  });
 
-    return addColumn(columnName, value);
-  }
-
-  const requirementKey = String(formData.requirementKey || '').trim();
-  const operatorCode = String(formData.operatorCode || 'equals').trim();
-  const requiredValue = String(formData.requiredValue || '').trim();
-  const notes = String(formData.notes || '').trim() || null;
-  const requiredValueAsNumber = Number(requiredValue);
-
-  const addedRequirementKey = addFirstAvailableColumn(
-    ['requirement_key', 'requirement_code', 'field_name', 'requirement_type_code'],
-    requirementKey
-  );
-
-  if (hasColumn(requirementColumns, 'requirement_type_config_value_id')) {
-    const requirementTypeConfigValueId = await findConfigValueIdByCode(
-      ['lot_requirement_types', 'requirement_types'],
-      requirementKey
-    );
-
-    if (requirementTypeConfigValueId) {
-      addColumn('requirement_type_config_value_id', requirementTypeConfigValueId);
-    } else if (!addedRequirementKey) {
-      throw new Error(
-        'The lot_requirements table expects requirement_type_config_value_id, but no matching config value was found. Add lot requirement type config values or add a text requirement_key column.'
-      );
-    }
-  } else if (!addedRequirementKey) {
-    throw new Error(
-      'The lot_requirements table does not have a compatible requirement key column. Expected one of: requirement_key, requirement_code, field_name, requirement_type_code.'
-    );
-  }
-
-  addFirstAvailableColumn(['operator_code', 'comparison_operator', 'operator'], operatorCode);
-  addFirstAvailableColumn(
-    ['required_value_text', 'value_text', 'required_text', 'text_value', 'requirement_value', 'value'],
-    requiredValue
-  );
-
-  if (!Number.isNaN(requiredValueAsNumber)) {
-    addFirstAvailableColumn(
-      ['required_value_number', 'value_number', 'required_number', 'number_value'],
-      requiredValueAsNumber
-    );
-  } else {
-    addFirstAvailableColumn(
-      ['required_value_number', 'value_number', 'required_number', 'number_value'],
-      null
-    );
-  }
-
-  addFirstAvailableColumn(['notes', 'note'], notes);
+  addColumn('is_required', 1);
+  addColumn('notes', String(formData.notes || '').trim() || null);
   addColumn('updated_by_user_id', currentUserId || null);
 
-  if (assignments.length === 0) {
-    throw new Error('No compatible lot requirement columns were found for updating.');
-  }
-
-  values.push(Number(lotId));
-  values.push(Number(requirementId));
+  values.push(Number(lotId), Number(requirementId));
 
   const [result] = await pool.query(
     `
@@ -1526,6 +1373,36 @@ async function updateLotRequirement(lotId, requirementId, formData, currentUserI
 
   return result.affectedRows > 0;
 }
+
+async function deleteLotRequirement(lotId, requirementId) {
+  const normalizedLotId = Number(lotId);
+  const normalizedRequirementId = Number(requirementId);
+
+  if (!Number.isInteger(normalizedLotId) || normalizedLotId <= 0
+    || !Number.isInteger(normalizedRequirementId) || normalizedRequirementId <= 0) {
+    return false;
+  }
+
+  const requirementColumns = await getColumnSet('lot_requirements');
+  const requirementIdColumn = getRequirementIdColumn(requirementColumns);
+
+  if (!requirementIdColumn) {
+    throw new Error('The lot_requirements table does not have a compatible requirement ID column.');
+  }
+
+  const [result] = await pool.query(
+    `
+      DELETE FROM lot_requirements
+      WHERE lot_id = ?
+        AND \`${requirementIdColumn}\` = ?
+      LIMIT 1
+    `,
+    [normalizedLotId, normalizedRequirementId]
+  );
+
+  return result.affectedRows > 0;
+}
+
 
 module.exports = {
   listLots,
@@ -1544,5 +1421,6 @@ module.exports = {
   listLotRequirements,
   getLotRequirementById,
   createLotRequirement,
-  updateLotRequirement
+  updateLotRequirement,
+  deleteLotRequirement
 };

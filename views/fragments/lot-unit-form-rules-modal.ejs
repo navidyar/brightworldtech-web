@@ -1,0 +1,179 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeSections = Array.isArray(sections) ? sections : [];
+  const safeLot = lot || null;
+  const safeProfile = profile || null;
+  const safeConfigurableSummary = configurableSummary || { totalFields: 0, visibleFields: 0, requiredFields: 0, hiddenFields: 0 };
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal lot-modal lot-unit-form-rules-modal" role="dialog" aria-modal="true" aria-labelledby="lot-unit-form-rules-modal-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="lot-unit-form-rules-modal-title">Configure Unit Form</h2>
+        <% if (safeLot) { %>
+          <p class="lot-unit-form-rules-subtitle"><%= safeLot.lot_name %></p>
+        <% } %>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeLot && safeProfile) { %>
+        <form
+          class="lot-unit-form-rules-form"
+          method="post"
+          action="/management/lots/<%= safeLot.lot_id %>/unit-form/modal"
+          hx-post="/management/lots/<%= safeLot.lot_id %>/unit-form/modal"
+          hx-target="#modal-root"
+          hx-swap="innerHTML"
+          data-lot-unit-form-rules
+        >
+          <div class="lot-unit-form-rules-intro">
+            <div>
+              <strong>Lot-controlled form profile</strong>
+              <p>
+                Choose what this Lot overrides. Inherit uses the nearest parent Lot setting, or the application default for a root Lot.
+                This stage configures and previews the profile only; the live Add/Edit Unit form is not connected yet.
+              </p>
+              <p><strong>Inheritance path:</strong> <%= safeProfile.lineage.map((lineageLot) => lineageLot.name).join(' › ') %></p>
+            </div>
+
+            <div class="lot-unit-form-rules-summary" aria-label="Current effective profile summary">
+              <span><small>Configurable fields</small><strong><%= formatNumber(safeConfigurableSummary.totalFields) %></strong></span>
+              <span><small>This Lot’s overrides</small><strong><%= formatNumber(directRuleCount) %></strong></span>
+              <span><small>Effective required</small><strong><%= formatNumber(safeConfigurableSummary.requiredFields) %></strong></span>
+              <span><small>Effective hidden</small><strong><%= formatNumber(safeConfigurableSummary.hiddenFields) %></strong></span>
+            </div>
+          </div>
+
+          <div class="lot-unit-form-rules-toolbar">
+            <label class="form-field lot-unit-form-rules-search-field">
+              <span>Search form fields</span>
+              <input type="search" placeholder="Search by field or section" autocomplete="off" data-lot-unit-form-rule-search />
+            </label>
+
+            <button type="button" class="secondary-button" data-lot-unit-form-rules-reset>Reset This Lot to Inherit</button>
+          </div>
+
+          <p class="lot-unit-form-rules-live-note" data-lot-unit-form-rules-note aria-live="polite">
+            Effective values and sources shown below reflect the currently saved profile.
+          </p>
+
+          <div class="lot-unit-form-rules-scroll" data-lot-unit-form-rules-scroll>
+            <% safeSections.forEach((section) => { %>
+              <section class="lot-unit-form-rule-section" data-lot-unit-form-rule-section data-section-search="<%= `${section.label} ${section.key}`.toLowerCase() %>">
+                <div class="lot-unit-form-rule-section-heading">
+                  <h3><%= section.label %></h3>
+                  <span><%= formatNumber(section.fields.length) %> configurable field<%= section.fields.length === 1 ? '' : 's' %></span>
+                </div>
+
+                <div class="table-card lot-unit-form-rule-table-card">
+                  <table>
+                    <colgroup>
+                      <col class="lot-unit-form-rule-field-column" />
+                      <col class="lot-unit-form-rule-setting-column" />
+                      <col class="lot-unit-form-rule-setting-column" />
+                      <col class="lot-unit-form-rule-effective-column" />
+                      <col class="lot-unit-form-rule-source-column" />
+                    </colgroup>
+                    <thead>
+                      <tr>
+                        <th>Form field</th>
+                        <th>This Lot: visibility</th>
+                        <th>This Lot: requirement</th>
+                        <th>Current effective state</th>
+                        <th>Current source</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      <% section.fields.forEach((field) => { %>
+                        <tr
+                          class="<%= field.hasDirectOverride ? 'has-direct-override' : '' %>"
+                          data-lot-unit-form-rule-row
+                          data-field-key="<%= field.key %>"
+                          data-field-search="<%= `${field.label} ${field.key} ${section.label}`.toLowerCase() %>"
+                        >
+                          <td>
+                            <strong><%= field.label %></strong>
+                            <small><code><%= field.key %></code></small>
+                            <% if (field.requiredSemantics) { %>
+                              <small><%= field.requiredSemantics %></small>
+                            <% } %>
+                          </td>
+                          <td>
+                            <% if (field.visibilityConfigurable) { %>
+                              <label class="form-field compact-rule-select">
+                                <span class="visually-hidden"><%= field.label %> visibility</span>
+                                <select name="visibilityModes[<%= field.key %>]" data-visibility-mode>
+                                  <option value="inherit" <%= field.visibilityMode === 'inherit' ? 'selected' : '' %>>Inherit</option>
+                                  <option value="visible" <%= field.visibilityMode === 'visible' ? 'selected' : '' %>>Visible</option>
+                                  <option value="hidden" <%= field.visibilityMode === 'hidden' ? 'selected' : '' %>>Hidden</option>
+                                </select>
+                              </label>
+                            <% } else { %>
+                              <span class="lot-unit-form-rule-unavailable">Not configurable</span>
+                            <% } %>
+                          </td>
+                          <td>
+                            <% if (field.requirementConfigurable) { %>
+                              <label class="form-field compact-rule-select">
+                                <span class="visually-hidden"><%= field.label %> requirement</span>
+                                <select name="requirementModes[<%= field.key %>]" data-requirement-mode>
+                                  <option value="inherit" <%= field.requirementMode === 'inherit' ? 'selected' : '' %>>Inherit</option>
+                                  <option value="required" <%= field.requirementMode === 'required' ? 'selected' : '' %>>Required</option>
+                                  <option value="optional" <%= field.requirementMode === 'optional' ? 'selected' : '' %>>Optional</option>
+                                </select>
+                              </label>
+                            <% } else { %>
+                              <span class="lot-unit-form-rule-unavailable">Not configurable</span>
+                            <% } %>
+                          </td>
+                          <td>
+                            <div class="lot-unit-form-effective-state">
+                              <span class="pill <%= field.effectiveVisible ? 'good' : 'bad' %>"><%= field.effectiveVisible ? 'Visible' : 'Hidden' %></span>
+                              <span class="pill <%= field.effectiveRequired ? 'warning' : 'muted' %>"><%= field.effectiveRequired ? 'Required' : 'Optional' %></span>
+                            </div>
+                            <% if (field.requiredSuppressedByHidden) { %>
+                              <small>Inherited requirement is suppressed while hidden.</small>
+                            <% } %>
+                            <% if (field.dependencyLabels.length > 0) { %>
+                              <small>Forced by: <%= field.dependencyLabels.join(', ') %></small>
+                            <% } %>
+                          </td>
+                          <td>
+                            <small><strong>Visibility:</strong> <%= field.visibilitySourceLabel %></small>
+                            <small><strong>Requirement:</strong> <%= field.requirementSourceLabel %></small>
+                          </td>
+                        </tr>
+                      <% }) %>
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            <% }) %>
+
+            <div class="message warning lot-unit-form-rules-empty-search" hidden data-lot-unit-form-rules-empty>
+              No configurable Unit form fields match that search.
+            </div>
+          </div>
+
+          <div class="form-actions lot-unit-form-rules-actions">
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            <button type="submit" class="primary-button">Save Unit Form Configuration</button>
+          </div>
+        </form>
+      <% } %>
+    </div>
+  </section>
+</div>

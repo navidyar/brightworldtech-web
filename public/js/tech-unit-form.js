@@ -7,6 +7,713 @@
     return select && select.selectedOptions.length > 0 ? select.selectedOptions[0] : null;
   }
 
+  const REPEATABLE_REQUIRED_MESSAGES = Object.freeze({
+    memory: 'Add at least one complete memory module with a positive size.',
+    storage: 'Add at least one complete storage device with a positive size.',
+    cosmeticIssue: 'Add at least one complete cosmetic issue with an issue type, severity, and location.',
+    hardwareIssue: 'Add at least one complete hardware issue using a configured issue or custom issue name.'
+  });
+
+  const LOT_UNIT_FORM_PROFILE_REFRESH_INTERVAL_MS = 30000;
+  const LOT_UNIT_FORM_PROFILE_SUBMIT_VERIFICATION_MAX_AGE_MS = 5000;
+  const LOT_UNIT_FORM_PROFILE_STORAGE_KEY = 'bwt-lot-unit-form-profile-updated';
+
+  function getLotUnitFormProfileStatus(form) {
+    return form ? form.querySelector('[data-lot-unit-form-profile-status]') : null;
+  }
+
+  function setLotUnitFormProfileStatus(form, message, status) {
+    const statusElement = getLotUnitFormProfileStatus(form);
+
+    if (!statusElement) {
+      return;
+    }
+
+    statusElement.textContent = message;
+    statusElement.dataset.status = status || 'idle';
+  }
+
+  function getLotConfigurableFieldWrappers(form) {
+    return form ? Array.from(form.querySelectorAll('[data-unit-form-field-key]')) : [];
+  }
+
+  let unitFormValidationErrorSequence = 0;
+
+  function getValidationWrapper(control) {
+    if (!control) {
+      return null;
+    }
+
+    return control.closest('[data-unit-form-field-key], .form-field, .form-section') || null;
+  }
+
+  function getDirectValidationError(wrapper) {
+    if (!wrapper) {
+      return null;
+    }
+
+    return Array.from(wrapper.children).find((child) => child.hasAttribute('data-unit-form-field-error')) || null;
+  }
+
+  function removeAriaDescribedByToken(control, token) {
+    if (!control || !token) {
+      return;
+    }
+
+    const remaining = String(control.getAttribute('aria-describedby') || '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter((value) => value !== token);
+
+    if (remaining.length > 0) {
+      control.setAttribute('aria-describedby', remaining.join(' '));
+    } else {
+      control.removeAttribute('aria-describedby');
+    }
+  }
+
+  function clearValidationError(wrapper) {
+    if (!wrapper) {
+      return;
+    }
+
+    const errorElement = getDirectValidationError(wrapper);
+    const errorId = errorElement ? errorElement.id : '';
+
+    wrapper.classList.remove('has-unit-form-validation-error');
+    wrapper.querySelectorAll('[aria-invalid="true"]').forEach((control) => {
+      control.removeAttribute('aria-invalid');
+      removeAriaDescribedByToken(control, errorId);
+    });
+
+    if (errorElement) {
+      errorElement.remove();
+    }
+  }
+
+  function showValidationError(control) {
+    const wrapper = getValidationWrapper(control);
+
+    if (!wrapper || !control) {
+      return;
+    }
+
+    let errorElement = getDirectValidationError(wrapper);
+
+    if (!errorElement) {
+      unitFormValidationErrorSequence += 1;
+      errorElement = document.createElement('small');
+      errorElement.id = `unit-form-validation-error-${unitFormValidationErrorSequence}`;
+      errorElement.className = 'unit-form-field-error';
+      errorElement.setAttribute('data-unit-form-field-error', '');
+      errorElement.setAttribute('role', 'alert');
+      wrapper.appendChild(errorElement);
+    }
+
+    errorElement.textContent = control.validationMessage || 'Complete this required field.';
+    wrapper.classList.add('has-unit-form-validation-error');
+    control.setAttribute('aria-invalid', 'true');
+
+    const describedBy = new Set(String(control.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
+    describedBy.add(errorElement.id);
+    control.setAttribute('aria-describedby', Array.from(describedBy).join(' '));
+  }
+
+  function isUsableInvalidControl(control) {
+    return Boolean(
+      control
+      && control.form
+      && !control.disabled
+      && !control.closest('[hidden]')
+      && control.validity
+      && !control.validity.valid
+    );
+  }
+
+  function findFirstInvalidControl(form, preferredControl) {
+    if (isUsableInvalidControl(preferredControl)) {
+      return preferredControl;
+    }
+
+    return Array.from(form ? form.elements : []).find(isUsableInvalidControl) || null;
+  }
+
+  function revealInvalidControl(control) {
+    if (!isUsableInvalidControl(control)) {
+      return;
+    }
+
+    showValidationError(control);
+
+    const wrapper = getValidationWrapper(control) || control;
+
+    try {
+      control.focus({ preventScroll: true });
+    } catch (error) {
+      control.focus();
+    }
+
+    wrapper.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+  }
+
+  function scheduleInvalidControlFocus(form, preferredControl) {
+    if (!form) {
+      return;
+    }
+
+    if (form._unitFormValidationFocusTimer) {
+      window.clearTimeout(form._unitFormValidationFocusTimer);
+    }
+
+    if (form._unitFormValidationFollowupTimer) {
+      window.clearTimeout(form._unitFormValidationFollowupTimer);
+    }
+
+    form._unitFormValidationFocusTimer = window.setTimeout(() => {
+      delete form._unitFormValidationFocusTimer;
+
+      window.requestAnimationFrame(() => {
+        const control = findFirstInvalidControl(form);
+
+        if (!control) {
+          return;
+        }
+
+        revealInvalidControl(control);
+
+        // Some browsers restore the submit button's scroll position after the
+        // invalid event completes. Re-assert the first invalid field once the
+        // native validation cycle has fully settled.
+        form._unitFormValidationFollowupTimer = window.setTimeout(() => {
+          delete form._unitFormValidationFollowupTimer;
+          const currentFirstInvalidControl = findFirstInvalidControl(form);
+
+          if (currentFirstInvalidControl) {
+            revealInvalidControl(currentFirstInvalidControl);
+          }
+        }, 80);
+      });
+    }, 0);
+  }
+
+  function clearResolvedValidationError(control) {
+    const wrapper = getValidationWrapper(control);
+
+    if (!wrapper || !wrapper.classList.contains('has-unit-form-validation-error')) {
+      return;
+    }
+
+    const invalidControl = Array.from(wrapper.querySelectorAll('input, select, textarea'))
+      .find((candidate) => !candidate.disabled && !candidate.closest('[hidden]') && candidate.validity && !candidate.validity.valid);
+
+    if (!invalidControl) {
+      clearValidationError(wrapper);
+    }
+  }
+
+  function getRequiredIndicatorTarget(wrapper) {
+    if (!wrapper) {
+      return null;
+    }
+
+    if (wrapper.matches('.form-section')) {
+      return wrapper.querySelector('.form-section-header h3');
+    }
+
+    if (wrapper.matches('fieldset')) {
+      return wrapper.querySelector('legend');
+    }
+
+    return Array.from(wrapper.children).find((child) => child.tagName === 'SPAN') || null;
+  }
+
+  function updateLotRequiredIndicator(wrapper, required) {
+    const target = getRequiredIndicatorTarget(wrapper);
+    let indicator = target ? target.querySelector('[data-unit-form-required-indicator]') : null;
+
+    wrapper.classList.toggle('is-lot-required', Boolean(required));
+    wrapper.setAttribute('aria-required', required ? 'true' : 'false');
+
+    if (!target) {
+      return;
+    }
+
+    if (required && !indicator) {
+      indicator = document.createElement('span');
+      indicator.setAttribute('data-unit-form-required-indicator', '');
+      indicator.setAttribute('aria-hidden', 'true');
+      indicator.textContent = ' *';
+      target.appendChild(indicator);
+    }
+
+    if (!required && indicator) {
+      indicator.remove();
+    }
+  }
+
+  function clearControlRequirement(wrapper) {
+    if (!wrapper) {
+      return;
+    }
+
+    clearValidationError(wrapper);
+
+    wrapper.querySelectorAll('input, select, textarea').forEach((control) => {
+      control.required = false;
+      control.removeAttribute('aria-required');
+      control.setCustomValidity('');
+    });
+  }
+
+  function getRequirementControls(wrapper) {
+    if (!wrapper) {
+      return [];
+    }
+
+    const fieldKey = wrapper.getAttribute('data-unit-form-field-key');
+
+    if (fieldKey === 'unit_model') {
+      const input = wrapper.querySelector('[data-unit-model-combobox-input]');
+      return input ? [input] : [];
+    }
+
+    if (fieldKey === 'processor_model') {
+      const input = wrapper.querySelector('[data-processor-combobox-input]');
+      return input ? [input] : [];
+    }
+
+    if (fieldKey === 'unit_outcome') {
+      return Array.from(wrapper.querySelectorAll('input[type="radio"][name="outcomeCode"]'));
+    }
+
+    return Array.from(wrapper.querySelectorAll('input:not([type="hidden"]), select, textarea'))
+      .filter((control) => !control.hasAttribute('data-processor-brand-select'));
+  }
+
+  function applyControlRequirement(wrapper, required) {
+    clearControlRequirement(wrapper);
+
+    if (!required || wrapper.hasAttribute('data-unit-form-repeatable-type')) {
+      updateLotRequiredIndicator(wrapper, required);
+      return;
+    }
+
+    const controls = getRequirementControls(wrapper);
+
+    controls.forEach((control, index) => {
+      if (control.type === 'radio') {
+        control.required = true;
+      } else if (index === 0) {
+        control.required = true;
+      }
+
+      control.setAttribute('aria-required', 'true');
+    });
+
+    updateLotRequiredIndicator(wrapper, required);
+  }
+
+  function hasCompleteRepeatableRow(wrapper) {
+    const rowType = wrapper ? wrapper.getAttribute('data-unit-form-repeatable-type') : '';
+    const rows = wrapper ? Array.from(wrapper.querySelectorAll(`[data-module-row="${rowType}"]`)) : [];
+
+    if (rowType === 'memory') {
+      return rows.some((row) => {
+        const sizeInput = row.querySelector('[name$="[sizeGb]"]');
+        const size = Number(sizeInput ? sizeInput.value : 0);
+        return Number.isInteger(size) && size > 0;
+      });
+    }
+
+    if (rowType === 'storage') {
+      return rows.some((row) => {
+        const sizeInput = row.querySelector('[name$="[sizeGb]"]');
+        const size = Number(sizeInput ? sizeInput.value : 0);
+        return Number.isInteger(size) && size > 0;
+      });
+    }
+
+    if (rowType === 'cosmeticIssue') {
+      return rows.some((row) => Boolean(
+        row.querySelector('[name$="[issueTypeConfigValueId]"]')?.value
+        && row.querySelector('[name$="[severityConfigValueId]"]')?.value
+        && row.querySelector('[name$="[locationConfigValueId]"]')?.value
+      ));
+    }
+
+    if (rowType === 'hardwareIssue') {
+      return rows.some((row) => Boolean(
+        row.querySelector('[name$="[issueTypeConfigValueId]"]')?.value
+        || String(row.querySelector('[name$="[customIssueLabel]"]')?.value || '').trim()
+      ));
+    }
+
+    return true;
+  }
+
+  function getRepeatableValidationAnchor(wrapper) {
+    if (!wrapper) {
+      return null;
+    }
+
+    const rowType = wrapper.getAttribute('data-unit-form-repeatable-type');
+
+    if (rowType === 'memory' || rowType === 'storage') {
+      return wrapper.querySelector('[name$="[sizeGb]"]');
+    }
+
+    return wrapper.querySelector('[data-module-field]');
+  }
+
+  function validateRequiredRepeatableSection(wrapper, reportValidity) {
+    if (!wrapper || !wrapper.hasAttribute('data-unit-form-repeatable-type')) {
+      return true;
+    }
+
+    const anchor = getRepeatableValidationAnchor(wrapper);
+    const rowType = wrapper.getAttribute('data-unit-form-repeatable-type');
+    const required = wrapper.dataset.lotRequired === 'true' && !wrapper.hidden;
+    const valid = !required || hasCompleteRepeatableRow(wrapper);
+
+    if (anchor) {
+      anchor.setCustomValidity(valid ? '' : (REPEATABLE_REQUIRED_MESSAGES[rowType] || 'Complete at least one row.'));
+
+      if (!valid && reportValidity) {
+        anchor.reportValidity();
+      }
+    }
+
+    return valid;
+  }
+
+  function validateAllRequiredRepeatableSections(form, reportValidity) {
+    const wrappers = form
+      ? Array.from(form.querySelectorAll('[data-unit-form-repeatable-type]'))
+      : [];
+
+    for (const wrapper of wrappers) {
+      if (!validateRequiredRepeatableSection(wrapper, reportValidity)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function updateProfileManagedSubmissionState(form, scope, visible) {
+    if (!form || !scope) {
+      return;
+    }
+
+    const createMode = form.getAttribute('data-unit-form-mode') === 'create';
+    const controls = Array.from(scope.querySelectorAll('[name]'));
+
+    controls.forEach((control) => {
+      if (!createMode || visible) {
+        if (control.getAttribute('data-lot-profile-disabled') === 'true') {
+          control.disabled = false;
+          control.removeAttribute('data-lot-profile-disabled');
+        }
+        return;
+      }
+
+      if (!control.disabled) {
+        control.disabled = true;
+        control.setAttribute('data-lot-profile-disabled', 'true');
+      }
+    });
+  }
+
+  function updateCompanionSubmissionState(form, fieldKey, visible) {
+    if (!form || !fieldKey) {
+      return;
+    }
+
+    form.querySelectorAll(`[data-unit-form-companion-key="${fieldKey}"]`).forEach((control) => {
+      const createMode = form.getAttribute('data-unit-form-mode') === 'create';
+
+      if (!createMode || visible) {
+        if (control.getAttribute('data-lot-profile-disabled') === 'true') {
+          control.disabled = false;
+          control.removeAttribute('data-lot-profile-disabled');
+        }
+        return;
+      }
+
+      if (!control.disabled) {
+        control.disabled = true;
+        control.setAttribute('data-lot-profile-disabled', 'true');
+      }
+    });
+  }
+
+  function applyFollowerVisibility(form, visibleByKey) {
+    if (!form) {
+      return;
+    }
+
+    form.querySelectorAll('[data-unit-form-follows-key]').forEach((follower) => {
+      const parentKey = follower.getAttribute('data-unit-form-follows-key');
+      const visible = visibleByKey.has(parentKey) ? Boolean(visibleByKey.get(parentKey)) : true;
+
+      follower.hidden = !visible;
+      updateProfileManagedSubmissionState(form, follower, visible);
+    });
+  }
+
+  function updateAutoCollapsedSections(form) {
+    if (!form) {
+      return;
+    }
+
+    form.querySelectorAll('[data-unit-form-auto-collapse]').forEach((section) => {
+      const managedChildren = Array.from(section.querySelectorAll('[data-unit-form-field-key], [data-unit-form-follows-key]'));
+      section.hidden = managedChildren.length > 0 && managedChildren.every((child) => child.hidden);
+    });
+  }
+
+  function applyDefaultLotUnitFormProfile(form) {
+    const visibleByKey = new Map();
+
+    getLotConfigurableFieldWrappers(form).forEach((wrapper) => {
+      const fieldKey = wrapper.getAttribute('data-unit-form-field-key');
+
+      wrapper.hidden = false;
+      wrapper.dataset.lotRequired = 'false';
+      applyControlRequirement(wrapper, false);
+      updateProfileManagedSubmissionState(form, wrapper, true);
+      updateCompanionSubmissionState(form, fieldKey, true);
+      validateRequiredRepeatableSection(wrapper, false);
+      visibleByKey.set(fieldKey, true);
+    });
+
+    applyFollowerVisibility(form, visibleByKey);
+    updateAutoCollapsedSections(form);
+  }
+
+  function resetLotUnitFormProfile(form) {
+    if (!form) {
+      return;
+    }
+
+    if (form._lotUnitFormProfileAbortController) {
+      form._lotUnitFormProfileAbortController.abort();
+      delete form._lotUnitFormProfileAbortController;
+    }
+
+    delete form.dataset.lotUnitFormProfileSignature;
+    delete form.dataset.lotUnitFormProfileLotId;
+    delete form.dataset.lotUnitFormProfileCheckedAt;
+    delete form.dataset.lotProfileSubmitVerifiedAt;
+    delete form.dataset.lotProfileSubmitVerifiedLotId;
+    applyDefaultLotUnitFormProfile(form);
+    setLotUnitFormProfileStatus(
+      form,
+      'Select an assignable Lot to apply its field visibility and requirement settings.',
+      'idle'
+    );
+  }
+
+  function parseLotUnitFormProfileMarkup(markup) {
+    const holder = document.createElement('template');
+    holder.innerHTML = String(markup || '').trim();
+    const errorElement = holder.content.querySelector('[data-unit-form-profile-error]');
+
+    if (errorElement) {
+      throw new Error(errorElement.getAttribute('data-error-message') || 'The selected Lot form settings could not be loaded.');
+    }
+
+    const profileElement = holder.content.querySelector('[data-unit-form-profile]');
+
+    if (!profileElement) {
+      throw new Error('The selected Lot returned an invalid Unit form profile.');
+    }
+
+    const fields = Array.from(profileElement.querySelectorAll('[data-unit-form-profile-field]')).map((fieldElement) => ({
+      key: fieldElement.getAttribute('data-field-key') || '',
+      label: fieldElement.getAttribute('data-field-label') || '',
+      visible: fieldElement.getAttribute('data-visible') === '1',
+      required: fieldElement.getAttribute('data-required') === '1'
+    }));
+
+    return {
+      lotId: profileElement.getAttribute('data-lot-id') || '',
+      lotName: profileElement.getAttribute('data-lot-name') || 'Selected Lot',
+      fields
+    };
+  }
+
+  function getLotUnitFormProfileSignature(profile) {
+    return [
+      String(profile?.lotId || ''),
+      ...(Array.isArray(profile?.fields) ? profile.fields : []).map((field) => (
+        `${field.key}:${field.visible ? '1' : '0'}:${field.required ? '1' : '0'}`
+      ))
+    ].join('|');
+  }
+
+
+  function applyLotUnitFormProfile(form, profile, options = {}) {
+    const fieldStateByKey = new Map(profile.fields.map((field) => [field.key, field]));
+    let hiddenCount = 0;
+    let requiredCount = 0;
+
+    const visibleByKey = new Map();
+
+    getLotConfigurableFieldWrappers(form).forEach((wrapper) => {
+      const fieldKey = wrapper.getAttribute('data-unit-form-field-key');
+      const fieldState = fieldStateByKey.get(fieldKey);
+      const visible = fieldState ? Boolean(fieldState.visible) : true;
+      const required = visible && fieldState ? Boolean(fieldState.required) : false;
+
+      wrapper.hidden = !visible;
+      wrapper.dataset.lotRequired = required ? 'true' : 'false';
+      applyControlRequirement(wrapper, required);
+      updateProfileManagedSubmissionState(form, wrapper, visible);
+      updateCompanionSubmissionState(form, fieldKey, visible);
+      validateRequiredRepeatableSection(wrapper, false);
+      visibleByKey.set(fieldKey, visible);
+
+      if (!visible) {
+        hiddenCount += 1;
+      }
+
+      if (required) {
+        requiredCount += 1;
+      }
+    });
+
+    applyFollowerVisibility(form, visibleByKey);
+    updateAutoCollapsedSections(form);
+
+    const statusPrefix = options.updatedWhileOpen
+      ? `${profile.lotName} settings were updated while this form was open.`
+      : `${profile.lotName} settings applied.`;
+
+    setLotUnitFormProfileStatus(
+      form,
+      `${statusPrefix} ${requiredCount} required and ${hiddenCount} hidden field${hiddenCount === 1 ? '' : 's'}. Values are retained when fields become hidden.`,
+      'applied'
+    );
+  }
+
+  async function refreshLotUnitFormProfile(form, options = {}) {
+    if (!form) {
+      return { ok: false, changed: false };
+    }
+
+    const background = Boolean(options.background);
+    const force = Boolean(options.force);
+    const lotSelect = getAssignableLotCatalog(form);
+    const lotId = lotSelect ? String(lotSelect.value || '').trim() : '';
+
+    if (!lotId) {
+      resetLotUnitFormProfile(form);
+      return { ok: true, changed: false };
+    }
+
+    if (form._lotUnitFormProfileAbortController) {
+      if (background && !force) {
+        return { ok: true, changed: false, skipped: true };
+      }
+
+      form._lotUnitFormProfileAbortController.abort();
+    }
+
+    const abortController = new AbortController();
+    form._lotUnitFormProfileAbortController = abortController;
+
+    if (!background) {
+      applyDefaultLotUnitFormProfile(form);
+      setLotUnitFormProfileStatus(form, 'Loading the selected Lot’s Unit form settings…', 'loading');
+    }
+
+    try {
+      const profileUrl = new URL(
+        form.getAttribute('data-lot-unit-form-profile-url') || '/tech/units/lot-form-profile',
+        window.location.origin
+      );
+      profileUrl.searchParams.set('lotId', lotId);
+      profileUrl.searchParams.set('_profileCheck', String(Date.now()));
+      const response = await fetch(profileUrl.toString(), {
+        headers: { 'HX-Request': 'true' },
+        cache: 'no-store',
+        signal: abortController.signal
+      });
+      const markup = await response.text();
+      const profile = parseLotUnitFormProfileMarkup(markup);
+      const currentLotId = String(getAssignableLotCatalog(form)?.value || '').trim();
+
+      if (form._lotUnitFormProfileAbortController !== abortController || currentLotId !== lotId) {
+        return { ok: false, changed: false, stale: true };
+      }
+
+      if (!response.ok) {
+        throw new Error('The selected Lot form settings could not be loaded.');
+      }
+
+      if (String(profile.lotId) !== lotId) {
+        throw new Error('The selected Lot returned mismatched Unit form settings.');
+      }
+
+      const nextSignature = getLotUnitFormProfileSignature(profile);
+      const previousSignature = String(form.dataset.lotUnitFormProfileSignature || '');
+      const changed = Boolean(previousSignature && previousSignature !== nextSignature);
+      const firstApplication = !previousSignature;
+
+      if (!background || firstApplication || changed) {
+        applyLotUnitFormProfile(form, profile, { updatedWhileOpen: background && changed });
+      }
+
+      form.dataset.lotUnitFormProfileSignature = nextSignature;
+      form.dataset.lotUnitFormProfileLotId = lotId;
+      form.dataset.lotUnitFormProfileCheckedAt = String(Date.now());
+
+      return { ok: true, changed };
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return { ok: false, changed: false, aborted: true };
+      }
+
+      if (!background) {
+        applyDefaultLotUnitFormProfile(form);
+        delete form.dataset.lotUnitFormProfileSignature;
+        delete form.dataset.lotUnitFormProfileLotId;
+        setLotUnitFormProfileStatus(
+          form,
+          `${error.message || 'The selected Lot form settings could not be loaded.'} All configurable fields remain visible and optional.`,
+          'error'
+        );
+      } else {
+        setLotUnitFormProfileStatus(
+          form,
+          `${error.message || 'The latest Lot form settings could not be verified.'} The last successfully loaded settings remain applied. Saving is paused until the settings can be verified.`,
+          'error'
+        );
+      }
+
+      return { ok: false, changed: false, error };
+    } finally {
+      if (form._lotUnitFormProfileAbortController === abortController) {
+        delete form._lotUnitFormProfileAbortController;
+      }
+    }
+  }
+
+  function refreshOpenLotUnitForms(options = {}) {
+    if (document.visibilityState === 'hidden') {
+      return;
+    }
+
+    document.querySelectorAll('[data-tech-unit-form]').forEach((form) => {
+      const lotSelect = getAssignableLotCatalog(form);
+
+      if (lotSelect && lotSelect.value) {
+        refreshLotUnitFormProfile(form, { background: true, ...options });
+      }
+    });
+  }
+
   function normalizeSerialInput(input) {
     if (!input) {
       return '';
@@ -234,6 +941,7 @@
     setAssignableLotInputValidity(form, '');
     updateAssignableLotAssumptionStatus(form);
     updateIntentionalDuplicateRequestControls(form);
+    resetLotUnitFormProfile(form);
   }
 
   function updateAssignableLotHint(form) {
@@ -407,6 +1115,7 @@
     updateIntentionalDuplicateRequestControls(form);
     updateProductionWeightPreview(form);
     refreshDuplicateCheckForSelectedLot(form);
+    refreshLotUnitFormProfile(form);
   }
 
   function resolveExactAssignableLotMatch(form) {
@@ -1302,6 +2011,7 @@
 
     renumberModuleRows(form, rowType);
     updateModuleTotals(form);
+    validateRequiredRepeatableSection(list.closest('[data-unit-form-repeatable-type]'), false);
   }
 
   function removeModuleRow(button) {
@@ -1313,6 +2023,7 @@
     }
 
     const rowType = row.getAttribute('data-module-row');
+    const section = row.closest('[data-unit-form-repeatable-type]');
     const rows = getModuleRows(form, rowType);
 
     if (rows.length <= 1) {
@@ -1329,6 +2040,7 @@
 
     renumberModuleRows(form, rowType);
     updateModuleTotals(form);
+    validateRequiredRepeatableSection(section, false);
   }
 
   function renderModalMarkup(markup) {
@@ -1570,6 +2282,7 @@
     updateProductionWeightPreview(form);
     updateIntentionalDuplicateRequestControls(form);
     updateCatalogRequestControls(form);
+    refreshLotUnitFormProfile(form);
 
     const processorSpeedInput = form.querySelector('[data-processor-speed-input]');
 
@@ -1635,7 +2348,47 @@
     }
   });
 
+  document.addEventListener('click', (event) => {
+    const submitter = event.target.closest('[data-tech-unit-form] button[type="submit"], [data-tech-unit-form] input[type="submit"]');
+    const form = submitter ? getFormFromElement(submitter) : null;
+
+    if (!form) {
+      return;
+    }
+
+    // Run after the browser and custom submit handlers have had a chance to
+    // establish their validity state. This makes repeat submission attempts
+    // consistently return to the first unresolved field.
+    window.setTimeout(() => {
+      const invalidControl = findFirstInvalidControl(form);
+
+      if (invalidControl) {
+        showValidationError(invalidControl);
+        scheduleInvalidControlFocus(form, invalidControl);
+      }
+    }, 0);
+  }, true);
+
+  document.addEventListener('invalid', (event) => {
+    const control = event.target;
+    const form = getFormFromElement(control);
+
+    if (!form || !isUsableInvalidControl(control)) {
+      return;
+    }
+
+    event.preventDefault();
+    showValidationError(control);
+    scheduleInvalidControlFocus(form, control);
+  }, true);
+
   document.addEventListener('change', (event) => {
+    const validationControl = event.target.closest('input, select, textarea');
+
+    if (validationControl && getFormFromElement(validationControl)) {
+      clearResolvedValidationError(validationControl);
+    }
+
     const modelFilterSelect = event.target.closest('[data-manufacturer-select], [data-unit-category-select]');
 
     if (modelFilterSelect) {
@@ -1657,6 +2410,7 @@
       updateIntentionalDuplicateRequestControls(form);
       updateProductionWeightPreview(form);
       refreshDuplicateCheckForSelectedLot(form);
+      refreshLotUnitFormProfile(form);
       return;
     }
 
@@ -1682,9 +2436,29 @@
       const form = getFormFromElement(moduleField);
       updateModuleTotals(form);
     }
+
+    const repeatableField = event.target.closest('[data-module-field]');
+
+    if (repeatableField) {
+      validateRequiredRepeatableSection(repeatableField.closest('[data-unit-form-repeatable-type]'), false);
+      clearResolvedValidationError(repeatableField);
+    }
   });
 
   document.addEventListener('input', (event) => {
+    const validationControl = event.target.closest('input, select, textarea');
+
+    if (validationControl && getFormFromElement(validationControl)) {
+      clearResolvedValidationError(validationControl);
+    }
+
+    const repeatableField = event.target.closest('[data-module-field]');
+
+    if (repeatableField) {
+      validateRequiredRepeatableSection(repeatableField.closest('[data-unit-form-repeatable-type]'), false);
+      clearResolvedValidationError(repeatableField);
+    }
+
     const assignableLotComboboxInput = event.target.closest('[data-assignable-lot-combobox-input]');
 
     if (assignableLotComboboxInput) {
@@ -1943,6 +2717,67 @@
   document.addEventListener('submit', (event) => {
     const form = event.target.closest('[data-tech-unit-form]');
 
+    if (!form) {
+      return;
+    }
+
+    const lotSelect = getAssignableLotCatalog(form);
+
+    if (!lotSelect || !lotSelect.value) {
+      return;
+    }
+
+    const selectedLotId = String(lotSelect.value);
+    const verifiedAt = Number(form.dataset.lotProfileSubmitVerifiedAt || 0);
+    const verifiedLotId = String(form.dataset.lotProfileSubmitVerifiedLotId || '');
+    const verificationIsCurrent = verifiedLotId === selectedLotId
+      && verifiedAt > 0
+      && (Date.now() - verifiedAt) <= LOT_UNIT_FORM_PROFILE_SUBMIT_VERIFICATION_MAX_AGE_MS;
+
+    if (verificationIsCurrent) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (form.dataset.lotProfileSubmitRefreshPending === 'true') {
+      return;
+    }
+
+    form.dataset.lotProfileSubmitRefreshPending = 'true';
+    const submitter = event.submitter || null;
+
+    refreshLotUnitFormProfile(form, { background: true, force: true }).then((result) => {
+      delete form.dataset.lotProfileSubmitRefreshPending;
+
+      if (!result || !result.ok) {
+        const statusElement = getLotUnitFormProfileStatus(form);
+
+        if (statusElement) {
+          statusElement.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+        }
+        return;
+      }
+
+      form.dataset.lotProfileSubmitVerifiedAt = String(Date.now());
+      form.dataset.lotProfileSubmitVerifiedLotId = selectedLotId;
+
+      if (typeof form.requestSubmit === 'function') {
+        try {
+          form.requestSubmit(submitter || undefined);
+        } catch (error) {
+          form.requestSubmit();
+        }
+      } else {
+        form.submit();
+      }
+    });
+  }, true);
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target.closest('[data-tech-unit-form]');
+
     if (!form || !form.querySelector('[data-duplicate-assumption-nonce]')) {
       return;
     }
@@ -2005,6 +2840,11 @@
     const form = event.target.closest('[data-tech-unit-form]');
 
     if (!form) {
+      return;
+    }
+
+    if (!validateAllRequiredRepeatableSections(form, true)) {
+      event.preventDefault();
       return;
     }
 
@@ -2085,6 +2925,28 @@
 
   document.addEventListener('DOMContentLoaded', () => {
     initializeForms(document);
+
+    if (!window._lotUnitFormProfileRefreshInterval) {
+      window._lotUnitFormProfileRefreshInterval = window.setInterval(() => {
+        refreshOpenLotUnitForms();
+      }, LOT_UNIT_FORM_PROFILE_REFRESH_INTERVAL_MS);
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    refreshOpenLotUnitForms({ force: true });
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      refreshOpenLotUnitForms({ force: true });
+    }
+  });
+
+  window.addEventListener('storage', (event) => {
+    if (event.key === LOT_UNIT_FORM_PROFILE_STORAGE_KEY) {
+      refreshOpenLotUnitForms({ force: true });
+    }
   });
 
   document.body.addEventListener('htmx:afterSwap', (event) => {

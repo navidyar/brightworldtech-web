@@ -1,83 +1,43 @@
 const lotModel = require('../models/lotModel');
 const lotValidationModel = require('../models/lotValidationModel');
 const lotEnforcementModel = require('../models/lotEnforcementModel');
+const lotValidationOverrideModel = require('../models/lotValidationOverrideModel');
 const requirementOptionModel = require('../models/requirementOptionModel');
+const lotUnitFormProfileModel = require('../models/lotUnitFormProfileModel');
+const {
+  REQUIREMENT,
+  UNIT_FORM_SECTIONS,
+  VISIBILITY,
+  getUnitFormFieldDefinition,
+  listLotConfigurableUnitFormFields
+} = require('../config/unitFormFieldRegistry');
+const {
+  LotUnitFormRuleEditorError,
+  normalizeSubmittedLotFormRules,
+  rulesToSelectionMaps
+} = require('../services/lotUnitFormRuleEditor');
+const { buildNewLotCreatedRedirect } = require('../services/lotCreationPolicy');
 
-const requirementFieldOptions = [
-  {
-    value: 'unit_type',
-    label: 'Unit Type',
-    helpText: 'Example: Laptop, Desktop, MacBook'
-  },
-  {
-    value: 'manufacturer',
-    label: 'Manufacturer',
-    helpText: 'Example: Dell, HP, Lenovo, Apple'
-  },
-  {
-    value: 'model',
-    label: 'Model',
-    helpText: 'Example: Latitude 5400, EliteBook 830 G7'
-  },
-  {
-    value: 'ram_size',
-    label: 'Memory Size',
-    helpText: 'Example: 8GB, 16GB, 32GB'
-  },
-  {
-    value: 'ram_type',
-    label: 'Memory Type',
-    helpText: 'Example: DDR4, DDR5, LPDDR4X'
-  },
-  {
-    value: 'storage_size',
-    label: 'SSD / Storage Size',
-    helpText: 'Example: 256GB, 512GB, 1TB'
-  },
-  {
-    value: 'storage_type',
-    label: 'SSD / Storage Type',
-    helpText: 'Example: 2.5 SATA, M.2 SATA, M.2 NVMe'
-  },
-  {
-    value: 'processor_brand',
-    label: 'CPU Brand',
-    helpText: 'Example: Intel, AMD, Apple'
-  },
-  {
-    value: 'processor_model',
-    label: 'CPU Model',
-    helpText: 'Example: i5-8365U, Ryzen 5 5600U, M1'
-  },
-  {
-    value: 'touchscreen',
-    label: 'Touchscreen',
-    helpText: 'Use yes, no, or any.'
-  }
-];
+const {
+  getLotRequirementField,
+  getLotRequirementOperator,
+  isOperatorAllowedForField,
+  listLotRequirementFields,
+  listLotRequirementOperators,
+  normalizeOperatorCode,
+  normalizeRequirementKey
+} = require('../config/lotRequirementRegistry');
 
-const operatorOptions = [
-  {
-    value: 'equals',
-    label: 'Must equal'
-  },
-  {
-    value: 'not_equals',
-    label: 'Must not equal'
-  },
-  {
-    value: 'minimum',
-    label: 'Minimum'
-  },
-  {
-    value: 'maximum',
-    label: 'Maximum'
-  },
-  {
-    value: 'contains',
-    label: 'Contains'
-  }
-];
+const requirementFieldOptions = listLotRequirementFields().map((field) => ({
+  value: field.key,
+  label: field.label,
+  helpText: field.helpText
+}));
+
+const operatorOptions = listLotRequirementOperators().map((operator) => ({
+  value: operator.key,
+  label: operator.label
+}));
 
 function getRequirementKeys() {
   return requirementFieldOptions.map((option) => option.value);
@@ -143,8 +103,8 @@ function getBlankRequirementFormData() {
 
 function getRequirementFormDataFromRequest(req) {
   return {
-    requirementKey: String(req.body.requirementKey || '').trim(),
-    operatorCode: String(req.body.operatorCode || 'equals').trim(),
+    requirementKey: normalizeRequirementKey(req.body.requirementKey),
+    operatorCode: normalizeOperatorCode(req.body.operatorCode),
     requiredValue: pickFirstBodyValue(req.body.requiredValue),
     notes: String(req.body.notes || '').trim()
   };
@@ -207,9 +167,9 @@ function getLotFormDataFromLot(lot) {
 
 function getRequirementFormDataFromRequirement(requirement) {
   return {
-    requirementKey: requirement.requirement_key || '',
-    operatorCode: requirement.operator_code || 'equals',
-    requiredValue: requirement.required_value || '',
+    requirementKey: normalizeRequirementKey(requirement.requirement_key),
+    operatorCode: normalizeOperatorCode(requirement.operator_code),
+    requiredValue: requirement.required_value_token || requirement.required_value || '',
     notes: requirement.notes || ''
   };
 }
@@ -306,21 +266,38 @@ function validateLotForm(formData, formOptions, currentLotId = null) {
   return errors;
 }
 
-function validateRequirementForm(formData) {
+function validateRequirementForm(formData, requirementValueOptionsByKey = {}) {
   const errors = [];
-  const allowedRequirementKeys = requirementFieldOptions.map((option) => option.value);
-  const allowedOperatorCodes = operatorOptions.map((option) => option.value);
+  const fieldDefinition = getLotRequirementField(formData.requirementKey);
+  const operatorDefinition = getLotRequirementOperator(formData.operatorCode);
 
-  if (!allowedRequirementKeys.includes(formData.requirementKey)) {
+  if (!fieldDefinition) {
     errors.push('Requirement field is required.');
   }
 
-  if (!allowedOperatorCodes.includes(formData.operatorCode)) {
-    errors.push('Requirement rule is invalid.');
+  if (!operatorDefinition || !isOperatorAllowedForField(formData.requirementKey, formData.operatorCode)) {
+    errors.push('The selected rule is not valid for this requirement field.');
   }
 
   if (!formData.requiredValue) {
     errors.push('Required value is required.');
+  } else if (fieldDefinition?.storageKind === 'number') {
+    const numericValue = Number(formData.requiredValue);
+
+    if (!Number.isFinite(numericValue) || numericValue <= 0) {
+      errors.push(`${fieldDefinition.label} must be a number greater than zero.`);
+    }
+  } else {
+    const optionSet = requirementValueOptionsByKey[fieldDefinition?.key];
+    const validOptionValues = new Set(
+      Array.isArray(optionSet?.options)
+        ? optionSet.options.map((option) => String(option.value))
+        : []
+    );
+
+    if (!validOptionValues.has(String(formData.requiredValue))) {
+      errors.push(`Select a valid ${fieldDefinition?.label || 'requirement'} value.`);
+    }
   }
 
   if (formData.requiredValue.length > 120) {
@@ -413,6 +390,7 @@ function buildRequirementValidationSummary(requirements, validationReport) {
   const activeRequirements = requirements.filter((requirement) => Number(requirement.is_active) === 1);
 
   return activeRequirements.map((requirement) => {
+    const requirementId = Number(requirement.lot_requirement_id || 0);
     const requirementKey = String(requirement.requirement_key || '').trim();
     const operatorCode = String(requirement.operator_code || 'equals').trim();
     const requiredValue = String(requirement.required_value || '').trim();
@@ -420,9 +398,13 @@ function buildRequirementValidationSummary(requirements, validationReport) {
     const matchingChecks = validationReport.units.flatMap((unit) => {
       return unit.checks
         .filter((check) => (
-          String(check.requirementKey || '') === requirementKey &&
-          String(check.operatorCode || 'equals') === operatorCode &&
-          String(check.requiredValue || '') === requiredValue
+          requirementId > 0
+            ? Number(check.requirementId || 0) === requirementId
+            : (
+                String(check.requirementKey || '') === requirementKey &&
+                String(check.operatorCode || 'equals') === operatorCode &&
+                String(check.requiredValue || '') === requiredValue
+              )
         ))
         .map((check) => ({
           ...check,
@@ -432,10 +414,11 @@ function buildRequirementValidationSummary(requirements, validationReport) {
     });
 
     return {
+      requirementId,
       requirementKey,
-      requirementLabel: getRequirementDisplayLabel(requirementKey),
+      requirementLabel: requirement.requirement_label || getRequirementDisplayLabel(requirementKey),
       operatorCode,
-      operatorLabel: getOperatorDisplayLabel(operatorCode),
+      operatorLabel: requirement.operator_label || getOperatorDisplayLabel(operatorCode),
       requiredValue,
       notes: requirement.notes || '',
       totalCount: matchingChecks.length,
@@ -472,9 +455,232 @@ async function getLotDetailViewData(lotId) {
   };
 }
 
+
+function getUnitFormRuleSourceLabel(source, selectedLotId) {
+  if (!source || source.type === 'application_default') {
+    return 'Application default';
+  }
+
+  if (source.type === 'lot_override' && Number(source.lotId) === Number(selectedLotId)) {
+    return 'This lot';
+  }
+
+  if (source.type === 'lot_override') {
+    return `Inherited from ${source.lotName || `Lot ${source.lotId}`}`;
+  }
+
+  return 'Resolved profile';
+}
+
+function buildLotUnitFormRuleSections(profile, selectionMaps) {
+  const configurableFields = listLotConfigurableUnitFormFields();
+  const labelsByKey = new Map(
+    configurableFields.map((field) => [field.key, field.label])
+  );
+
+  return UNIT_FORM_SECTIONS.map((section) => {
+    const fields = configurableFields
+      .filter((field) => field.section === section.key)
+      .map((field) => {
+        const resolvedField = profile.fieldsByKey.get(field.key);
+        const visibilityMode = String(
+          selectionMaps.visibilityModes[field.key] ?? VISIBILITY.INHERIT
+        );
+        const requirementMode = String(
+          selectionMaps.requirementModes[field.key] ?? REQUIREMENT.INHERIT
+        );
+        const dependencyKeys = [
+          ...new Set([
+            ...(resolvedField?.forcedVisibleBy || []),
+            ...(resolvedField?.forcedRequiredBy || [])
+          ])
+        ];
+
+        return {
+          ...field,
+          visibilityMode,
+          requirementMode,
+          hasDirectOverride: (
+            visibilityMode !== VISIBILITY.INHERIT
+            || requirementMode !== REQUIREMENT.INHERIT
+          ),
+          effectiveVisible: Boolean(resolvedField?.visible),
+          effectiveRequired: Boolean(resolvedField?.required),
+          requiredSuppressedByHidden: Boolean(resolvedField?.requiredSuppressedByHidden),
+          visibilitySourceLabel: getUnitFormRuleSourceLabel(
+            resolvedField?.visibilitySource,
+            profile.selectedLot.lotId
+          ),
+          requirementSourceLabel: getUnitFormRuleSourceLabel(
+            resolvedField?.requirementSource,
+            profile.selectedLot.lotId
+          ),
+          dependencyLabels: dependencyKeys.map((fieldKey) => (
+            labelsByKey.get(fieldKey)
+            || getUnitFormFieldDefinition(fieldKey)?.label
+            || fieldKey
+          ))
+        };
+      });
+
+    return fields.length > 0
+      ? { ...section, fields }
+      : null;
+  }).filter(Boolean);
+}
+
+async function getLotUnitFormRuleViewData(lotId, submittedSelectionMaps = null) {
+  const lot = await lotModel.getLotById(lotId);
+
+  if (!lot) {
+    return null;
+  }
+
+  const [profile, directRules] = await Promise.all([
+    lotUnitFormProfileModel.getEffectiveUnitFormProfileForLot(lotId),
+    lotUnitFormProfileModel.listRulesForLot(lotId)
+  ]);
+  const selectionMaps = submittedSelectionMaps || rulesToSelectionMaps(directRules);
+
+  const sections = buildLotUnitFormRuleSections(profile, selectionMaps);
+  const configurableResolvedFields = profile.fields.filter((field) => field.enabledForLotRules);
+
+  return {
+    lot,
+    profile,
+    directRules,
+    selectionMaps,
+    sections,
+    directRuleCount: sections.reduce((count, section) => (
+      count + section.fields.filter((field) => field.hasDirectOverride).length
+    ), 0),
+    configurableSummary: {
+      totalFields: configurableResolvedFields.length,
+      visibleFields: configurableResolvedFields.filter((field) => field.visible).length,
+      requiredFields: configurableResolvedFields.filter((field) => field.required).length,
+      hiddenFields: configurableResolvedFields.filter((field) => !field.visible).length
+    },
+    visibilityModes: Object.values(VISIBILITY),
+    requirementModes: Object.values(REQUIREMENT)
+  };
+}
+
+function renderLotUnitFormRulesModal(res, viewData, errorMessages = [], statusCode = 200) {
+  return res.status(statusCode).render('fragments/lot-unit-form-rules-modal', {
+    ...viewData,
+    errorMessages
+  });
+}
+
+async function renderLotUnitFormRulesModalPage(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return renderLotUnitFormRulesModal(res, {
+        lot: null,
+        profile: null,
+        directRules: [],
+        selectionMaps: { visibilityModes: {}, requirementModes: {} },
+        sections: [],
+        directRuleCount: 0,
+        configurableSummary: { totalFields: 0, visibleFields: 0, requiredFields: 0, hiddenFields: 0 },
+        visibilityModes: Object.values(VISIBILITY),
+        requirementModes: Object.values(REQUIREMENT)
+      }, ['The selected lot could not be found.'], 404);
+    }
+
+    const viewData = await getLotUnitFormRuleViewData(lotId);
+
+    if (!viewData) {
+      return renderLotUnitFormRulesModal(res, {
+        lot: null,
+        profile: null,
+        directRules: [],
+        selectionMaps: { visibilityModes: {}, requirementModes: {} },
+        sections: [],
+        directRuleCount: 0,
+        configurableSummary: { totalFields: 0, visibleFields: 0, requiredFields: 0, hiddenFields: 0 },
+        visibilityModes: Object.values(VISIBILITY),
+        requirementModes: Object.values(REQUIREMENT)
+      }, ['The selected lot could not be found.'], 404);
+    }
+
+    return renderLotUnitFormRulesModal(res, viewData);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateLotUnitFormRules(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return renderLotUnitFormRulesModal(res, {
+        lot: null,
+        profile: null,
+        directRules: [],
+        selectionMaps: { visibilityModes: {}, requirementModes: {} },
+        sections: [],
+        directRuleCount: 0,
+        configurableSummary: { totalFields: 0, visibleFields: 0, requiredFields: 0, hiddenFields: 0 },
+        visibilityModes: Object.values(VISIBILITY),
+        requirementModes: Object.values(REQUIREMENT)
+      }, ['The selected lot could not be found.'], 404);
+    }
+
+    const submittedSelectionMaps = {
+      visibilityModes: req.body.visibilityModes || {},
+      requirementModes: req.body.requirementModes || {}
+    };
+    let rules;
+
+    try {
+      rules = normalizeSubmittedLotFormRules(submittedSelectionMaps);
+    } catch (error) {
+      if (!(error instanceof LotUnitFormRuleEditorError)) {
+        throw error;
+      }
+
+      const viewData = await getLotUnitFormRuleViewData(lotId, submittedSelectionMaps);
+
+      if (!viewData) {
+        return renderLotUnitFormRulesModal(res, {
+          lot: null,
+          profile: null,
+          directRules: [],
+          selectionMaps: submittedSelectionMaps,
+          sections: [],
+          directRuleCount: 0,
+          configurableSummary: { totalFields: 0, visibleFields: 0, requiredFields: 0, hiddenFields: 0 },
+          visibilityModes: Object.values(VISIBILITY),
+          requirementModes: Object.values(REQUIREMENT)
+        }, ['The selected lot could not be found.'], 404);
+      }
+
+      return renderLotUnitFormRulesModal(res, viewData, error.messages);
+    }
+
+    await lotUnitFormProfileModel.replaceRulesForLot(
+      lotId,
+      rules,
+      req.currentUser.user_id
+    );
+
+    return sendHtmxRedirect(
+      req,
+      res,
+      addCacheBuster(`/management/lots/${lotId}?unitFormRulesUpdated=1`)
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
 function getLotSuccessMessage(query) {
   if (query.created === '1') {
-    return 'Lot created successfully.';
+    return 'Lot created successfully. It remains hidden until you manually unhide it.';
   }
 
   if (query.updated === '1') {
@@ -571,9 +777,13 @@ async function createLot(req, res, next) {
       });
     }
 
-    await lotModel.createLot(formData, req.currentUser.user_id);
+    const createdLot = await lotModel.createLot(formData, req.currentUser.user_id);
 
-    return sendHtmxRedirect(req, res, addCacheBuster('/management/lots?created=1'));
+    return sendHtmxRedirect(
+      req,
+      res,
+      addCacheBuster(buildNewLotCreatedRedirect(createdLot.lotId))
+    );
   } catch (error) {
     next(error);
   }
@@ -613,9 +823,19 @@ async function renderLotDetailPage(req, res, next) {
           ? 'Lot updated successfully.'
           : (req.query.requirementUpdated === '1'
             ? 'Requirement updated successfully.'
-            : (req.query.closed === '1'
-              ? 'Lot closed successfully.'
-              : (req.query.reopened === '1' ? 'Lot reopened successfully.' : null))))
+            : (req.query.requirementDeleted === '1'
+              ? 'Requirement deleted successfully.'
+              : (req.query.closed === '1'
+                ? 'Lot closed successfully.'
+              : (req.query.reopened === '1'
+                ? 'Lot reopened successfully.'
+                : (req.query.unitFormRulesUpdated === '1'
+                  ? 'Unit form configuration updated successfully.'
+                  : (req.query.validationOverrideAccepted === '1'
+                    ? 'Unit accepted by Management for this Lot.'
+                    : (req.query.validationOverrideRevoked === '1'
+                      ? 'Management acceptance revoked.'
+                      : null))))))))
     });
   } catch (error) {
     next(error);
@@ -643,7 +863,10 @@ async function createLotRequirement(req, res, next) {
     }
 
     const requirementFormData = getRequirementFormDataFromRequest(req);
-    const errorMessages = validateRequirementForm(requirementFormData);
+    const errorMessages = validateRequirementForm(
+      requirementFormData,
+      lotDetailViewData.requirementValueOptionsByKey
+    );
 
     if (errorMessages.length > 0) {
       if (isHtmxRequest(req)) {
@@ -1039,38 +1262,212 @@ async function renderLotRequirementsModal(req, res, next) {
   }
 }
 
-async function renderLotEnforcementModal(req, res, next) {
+
+async function renderLotUnitValidationModal(req, res, next) {
   try {
     const lotId = Number(req.params.lotId);
+    const unitId = Number(req.params.unitId);
 
-    if (!Number.isInteger(lotId) || lotId <= 0) {
-      return res.status(404).render('fragments/lot-enforcement-modal', {
-        enforcementSummary: null,
-        validationReport: null,
-        requirementValidationSummary: [],
-        errorMessages: ['The selected lot could not be found.']
+    if (!Number.isInteger(lotId) || lotId <= 0 || !Number.isInteger(unitId) || unitId <= 0) {
+      return res.status(404).render('fragments/lot-unit-validation-modal', {
+        lot: null,
+        unit: null,
+        requirementCount: 0,
+        errorMessages: ['The selected Lot or Unit could not be found.']
       });
     }
 
     const lotDetailViewData = await getLotDetailViewData(lotId);
 
     if (!lotDetailViewData) {
-      return res.status(404).render('fragments/lot-enforcement-modal', {
-        enforcementSummary: null,
-        validationReport: null,
-        requirementValidationSummary: [],
-        errorMessages: ['The selected lot could not be found.']
+      return res.status(404).render('fragments/lot-unit-validation-modal', {
+        lot: null,
+        unit: null,
+        requirementCount: 0,
+        errorMessages: ['The selected Lot could not be found.']
       });
     }
 
-    return res.render('fragments/lot-enforcement-modal', {
-      enforcementSummary: lotDetailViewData.enforcementSummary,
-      validationReport: lotDetailViewData.validationReport,
-      requirementValidationSummary: lotDetailViewData.requirementValidationSummary,
+    const unit = lotDetailViewData.validationReport.units.find(
+      (candidate) => Number(candidate.unitId) === unitId
+    );
+
+    if (!unit) {
+      return res.status(404).render('fragments/lot-unit-validation-modal', {
+        lot: lotDetailViewData.lot,
+        unit: null,
+        requirementCount: lotDetailViewData.validationReport.requirementCount,
+        errorMessages: ['The selected Unit is not currently assigned to this Lot.']
+      });
+    }
+
+    return res.render('fragments/lot-unit-validation-modal', {
+      lot: lotDetailViewData.lot,
+      unit,
+      requirementCount: lotDetailViewData.validationReport.requirementCount,
       errorMessages: []
     });
   } catch (error) {
     next(error);
+  }
+}
+
+
+function renderLotUnitValidationModalResponse(res, {
+  lot,
+  unit,
+  requirementCount,
+  errorMessages = [],
+  statusCode = 200
+}) {
+  return res.status(statusCode).render('fragments/lot-unit-validation-modal', {
+    lot,
+    unit,
+    requirementCount,
+    errorMessages
+  });
+}
+
+async function acceptLotUnitValidationOverride(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const unitId = Number(req.params.unitId);
+    const reason = String(req.body.reason || '').trim();
+
+    if (!Number.isSafeInteger(lotId) || lotId <= 0 || !Number.isSafeInteger(unitId) || unitId <= 0) {
+      return renderLotUnitValidationModalResponse(res, {
+        lot: null,
+        unit: null,
+        requirementCount: 0,
+        errorMessages: ['The selected Lot or Unit could not be found.'],
+        statusCode: 404
+      });
+    }
+
+    const lotDetailViewData = await getLotDetailViewData(lotId);
+    const unit = lotDetailViewData?.validationReport?.units.find(
+      (candidate) => Number(candidate.unitId) === unitId
+    );
+
+    if (!lotDetailViewData || !unit) {
+      return renderLotUnitValidationModalResponse(res, {
+        lot: lotDetailViewData?.lot || null,
+        unit: null,
+        requirementCount: lotDetailViewData?.validationReport?.requirementCount || 0,
+        errorMessages: ['The selected Unit is not currently assigned to this Lot.'],
+        statusCode: 404
+      });
+    }
+
+    if (!['rejected', 'needs_review'].includes(unit.technicalStatus || unit.status)) {
+      return renderLotUnitValidationModalResponse(res, {
+        lot: lotDetailViewData.lot,
+        unit,
+        requirementCount: lotDetailViewData.validationReport.requirementCount,
+        errorMessages: ['This Unit does not currently require a Management acceptance.'],
+        statusCode: 400
+      });
+    }
+
+    if (!reason) {
+      return renderLotUnitValidationModalResponse(res, {
+        lot: lotDetailViewData.lot,
+        unit,
+        requirementCount: lotDetailViewData.validationReport.requirementCount,
+        errorMessages: ['A reason is required to accept this Unit.'],
+        statusCode: 400
+      });
+    }
+
+    await lotValidationOverrideModel.createApprovedOverride({
+      unitId,
+      lotId,
+      approvedByUserId: req.currentUser.user_id,
+      reason
+    });
+
+    return sendHtmxRedirect(
+      req,
+      res,
+      addCacheBuster(`/management/lots/${lotId}?validationOverrideAccepted=1`)
+    );
+  } catch (error) {
+    if (isHtmxRequest(req)) {
+      const lotId = Number(req.params.lotId);
+      const unitId = Number(req.params.unitId);
+      const lotDetailViewData = Number.isSafeInteger(lotId) && lotId > 0
+        ? await getLotDetailViewData(lotId)
+        : null;
+      const unit = lotDetailViewData?.validationReport?.units.find(
+        (candidate) => Number(candidate.unitId) === unitId
+      ) || null;
+
+      return renderLotUnitValidationModalResponse(res, {
+        lot: lotDetailViewData?.lot || null,
+        unit,
+        requirementCount: lotDetailViewData?.validationReport?.requirementCount || 0,
+        errorMessages: [error.message || 'The Unit could not be accepted.'],
+        statusCode: 400
+      });
+    }
+
+    return next(error);
+  }
+}
+
+async function revokeLotUnitValidationOverride(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const unitId = Number(req.params.unitId);
+    const overrideId = Number(req.params.overrideId);
+
+    if (
+      !Number.isSafeInteger(lotId) || lotId <= 0
+      || !Number.isSafeInteger(unitId) || unitId <= 0
+      || !Number.isSafeInteger(overrideId) || overrideId <= 0
+    ) {
+      return renderLotUnitValidationModalResponse(res, {
+        lot: null,
+        unit: null,
+        requirementCount: 0,
+        errorMessages: ['The selected Management acceptance could not be found.'],
+        statusCode: 404
+      });
+    }
+
+    await lotValidationOverrideModel.revokeApprovedOverride({
+      overrideId,
+      unitId,
+      lotId,
+      revokedByUserId: req.currentUser.user_id
+    });
+
+    return sendHtmxRedirect(
+      req,
+      res,
+      addCacheBuster(`/management/lots/${lotId}?validationOverrideRevoked=1`)
+    );
+  } catch (error) {
+    if (isHtmxRequest(req)) {
+      const lotId = Number(req.params.lotId);
+      const unitId = Number(req.params.unitId);
+      const lotDetailViewData = Number.isSafeInteger(lotId) && lotId > 0
+        ? await getLotDetailViewData(lotId)
+        : null;
+      const unit = lotDetailViewData?.validationReport?.units.find(
+        (candidate) => Number(candidate.unitId) === unitId
+      ) || null;
+
+      return renderLotUnitValidationModalResponse(res, {
+        lot: lotDetailViewData?.lot || null,
+        unit,
+        requirementCount: lotDetailViewData?.validationReport?.requirementCount || 0,
+        errorMessages: [error.message || 'The Management acceptance could not be revoked.'],
+        statusCode: 400
+      });
+    }
+
+    return next(error);
   }
 }
 
@@ -1172,7 +1569,10 @@ async function updateLotRequirementModal(req, res, next) {
 
     const requirement = await lotModel.getLotRequirementById(lotId, requirementId);
     const formData = getRequirementFormDataFromRequest(req);
-    const errorMessages = validateRequirementForm(formData);
+    const errorMessages = validateRequirementForm(
+      formData,
+      lotDetailViewData.requirementValueOptionsByKey
+    );
 
     if (!requirement) {
       errorMessages.push('The selected requirement could not be found.');
@@ -1199,6 +1599,84 @@ async function updateLotRequirementModal(req, res, next) {
   }
 }
 
+async function renderDeleteLotRequirementModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const requirementId = Number(req.params.requirementId);
+
+    if (!Number.isInteger(lotId) || lotId <= 0 || !Number.isInteger(requirementId) || requirementId <= 0) {
+      return res.status(404).render('fragments/lot-requirement-delete-modal', {
+        lot: null,
+        requirement: null,
+        errorMessages: ['The selected requirement could not be found.']
+      });
+    }
+
+    const [lot, requirement] = await Promise.all([
+      lotModel.getLotById(lotId),
+      lotModel.getLotRequirementById(lotId, requirementId)
+    ]);
+
+    if (!lot || !requirement) {
+      return res.status(404).render('fragments/lot-requirement-delete-modal', {
+        lot: lot || null,
+        requirement: requirement || null,
+        errorMessages: ['The selected requirement could not be found.']
+      });
+    }
+
+    return res.render('fragments/lot-requirement-delete-modal', {
+      lot,
+      requirement,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function deleteLotRequirement(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const requirementId = Number(req.params.requirementId);
+
+    if (!Number.isInteger(lotId) || lotId <= 0 || !Number.isInteger(requirementId) || requirementId <= 0) {
+      return res.status(404).render('fragments/lot-requirement-delete-modal', {
+        lot: null,
+        requirement: null,
+        errorMessages: ['The selected requirement could not be found.']
+      });
+    }
+
+    const [lot, requirement] = await Promise.all([
+      lotModel.getLotById(lotId),
+      lotModel.getLotRequirementById(lotId, requirementId)
+    ]);
+
+    if (!lot || !requirement) {
+      return res.status(404).render('fragments/lot-requirement-delete-modal', {
+        lot: lot || null,
+        requirement: requirement || null,
+        errorMessages: ['The selected requirement could not be found.']
+      });
+    }
+
+    const deleted = await lotModel.deleteLotRequirement(lotId, requirementId);
+
+    if (!deleted) {
+      return res.status(409).render('fragments/lot-requirement-delete-modal', {
+        lot,
+        requirement,
+        errorMessages: ['The requirement was not deleted. It may have already been removed.']
+      });
+    }
+
+    return sendHtmxRedirect(req, res, addCacheBuster(`/management/lots/${lotId}?requirementDeleted=1`));
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   renderLotsPage,
   renderNewLotPage,
@@ -1214,9 +1692,15 @@ module.exports = {
   deleteLot,
   renderLotDetailPage,
   renderLotRequirementsModal,
-  renderLotEnforcementModal,
+  renderLotUnitFormRulesModalPage,
+  renderLotUnitValidationModal,
+  acceptLotUnitValidationOverride,
+  revokeLotUnitValidationOverride,
   renderNewLotRequirementModal,
   createLotRequirement,
   renderEditLotRequirementModal,
-  updateLotRequirementModal
+  updateLotRequirementModal,
+  renderDeleteLotRequirementModal,
+  deleteLotRequirement,
+  updateLotUnitFormRules
 };

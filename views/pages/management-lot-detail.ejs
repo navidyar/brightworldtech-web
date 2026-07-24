@@ -1,13 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle }) %>
-  <link rel="stylesheet" href="/css/lots.css" />
-  <link rel="stylesheet" href="/css/modal.css" />
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: [
+      '/css/lots.css',
+      '/css/modal.css'
+    ]
+  }) %>
   <script defer src="/js/modal.js"></script>
   <script defer src="/js/lot-form.js"></script>
   <script defer src="/js/lot-requirements.js"></script>
+  <script defer src="/js/lot-unit-form-rules.js"></script>
 
-  <body>
+  <body class="lots-lookup-typography-preview lots-lookup-ui-preview">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 
@@ -38,7 +43,7 @@
               <a class="secondary-button" href="/management/lots<%= Number(lot.is_active) === 1 ? '' : '?showHidden=1' %>">Back to Lots</a>
               <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-target="#modal-root" hx-swap="innerHTML">Requirements</a>
-              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/enforcement/modal" hx-get="/management/lots/<%= lot.lot_id %>/enforcement/modal" hx-target="#modal-root" hx-swap="innerHTML">Enforcement Preview</a>
+              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-get="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Unit Form</a>
               <% if (Number(lot.is_closed) === 1) { %>
                 <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-target="#modal-root" hx-swap="innerHTML">Reopen Lot</a>
               <% } else { %>
@@ -63,7 +68,7 @@
 
           <% if (Number(lot.is_active) !== 1) { %>
             <div class="message warning">
-              This lot is hidden from normal lot browsers and assignment dropdowns, but remains available here for history and review.
+              This lot is hidden from technicians and assignment dropdowns. Configure its Unit form, requirements, and other settings, then use Unhide Lot when it is ready.
             </div>
           <% } %>
 
@@ -152,6 +157,7 @@
 
                 <div class="lot-validation-check-stats">
                   <span class="accepted"><small>Accepted</small><strong><%= formatNumber(validationReport.acceptedCount) %></strong></span>
+                  <span class="accepted-override"><small>Management</small><strong><%= formatNumber(validationReport.acceptedOverrideCount || 0) %></strong></span>
                   <span class="rejected"><small>Rejected</small><strong><%= formatNumber(validationReport.rejectedCount) %></strong></span>
                   <span class="review"><small>Needs Review</small><strong><%= formatNumber(validationReport.needsReviewCount) %></strong></span>
                   <span class="open"><small>Open</small><strong><%= formatNumber(validationReport.openCount) %></strong></span>
@@ -221,62 +227,39 @@
             <% } else { %>
               <div class="unit-validation-list">
                 <% validationReport.units.forEach((unit) => { %>
-                  <details class="unit-validation-item">
-                    <summary>
-                      <span class="unit-validation-main">
-                        <strong><%= unit.label %></strong>
-                        <small><%= unit.subLabel %></small>
-                      </span>
+                  <article class="unit-validation-item unit-validation-row">
+                    <a
+                      class="unit-validation-indicator <%= unit.status %>"
+                      href="/management/lots/<%= lot.lot_id %>/units/<%= unit.unitId %>/validation/modal"
+                      hx-get="/management/lots/<%= lot.lot_id %>/units/<%= unit.unitId %>/validation/modal"
+                      hx-target="#modal-root"
+                      hx-swap="innerHTML"
+                      aria-label="Review requirement details for <%= unit.label %>"
+                    >
+                      <span class="validation-badge <%= unit.status %>"><%= unit.statusLabel %></span>
+                      <small>
+                        <% const issueCount = unit.failedChecks.length + unit.reviewChecks.length; %>
+                        <% if (issueCount === 0) { %>
+                          No issues
+                        <% } else { %>
+                          <%= formatNumber(issueCount) %> issue<%= issueCount === 1 ? '' : 's' %>
+                        <% } %>
+                      </small>
+                    </a>
 
-                      <span class="validation-badge <%= unit.status %>">
-                        <%= unit.statusLabel %>
-                      </span>
-                    </summary>
-
-                    <% if (validationReport.requirementCount === 0) { %>
-                      <div class="unit-validation-empty">
-                        No active requirements exist for this lot.
-                      </div>
-                    <% } else { %>
-                      <div class="table-card unit-check-table">
-                        <table>
-                          <thead>
-                            <tr>
-                              <th>Requirement</th>
-                              <th>Rule</th>
-                              <th>Required</th>
-                              <th>Actual</th>
-                              <th>Result</th>
-                              <th>Notes</th>
-                            </tr>
-                          </thead>
-
-                          <tbody>
-                            <% unit.checks.forEach((check) => { %>
-                              <tr>
-                                <td><%= check.requirementKey %></td>
-                                <td><%= check.operatorCode %></td>
-                                <td><%= check.requiredValue || '—' %></td>
-                                <td>
-                                  <%= check.actualValue || '—' %>
-                                  <% if (check.sourceColumn && check.sourceColumn !== '—') { %>
-                                    <br />
-                                    <span class="table-muted-line">Column: <%= check.sourceColumn %></span>
-                                  <% } %>
-                                </td>
-                                <td>
-                                  <span class="validation-badge <%= check.status %>">
-                                    <%= check.statusLabel %>
-                                  </span>
-                                </td>
-                                <td><%= check.message %></td>
-                              </tr>
-                            <% }) %>
-                          </tbody>
-                        </table>
-                      </div>
-                    <% } %>
-                  </details>
+                    <div class="unit-validation-main">
+                      <strong>
+                        <a
+                          class="unit-validation-asset-link"
+                          href="/tech/units/<%= unit.unitId %>"
+                          target="_blank"
+                          rel="noopener"
+                        ><%= unit.label %></a>
+                      </strong>
+                      <small><%= unit.subLabel %></small>
+                      <small class="unit-validation-technician"><span>Tech:</span> <%= unit.technicianSummary %></small>
+                    </div>
+                  </article>
                 <% }) %>
               </div>
 

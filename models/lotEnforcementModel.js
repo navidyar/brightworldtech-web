@@ -19,6 +19,16 @@ function getUnitEnforcementDecision(unit) {
     };
   }
 
+  if (unit.status === 'accepted_override') {
+    return {
+      decision: 'allowed_override',
+      decisionLabel: 'Allowed by Management',
+      message: 'Management accepted this Unit despite its requirement issues.',
+      canProceed: true,
+      requiresOverride: false
+    };
+  }
+
   if (unit.status === 'open') {
     return {
       decision: 'allowed_open',

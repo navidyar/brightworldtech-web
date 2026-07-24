@@ -54,9 +54,9 @@
 
             <label class="form-field">
               <span>Rule</span>
-              <select name="operatorCode" required>
+              <select name="operatorCode" required data-requirement-operator>
                 <% operatorOptions.forEach((option) => { %>
-                  <option value="<%= option.value %>" <%= safeFormData.operatorCode === option.value ? 'selected' : '' %>>
+                  <option value="<%= option.value %>" data-operator-code="<%= option.value %>" <%= safeFormData.operatorCode === option.value ? 'selected' : '' %>>
                     <%= option.label %>
                   </option>
                 <% }) %>
@@ -68,11 +68,12 @@
               <select name="requiredValue" data-required-value-select disabled>
                 <option value="">Select value</option>
               </select>
+              <small class="field-hint" data-required-value-select-hint></small>
             </label>
 
             <label class="form-field" data-required-value-text-wrap>
               <span>Required Value</span>
-              <input type="text" name="requiredValue" value="<%= safeFormData.requiredValue || '' %>" maxlength="120" placeholder="Example: 16GB, DDR4, 512GB, i5-8365U, yes, no" required data-required-value-text />
+              <input type="number" name="requiredValue" value="<%= safeFormData.requiredValue || '' %>" min="0.01" step="0.01" placeholder="Example: 16" required data-required-value-text />
             </label>
 
             <label class="form-field">
@@ -80,6 +81,10 @@
               <input type="text" name="notes" value="<%= safeFormData.notes || '' %>" maxlength="500" placeholder="Optional internal note" />
             </label>
           </div>
+
+          <p class="field-hint" data-requirement-field-hint>
+            Select a requirement field to load its supported values and rules.
+          </p>
         </div>
 
         <div class="form-actions">

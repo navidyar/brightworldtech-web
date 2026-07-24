@@ -1,15 +1,18 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle }) %>
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: ['/css/lots.css']
+  }) %>
 
-  <body>
+  <body class="lots-lookup-typography-preview lots-lookup-ui-preview">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 
       <div class="app-main">
         <%- include('../partials/topbar', { pageTitle }) %>
 
-        <main class="content-shell">
+        <main class="content-shell lot-new-page">
           <section class="dashboard-hero accent-green">
             <div>
               <p class="eyebrow">Step 2c.1</p>
