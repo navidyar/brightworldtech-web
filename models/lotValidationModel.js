@@ -25,6 +25,10 @@ async function listBaseUnitRowsForLot(lotId, connection = pool) {
         u.unit_id,
         u.asset_number,
         u.lot_id,
+        u.assigned_to_user_id,
+        assigned_user.first_name AS assigned_first_name,
+        assigned_user.last_name AS assigned_last_name,
+        assigned_user.email AS assigned_email,
         u.unit_category_config_value_id,
         unit_category.code AS unit_category_code,
         COALESCE(unit_category.label, unit_category.code) AS unit_category_label,
@@ -49,12 +53,29 @@ async function listBaseUnitRowsForLot(lotId, connection = pool) {
           NULLIF(processor_model.processor_family, ''),
           processor_model.model_code
         ) AS processor_display_label,
+        (
+          SELECT GROUP_CONCAT(DISTINCT pfm.processor_family_id ORDER BY pfm.processor_family_id SEPARATOR ',')
+          FROM processor_family_members pfm
+          INNER JOIN processor_families pf
+            ON pf.processor_family_id = pfm.processor_family_id
+           AND pf.is_active = 1
+          WHERE pfm.processor_model_id = u.processor_model_id
+        ) AS processor_family_ids,
+        (
+          SELECT GROUP_CONCAT(DISTINCT pf.name ORDER BY pf.name SEPARATOR '||')
+          FROM processor_family_members pfm
+          INNER JOIN processor_families pf
+            ON pf.processor_family_id = pfm.processor_family_id
+           AND pf.is_active = 1
+          WHERE pfm.processor_model_id = u.processor_model_id
+        ) AS processor_family_labels,
         u.ram_gb,
         u.ram_type_config_value_id,
         ram_type.code AS ram_type_code,
         COALESCE(ram_type.label, ram_type.code) AS ram_type_label,
         u.storage_gb,
         u.storage_type_config_value_id,
+        u.battery_health_percent,
         storage_type.code AS storage_type_code,
         COALESCE(storage_type.label, storage_type.code) AS storage_type_label,
         u.created_at,
@@ -62,6 +83,8 @@ async function listBaseUnitRowsForLot(lotId, connection = pool) {
         latest_lot_history.unit_lot_history_id AS latest_lot_history_id,
         latest_lot_history.moved_at AS latest_lot_moved_at
       FROM units u
+      LEFT JOIN users assigned_user
+        ON assigned_user.user_id = u.assigned_to_user_id
       LEFT JOIN unit_lot_history latest_lot_history
         ON latest_lot_history.unit_lot_history_id = (
           SELECT MAX(history_lookup.unit_lot_history_id)
@@ -200,6 +223,7 @@ async function listTechnicianRowsForUnits(unitIds, connection = pool) {
         JOIN users user
           ON user.user_id = completion.completed_by_user_id
         WHERE completion.unit_id IN (${placeholders})
+          AND completion.reversed_at IS NULL
 
         UNION ALL
 

@@ -96,6 +96,14 @@
                 <dd><%= currentLotLabel() %></dd>
               </div>
               <div>
+                <dt>Manufacturer</dt>
+                <dd><%= safeCandidate.manufacturerLabel || '—' %></dd>
+              </div>
+              <div>
+                <dt>Model</dt>
+                <dd><%= safeCandidate.modelLabel || safeCandidate.modelSummary || '—' %></dd>
+              </div>
+              <div>
                 <dt>Matched By</dt>
                 <dd><%= matchedByLabel() || 'Serial match' %></dd>
               </div>
@@ -115,8 +123,12 @@
                   <dd><%= display.destinationLotName || '—' %></dd>
                 </div>
                 <div>
+                  <dt>Manufacturer</dt>
+                  <dd><%= display.manufacturerLabel || '—' %></dd>
+                </div>
+                <div>
                   <dt>Model</dt>
-                  <dd><%= [display.manufacturerLabel, display.modelLabel].filter((value) => value && value !== '—').join(' · ') || '—' %></dd>
+                  <dd><%= display.modelLabel || '—' %></dd>
                 </div>
                 <div>
                   <dt>Processor</dt>
@@ -136,6 +148,18 @@
                 </div>
               </dl>
             </section>
+
+            <% if (display.manufacturerDiffers || display.modelDiffers) { %>
+              <div class="message info">
+                <p><strong>The proposed identity differs from the matching record.</strong> That difference is allowed in an Intentional Duplicate request and will be shown to the reviewer; the matching serials are why approval is required.</p>
+                <% if (display.manufacturerDiffers) { %>
+                  <p>Manufacturer: <%= display.existingManufacturerLabel || '—' %> → <%= display.manufacturerLabel || '—' %></p>
+                <% } %>
+                <% if (display.modelDiffers) { %>
+                  <p>Model: <%= display.existingModelLabel || '—' %> → <%= display.modelLabel || '—' %></p>
+                <% } %>
+              </div>
+            <% } %>
 
             <form
               class="app-form unit-request-form"

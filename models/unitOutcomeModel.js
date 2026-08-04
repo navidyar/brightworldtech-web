@@ -1,4 +1,5 @@
 const { pool } = require('./db');
+const unitWorkflowAudit = require('../services/unitWorkflowAudit');
 
 const VALID_OUTCOME_CODES = new Set(['pass', 'fail']);
 
@@ -235,8 +236,10 @@ async function getOutcomeFormDataByUnitId(unitId) {
   return {
     outcomeCode: currentOutcome.outcomeCode || '',
     outcomeNotes: currentOutcome.outcomeNotes || '',
-    outcomeApprovalRequested: currentOutcome.isPendingApproval,
-    outcomeApprovalRequestNotes: currentOutcome.approvalRequestNotes || ''
+    // Approval requests are one-time actions. Their checkbox and note must not
+    // be repopulated after the request has been recorded in Requests/History.
+    outcomeApprovalRequested: false,
+    outcomeApprovalRequestNotes: ''
   };
 }
 
@@ -269,6 +272,7 @@ async function saveOutcomeForUnitWithConnection(connection, { unitId, formData, 
         outcome_code,
         outcome_notes,
         approval_status_code,
+        approval_requested_by_user_id,
         approval_request_notes
       FROM unit_outcomes
       WHERE unit_id = ?
@@ -281,15 +285,24 @@ async function saveOutcomeForUnitWithConnection(connection, { unitId, formData, 
   );
 
   const currentRow = currentRows[0] || null;
+  const outcomeChanged = !currentRow
+    || currentRow.outcome_code !== outcomeCode
+    || String(currentRow.outcome_notes || '') !== String(outcomeNotes || '');
+  const approvalRequestChanged = approvalRequested && (
+    String(currentRow?.approval_status_code || 'not_requested') !== 'pending'
+    || String(currentRow?.approval_request_notes || '') !== String(approvalRequestNotes || '')
+    || normalizeOptionalInteger(currentRow?.approval_requested_by_user_id) !== userId
+  );
 
-  if (
-    currentRow &&
-    currentRow.outcome_code === outcomeCode &&
-    String(currentRow.outcome_notes || '') === String(outcomeNotes || '') &&
-    String(currentRow.approval_status_code || 'not_requested') === approvalStatusCode &&
-    String(currentRow.approval_request_notes || '') === String(approvalRequestNotes || '')
-  ) {
-    return;
+  // Leaving the action checkbox clear means "do not create a new request".
+  // It must not withdraw or overwrite an already-recorded pending request when
+  // the Pass/Fail decision itself has not changed.
+  if (!outcomeChanged && !approvalRequestChanged) {
+    return {
+      saved: false,
+      outcomeChanged: false,
+      approvalRequested
+    };
   }
 
   await connection.query(
@@ -328,6 +341,12 @@ async function saveOutcomeForUnitWithConnection(connection, { unitId, formData, 
       approvalRequestNotes
     ]
   );
+
+  return {
+    saved: true,
+    outcomeChanged,
+    approvalRequested
+  };
 }
 
 async function saveOutcomeForUnit({ unitId, formData, currentUserId }) {
@@ -336,13 +355,14 @@ async function saveOutcomeForUnit({ unitId, formData, currentUserId }) {
   try {
     await connection.beginTransaction();
 
-    await saveOutcomeForUnitWithConnection(connection, {
+    const result = await saveOutcomeForUnitWithConnection(connection, {
       unitId,
       formData,
       currentUserId
     });
 
     await connection.commit();
+    return result;
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -359,25 +379,67 @@ async function approveCurrentOutcome({ unitId, approvedByUserId, approvalNotes }
     return false;
   }
 
-  const [result] = await pool.query(
-    `
-      UPDATE unit_outcomes
-      SET
-        approval_status_code = 'approved',
-        approved_by_user_id = ?,
-        approved_at = NOW(),
-        approval_notes = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE unit_id = ?
-        AND is_current = 1
-        AND approval_status_code = 'pending'
-      ORDER BY selected_at DESC, unit_outcome_id DESC
-      LIMIT 1
-    `,
-    [reviewerUserId, normalizeNullableText(approvalNotes, 1000), safeUnitId]
-  );
+  const connection = await pool.getConnection();
 
-  return result.affectedRows > 0;
+  try {
+    await connection.beginTransaction();
+    const [currentRows] = await connection.query(
+      `
+        SELECT unit_outcome_id, outcome_code
+        FROM unit_outcomes
+        WHERE unit_id = ?
+          AND is_current = 1
+          AND approval_status_code = 'pending'
+        ORDER BY selected_at DESC, unit_outcome_id DESC
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [safeUnitId]
+    );
+    const current = currentRows[0] || null;
+
+    if (!current) {
+      await connection.rollback();
+      return false;
+    }
+
+    const [result] = await connection.query(
+      `
+        UPDATE unit_outcomes
+        SET
+          approval_status_code = 'approved',
+          approved_by_user_id = ?,
+          approved_at = NOW(),
+          approval_notes = ?,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE unit_outcome_id = ?
+          AND approval_status_code = 'pending'
+        LIMIT 1
+      `,
+      [reviewerUserId, normalizeNullableText(approvalNotes, 1000), Number(current.unit_outcome_id)]
+    );
+
+    if (Number(result.affectedRows || 0) !== 1) {
+      await connection.rollback();
+      return false;
+    }
+
+    await unitWorkflowAudit.recordOutcomeApproved(connection, {
+      unitId: safeUnitId,
+      actorUserId: reviewerUserId,
+      outcomeLabel: getOutcomeLabel(current.outcome_code),
+      approvalNotes,
+      source: 'unit_outcome_approval'
+    });
+
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 module.exports = {

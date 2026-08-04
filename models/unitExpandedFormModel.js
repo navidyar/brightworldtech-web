@@ -1,6 +1,12 @@
 const { pool } = require('./db');
 const unitOutcomeModel = require('./unitOutcomeModel');
 const overrideRequestModel = require('./overrideRequestModel');
+const operationalOptionRankingModel = require('./operationalOptionRankingModel');
+const { sortOptionsByPopularity } = require('../services/operationalOptionRanking');
+const {
+  isAnyUnitFormFieldManaged,
+  isUnitFormFieldManaged
+} = require('../services/unitFormSubmissionPolicy');
 
 const DEFAULT_GRAPHICS_ROWS = [
   {
@@ -247,7 +253,8 @@ async function getExpandedFormOptions() {
     virusCheckStatusOptions,
     driverCheckStatusOptions,
     skinnedStatusOptions,
-    gpuTypeOptions
+    gpuTypeOptions,
+    operationalRankingSnapshot
   ] = await Promise.all([
     listConfigValuesByCategoryCodes(['cosmetic_grades', 'overall_unit_grades', 'unit_grades', 'unit_grade']),
     listConfigValuesByCategoryCodes(['absolute_statuses', 'absolute_status']),
@@ -258,7 +265,8 @@ async function getExpandedFormOptions() {
     listConfigValuesByCategoryCodes(['virus_check_statuses', 'virus_check_status']),
     listConfigValuesByCategoryCodes(['driver_check_statuses', 'driver_check_status']),
     listConfigValuesByCategoryCodes(['skinned_statuses', 'skinned_status']),
-    listConfigValuesByCategoryCodes(['gpu_types', 'gpu_type', 'graphics_adapter_types'])
+    listConfigValuesByCategoryCodes(['gpu_types', 'gpu_type', 'graphics_adapter_types']),
+    operationalOptionRankingModel.loadRankingSnapshot()
   ]);
 
   return {
@@ -274,12 +282,16 @@ async function getExpandedFormOptions() {
     absoluteStatusOptions,
     physicalCameraStatusOptions,
     touchscreenStatusOptions,
-    keyboardLanguageOptions,
+    keyboardLanguageOptions: sortOptionsByPopularity(keyboardLanguageOptions, operationalRankingSnapshot, {
+      optionScope: 'keyboard_language'
+    }),
     diagnosticsStatusOptions,
     virusCheckStatusOptions,
     driverCheckStatusOptions,
     skinnedStatusOptions,
-    gpuTypeOptions
+    gpuTypeOptions: sortOptionsByPopularity(gpuTypeOptions, operationalRankingSnapshot, {
+      optionScope: 'gpu_type'
+    })
   };
 }
 
@@ -553,71 +565,116 @@ async function saveUnitSpecifications(connection, unitId, formData, currentUserI
     return;
   }
 
+  const specificationFields = [
+    {
+      fieldKey: 'bios_version',
+      sourceKey: 'bios_version',
+      columnName: 'bios_version',
+      value: normalizeNullableText(formData.biosVersion, 100)
+    },
+    {
+      fieldKey: 'os_build',
+      sourceKey: 'os_build',
+      columnName: 'os_build',
+      value: normalizeNullableText(formData.osBuild, 100)
+    },
+    {
+      fieldKey: 'absolute_status',
+      sourceKey: 'absolute_status',
+      columnName: 'absolute_status_config_value_id',
+      value: normalizeOptionalInteger(formData.absoluteStatusConfigValueId)
+    },
+    {
+      fieldKey: 'physical_camera_status',
+      sourceKey: 'physical_camera_status',
+      columnName: 'physical_camera_status_config_value_id',
+      value: normalizeOptionalInteger(formData.physicalCameraStatusConfigValueId)
+    },
+    {
+      fieldKey: 'touchscreen_status',
+      sourceKey: 'touchscreen_status',
+      columnName: 'touchscreen_status_config_value_id',
+      value: normalizeOptionalInteger(formData.touchscreenStatusConfigValueId)
+    },
+    {
+      fieldKey: 'keyboard_language',
+      sourceKey: 'keyboard_language',
+      columnName: 'keyboard_language_config_value_id',
+      value: normalizeOptionalInteger(formData.keyboardLanguageConfigValueId)
+    },
+    {
+      fieldKey: 'complete_diagnostics',
+      sourceKey: 'complete_diagnostics_status',
+      columnName: 'complete_diagnostics_status_config_value_id',
+      value: normalizeOptionalInteger(formData.completeDiagnosticsStatusConfigValueId)
+    },
+    {
+      fieldKey: 'virus_check',
+      sourceKey: 'virus_check_status',
+      columnName: 'virus_check_status_config_value_id',
+      value: normalizeOptionalInteger(formData.virusCheckStatusConfigValueId)
+    },
+    {
+      fieldKey: 'driver_check',
+      sourceKey: 'driver_check_status',
+      columnName: 'driver_check_status_config_value_id',
+      value: normalizeOptionalInteger(formData.driverCheckStatusConfigValueId)
+    },
+    {
+      fieldKey: 'skinned_status',
+      sourceKey: 'skinned_status',
+      columnName: 'skinned_status_config_value_id',
+      value: normalizeOptionalInteger(formData.skinnedStatusConfigValueId)
+    }
+  ];
+  const managedFields = specificationFields.filter((field) => (
+    isUnitFormFieldManaged(formData, field.fieldKey)
+  ));
+
+  if (managedFields.length === 0) {
+    return;
+  }
+
+  const insertColumns = [
+    'unit_id',
+    ...managedFields.map((field) => field.columnName),
+    'created_by_user_id',
+    'updated_by_user_id'
+  ];
   const values = [
     unitId,
-    normalizeNullableText(formData.biosVersion, 100),
-    normalizeNullableText(formData.osBuild, 100),
-    normalizeOptionalInteger(formData.absoluteStatusConfigValueId),
-    normalizeOptionalInteger(formData.physicalCameraStatusConfigValueId),
-    normalizeOptionalInteger(formData.touchscreenStatusConfigValueId),
-    normalizeOptionalInteger(formData.keyboardLanguageConfigValueId),
-    normalizeOptionalInteger(formData.completeDiagnosticsStatusConfigValueId),
-    normalizeOptionalInteger(formData.virusCheckStatusConfigValueId),
-    normalizeOptionalInteger(formData.driverCheckStatusConfigValueId),
-    normalizeOptionalInteger(formData.skinnedStatusConfigValueId),
+    ...managedFields.map((field) => field.value),
     normalizeOptionalInteger(currentUserId),
     normalizeOptionalInteger(currentUserId)
+  ];
+  const updateAssignments = [
+    ...managedFields.map((field) => `${field.columnName} = VALUES(${field.columnName})`),
+    'updated_by_user_id = VALUES(updated_by_user_id)'
   ];
 
   await connection.query(
     `
-      INSERT INTO unit_specifications (
-        unit_id,
-        bios_version,
-        os_build,
-        absolute_status_config_value_id,
-        physical_camera_status_config_value_id,
-        touchscreen_status_config_value_id,
-        keyboard_language_config_value_id,
-        complete_diagnostics_status_config_value_id,
-        virus_check_status_config_value_id,
-        driver_check_status_config_value_id,
-        skinned_status_config_value_id,
-        created_by_user_id,
-        updated_by_user_id
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO unit_specifications (${insertColumns.join(', ')})
+      VALUES (${insertColumns.map(() => '?').join(', ')})
       ON DUPLICATE KEY UPDATE
-        bios_version = VALUES(bios_version),
-        os_build = VALUES(os_build),
-        absolute_status_config_value_id = VALUES(absolute_status_config_value_id),
-        physical_camera_status_config_value_id = VALUES(physical_camera_status_config_value_id),
-        touchscreen_status_config_value_id = VALUES(touchscreen_status_config_value_id),
-        keyboard_language_config_value_id = VALUES(keyboard_language_config_value_id),
-        complete_diagnostics_status_config_value_id = VALUES(complete_diagnostics_status_config_value_id),
-        virus_check_status_config_value_id = VALUES(virus_check_status_config_value_id),
-        driver_check_status_config_value_id = VALUES(driver_check_status_config_value_id),
-        skinned_status_config_value_id = VALUES(skinned_status_config_value_id),
-        updated_by_user_id = VALUES(updated_by_user_id)
+        ${updateAssignments.join(',\n        ')}
     `,
     values
   );
 
-  await upsertManualFieldSources(connection, unitId, [
-    'bios_version',
-    'os_build',
-    'absolute_status',
-    'physical_camera_status',
-    'touchscreen_status',
-    'keyboard_language',
-    'complete_diagnostics_status',
-    'virus_check_status',
-    'driver_check_status',
-    'skinned_status'
-  ], currentUserId);
+  await upsertManualFieldSources(
+    connection,
+    unitId,
+    managedFields.map((field) => field.sourceKey),
+    currentUserId
+  );
 }
 
 async function saveOverallGrade(connection, unitId, formData, currentUserId) {
+  if (!isAnyUnitFormFieldManaged(formData, ['overall_grade', 'overall_grade_notes'])) {
+    return;
+  }
+
   if (!await tableExists('unit_grade_assessments', connection)) {
     return;
   }
@@ -682,19 +739,24 @@ async function saveOverallGrade(connection, unitId, formData, currentUserId) {
 }
 
 async function saveOutcome(connection, unitId, formData, currentUserId) {
+  if (!isAnyUnitFormFieldManaged(formData, ['unit_outcome', 'outcome_notes'])) {
+    return;
+  }
+
   if (!await unitOutcomeModel.tableExists(connection)) {
     return;
   }
 
-  await unitOutcomeModel.saveOutcomeForUnitWithConnection(connection, {
+  const outcomeSaveResult = await unitOutcomeModel.saveOutcomeForUnitWithConnection(connection, {
     unitId,
     formData,
     currentUserId
   });
 
   const outcomeCode = unitOutcomeModel.normalizeOutcomeCode(formData.outcomeCode);
+  const approvalRequested = unitOutcomeModel.normalizeApprovalRequested(formData.outcomeApprovalRequested);
 
-  if (!outcomeCode) {
+  if (!outcomeCode || (!approvalRequested && !outcomeSaveResult?.outcomeChanged)) {
     return;
   }
 
@@ -715,7 +777,7 @@ async function saveOutcome(connection, unitId, formData, currentUserId) {
     outcomeCode,
     outcomeNotes: formData.outcomeNotes,
     requestNotes: formData.outcomeApprovalRequestNotes,
-    approvalRequested: unitOutcomeModel.normalizeApprovalRequested(formData.outcomeApprovalRequested)
+    approvalRequested
   });
 }
 

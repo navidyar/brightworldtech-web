@@ -1,12 +1,15 @@
 const { pool } = require('./db');
 const unitOutcomeModel = require('./unitOutcomeModel');
+const { buildHardwareComponentComparisons } = require('../services/hardwareComponentComparison');
 const EXPANDED_TABLES = [
   'unit_identifiers',
   'unit_specifications',
   'unit_field_sources',
   'unit_grade_assessments',
   'unit_memory_modules',
+  'unit_previous_memory_modules',
   'unit_storage_devices',
+  'unit_previous_storage_devices',
   'unit_cellular_modules',
   'unit_cellular_module_bands',
   'unit_graphics_adapters',
@@ -36,12 +39,18 @@ function createEmptyDetails() {
     currentGrade: null,
     currentOutcome: null,
     gradeHistory: [],
+    previousMemoryModules: [],
+    previousMemoryTotalGb: 0,
     memoryModules: [],
     memoryHistory: [],
     memoryTotalGb: 0,
+    memoryComparisons: [],
+    previousStorageDevices: [],
+    previousStorageTotalGb: 0,
     storageDevices: [],
     storageHistory: [],
     storageTotalGb: 0,
+    storageComparisons: [],
     cellularModules: [],
     graphicsAdapters: [],
     cosmeticIssues: [],
@@ -130,7 +139,11 @@ function getMemoryInstallTypeLabel(value) {
     return 'Unknown';
   }
 
-  return 'Removable Module';
+  if (value === 'removable_module') {
+    return 'Removable Module';
+  }
+
+  return '';
 }
 async function getExistingExpandedTables() {
   const [rows] = await pool.query(
@@ -340,6 +353,51 @@ async function attachCurrentOutcomes(detailsMap, unitIds, existingTables) {
   });
 }
 
+async function attachPreviousMemoryModules(detailsMap, unitIds, existingTables) {
+  if (!existingTables.has('unit_previous_memory_modules')) {
+    return;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        upmm.unit_id,
+        upmm.sort_order,
+        upmm.slot_label,
+        upmm.size_gb,
+        ram_type.label AS ram_type_label,
+        upmm.memory_install_type_code,
+        upmm.created_at,
+        upmm.updated_at
+      FROM unit_previous_memory_modules upmm
+      LEFT JOIN config_values ram_type
+        ON ram_type.config_value_id = upmm.ram_type_config_value_id
+      WHERE upmm.unit_id IN (${buildPlaceholders(unitIds)})
+      ORDER BY upmm.unit_id, upmm.sort_order, upmm.unit_previous_memory_module_id
+    `,
+    unitIds
+  );
+
+  rows.forEach((row) => {
+    const sizeGb = row.size_gb !== null && row.size_gb !== undefined ? Number(row.size_gb) : 0;
+    const details = detailsMap.get(Number(row.unit_id));
+
+    if (details) {
+      details.previousMemoryTotalGb += sizeGb;
+    }
+
+    addToUnitList(detailsMap, row.unit_id, 'previousMemoryModules', {
+      slotLabel: row.slot_label || 'Slot',
+      sizeGb: row.size_gb !== null && row.size_gb !== undefined ? row.size_gb : '',
+      ramTypeLabel: row.ram_type_label || '',
+      memoryInstallTypeCode: row.memory_install_type_code || '',
+      memoryInstallTypeLabel: getMemoryInstallTypeLabel(row.memory_install_type_code),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    });
+  });
+}
+
 async function attachMemoryModules(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_memory_modules')) {
     return;
@@ -379,16 +437,16 @@ async function attachMemoryModules(detailsMap, unitIds, existingTables) {
     unitIds
   );
   rows.forEach((row) => {
-    const sizeGb = row.size_gb ? Number(row.size_gb) : 0;
+    const sizeGb = row.size_gb !== null && row.size_gb !== undefined ? Number(row.size_gb) : 0;
     const details = detailsMap.get(Number(row.unit_id));
     if (details) {
       details.memoryTotalGb += sizeGb;
     }
     addToUnitList(detailsMap, row.unit_id, 'memoryModules', {
       slotLabel: row.slot_label || 'Slot',
-      sizeGb: row.size_gb || '',
+      sizeGb: row.size_gb !== null && row.size_gb !== undefined ? row.size_gb : '',
       ramTypeLabel: row.ram_type_label || '',
-      memoryInstallTypeCode: row.memory_install_type_code || 'removable_module',
+      memoryInstallTypeCode: row.memory_install_type_code || '',
       memoryInstallTypeLabel: getMemoryInstallTypeLabel(row.memory_install_type_code),
       speedMhz: row.speed_mhz || '',
       manufacturerName: row.manufacturer_name || '',
@@ -403,6 +461,53 @@ async function attachMemoryModules(detailsMap, unitIds, existingTables) {
     });
   });
 }
+
+async function attachPreviousStorageDevices(detailsMap, unitIds, existingTables) {
+  if (!existingTables.has('unit_previous_storage_devices')) {
+    return;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        upsd.unit_id,
+        upsd.sort_order,
+        upsd.slot_label,
+        upsd.size_gb,
+        storage_type.label AS storage_type_label,
+        wipe_status.label AS wipe_status_label,
+        upsd.created_at,
+        upsd.updated_at
+      FROM unit_previous_storage_devices upsd
+      LEFT JOIN config_values storage_type
+        ON storage_type.config_value_id = upsd.storage_type_config_value_id
+      LEFT JOIN config_values wipe_status
+        ON wipe_status.config_value_id = upsd.wipe_status_config_value_id
+      WHERE upsd.unit_id IN (${buildPlaceholders(unitIds)})
+      ORDER BY upsd.unit_id, upsd.sort_order, upsd.unit_previous_storage_device_id
+    `,
+    unitIds
+  );
+
+  rows.forEach((row) => {
+    const sizeGb = row.size_gb !== null && row.size_gb !== undefined ? Number(row.size_gb) : 0;
+    const details = detailsMap.get(Number(row.unit_id));
+
+    if (details) {
+      details.previousStorageTotalGb += sizeGb;
+    }
+
+    addToUnitList(detailsMap, row.unit_id, 'previousStorageDevices', {
+      slotLabel: row.slot_label || 'Drive',
+      storageTypeLabel: row.storage_type_label || '',
+      sizeGb: row.size_gb !== null && row.size_gb !== undefined ? row.size_gb : '',
+      wipeStatusLabel: row.wipe_status_label || '',
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    });
+  });
+}
+
 async function attachStorageDevices(detailsMap, unitIds, existingTables) {
   if (!existingTables.has('unit_storage_devices')) {
     return;
@@ -450,7 +555,7 @@ async function attachStorageDevices(detailsMap, unitIds, existingTables) {
     unitIds
   );
   rows.forEach((row) => {
-    const sizeGb = row.size_gb ? Number(row.size_gb) : 0;
+    const sizeGb = row.size_gb !== null && row.size_gb !== undefined ? Number(row.size_gb) : 0;
     const details = detailsMap.get(Number(row.unit_id));
     if (details) {
       details.storageTotalGb += sizeGb;
@@ -458,7 +563,7 @@ async function attachStorageDevices(detailsMap, unitIds, existingTables) {
     addToUnitList(detailsMap, row.unit_id, 'storageDevices', {
       slotLabel: row.slot_label || 'Drive',
       storageTypeLabel: row.storage_type_label || '',
-      sizeGb: row.size_gb || '',
+      sizeGb: row.size_gb !== null && row.size_gb !== undefined ? row.size_gb : '',
       manufacturerName: row.manufacturer_name || '',
       modelNumber: row.model_number || '',
       serialNumber: row.serial_number || '',
@@ -789,9 +894,9 @@ async function attachMemoryHistory(detailsMap, unitIds, existingTables) {
   rows.forEach((row) => {
     addToUnitList(detailsMap, row.unit_id, 'memoryHistory', {
       slotLabel: row.slot_label || 'Slot',
-      sizeGb: row.size_gb || '',
+      sizeGb: row.size_gb !== null && row.size_gb !== undefined ? row.size_gb : '',
       ramTypeLabel: row.ram_type_label || '',
-      memoryInstallTypeCode: row.memory_install_type_code || 'removable_module',
+      memoryInstallTypeCode: row.memory_install_type_code || '',
       memoryInstallTypeLabel: getMemoryInstallTypeLabel(row.memory_install_type_code),
       speedMhz: row.speed_mhz || '',
       manufacturerName: row.manufacturer_name || '',
@@ -872,7 +977,7 @@ async function attachStorageHistory(detailsMap, unitIds, existingTables) {
     addToUnitList(detailsMap, row.unit_id, 'storageHistory', {
       slotLabel: row.slot_label || 'Drive',
       storageTypeLabel: row.storage_type_label || '',
-      sizeGb: row.size_gb || '',
+      sizeGb: row.size_gb !== null && row.size_gb !== undefined ? row.size_gb : '',
       manufacturerName: row.manufacturer_name || '',
       modelNumber: row.model_number || '',
       serialNumber: row.serial_number || '',
@@ -1225,13 +1330,29 @@ async function listExpandedDetailsForUnits(unitIds) {
   await attachFieldSources(detailsMap, safeUnitIds, existingTables);
   await attachCurrentGrades(detailsMap, safeUnitIds, existingTables);
   await attachCurrentOutcomes(detailsMap, safeUnitIds, existingTables);
+  await attachPreviousMemoryModules(detailsMap, safeUnitIds, existingTables);
   await attachMemoryModules(detailsMap, safeUnitIds, existingTables);
+  await attachPreviousStorageDevices(detailsMap, safeUnitIds, existingTables);
   await attachStorageDevices(detailsMap, safeUnitIds, existingTables);
   await attachCellularModules(detailsMap, safeUnitIds, existingTables);
   await attachGraphicsAdapters(detailsMap, safeUnitIds, existingTables);
   await attachIssueEntries(detailsMap, safeUnitIds, existingTables);
   await attachComments(detailsMap, safeUnitIds, existingTables);
   await attachLatestTechActivity(detailsMap, safeUnitIds, existingTables);
+
+  detailsMap.forEach((details) => {
+    details.memoryComparisons = buildHardwareComponentComparisons(
+      details.previousMemoryModules,
+      details.memoryModules,
+      { kind: 'memory' }
+    );
+    details.storageComparisons = buildHardwareComponentComparisons(
+      details.previousStorageDevices,
+      details.storageDevices,
+      { kind: 'storage' }
+    );
+  });
+
   return detailsMap;
 }
 async function getHistoryDetailsForUnit(unitId) {

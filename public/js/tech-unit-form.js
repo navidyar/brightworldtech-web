@@ -10,8 +10,8 @@
   const REPEATABLE_REQUIRED_MESSAGES = Object.freeze({
     memory: 'Add at least one complete memory module with a positive size.',
     storage: 'Add at least one complete storage device with a positive size.',
-    cosmeticIssue: 'Add at least one complete cosmetic issue with an issue type, severity, and location.',
-    hardwareIssue: 'Add at least one complete hardware issue using a configured issue or custom issue name.'
+    cosmeticIssue: 'Choose a cosmetic issue with severity and location, or choose None when there is no cosmetic issue.',
+    hardwareIssue: 'Choose a hardware issue, enter a custom issue, or choose None when there is no hardware issue.'
   });
 
   const LOT_UNIT_FORM_PROFILE_REFRESH_INTERVAL_MS = 30000;
@@ -51,6 +51,14 @@
   }
 
   let unitFormValidationErrorSequence = 0;
+  const MODULE_ROW_VALIDATION_LABELS = Object.freeze({
+    previousMemory: 'Previous Memory Module',
+    memory: 'Current Memory Module',
+    previousStorage: 'Previous Storage Device',
+    storage: 'Current Storage Device',
+    cosmeticIssue: 'Cosmetic Issue',
+    hardwareIssue: 'Hardware Issue'
+  });
 
   function getValidationWrapper(control) {
     if (!control) {
@@ -60,12 +68,172 @@
     return control.closest('[data-unit-form-field-key], .form-field, .form-section') || null;
   }
 
-  function getDirectValidationError(wrapper) {
-    if (!wrapper) {
+  function getValidationControlToken(control) {
+    if (!control) {
+      return '';
+    }
+
+    let token = control.getAttribute('data-unit-form-validation-token') || '';
+
+    if (!token) {
+      unitFormValidationErrorSequence += 1;
+      token = `unit-form-control-${unitFormValidationErrorSequence}`;
+      control.setAttribute('data-unit-form-validation-token', token);
+    }
+
+    return token;
+  }
+
+  function getValidationControlByToken(form, token) {
+    if (!form || !token) {
       return null;
     }
 
-    return Array.from(wrapper.children).find((child) => child.hasAttribute('data-unit-form-field-error')) || null;
+    return Array.from(form.querySelectorAll('[data-unit-form-validation-token]'))
+      .find((control) => control.getAttribute('data-unit-form-validation-token') === token) || null;
+  }
+
+  function getValidationFieldLabel(control) {
+    if (!control) {
+      return 'Field';
+    }
+
+    const label = control.closest('label');
+    const directLabel = label
+      ? Array.from(label.children).find((child) => child.tagName === 'SPAN')
+      : null;
+    const fieldset = control.closest('fieldset');
+    const legend = fieldset ? fieldset.querySelector('legend') : null;
+
+    return String(
+      (directLabel && directLabel.textContent)
+      || (legend && legend.textContent)
+      || control.getAttribute('aria-label')
+      || control.name
+      || 'Field'
+    ).replace(/\s+/g, ' ').trim();
+  }
+
+  function getValidationControlLabel(control) {
+    const fieldLabel = getValidationFieldLabel(control);
+    const row = control ? control.closest('[data-module-row]') : null;
+
+    if (row) {
+      const rowType = row.getAttribute('data-module-row') || '';
+      const rowLabel = MODULE_ROW_VALIDATION_LABELS[rowType] || 'Row';
+      const displayNumber = String(row.querySelector('[data-module-display-number]')?.textContent || '').trim();
+
+      return `${rowLabel}${displayNumber ? ` ${displayNumber}` : ''} — ${fieldLabel}`;
+    }
+
+    const section = control ? control.closest('.form-section') : null;
+    const sectionHeading = section ? section.querySelector('.form-section-header h3') : null;
+    const sectionLabel = String(sectionHeading ? sectionHeading.textContent : '').replace(/\s+/g, ' ').trim();
+
+    return sectionLabel && sectionLabel !== fieldLabel
+      ? `${sectionLabel} — ${fieldLabel}`
+      : fieldLabel;
+  }
+
+  function getValidationPlacement(control, preferredHost = null) {
+    if (!control) {
+      return { host: null, type: 'section' };
+    }
+
+    if (preferredHost) {
+      if (preferredHost.hasAttribute('data-module-row')) {
+        return { host: preferredHost, type: 'row' };
+      }
+
+      if (preferredHost.hasAttribute('data-unit-form-repeatable-type')) {
+        return { host: preferredHost, type: 'repeatable' };
+      }
+
+      return { host: preferredHost, type: 'section' };
+    }
+
+    if (control.dataset.unitFormValidationPlacement === 'repeatable') {
+      const repeatable = control.closest('[data-unit-form-repeatable-type]');
+
+      if (repeatable) {
+        return { host: repeatable, type: 'repeatable' };
+      }
+    }
+
+    const row = control.closest('[data-module-row]');
+
+    if (row) {
+      return { host: row, type: 'row' };
+    }
+
+    const section = control.closest('.form-section');
+
+    if (section) {
+      return { host: section, type: 'section' };
+    }
+
+    return { host: getValidationWrapper(control), type: 'section' };
+  }
+
+  function getDirectValidationRegion(host, type) {
+    if (!host) {
+      return null;
+    }
+
+    return Array.from(host.children).find((child) => (
+      child.getAttribute('data-unit-form-validation-region') === type
+    )) || null;
+  }
+
+  function ensureValidationRegion(host, type) {
+    if (!host) {
+      return null;
+    }
+
+    let region = getDirectValidationRegion(host, type);
+
+    if (region) {
+      return region;
+    }
+
+    region = document.createElement('div');
+    region.className = `unit-form-validation-region unit-form-validation-region--${type}`;
+    region.setAttribute('data-unit-form-validation-region', type);
+    region.setAttribute('aria-live', 'polite');
+
+    if (type === 'section') {
+      const header = Array.from(host.children).find((child) => child.classList.contains('form-section-header'));
+
+      if (header) {
+        header.insertAdjacentElement('afterend', region);
+      } else {
+        host.prepend(region);
+      }
+    } else if (type === 'repeatable') {
+      const bar = Array.from(host.children).find((child) => child.classList.contains('tech-memory-state-bar'));
+
+      if (bar) {
+        bar.insertAdjacentElement('afterend', region);
+      } else {
+        host.prepend(region);
+      }
+    } else {
+      host.appendChild(region);
+    }
+
+    return region;
+  }
+
+  function getControlValidationError(control) {
+    const form = getFormFromElement(control);
+    const token = control ? control.getAttribute('data-unit-form-validation-token') || '' : '';
+
+    if (!form || !token) {
+      return null;
+    }
+
+    return Array.from(form.querySelectorAll('[data-unit-form-field-error]'))
+      .find((errorElement) => errorElement.getAttribute('data-unit-form-validation-for') === token) || null;
   }
 
   function removeAriaDescribedByToken(control, token) {
@@ -85,51 +253,160 @@
     }
   }
 
-  function clearValidationError(wrapper) {
-    if (!wrapper) {
+  function refreshValidationSummary(form) {
+    const summary = form ? form.querySelector('[data-unit-form-validation-summary]') : null;
+
+    if (!summary) {
       return;
     }
 
-    const errorElement = getDirectValidationError(wrapper);
+    const heading = summary.querySelector('[data-unit-form-validation-summary-heading]');
+    const list = summary.querySelector('[data-unit-form-validation-summary-list]');
+    const errorControls = Array.from(form.querySelectorAll('[data-unit-form-validation-token][aria-invalid="true"]'));
+
+    if (errorControls.length === 0) {
+      summary.hidden = true;
+
+      if (heading) {
+        heading.textContent = '';
+      }
+
+      if (list) {
+        list.replaceChildren();
+      }
+
+      return;
+    }
+
+    summary.hidden = false;
+
+    if (heading) {
+      heading.textContent = `Please correct ${errorControls.length} field${errorControls.length === 1 ? '' : 's'} before saving.`;
+    }
+
+    if (list) {
+      list.replaceChildren();
+
+      errorControls.forEach((control) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'unit-form-validation-summary-link';
+        button.setAttribute('data-unit-form-validation-focus', getValidationControlToken(control));
+        button.textContent = getValidationControlLabel(control);
+        list.appendChild(button);
+      });
+    }
+  }
+
+  function updateValidationContainerState(container) {
+    if (!container) {
+      return;
+    }
+
+    const hasInvalidControl = Boolean(container.querySelector('[aria-invalid="true"]'));
+    container.classList.toggle('has-unit-form-validation-error', hasInvalidControl);
+  }
+
+  function clearValidationErrorForControl(control, options = {}) {
+    if (!control) {
+      return;
+    }
+
+    const form = getFormFromElement(control);
+    const wrapper = getValidationWrapper(control);
+    const errorElement = getControlValidationError(control);
+    const region = errorElement ? errorElement.parentElement : null;
+    const host = region ? region.parentElement : null;
     const errorId = errorElement ? errorElement.id : '';
 
-    wrapper.classList.remove('has-unit-form-validation-error');
-    wrapper.querySelectorAll('[aria-invalid="true"]').forEach((control) => {
-      control.removeAttribute('aria-invalid');
-      removeAriaDescribedByToken(control, errorId);
-    });
+    control.removeAttribute('aria-invalid');
+    removeAriaDescribedByToken(control, errorId);
 
     if (errorElement) {
       errorElement.remove();
     }
+
+    if (region && !region.querySelector('[data-unit-form-field-error]')) {
+      region.remove();
+    }
+
+    updateValidationContainerState(wrapper);
+    updateValidationContainerState(host);
+
+    if (options.keepToken !== true) {
+      control.removeAttribute('data-unit-form-validation-token');
+    }
+
+    if (options.refreshSummary !== false) {
+      refreshValidationSummary(form);
+    }
   }
 
-  function showValidationError(control) {
-    const wrapper = getValidationWrapper(control);
-
-    if (!wrapper || !control) {
+  function clearValidationError(scope) {
+    if (!scope) {
       return;
     }
 
-    let errorElement = getDirectValidationError(wrapper);
+    const form = scope.matches && scope.matches('[data-tech-unit-form]')
+      ? scope
+      : getFormFromElement(scope);
+    const controls = [];
+
+    if (scope.matches && scope.matches('input, select, textarea') && scope.hasAttribute('data-unit-form-validation-token')) {
+      controls.push(scope);
+    }
+
+    scope.querySelectorAll?.('[data-unit-form-validation-token]').forEach((control) => controls.push(control));
+    Array.from(new Set(controls)).forEach((control) => {
+      clearValidationErrorForControl(control, { refreshSummary: false });
+    });
+
+    scope.querySelectorAll?.('[data-unit-form-validation-region]').forEach((region) => region.remove());
+    scope.classList?.remove('has-unit-form-validation-error');
+    refreshValidationSummary(form);
+  }
+
+  function showValidationError(control, customMessage = '', options = {}) {
+    if (!control) {
+      return;
+    }
+
+    const form = getFormFromElement(control);
+    const wrapper = getValidationWrapper(control);
+    const placement = getValidationPlacement(control, options.host || null);
+    const region = ensureValidationRegion(placement.host, placement.type);
+
+    if (!form || !wrapper || !region) {
+      return;
+    }
+
+    const token = getValidationControlToken(control);
+    let errorElement = getControlValidationError(control);
 
     if (!errorElement) {
       unitFormValidationErrorSequence += 1;
-      errorElement = document.createElement('small');
+      errorElement = document.createElement('button');
+      errorElement.type = 'button';
       errorElement.id = `unit-form-validation-error-${unitFormValidationErrorSequence}`;
-      errorElement.className = 'unit-form-field-error';
+      errorElement.className = 'unit-form-validation-message';
       errorElement.setAttribute('data-unit-form-field-error', '');
-      errorElement.setAttribute('role', 'alert');
-      wrapper.appendChild(errorElement);
+      errorElement.setAttribute('data-unit-form-validation-for', token);
+      errorElement.setAttribute('data-unit-form-validation-focus', token);
+      region.appendChild(errorElement);
+    } else if (errorElement.parentElement !== region) {
+      region.appendChild(errorElement);
     }
 
-    errorElement.textContent = control.validationMessage || 'Complete this required field.';
+    const message = customMessage || control.validationMessage || 'Complete this required field.';
+    errorElement.textContent = `${getValidationFieldLabel(control)}: ${message}`;
     wrapper.classList.add('has-unit-form-validation-error');
+    placement.host.classList.add('has-unit-form-validation-error');
     control.setAttribute('aria-invalid', 'true');
 
     const describedBy = new Set(String(control.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
     describedBy.add(errorElement.id);
     control.setAttribute('aria-describedby', Array.from(describedBy).join(' '));
+    refreshValidationSummary(form);
   }
 
   function isUsableInvalidControl(control) {
@@ -143,22 +420,34 @@
     );
   }
 
+  function isVisibleValidationTarget(control) {
+    return Boolean(
+      control
+      && control.form
+      && !control.disabled
+      && !control.closest('[hidden]')
+      && (isUsableInvalidControl(control) || control.getAttribute('aria-invalid') === 'true')
+    );
+  }
+
   function findFirstInvalidControl(form, preferredControl) {
-    if (isUsableInvalidControl(preferredControl)) {
+    if (isVisibleValidationTarget(preferredControl)) {
       return preferredControl;
     }
 
-    return Array.from(form ? form.elements : []).find(isUsableInvalidControl) || null;
+    const markedControl = Array.from(form ? form.elements : [])
+      .find((control) => isVisibleValidationTarget(control) && control.getAttribute('aria-invalid') === 'true');
+
+    return markedControl || Array.from(form ? form.elements : []).find(isUsableInvalidControl) || null;
   }
 
-  function revealInvalidControl(control) {
-    if (!isUsableInvalidControl(control)) {
+  function focusValidationControl(control) {
+    if (!isVisibleValidationTarget(control)) {
       return;
     }
 
-    showValidationError(control);
-
-    const wrapper = getValidationWrapper(control) || control;
+    const placement = getValidationPlacement(control);
+    const target = placement.host || getValidationWrapper(control) || control;
 
     try {
       control.focus({ preventScroll: true });
@@ -166,7 +455,19 @@
       control.focus();
     }
 
-    wrapper.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+    target.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+  }
+
+  function revealInvalidControl(control) {
+    if (!isVisibleValidationTarget(control)) {
+      return;
+    }
+
+    if (isUsableInvalidControl(control) && !getControlValidationError(control)) {
+      showValidationError(control);
+    }
+
+    focusValidationControl(control);
   }
 
   function scheduleInvalidControlFocus(form, preferredControl) {
@@ -186,7 +487,7 @@
       delete form._unitFormValidationFocusTimer;
 
       window.requestAnimationFrame(() => {
-        const control = findFirstInvalidControl(form);
+        const control = findFirstInvalidControl(form, preferredControl);
 
         if (!control) {
           return;
@@ -199,7 +500,7 @@
         // native validation cycle has fully settled.
         form._unitFormValidationFollowupTimer = window.setTimeout(() => {
           delete form._unitFormValidationFollowupTimer;
-          const currentFirstInvalidControl = findFirstInvalidControl(form);
+          const currentFirstInvalidControl = findFirstInvalidControl(form, preferredControl);
 
           if (currentFirstInvalidControl) {
             revealInvalidControl(currentFirstInvalidControl);
@@ -210,17 +511,61 @@
   }
 
   function clearResolvedValidationError(control) {
-    const wrapper = getValidationWrapper(control);
-
-    if (!wrapper || !wrapper.classList.contains('has-unit-form-validation-error')) {
+    if (!control || control.getAttribute('aria-invalid') !== 'true') {
       return;
     }
 
-    const invalidControl = Array.from(wrapper.querySelectorAll('input, select, textarea'))
-      .find((candidate) => !candidate.disabled && !candidate.closest('[hidden]') && candidate.validity && !candidate.validity.valid);
+    if (!control.validity || control.validity.valid) {
+      clearValidationErrorForControl(control);
+    }
+  }
 
-    if (!invalidControl) {
-      clearValidationError(wrapper);
+
+  function applyAuthoritativeServerFieldErrors(form) {
+    if (!form || form.dataset.unitFormServerErrorsApplied === 'true') {
+      return;
+    }
+
+    const errorElements = Array.from(form.querySelectorAll('[data-unit-form-server-error]'));
+
+    if (errorElements.length === 0) {
+      return;
+    }
+
+    let firstVisibleControl = null;
+
+    errorElements.forEach((errorElement) => {
+      const fieldKey = errorElement.getAttribute('data-field-key') || '';
+      const message = errorElement.getAttribute('data-error-message') || 'Complete this field.';
+      const wrapper = fieldKey
+        ? form.querySelector(`[data-unit-form-field-key="${fieldKey}"]`)
+        : null;
+
+      if (!wrapper || wrapper.hidden || wrapper.closest('[hidden]')) {
+        return;
+      }
+
+      const control = wrapper.hasAttribute('data-unit-form-repeatable-type')
+        ? getRepeatableValidationAnchor(wrapper)
+        : getRequirementControls(wrapper)[0];
+
+      if (!control || control.disabled) {
+        return;
+      }
+
+      showValidationError(control, message, {
+        host: wrapper.hasAttribute('data-unit-form-repeatable-type') ? wrapper : null
+      });
+
+      if (!firstVisibleControl) {
+        firstVisibleControl = control;
+      }
+    });
+
+    form.dataset.unitFormServerErrorsApplied = 'true';
+
+    if (firstVisibleControl) {
+      scheduleInvalidControlFocus(form, firstVisibleControl);
     }
   }
 
@@ -326,6 +671,86 @@
     updateLotRequiredIndicator(wrapper, required);
   }
 
+  function syncCosmeticIssueRowState(row) {
+    if (!row || row.getAttribute('data-module-row') !== 'cosmeticIssue') {
+      return;
+    }
+
+    const issueTypeSelect = row.querySelector('[data-cosmetic-issue-type-select]');
+    const noIssueFlag = row.querySelector('[data-cosmetic-no-issue-flag]');
+    const selectedOption = getSelectedOption(issueTypeSelect);
+    const isNoIssue = Boolean(selectedOption && selectedOption.getAttribute('data-no-issue') === 'true');
+
+    row.setAttribute('data-cosmetic-no-issue', isNoIssue ? 'true' : 'false');
+
+    if (noIssueFlag) {
+      noIssueFlag.value = isNoIssue ? '1' : '';
+    }
+
+    row.querySelectorAll('[data-cosmetic-detail-field]').forEach((wrapper) => {
+      const control = wrapper.querySelector('select, input, textarea');
+
+      wrapper.setAttribute('data-no-issue-disabled', isNoIssue ? 'true' : 'false');
+
+      if (!control) {
+        return;
+      }
+
+      if (isNoIssue) {
+        control.value = '';
+        control.setCustomValidity('');
+        clearResolvedValidationError(control);
+      }
+
+      control.disabled = isNoIssue;
+      control.setAttribute('aria-disabled', isNoIssue ? 'true' : 'false');
+    });
+  }
+
+  function syncAllCosmeticIssueRows(form) {
+    getModuleRows(form, 'cosmeticIssue').forEach((row) => syncCosmeticIssueRowState(row));
+  }
+
+  function syncHardwareIssueRowState(row) {
+    if (!row || row.getAttribute('data-module-row') !== 'hardwareIssue') {
+      return;
+    }
+
+    const issueTypeSelect = row.querySelector('[data-hardware-issue-type-select]');
+    const noIssueFlag = row.querySelector('[data-hardware-no-issue-flag]');
+    const selectedOption = getSelectedOption(issueTypeSelect);
+    const isNoIssue = Boolean(selectedOption && selectedOption.getAttribute('data-no-issue') === 'true');
+
+    row.setAttribute('data-hardware-no-issue', isNoIssue ? 'true' : 'false');
+
+    if (noIssueFlag) {
+      noIssueFlag.value = isNoIssue ? '1' : '';
+    }
+
+    row.querySelectorAll('[data-hardware-detail-field]').forEach((wrapper) => {
+      const control = wrapper.querySelector('select, input, textarea');
+
+      wrapper.setAttribute('data-no-issue-disabled', isNoIssue ? 'true' : 'false');
+
+      if (!control) {
+        return;
+      }
+
+      if (isNoIssue) {
+        control.value = '';
+        control.setCustomValidity('');
+        clearResolvedValidationError(control);
+      }
+
+      control.disabled = isNoIssue;
+      control.setAttribute('aria-disabled', isNoIssue ? 'true' : 'false');
+    });
+  }
+
+  function syncAllHardwareIssueRows(form) {
+    getModuleRows(form, 'hardwareIssue').forEach((row) => syncHardwareIssueRowState(row));
+  }
+
   function hasCompleteRepeatableRow(wrapper) {
     const rowType = wrapper ? wrapper.getAttribute('data-unit-form-repeatable-type') : '';
     const rows = wrapper ? Array.from(wrapper.querySelectorAll(`[data-module-row="${rowType}"]`)) : [];
@@ -333,7 +758,7 @@
     if (rowType === 'memory') {
       return rows.some((row) => {
         const sizeInput = row.querySelector('[name$="[sizeGb]"]');
-        const size = Number(sizeInput ? sizeInput.value : 0);
+        const size = parseCapacityInputToGb(sizeInput ? sizeInput.value : '').gb;
         return Number.isInteger(size) && size > 0;
       });
     }
@@ -341,24 +766,38 @@
     if (rowType === 'storage') {
       return rows.some((row) => {
         const sizeInput = row.querySelector('[name$="[sizeGb]"]');
-        const size = Number(sizeInput ? sizeInput.value : 0);
+        const size = parseCapacityInputToGb(sizeInput ? sizeInput.value : '').gb;
         return Number.isInteger(size) && size > 0;
       });
     }
 
     if (rowType === 'cosmeticIssue') {
-      return rows.some((row) => Boolean(
-        row.querySelector('[name$="[issueTypeConfigValueId]"]')?.value
-        && row.querySelector('[name$="[severityConfigValueId]"]')?.value
-        && row.querySelector('[name$="[locationConfigValueId]"]')?.value
-      ));
+      return rows.some((row) => {
+        const issueTypeSelected = Boolean(row.querySelector('[name$="[issueTypeConfigValueId]"]')?.value);
+        const isNoIssue = row.getAttribute('data-cosmetic-no-issue') === 'true';
+
+        return issueTypeSelected && (
+          isNoIssue
+          || Boolean(
+            row.querySelector('[name$="[severityConfigValueId]"]')?.value
+            && row.querySelector('[name$="[locationConfigValueId]"]')?.value
+          )
+        );
+      });
     }
 
     if (rowType === 'hardwareIssue') {
-      return rows.some((row) => Boolean(
-        row.querySelector('[name$="[issueTypeConfigValueId]"]')?.value
-        || String(row.querySelector('[name$="[customIssueLabel]"]')?.value || '').trim()
-      ));
+      return rows.some((row) => {
+        const issueTypeSelected = Boolean(row.querySelector('[name$="[issueTypeConfigValueId]"]')?.value);
+        const isNoIssue = row.getAttribute('data-hardware-no-issue') === 'true';
+        const customIssue = String(row.querySelector('[name$="[customIssueLabel]"]')?.value || '').trim();
+
+        if (isNoIssue) {
+          return issueTypeSelected;
+        }
+
+        return issueTypeSelected || Boolean(customIssue);
+      });
     }
 
     return true;
@@ -391,8 +830,16 @@
     if (anchor) {
       anchor.setCustomValidity(valid ? '' : (REPEATABLE_REQUIRED_MESSAGES[rowType] || 'Complete at least one row.'));
 
-      if (!valid && reportValidity) {
-        anchor.reportValidity();
+      if (valid) {
+        delete anchor.dataset.unitFormValidationPlacement;
+        clearResolvedValidationError(anchor);
+      } else {
+        anchor.dataset.unitFormValidationPlacement = 'repeatable';
+
+        if (reportValidity) {
+          showValidationError(anchor, anchor.validationMessage, { host: wrapper });
+          scheduleInvalidControlFocus(getFormFromElement(anchor), anchor);
+        }
       }
     }
 
@@ -418,11 +865,10 @@
       return;
     }
 
-    const createMode = form.getAttribute('data-unit-form-mode') === 'create';
     const controls = Array.from(scope.querySelectorAll('[name]'));
 
     controls.forEach((control) => {
-      if (!createMode || visible) {
+      if (visible) {
         if (control.getAttribute('data-lot-profile-disabled') === 'true') {
           control.disabled = false;
           control.removeAttribute('data-lot-profile-disabled');
@@ -430,6 +876,9 @@
         return;
       }
 
+      // Hidden controls must not participate in native browser validation or
+      // request serialization. Edit submissions preserve their authoritative
+      // stored values through the server-side submission policy.
       if (!control.disabled) {
         control.disabled = true;
         control.setAttribute('data-lot-profile-disabled', 'true');
@@ -443,9 +892,7 @@
     }
 
     form.querySelectorAll(`[data-unit-form-companion-key="${fieldKey}"]`).forEach((control) => {
-      const createMode = form.getAttribute('data-unit-form-mode') === 'create';
-
-      if (!createMode || visible) {
+      if (visible) {
         if (control.getAttribute('data-lot-profile-disabled') === 'true') {
           control.disabled = false;
           control.removeAttribute('data-lot-profile-disabled');
@@ -1103,6 +1550,12 @@
       params.set('duplicateAssumptionNonce', duplicateAssumptionNonce.value);
     }
 
+    const currentUnitIdInput = form.querySelector('[name="lotRequirementUnitId"]');
+
+    if (currentUnitIdInput && currentUnitIdInput.value) {
+      params.set('currentUnitId', currentUnitIdInput.value);
+    }
+
     region.innerHTML = '<p class="field-hint tech-unit-duplicate-check-pending">Checking for existing serial matches…</p>';
 
     try {
@@ -1149,6 +1602,40 @@
 
   function normalizeModelSearch(value) {
     return String(value || '').trim().toLocaleLowerCase();
+  }
+
+  function getOperationalUsageScore(option, contextKey) {
+    if (!option) {
+      return 0;
+    }
+
+    const normalizedContextKey = String(contextKey || '').trim();
+    const contextScores = String(option.getAttribute('data-context-usage-scores') || '')
+      .split(',')
+      .map((entry) => entry.split(':'))
+      .find(([entryContextKey]) => String(entryContextKey || '').trim() === normalizedContextKey);
+    const contextualScore = contextScores ? Number(contextScores[1]) : NaN;
+
+    if (contextScores && Number.isFinite(contextualScore) && contextualScore >= 0) {
+      return contextualScore;
+    }
+
+    const globalScore = Number(option.getAttribute('data-usage-score') || 0);
+
+    return Number.isFinite(globalScore) && globalScore > 0 ? globalScore : 0;
+  }
+
+  function compareOperationalOptions(left, right, contextKey, getLabel) {
+    const scoreDifference = getOperationalUsageScore(right, contextKey) - getOperationalUsageScore(left, contextKey);
+
+    if (scoreDifference !== 0) {
+      return scoreDifference;
+    }
+
+    return String(getLabel(left) || '').localeCompare(String(getLabel(right) || ''), undefined, {
+      numeric: true,
+      sensitivity: 'base'
+    });
   }
 
   function getAssignableLotCatalog(form) {
@@ -1317,7 +1804,7 @@
 
       if (hint) {
         hint.textContent = readiness.ready
-          ? 'Complete the reviewer reason in the next step. No new Unit or Asset Tag is created until approval.'
+          ? 'Complete the reviewer reason in the next step. A new Unit and Asset Tag are created only after approval.'
           : readiness.message;
         hint.hidden = false;
       }
@@ -1342,18 +1829,22 @@
     const assumptionEnabled = selectedOption.getAttribute('data-allow-duplicate-unit-assumption') === '1';
     let state = status.querySelector('[data-assignable-lot-assumption-status-state]');
 
+    const statusMessage = assumptionEnabled
+      ? 'Matching existing units can be moved or taken over without approval.'
+      : 'Moving or taking over a matching existing unit requires Management or Tech Lead approval.';
+
     if (!state) {
-      status.replaceChildren(
-        document.createTextNode('Existing-unit assumption is '),
-        Object.assign(document.createElement('span'), {
-          textContent: assumptionEnabled ? 'enabled' : 'not enabled'
-        }),
-        document.createTextNode(' for this lot.')
-      );
-      state = status.querySelector('span');
+      const title = document.createElement('strong');
+      title.className = 'tech-lot-assumption-status-title';
+      title.textContent = 'Existing Unit Move/Takeover';
+
+      state = document.createElement('span');
       state.setAttribute('data-assignable-lot-assumption-status-state', '');
+      state.textContent = statusMessage;
+
+      status.replaceChildren(title, state);
     } else {
-      state.textContent = assumptionEnabled ? 'enabled' : 'not enabled';
+      state.textContent = statusMessage;
     }
 
     status.dataset.status = assumptionEnabled ? 'enabled' : 'disabled';
@@ -1427,7 +1918,9 @@
     updateIntentionalDuplicateRequestControls(form);
     updateProductionWeightPreview(form);
     refreshDuplicateCheckForSelectedLot(form);
-    refreshLotUnitFormProfile(form);
+    refreshLotUnitFormProfile(form).then(() => {
+      applyAuthoritativeServerFieldErrors(form);
+    });
     scheduleLotRequirementWorkflowRefresh(form, { immediate: true });
   }
 
@@ -1467,6 +1960,32 @@
 
     updateAssignableLotHint(form);
     updateAssignableLotAssumptionStatus(form);
+  }
+
+
+  function resolveAssignableLotIdForDuplicateAction(form) {
+    const catalog = getAssignableLotCatalog(form);
+    const comboboxInput = getAssignableLotComboboxInput(form);
+
+    if (!catalog || !comboboxInput) {
+      return '';
+    }
+
+    const selectedOption = getAssignableLotOptionById(form, catalog.value);
+    const typedLabel = normalizeModelSearch(comboboxInput.value);
+    const selectedLabel = normalizeModelSearch(getAssignableLotOptionLabel(selectedOption));
+
+    if (selectedOption && typedLabel && typedLabel === selectedLabel) {
+      return String(catalog.value || '');
+    }
+
+    if (typedLabel && resolveExactAssignableLotMatch(form)) {
+      return String(catalog.value || '');
+    }
+
+    setAssignableLotInputValidity(form, 'Choose an assignable lot from the list before continuing.');
+    comboboxInput.reportValidity();
+    return '';
   }
 
   function getUnitModelCatalog(form) {
@@ -1644,12 +2163,19 @@
 
     const selectedId = selectionInput ? selectionInput.value : '';
 
-    return Array.from(catalog.options).filter((option) => {
-      const isSelected = includeSelectedOption && option.value === selectedId;
-      const isActive = option.getAttribute('data-model-active') === '1';
+    return Array.from(catalog.options)
+      .filter((option) => {
+        const isSelected = includeSelectedOption && option.value === selectedId;
+        const isActive = option.getAttribute('data-model-active') === '1';
 
-      return (isActive || isSelected) && optionMatchesFilters(option, filters);
-    });
+        return (isActive || isSelected) && optionMatchesFilters(option, filters);
+      })
+      .sort((left, right) => compareOperationalOptions(
+        left,
+        right,
+        filters.manufacturerId,
+        getUnitModelOptionLabel
+      ));
   }
 
   function renderUnitModelOptions(form, openOptions, ignoreSearch) {
@@ -1877,14 +2403,21 @@
     const selectedBrandId = brandSelect ? brandSelect.value : '';
     const search = ignoreSearch ? '' : normalizeModelSearch(comboboxInput ? comboboxInput.value : '');
 
-    return Array.from(catalog.options).filter((option) => {
-      const isSelected = includeSelectedOption && option.value === selectedId;
-      const matchesModel = processorOptionSupportsUnitModel(option, modelSelectionInput.value);
-      const matchesBrand = !selectedBrandId || (option.getAttribute('data-processor-brand-id') || '') === selectedBrandId;
-      const matchesSearch = !search || normalizeModelSearch(getProcessorOptionLabel(option)).includes(search);
+    return Array.from(catalog.options)
+      .filter((option) => {
+        const isSelected = includeSelectedOption && option.value === selectedId;
+        const matchesModel = processorOptionSupportsUnitModel(option, modelSelectionInput.value);
+        const matchesBrand = !selectedBrandId || (option.getAttribute('data-processor-brand-id') || '') === selectedBrandId;
+        const matchesSearch = !search || normalizeModelSearch(getProcessorOptionLabel(option)).includes(search);
 
-      return (matchesModel || isSelected) && matchesBrand && matchesSearch;
-    });
+        return (matchesModel || isSelected) && matchesBrand && matchesSearch;
+      })
+      .sort((left, right) => compareOperationalOptions(
+        left,
+        right,
+        modelSelectionInput.value,
+        getProcessorOptionLabel
+      ));
   }
 
   function closeProcessorOptions(form) {
@@ -1996,6 +2529,23 @@
       option.hidden = !compatibleBrandIds.has(option.value);
     });
 
+    const placeholderOption = Array.from(brandSelect.options).find((option) => !option.value) || null;
+    const rankedBrandOptions = Array.from(brandSelect.options)
+      .filter((option) => option.value)
+      .sort((left, right) => compareOperationalOptions(
+        left,
+        right,
+        modelSelectionInput.value,
+        (option) => option.textContent
+      ));
+    const currentBrandValue = brandSelect.value;
+
+    if (placeholderOption) {
+      brandSelect.appendChild(placeholderOption);
+    }
+
+    rankedBrandOptions.forEach((option) => brandSelect.appendChild(option));
+    brandSelect.value = currentBrandValue;
     brandSelect.disabled = compatibleBrandIds.size === 0;
 
     if (selectedProcessor && selectedProcessor.getAttribute('data-processor-brand-id')) {
@@ -2172,8 +2722,16 @@
   }
 
   function getCollectionNameForRowType(rowType) {
+    if (rowType === 'previousMemory') {
+      return 'previousMemoryModules';
+    }
+
     if (rowType === 'memory') {
       return 'memoryModules';
+    }
+
+    if (rowType === 'previousStorage') {
+      return 'previousStorageDevices';
     }
 
     if (rowType === 'storage') {
@@ -2225,6 +2783,200 @@
   }
 
 
+  function trimCapacityDecimal(value) {
+    return Number(value).toFixed(3).replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1');
+  }
+
+  function parseCapacityInputToGb(value) {
+    const normalized = String(value || '').trim().replace(/,/g, '');
+
+    if (!normalized) {
+      return { valid: true, gb: null, canonical: '' };
+    }
+
+    const match = normalized.match(/^(\d+(?:\.\d+)?)\s*(GB|TB)?$/i);
+
+    if (!match) {
+      return { valid: false, gb: null, canonical: normalized };
+    }
+
+    const amount = Number(match[1]);
+    const unit = String(match[2] || 'GB').toUpperCase();
+    let gb = unit === 'TB' ? amount * 1024 : amount;
+
+    if (unit === 'GB' && amount >= 1000) {
+      if (!Number.isInteger(amount)) {
+        return { valid: false, gb: null, canonical: normalized };
+      }
+
+      if (amount % 1024 === 0) {
+        gb = amount;
+      } else if (amount % 1000 === 0) {
+        gb = (amount / 1000) * 1024;
+      } else {
+        return { valid: false, gb: null, canonical: normalized };
+      }
+    }
+
+    if (!Number.isFinite(amount) || amount < 0 || !Number.isInteger(gb)) {
+      return { valid: false, gb: null, canonical: normalized };
+    }
+
+    return { valid: true, gb, canonical: formatCapacityGb(gb) };
+  }
+
+  function formatCapacityGb(value) {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric) || numeric < 0) {
+      return '';
+    }
+
+    if (numeric === 0) {
+      return '0GB';
+    }
+
+    if (Number.isInteger(numeric) && numeric >= 1000) {
+      if (numeric % 1024 === 0) {
+        return `${trimCapacityDecimal(numeric / 1024)}TB`;
+      }
+
+      if (numeric % 1000 === 0) {
+        return `${trimCapacityDecimal(numeric / 1000)}TB`;
+      }
+
+      if (numeric % 256 === 0) {
+        return `${trimCapacityDecimal(numeric / 1024)}TB`;
+      }
+    }
+
+    return `${trimCapacityDecimal(numeric)}GB`;
+  }
+
+  function validateCapacityInput(input, reportValidity) {
+    if (!input) {
+      return true;
+    }
+
+    const parsed = parseCapacityInputToGb(input.value);
+    const valid = parsed.valid;
+
+    input.setCustomValidity(valid ? '' : 'Enter 0 for an empty slot, or a capacity such as 512GB or 1TB. Values like 1000/1024 and 2000/2048 automatically normalize to 1TB and 2TB.');
+
+    if (valid && parsed.gb !== null) {
+      input.value = parsed.canonical;
+    }
+
+    if (!valid && reportValidity) {
+      input.reportValidity();
+    }
+
+    return valid;
+  }
+
+  function validateAllCapacityInputs(form, reportValidity) {
+    const inputs = form ? Array.from(form.querySelectorAll('[data-capacity-input]')) : [];
+
+    for (const input of inputs) {
+      if (input.disabled) {
+        continue;
+      }
+
+      if (!validateCapacityInput(input, reportValidity)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+
+  function validateHardwareRowSelections(form, reportValidity) {
+    const rows = form
+      ? Array.from(form.querySelectorAll('[data-module-row="previousMemory"], [data-module-row="memory"], [data-module-row="previousStorage"], [data-module-row="storage"]'))
+      : [];
+    const invalidSelections = [];
+
+    for (const row of rows) {
+      const rowType = row.getAttribute('data-module-row') || '';
+      const sizeInput = row.querySelector('[name$="[sizeGb]"]');
+      const memoryTypeSelect = row.querySelector('[name$="[ramTypeConfigValueId]"]');
+      const installTypeSelect = row.querySelector('[name$="[memoryInstallTypeCode]"]');
+      const storageTypeSelect = row.querySelector('[name$="[storageTypeConfigValueId]"]');
+      const wipeStatusSelect = row.querySelector('[name$="[wipeStatusConfigValueId]"]');
+      const meaningful = Boolean(
+        String(sizeInput ? sizeInput.value : '').trim()
+        || String(memoryTypeSelect ? memoryTypeSelect.value : '').trim()
+        || String(installTypeSelect ? installTypeSelect.value : '').trim()
+        || String(storageTypeSelect ? storageTypeSelect.value : '').trim()
+        || String(wipeStatusSelect ? wipeStatusSelect.value : '').trim()
+      );
+
+      [memoryTypeSelect, installTypeSelect, storageTypeSelect].forEach((control) => {
+        if (control) {
+          control.setCustomValidity('');
+        }
+      });
+
+      if (!meaningful) {
+        [memoryTypeSelect, installTypeSelect, storageTypeSelect, wipeStatusSelect].forEach((control) => {
+          if (control) {
+            clearResolvedValidationError(control);
+          }
+        });
+        continue;
+      }
+
+      const parsedSize = parseCapacityInputToGb(sizeInput ? sizeInput.value : '');
+      const isExplicitEmptySlot = Boolean(
+        sizeInput
+        && String(sizeInput.value || '').trim()
+        && parsedSize.valid
+        && parsedSize.gb === 0
+      );
+
+      if (isExplicitEmptySlot) {
+        [memoryTypeSelect, installTypeSelect, storageTypeSelect, wipeStatusSelect].forEach((control) => {
+          if (control) {
+            control.value = '';
+            control.setCustomValidity('');
+            clearResolvedValidationError(control);
+          }
+        });
+        continue;
+      }
+
+      const requiredSelections = rowType === 'memory' || rowType === 'previousMemory'
+        ? [
+            [memoryTypeSelect, 'Select a Memory Type for this module.'],
+            [installTypeSelect, 'Select an Install Type for this module.']
+          ]
+        : [[storageTypeSelect, 'Select a Storage Type for this device.']];
+
+      for (const [control, message] of requiredSelections) {
+        if (!control || control.disabled || String(control.value || '').trim()) {
+          if (control) {
+            clearResolvedValidationError(control);
+          }
+          continue;
+        }
+
+        control.setCustomValidity(message);
+        invalidSelections.push([control, message]);
+      }
+    }
+
+    if (invalidSelections.length > 0 && reportValidity) {
+      invalidSelections.forEach(([control, message]) => {
+        showValidationError(control, message);
+      });
+      scheduleInvalidControlFocus(form, invalidSelections[0][0]);
+    }
+
+    return invalidSelections.length === 0;
+  }
+
+
   function formatProductionWeight(value) {
     if (value === null || value === undefined || value === '') {
       return '—';
@@ -2267,39 +3019,98 @@
     }
   }
 
+  function synchronizeCurrentCapacityFromComponents(input, total, hasStructuredEntries) {
+    if (!input) {
+      return;
+    }
+
+    const previousComponentTotal = Number(input.getAttribute('data-component-total') || 0);
+    const currentValue = String(input.value || '').trim();
+    const followsComponents = input.getAttribute('data-auto-from-components') === 'true';
+    const currentMatchesPreviousComponentTotal = Number(currentValue) === previousComponentTotal;
+
+    if (hasStructuredEntries && (!currentValue || followsComponents || currentMatchesPreviousComponentTotal)) {
+      input.value = String(total);
+      input.setAttribute('data-auto-from-components', 'true');
+    } else if (!hasStructuredEntries && followsComponents && currentMatchesPreviousComponentTotal) {
+      input.value = '';
+      input.setAttribute('data-auto-from-components', 'false');
+    }
+
+    input.setAttribute('data-component-total', String(total));
+  }
+
+  function getModuleCapacityState(form, selector) {
+    return Array.from(form.querySelectorAll(selector)).reduce((state, input) => {
+      const parsed = parseCapacityInputToGb(input.value);
+
+      if (parsed.valid && parsed.gb !== null) {
+        state.hasStructuredEntries = true;
+        state.total += parsed.gb;
+      }
+
+      return state;
+    }, { total: 0, hasStructuredEntries: false });
+  }
+
+  function sumPositiveModuleSizes(form, selector) {
+    return getModuleCapacityState(form, selector).total;
+  }
+
+  function updateStructuredCopyButtons(form) {
+    const previousMemoryState = getModuleCapacityState(form, '[data-previous-memory-size-input]');
+    const previousStorageState = getModuleCapacityState(form, '[data-previous-storage-size-input]');
+    const memoryButton = form.querySelector('[data-copy-previous-memory]');
+    const storageButton = form.querySelector('[data-copy-previous-storage]');
+
+    if (memoryButton) {
+      memoryButton.disabled = !previousMemoryState.hasStructuredEntries;
+      memoryButton.setAttribute('aria-disabled', memoryButton.disabled ? 'true' : 'false');
+    }
+
+    if (storageButton) {
+      storageButton.disabled = !previousStorageState.hasStructuredEntries;
+      storageButton.setAttribute('aria-disabled', storageButton.disabled ? 'true' : 'false');
+    }
+  }
+
   function updateModuleTotals(form) {
-    const memoryTotal = Array.from(form.querySelectorAll('[data-memory-size-input]')).reduce((sum, input) => {
-      const value = Number(input.value || 0);
-
-      return Number.isFinite(value) && value > 0 ? sum + value : sum;
-    }, 0);
-
-    const storageTotal = Array.from(form.querySelectorAll('[data-storage-size-input]')).reduce((sum, input) => {
-      const value = Number(input.value || 0);
-
-      return Number.isFinite(value) && value > 0 ? sum + value : sum;
-    }, 0);
-
+    const previousMemoryState = getModuleCapacityState(form, '[data-previous-memory-size-input]');
+    const memoryState = getModuleCapacityState(form, '[data-memory-size-input]');
+    const previousStorageState = getModuleCapacityState(form, '[data-previous-storage-size-input]');
+    const storageState = getModuleCapacityState(form, '[data-storage-size-input]');
+    const previousMemoryTotal = previousMemoryState.total;
+    const memoryTotal = memoryState.total;
+    const previousStorageTotal = previousStorageState.total;
+    const storageTotal = storageState.total;
+    const previousMemoryInput = form.querySelector('[data-previous-memory-total-input]');
     const memoryInput = form.querySelector('[data-memory-total-input]');
+    const previousStorageInput = form.querySelector('[data-previous-storage-total-input]');
     const storageInput = form.querySelector('[data-storage-total-input]');
-    const memoryDisplay = form.querySelector('[data-memory-total-display]');
-    const storageDisplay = form.querySelector('[data-storage-total-display]');
+    const previousMemoryDisplays = Array.from(form.querySelectorAll('[data-previous-memory-total-display]'));
+    const memoryDisplays = Array.from(form.querySelectorAll('[data-memory-total-display]'));
+    const previousStorageDisplays = Array.from(form.querySelectorAll('[data-previous-storage-total-display]'));
+    const storageDisplays = Array.from(form.querySelectorAll('[data-storage-total-display]'));
 
-    if (memoryInput) {
-      memoryInput.value = memoryTotal > 0 ? String(memoryTotal) : '';
-    }
+    synchronizeCurrentCapacityFromComponents(previousMemoryInput, previousMemoryTotal, previousMemoryState.hasStructuredEntries);
+    synchronizeCurrentCapacityFromComponents(memoryInput, memoryTotal, memoryState.hasStructuredEntries);
+    synchronizeCurrentCapacityFromComponents(previousStorageInput, previousStorageTotal, previousStorageState.hasStructuredEntries);
+    synchronizeCurrentCapacityFromComponents(storageInput, storageTotal, storageState.hasStructuredEntries);
 
-    if (storageInput) {
-      storageInput.value = storageTotal > 0 ? String(storageTotal) : '';
-    }
+    previousMemoryDisplays.forEach((display) => {
+      display.textContent = formatCapacityGb(previousMemoryTotal) || '0GB';
+    });
+    memoryDisplays.forEach((display) => {
+      display.textContent = formatCapacityGb(memoryTotal) || '0GB';
+    });
+    previousStorageDisplays.forEach((display) => {
+      display.textContent = formatCapacityGb(previousStorageTotal) || '0GB';
+    });
+    storageDisplays.forEach((display) => {
+      display.textContent = formatCapacityGb(storageTotal) || '0GB';
+    });
 
-    if (memoryDisplay) {
-      memoryDisplay.textContent = String(memoryTotal || 0);
-    }
-
-    if (storageDisplay) {
-      storageDisplay.textContent = String(storageTotal || 0);
-    }
+    updateStructuredCopyButtons(form);
   }
 
   function addModuleRow(form, rowType) {
@@ -2324,11 +3135,119 @@
 
     if (row) {
       list.appendChild(row);
+      syncCosmeticIssueRowState(row);
+      syncHardwareIssueRowState(row);
     }
 
     renumberModuleRows(form, rowType);
     updateModuleTotals(form);
     validateRequiredRepeatableSection(list.closest('[data-unit-form-repeatable-type]'), false);
+  }
+
+  function setModuleRowFieldValue(row, fieldName, value) {
+    if (!row) {
+      return;
+    }
+
+    const field = row.querySelector(`[name$="[${fieldName}]"]`);
+
+    if (!field) {
+      return;
+    }
+
+    field.value = value === null || value === undefined ? '' : String(value);
+  }
+
+  function readModuleRowFieldValue(row, fieldName) {
+    const field = row ? row.querySelector(`[name$="[${fieldName}]"]`) : null;
+    return field ? field.value : '';
+  }
+
+  function copyPreviousRowsToCurrent(button, configuration) {
+    const form = getFormFromElement(button);
+
+    if (!form) {
+      return;
+    }
+
+    const sourceRows = getModuleRows(form, configuration.sourceType)
+      .filter((row) => {
+        const parsed = parseCapacityInputToGb(readModuleRowFieldValue(row, 'sizeGb'));
+
+        return parsed.valid && parsed.gb !== null;
+      });
+    const list = form.querySelector(`[data-module-list="${configuration.targetType}"]`);
+    const template = form.querySelector(`template[data-module-template="${configuration.targetType}"]`);
+
+    if (sourceRows.length === 0 || !list || !template) {
+      return;
+    }
+
+    clearValidationError(list);
+    list.innerHTML = '';
+
+    sourceRows.forEach((sourceRow, index) => {
+      const displayNumber = index + 1;
+      const html = template.innerHTML
+        .replaceAll('__INDEX__', String(index))
+        .replaceAll('__DISPLAY__', String(displayNumber));
+      const holder = document.createElement('div');
+      holder.innerHTML = html.trim();
+      const row = holder.firstElementChild;
+
+      if (!row) {
+        return;
+      }
+
+      configuration.fields.forEach((fieldName) => {
+        setModuleRowFieldValue(row, fieldName, readModuleRowFieldValue(sourceRow, fieldName));
+      });
+      list.appendChild(row);
+    });
+
+    renumberModuleRows(form, configuration.targetType);
+    updateModuleTotals(form);
+    validateRequiredRepeatableSection(list.closest('[data-unit-form-repeatable-type]'), false);
+
+    const firstSizeInput = list.querySelector('[name$="[sizeGb]"]');
+
+    if (firstSizeInput) {
+      firstSizeInput.focus({ preventScroll: true });
+    }
+  }
+
+  function copyPreviousMemoryToCurrent(button) {
+    copyPreviousRowsToCurrent(button, {
+      sourceType: 'previousMemory',
+      targetType: 'memory',
+      fields: [
+        'slotLabel',
+        'sizeGb',
+        'ramTypeConfigValueId',
+        'memoryInstallTypeCode',
+        'speedMhz',
+        'manufacturerName',
+        'partNumber',
+        'serialNumber',
+        'changeNotes'
+      ]
+    });
+  }
+
+  function copyPreviousStorageToCurrent(button) {
+    copyPreviousRowsToCurrent(button, {
+      sourceType: 'previousStorage',
+      targetType: 'storage',
+      fields: [
+        'slotLabel',
+        'sizeGb',
+        'storageTypeConfigValueId',
+        'manufacturerName',
+        'modelNumber',
+        'serialNumber',
+        'firmwareVersion'
+      ]
+    });
   }
 
   function removeModuleRow(button) {
@@ -2343,6 +3262,8 @@
     const section = row.closest('[data-unit-form-repeatable-type]');
     const rows = getModuleRows(form, rowType);
 
+    clearValidationError(row);
+
     if (rows.length <= 1) {
       row.querySelectorAll('input, select, textarea').forEach((field) => {
         if (field.tagName === 'SELECT') {
@@ -2355,9 +3276,18 @@
       row.remove();
     }
 
+    if (rowType === 'cosmeticIssue') {
+      syncCosmeticIssueRowState(row);
+    }
+
+    if (rowType === 'hardwareIssue') {
+      syncHardwareIssueRowState(row);
+    }
+
     renumberModuleRows(form, rowType);
     updateModuleTotals(form);
     validateRequiredRepeatableSection(section, false);
+    refreshValidationSummary(form);
   }
 
   function renderModalMarkup(markup) {
@@ -2473,9 +3403,14 @@
       return;
     }
 
+    const destinationLotId = resolveAssignableLotIdForDuplicateAction(form);
+
+    if (!destinationLotId) {
+      return;
+    }
+
     const unitSerialInput = form.querySelector('[name="unitSerialNumber"]');
     const biosSerialInput = form.querySelector('[name="biosSerialNumber"]');
-    const destinationLotSelect = form.querySelector('[name="lotId"]');
     const params = new URLSearchParams();
 
     if (unitSerialInput && normalizeSerialInput(unitSerialInput)) {
@@ -2486,9 +3421,7 @@
       params.set('biosSerialNumber', biosSerialInput.value);
     }
 
-    if (destinationLotSelect && destinationLotSelect.value) {
-      params.set('destinationLotId', destinationLotSelect.value);
-    }
+    params.set('destinationLotId', destinationLotId);
 
     const duplicateAssumptionNonce = form.querySelector('[data-duplicate-assumption-nonce]');
 
@@ -2508,7 +3441,7 @@
       const region = form.querySelector('[data-duplicate-check-region]');
 
       if (region) {
-        region.insertAdjacentHTML('afterbegin', '<div class="message error"><p>The existing-unit assumption review could not be opened. Refresh the duplicate check and try again.</p></div>');
+        region.insertAdjacentHTML('afterbegin', '<div class="message error"><p>The existing unit move/takeover review could not be opened. Refresh the duplicate check and try again.</p></div>');
       }
     } finally {
       button.disabled = false;
@@ -2520,6 +3453,10 @@
     const unitId = button.getAttribute('data-intentional-duplicate-request-unit-id');
 
     if (!form || !unitId) {
+      return;
+    }
+
+    if (!resolveAssignableLotIdForDuplicateAction(form)) {
       return;
     }
 
@@ -2557,15 +3494,45 @@
 
   async function openDuplicateOverrideModal(button) {
     const unitId = button.getAttribute('data-duplicate-request-override-unit-id');
+    const form = getFormFromElement(button);
 
-    if (!unitId) {
+    if (!unitId || !form) {
+      return;
+    }
+
+    const destinationLotId = resolveAssignableLotIdForDuplicateAction(form);
+
+    if (!destinationLotId) {
       return;
     }
 
     button.disabled = true;
 
     try {
-      const response = await fetch(`/tech/units/${encodeURIComponent(unitId)}/override/modal`, {
+      const params = new URLSearchParams();
+      params.set('destinationLotId', destinationLotId);
+
+      const unitSerialInput = form ? form.querySelector('[name="unitSerialNumber"]') : null;
+      const biosSerialInput = form ? form.querySelector('[name="biosSerialNumber"]') : null;
+      const duplicateAssumptionNonce = form ? form.querySelector('[data-duplicate-assumption-nonce]') : null;
+
+      if (unitSerialInput && normalizeSerialInput(unitSerialInput)) {
+        params.set('unitSerialNumber', unitSerialInput.value);
+      }
+
+      if (biosSerialInput && normalizeSerialInput(biosSerialInput)) {
+        params.set('biosSerialNumber', biosSerialInput.value);
+      }
+
+      if (duplicateAssumptionNonce && duplicateAssumptionNonce.value) {
+        params.set('duplicateAssumptionNonce', duplicateAssumptionNonce.value);
+      }
+
+      params.set('requestContext', 'duplicate_intake');
+
+      const queryString = params.toString();
+      const modalUrl = `/tech/units/${encodeURIComponent(unitId)}/override/modal${queryString ? `?${queryString}` : ''}`;
+      const response = await fetch(modalUrl, {
         headers: { 'HX-Request': 'true' }
       });
 
@@ -2575,10 +3542,35 @@
       const region = form ? form.querySelector('[data-duplicate-check-region]') : null;
 
       if (region) {
-        region.insertAdjacentHTML('afterbegin', '<div class="message error"><p>The override request could not be opened. Use the Unit Browser to review the existing unit.</p></div>');
+        region.insertAdjacentHTML('afterbegin', '<div class="message error"><p>The Move / Takeover request could not be opened. Use Open Existing Unit to review the matching record.</p></div>');
       }
     } finally {
       button.disabled = false;
+    }
+  }
+
+  function updateOutcomeApprovalRequestControls(form, { clearWhenDisabled = false } = {}) {
+    if (!form) {
+      return;
+    }
+
+    const box = form.querySelector('[data-outcome-approval-request-box]');
+    const checkbox = form.querySelector('[data-outcome-approval-request-toggle]');
+    const notes = form.querySelector('[data-outcome-approval-request-notes]');
+
+    if (!box || !checkbox || !notes) {
+      return;
+    }
+
+    const requestActive = checkbox.checked && !checkbox.disabled;
+    box.setAttribute('data-request-active', requestActive ? 'true' : 'false');
+    notes.disabled = !requestActive;
+    notes.setAttribute('aria-disabled', requestActive ? 'false' : 'true');
+
+    if (!requestActive && clearWhenDisabled) {
+      notes.value = '';
+      notes.setCustomValidity('');
+      clearResolvedValidationError(notes);
     }
   }
 
@@ -2593,13 +3585,21 @@
     setUnitModelComboboxLayer(form, false);
     updateUnitModelFilter(form, true);
     updateProcessorFilter(form, true);
+    renumberModuleRows(form, 'previousMemory');
     renumberModuleRows(form, 'memory');
+    renumberModuleRows(form, 'previousStorage');
     renumberModuleRows(form, 'storage');
+    syncAllCosmeticIssueRows(form);
+    syncAllHardwareIssueRows(form);
     updateModuleTotals(form);
     updateProductionWeightPreview(form);
     updateIntentionalDuplicateRequestControls(form);
     updateCatalogRequestControls(form);
-    refreshLotUnitFormProfile(form);
+    updateOutcomeApprovalRequestControls(form, { clearWhenDisabled: true });
+    refreshLotUnitFormProfile(form).then(() => {
+      updateOutcomeApprovalRequestControls(form, { clearWhenDisabled: true });
+      applyAuthoritativeServerFieldErrors(form);
+    });
     scheduleLotRequirementWorkflowRefresh(form, { immediate: true, background: true });
 
     const processorSpeedInput = form.querySelector('[data-processor-speed-input]');
@@ -2632,6 +3632,25 @@
   });
 
   document.addEventListener('intentional-duplicate-request-submitted', showIntentionalDuplicateRequestSubmitted);
+
+  document.addEventListener('click', (event) => {
+    const validationLink = event.target.closest('[data-unit-form-validation-focus]');
+
+    if (!validationLink) {
+      return;
+    }
+
+    const form = getFormFromElement(validationLink);
+    const token = validationLink.getAttribute('data-unit-form-validation-focus') || '';
+    const control = getValidationControlByToken(form, token);
+
+    if (!control) {
+      return;
+    }
+
+    event.preventDefault();
+    focusValidationControl(control);
+  });
 
   document.addEventListener('click', (event) => {
     const catalogRequestButton = event.target.closest('[data-catalog-request-button]');
@@ -2711,6 +3730,38 @@
       }
     }
 
+    const cosmeticIssueTypeSelect = event.target.closest('[data-cosmetic-issue-type-select]');
+
+    if (cosmeticIssueTypeSelect) {
+      const row = cosmeticIssueTypeSelect.closest('[data-module-row="cosmeticIssue"]');
+      const section = cosmeticIssueTypeSelect.closest('[data-unit-form-repeatable-type="cosmeticIssue"]');
+      const form = getFormFromElement(cosmeticIssueTypeSelect);
+
+      syncCosmeticIssueRowState(row);
+      validateRequiredRepeatableSection(section, false);
+      refreshValidationSummary(form);
+      scheduleLotRequirementWorkflowRefresh(form);
+    }
+
+    const hardwareIssueTypeSelect = event.target.closest('[data-hardware-issue-type-select]');
+
+    if (hardwareIssueTypeSelect) {
+      const row = hardwareIssueTypeSelect.closest('[data-module-row="hardwareIssue"]');
+      const section = hardwareIssueTypeSelect.closest('[data-unit-form-repeatable-type="hardwareIssue"]');
+      const form = getFormFromElement(hardwareIssueTypeSelect);
+
+      syncHardwareIssueRowState(row);
+      validateRequiredRepeatableSection(section, false);
+      refreshValidationSummary(form);
+      scheduleLotRequirementWorkflowRefresh(form);
+    }
+
+    const outcomeApprovalToggle = event.target.closest('[data-outcome-approval-request-toggle]');
+
+    if (outcomeApprovalToggle) {
+      updateOutcomeApprovalRequestControls(getFormFromElement(outcomeApprovalToggle), { clearWhenDisabled: true });
+    }
+
     const modelFilterSelect = event.target.closest('[data-manufacturer-select], [data-unit-category-select]');
 
     if (modelFilterSelect) {
@@ -2732,7 +3783,9 @@
       updateIntentionalDuplicateRequestControls(form);
       updateProductionWeightPreview(form);
       refreshDuplicateCheckForSelectedLot(form);
-      refreshLotUnitFormProfile(form);
+      refreshLotUnitFormProfile(form).then(() => {
+        applyAuthoritativeServerFieldErrors(form);
+      });
       scheduleLotRequirementWorkflowRefresh(form, { immediate: true });
       return;
     }
@@ -2753,17 +3806,21 @@
       return;
     }
 
-    const moduleField = event.target.closest('[data-memory-size-input], [data-storage-size-input]');
+    const moduleField = event.target.closest('[data-previous-memory-size-input], [data-memory-size-input], [data-previous-storage-size-input], [data-storage-size-input]');
 
     if (moduleField) {
       const form = getFormFromElement(moduleField);
+      validateCapacityInput(moduleField, false);
       updateModuleTotals(form);
+      validateHardwareRowSelections(form, false);
     }
 
     const repeatableField = event.target.closest('[data-module-field]');
 
     if (repeatableField) {
+      const form = getFormFromElement(repeatableField);
       validateRequiredRepeatableSection(repeatableField.closest('[data-unit-form-repeatable-type]'), false);
+      validateHardwareRowSelections(form, false);
       clearResolvedValidationError(repeatableField);
     }
   });
@@ -2782,7 +3839,9 @@
     const repeatableField = event.target.closest('[data-module-field]');
 
     if (repeatableField) {
+      const form = getFormFromElement(repeatableField);
       validateRequiredRepeatableSection(repeatableField.closest('[data-unit-form-repeatable-type]'), false);
+      validateHardwareRowSelections(form, false);
       clearResolvedValidationError(repeatableField);
     }
 
@@ -2861,7 +3920,7 @@
       updateProductionWeightPreview(form);
     }
 
-    const moduleSizeInput = event.target.closest('[data-memory-size-input], [data-storage-size-input]');
+    const moduleSizeInput = event.target.closest('[data-previous-memory-size-input], [data-memory-size-input], [data-previous-storage-size-input], [data-storage-size-input]');
 
     if (moduleSizeInput) {
       const form = getFormFromElement(moduleSizeInput);
@@ -3047,6 +4106,17 @@
     if (!form) {
       return;
     }
+
+    if (!validateAllCapacityInputs(form, true) || !validateHardwareRowSelections(form, true)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
+    // Recalculate hidden capacity summaries at the final possible moment.
+    // This covers browser-restored values and changes made immediately before
+    // pressing Create/Update, before profile or requirement fingerprints run.
+    updateModuleTotals(form);
 
     const lotSelect = getAssignableLotCatalog(form);
 
@@ -3302,13 +4372,33 @@
       return;
     }
 
+    const copyPreviousMemoryButton = event.target.closest('[data-copy-previous-memory]');
+
+    if (copyPreviousMemoryButton) {
+      const form = getFormFromElement(copyPreviousMemoryButton);
+      copyPreviousMemoryToCurrent(copyPreviousMemoryButton);
+      scheduleLotRequirementWorkflowRefresh(form);
+      return;
+    }
+
+    const copyPreviousStorageButton = event.target.closest('[data-copy-previous-storage]');
+
+    if (copyPreviousStorageButton) {
+      const form = getFormFromElement(copyPreviousStorageButton);
+      copyPreviousStorageToCurrent(copyPreviousStorageButton);
+      scheduleLotRequirementWorkflowRefresh(form);
+      return;
+    }
+
     const addButton = event.target.closest('[data-add-module-row]');
 
     if (addButton) {
       const form = getFormFromElement(addButton);
       const rowType = addButton.getAttribute('data-add-module-row');
       addModuleRow(form, rowType);
-      scheduleLotRequirementWorkflowRefresh(form);
+      if (!String(rowType || '').startsWith('previous')) {
+        scheduleLotRequirementWorkflowRefresh(form);
+      }
       return;
     }
 
@@ -3316,8 +4406,11 @@
 
     if (removeButton) {
       const form = getFormFromElement(removeButton);
+      const rowType = removeButton.closest('[data-module-row]')?.getAttribute('data-module-row') || '';
       removeModuleRow(removeButton);
-      scheduleLotRequirementWorkflowRefresh(form);
+      if (!rowType.startsWith('previous')) {
+        scheduleLotRequirementWorkflowRefresh(form);
+      }
     }
   });
 
@@ -3350,6 +4443,7 @@
     }
 
     if (event.key === LOT_REQUIREMENT_WORKFLOW_STORAGE_KEY) {
+      refreshOpenLotUnitForms({ force: true });
       refreshOpenLotRequirementWorkflows();
     }
   });

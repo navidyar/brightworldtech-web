@@ -1,12 +1,14 @@
 'use strict';
 
 const { getLotRequirementField } = require('../config/lotRequirementRegistry');
+const { analyzeRequirementNumber } = require('./lotRequirementNumberPolicy');
 
 const VALUE_COLUMN_NAMES = Object.freeze([
   'requirement_config_value_id',
   'manufacturer_id',
   'unit_model_id',
   'processor_model_id',
+  'processor_family_id',
   'requirement_text',
   'requirement_number'
 ]);
@@ -37,13 +39,13 @@ function buildRequirementValuePayload(requirementKey, requiredValue) {
   }
 
   if (field.storageKind === 'number') {
-    const numericValue = Number(normalizedValue);
+    const analysis = analyzeRequirementNumber(field, normalizedValue);
 
-    if (!Number.isFinite(numericValue) || numericValue <= 0) {
-      throw new Error(`${field.label} must be a number greater than zero.`);
+    if (!analysis.valid) {
+      throw new Error(analysis.message);
     }
 
-    payload.requirement_number = numericValue;
+    payload.requirement_number = analysis.numericValue;
     return payload;
   }
 
@@ -51,13 +53,15 @@ function buildRequirementValuePayload(requirementKey, requiredValue) {
     config_value: 'config_value',
     manufacturer: 'manufacturer',
     unit_model: 'unit_model',
-    processor_model: 'processor_model'
+    processor_model: 'processor_model',
+    processor_family: 'processor_family'
   };
   const columnByStorageKind = {
     config_value: 'requirement_config_value_id',
     manufacturer: 'manufacturer_id',
     unit_model: 'unit_model_id',
-    processor_model: 'processor_model_id'
+    processor_model: 'processor_model_id',
+    processor_family: 'processor_family_id'
   };
   const expectedPrefix = prefixByStorageKind[field.storageKind];
   const targetColumn = columnByStorageKind[field.storageKind];
@@ -83,6 +87,9 @@ function getRequirementValueToken(row) {
   }
   if (row.processor_model_id) {
     return `processor_model:${row.processor_model_id}`;
+  }
+  if (row.processor_family_id) {
+    return `processor_family:${row.processor_family_id}`;
   }
   if (row.requirement_number !== null && row.requirement_number !== undefined) {
     return String(Number(row.requirement_number));

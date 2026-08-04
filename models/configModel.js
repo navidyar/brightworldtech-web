@@ -1,4 +1,8 @@
 const { pool } = require('./db');
+const {
+  getConfigCategoryOrderingPolicy,
+  isPopularitySortedConfigCategory
+} = require('../services/configurationOrderingPolicy');
 
 const ALLOWED_TABLES = ['config_categories', 'config_values'];
 
@@ -224,6 +228,7 @@ async function listConfigCategoriesWithValues(options = {}) {
     const inactiveValues = allValues.filter((value) => !value.isActive);
     const visibleValues = includeInactiveValues ? allValues : activeValues;
     const section = getConfigSection(category.code);
+    const orderingPolicy = getConfigCategoryOrderingPolicy(category.code, activeValues.length);
 
     return {
       ...category,
@@ -236,7 +241,10 @@ async function listConfigCategoriesWithValues(options = {}) {
       inactiveValueCount: inactiveValues.length,
       totalValueCount: allValues.length,
       visibleValueCount: visibleValues.length,
-      hiddenInactiveValueCount: includeInactiveValues ? 0 : inactiveValues.length
+      hiddenInactiveValueCount: includeInactiveValues ? 0 : inactiveValues.length,
+      usesPopularitySorting: orderingPolicy.usesPopularitySorting,
+      dragOrderingManaged: orderingPolicy.supportsDragOrdering,
+      supportsDragOrdering: orderingPolicy.supportsDragOrdering && visibleValues.length >= 3
     };
   });
 }
@@ -248,6 +256,7 @@ async function listConfigCategoriesForForm() {
     categorySortExpression,
     categoryActiveExpression
   } = await getConfigCategorySelectExpressions();
+  const { valueActiveExpression } = await getConfigValueSelectExpressions();
 
   const [rows] = await pool.query(`
     SELECT
@@ -256,15 +265,31 @@ async function listConfigCategoriesForForm() {
       ${categoryLabelExpression} AS label,
       ${categoryDescriptionExpression} AS description,
       ${categorySortExpression} AS sort_order,
-      ${categoryActiveExpression} AS is_active
+      ${categoryActiveExpression} AS is_active,
+      (SELECT COUNT(*)
+       FROM config_values cv
+       WHERE cv.config_category_id = cc.config_category_id) AS total_value_count,
+      (SELECT COUNT(*)
+       FROM config_values cv
+       WHERE cv.config_category_id = cc.config_category_id
+         AND ${valueActiveExpression} = 1) AS active_value_count
     FROM config_categories cc
     ORDER BY sort_order, label, code
   `);
 
-  return rows.map((row) => ({
-    ...row,
-    isActive: isActiveRecord(row)
-  }));
+  return rows.map((row) => {
+    const activeValueCount = Number(row.active_value_count || 0);
+    const orderingPolicy = getConfigCategoryOrderingPolicy(row.code, activeValueCount);
+
+    return {
+      ...row,
+      isActive: isActiveRecord(row),
+      totalValueCount: Number(row.total_value_count || 0),
+      activeValueCount,
+      usesPopularitySorting: orderingPolicy.usesPopularitySorting,
+      dragOrderingManaged: orderingPolicy.supportsDragOrdering
+    };
+  });
 }
 
 async function getConfigCategoryById(configCategoryId) {
@@ -359,6 +384,23 @@ async function configValueCodeExists(code, exceptConfigValueId = null) {
 
   const [rows] = await pool.query(sql, params);
   return rows.length > 0;
+}
+
+async function getNextConfigValueSortOrder(configCategoryId) {
+  const valueColumns = await getColumnSet('config_values');
+
+  if (!valueColumns.has('sort_order')) {
+    return 0;
+  }
+
+  const [rows] = await pool.query(
+    `SELECT COALESCE(MAX(sort_order), 0) + 10 AS next_sort_order
+     FROM config_values
+     WHERE config_category_id = ?`,
+    [configCategoryId]
+  );
+
+  return Number(rows[0]?.next_sort_order || 10);
 }
 
 async function createConfigValue({ configCategoryId, code, label, value, description, sortOrder, isActive }) {
@@ -458,6 +500,137 @@ async function updateConfigValue({ configValueId, configCategoryId, code, label,
   );
 }
 
+function createConfigOrderingError(message, statusCode = 400, code = 'CONFIG_ORDER_INVALID') {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.code = code;
+  return error;
+}
+
+function normalizeOrderedConfigValueIds(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  const normalized = values
+    .map((value) => Number.parseInt(String(value || '').trim(), 10))
+    .filter((value) => Number.isSafeInteger(value) && value > 0);
+
+  return Array.from(new Set(normalized));
+}
+
+async function reorderConfigValues({ configCategoryId, orderedConfigValueIds, includeInactiveValues = false }) {
+  const categoryId = Number.parseInt(String(configCategoryId || '').trim(), 10);
+  const submittedIds = normalizeOrderedConfigValueIds(orderedConfigValueIds);
+
+  if (!Number.isSafeInteger(categoryId) || categoryId <= 0) {
+    throw createConfigOrderingError('Choose a valid configuration category.');
+  }
+
+  const valueColumns = await getColumnSet('config_values');
+
+  if (!valueColumns.has('sort_order')) {
+    throw createConfigOrderingError('Configuration value ordering is not available for the current database schema.', 409, 'CONFIG_ORDER_UNAVAILABLE');
+  }
+
+  const hasActiveColumn = valueColumns.has('is_active');
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [categoryRows] = await connection.query(
+      `SELECT config_category_id, code
+       FROM config_categories
+       WHERE config_category_id = ?
+       LIMIT 1
+       FOR UPDATE`,
+      [categoryId]
+    );
+    const category = categoryRows[0];
+
+    if (!category) {
+      throw createConfigOrderingError('The selected configuration category could not be found.', 404, 'CONFIG_CATEGORY_NOT_FOUND');
+    }
+
+    if (isPopularitySortedConfigCategory(category.code)) {
+      throw createConfigOrderingError(
+        'This list is ordered by operational popularity and cannot be manually reordered here.',
+        409,
+        'CONFIG_ORDER_POPULARITY_CONTROLLED'
+      );
+    }
+
+    const activeSelect = hasActiveColumn ? 'is_active' : '1 AS is_active';
+    const [valueRows] = await connection.query(
+      `SELECT config_value_id, ${activeSelect}, sort_order
+       FROM config_values
+       WHERE config_category_id = ?
+       ORDER BY sort_order, config_value_id
+       FOR UPDATE`,
+      [categoryId]
+    );
+    const reorderableRows = includeInactiveValues
+      ? valueRows
+      : valueRows.filter((row) => Number(row.is_active) === 1);
+
+    if (reorderableRows.length < 3) {
+      throw createConfigOrderingError(
+        'Drag-and-drop ordering is available only for lists with at least three visible values.',
+        409,
+        'CONFIG_ORDER_TOO_FEW_VALUES'
+      );
+    }
+
+    const expectedIds = reorderableRows.map((row) => Number(row.config_value_id));
+    const expectedIdSet = new Set(expectedIds);
+    const submittedIdSet = new Set(submittedIds);
+    const hasExactValueSet = submittedIds.length === expectedIds.length
+      && expectedIds.every((valueId) => submittedIdSet.has(valueId))
+      && submittedIds.every((valueId) => expectedIdSet.has(valueId));
+
+    if (!hasExactValueSet) {
+      throw createConfigOrderingError(
+        'This configuration list changed while it was being reordered. Reload the page and try again.',
+        409,
+        'CONFIG_ORDER_STALE'
+      );
+    }
+
+    const submittedSet = new Set(submittedIds);
+    const remainingRows = valueRows.filter((row) => !submittedSet.has(Number(row.config_value_id)));
+    const fullOrderedIds = [...submittedIds, ...remainingRows.map((row) => Number(row.config_value_id))];
+
+    const orderCases = fullOrderedIds.map(() => 'WHEN ? THEN ?').join(' ');
+    const idPlaceholders = fullOrderedIds.map(() => '?').join(', ');
+    const orderParams = fullOrderedIds.flatMap((valueId, index) => [valueId, (index + 1) * 10]);
+
+    await connection.query(
+      `UPDATE config_values
+       SET sort_order = CASE config_value_id
+         ${orderCases}
+         ELSE sort_order
+       END
+       WHERE config_category_id = ?
+         AND config_value_id IN (${idPlaceholders})`,
+      [...orderParams, categoryId, ...fullOrderedIds]
+    );
+
+    await connection.commit();
+
+    return {
+      configCategoryId: categoryId,
+      orderedConfigValueIds: submittedIds,
+      updatedCount: fullOrderedIds.length
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function setConfigValueActive(configValueId, isActive) {
   const valueColumns = await getColumnSet('config_values');
 
@@ -503,8 +676,10 @@ module.exports = {
   getConfigCategoryById,
   getConfigValueById,
   configValueCodeExists,
+  getNextConfigValueSortOrder,
   createConfigValue,
   updateConfigValue,
+  reorderConfigValues,
   setConfigValueActive,
   getConfigSummary,
   groupConfigCategories

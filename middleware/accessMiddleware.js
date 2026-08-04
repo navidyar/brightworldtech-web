@@ -7,6 +7,8 @@ function attachAccessLocals(req, res, next) {
   res.locals.getAccessibleDashboards = () => accessPolicy.getAccessibleDashboards(currentRoles);
   res.locals.canAccessDashboard = (dashboardKey) => accessPolicy.canAccessDashboard(currentRoles, dashboardKey);
   res.locals.canAccessMenuArea = (menuAreaKey) => accessPolicy.canAccessMenuArea(currentRoles, menuAreaKey);
+  res.locals.canAccessUnitRequests = () => accessPolicy.canAccessUnitRequests(currentRoles);
+  res.locals.canCreateOrEditTechUnits = () => accessPolicy.canCreateOrEditTechUnits(currentRoles);
 
   return next();
 }

@@ -14,7 +14,7 @@ const {
 } = require('../config/unitFormFieldRegistry');
 
 test('authoritative registry contains every Stage 1A audited control', () => {
-  assert.equal(UNIT_FORM_FIELD_REGISTRY.length, 54);
+  assert.equal(UNIT_FORM_FIELD_REGISTRY.length, 57);
   assert.equal(assertValidUnitFormFieldRegistry(), true);
 });
 
@@ -34,6 +34,42 @@ test('protected routing and system fields cannot be changed by lot rules', () =>
     assert.equal(field.visibilityConfigurable, false);
     assert.equal(field.requirementConfigurable, false);
   }
+});
+
+test('previous memory and storage are visibility-only Lot fields', () => {
+  for (const [fieldKey, sourceKey] of [
+    ['previous_memory_size', 'memory_modules'],
+    ['previous_storage_size', 'storage_devices']
+  ]) {
+    const field = getUnitFormFieldDefinition(fieldKey);
+
+    assert.ok(field);
+    assert.equal(field.visibilityConfigurable, true);
+    assert.equal(field.requirementConfigurable, false);
+    assert.equal(field.enabledForLotRules, true);
+    assert.equal(field.inheritVisibilityFromFieldKey, sourceKey);
+  }
+});
+
+
+test('linked visibility defaults reference one direct registered source', () => {
+  const previousMemory = getUnitFormFieldDefinition('previous_memory_size');
+  const previousStorage = getUnitFormFieldDefinition('previous_storage_size');
+
+  assert.equal(previousMemory.inheritVisibilityFromFieldKey, 'memory_modules');
+  assert.equal(previousStorage.inheritVisibilityFromFieldKey, 'storage_devices');
+
+  assert.throws(
+    () => assertValidUnitFormFieldRegistry([
+      ...UNIT_FORM_FIELD_REGISTRY,
+      {
+        ...previousMemory,
+        key: 'invalid_linked_visibility',
+        inheritVisibilityFromFieldKey: 'missing_field'
+      }
+    ]),
+    /inherits visibility from unknown field/
+  );
 });
 
 test('repeatable sections are configurable while their child controls are not independently configurable', () => {

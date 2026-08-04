@@ -73,11 +73,9 @@ function sampleBaseRow() {
 function noActiveOverrideQueryResults() {
   return [
     [{ config_value_id: 100 }],
-    [{ config_value_id: 104 }],
-    { affectedRows: 0 },
+    [],
     [{ config_value_id: 100 }],
-    [{ config_value_id: 104 }],
-    { affectedRows: 0 },
+    [],
     []
   ];
 }
@@ -164,4 +162,33 @@ test('incomplete legacy requirement values remain visible as Needs Review', asyn
   assert.equal(report.needsReviewCount, 1);
   assert.equal(report.units[0].status, 'needs_review');
   assert.match(report.units[0].checks[0].message, /missing its configured catalog value/i);
+});
+
+test('Lot snapshots use the current assigned technician when no work activity exists', async () => {
+  const baseRow = {
+    ...sampleBaseRow(),
+    assigned_to_user_id: 9,
+    assigned_first_name: 'Morgan',
+    assigned_last_name: 'Tech',
+    assigned_email: 'morgan@example.com'
+  };
+  const connection = createQueuedConnection([
+    [baseRow],
+    [],
+    [],
+    [],
+    []
+  ]);
+
+  const snapshots = await listUnitSnapshotsForLot(7, connection);
+
+  assert.equal(snapshots.length, 1);
+  assert.deepEqual(snapshots[0].assignedTechnician, {
+    userId: 9,
+    displayName: 'Morgan Tech'
+  });
+  assert.equal(snapshots[0].technicianSummary, 'Morgan Tech');
+  assert.equal(snapshots[0].activityTechnicianSummary, 'No technician activity recorded');
+  assert.match(connection.calls[0].sql, /LEFT JOIN users assigned_user/);
+  assert.match(connection.calls[0].sql, /u\.assigned_to_user_id/);
 });

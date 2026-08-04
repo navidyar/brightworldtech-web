@@ -2,7 +2,7 @@
 
 const { pool } = require('../models/db');
 const {
-  getEffectiveUnitFormProfileForLot,
+  getRequirementAwareUnitFormProfileForLot,
   listAllLotIds
 } = require('../models/lotUnitFormProfileModel');
 
@@ -59,7 +59,7 @@ async function run() {
   let fieldCount = 0;
 
   for (const lotId of lotIds) {
-    const profile = await getEffectiveUnitFormProfileForLot(lotId);
+    const profile = await getRequirementAwareUnitFormProfileForLot(lotId);
 
     if (fieldCount === 0) {
       fieldCount = profile.fields.length;

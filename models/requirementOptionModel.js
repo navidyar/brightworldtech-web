@@ -89,6 +89,47 @@ async function listUnitModelOptions() {
   });
 }
 
+async function listProcessorFamilyOptions() {
+  const [rows] = await pool.query(`
+    SELECT
+      pf.processor_family_id,
+      pf.name,
+      pf.description,
+      pb.name AS brand_name,
+      COUNT(pfm.processor_model_id) AS member_count
+    FROM processor_families pf
+    INNER JOIN processor_brands pb
+      ON pb.processor_brand_id = pf.processor_brand_id
+    LEFT JOIN processor_family_members pfm
+      ON pfm.processor_family_id = pf.processor_family_id
+    WHERE pf.is_active = 1
+      AND pb.is_active = 1
+    GROUP BY
+      pf.processor_family_id,
+      pf.name,
+      pf.description,
+      pb.name,
+      pf.sort_order
+    HAVING COUNT(pfm.processor_model_id) > 0
+    ORDER BY pb.name, pf.sort_order, pf.name
+  `);
+
+  return rows.map((row) => {
+    const familyName = String(row.name || '').trim();
+    const brandName = String(row.brand_name || '').trim();
+    const includesBrand = familyName.toLowerCase().startsWith(brandName.toLowerCase());
+    const displayName = brandName && !includesBrand ? `${brandName} · ${familyName}` : familyName;
+
+    return {
+      value: `processor_family:${row.processor_family_id}`,
+      label: `${displayName} (${Number(row.member_count || 0)} processors)`,
+      code: String(row.processor_family_id),
+      description: row.description || '',
+      source: 'processor_families'
+    };
+  });
+}
+
 async function listProcessorModelOptions() {
   const [rows] = await pool.query(`
     SELECT
@@ -142,6 +183,10 @@ async function listOptionsForSource(optionSource) {
     return listProcessorModelOptions();
   }
 
+  if (optionSource === 'processor_family') {
+    return listProcessorFamilyOptions();
+  }
+
   return [];
 }
 
@@ -166,6 +211,15 @@ async function getRequirementValueOptionsByKey(requirementKeys) {
         type: 'number',
         source: 'numeric',
         options: [],
+        helpText: definition.helpText || '',
+        unitSuffix: definition.unitSuffix || '',
+        numericInput: {
+          minimum: definition.minimumValue ?? 0.01,
+          maximum: definition.maximumValue ?? null,
+          decimalPlaces: definition.decimalPlaces ?? 2,
+          step: 1 / (10 ** (definition.decimalPlaces ?? 2)),
+          exampleValue: definition.exampleValue || ''
+        },
         allowedOperators: [...definition.allowedOperators]
       };
       continue;

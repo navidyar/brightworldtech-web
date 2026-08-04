@@ -1,34 +1,13 @@
 'use strict';
 
+const { formatHardwareCapacityGb } = require('./hardwareCapacity');
+
 const { evaluateUnitSnapshot } = require('./lotRequirementEvaluator');
 const { applyManagementAcceptance } = require('./lotValidationOverridePolicy');
-
-const POLICY_ALIASES = Object.freeze({
-  strict: 'strict',
-  required: 'strict',
-  enforced: 'strict',
-  validate: 'strict',
-  warn_only: 'warn_only',
-  warning: 'warn_only',
-  warn: 'warn_only',
-  open_mixed: 'open_mixed',
-  open: 'open_mixed',
-  mixed: 'open_mixed',
-  flexible: 'open_mixed',
-  none: 'open_mixed',
-  no_requirements: 'open_mixed'
-});
-
-const REQUIREMENT_FIELD_BINDINGS = Object.freeze({
-  unit_type: 'unit_category',
-  manufacturer: 'manufacturer',
-  model: 'unit_model',
-  processor: 'processor_model',
-  ram_gb: 'memory_modules',
-  ram_type: 'memory_modules',
-  storage_gb: 'storage_devices',
-  storage_type: 'storage_devices'
-});
+const {
+  REQUIREMENT_FIELD_BINDINGS,
+  normalizeRequirementPolicyCode
+} = require('../config/lotRequirementFormPolicy');
 
 function asPositiveInteger(value) {
   const parsed = Number(value);
@@ -42,11 +21,6 @@ function asFiniteNumber(value) {
 
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-function normalizeRequirementPolicyCode(value) {
-  const normalized = String(value || '').trim().toLowerCase();
-  return POLICY_ALIASES[normalized] || 'strict';
 }
 
 function getOptionById(options, value) {
@@ -79,7 +53,7 @@ function createCatalogActual({ ids = [], labels = [], sourceLabel }) {
   };
 }
 
-function createNumberActual({ value, sourceLabel, suffix = '' }) {
+function createNumberActual({ value, sourceLabel, suffix = '', formatter = null }) {
   const numericValue = asFiniteNumber(value);
 
   return {
@@ -87,7 +61,7 @@ function createNumberActual({ value, sourceLabel, suffix = '' }) {
     isSupported: true,
     ids: [],
     numberValue: numericValue,
-    displayValue: numericValue === null ? '' : `${numericValue}${suffix}`,
+    displayValue: numericValue === null ? '' : (formatter ? formatter(numericValue) : `${numericValue}${suffix}`),
     sourceLabel: sourceLabel || 'Current Unit form'
   };
 }
@@ -98,18 +72,20 @@ function meaningfulRows(rows) {
 
 function buildMemoryActual(formData, formOptions) {
   const rows = meaningfulRows(formData.memoryModules)
-    .filter((row) => asFiniteNumber(row.sizeGb) > 0);
+    .filter((row) => String(row.sizeGb ?? '').trim() !== '' && asFiniteNumber(row.sizeGb) >= 0);
 
   if (rows.length > 0) {
+    const populatedRows = rows.filter((row) => asFiniteNumber(row.sizeGb) > 0);
+
     return {
       total: createNumberActual({
         value: rows.reduce((sum, row) => sum + Number(row.sizeGb), 0),
         sourceLabel: 'Current memory rows',
-        suffix: ' GB'
+        formatter: formatHardwareCapacityGb
       }),
       type: createCatalogActual({
-        ids: rows.map((row) => row.ramTypeConfigValueId),
-        labels: rows.map((row) => optionLabel(formOptions.ramTypes, row.ramTypeConfigValueId)),
+        ids: populatedRows.map((row) => row.ramTypeConfigValueId),
+        labels: populatedRows.map((row) => optionLabel(formOptions.ramTypes, row.ramTypeConfigValueId)),
         sourceLabel: 'Current memory rows'
       })
     };
@@ -119,7 +95,7 @@ function buildMemoryActual(formData, formOptions) {
     total: createNumberActual({
       value: formData.ramGb,
       sourceLabel: 'Current memory total',
-      suffix: ' GB'
+      formatter: formatHardwareCapacityGb
     }),
     type: createCatalogActual({
       ids: [formData.ramTypeConfigValueId],
@@ -131,18 +107,20 @@ function buildMemoryActual(formData, formOptions) {
 
 function buildStorageActual(formData, formOptions) {
   const rows = meaningfulRows(formData.storageDevices)
-    .filter((row) => asFiniteNumber(row.sizeGb) > 0);
+    .filter((row) => String(row.sizeGb ?? '').trim() !== '' && asFiniteNumber(row.sizeGb) >= 0);
 
   if (rows.length > 0) {
+    const populatedRows = rows.filter((row) => asFiniteNumber(row.sizeGb) > 0);
+
     return {
       total: createNumberActual({
         value: rows.reduce((sum, row) => sum + Number(row.sizeGb), 0),
         sourceLabel: 'Current storage rows',
-        suffix: ' GB'
+        formatter: formatHardwareCapacityGb
       }),
       type: createCatalogActual({
-        ids: rows.map((row) => row.storageTypeConfigValueId),
-        labels: rows.map((row) => optionLabel(formOptions.storageTypes, row.storageTypeConfigValueId)),
+        ids: populatedRows.map((row) => row.storageTypeConfigValueId),
+        labels: populatedRows.map((row) => optionLabel(formOptions.storageTypes, row.storageTypeConfigValueId)),
         sourceLabel: 'Current storage rows'
       })
     };
@@ -152,7 +130,7 @@ function buildStorageActual(formData, formOptions) {
     total: createNumberActual({
       value: formData.storageGb,
       sourceLabel: 'Current storage total',
-      suffix: ' GB'
+      formatter: formatHardwareCapacityGb
     }),
     type: createCatalogActual({
       ids: [formData.storageTypeConfigValueId],
@@ -166,6 +144,7 @@ function buildSubmittedUnitSnapshot({ formData = {}, formOptions = {}, unitId = 
   const memory = buildMemoryActual(formData, formOptions);
   const storage = buildStorageActual(formData, formOptions);
   const safeUnitId = asPositiveInteger(unitId);
+  const selectedProcessor = getOptionById(formOptions.processorModels, formData.processorModelId);
 
   return {
     unitId: safeUnitId,
@@ -198,6 +177,11 @@ function buildSubmittedUnitSnapshot({ formData = {}, formOptions = {}, unitId = 
         ids: [formData.processorModelId],
         labels: [optionLabel(formOptions.processorModels, formData.processorModelId)],
         sourceLabel: 'Processor field'
+      }),
+      processor_family: createCatalogActual({
+        ids: selectedProcessor?.processorFamilyIds || [],
+        labels: selectedProcessor?.processorFamilyLabels || [],
+        sourceLabel: 'Processor family membership'
       }),
       ram_gb: memory.total,
       ram_type: memory.type,

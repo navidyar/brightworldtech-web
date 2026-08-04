@@ -1,6 +1,8 @@
 'use strict';
 
 const { pool } = require('./db');
+const unitAuditEventModel = require('./unitAuditEventModel');
+const unitWorkflowAudit = require('../services/unitWorkflowAudit');
 const {
   buildLotAssignmentSignature,
   buildRequirementSignature
@@ -8,6 +10,15 @@ const {
 
 function buildPlaceholders(values) {
   return values.map(() => '?').join(', ');
+}
+
+async function getLotName(lotId, connection = pool) {
+  const [rows] = await connection.query(
+    'SELECT name FROM lots WHERE lot_id = ? LIMIT 1',
+    [Number(lotId)]
+  );
+
+  return String(rows[0]?.name || '').trim() || `Lot #${Number(lotId)}`;
 }
 
 async function getOverrideStatusId(code, connection = pool) {
@@ -84,21 +95,45 @@ async function getUnitAssignmentState(unitId, connection = pool, { lock = false 
   return rows[0] || null;
 }
 
+function getOverrideStatusLabel(statusCode, configuredLabel) {
+  const normalizedCode = String(statusCode || '').trim();
+  const labels = {
+    approved: 'Accepted by Management',
+    cancelled: 'Revoked',
+    denied: 'Denied',
+    expired: 'Expired',
+    pending: 'Pending'
+  };
+
+  return labels[normalizedCode]
+    || String(configuredLabel || '').trim()
+    || 'Recorded';
+}
+
 function normalizeOverrideRow(row) {
   if (!row) return null;
+
+  const statusCode = String(row.override_status_code || '').trim();
 
   return {
     overrideId: Number(row.unit_lot_validation_override_id),
     unitId: Number(row.unit_id),
     lotId: Number(row.lot_id),
-    statusCode: row.override_status_code,
+    lotName: String(row.lot_name || '').trim() || 'Unknown lot',
+    statusCode,
+    statusLabel: getOverrideStatusLabel(statusCode, row.override_status_label),
     reason: row.reason || '',
     requirementSignature: row.requirement_signature || '',
     lotAssignmentSignature: row.lot_assignment_signature || '',
+    requestedByUserId: Number(row.requested_by_user_id || 0) || null,
+    requestedByName: String(row.requested_by_name || '').trim() || '',
+    requestedAt: row.requested_at || null,
     approvedByUserId: Number(row.approved_by_user_id || 0) || null,
     approvedByName: String(row.approved_by_name || '').trim() || 'Management',
     approvedAt: row.approved_at || null,
+    deniedAt: row.denied_at || null,
     revokedByUserId: Number(row.revoked_by_user_id || 0) || null,
+    revokedByName: String(row.revoked_by_name || '').trim() || '',
     revokedAt: row.revoked_at || null,
     expiredAt: row.expired_at || null
   };
@@ -136,37 +171,105 @@ async function listApprovedOverridesForLot(lotId, unitIds, connection = pool) {
   return rows.map(normalizeOverrideRow);
 }
 
+
+async function listOverrideHistoryForUnit(unitId, limit = 100, connection = pool) {
+  const safeUnitId = Number(unitId);
+  const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 250);
+
+  if (!Number.isSafeInteger(safeUnitId) || safeUnitId <= 0) {
+    return [];
+  }
+
+  const [rows] = await connection.query(
+    `
+      SELECT
+        override_record.*,
+        status_value.code AS override_status_code,
+        status_value.label AS override_status_label,
+        lot_record.name AS lot_name,
+        CONCAT_WS(' ', requester.first_name, requester.last_name) AS requested_by_name,
+        CONCAT_WS(' ', approver.first_name, approver.last_name) AS approved_by_name,
+        CONCAT_WS(' ', revoker.first_name, revoker.last_name) AS revoked_by_name
+      FROM unit_lot_validation_overrides override_record
+      JOIN config_values status_value
+        ON status_value.config_value_id = override_record.override_status_config_value_id
+      LEFT JOIN lots lot_record
+        ON lot_record.lot_id = override_record.lot_id
+      LEFT JOIN users requester
+        ON requester.user_id = override_record.requested_by_user_id
+      LEFT JOIN users approver
+        ON approver.user_id = override_record.approved_by_user_id
+      LEFT JOIN users revoker
+        ON revoker.user_id = override_record.revoked_by_user_id
+      WHERE override_record.unit_id = ?
+      ORDER BY
+        COALESCE(
+          override_record.revoked_at,
+          override_record.expired_at,
+          override_record.denied_at,
+          override_record.approved_at,
+          override_record.requested_at
+        ) DESC,
+        override_record.unit_lot_validation_override_id DESC
+      LIMIT ?
+    `,
+    [safeUnitId, safeLimit]
+  );
+
+  return rows.map(normalizeOverrideRow);
+}
+
+async function expireSelectedOverrideRows(rows, expirationReason, connection = pool) {
+  const safeRows = Array.isArray(rows) ? rows.filter((row) => Number(row.unit_lot_validation_override_id) > 0) : [];
+  if (safeRows.length === 0) return 0;
+
+  const approvedStatusId = await getOverrideStatusId('approved', connection);
+  const expiredStatusId = await getOverrideStatusId('expired', connection);
+  const ids = safeRows.map((row) => Number(row.unit_lot_validation_override_id));
+  const [result] = await connection.query(
+    `
+      UPDATE unit_lot_validation_overrides
+      SET
+        override_status_config_value_id = ?,
+        expired_at = COALESCE(expired_at, NOW())
+      WHERE unit_lot_validation_override_id IN (${buildPlaceholders(ids)})
+        AND override_status_config_value_id = ?
+    `,
+    [expiredStatusId, ...ids, approvedStatusId]
+  );
+
+  if (Number(result.affectedRows || 0) > 0) {
+    await unitWorkflowAudit.recordExpiredExceptions(connection, safeRows, expirationReason);
+  }
+
+  return Number(result.affectedRows || 0);
+}
+
 async function expireOverrideIds(overrideIds, connection = pool) {
   const safeIds = (Array.isArray(overrideIds) ? overrideIds : [])
     .map(Number)
     .filter((overrideId) => Number.isSafeInteger(overrideId) && overrideId > 0);
 
   if (safeIds.length === 0) return 0;
-
-  const expiredStatusId = await getOverrideStatusId('expired', connection);
-  const [result] = await connection.query(
+  const approvedStatusId = await getOverrideStatusId('approved', connection);
+  const [rows] = await connection.query(
     `
-      UPDATE unit_lot_validation_overrides
-      SET
-        override_status_config_value_id = ?,
-        expired_at = COALESCE(expired_at, NOW())
+      SELECT unit_lot_validation_override_id, unit_id, lot_id, reason
+      FROM unit_lot_validation_overrides
       WHERE unit_lot_validation_override_id IN (${buildPlaceholders(safeIds)})
+        AND override_status_config_value_id = ?
     `,
-    [expiredStatusId, ...safeIds]
+    [...safeIds, approvedStatusId]
   );
-
-  return Number(result.affectedRows || 0);
+  return expireSelectedOverrideRows(rows, 'The Unit assignment or Lot stay changed', connection);
 }
 
 async function expireRequirementChangedOverrides(lotId, requirementSignature, connection = pool) {
   const approvedStatusId = await getOverrideStatusId('approved', connection);
-  const expiredStatusId = await getOverrideStatusId('expired', connection);
-  const [result] = await connection.query(
+  const [rows] = await connection.query(
     `
-      UPDATE unit_lot_validation_overrides
-      SET
-        override_status_config_value_id = ?,
-        expired_at = COALESCE(expired_at, NOW())
+      SELECT unit_lot_validation_override_id, unit_id, lot_id, reason
+      FROM unit_lot_validation_overrides
       WHERE lot_id = ?
         AND override_status_config_value_id = ?
         AND (
@@ -174,31 +277,30 @@ async function expireRequirementChangedOverrides(lotId, requirementSignature, co
           OR requirement_signature <> ?
         )
     `,
-    [expiredStatusId, Number(lotId), approvedStatusId, String(requirementSignature || '')]
+    [Number(lotId), approvedStatusId, String(requirementSignature || '')]
   );
-
-  return Number(result.affectedRows || 0);
+  return expireSelectedOverrideRows(rows, 'Lot requirements changed', connection);
 }
 
 async function expireMovedUnitOverrides(lotId, connection = pool) {
   const approvedStatusId = await getOverrideStatusId('approved', connection);
-  const expiredStatusId = await getOverrideStatusId('expired', connection);
-  const [result] = await connection.query(
+  const [rows] = await connection.query(
     `
-      UPDATE unit_lot_validation_overrides override_record
+      SELECT
+        override_record.unit_lot_validation_override_id,
+        override_record.unit_id,
+        override_record.lot_id,
+        override_record.reason
+      FROM unit_lot_validation_overrides override_record
       JOIN units unit_record
         ON unit_record.unit_id = override_record.unit_id
-      SET
-        override_record.override_status_config_value_id = ?,
-        override_record.expired_at = COALESCE(override_record.expired_at, NOW())
       WHERE override_record.lot_id = ?
         AND override_record.override_status_config_value_id = ?
         AND (unit_record.lot_id IS NULL OR unit_record.lot_id <> override_record.lot_id)
     `,
-    [expiredStatusId, Number(lotId), approvedStatusId]
+    [Number(lotId), approvedStatusId]
   );
-
-  return Number(result.affectedRows || 0);
+  return expireSelectedOverrideRows(rows, 'The Unit left the accepted Lot', connection);
 }
 
 async function getActiveOverrideMapForLot({
@@ -273,20 +375,19 @@ async function createApprovedOverride({ unitId, lotId, approvedByUserId, reason 
       unitCreatedAt: assignmentState.created_at
     });
     const approvedStatusId = await getOverrideStatusId('approved', connection);
-    const expiredStatusId = await getOverrideStatusId('expired', connection);
 
-    await connection.query(
+    const [replacedRows] = await connection.query(
       `
-        UPDATE unit_lot_validation_overrides
-        SET
-          override_status_config_value_id = ?,
-          expired_at = COALESCE(expired_at, NOW())
+        SELECT unit_lot_validation_override_id, unit_id, lot_id, reason
+        FROM unit_lot_validation_overrides
         WHERE unit_id = ?
           AND lot_id = ?
           AND override_status_config_value_id = ?
+        FOR UPDATE
       `,
-      [expiredStatusId, Number(unitId), Number(lotId), approvedStatusId]
+      [Number(unitId), Number(lotId), approvedStatusId]
     );
+    await expireSelectedOverrideRows(replacedRows, 'A newer Management acceptance replaced this record', connection);
 
     const [result] = await connection.query(
       `
@@ -316,6 +417,32 @@ async function createApprovedOverride({ unitId, lotId, approvedByUserId, reason 
       ]
     );
 
+    const lotName = await getLotName(lotId, connection);
+    await unitAuditEventModel.createUnitAuditEvent({
+      unitId: Number(unitId),
+      actorUserId: Number(approvedByUserId),
+      eventType: 'lot_requirement_exception_accepted',
+      eventSource: 'lot_validation_override',
+      eventSummary: `Accepted Lot requirement exception for ${lotName}`,
+      metadata: {
+        lotId: Number(lotId),
+        lotName,
+        overrideId: Number(result.insertId)
+      },
+      changes: [
+        {
+          fieldKey: 'lot_requirement_acceptance',
+          fieldLabel: 'Lot Requirement Acceptance',
+          changeType: 'accepted',
+          oldValue: null,
+          newValue: { lotId: Number(lotId), lotName, reason: normalizedReason },
+          oldValueText: '',
+          newValueText: `${lotName}: ${normalizedReason}`,
+          sortOrder: 10
+        }
+      ]
+    }, connection);
+
     await connection.commit();
 
     return { overrideId: Number(result.insertId) };
@@ -334,6 +461,19 @@ async function revokeApprovedOverride({ overrideId, unitId, lotId, revokedByUser
     await connection.beginTransaction();
     const approvedStatusId = await getOverrideStatusId('approved', connection);
     const cancelledStatusId = await getOverrideStatusId('cancelled', connection);
+    const [overrideRows] = await connection.query(
+      `
+        SELECT reason
+        FROM unit_lot_validation_overrides
+        WHERE unit_lot_validation_override_id = ?
+          AND unit_id = ?
+          AND lot_id = ?
+          AND override_status_config_value_id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [Number(overrideId), Number(unitId), Number(lotId), approvedStatusId]
+    );
     const [result] = await connection.query(
       `
         UPDATE unit_lot_validation_overrides
@@ -360,6 +500,33 @@ async function revokeApprovedOverride({ overrideId, unitId, lotId, revokedByUser
       throw new Error('The management acceptance is no longer active.');
     }
 
+    const lotName = await getLotName(lotId, connection);
+    const originalReason = String(overrideRows[0]?.reason || '').trim();
+    await unitAuditEventModel.createUnitAuditEvent({
+      unitId: Number(unitId),
+      actorUserId: Number(revokedByUserId),
+      eventType: 'lot_requirement_exception_revoked',
+      eventSource: 'lot_validation_override',
+      eventSummary: `Revoked Lot requirement exception for ${lotName}`,
+      metadata: {
+        lotId: Number(lotId),
+        lotName,
+        overrideId: Number(overrideId)
+      },
+      changes: [
+        {
+          fieldKey: 'lot_requirement_acceptance',
+          fieldLabel: 'Lot Requirement Acceptance',
+          changeType: 'revoked',
+          oldValue: { lotId: Number(lotId), lotName, reason: originalReason || null },
+          newValue: null,
+          oldValueText: originalReason ? `${lotName}: ${originalReason}` : lotName,
+          newValueText: 'Revoked',
+          sortOrder: 10
+        }
+      ]
+    }, connection);
+
     await connection.commit();
     return true;
   } catch (error) {
@@ -378,6 +545,7 @@ module.exports = {
   getOverrideStatusId,
   getUnitAssignmentState,
   listApprovedOverridesForLot,
+  listOverrideHistoryForUnit,
   listRawRequirementsForSignature,
   revokeApprovedOverride
 };

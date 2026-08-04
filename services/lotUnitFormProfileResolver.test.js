@@ -22,11 +22,36 @@ test('resolves application defaults without stored rules', () => {
   const profile = resolveLotUnitFormProfile({ lineage: rootOnly });
 
   assert.equal(profile.selectedLot.lotId, 10);
-  assert.equal(profile.fields.length, 54);
+  assert.equal(profile.fields.length, 57);
   assert.equal(getResolvedUnitFormField(profile, 'assignable_lot').required, true);
   assert.equal(getResolvedUnitFormField(profile, 'bios_serial_number').visible, true);
   assert.equal(getResolvedUnitFormField(profile, 'bios_serial_number').required, false);
   assert.equal(profile.storedRuleCount, 0);
+});
+
+test('previous hardware visibility follows current sections until explicitly overridden', () => {
+  const inheritedProfile = resolveLotUnitFormProfile({
+    lineage: rootOnly,
+    rules: [
+      { lotId: 10, fieldKey: 'memory_modules', visibilityMode: 'hidden', requirementMode: 'optional' },
+      { lotId: 10, fieldKey: 'storage_devices', visibilityMode: 'hidden', requirementMode: 'optional' }
+    ]
+  });
+
+  assert.equal(getResolvedUnitFormField(inheritedProfile, 'previous_memory_size').visible, false);
+  assert.equal(getResolvedUnitFormField(inheritedProfile, 'previous_storage_size').visible, false);
+
+  const overriddenProfile = resolveLotUnitFormProfile({
+    lineage: rootOnly,
+    rules: [
+      { lotId: 10, fieldKey: 'memory_modules', visibilityMode: 'hidden', requirementMode: 'optional' },
+      { lotId: 10, fieldKey: 'previous_memory_size', visibilityMode: 'visible', requirementMode: 'inherit' }
+    ]
+  });
+
+  assert.equal(getResolvedUnitFormField(overriddenProfile, 'memory_modules').visible, false);
+  assert.equal(getResolvedUnitFormField(overriddenProfile, 'previous_memory_size').visible, true);
+  assert.equal(getResolvedUnitFormField(overriddenProfile, 'previous_memory_size').required, false);
 });
 
 test('applies parent rules first and lets descendants override each mode independently', () => {
@@ -169,4 +194,53 @@ test('rejects malformed or cyclic lineage input', () => {
     }),
     /duplicate or cyclic/
   );
+});
+
+test('Strict Lot requirements override hidden and optional form configuration', () => {
+  const profile = resolveLotUnitFormProfile({
+    lineage: rootOnly,
+    rules: [
+      { lotId: 10, fieldKey: 'unit_model', visibilityMode: 'hidden', requirementMode: 'optional' },
+      { lotId: 10, fieldKey: 'manufacturer', visibilityMode: 'hidden', requirementMode: 'optional' }
+    ],
+    lotRequirementConstraints: [{
+      fieldKey: 'unit_model',
+      forceVisible: true,
+      forceRequired: true,
+      sources: [{ key: 'lot_requirement:1', label: 'Model' }]
+    }]
+  });
+
+  const model = getResolvedUnitFormField(profile, 'unit_model');
+  const manufacturer = getResolvedUnitFormField(profile, 'manufacturer');
+
+  assert.equal(model.visible, true);
+  assert.equal(model.required, true);
+  assert.deepEqual(model.lotRequirementVisibilitySources, [
+    { key: 'lot_requirement:1', label: 'Model' }
+  ]);
+  assert.equal(manufacturer.visible, true);
+  assert.equal(manufacturer.required, true);
+  assert.ok(manufacturer.forcedRequiredBy.includes('unit_model'));
+});
+
+test('Warn Only and Mixed Lot requirements force fields visible without browser-level required validation', () => {
+  const profile = resolveLotUnitFormProfile({
+    lineage: rootOnly,
+    rules: [
+      { lotId: 10, fieldKey: 'memory_modules', visibilityMode: 'hidden', requirementMode: 'optional' }
+    ],
+    lotRequirementConstraints: [{
+      fieldKey: 'memory_modules',
+      forceVisible: true,
+      forceRequired: false,
+      sources: [{ key: 'lot_requirement:2', label: 'Memory Size' }]
+    }]
+  });
+
+  const memory = getResolvedUnitFormField(profile, 'memory_modules');
+
+  assert.equal(memory.visible, true);
+  assert.equal(memory.required, false);
+  assert.equal(memory.requiredSuppressedByHidden, false);
 });

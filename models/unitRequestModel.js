@@ -3,6 +3,8 @@ const lotModel = require('./lotModel');
 const techUnitModel = require('./techUnitModel');
 const unitIssueEntryModel = require('./unitIssueEntryModel');
 const unitExpandedFormModel = require('./unitExpandedFormModel');
+const unitLotDestinationValidationModel = require('./unitLotDestinationValidationModel');
+const processorFamilyModel = require('./processorFamilyModel');
 
 const UNIT_REQUESTS_TABLE = 'unit_requests';
 const UNIT_DUPLICATE_REQUESTS_TABLE = 'unit_duplicate_requests';
@@ -1205,22 +1207,30 @@ async function approveIntentionalDuplicateRequest({ unitRequestId, reviewedByUse
     }
 
     await assertRequestedDestinationLotIsAssignable(request.requested_destination_lot_id);
+    const creationFormData = {
+      ...formData,
+      lotId: String(request.requested_destination_lot_id)
+    };
+    const destinationValidation = await unitLotDestinationValidationModel.assertSubmittedUnitDestination({
+      formData: creationFormData,
+      destinationLotId: request.requested_destination_lot_id
+    });
 
     const creation = await techUnitModel.createIntentionalDuplicateTechUnitWithConnection(
       connection,
-      formData,
+      creationFormData,
       Number(request.requested_by_user_id)
     );
 
     await unitIssueEntryModel.saveIssueDetailsForUnitWithConnection(connection, {
       unitId: creation.unitId,
-      formData,
+      formData: creationFormData,
       currentUserId: Number(request.requested_by_user_id)
     });
 
     await unitExpandedFormModel.saveExpandedDetailsForUnitWithConnection(connection, {
       unitId: creation.unitId,
-      formData,
+      formData: creationFormData,
       currentUserId: Number(request.requested_by_user_id)
     });
 
@@ -1229,7 +1239,13 @@ async function approveIntentionalDuplicateRequest({ unitRequestId, reviewedByUse
       [creation.unitId, safeRequestId]
     );
 
-    const note = normalizeText(reviewerNote, 1000) || null;
+    const validationWarningNote = destinationValidation.warningMessages.length > 0
+      ? destinationValidation.warningMessages.join(' ')
+      : '';
+    const note = [
+      normalizeText(reviewerNote, 1000),
+      validationWarningNote
+    ].filter(Boolean).join('\n') || null;
     await connection.query(
       `
         UPDATE unit_requests
@@ -1551,6 +1567,13 @@ async function approveProcessorCatalogRequest({
       actionLabel = 'New processor added and mapped';
     }
 
+    const assignedProcessorFamilies = await processorFamilyModel.autoAssignProcessorFamilyMembershipWithConnection(connection, {
+      processorModelId: approvedProcessorModelId,
+      processorBrandName: processorBrand.name,
+      modelCode: safeModelCode,
+      currentUserId: safeReviewerUserId
+    });
+
     await connection.query(
       `
         INSERT INTO unit_model_processor_options (
@@ -1595,6 +1618,7 @@ async function approveProcessorCatalogRequest({
         approvedProcessorBrandName: processorBrand.name,
         approvedProcessorModelId,
         approvedProcessorModelCode: safeModelCode,
+        assignedProcessorFamilyCodes: assignedProcessorFamilies.map((family) => family.code),
         action: actionLabel
       }
     });

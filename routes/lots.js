@@ -6,6 +6,7 @@ const router = express.Router();
 
 const lotManagementRoles = ['admin', 'management'];
 
+
 router.get(
   '/management/lots/new/modal',
   requireAuth,

@@ -107,7 +107,7 @@ async function renderUnitModelCatalogPage(req, res, next) {
 
     return res.render('pages/management-unit-models', {
       pageTitle: 'Unit Model Catalog',
-      currentNav: 'management-unit-models',
+      currentNav: 'admin-config-models',
       filters,
       models,
       manufacturers: formOptions.manufacturers,

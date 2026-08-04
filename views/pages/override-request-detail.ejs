@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: [
+      '/css/tech.css',
+      '/css/unit-requests.css'
+    ]
+  }) %>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell unit-requests-page">
+          <section class="dashboard-hero accent-green">
+            <div>
+              <p class="eyebrow"><%= request.requestType === 'outcome_confirmation' ? 'Outcome Confirmation' : (request.isDuplicateIntakeMoveRequest ? request.duplicateIntakeRequestLabel : 'Existing Unit Override') %></p>
+              <h2>Request #<%= request.unitOverrideRequestId %></h2>
+              <p>Review the existing Unit, current assignment, requested destination, reason, and validation result.</p>
+            </div>
+            <div class="hero-badge"><span>Status</span><strong><%= request.statusLabel %></strong></div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header unit-request-detail-header">
+              <div>
+                <p class="eyebrow">Request Summary</p>
+                <h2><%= request.isDuplicateIntakeMoveRequest ? request.duplicateIntakeRequestLabel : request.requestTypeLabel %></h2>
+                <p class="unit-request-detail-meta">Requested by <%= request.requestedByName %> · <%= request.createdAt ? formatDateTime(request.createdAt) : '—' %></p>
+              </div>
+              <a class="secondary-button" href="<%= requestQueueUrl %>">Back to Requests</a>
+            </div>
+
+            <% if (successMessage) { %><div class="message success"><p><%= successMessage %></p></div><% } %>
+            <% if (errorMessages.length > 0) { %><div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div><% } %>
+
+            <div class="unit-request-detail-grid unit-request-detail-overview">
+              <section class="unit-request-detail-card">
+                <p class="eyebrow">Existing Unit</p>
+                <h3><%= request.unitLabel %></h3>
+                <dl class="unit-request-detail-list">
+                  <div><dt>Current Lot</dt><dd><%= request.lotName %></dd></div>
+                  <div><dt>Requested Destination</dt><dd><%= request.requestedDestinationLotName %></dd></div>
+                  <div><dt>Validation</dt><dd><%= request.validationLabel %></dd></div>
+                  <div><dt>Decision</dt><dd><%= request.decisionLabel %></dd></div>
+                </dl>
+              </section>
+
+              <section class="unit-request-detail-card">
+                <p class="eyebrow">Request Context</p>
+                <h3><%= request.isDuplicateIntakeMoveRequest ? 'Duplicate Intake' : request.requestTypeLabel %></h3>
+                <dl class="unit-request-detail-list">
+                  <div><dt>Requester</dt><dd><%= request.requestedByName %></dd></div>
+                  <div><dt>Origin</dt><dd><%= request.isDuplicateIntakeMoveRequest ? 'Create Unit duplicate intake' : 'Tech Units' %></dd></div>
+                  <div><dt>Submitted</dt><dd><%= request.createdAt ? formatDateTime(request.createdAt) : '—' %></dd></div>
+                  <div><dt>Recorded Work</dt><dd><%= request.hasRecordedWork ? 'Yes' : 'No' %></dd></div>
+                  <div><dt>Expires</dt><dd><%= request.expiresAt ? formatDateTime(request.expiresAt) : 'No automatic expiration' %></dd></div>
+                </dl>
+              </section>
+            </div>
+
+            <section class="unit-request-detail-section">
+              <p class="eyebrow"><%= request.requestType === 'outcome_confirmation' ? 'Technician Request Note' : 'Requester Explanation' %></p>
+              <p class="unit-request-requester-note"><%= request.requesterNote || (request.requestType === 'outcome_confirmation' ? 'No technician note entered.' : 'No requester explanation entered.') %></p>
+            </section>
+
+            <% if (canReviewRequest && request.isPending) { %>
+              <section class="unit-request-review-panel">
+                <div>
+                  <p class="eyebrow">Reviewer Action</p>
+                  <h3>Approve or Reject</h3>
+                  <p>Approval rechecks the selected destination Lot before changing the Unit assignment or Lot.</p>
+                </div>
+
+                <div class="unit-request-review-actions">
+                  <form method="post" action="/unit-requests/override/<%= request.unitOverrideRequestId %>/approve">
+                    <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                    <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                    <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                    <% if (request.requestType === 'manual_tech_override_request') { %>
+                      <label class="form-field">
+                        <span>Approved Destination Lot</span>
+                        <select name="destinationLotId" required>
+                          <option value="">Select open destination Lot</option>
+                          <% assignableLots.forEach((lot) => { %>
+                            <option value="<%= lot.lotId %>" <%= Number(request.requestedDestinationLotId || request.lotId) === Number(lot.lotId) ? 'selected' : '' %>><%= lot.lotName %></option>
+                          <% }) %>
+                        </select>
+                      </label>
+                      <label class="unit-request-inline-check">
+                        <input type="checkbox" name="priorTechCreditGranted" value="1" />
+                        <span>Give prior technician credit</span>
+                      </label>
+                      <label class="form-field"><span>Prior Technician Weight <small>(only when credit is selected)</small></span><input type="text" name="priorTechCreditWeight" inputmode="decimal" placeholder="0.10–10.00" /></label>
+                    <% } else { %>
+                      <input type="hidden" name="destinationLotId" value="<%= request.requestedDestinationLotId || request.lotId || '' %>" />
+                    <% } %>
+                    <label class="form-field"><span>Approval Note <small>(optional)</small></span><textarea name="reviewNotes" rows="3" maxlength="500"></textarea></label>
+                    <button class="primary-button" type="submit">Approve Request</button>
+                  </form>
+
+                  <form method="post" action="/unit-requests/override/<%= request.unitOverrideRequestId %>/reject">
+                    <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                    <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                    <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                    <label class="form-field"><span>Rejection Note <small>(optional)</small></span><textarea name="reviewNotes" rows="3" maxlength="500"></textarea></label>
+                    <button class="secondary-button" type="submit">Reject Request</button>
+                  </form>
+                </div>
+              </section>
+            <% } else if (canWithdrawRequest) { %>
+              <section class="unit-request-review-panel">
+                <div><p class="eyebrow">Requester Action</p><h3>Withdraw Pending Request</h3><p>Withdrawal preserves the request record but prevents later approval.</p></div>
+                <form method="post" action="/unit-requests/override/<%= request.unitOverrideRequestId %>/withdraw" onsubmit="return window.confirm('Withdraw this pending request?');">
+                  <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                  <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                  <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                  <label class="form-field"><span>Withdrawal Note <small>(optional)</small></span><textarea name="withdrawalNote" rows="3" maxlength="500"></textarea></label>
+                  <button class="secondary-button" type="submit">Withdraw Request</button>
+                </form>
+              </section>
+            <% } else if (!request.isPending) { %>
+              <section class="unit-request-detail-section">
+                <p class="eyebrow">Review Result</p>
+                <p class="unit-request-requester-note"><%= request.reviewNotes || 'No review note entered.' %></p>
+                <p class="table-muted-line"><%= request.reviewedByName || 'Reviewed' %> · <%= request.reviewedAt ? formatDateTime(request.reviewedAt) : '—' %></p>
+                <% if (request.priorTechCreditGranted) { %><p class="table-muted-line">Prior technician credit: <%= request.priorTechCreditUserName || 'Prior technician' %> · <%= Number(request.priorTechCreditWeight || 0).toFixed(2) %></p><% } %>
+              </section>
+            <% } %>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

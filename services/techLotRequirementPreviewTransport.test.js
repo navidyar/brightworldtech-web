@@ -24,3 +24,10 @@ test('server-rendered requirement preview errors remain visible to the user', ()
     /if \(!response\.ok\) \{\s*throw new Error\('The selected Lot requirements could not be checked\.'\);\s*\}/
   );
 });
+
+test('Lot requirement changes refresh both the workflow and the requirement-aware form profile', () => {
+  assert.match(
+    browserSource,
+    /if \(event\.key === LOT_REQUIREMENT_WORKFLOW_STORAGE_KEY\) \{\s*refreshOpenLotUnitForms\(\{ force: true \}\);\s*refreshOpenLotRequirementWorkflows\(\);\s*\}/
+  );
+});

@@ -17,6 +17,10 @@ const {
   rulesToSelectionMaps
 } = require('../services/lotUnitFormRuleEditor');
 const { buildNewLotCreatedRedirect } = require('../services/lotCreationPolicy');
+const {
+  findSelectedRequirementPolicy,
+  getDefaultRequirementPolicyId
+} = require('../config/lotRequirementPolicyRegistry');
 
 const {
   getLotRequirementField,
@@ -27,6 +31,7 @@ const {
   normalizeOperatorCode,
   normalizeRequirementKey
 } = require('../config/lotRequirementRegistry');
+const { analyzeRequirementNumber } = require('../services/lotRequirementNumberPolicy');
 
 const requirementFieldOptions = listLotRequirementFields().map((field) => ({
   value: field.key,
@@ -47,11 +52,12 @@ async function getRequirementValueOptionsByKey() {
   return requirementOptionModel.getRequirementValueOptionsByKey(getRequirementKeys());
 }
 
-function getBlankLotFormData() {
+function getBlankLotFormData(formOptions = {}) {
   return {
     lotName: '',
     parentLotId: '',
     lotTypeConfigValueId: '',
+    requirementPolicyConfigValueId: String(getDefaultRequirementPolicyId(formOptions.requirementPolicies) || ''),
     defaultGradeConfigValueId: '',
     defaultProductionWeightConfigValueId: '',
     defaultProductionWeight: '',
@@ -69,6 +75,7 @@ function getLotFormDataFromRequest(req) {
     lotName: String(req.body.lotName || '').trim(),
     parentLotId: String(req.body.parentLotId || '').trim(),
     lotTypeConfigValueId: String(req.body.lotTypeConfigValueId || '').trim(),
+    requirementPolicyConfigValueId: String(req.body.requirementPolicyConfigValueId || '').trim(),
     defaultGradeConfigValueId: String(req.body.defaultGradeConfigValueId || '').trim(),
     defaultProductionWeightConfigValueId: String(req.body.defaultProductionWeightConfigValueId || '').trim(),
     defaultProductionWeight: String(req.body.defaultProductionWeight || '').trim(),
@@ -152,6 +159,7 @@ function getLotFormDataFromLot(lot) {
     lotName: lot.lot_name || '',
     parentLotId: lot.parent_lot_id || '',
     lotTypeConfigValueId: lot.lot_type_config_value_id || '',
+    requirementPolicyConfigValueId: lot.requirement_policy_config_value_id || '',
     defaultGradeConfigValueId: lot.default_grade_config_value_id || '',
     defaultProductionWeightConfigValueId: lot.default_production_weight_config_value_id || '',
     defaultProductionWeight: lot.default_production_weight !== null && lot.default_production_weight !== undefined ? String(lot.default_production_weight) : '',
@@ -227,6 +235,17 @@ function validateLotForm(formData, formOptions, currentLotId = null) {
     errors.push('Lot type must be valid.');
   }
 
+  if (formOptions.capabilities.hasRequirementPolicy) {
+    if (!formData.requirementPolicyConfigValueId) {
+      errors.push('Requirement enforcement policy is required.');
+    } else if (!findSelectedRequirementPolicy(
+      formOptions.requirementPolicies,
+      formData.requirementPolicyConfigValueId
+    )) {
+      errors.push('Requirement enforcement policy must be Strict, Warn Only, or Open / Mixed.');
+    }
+  }
+
   if (formData.defaultGradeConfigValueId && !Number.isInteger(Number(formData.defaultGradeConfigValueId))) {
     errors.push('Default grade must be valid.');
   }
@@ -282,10 +301,10 @@ function validateRequirementForm(formData, requirementValueOptionsByKey = {}) {
   if (!formData.requiredValue) {
     errors.push('Required value is required.');
   } else if (fieldDefinition?.storageKind === 'number') {
-    const numericValue = Number(formData.requiredValue);
+    const analysis = analyzeRequirementNumber(fieldDefinition, formData.requiredValue);
 
-    if (!Number.isFinite(numericValue) || numericValue <= 0) {
-      errors.push(`${fieldDefinition.label} must be a number greater than zero.`);
+    if (!analysis.valid) {
+      errors.push(analysis.message);
     }
   } else {
     const optionSet = requirementValueOptionsByKey[fieldDefinition?.key];
@@ -399,7 +418,10 @@ function buildRequirementValidationSummary(requirements, validationReport) {
       return unit.checks
         .filter((check) => (
           requirementId > 0
-            ? Number(check.requirementId || 0) === requirementId
+            ? (
+                Number(check.requirementId || 0) === requirementId ||
+                (Array.isArray(check.requirementIds) && check.requirementIds.includes(requirementId))
+              )
             : (
                 String(check.requirementKey || '') === requirementKey &&
                 String(check.operatorCode || 'equals') === operatorCode &&
@@ -519,7 +541,11 @@ function buildLotUnitFormRuleSections(profile, selectionMaps) {
             labelsByKey.get(fieldKey)
             || getUnitFormFieldDefinition(fieldKey)?.label
             || fieldKey
-          ))
+          )),
+          lotRequirementVisibilityLabels: (resolvedField?.lotRequirementVisibilitySources || [])
+            .map((source) => source.label),
+          lotRequirementRequirementLabels: (resolvedField?.lotRequirementRequirementSources || [])
+            .map((source) => source.label)
         };
       });
 
@@ -537,7 +563,7 @@ async function getLotUnitFormRuleViewData(lotId, submittedSelectionMaps = null) 
   }
 
   const [profile, directRules] = await Promise.all([
-    lotUnitFormProfileModel.getEffectiveUnitFormProfileForLot(lotId),
+    lotUnitFormProfileModel.getRequirementAwareUnitFormProfileForLot(lotId),
     lotUnitFormProfileModel.listRulesForLot(lotId)
   ]);
   const selectionMaps = submittedSelectionMaps || rulesToSelectionMaps(directRules);
@@ -743,7 +769,7 @@ async function renderNewLotPage(req, res, next) {
       pageTitle: 'Create Lot',
       currentNav: 'management-lots',
       formOptions,
-      formData: getBlankLotFormData(),
+      formData: getBlankLotFormData(formOptions),
       errorMessages: []
     });
   } catch (error) {
@@ -910,7 +936,7 @@ async function renderNewLotModal(req, res, next) {
     return renderLotModal(res, {
       mode: 'create',
       formOptions,
-      formData: getBlankLotFormData(),
+      formData: getBlankLotFormData(formOptions),
       errorMessages: []
     });
   } catch (error) {
@@ -923,11 +949,13 @@ async function renderEditLotModal(req, res, next) {
     const lotId = Number(req.params.lotId);
 
     if (!Number.isInteger(lotId) || lotId <= 0) {
+      const formOptions = await lotModel.getLotFormOptions();
+
       return res.status(404).render('fragments/lot-form-modal', {
         mode: 'edit',
         lot: null,
-        formOptions: await lotModel.getLotFormOptions(),
-        formData: getBlankLotFormData(),
+        formOptions,
+        formData: getBlankLotFormData(formOptions),
         errorMessages: ['The selected lot could not be found.']
       });
     }
@@ -942,7 +970,7 @@ async function renderEditLotModal(req, res, next) {
         mode: 'edit',
         lot: null,
         formOptions,
-        formData: getBlankLotFormData(),
+        formData: getBlankLotFormData(formOptions),
         errorMessages: ['The selected lot could not be found.']
       });
     }

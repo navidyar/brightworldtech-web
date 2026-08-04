@@ -1,0 +1,140 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const unitLabel = unit && unit.assetTag ? unit.assetTag : (unit && unit.unitId ? `Unit ${unit.unitId}` : 'Selected Unit');
+  const presentation = qcStatusPresentation && qcStatusPresentation.available
+    ? qcStatusPresentation
+    : null;
+  const statusCode = presentation ? presentation.statusCode : '';
+  const statusIconCode = statusCode === 'corrected' ? 'corrected' : statusCode;
+  const review = presentation ? presentation.latestReview : latestQcReview;
+  const correction = presentation ? presentation.latestCorrection : latestQcCorrection;
+  const workflowSteps = presentation && Array.isArray(presentation.workflowSteps)
+    ? presentation.workflowSteps
+    : [];
+  const currentUserRoles = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
+  const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'qc'].includes(roleCode));
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section
+    class="modal-panel site-clean-modal tech-qc-review-modal tech-qc-status-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="tech-qc-review-details-title"
+    aria-describedby="tech-qc-review-details-description"
+    tabindex="-1"
+  >
+    <header class="modal-header tech-qc-status-modal__header">
+      <div class="tech-qc-modal-heading">
+        <% if (presentation) { %>
+          <span class="tech-qc-modal-heading__icon" aria-hidden="true">
+            <%- include('tech-unit-qc-status-icon', { statusCode: statusIconCode, decisionCode: review ? review.decisionCode : '' }) %>
+          </span>
+        <% } %>
+        <div class="tech-qc-modal-heading__copy">
+          <p class="eyebrow">Quality Control</p>
+          <h2 id="tech-qc-review-details-title"><%= presentation ? presentation.title : 'QC Review Details' %></h2>
+          <p id="tech-qc-review-details-description" class="modal-description"><%= unitLabel %></p>
+        </div>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close data-modal-initial-focus aria-label="Close Quality Control status details">
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5.5 5.5 14.5 14.5M14.5 5.5 5.5 14.5" /></svg>
+      </button>
+    </header>
+
+    <div class="modal-body tech-qc-status-modal__body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error" role="alert" aria-live="assertive">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (unit && review && presentation) { %>
+        <section class="tech-qc-status-banner tech-qc-status-banner--<%= statusCode.replace('_', '-') %>" aria-label="Current Quality Control status">
+          <span class="tech-qc-status-banner__label"><%= presentation.statusLabel %></span>
+          <p><%= presentation.description %></p>
+        </section>
+
+        <% if (workflowSteps.length > 1) { %>
+          <section class="tech-qc-workflow" aria-labelledby="tech-qc-workflow-title">
+            <h3 id="tech-qc-workflow-title">QC Progress</h3>
+            <ol class="tech-qc-workflow__steps">
+              <% workflowSteps.forEach((step, index) => { %>
+                <li class="tech-qc-workflow__step is-<%= step.state %> tech-qc-workflow__step--<%= step.code.replace('_', '-') %>">
+                  <span class="tech-qc-workflow__marker" aria-hidden="true"><%= index + 1 %></span>
+                  <span><%= step.label %></span>
+                </li>
+              <% }) %>
+            </ol>
+          </section>
+        <% } %>
+
+        <dl class="tech-qc-review-meta">
+          <div>
+            <dt>Reviewed By</dt>
+            <dd><%= review.reviewedByName %></dd>
+          </div>
+          <div>
+            <dt>Review Date</dt>
+            <dd><%= review.reviewedAt ? formatDateTime(review.reviewedAt) : '—' %></dd>
+          </div>
+        </dl>
+
+        <section class="tech-qc-note-panel tech-qc-note-panel--<%= review.decisionCode %>" aria-labelledby="tech-qc-review-note-title">
+          <h3 id="tech-qc-review-note-title"><%= presentation.notesHeading %></h3>
+          <% if (review.notes) { %>
+            <p class="tech-qc-note-panel__text"><%= review.notes %></p>
+          <% } else { %>
+            <p class="tech-qc-note-panel__empty">No notes were provided.</p>
+          <% } %>
+        </section>
+
+        <% if (correction) { %>
+          <section class="tech-qc-correction-detail" aria-labelledby="tech-qc-correction-detail-title">
+            <div class="tech-qc-correction-detail__heading">
+              <h3 id="tech-qc-correction-detail-title">Correction Handoff</h3>
+              <span>Ready for recheck</span>
+            </div>
+            <dl class="tech-qc-review-meta tech-qc-review-meta--correction">
+              <div>
+                <dt>Marked Corrected By</dt>
+                <dd><%= correction.submittedByName %></dd>
+              </div>
+              <div>
+                <dt>Submitted At</dt>
+                <dd><%= correction.submittedAt ? formatDateTime(correction.submittedAt) : '—' %></dd>
+              </div>
+            </dl>
+            <div class="tech-qc-correction-detail__notes">
+              <h4>Correction Notes</h4>
+              <% if (correction.notes) { %>
+                <p><%= correction.notes %></p>
+              <% } else { %>
+                <p class="tech-qc-note-panel__empty">No correction notes were provided.</p>
+              <% } %>
+            </div>
+          </section>
+        <% } %>
+      <% } %>
+    </div>
+
+    <footer class="tech-qc-modal-footer">
+      <div class="action-row tech-qc-modal-actions">
+        <% if (unit && canViewUnitHistory) { %>
+          <button
+            type="button"
+            class="secondary-button"
+            data-qc-open-unit-history
+            data-unit-id="<%= unit.unitId %>"
+          >
+            View Unit History
+          </button>
+        <% } %>
+        <button type="button" class="secondary-button" data-modal-close>Close</button>
+      </div>
+    </footer>
+  </section>
+</div>

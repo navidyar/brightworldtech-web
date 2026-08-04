@@ -324,7 +324,7 @@ function buildCompletedUnitWindowWhere(window, gradeAlias = 'uga') {
 }
 
 function buildWorkCompletionWindowWhere(window, alias = 'uwc') {
-  const whereParts = [];
+  const whereParts = [`${alias}.reversed_at IS NULL`];
   const params = [];
 
   if (window && window.startSql) {
@@ -585,7 +585,8 @@ async function getTechDashboardUserOptions() {
         FROM unit_work_completions uwc
         INNER JOIN users
           ON users.user_id = uwc.completed_by_user_id
-        WHERE users.is_active = 1
+        WHERE uwc.reversed_at IS NULL
+          AND users.is_active = 1
         GROUP BY users.user_id, users.first_name, users.last_name, users.email
         ORDER BY users.first_name, users.last_name, users.email
       `

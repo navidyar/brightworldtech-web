@@ -7,7 +7,7 @@
       '/css/management.css?v=step5c-ui-hotfix'
     ]
   }) %>
-  <script defer src="/js/modal.js"></script>
+  <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
 
   <body>
     <div class="app-shell">
@@ -90,7 +90,7 @@
             <% } %>
 
             <div class="message management-user-note">
-              <p><strong>Role assignment rule:</strong> each user receives one primary access role. Admin users can assign Admin. Management users can assign Management, Tech Lead, or Tech. Production labels such as QC, packing, or task activity should not be assigned here as account roles.</p>
+              <p><strong>Role assignment rule:</strong> each user receives one primary access role. Admin users can assign Admin. Management users can assign Management, Tech Lead, QC, or Tech. QC is a restricted review role; packing and task activity remain operational records rather than account roles.</p>
             </div>
 
             <div class="table-card management-users-table-card" style="margin-top: 20px;">

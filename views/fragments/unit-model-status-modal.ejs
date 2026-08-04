@@ -13,10 +13,9 @@
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel unit-model-modal unit-model-status-modal" role="dialog" aria-modal="true" aria-labelledby="unit-model-status-title">
+  <section class="modal-panel site-clean-modal unit-model-modal unit-model-status-modal" role="dialog" aria-modal="true" aria-labelledby="unit-model-status-title">
     <header class="modal-header">
       <div>
-        <p class="eyebrow">Model Catalog</p>
         <h2 id="unit-model-status-title"><%= title %></h2>
       </div>
 
@@ -33,13 +32,13 @@
       <% } %>
 
       <% if (unitModel) { %>
-        <div class="unit-model-confirm-card">
-          <p class="eyebrow">Selected Model</p>
-          <h3><%= unitModel.modelName %></h3>
-          <p><%= unitModel.manufacturerName %> · <%= unitModel.unitCategoryLabel %></p>
-        </div>
+        <dl class="site-detail-list unit-model-summary">
+          <div><dt>Model</dt><dd><strong><%= unitModel.modelName %></strong></dd></div>
+          <div><dt>Manufacturer</dt><dd><%= unitModel.manufacturerName %></dd></div>
+          <div><dt>Unit Category</dt><dd><%= unitModel.unitCategoryLabel %></dd></div>
+        </dl>
 
-        <p class="unit-model-confirm-copy"><%= activating ? 'Activating this model makes it available again for new unit intake.' : 'Deactivating this model hides it from new unit intake. Existing units retain the model in their historical records.' %></p>
+        <p class="unit-model-confirm-copy"><%= activating ? 'Activating this model makes it available again for new Unit intake.' : 'Deactivating this model hides it from new Unit intake. Existing Units retain the model in their historical records.' %></p>
 
         <form method="post" action="<%= actionUrl %>" hx-post="<%= actionUrl %>" hx-target="#modal-root" hx-swap="innerHTML">
           <div class="form-actions">

@@ -1,5 +1,6 @@
 (function () {
   const guidanceByPeriod = {
+    all_time: 'All recorded completion cycles are included. No date picker is needed.',
     day: 'Choose one specific day. Only the Day field is used.',
     work_week: 'Choose a week. The dashboard reports Monday through Sunday for that week.',
     month: 'Choose a full month. Only the Month field is used.',
@@ -25,6 +26,9 @@
     if (!select) return;
 
     const period = select.value || 'day';
+    form.classList.toggle('has-active-date-field', period !== 'all_time');
+    form.classList.toggle('is-custom-range', period === 'custom_range');
+
     const guidance = form.querySelector('[data-period-guidance]');
     if (guidance) {
       guidance.textContent = guidanceByPeriod[period] || 'Choose a reporting period first. Only visible fields are used.';

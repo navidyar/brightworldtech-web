@@ -80,6 +80,24 @@ function formatNumber(value) {
   return new Intl.NumberFormat('en-US').format(number);
 }
 
+
+function formatRoleLabel(roleCode) {
+  const normalized = String(roleCode || '').trim().toLowerCase();
+  const labels = {
+    admin: 'Admin',
+    management: 'Management',
+    tech_lead: 'Tech Lead',
+    qc: 'Quality Control',
+    tech: 'Tech'
+  };
+
+  return labels[normalized] || normalized
+    .split('_')
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ');
+}
+
 function formatWeight(value) {
   if (value === null || value === undefined || value === '') {
     return '—';
@@ -100,5 +118,6 @@ module.exports = {
   formatDate,
   formatTime,
   formatNumber,
+  formatRoleLabel,
   formatWeight
 };

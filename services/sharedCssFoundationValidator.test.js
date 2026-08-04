@@ -14,13 +14,13 @@ const {
 test('head template requires page CSS before shared visual and feature CSS', () => {
   const valid = `
     stylesheets.forEach((stylesheetHref) => {})
-    /css/app.css?v=20260723-shared-ui-foundation
+    /css/app.css?v=20260731-stage10c-hardware-matrix
     /css/features.css?v=20260723-shared-ui-foundation
   `;
   assert.deepEqual(validateHeadTemplate(valid), []);
 
   const invalid = `
-    /css/app.css?v=20260723-shared-ui-foundation
+    /css/app.css?v=20260731-stage10c-hardware-matrix
     stylesheets.forEach((stylesheetHref) => {})
     /css/features.css?v=20260723-shared-ui-foundation
   `;

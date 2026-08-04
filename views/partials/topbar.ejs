@@ -17,7 +17,7 @@
 
         <div>
           <strong><%= currentUser.first_name %> <%= currentUser.last_name %></strong>
-          <p><%= currentRoles.join(', ') || 'user' %></p>
+          <p><%= currentRoles.map(formatRoleLabel).join(', ') || 'User' %></p>
         </div>
       </div>
 

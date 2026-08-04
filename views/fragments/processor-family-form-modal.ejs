@@ -1,0 +1,91 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeMode = mode === 'edit' ? 'edit' : 'create';
+  const safeFamily = family || null;
+  const safeFormData = formData || {};
+  const formAction = safeMode === 'edit' && safeFamily
+    ? `/management/config/processor-families/${safeFamily.processor_family_id}/edit/modal`
+    : '/management/config/processor-families';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal processor-family-modal" role="dialog" aria-modal="true" aria-labelledby="processor-family-modal-title">
+    <header class="modal-header">
+      <div><h2 id="processor-family-modal-title"><%= safeMode === 'edit' ? 'Edit Processor Family' : 'Create Processor Family' %></h2></div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length) { %>
+        <div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <form class="app-form app-form-clean processor-family-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML">
+        <% if (safeFamily) { %><input type="hidden" name="processorFamilyId" value="<%= safeFamily.processor_family_id %>" /><% } %>
+
+        <div class="form-grid processor-family-form-grid">
+          <label class="form-field">
+            <span>Processor Brand</span>
+            <select name="processorBrandId" required
+              hx-get="/management/config/processor-families/members"
+              hx-trigger="change"
+              hx-target="#processor-family-member-options"
+              hx-swap="innerHTML"
+              hx-include="[name='processorBrandId'], [name='processorFamilyId']">
+              <% brands.forEach((brand) => { %>
+                <option value="<%= brand.id %>" <%= String(safeFormData.processorBrandId || '') === String(brand.id) ? 'selected' : '' %>><%= brand.label %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <label class="form-field">
+            <span>Family Name</span>
+            <input type="text" name="name" value="<%= safeFormData.name || '' %>" minlength="2" maxlength="120" placeholder="Example: Intel i5-12th Gen" required />
+          </label>
+
+          <label class="form-field">
+            <span>Short Form</span>
+            <input type="text" name="shortForm" value="<%= safeFormData.shortForm || '' %>" maxlength="40" placeholder="Example: i5-13th" required />
+            <small class="field-hint">Used by filtered Unit exports for every processor in this family.</small>
+          </label>
+
+          <label class="form-field">
+            <span>Stable Code <small>(optional)</small></span>
+            <input type="text" name="code" value="<%= safeFormData.code || '' %>" maxlength="100" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="Generated from name when blank" />
+          </label>
+
+          <label class="form-field processor-family-description-field">
+            <span>Description <small>(optional)</small></span>
+            <input type="text" name="description" value="<%= safeFormData.description || '' %>" maxlength="500" placeholder="What this family is intended to match" />
+          </label>
+        </div>
+
+        <% if (safeMode === 'edit') { %>
+          <label class="processor-family-active-toggle">
+            <input type="checkbox" name="isActive" value="1" <%= safeFormData.isActive === '1' ? 'checked' : '' %> />
+            <span>Active and selectable for new Lot requirements</span>
+          </label>
+        <% } else { %>
+          <input type="hidden" name="isActive" value="1" />
+        <% } %>
+
+        <div class="processor-family-members-section">
+          <div class="processor-family-members-heading">
+            <div>
+              <h3>Included Processors</h3>
+              <p>A Lot using this family accepts any checked processor. Existing Lots update automatically when membership changes.</p>
+            </div>
+          </div>
+          <div id="processor-family-member-options">
+            <%- include('./processor-family-member-options', { processors }) %>
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="primary-button"><%= safeMode === 'edit' ? 'Save Family' : 'Create Family' %></button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

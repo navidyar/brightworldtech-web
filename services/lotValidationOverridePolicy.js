@@ -25,6 +25,8 @@ function buildRequirementSignature(requirements = []) {
       manufacturerId: Number(requirement.manufacturer_id || 0),
       unitModelId: Number(requirement.unit_model_id || 0),
       processorModelId: Number(requirement.processor_model_id || 0),
+      processorFamilyId: Number(requirement.processor_family_id || 0),
+      processorFamilyMembershipVersion: Number(requirement.processor_family_membership_version || 0),
       text: normalizeScalar(requirement.requirement_text),
       number: normalizeScalar(requirement.requirement_number),
       required: Number(requirement.is_required ?? 1) === 1

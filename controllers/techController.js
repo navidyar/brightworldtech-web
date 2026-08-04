@@ -8,8 +8,32 @@ const unitExpandedFormModel = require('../models/unitExpandedFormModel');
 const unitOutcomeModel = require('../models/unitOutcomeModel');
 const lotUnitFormProfileModel = require('../models/lotUnitFormProfileModel');
 const techLotRequirementModel = require('../models/techLotRequirementModel');
+const lotValidationOverrideModel = require('../models/lotValidationOverrideModel');
+const unitAuditEventModel = require('../models/unitAuditEventModel');
+const unitQcCheckModel = require('../models/unitQcCheckModel');
+const unitQcCorrectionModel = require('../models/unitQcCorrectionModel');
+const unitExportService = require('../services/unitExportService');
+const unitExportFileService = require('../services/unitExportFileService');
+const { UNIT_EXPORT_COLUMNS } = require('../config/unitExportContract');
+const qcGradingModel = require('../models/qcGradingModel');
+const unitLotDestinationValidationModel = require('../models/unitLotDestinationValidationModel');
 const { buildUnitFormProfilePresentation } = require('../services/unitFormProfilePresentation');
 const { getBlockingMessage: getLotRequirementBlockingMessage } = require('../services/techLotRequirementWorkflow');
+const { buildUnitFormAuditEvent } = require('../services/unitAuditSnapshot');
+const { buildUnitHistoryTimeline } = require('../services/unitHistoryTimeline');
+const { buildQcStatusPresentation } = require('../services/qcStatusPresentation');
+const {
+  parseHardwareCapacityToGb,
+  normalizeHardwareCapacityForStorage
+} = require('../services/hardwareCapacity');
+const {
+  subscribeToUnitBrowserChanges,
+  publishUnitBrowserChange
+} = require('../services/unitBrowserRealtime');
+const {
+  applyUnitFormSubmissionPolicy,
+  buildManagedValidationFormData
+} = require('../services/unitFormSubmissionPolicy');
 
 const VALID_MEMORY_INSTALL_TYPE_CODES = new Set([
   'removable_module',
@@ -17,7 +41,40 @@ const VALID_MEMORY_INSTALL_TYPE_CODES = new Set([
   'unknown'
 ]);
 
-const DEFAULT_MEMORY_INSTALL_TYPE_CODE = 'removable_module';
+
+function normalizePositiveInteger(value) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function canViewCrossTechnicianQcSummary(req) {
+  return getCurrentRoleCodes(req)
+    .some((roleCode) => ['admin', 'management', 'tech_lead', 'qc'].includes(roleCode));
+}
+
+function resolveQcSummaryTechnicianUserId(req) {
+  const currentUserId = normalizePositiveInteger(req && req.currentUser ? req.currentUser.user_id : null);
+
+  if (!canViewCrossTechnicianQcSummary(req)) {
+    return currentUserId;
+  }
+
+  return normalizePositiveInteger(req && req.query ? req.query.techUserId : null);
+}
+
+function buildTechUnitsQcSummaryUrl(filters = {}, req = null) {
+  const params = new URLSearchParams();
+  const selectedTechnicianUserId = canViewCrossTechnicianQcSummary(req)
+    ? normalizePositiveInteger(filters.techUserId)
+    : null;
+
+  if (selectedTechnicianUserId) {
+    params.set('techUserId', String(selectedTechnicianUserId));
+  }
+
+  const queryString = params.toString();
+  return queryString ? `/tech/units/qc-summary?${queryString}` : '/tech/units/qc-summary';
+}
 
 function buildTechUnitsTableUrl(filters) {
   const params = new URLSearchParams();
@@ -26,6 +83,7 @@ function buildTechUnitsTableUrl(filters) {
     'lotId',
     'categoryId',
     'gradeFilter',
+    'qcReviewFilter',
     'techUserId',
     'createdStartDate',
     'createdEndDate',
@@ -47,6 +105,41 @@ function buildTechUnitsTableUrl(filters) {
   return queryString ? `/tech/units/table?${queryString}` : '/tech/units/table';
 }
 
+const TECH_UNIT_EXPORT_FILTER_KEYS = Object.freeze([
+  'search',
+  'lotId',
+  'categoryId',
+  'gradeFilter',
+  'qcReviewFilter',
+  'techUserId',
+  'createdStartDate',
+  'createdEndDate',
+  'createdWindow',
+  'unitState',
+  'sort'
+]);
+
+function buildTechUnitsExportUrl(pathname, filters = {}) {
+  const params = new URLSearchParams();
+
+  TECH_UNIT_EXPORT_FILTER_KEYS.forEach((key) => {
+    if (filters[key]) {
+      params.set(key, filters[key]);
+    }
+  });
+
+  const queryString = params.toString();
+  return queryString ? `${pathname}?${queryString}` : pathname;
+}
+
+function buildTechUnitsExportPreviewUrl(filters) {
+  return buildTechUnitsExportUrl('/tech/units/export/preview', filters);
+}
+
+function buildTechUnitsExportDownloadUrl(format, filters) {
+  return buildTechUnitsExportUrl(`/tech/units/export/${format}`, filters);
+}
+
 
 function getCurrentRoleCodes(req) {
   return req && req.currentUser && Array.isArray(req.currentUser.roles)
@@ -54,9 +147,13 @@ function getCurrentRoleCodes(req) {
     : [];
 }
 
-function userCanOverrideProductionWeight(req) {
+function userCanViewProductionWeight(req) {
   return getCurrentRoleCodes(req)
     .some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+}
+
+function userCanOverrideProductionWeight(req) {
+  return userCanViewProductionWeight(req);
 }
 
 function canRequestCatalogException(req) {
@@ -78,6 +175,22 @@ function markProductionWeightPermission(formData, formOptions, { allowOverrideIn
     productionWeightOverride: canOverrideProductionWeight ? formData.productionWeightOverride : '',
     productionWeightNotes: canOverrideProductionWeight ? formData.productionWeightNotes : '',
     canOverrideProductionWeight
+  };
+}
+
+
+function redactProductionWeightFromTimeline(timeline) {
+  const safeTimeline = timeline || {};
+  const events = (Array.isArray(safeTimeline.events) ? safeTimeline.events : []).map((event) => ({
+    ...event,
+    changes: (Array.isArray(event.changes) ? event.changes : []).filter((change) => !/production weight|production credit|current lot weight/i.test(String(change.label || ''))),
+    notes: (Array.isArray(event.notes) ? event.notes : []).filter((note) => !/^prior tech credit:/i.test(String(note || '').trim()))
+  }));
+
+  return {
+    ...safeTimeline,
+    events,
+    totalChanges: events.reduce((sum, event) => sum + (Array.isArray(event.changes) ? event.changes.length : 0), 0)
   };
 }
 
@@ -129,6 +242,31 @@ function buildCompleteWorkModalView({ preview = null, req = null, successMessage
       errorMessage: ''
     },
     creditedToName: getCurrentUserDisplayName(req),
+    canViewProductionWeight: userCanViewProductionWeight(req),
+    successMessage,
+    errorMessages: Array.isArray(errorMessages) ? errorMessages : []
+  };
+}
+
+function buildReverseCompletionModalView({
+  preview = null,
+  reason = '',
+  successMessage = null,
+  errorMessages = []
+} = {}) {
+  return {
+    preview: preview || {
+      ready: false,
+      unitId: null,
+      unitWorkCompletionId: null,
+      unitLabel: 'Unit not found',
+      lotName: 'Unknown lot',
+      completedByName: 'Unknown user',
+      completedAt: null,
+      formattedProductionWeight: '—',
+      errorMessage: ''
+    },
+    reason: String(reason || ''),
     successMessage,
     errorMessages: Array.isArray(errorMessages) ? errorMessages : []
   };
@@ -137,6 +275,25 @@ function buildCompleteWorkModalView({ preview = null, req = null, successMessage
 function canViewParkedUnits(req) {
   return getCurrentRoleCodes(req)
     .some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+}
+
+function canViewAnyLotFilter(req) {
+  return getCurrentRoleCodes(req)
+    .some((roleCode) => ['admin', 'management'].includes(roleCode));
+}
+
+function canExportTechUnits(req) {
+  return getCurrentRoleCodes(req)
+    .some((roleCode) => ['admin', 'management'].includes(roleCode));
+}
+
+function getUnitExportColumnSelection(req) {
+  const query = req && req.query ? req.query : {};
+
+  return {
+    value: query.columns,
+    selectionProvided: Object.prototype.hasOwnProperty.call(query, 'columns')
+  };
 }
 
 function isRegularTechUnitBrowserUser(req) {
@@ -151,6 +308,7 @@ function getFiltersFromRequest(req) {
     lotId: String(req.query.lotId || '').trim(),
     categoryId: String(req.query.categoryId || '').trim(),
     gradeFilter: String(req.query.gradeFilter || '').trim(),
+    qcReviewFilter: String(req.query.qcReviewFilter || '').trim(),
     techUserId: String(req.query.techUserId || '').trim(),
     createdStartDate: String(req.query.createdStartDate || '').trim(),
     createdEndDate: String(req.query.createdEndDate || '').trim(),
@@ -161,7 +319,8 @@ function getFiltersFromRequest(req) {
     perPage: String(req.query.perPage || '').trim(),
     currentUserId: req && req.currentUser ? req.currentUser.user_id : null,
     restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req),
-    canViewParkedUnits: canViewParkedUnits(req)
+    canViewParkedUnits: canViewParkedUnits(req),
+    allowAnyLotFilter: canViewAnyLotFilter(req)
   };
 }
 
@@ -238,11 +397,100 @@ async function attachLatestWorkCompletion(result) {
   };
 }
 
+async function attachLatestQcReviews(result) {
+  if (!result || !result.supported || !Array.isArray(result.units) || result.units.length === 0) {
+    return result;
+  }
+
+  const unitIds = result.units
+    .map((unit) => Number(unit.unitId))
+    .filter((unitId) => Number.isInteger(unitId) && unitId > 0);
+
+  if (unitIds.length === 0) {
+    return result;
+  }
+
+  const completionIds = result.units
+    .map((unit) => unit.latestWorkCompletion && Number(unit.latestWorkCompletion.unitWorkCompletionId))
+    .filter((completionId) => Number.isSafeInteger(completionId) && completionId > 0);
+  const latestQcReviewMap = await unitQcCheckModel.listLatestQcChecksForCompletions(completionIds);
+
+  return {
+    ...result,
+    units: result.units.map((unit) => ({
+      ...unit,
+      latestQcReview: unit.latestWorkCompletion
+        ? latestQcReviewMap.get(Number(unit.latestWorkCompletion.unitWorkCompletionId)) || null
+        : null
+    }))
+  };
+}
+
+async function attachLatestQcCorrections(result) {
+  if (!result || !result.supported || !Array.isArray(result.units) || result.units.length === 0) {
+    return result;
+  }
+
+  const rejectedQcCheckIds = result.units
+    .map((unit) => unit.latestQcReview && unit.latestQcReview.decisionCode === 'rejected'
+      ? Number(unit.latestQcReview.qcCheckId)
+      : null)
+    .filter((qcCheckId) => Number.isSafeInteger(qcCheckId) && qcCheckId > 0);
+  const latestCorrectionMap = await unitQcCorrectionModel.listLatestCorrectionsForQcChecks(rejectedQcCheckIds);
+
+  return {
+    ...result,
+    units: result.units.map((unit) => ({
+      ...unit,
+      latestQcCorrection: unit.latestQcReview && unit.latestQcReview.decisionCode === 'rejected'
+        ? latestCorrectionMap.get(Number(unit.latestQcReview.qcCheckId)) || null
+        : null
+    }))
+  };
+}
+
+function attachTechUnitBrowserVersions(result) {
+  if (!result || !result.supported || !Array.isArray(result.units)) {
+    return result;
+  }
+
+  const qcReviewQueue = result.qcReviewQueue
+    ? {
+      ...result.qcReviewQueue,
+      version: crypto
+        .createHash('sha256')
+        .update(JSON.stringify({
+          queue: result.qcReviewQueue,
+          selectedFilter: result.filters ? result.filters.qcReviewFilter : ''
+        }))
+        .digest('hex')
+        .slice(0, 24)
+    }
+    : null;
+
+  return {
+    ...result,
+    qcReviewQueue,
+    units: result.units.map((unit) => ({
+      ...unit,
+      browserVersion: crypto
+        .createHash('sha256')
+        .update(JSON.stringify(unit))
+        .digest('hex')
+        .slice(0, 24)
+    }))
+  };
+}
+
 async function buildTechUnitsResult(filters) {
   const rawResult = await techUnitModel.listTechUnits(filters);
   const expandedResult = await attachExpandedUnitDetails(rawResult);
+  const overrideResult = await attachLatestOverrideHistory(expandedResult);
+  const completionResult = await attachLatestWorkCompletion(overrideResult);
+  const qcResult = await attachLatestQcReviews(completionResult);
+  const correctionResult = await attachLatestQcCorrections(qcResult);
 
-  return attachLatestWorkCompletion(expandedResult);
+  return attachTechUnitBrowserVersions(correctionResult);
 }
 
 function normalizeModuleRowsFromBody(value) {
@@ -269,39 +517,45 @@ function normalizeModuleField(value) {
 }
 
 function normalizeMemoryInstallTypeCode(value) {
-  const normalized = normalizeModuleField(value);
-
-  return VALID_MEMORY_INSTALL_TYPE_CODES.has(normalized)
-    ? normalized
-    : DEFAULT_MEMORY_INSTALL_TYPE_CODE;
+  return normalizeModuleField(value);
 }
 
-function getMemoryModulesFromRequest(req) {
-  return normalizeModuleRowsFromBody(req.body.memoryModules).map((row) => ({
-    slotLabel: normalizeModuleField(row.slotLabel),
-    sizeGb: normalizeModuleField(row.sizeGb),
-    ramTypeConfigValueId: normalizeModuleField(row.ramTypeConfigValueId),
-    memoryInstallTypeCode: normalizeMemoryInstallTypeCode(row.memoryInstallTypeCode),
-    speedMhz: normalizeModuleField(row.speedMhz),
-    manufacturerName: normalizeModuleField(row.manufacturerName),
-    partNumber: normalizeModuleField(row.partNumber),
-    serialNumber: normalizeModuleField(row.serialNumber),
-    changeNotes: normalizeModuleField(row.changeNotes)
-  }));
+function getMemoryModulesFromRequest(req, collectionName = 'memoryModules') {
+  return normalizeModuleRowsFromBody(req.body[collectionName]).map((row) => {
+    const sizeGb = normalizeHardwareCapacityForStorage(row.sizeGb);
+    const isEmptySlot = sizeGb === '0';
+
+    return {
+      slotLabel: normalizeModuleField(row.slotLabel),
+      sizeGb,
+      ramTypeConfigValueId: isEmptySlot ? '' : normalizeModuleField(row.ramTypeConfigValueId),
+      memoryInstallTypeCode: isEmptySlot ? '' : normalizeMemoryInstallTypeCode(row.memoryInstallTypeCode),
+      speedMhz: isEmptySlot ? '' : normalizeModuleField(row.speedMhz),
+      manufacturerName: isEmptySlot ? '' : normalizeModuleField(row.manufacturerName),
+      partNumber: isEmptySlot ? '' : normalizeModuleField(row.partNumber),
+      serialNumber: isEmptySlot ? '' : normalizeModuleField(row.serialNumber),
+      changeNotes: normalizeModuleField(row.changeNotes)
+    };
+  });
 }
 
-function getStorageDevicesFromRequest(req) {
-  return normalizeModuleRowsFromBody(req.body.storageDevices).map((row) => ({
-    slotLabel: normalizeModuleField(row.slotLabel),
-    sizeGb: normalizeModuleField(row.sizeGb),
-    storageTypeConfigValueId: normalizeModuleField(row.storageTypeConfigValueId),
-    manufacturerName: normalizeModuleField(row.manufacturerName),
-    modelNumber: normalizeModuleField(row.modelNumber),
-    serialNumber: normalizeModuleField(row.serialNumber),
-    firmwareVersion: normalizeModuleField(row.firmwareVersion),
-    wipeStatusConfigValueId: normalizeModuleField(row.wipeStatusConfigValueId),
-    changeNotes: normalizeModuleField(row.changeNotes)
-  }));
+function getStorageDevicesFromRequest(req, collectionName = 'storageDevices') {
+  return normalizeModuleRowsFromBody(req.body[collectionName]).map((row) => {
+    const sizeGb = normalizeHardwareCapacityForStorage(row.sizeGb);
+    const isEmptySlot = sizeGb === '0';
+
+    return {
+      slotLabel: normalizeModuleField(row.slotLabel),
+      sizeGb,
+      storageTypeConfigValueId: isEmptySlot ? '' : normalizeModuleField(row.storageTypeConfigValueId),
+      manufacturerName: isEmptySlot ? '' : normalizeModuleField(row.manufacturerName),
+      modelNumber: isEmptySlot ? '' : normalizeModuleField(row.modelNumber),
+      serialNumber: isEmptySlot ? '' : normalizeModuleField(row.serialNumber),
+      firmwareVersion: isEmptySlot ? '' : normalizeModuleField(row.firmwareVersion),
+      wipeStatusConfigValueId: isEmptySlot ? '' : normalizeModuleField(row.wipeStatusConfigValueId),
+      changeNotes: normalizeModuleField(row.changeNotes)
+    };
+  });
 }
 
 function getIssueRowsFromBody(value) {
@@ -313,7 +567,8 @@ function getCosmeticIssuesFromRequest(req) {
     issueTypeConfigValueId: normalizeModuleField(row.issueTypeConfigValueId),
     severityConfigValueId: normalizeModuleField(row.severityConfigValueId),
     locationConfigValueId: normalizeModuleField(row.locationConfigValueId),
-    issueRemark: normalizeModuleField(row.issueRemark)
+    issueRemark: normalizeModuleField(row.issueRemark),
+    isNoIssue: normalizeModuleField(row.isNoIssue)
   }));
 }
 
@@ -322,7 +577,8 @@ function getHardwareIssuesFromRequest(req) {
     issueTypeConfigValueId: normalizeModuleField(row.issueTypeConfigValueId),
     customIssueLabel: normalizeModuleField(row.customIssueLabel),
     locationConfigValueId: normalizeModuleField(row.locationConfigValueId),
-    issueRemark: normalizeModuleField(row.issueRemark)
+    issueRemark: normalizeModuleField(row.issueRemark),
+    isNoIssue: normalizeModuleField(row.isNoIssue)
   }));
 }
 
@@ -369,15 +625,36 @@ function getPositiveIntegerOrBlank(value) {
 
   const parsed = Number(trimmed);
 
-  return Number.isInteger(parsed) && parsed > 0 ? String(parsed) : trimmed;
+  return Number.isInteger(parsed) && parsed > 0 ? String(parsed) : '';
 }
 
 function getModuleTotalGb(rows) {
   return rows.reduce((sum, row) => {
-    const parsed = Number(row.sizeGb);
+    const parsed = parseHardwareCapacityToGb(row.sizeGb);
 
-    return Number.isFinite(parsed) && parsed > 0 ? sum + parsed : sum;
+    return parsed.valid && parsed.gb !== null ? sum + parsed.gb : sum;
   }, 0);
+}
+
+function hasStructuredCapacityEntry(rows) {
+  return rows.some((row) => {
+    const parsed = parseHardwareCapacityToGb(row.sizeGb);
+
+    return parsed.valid && parsed.gb !== null;
+  });
+}
+
+function getComponentCapacityTotalGb(rows, submittedLegacyTotal) {
+  const componentTotal = getModuleTotalGb(rows);
+
+  if (hasStructuredCapacityEntry(rows)) {
+    return String(componentTotal);
+  }
+
+  // The visible total fields were removed in Stage 10E. Preserve a valid
+  // summary-only legacy value when no structured rows exist, but never allow
+  // stale zero/negative/non-integer hidden values to block form submission.
+  return getPositiveIntegerOrBlank(submittedLegacyTotal);
 }
 
 function normalizeSerialInput(value) {
@@ -388,9 +665,13 @@ function normalizeSerialInput(value) {
 }
 
 function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
+  const previousMemoryModules = getMemoryModulesFromRequest(req, 'previousMemoryModules');
   const memoryModules = getMemoryModulesFromRequest(req);
+  const previousStorageDevices = getStorageDevicesFromRequest(req, 'previousStorageDevices');
   const storageDevices = getStorageDevicesFromRequest(req);
+  const previousMemoryTotalGb = getModuleTotalGb(previousMemoryModules);
   const memoryTotalGb = getModuleTotalGb(memoryModules);
+  const previousStorageTotalGb = getModuleTotalGb(previousStorageDevices);
   const storageTotalGb = getModuleTotalGb(storageDevices);
   const issueDetails = getIssueDetailsFromRequest(req);
   const expandedDetails = getExpandedDetailsFromRequest(req);
@@ -407,12 +688,17 @@ function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
     unitModelId: String(req.body.unitModelId || '').trim(),
     processorModelId: String(req.body.processorModelId || '').trim(),
     processorSpeedGhz: String(req.body.processorSpeedGhz || '').trim(),
-    ramGb: memoryTotalGb > 0 ? String(memoryTotalGb) : String(req.body.ramGb || '').trim(),
+    previousRamGb: getComponentCapacityTotalGb(previousMemoryModules, req.body.previousRamGb),
+    ramGb: getComponentCapacityTotalGb(memoryModules, req.body.ramGb),
     ramTypeConfigValueId: String(req.body.ramTypeConfigValueId || '').trim(),
-    storageGb: storageTotalGb > 0 ? String(storageTotalGb) : String(req.body.storageGb || '').trim(),
+    previousStorageGb: getComponentCapacityTotalGb(previousStorageDevices, req.body.previousStorageGb),
+    storageGb: getComponentCapacityTotalGb(storageDevices, req.body.storageGb),
     storageTypeConfigValueId: String(req.body.storageTypeConfigValueId || '').trim(),
     operatingSystemConfigValueId: String(req.body.operatingSystemConfigValueId || '').trim(),
+    batteryHealthPercent: String(req.body.batteryHealthPercent || '').trim(),
+    previousMemoryModules,
     memoryModules,
+    previousStorageDevices,
     storageDevices,
     cosmeticIssues: issueDetails.cosmeticIssues,
     hardwareIssues: issueDetails.hardwareIssues,
@@ -448,6 +734,31 @@ function isPositiveInteger(value) {
   return Number.isInteger(parsed) && parsed > 0;
 }
 
+function isNonNegativeInteger(value) {
+  const parsed = Number(value);
+
+  return Number.isInteger(parsed) && parsed >= 0;
+}
+
+function isNumberInRangeWithPrecision(value, minimum, maximum, maximumDecimalPlaces) {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return true;
+  }
+
+  const normalized = String(value).trim();
+  if (!/^-?\d+(?:\.\d+)?$/.test(normalized)) {
+    return false;
+  }
+
+  const parsed = Number(normalized);
+  const decimalPart = normalized.includes('.') ? normalized.split('.')[1] : '';
+
+  return Number.isFinite(parsed)
+    && parsed >= minimum
+    && parsed <= maximum
+    && decimalPart.length <= maximumDecimalPlaces;
+}
+
 function isPositiveOrZeroNumber(value) {
   if (!value) {
     return true;
@@ -474,25 +785,33 @@ function moduleRowHasAnyValue(row, ignoredFields = []) {
   });
 }
 
-function validateMemoryModules(formData) {
+function validateMemoryModules(formData, propertyName = 'memoryModules', rowLabelPrefix = 'Memory module') {
   const errors = [];
 
-  (formData.memoryModules || []).forEach((moduleRow, index) => {
-    if (!moduleRowHasAnyValue(moduleRow, ['slotLabel', 'memoryInstallTypeCode'])) {
+  (formData[propertyName] || []).forEach((moduleRow, index) => {
+    if (!moduleRowHasAnyValue(moduleRow, ['slotLabel'])) {
       return;
     }
 
-    const rowLabel = `Memory module ${index + 1}`;
+    const rowLabel = `${rowLabelPrefix} ${index + 1}`;
 
-    if (!moduleRow.sizeGb || !isPositiveInteger(moduleRow.sizeGb)) {
-      errors.push(`${rowLabel} requires a valid positive memory size.`);
+    const parsedCapacity = parseHardwareCapacityToGb(moduleRow.sizeGb);
+
+    if (!parsedCapacity.valid || parsedCapacity.gb === null) {
+      errors.push(`${rowLabel}: ${parsedCapacity.message || 'Enter 0 for an empty slot, or a size such as 16GB, 512GB, 1TB, or 2TB.'}`);
     }
 
-    if (moduleRow.ramTypeConfigValueId && !isPositiveInteger(moduleRow.ramTypeConfigValueId)) {
+    const isEmptySlot = parsedCapacity.valid && parsedCapacity.gb === 0;
+
+    if (!isEmptySlot && !moduleRow.ramTypeConfigValueId) {
+      errors.push(`${rowLabel} requires a Memory Type selection.`);
+    } else if (moduleRow.ramTypeConfigValueId && !isPositiveInteger(moduleRow.ramTypeConfigValueId)) {
       errors.push(`${rowLabel} has an invalid memory type.`);
     }
 
-    if (!VALID_MEMORY_INSTALL_TYPE_CODES.has(moduleRow.memoryInstallTypeCode || DEFAULT_MEMORY_INSTALL_TYPE_CODE)) {
+    if (!isEmptySlot && !moduleRow.memoryInstallTypeCode) {
+      errors.push(`${rowLabel} requires an Install Type selection.`);
+    } else if (moduleRow.memoryInstallTypeCode && !VALID_MEMORY_INSTALL_TYPE_CODES.has(moduleRow.memoryInstallTypeCode)) {
       errors.push(`${rowLabel} has an invalid memory install type.`);
     }
 
@@ -516,21 +835,27 @@ function validateMemoryModules(formData) {
   return errors;
 }
 
-function validateStorageDevices(formData) {
+function validateStorageDevices(formData, propertyName = 'storageDevices', rowLabelPrefix = 'Storage device') {
   const errors = [];
 
-  (formData.storageDevices || []).forEach((deviceRow, index) => {
+  (formData[propertyName] || []).forEach((deviceRow, index) => {
     if (!moduleRowHasAnyValue(deviceRow, ['slotLabel'])) {
       return;
     }
 
-    const rowLabel = `Storage device ${index + 1}`;
+    const rowLabel = `${rowLabelPrefix} ${index + 1}`;
 
-    if (!deviceRow.sizeGb || !isPositiveInteger(deviceRow.sizeGb)) {
-      errors.push(`${rowLabel} requires a valid positive storage size.`);
+    const parsedCapacity = parseHardwareCapacityToGb(deviceRow.sizeGb);
+
+    if (!parsedCapacity.valid || parsedCapacity.gb === null) {
+      errors.push(`${rowLabel}: ${parsedCapacity.message || 'Enter 0 for an empty slot, or a size such as 512GB, 1TB, or 2TB.'}`);
     }
 
-    if (deviceRow.storageTypeConfigValueId && !isPositiveInteger(deviceRow.storageTypeConfigValueId)) {
+    const isEmptySlot = parsedCapacity.valid && parsedCapacity.gb === 0;
+
+    if (!isEmptySlot && !deviceRow.storageTypeConfigValueId) {
+      errors.push(`${rowLabel} requires a Storage Type selection.`);
+    } else if (deviceRow.storageTypeConfigValueId && !isPositiveInteger(deviceRow.storageTypeConfigValueId)) {
       errors.push(`${rowLabel} has an invalid storage type.`);
     }
 
@@ -560,7 +885,69 @@ function validateStorageDevices(formData) {
 }
 
 function issueRowHasAnyValue(row) {
-  return Object.values(row || {}).some((value) => String(value || '').trim());
+  return Object.entries(row || {}).some(([key, value]) => (
+    key !== 'isNoIssue' && String(value || '').trim()
+  ));
+}
+
+function getNoCosmeticIssueTypeIdSet(formOptions = {}) {
+  return new Set(
+    (Array.isArray(formOptions.cosmeticIssueTypes) ? formOptions.cosmeticIssueTypes : [])
+      .filter((option) => option && option.isNoIssue)
+      .map((option) => String(option.id || '').trim())
+      .filter(Boolean)
+  );
+}
+
+function normalizeCosmeticIssueRowsForSubmission(formData, formOptions = {}) {
+  const noIssueTypeIds = getNoCosmeticIssueTypeIdSet(formOptions);
+  const rows = Array.isArray(formData && formData.cosmeticIssues)
+    ? formData.cosmeticIssues
+    : [];
+
+  rows.forEach((issueRow) => {
+    const selectedTypeId = String(issueRow.issueTypeConfigValueId || '').trim();
+    const isNoIssue = Boolean(selectedTypeId && noIssueTypeIds.has(selectedTypeId));
+
+    issueRow.isNoIssue = isNoIssue ? '1' : '';
+
+    if (isNoIssue) {
+      issueRow.severityConfigValueId = '';
+      issueRow.locationConfigValueId = '';
+    }
+  });
+
+  return formData;
+}
+
+function getNoHardwareIssueTypeIdSet(formOptions = {}) {
+  return new Set(
+    (Array.isArray(formOptions.hardwareIssueTypes) ? formOptions.hardwareIssueTypes : [])
+      .filter((option) => option && option.isNoIssue)
+      .map((option) => String(option.id || '').trim())
+      .filter(Boolean)
+  );
+}
+
+function normalizeHardwareIssueRowsForSubmission(formData, formOptions = {}) {
+  const noIssueTypeIds = getNoHardwareIssueTypeIdSet(formOptions);
+  const rows = Array.isArray(formData && formData.hardwareIssues)
+    ? formData.hardwareIssues
+    : [];
+
+  rows.forEach((issueRow) => {
+    const selectedTypeId = String(issueRow.issueTypeConfigValueId || '').trim();
+    const isNoIssue = Boolean(selectedTypeId && noIssueTypeIds.has(selectedTypeId));
+
+    issueRow.isNoIssue = isNoIssue ? '1' : '';
+
+    if (isNoIssue) {
+      issueRow.customIssueLabel = '';
+      issueRow.locationConfigValueId = '';
+    }
+  });
+
+  return formData;
 }
 
 function validateIssueDetails(formData) {
@@ -577,11 +964,13 @@ function validateIssueDetails(formData) {
       errors.push(`${rowLabel} requires a valid issue type.`);
     }
 
-    if (!issueRow.severityConfigValueId || !isPositiveInteger(issueRow.severityConfigValueId)) {
+    const isNoIssue = issueRow.isNoIssue === '1';
+
+    if (!isNoIssue && (!issueRow.severityConfigValueId || !isPositiveInteger(issueRow.severityConfigValueId))) {
       errors.push(`${rowLabel} requires a valid severity.`);
     }
 
-    if (!issueRow.locationConfigValueId || !isPositiveInteger(issueRow.locationConfigValueId)) {
+    if (!isNoIssue && (!issueRow.locationConfigValueId || !isPositiveInteger(issueRow.locationConfigValueId))) {
       errors.push(`${rowLabel} requires a valid location.`);
     }
 
@@ -601,7 +990,9 @@ function validateIssueDetails(formData) {
       errors.push(`${rowLabel} has an invalid configured issue type.`);
     }
 
-    if (!issueRow.issueTypeConfigValueId && !issueRow.customIssueLabel) {
+    const isNoIssue = issueRow.isNoIssue === '1';
+
+    if (!isNoIssue && !issueRow.issueTypeConfigValueId && !issueRow.customIssueLabel) {
       errors.push(`${rowLabel} requires either a configured issue type or a custom issue.`);
     }
 
@@ -710,49 +1101,62 @@ function validateExpandedDetails(formData) {
 async function validateUnitForm(formData, formOptions, mode) {
   const errors = [];
 
+  normalizeCosmeticIssueRowsForSubmission(formData, formOptions);
+  normalizeHardwareIssueRowsForSubmission(formData, formOptions);
+
+  const validationFormData = buildManagedValidationFormData(formData);
+
   if (!formOptions.supported) {
     errors.push(formOptions.message || 'The units table is not ready yet.');
     return errors;
   }
 
-  if (!formData.lotId || !isPositiveInteger(formData.lotId)) {
+  if (!validationFormData.lotId || !isPositiveInteger(validationFormData.lotId)) {
     errors.push('A valid assignable lot is required.');
-  } else if (!isAssignableLotId(formData.lotId, formOptions)) {
+  } else if (!isAssignableLotId(validationFormData.lotId, formOptions)) {
     errors.push('Units can only be assigned to lots that do not have child lots. Choose a more specific child lot, or choose a standalone lot with no children.');
   }
 
-  if (!formData.unitCategoryConfigValueId || !isPositiveInteger(formData.unitCategoryConfigValueId)) {
+  if (!validationFormData.unitCategoryConfigValueId || !isPositiveInteger(validationFormData.unitCategoryConfigValueId)) {
     errors.push('Unit category is required.');
   }
 
-  if (!formData.currentUnitStatusConfigValueId || !isPositiveInteger(formData.currentUnitStatusConfigValueId)) {
+  if (!validationFormData.currentUnitStatusConfigValueId || !isPositiveInteger(validationFormData.currentUnitStatusConfigValueId)) {
     errors.push('Unit status is required.');
   }
 
-  if (formData.unitSerialNumber.length > 150) {
+  if (validationFormData.unitSerialNumber.length > 150) {
     errors.push('Unit serial number must be 150 characters or fewer.');
   }
 
-  if (formData.biosSerialNumber.length > 150) {
+  if (validationFormData.biosSerialNumber.length > 150) {
     errors.push('BIOS serial number must be 150 characters or fewer.');
   }
 
-  if (formData.ramGb && !isPositiveInteger(formData.ramGb)) {
-    errors.push('Memory total must be a positive whole number.');
+  if (validationFormData.previousRamGb && !isNonNegativeInteger(validationFormData.previousRamGb)) {
+    errors.push('Previous memory size must be a non-negative whole number.');
   }
 
-  if (formData.storageGb && !isPositiveInteger(formData.storageGb)) {
-    errors.push('Storage GB must be a positive whole number.');
+  if (validationFormData.ramGb && !isNonNegativeInteger(validationFormData.ramGb)) {
+    errors.push('Current memory total must be a non-negative whole number.');
   }
 
-  if (formData.processorModelId && !isPositiveInteger(formData.processorModelId)) {
+  if (validationFormData.previousStorageGb && !isNonNegativeInteger(validationFormData.previousStorageGb)) {
+    errors.push('Previous storage size must be a non-negative whole number.');
+  }
+
+  if (validationFormData.storageGb && !isNonNegativeInteger(validationFormData.storageGb)) {
+    errors.push('Current storage total must be a non-negative whole number.');
+  }
+
+  if (validationFormData.processorModelId && !isPositiveInteger(validationFormData.processorModelId)) {
     errors.push('Choose a valid processor from the compatibility catalog.');
   }
 
-  if (formData.unitModelId && formData.processorModelId && isPositiveInteger(formData.unitModelId) && isPositiveInteger(formData.processorModelId)) {
+  if (validationFormData.unitModelId && validationFormData.processorModelId && isPositiveInteger(validationFormData.unitModelId) && isPositiveInteger(validationFormData.processorModelId)) {
     const processorCompatibility = await techUnitModel.getProcessorCompatibilityStatus({
-      unitModelId: formData.unitModelId,
-      processorModelId: formData.processorModelId
+      unitModelId: validationFormData.unitModelId,
+      processorModelId: validationFormData.processorModelId
     });
 
     if (processorCompatibility.hasCatalog && !processorCompatibility.isSupported) {
@@ -760,30 +1164,36 @@ async function validateUnitForm(formData, formOptions, mode) {
     }
   }
 
-  if (!isPositiveOrZeroNumber(formData.processorSpeedGhz)) {
+  if (!isPositiveOrZeroNumber(validationFormData.processorSpeedGhz)) {
     errors.push('Processor speed must be a valid number.');
   }
 
-  if (formData.hardwareNotes.length > 1000) {
+  if (!isNumberInRangeWithPrecision(validationFormData.batteryHealthPercent, 0, 100, 1)) {
+    errors.push('Battery health must be a percentage from 0.0 through 100.0 with no more than one decimal place.');
+  }
+
+  if (validationFormData.hardwareNotes.length > 1000) {
     errors.push('Hardware notes must be 1000 characters or fewer.');
   }
 
-  if (formData.cosmeticNotes.length > 1000) {
+  if (validationFormData.cosmeticNotes.length > 1000) {
     errors.push('Cosmetic notes must be 1000 characters or fewer.');
   }
 
-  if (formOptions.canOverrideProductionWeight && formData.productionWeightOverride && !isPositiveOrZeroNumber(formData.productionWeightOverride)) {
+  if (formOptions.canOverrideProductionWeight && validationFormData.productionWeightOverride && !isPositiveOrZeroNumber(validationFormData.productionWeightOverride)) {
     errors.push('Production weight override must be a valid non-negative number.');
   }
 
-  if (formOptions.canOverrideProductionWeight && formData.productionWeightNotes && formData.productionWeightNotes.length > 500) {
+  if (formOptions.canOverrideProductionWeight && validationFormData.productionWeightNotes && validationFormData.productionWeightNotes.length > 500) {
     errors.push('Production weight notes must be 500 characters or fewer.');
   }
 
-  errors.push(...validateMemoryModules(formData));
-  errors.push(...validateStorageDevices(formData));
-  errors.push(...validateIssueDetails(formData));
-  errors.push(...validateExpandedDetails(formData));
+  errors.push(...validateMemoryModules(validationFormData, 'previousMemoryModules', 'Previous memory module'));
+  errors.push(...validateMemoryModules(validationFormData));
+  errors.push(...validateStorageDevices(validationFormData, 'previousStorageDevices', 'Previous storage device'));
+  errors.push(...validateStorageDevices(validationFormData));
+  errors.push(...validateIssueDetails(validationFormData));
+  errors.push(...validateExpandedDetails(validationFormData));
 
   return errors;
 }
@@ -856,7 +1266,8 @@ async function getDuplicateAssumptionRecoveryView(req, formData) {
       unitSerialNumber,
       biosSerialNumber,
       destinationLotId,
-      actorRoleCodes: getCurrentRoleCodes(req)
+      actorRoleCodes: getCurrentRoleCodes(req),
+      actorUserId: req.currentUser ? req.currentUser.user_id : null
     })
     : [];
 
@@ -875,12 +1286,15 @@ async function renderEarlySerialDuplicateCheck(req, res, next) {
     const biosSerialNumber = normalizeSerialInput(req.query.biosSerialNumber).slice(0, 150);
     const hasSerialSearch = Boolean(unitSerialNumber || biosSerialNumber);
     const destinationLotId = String(req.query.destinationLotId || '').trim();
+    const currentUnitId = normalizePositiveInteger(req.query.currentUnitId);
     const duplicateMatches = hasSerialSearch
       ? await techUnitModel.getDuplicateAssumptionCandidates({
         unitSerialNumber,
         biosSerialNumber,
         destinationLotId,
-        actorRoleCodes: getCurrentRoleCodes(req)
+        actorRoleCodes: getCurrentRoleCodes(req),
+        actorUserId: req.currentUser ? req.currentUser.user_id : null,
+        currentUnitId
       })
       : [];
 
@@ -890,7 +1304,8 @@ async function renderEarlySerialDuplicateCheck(req, res, next) {
       duplicateMatches,
       hasSerialSearch,
       destinationLotId,
-      canRequestIntentionalDuplicate: isRegularTechIntentionalDuplicateRequester(req)
+      isEditDuplicateCheck: Boolean(currentUnitId),
+      canRequestIntentionalDuplicate: !currentUnitId && isRegularTechIntentionalDuplicateRequester(req)
     });
   } catch (error) {
     next(error);
@@ -961,17 +1376,26 @@ function buildIntentionalDuplicateRequestSnapshot({ formData, formOptions, candi
     graphicsAdapters: []
   }));
 
+  const requestedManufacturerLabel = selectedManufacturer ? selectedManufacturer.name : '—';
+  const requestedModelLabel = selectedModel ? selectedModel.modelName : '—';
+  const existingManufacturerLabel = candidate && candidate.manufacturerLabel ? candidate.manufacturerLabel : '—';
+  const existingModelLabel = candidate && candidate.modelLabel ? candidate.modelLabel : '—';
+
   return {
-    version: 1,
+    version: 2,
     formData: safeFormData,
     display: {
       destinationLotName: selectedLot ? selectedLot.lot_name : 'Lot name not available',
       unitCategoryLabel: getOptionLabel(formOptions.unitCategories, formData.unitCategoryConfigValueId) || '—',
-      manufacturerLabel: selectedManufacturer ? selectedManufacturer.name : '—',
-      modelLabel: selectedModel ? selectedModel.modelName : '—',
+      manufacturerLabel: requestedManufacturerLabel,
+      modelLabel: requestedModelLabel,
       processorLabel: selectedProcessor ? selectedProcessor.label : '—',
       operatingSystemLabel: getOptionLabel(formOptions.operatingSystems, formData.operatingSystemConfigValueId) || '—',
-      serialSummary: `Unit Serial: ${formData.unitSerialNumber || '—'}; BIOS Serial: ${formData.biosSerialNumber || '—'}`
+      serialSummary: `Unit Serial: ${formData.unitSerialNumber || '—'}; BIOS Serial: ${formData.biosSerialNumber || '—'}`,
+      existingManufacturerLabel,
+      existingModelLabel,
+      manufacturerDiffers: existingManufacturerLabel !== '—' && requestedManufacturerLabel !== '—' && existingManufacturerLabel !== requestedManufacturerLabel,
+      modelDiffers: existingModelLabel !== '—' && requestedModelLabel !== '—' && existingModelLabel !== requestedModelLabel
     },
     capturedAt: new Date().toISOString(),
     selectedMatchingUnitId: Number(candidate.unitId)
@@ -990,6 +1414,8 @@ function buildMatchedUnitSnapshot(candidate) {
     lotName: candidate && candidate.lotName ? candidate.lotName : '',
     unitSerialNumber: candidate && candidate.unitSerialNumber ? candidate.unitSerialNumber : '',
     biosSerialNumber: candidate && candidate.biosSerialNumber ? candidate.biosSerialNumber : '',
+    manufacturerLabel: candidate && candidate.manufacturerLabel ? candidate.manufacturerLabel : '',
+    modelLabel: candidate && candidate.modelLabel ? candidate.modelLabel : '',
     modelSummary: candidate && candidate.modelSummary ? candidate.modelSummary : '',
     cpuSummary: candidate && candidate.cpuSummary ? candidate.cpuSummary : '',
     assignedToName: candidate && candidate.assignedToName ? candidate.assignedToName : '',
@@ -1043,7 +1469,8 @@ async function getDuplicateAssumptionCandidateForRequest(req, unitId) {
   const formData = getDuplicateAssumptionRequestData(req);
   const candidates = await techUnitModel.getDuplicateAssumptionCandidates({
     ...formData,
-    actorRoleCodes: getCurrentRoleCodes(req)
+    actorRoleCodes: getCurrentRoleCodes(req),
+    actorUserId: req.currentUser ? req.currentUser.user_id : null
   });
 
   return {
@@ -1117,6 +1544,11 @@ async function assumeExistingTechUnitFromDuplicateMatch(req, res, next) {
       }));
     }
 
+    const destinationValidation = await unitLotDestinationValidationModel.assertExistingUnitDestination({
+      unitId,
+      destinationLotId: formData.destinationLotId
+    });
+
     const result = await techUnitModel.assumeExistingTechUnitFromDuplicateMatch({
       unitId,
       ...formData,
@@ -1130,7 +1562,14 @@ async function assumeExistingTechUnitFromDuplicateMatch(req, res, next) {
       req.session.duplicateAssumptionCreateNonce = crypto.randomUUID();
     }
 
-    const redirectUrl = `/tech/units?assumed=1&unitId=${encodeURIComponent(result.unitId)}`;
+    const assumptionParams = new URLSearchParams({
+      assumed: '1',
+      unitId: String(result.unitId)
+    });
+    if (destinationValidation.warningMessages.length > 0) {
+      assumptionParams.set('destinationWarning', destinationValidation.warningMessages.join(' ').slice(0, 1000));
+    }
+    const redirectUrl = `/tech/units?${assumptionParams.toString()}`;
 
     if (isHtmxRequest(req)) {
       res.set('HX-Redirect', redirectUrl);
@@ -1362,6 +1801,7 @@ async function getTechUnitFormOptionsWithIssues(req = null, options = {}) {
     ...formOptions,
     ...issueFormOptions,
     ...expandedFormOptions,
+    canViewProductionWeight: userCanViewProductionWeight(req),
     canOverrideProductionWeight: userCanOverrideProductionWeight(req),
     canRequestCatalogException: canRequestCatalogException(req)
   };
@@ -1425,6 +1865,77 @@ async function saveExpandedDetailsIfPossible(unitId, formData, currentUserId) {
   });
 }
 
+async function createTechUnitWithAudit({ formData, formOptions, currentUserId }) {
+  return techUnitModel.createTechUnit(formData, currentUserId, {
+    beforeCommit: async ({ connection, unitId, assetNumber }) => {
+      await unitIssueEntryModel.saveIssueDetailsForUnitWithConnection(connection, {
+        unitId,
+        formData,
+        currentUserId
+      });
+      await unitExpandedFormModel.saveExpandedDetailsForUnitWithConnection(connection, {
+        unitId,
+        formData,
+        currentUserId
+      });
+
+      const event = buildUnitFormAuditEvent({
+        mode: 'create',
+        unitId,
+        actorUserId: currentUserId,
+        afterFormData: {
+          ...formData,
+          assetTag: techUnitModel.getDisplayAssetTag(assetNumber)
+        },
+        formOptions
+      });
+
+      await unitAuditEventModel.createUnitAuditEvent(event, connection);
+    }
+  });
+}
+
+async function updateTechUnitWithAudit({
+  unitId,
+  formData,
+  existingFormData,
+  formOptions,
+  currentUserId,
+  actorRoleCodes
+}) {
+  return techUnitModel.updateTechUnit(unitId, formData, currentUserId, {
+    actorRoleCodes,
+    beforeCommit: async ({ connection }) => {
+      await unitIssueEntryModel.saveIssueDetailsForUnitWithConnection(connection, {
+        unitId,
+        formData,
+        currentUserId
+      });
+      await unitExpandedFormModel.saveExpandedDetailsForUnitWithConnection(connection, {
+        unitId,
+        formData,
+        currentUserId
+      });
+
+      const event = buildUnitFormAuditEvent({
+        mode: 'edit',
+        unitId,
+        actorUserId: currentUserId,
+        beforeFormData: existingFormData,
+        afterFormData: {
+          ...formData,
+          assetTag: existingFormData && existingFormData.assetTag
+        },
+        formOptions
+      });
+
+      if (event.changes.length > 0) {
+        await unitAuditEventModel.createUnitAuditEvent(event, connection);
+      }
+    }
+  });
+}
+
 async function buildLotRequirementWorkflowForForm({
   formData,
   formOptions,
@@ -1454,6 +1965,116 @@ function appendLotRequirementBlockingError(errorMessages, workflow) {
   return errorMessages;
 }
 
+function appendUniqueMessages(target, messages) {
+  (Array.isArray(messages) ? messages : []).forEach((message) => {
+    if (message && !target.includes(message)) {
+      target.push(message);
+    }
+  });
+
+  return target;
+}
+
+async function applyLatestLotUnitFormSubmissionPolicy({
+  mode,
+  formData,
+  formOptions,
+  existingFormData = null
+} = {}) {
+  const lotId = Number(formData && formData.lotId);
+
+  if (!Number.isSafeInteger(lotId) || lotId <= 0 || !isAssignableLotId(lotId, formOptions)) {
+    return {
+      formData,
+      errors: [],
+      fieldErrors: []
+    };
+  }
+
+  try {
+    const profile = await lotUnitFormProfileModel.getRequirementAwareUnitFormProfileForLot(lotId);
+
+    return applyUnitFormSubmissionPolicy({
+      mode,
+      submittedFormData: formData,
+      existingFormData,
+      profile
+    });
+  } catch (error) {
+    console.error('Authoritative Lot Unit form validation failed:', error);
+
+    const databaseSetupError = error && (
+      error.code === 'ER_NO_SUCH_TABLE'
+      || error.code === 'ER_BAD_FIELD_ERROR'
+    );
+    const message = databaseSetupError
+      ? 'The Lot Unit form configuration database setup is incomplete. Ask an administrator to verify the latest Lots migrations.'
+      : 'The latest Lot Unit form configuration could not be verified. Saving is paused; refresh the form and try again.';
+
+    return {
+      formData,
+      errors: [message],
+      fieldErrors: []
+    };
+  }
+}
+
+async function prepareTechUnitFormSubmission({
+  mode,
+  formData,
+  formOptions,
+  unitId = null
+} = {}) {
+  const existingFormData = mode === 'edit'
+    ? await buildEditFormData(unitId, formOptions)
+    : null;
+
+  if (mode === 'edit' && !existingFormData) {
+    return {
+      notFound: true,
+      formData,
+      errorMessages: [],
+      fieldErrors: [],
+      lotRequirementWorkflow: null
+    };
+  }
+
+  normalizeCosmeticIssueRowsForSubmission(formData, formOptions);
+  normalizeHardwareIssueRowsForSubmission(formData, formOptions);
+
+  const submissionPolicy = await applyLatestLotUnitFormSubmissionPolicy({
+    mode,
+    formData,
+    formOptions,
+    existingFormData
+  });
+  const authoritativeFormData = submissionPolicy.formData;
+
+  const errorMessages = [];
+
+  appendUniqueMessages(errorMessages, submissionPolicy.errors);
+  appendUniqueMessages(
+    errorMessages,
+    await validateUnitForm(authoritativeFormData, formOptions, mode)
+  );
+
+  const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({
+    formData: authoritativeFormData,
+    formOptions,
+    unitId
+  });
+  appendLotRequirementBlockingError(errorMessages, lotRequirementWorkflow);
+
+  return {
+    notFound: false,
+    formData: authoritativeFormData,
+    errorMessages,
+    fieldErrors: submissionPolicy.fieldErrors || [],
+    lotRequirementWorkflow,
+    existingFormData
+  };
+}
+
 function getLotRequirementPreviewUnitId(req) {
   const mode = String(req && req.body ? req.body.lotRequirementMode || '' : '').trim().toLowerCase();
   const unitId = Number(req && req.body ? req.body.lotRequirementUnitId : 0);
@@ -1479,6 +2100,64 @@ async function getBlankFormDataWithDefaults(req = null) {
   };
 }
 
+function streamTechUnitBrowserChanges(req, res) {
+  res.status(200);
+  res.set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+
+  if (typeof res.flushHeaders === 'function') {
+    res.flushHeaders();
+  }
+
+  if (res.socket) {
+    res.socket.setTimeout(0);
+    res.socket.setKeepAlive(true);
+  }
+
+  res.write('retry: 3000\n\n');
+
+  const sendChange = (change) => {
+    if (res.writableEnded || res.destroyed) {
+      return;
+    }
+
+    res.write(`id: ${change.eventId}\n`);
+    res.write('event: unit-browser-change\n');
+    res.write(`data: ${JSON.stringify(change)}\n\n`);
+
+    if (typeof res.flush === 'function') {
+      res.flush();
+    }
+  };
+
+  const unsubscribe = subscribeToUnitBrowserChanges(sendChange);
+  const heartbeat = setInterval(() => {
+    if (!res.writableEnded && !res.destroyed) {
+      res.write(': keep-alive\n\n');
+    }
+  }, 20000);
+
+  heartbeat.unref();
+
+  let cleanedUp = false;
+  const cleanup = () => {
+    if (cleanedUp) {
+      return;
+    }
+
+    cleanedUp = true;
+    clearInterval(heartbeat);
+    unsubscribe();
+  };
+
+  req.on('close', cleanup);
+  res.on('close', cleanup);
+}
+
 async function renderTechUnitsPage(req, res, next) {
   try {
     const filters = getFiltersFromRequest(req);
@@ -1490,6 +2169,8 @@ async function renderTechUnitsPage(req, res, next) {
       result,
       filters: result.filters || filters,
       tableUrl: buildTechUnitsTableUrl(result.filters || filters),
+      qcSummaryUrl: buildTechUnitsQcSummaryUrl(result.filters || filters, req),
+      exportPreviewUrl: buildTechUnitsExportPreviewUrl(result.filters || filters),
       successMessage: req.query.created === '1'
         ? 'Unit created successfully.'
         : req.query.updated === '1'
@@ -1504,10 +2185,156 @@ async function renderTechUnitsPage(req, res, next) {
                   ? 'Unit returned to Active successfully.'
                   : req.query.assumed === '1'
                     ? 'Existing unit assumed successfully. Its current lot and assignment now reflect the selected work lot; prior history and earned credit were retained.'
-                    : null
+                    : null,
+      warningMessage: String(req.query.destinationWarning || '').trim().slice(0, 1000) || null
     });
   } catch (error) {
     next(error);
+  }
+}
+
+async function renderTechUnitsExportPreview(req, res) {
+  if (!canExportTechUnits(req)) {
+    return res.status(403).render('fragments/tech-unit-export-preview-modal', {
+      dataset: null,
+      availableColumns: UNIT_EXPORT_COLUMNS,
+      previewRows: [],
+      csvDownloadUrl: '',
+      xlsxDownloadUrl: '',
+      errorMessages: ['Only Admin and Management users can export Unit data.']
+    });
+  }
+
+  try {
+    const filters = getFiltersFromRequest(req);
+    const fullDataset = await unitExportService.buildFilteredUnitExportDataset(filters);
+    const columnSelection = getUnitExportColumnSelection(req);
+    const dataset = unitExportService.applyUnitExportColumnSelection(fullDataset, columnSelection.value, columnSelection);
+
+    return res.render('fragments/tech-unit-export-preview-modal', {
+      dataset,
+      availableColumns: UNIT_EXPORT_COLUMNS,
+      previewRows: dataset.rows,
+      csvDownloadUrl: buildTechUnitsExportDownloadUrl('csv', dataset.filters),
+      xlsxDownloadUrl: buildTechUnitsExportDownloadUrl('xlsx', dataset.filters),
+      errorMessages: []
+    });
+  } catch (error) {
+    console.error('Filtered Unit export preview could not be prepared:', error);
+    return res.render('fragments/tech-unit-export-preview-modal', {
+      dataset: null,
+      availableColumns: UNIT_EXPORT_COLUMNS,
+      previewRows: [],
+      csvDownloadUrl: '',
+      xlsxDownloadUrl: '',
+      errorMessages: [error && error.message
+        ? error.message
+        : 'The filtered Unit export preview could not be prepared.']
+    });
+  }
+}
+
+
+async function downloadTechUnitsExport(req, res, next, format) {
+  if (!canExportTechUnits(req)) {
+    return res.status(403).type('text/plain').send('Only Admin and Management users can export Unit data.');
+  }
+
+  try {
+    const filters = getFiltersFromRequest(req);
+    const fullDataset = await unitExportService.buildFilteredUnitExportDataset(filters);
+    const columnSelection = getUnitExportColumnSelection(req);
+    const dataset = unitExportService.applyUnitExportColumnSelection(fullDataset, columnSelection.value, columnSelection);
+    const normalizedFormat = String(format || '').trim().toLowerCase();
+    const fileBuffer = normalizedFormat === 'csv'
+      ? unitExportFileService.buildCsvBuffer(dataset)
+      : unitExportFileService.buildXlsxWorkbookBuffer(dataset);
+    const contentType = normalizedFormat === 'csv'
+      ? unitExportFileService.CSV_CONTENT_TYPE
+      : unitExportFileService.XLSX_CONTENT_TYPE;
+    const filename = unitExportFileService.buildUnitExportFilename(normalizedFormat, dataset.filters);
+
+    res.status(200);
+    res.set({
+      'Content-Type': contentType,
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(fileBuffer.length),
+      'Cache-Control': 'no-store, max-age=0',
+      Pragma: 'no-cache',
+      'X-Content-Type-Options': 'nosniff'
+    });
+
+    return res.send(fileBuffer);
+  } catch (error) {
+    if (error && error.code === 'BWT_UNIT_EXPORT_COLUMNS_REQUIRED') {
+      return res.status(400).type('text/plain').send(error.message);
+    }
+
+    return next(error);
+  }
+}
+
+async function downloadTechUnitsCsv(req, res, next) {
+  return downloadTechUnitsExport(req, res, next, 'csv');
+}
+
+async function downloadTechUnitsXlsx(req, res, next) {
+  return downloadTechUnitsExport(req, res, next, 'xlsx');
+}
+
+async function renderTechUnitsQcSummary(req, res) {
+  const technicianUserId = resolveQcSummaryTechnicianUserId(req);
+
+  try {
+    let summary;
+    let scopeLabel;
+    let gradedTechnicians = null;
+
+    if (technicianUserId) {
+      summary = await qcGradingModel.getTechnicianQcGradeSummary(technicianUserId);
+      const subject = await qcGradingModel.getQcGradingTechnician(technicianUserId);
+      scopeLabel = subject
+        ? subject.displayName
+        : (technicianUserId === normalizePositiveInteger(req.currentUser && req.currentUser.user_id)
+          ? getCurrentUserDisplayName(req)
+          : `User #${technicianUserId}`);
+    } else {
+      const overall = await qcGradingModel.getOverallQcGradeSummary();
+      summary = overall.summary;
+      gradedTechnicians = overall.gradedTechnicians;
+      scopeLabel = 'All reviewed technicians';
+    }
+
+    const version = crypto
+      .createHash('sha256')
+      .update(JSON.stringify({ summary, scopeLabel, gradedTechnicians }))
+      .digest('hex')
+      .slice(0, 24);
+
+    return res.render('fragments/tech-units-qc-summary', {
+      qcSummary: {
+        available: true,
+        summary,
+        scopeLabel,
+        gradedTechnicians,
+        version
+      }
+    });
+  } catch (error) {
+    if (!error || error.code !== 'BWT_QC_SCHEMA_REQUIRED') {
+      console.error('QC grading summary could not be loaded:', error);
+    }
+
+    return res.render('fragments/tech-units-qc-summary', {
+      qcSummary: {
+        available: false,
+        scopeLabel: technicianUserId ? 'Selected technician' : 'All reviewed technicians',
+        message: error && error.code === 'BWT_QC_SCHEMA_REQUIRED'
+          ? 'QC grading will appear after the Quality Control storage migration is validated.'
+          : 'QC grading is temporarily unavailable. Unit browsing remains available.',
+        version: 'unavailable'
+      }
+    });
   }
 }
 
@@ -1526,6 +2353,38 @@ async function renderTechUnitsTable(req, res, next) {
 }
 
 
+async function buildSingleTechUnitResult(req, unitId) {
+  const unitRecord = await techUnitModel.getUnitById(unitId);
+
+  if (!unitRecord) {
+    return null;
+  }
+
+  const exactUnitSearch = String(
+    unitRecord.asset_number
+    || unitRecord.unit_serial_number
+    || unitRecord.bios_serial_number
+    || ''
+  ).trim();
+  const filters = {
+    unitId: String(unitId),
+    search: exactUnitSearch,
+    unitState: Number(unitRecord.is_parked || 0) === 1 ? 'parked' : 'active',
+    page: '1',
+    perPage: '10',
+    currentUserId: req.currentUser.user_id,
+    restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req),
+    canViewParkedUnits: canViewParkedUnits(req)
+  };
+  const result = await buildTechUnitsResult(filters);
+
+  if (!result.supported || !Array.isArray(result.units) || result.units.length !== 1) {
+    return null;
+  }
+
+  return { result, filters };
+}
+
 async function renderTechUnitDetailPage(req, res, next) {
   try {
     const unitId = Number(req.params.unitId);
@@ -1537,27 +2396,9 @@ async function renderTechUnitDetailPage(req, res, next) {
       });
     }
 
-    const unitRecord = await techUnitModel.getUnitById(unitId);
+    const context = await buildSingleTechUnitResult(req, unitId);
 
-    if (!unitRecord) {
-      return res.status(404).render('pages/not-found', {
-        pageTitle: 'Unit Not Found',
-        requestedPath: req.originalUrl
-      });
-    }
-
-    const filters = {
-      unitId: String(unitId),
-      unitState: Number(unitRecord.is_parked || 0) === 1 ? 'parked' : 'active',
-      page: '1',
-      perPage: '10',
-      currentUserId: req.currentUser.user_id,
-      restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req),
-      canViewParkedUnits: canViewParkedUnits(req)
-    };
-    const result = await buildTechUnitsResult(filters);
-
-    if (!result.supported || !Array.isArray(result.units) || result.units.length !== 1) {
+    if (!context) {
       return res.status(404).render('pages/not-found', {
         pageTitle: 'Unit Not Found',
         requestedPath: req.originalUrl
@@ -1565,10 +2406,383 @@ async function renderTechUnitDetailPage(req, res, next) {
     }
 
     return res.render('pages/tech-unit-detail', {
-      pageTitle: result.units[0].assetTag || `Unit ${unitId}`,
+      pageTitle: context.result.units[0].assetTag || `Unit ${unitId}`,
       currentNav: 'tech-units',
-      result,
-      filters
+      result: context.result,
+      filters: context.filters
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderTechUnitRecord(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+
+    if (!Number.isSafeInteger(unitId) || unitId <= 0) {
+      return res.status(404).send('Unit not found.');
+    }
+
+    const context = await buildSingleTechUnitResult(req, unitId);
+
+    if (!context) {
+      return res.status(404).send('Unit not found.');
+    }
+
+    return res.render('fragments/tech-units-table', {
+      result: context.result,
+      filters: context.filters,
+      singleUnitView: true
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+
+function buildQcReviewModalView({
+  unit = null,
+  latestCompletion = null,
+  latestQcReview = null,
+  latestQcCorrection = null,
+  decisionCode = '',
+  reviewNotes = '',
+  errorMessages = []
+} = {}) {
+  const safeDecisionCode = ['accepted', 'rejected'].includes(String(decisionCode || '').trim().toLowerCase())
+    ? String(decisionCode).trim().toLowerCase()
+    : '';
+
+  return {
+    unit,
+    latestCompletion,
+    latestQcReview,
+    latestQcCorrection,
+    decisionCode: safeDecisionCode,
+    decisionLabel: safeDecisionCode === 'accepted' ? 'Accept' : (safeDecisionCode === 'rejected' ? 'Reject' : ''),
+    reviewNotes: String(reviewNotes || ''),
+    errorMessages: Array.isArray(errorMessages) ? errorMessages : []
+  };
+}
+
+async function getQcReviewContext(unitId) {
+  const safeUnitId = Number(unitId);
+  if (!Number.isSafeInteger(safeUnitId) || safeUnitId <= 0) {
+    return {
+      unit: null,
+      latestCompletion: null,
+      latestQcReview: null,
+      latestQcCorrection: null,
+      qcReviewHistory: [],
+      qcCorrectionHistory: []
+    };
+  }
+
+  const [unit, latestCompletionMap] = await Promise.all([
+    techUnitModel.getTechUnitLifecycleSummaryById(safeUnitId),
+    techUnitModel.getLatestWorkCompletionMapForUnits([safeUnitId])
+  ]);
+  const latestCompletion = latestCompletionMap.get(safeUnitId) || null;
+  const [qcReviewHistory, qcCorrectionHistory] = latestCompletion
+    ? await Promise.all([
+      unitQcCheckModel.listQcChecksForCompletion(latestCompletion.unitWorkCompletionId),
+      unitQcCorrectionModel.listCorrectionsForCompletion(latestCompletion.unitWorkCompletionId)
+    ])
+    : [[], []];
+  const latestQcReview = qcReviewHistory.at(-1) || null;
+  const latestQcCorrection = latestQcReview && latestQcReview.decisionCode === 'rejected'
+    ? qcCorrectionHistory
+      .filter((correction) => Number(correction.rejectedQcCheckId) === Number(latestQcReview.qcCheckId))
+      .at(-1) || null
+    : null;
+
+  return {
+    unit,
+    latestCompletion,
+    latestQcReview,
+    latestQcCorrection,
+    qcReviewHistory,
+    qcCorrectionHistory
+  };
+}
+
+async function renderQcReviewModal(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+    const decisionCode = String(req.params.decisionCode || '').trim().toLowerCase();
+    const context = await getQcReviewContext(unitId);
+    const errors = [];
+
+    if (!Number.isSafeInteger(unitId) || unitId <= 0) {
+      errors.push('The selected unit ID is invalid.');
+    } else if (!['accepted', 'rejected'].includes(decisionCode)) {
+      errors.push('The selected Quality Control action is invalid.');
+    } else if (!context.unit) {
+      errors.push('The selected unit could not be found.');
+    } else if (context.unit.isParked) {
+      errors.push('Return this unit to Active before recording a Quality Control decision.');
+    } else if (!context.latestCompletion) {
+      errors.push('Quality Control can review a unit only after its current work cycle has been completed.');
+    } else if (context.latestQcReview && context.latestQcReview.decisionCode === 'accepted') {
+      errors.push('This completion cycle has already been accepted by Quality Control. Reverse completion and record a new completion cycle before reviewing it again.');
+    } else if (context.latestQcReview && context.latestQcReview.decisionCode === 'rejected' && !context.latestQcCorrection) {
+      errors.push('The assigned technician must mark this Unit corrected before Quality Control can review it again.');
+    }
+
+    return res.status(errors.length > 0 ? 400 : 200).render('fragments/tech-unit-qc-review-modal', buildQcReviewModalView({
+      ...context,
+      decisionCode,
+      errorMessages: errors
+    }));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function recordQcReview(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+    const decisionCode = String(req.body.decisionCode || '').trim().toLowerCase();
+    const reviewNotes = String(req.body.reviewNotes || '').trim();
+    const context = await getQcReviewContext(unitId);
+    const errors = [];
+
+    if (!Number.isSafeInteger(unitId) || unitId <= 0) {
+      errors.push('The selected unit ID is invalid.');
+    } else if (!['accepted', 'rejected'].includes(decisionCode)) {
+      errors.push('Choose Accept or Reject.');
+    } else if (!context.unit) {
+      errors.push('The selected unit could not be found.');
+    } else if (context.unit.isParked) {
+      errors.push('Return this unit to Active before recording a Quality Control decision.');
+    } else if (!context.latestCompletion) {
+      errors.push('Quality Control can review a unit only after its current work cycle has been completed.');
+    } else if (context.latestQcReview && context.latestQcReview.decisionCode === 'accepted') {
+      errors.push('This completion cycle has already been accepted by Quality Control. Reverse completion and record a new completion cycle before reviewing it again.');
+    } else if (context.latestQcReview && context.latestQcReview.decisionCode === 'rejected' && !context.latestQcCorrection) {
+      errors.push('The assigned technician must mark this Unit corrected before Quality Control can review it again.');
+    }
+
+    if (reviewNotes.length > 2000) {
+      errors.push('QC notes must be 2,000 characters or fewer.');
+    }
+
+    if (decisionCode === 'rejected' && !reviewNotes) {
+      errors.push('A rejection reason is required.');
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).render('fragments/tech-unit-qc-review-modal', buildQcReviewModalView({
+        ...context,
+        decisionCode,
+        reviewNotes,
+        errorMessages: errors
+      }));
+    }
+
+    await unitQcCheckModel.recordQcReview({
+      unitId,
+      unitWorkCompletionId: context.latestCompletion.unitWorkCompletionId,
+      reviewedByUserId: req.currentUser.user_id,
+      decisionCode,
+      reviewNotes
+    });
+
+    publishUnitBrowserChange({ unitId, changeType: 'qc-reviewed' });
+    res.set('HX-Trigger', JSON.stringify({ 'unit-saved': true, 'qc-review-recorded': true }));
+    return res.send('');
+  } catch (error) {
+    const unitId = Number(req.params.unitId);
+    let context = { unit: null, latestCompletion: null, latestQcReview: null };
+
+    try {
+      context = await getQcReviewContext(unitId);
+    } catch (contextError) {
+      // Preserve the original save failure and still return a usable modal response.
+    }
+
+    if (['BWT_QC_SCHEMA_REQUIRED', 'BWT_QC_COMPLETION_NOT_FOUND', 'BWT_QC_COMPLETION_STALE', 'BWT_QC_UNIT_PARKED', 'BWT_QC_RECHECK_NOT_READY', 'BWT_QC_REVIEW_FINAL'].includes(error.code)) {
+      return res.status(error.code === 'BWT_QC_COMPLETION_NOT_FOUND' ? 404 : 409).render('fragments/tech-unit-qc-review-modal', buildQcReviewModalView({
+        ...context,
+        decisionCode: req.body.decisionCode,
+        reviewNotes: req.body.reviewNotes,
+        errorMessages: [error.message]
+      }));
+    }
+
+    console.error('Quality Control review save failed:', error);
+    return res.status(500).render('fragments/tech-unit-qc-review-modal', buildQcReviewModalView({
+      ...context,
+      decisionCode: req.body.decisionCode,
+      reviewNotes: req.body.reviewNotes,
+      errorMessages: ['The Quality Control decision could not be saved. No review was recorded. Refresh and try again; if the problem continues, contact an administrator.']
+    }));
+  }
+}
+
+function canSubmitQcCorrection(req, unit) {
+  if (!unit || unit.isParked) return false;
+  const roleCodes = getCurrentRoleCodes(req);
+
+  if (roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode))) {
+    return true;
+  }
+
+  return roleCodes.includes('tech')
+    && Number(unit.assignedToUserId) === Number(req.currentUser && req.currentUser.user_id);
+}
+
+function buildQcCorrectionModalView({ context = {}, correctionNotes = '', errorMessages = [] } = {}) {
+  return {
+    ...context,
+    correctionNotes: String(correctionNotes || ''),
+    errorMessages: Array.isArray(errorMessages) ? errorMessages : []
+  };
+}
+
+async function renderQcCorrectionModal(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+    const context = await getQcReviewContext(unitId);
+    const errors = [];
+
+    if (!Number.isSafeInteger(unitId) || unitId <= 0) {
+      errors.push('The selected Unit ID is invalid.');
+    } else if (!context.unit) {
+      errors.push('The selected Unit could not be found.');
+    } else if (!canSubmitQcCorrection(req, context.unit)) {
+      errors.push('You do not have permission to mark this Unit corrected.');
+    } else if (!context.latestCompletion) {
+      errors.push('This Unit is not currently completed.');
+    } else if (!context.latestQcReview || context.latestQcReview.decisionCode !== 'rejected') {
+      errors.push('This Unit does not have a current QC rejection to correct.');
+    } else if (context.latestQcCorrection) {
+      errors.push('This Unit is already marked corrected and ready for QC recheck.');
+    }
+
+    return res.status(errors.length > 0 ? 400 : 200).render(
+      'fragments/tech-unit-qc-correction-modal',
+      buildQcCorrectionModalView({ context, errorMessages: errors })
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function submitQcCorrection(req, res, next) {
+  const unitId = Number(req.params.unitId);
+  const correctionNotes = String(req.body.correctionNotes || '').trim();
+
+  try {
+    const context = await getQcReviewContext(unitId);
+    const errors = [];
+
+    if (!Number.isSafeInteger(unitId) || unitId <= 0) {
+      errors.push('The selected Unit ID is invalid.');
+    } else if (!context.unit) {
+      errors.push('The selected Unit could not be found.');
+    } else if (!canSubmitQcCorrection(req, context.unit)) {
+      errors.push('You do not have permission to mark this Unit corrected.');
+    } else if (!context.latestCompletion) {
+      errors.push('This Unit is not currently completed.');
+    } else if (!context.latestQcReview || context.latestQcReview.decisionCode !== 'rejected') {
+      errors.push('This Unit does not have a current QC rejection to correct.');
+    } else if (context.latestQcCorrection) {
+      errors.push('This Unit is already marked corrected and ready for QC recheck.');
+    }
+
+    if (correctionNotes.length > 2000) {
+      errors.push('Correction notes must be 2,000 characters or fewer.');
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).render(
+        'fragments/tech-unit-qc-correction-modal',
+        buildQcCorrectionModalView({ context, correctionNotes, errorMessages: errors })
+      );
+    }
+
+    await unitQcCorrectionModel.recordCorrectionSubmission({
+      unitId,
+      unitWorkCompletionId: context.latestCompletion.unitWorkCompletionId,
+      rejectedQcCheckId: context.latestQcReview.qcCheckId,
+      submittedByUserId: req.currentUser.user_id,
+      submittedByRoleCodes: getCurrentRoleCodes(req),
+      correctionNotes
+    });
+
+    publishUnitBrowserChange({ unitId, changeType: 'qc-correction-submitted' });
+    res.set('HX-Trigger', JSON.stringify({ 'unit-saved': true, 'qc-correction-submitted': true }));
+    return res.send('');
+  } catch (error) {
+    let context = { unit: null, latestCompletion: null, latestQcReview: null, latestQcCorrection: null };
+    try {
+      context = await getQcReviewContext(unitId);
+    } catch (contextError) {
+      // Preserve the original write failure.
+    }
+
+    const handledCodes = new Set([
+      'BWT_QC_CORRECTION_SCHEMA_REQUIRED',
+      'BWT_QC_CORRECTION_COMPLETION_NOT_FOUND',
+      'BWT_QC_CORRECTION_UNIT_PARKED',
+      'BWT_QC_CORRECTION_COMPLETION_STALE',
+      'BWT_QC_CORRECTION_PERMISSION_CHANGED',
+      'BWT_QC_CORRECTION_STALE_REJECTION',
+      'BWT_QC_CORRECTION_ALREADY_SUBMITTED'
+    ]);
+
+    if (handledCodes.has(error.code)) {
+      return res.status(409).render(
+        'fragments/tech-unit-qc-correction-modal',
+        buildQcCorrectionModalView({ context, correctionNotes, errorMessages: [error.message] })
+      );
+    }
+
+    console.error('QC correction submission failed:', error);
+    return res.status(500).render(
+      'fragments/tech-unit-qc-correction-modal',
+      buildQcCorrectionModalView({
+        context,
+        correctionNotes,
+        errorMessages: ['The correction could not be saved. No workflow change was recorded. Refresh and try again.']
+      })
+    );
+  }
+}
+
+function canViewQcReviewDetails(req, unit) {
+  if (!unit) return false;
+  if (unit.isParked && !canViewParkedUnits(req)) return false;
+  if (!isRegularTechUnitBrowserUser(req)) return true;
+
+  return Number(unit.assignedToUserId) === Number(req.currentUser && req.currentUser.user_id);
+}
+
+async function renderQcReviewDetailsModal(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+    const context = await getQcReviewContext(unitId);
+    const errors = [];
+
+    if (!Number.isSafeInteger(unitId) || unitId <= 0) {
+      errors.push('The selected unit ID is invalid.');
+    } else if (!context.unit) {
+      errors.push('The selected unit could not be found.');
+    } else if (!canViewQcReviewDetails(req, context.unit)) {
+      errors.push('You do not have access to this Unit review.');
+    } else if (!context.latestQcReview) {
+      errors.push('No Quality Control decision has been recorded for this unit.');
+    }
+
+    return res.status(errors.length > 0 ? 404 : 200).render('fragments/tech-unit-qc-review-details-modal', {
+      ...context,
+      qcStatusPresentation: buildQcStatusPresentation({
+        reviews: context.qcReviewHistory,
+        corrections: context.qcCorrectionHistory
+      }),
+      errorMessages: errors
     });
   } catch (error) {
     next(error);
@@ -1582,39 +2796,51 @@ async function renderTechUnitHistoryPanel(req, res, next) {
     if (!Number.isInteger(unitId) || unitId <= 0) {
       return res.status(400).render('fragments/tech-unit-history-panel', {
         unitId: null,
-        historyDetails: {
-          schemaReady: false,
-          gradeHistory: [],
-          memoryHistory: [],
-          storageHistory: [],
-          hardwareIssueHistory: [],
-          cosmeticIssueHistory: []
+        timeline: {
+          events: [],
+          totalEvents: 0,
+          totalChanges: 0,
+          hasLegacyEvents: false,
+          hasAuditEvents: false
         },
-        overrideHistory: {
-          supported: false,
-          requests: []
-        },
-        operationalHistory: {
-          workCompletions: [],
-          assignmentChanges: [],
-          lotMoves: [],
-          lifecycleEvents: []
-        },
+        schemaReady: false,
         errorMessages: ['The selected unit ID is invalid.']
       });
     }
 
-    const [historyDetails, overrideHistory, operationalHistory] = await Promise.all([
-      unitExpandedDetailModel.getHistoryDetailsForUnit(unitId),
-      overrideRequestModel.listOverrideRequestsForUnit(unitId, 25),
-      techUnitModel.getUnitOperationalHistory(unitId)
-    ]);
-
-    return res.render('fragments/tech-unit-history-panel', {
-      unitId,
+    const [
       historyDetails,
       overrideHistory,
       operationalHistory,
+      lotValidationAcceptanceHistory,
+      auditEvents,
+      creationContext
+    ] = await Promise.all([
+      unitExpandedDetailModel.getHistoryDetailsForUnit(unitId),
+      overrideRequestModel.listOverrideRequestsForUnit(unitId, 25),
+      techUnitModel.getUnitOperationalHistory(unitId),
+      lotValidationOverrideModel.listOverrideHistoryForUnit(unitId, 100),
+      unitAuditEventModel.listUnitAuditEvents(unitId, { limit: 500 }),
+      unitAuditEventModel.getUnitCreationContext(unitId, {
+        assetTagPrefix: techUnitModel.getAssetTagPrefix()
+      })
+    ]);
+    const rawTimeline = buildUnitHistoryTimeline({
+      auditEvents,
+      historyDetails,
+      overrideHistory,
+      operationalHistory,
+      acceptanceHistory: lotValidationAcceptanceHistory,
+      creationContext
+    });
+    const timeline = userCanViewProductionWeight(req)
+      ? rawTimeline
+      : redactProductionWeightFromTimeline(rawTimeline);
+
+    return res.render('fragments/tech-unit-history-panel', {
+      unitId,
+      timeline,
+      schemaReady: historyDetails.schemaReady !== false,
       errorMessages: []
     });
   } catch (error) {
@@ -1696,8 +2922,11 @@ async function completeTechUnitWork(req, res, next) {
       recordedByUserId: req.currentUser.user_id,
       creditSource: 'manual_completion',
       notes: 'Unit completion recorded from the Tech Unit Browser.',
-      actorRoleCodes: getCurrentRoleCodes(req)
+      actorRoleCodes: getCurrentRoleCodes(req),
+      actorUserId: req.currentUser ? req.currentUser.user_id : null
     });
+
+    publishUnitBrowserChange({ unitId: preview.unitId, changeType: 'work-completed' });
 
     if (isHtmxRequest(req)) {
       res.set('HX-Trigger', 'unit-work-completed');
@@ -1721,6 +2950,88 @@ async function completeTechUnitWork(req, res, next) {
           preview,
           req,
           errorMessages: [error.message || 'Unit completion could not be recorded.']
+        })
+      );
+    }
+
+    next(error);
+  }
+}
+
+
+async function renderReverseTechUnitCompletionModal(req, res, next) {
+  try {
+    const preview = await techUnitModel.getUnitWorkCompletionReversalPreview(
+      req.params.unitId,
+      req.params.completionId
+    );
+
+    return res.render(
+      'fragments/tech-unit-reverse-completion-modal',
+      buildReverseCompletionModalView({
+        preview,
+        errorMessages: preview.ready ? [] : [preview.errorMessage]
+      })
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function reverseTechUnitCompletion(req, res, next) {
+  let preview = null;
+  const reason = String(req.body && req.body.reason || '');
+
+  try {
+    preview = await techUnitModel.getUnitWorkCompletionReversalPreview(
+      req.params.unitId,
+      req.params.completionId
+    );
+
+    if (!preview.ready) {
+      return res.render(
+        'fragments/tech-unit-reverse-completion-modal',
+        buildReverseCompletionModalView({
+          preview,
+          reason,
+          errorMessages: [preview.errorMessage]
+        })
+      );
+    }
+
+    await techUnitModel.reverseUnitWorkCompletion({
+      unitId: preview.unitId,
+      unitWorkCompletionId: preview.unitWorkCompletionId,
+      reversedByUserId: req.currentUser.user_id,
+      reason,
+      actorRoleCodes: getCurrentRoleCodes(req),
+      actorUserId: req.currentUser ? req.currentUser.user_id : null
+    });
+
+    publishUnitBrowserChange({ unitId: preview.unitId, changeType: 'work-completion-reversed' });
+
+    if (isHtmxRequest(req)) {
+      res.set('HX-Trigger', 'unit-work-completion-reversed');
+
+      return res.render(
+        'fragments/tech-unit-reverse-completion-modal',
+        buildReverseCompletionModalView({
+          preview,
+          reason,
+          successMessage: 'Unit completion was undone successfully.'
+        })
+      );
+    }
+
+    return res.redirect('/tech/units?completionReversed=1');
+  } catch (error) {
+    if (isHtmxRequest(req)) {
+      return res.render(
+        'fragments/tech-unit-reverse-completion-modal',
+        buildReverseCompletionModalView({
+          preview,
+          reason,
+          errorMessages: [error.message || 'Unit completion could not be undone.']
         })
       );
     }
@@ -1807,8 +3118,11 @@ async function parkTechUnit(req, res, next) {
     await techUnitModel.parkTechUnit({
       unitId,
       parkedByUserId: req.currentUser.user_id,
-      actorRoleCodes: getCurrentRoleCodes(req)
+      actorRoleCodes: getCurrentRoleCodes(req),
+      actorUserId: req.currentUser ? req.currentUser.user_id : null
     });
+
+    publishUnitBrowserChange({ unitId, changeType: 'unit-parked' });
 
     if (isHtmxRequest(req)) {
       res.set('HX-Trigger', 'unit-saved, unit-parked');
@@ -1894,20 +3208,34 @@ async function returnTechUnitToActive(req, res, next) {
       }));
     }
 
+    const destinationValidation = await unitLotDestinationValidationModel.assertExistingUnitDestination({
+      unitId,
+      destinationLotId: formData.destinationLotId
+    });
+
     await techUnitModel.returnTechUnitToActive({
       unitId,
       destinationLotId: formData.destinationLotId,
       assignedToUserId: formData.assignedToUserId,
       returnedByUserId: req.currentUser.user_id,
-      actorRoleCodes: getCurrentRoleCodes(req)
+      actorRoleCodes: getCurrentRoleCodes(req),
+      actorUserId: req.currentUser ? req.currentUser.user_id : null
     });
 
+    publishUnitBrowserChange({ unitId, changeType: 'unit-returned-active' });
+
+    const returnParams = new URLSearchParams({ returnedToActive: '1' });
+    if (destinationValidation.warningMessages.length > 0) {
+      returnParams.set('destinationWarning', destinationValidation.warningMessages.join(' ').slice(0, 1000));
+    }
+    const redirectUrl = `/tech/units?${returnParams.toString()}`;
+
     if (isHtmxRequest(req)) {
-      res.set('HX-Redirect', '/tech/units?returnedToActive=1');
+      res.set('HX-Redirect', redirectUrl);
       return res.send('');
     }
 
-    return res.redirect('/tech/units?returnedToActive=1');
+    return res.redirect(redirectUrl);
   } catch (error) {
     return res.status(400).render('fragments/tech-unit-park-modal', buildUnitParkModalView({
       mode: 'return',
@@ -2016,6 +3344,8 @@ async function permanentlyDeleteTechUnit(req, res, next) {
       );
     }
 
+    publishUnitBrowserChange({ unitId, changeType: 'unit-deleted' });
+
     if (isHtmxRequest(req)) {
       res.set('HX-Trigger', 'unit-permanently-deleted');
       return res.send('');
@@ -2048,7 +3378,7 @@ async function renderLotUnitFormProfile(req, res, next) {
       });
     }
 
-    const resolvedProfile = await lotUnitFormProfileModel.getEffectiveUnitFormProfileForLot(lotId);
+    const resolvedProfile = await lotUnitFormProfileModel.getRequirementAwareUnitFormProfileForLot(lotId);
     const profile = buildUnitFormProfilePresentation(resolvedProfile);
 
     return res.render('fragments/tech-unit-form-profile', {
@@ -2154,10 +3484,22 @@ async function renderNewTechUnitModal(req, res, next) {
 async function createTechUnit(req, res, next) {
   try {
     const formOptions = await getTechUnitFormOptionsWithIssues(req);
-    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req, { allowAssetTag: false }), formOptions, { allowOverrideInput: false });
-    const errorMessages = await validateUnitForm(formData, formOptions, 'create');
-    const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({ formData, formOptions });
-    appendLotRequirementBlockingError(errorMessages, lotRequirementWorkflow);
+    const submittedFormData = markProductionWeightPermission(
+      getUnitFormDataFromRequest(req, { allowAssetTag: false }),
+      formOptions,
+      { allowOverrideInput: false }
+    );
+    const preparedSubmission = await prepareTechUnitFormSubmission({
+      mode: 'create',
+      formData: submittedFormData,
+      formOptions
+    });
+    const {
+      formData,
+      errorMessages,
+      fieldErrors: unitFormFieldErrors,
+      lotRequirementWorkflow
+    } = preparedSubmission;
 
     if (errorMessages.length > 0) {
       return res.status(400).render('pages/tech-unit-form', {
@@ -2168,14 +3510,17 @@ async function createTechUnit(req, res, next) {
         formOptions,
         formData,
         lotRequirementWorkflow,
+        unitFormFieldErrors,
         errorMessages
       });
     }
 
     try {
-      const savedUnitId = await techUnitModel.createTechUnit(formData, req.currentUser.user_id);
-      await saveIssueDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
-      await saveExpandedDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
+      await createTechUnitWithAudit({
+        formData,
+        formOptions,
+        currentUserId: req.currentUser.user_id
+      });
     } catch (saveError) {
       if (isDuplicateIdentifierError(saveError)) {
         const duplicateRecovery = await getDuplicateAssumptionRecoveryView(req, formData);
@@ -2188,6 +3533,7 @@ async function createTechUnit(req, res, next) {
           formOptions,
           formData,
           lotRequirementWorkflow,
+          unitFormFieldErrors,
           canRequestIntentionalDuplicate: isRegularTechIntentionalDuplicateRequester(req),
           ...duplicateRecovery
         });
@@ -2204,6 +3550,7 @@ async function createTechUnit(req, res, next) {
           formOptions,
           formData,
           lotRequirementWorkflow,
+          unitFormFieldErrors,
           errorMessages: [friendlyError]
         });
       }
@@ -2220,10 +3567,22 @@ async function createTechUnit(req, res, next) {
 async function createTechUnitModal(req, res, next) {
   try {
     const formOptions = await getTechUnitFormOptionsWithIssues(req);
-    const formData = markProductionWeightPermission(getUnitFormDataFromRequest(req, { allowAssetTag: false }), formOptions, { allowOverrideInput: false });
-    const errorMessages = await validateUnitForm(formData, formOptions, 'create');
-    const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({ formData, formOptions });
-    appendLotRequirementBlockingError(errorMessages, lotRequirementWorkflow);
+    const submittedFormData = markProductionWeightPermission(
+      getUnitFormDataFromRequest(req, { allowAssetTag: false }),
+      formOptions,
+      { allowOverrideInput: false }
+    );
+    const preparedSubmission = await prepareTechUnitFormSubmission({
+      mode: 'create',
+      formData: submittedFormData,
+      formOptions
+    });
+    const {
+      formData,
+      errorMessages,
+      fieldErrors: unitFormFieldErrors,
+      lotRequirementWorkflow
+    } = preparedSubmission;
 
     if (errorMessages.length > 0) {
       return res.render('fragments/tech-unit-modal', {
@@ -2233,14 +3592,17 @@ async function createTechUnitModal(req, res, next) {
         formOptions,
         formData,
         lotRequirementWorkflow,
+        unitFormFieldErrors,
         errorMessages
       });
     }
 
     try {
-      const savedUnitId = await techUnitModel.createTechUnit(formData, req.currentUser.user_id);
-      await saveIssueDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
-      await saveExpandedDetailsIfPossible(savedUnitId, formData, req.currentUser.user_id);
+      await createTechUnitWithAudit({
+        formData,
+        formOptions,
+        currentUserId: req.currentUser.user_id
+      });
     } catch (saveError) {
       if (isDuplicateIdentifierError(saveError)) {
         const duplicateRecovery = await getDuplicateAssumptionRecoveryView(req, formData);
@@ -2252,6 +3614,7 @@ async function createTechUnitModal(req, res, next) {
           formOptions,
           formData,
           lotRequirementWorkflow,
+          unitFormFieldErrors,
           canRequestIntentionalDuplicate: isRegularTechIntentionalDuplicateRequester(req),
           ...duplicateRecovery
         });
@@ -2267,6 +3630,7 @@ async function createTechUnitModal(req, res, next) {
           formOptions,
           formData,
           lotRequirementWorkflow,
+          unitFormFieldErrors,
           errorMessages: [friendlyError]
         });
       }
@@ -2443,17 +3807,31 @@ async function updateTechUnit(req, res, next) {
     }
 
     const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
-    const formData = {
+    const submittedFormData = {
       unitId: String(unitId),
       ...markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions)
     };
-    const errorMessages = await validateUnitForm(formData, formOptions, 'edit');
-    const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({
-      formData,
+    const preparedSubmission = await prepareTechUnitFormSubmission({
+      mode: 'edit',
+      formData: submittedFormData,
       formOptions,
       unitId
     });
-    appendLotRequirementBlockingError(errorMessages, lotRequirementWorkflow);
+
+    if (preparedSubmission.notFound) {
+      return res.status(404).render('pages/not-found', {
+        pageTitle: 'Unit Not Found',
+        requestedPath: req.originalUrl
+      });
+    }
+
+    const {
+      formData,
+      errorMessages,
+      fieldErrors: unitFormFieldErrors,
+      lotRequirementWorkflow,
+      existingFormData
+    } = preparedSubmission;
 
     if (errorMessages.length > 0) {
       return res.status(400).render('pages/tech-unit-form', {
@@ -2464,14 +3842,21 @@ async function updateTechUnit(req, res, next) {
         formOptions,
         formData,
         lotRequirementWorkflow,
+        unitFormFieldErrors,
         errorMessages
       });
     }
 
     try {
-      await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id, { actorRoleCodes: getCurrentRoleCodes(req) });
-    await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
-      await saveExpandedDetailsIfPossible(unitId, formData, req.currentUser.user_id);
+      await updateTechUnitWithAudit({
+        unitId,
+        formData,
+        existingFormData,
+        formOptions,
+        currentUserId: req.currentUser.user_id,
+        actorRoleCodes: getCurrentRoleCodes(req),
+        actorUserId: req.currentUser ? req.currentUser.user_id : null
+      });
     } catch (saveError) {
       const friendlyError = getFriendlySaveError(saveError, formOptions);
 
@@ -2484,6 +3869,7 @@ async function updateTechUnit(req, res, next) {
           formOptions,
           formData,
           lotRequirementWorkflow,
+          unitFormFieldErrors,
           errorMessages: [friendlyError]
         });
       }
@@ -2491,6 +3877,7 @@ async function updateTechUnit(req, res, next) {
       throw saveError;
     }
 
+    publishUnitBrowserChange({ unitId, changeType: 'unit-updated' });
     return res.redirect('/tech/units?updated=1');
   } catch (error) {
     next(error);
@@ -2544,17 +3931,35 @@ async function updateTechUnitModal(req, res, next) {
     }
 
     const formOptions = await getEditTechUnitFormOptionsWithIssues(req, unitId);
-    const formData = {
+    const submittedFormData = {
       unitId: String(unitId),
       ...markProductionWeightPermission(getUnitFormDataFromRequest(req), formOptions)
     };
-    const errorMessages = await validateUnitForm(formData, formOptions, 'edit');
-    const lotRequirementWorkflow = await buildLotRequirementWorkflowForForm({
-      formData,
+    const preparedSubmission = await prepareTechUnitFormSubmission({
+      mode: 'edit',
+      formData: submittedFormData,
       formOptions,
       unitId
     });
-    appendLotRequirementBlockingError(errorMessages, lotRequirementWorkflow);
+
+    if (preparedSubmission.notFound) {
+      return res.status(404).render('fragments/tech-unit-modal', {
+        pageTitle: 'Unit Not Found',
+        mode: 'edit',
+        formAction: '',
+        formOptions,
+        formData: techUnitModel.getBlankUnitFormData(formOptions),
+        errorMessages: ['The selected unit could not be found.']
+      });
+    }
+
+    const {
+      formData,
+      errorMessages,
+      fieldErrors: unitFormFieldErrors,
+      lotRequirementWorkflow,
+      existingFormData
+    } = preparedSubmission;
 
     if (errorMessages.length > 0) {
       return res.render('fragments/tech-unit-modal', {
@@ -2564,14 +3969,21 @@ async function updateTechUnitModal(req, res, next) {
         formOptions,
         formData,
         lotRequirementWorkflow,
+        unitFormFieldErrors,
         errorMessages
       });
     }
 
     try {
-      await techUnitModel.updateTechUnit(unitId, formData, req.currentUser.user_id, { actorRoleCodes: getCurrentRoleCodes(req) });
-    await saveIssueDetailsIfPossible(unitId, formData, req.currentUser.user_id);
-      await saveExpandedDetailsIfPossible(unitId, formData, req.currentUser.user_id);
+      await updateTechUnitWithAudit({
+        unitId,
+        formData,
+        existingFormData,
+        formOptions,
+        currentUserId: req.currentUser.user_id,
+        actorRoleCodes: getCurrentRoleCodes(req),
+        actorUserId: req.currentUser ? req.currentUser.user_id : null
+      });
     } catch (saveError) {
       const friendlyError = getFriendlySaveError(saveError, formOptions);
 
@@ -2583,6 +3995,7 @@ async function updateTechUnitModal(req, res, next) {
           formOptions,
           formData,
           lotRequirementWorkflow,
+          unitFormFieldErrors,
           errorMessages: [friendlyError]
         });
       }
@@ -2590,16 +4003,12 @@ async function updateTechUnitModal(req, res, next) {
       throw saveError;
     }
 
+    publishUnitBrowserChange({ unitId, changeType: 'unit-updated' });
     res.set('HX-Trigger', 'unit-saved');
     return res.send('');
   } catch (error) {
     next(error);
   }
-}
-
-
-function getOutcomeApprovalNotes(req) {
-  return String(req.body.approvalNotes || '').trim();
 }
 
 async function renderOutcomeApprovalModal(req, res, next) {
@@ -2704,6 +4113,7 @@ async function approveOutcomeRequest(req, res, next) {
       });
     }
 
+    publishUnitBrowserChange({ unitId, changeType: 'outcome-approved' });
     res.set('HX-Trigger', 'unit-saved');
     return res.send('');
   } catch (error) {
@@ -2712,13 +4122,26 @@ async function approveOutcomeRequest(req, res, next) {
 }
 
 module.exports = {
+  streamTechUnitBrowserChanges,
   renderTechUnitsPage,
+  renderTechUnitsExportPreview,
+  downloadTechUnitsCsv,
+  downloadTechUnitsXlsx,
+  renderTechUnitsQcSummary,
   renderTechUnitsTable,
   renderTechUnitDetailPage,
+  renderTechUnitRecord,
+  renderQcReviewModal,
+  recordQcReview,
+  renderQcCorrectionModal,
+  submitQcCorrection,
+  renderQcReviewDetailsModal,
   renderTechUnitHistoryPanel,
   renderMyUnitWeightPanel,
   renderCompleteTechUnitWorkModal,
   completeTechUnitWork,
+  renderReverseTechUnitCompletionModal,
+  reverseTechUnitCompletion,
   renderParkTechUnitModal,
   parkTechUnit,
   renderReturnTechUnitToActiveModal,

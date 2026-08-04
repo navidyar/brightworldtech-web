@@ -53,13 +53,17 @@
           </div>
 
           <div>
-            <span>Technicians</span>
+            <span>Technician</span>
             <strong><%= safeUnit.technicianSummary %></strong>
             <small>
-              <% if ((safeUnit.technicians || []).length === 0) { %>
-                No work-session or completion activity has been recorded.
+              <% if (safeUnit.assignedTechnician && (safeUnit.technicians || []).length === 0) { %>
+                Currently assigned; no work-session or completion activity has been recorded.
+              <% } else if (safeUnit.assignedTechnician) { %>
+                Current assignment with activity details shown below.
+              <% } else if ((safeUnit.technicians || []).length > 0) { %>
+                No current assignment; based on work-session and completion records.
               <% } else { %>
-                Based on work-session and completion records.
+                No current assignment or technician activity has been recorded.
               <% } %>
             </small>
           </div>

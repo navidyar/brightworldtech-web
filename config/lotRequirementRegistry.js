@@ -34,11 +34,24 @@ const LOT_REQUIREMENT_FIELDS = Object.freeze([
     allowedOperators: Object.freeze(['equals'])
   }),
   Object.freeze({
+    key: 'processor_family',
+    label: 'Processor Family',
+    helpText: 'Any processor explicitly included in a reusable processor family.',
+    storageKind: 'processor_family',
+    optionSource: 'processor_family',
+    allowedOperators: Object.freeze(['equals'])
+  }),
+  Object.freeze({
     key: 'ram_gb',
-    label: 'Memory Size',
+    label: 'Current Memory Size',
     helpText: 'Total current memory in GB.',
     storageKind: 'number',
     optionSource: null,
+    unitSuffix: ' GB',
+    minimumValue: 0.01,
+    maximumValue: null,
+    decimalPlaces: 2,
+    exampleValue: '16',
     allowedOperators: Object.freeze(['equals', 'greater_equal', 'less_equal'])
   }),
   Object.freeze({
@@ -51,10 +64,28 @@ const LOT_REQUIREMENT_FIELDS = Object.freeze([
   }),
   Object.freeze({
     key: 'storage_gb',
-    label: 'Storage Size',
+    label: 'Current Storage Size',
     helpText: 'Total current storage in GB.',
     storageKind: 'number',
     optionSource: null,
+    unitSuffix: ' GB',
+    minimumValue: 0.01,
+    maximumValue: null,
+    decimalPlaces: 2,
+    exampleValue: '512',
+    allowedOperators: Object.freeze(['equals', 'greater_equal', 'less_equal'])
+  }),
+  Object.freeze({
+    key: 'battery_health',
+    label: 'Battery Health',
+    helpText: 'Recorded battery health percentage from 0 through 100.',
+    storageKind: 'number',
+    optionSource: null,
+    unitSuffix: '%',
+    minimumValue: 0,
+    maximumValue: 100,
+    decimalPlaces: 1,
+    exampleValue: '87.5',
     allowedOperators: Object.freeze(['equals', 'greater_equal', 'less_equal'])
   }),
   Object.freeze({

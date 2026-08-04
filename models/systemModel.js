@@ -22,6 +22,7 @@ const REQUIRED_TABLES = [
   'unit_completion_credits',
   'unit_status_history',
   'unit_qc_checks',
+  'unit_qc_corrections',
   'unit_lot_validation_overrides',
   'unit_lot_history',
   'unit_issue_flags',

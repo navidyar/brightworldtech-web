@@ -1,7 +1,7 @@
 <%
   const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
   const safeFormData = formData || {};
-  const safeFormOptions = formOptions || { capabilities: {}, parentLots: [], lotTypes: [], grades: [], productionWeightOptions: [] };
+  const safeFormOptions = formOptions || { capabilities: {}, parentLots: [], lotTypes: [], requirementPolicies: [], grades: [], productionWeightOptions: [] };
   const safeMode = mode === 'edit' ? 'edit' : 'create';
   const safeLot = lot || null;
   const formAction = safeMode === 'edit' && safeLot
@@ -33,6 +33,12 @@
       <% if (safeFormOptions.capabilities.hasLotType && safeFormOptions.lotTypes.length === 0) { %>
         <div class="message error">
           <p>The lots table expects a lot type, but no lot type config values were found.</p>
+        </div>
+      <% } %>
+
+      <% if (safeFormOptions.capabilities.hasRequirementPolicy && safeFormOptions.requirementPolicies.length !== 3) { %>
+        <div class="message error">
+          <p>Requirement enforcement needs active Strict, Warn Only, and Open / Mixed config values before a Lot can be saved.</p>
         </div>
       <% } %>
 
@@ -136,6 +142,35 @@
             <% } %>
           </div>
         </div>
+
+        <% if (safeFormOptions.capabilities.hasRequirementPolicy) { %>
+          <div class="form-section">
+            <div class="form-section-header">
+              <div>
+                <h3>Requirement Enforcement</h3>
+              </div>
+            </div>
+
+            <div class="form-grid single-column">
+              <% safeFormOptions.requirementPolicies.forEach((policy) => { %>
+                <label class="checkbox-card" for="requirementPolicyModal-<%= policy.code %>">
+                  <input
+                    id="requirementPolicyModal-<%= policy.code %>"
+                    type="radio"
+                    name="requirementPolicyConfigValueId"
+                    value="<%= policy.config_value_id %>"
+                    <%= String(safeFormData.requirementPolicyConfigValueId || '') === String(policy.config_value_id) ? 'checked' : '' %>
+                    required
+                  />
+                  <span>
+                    <strong><%= policy.label %></strong>
+                    <small><%= policy.description %></small>
+                  </span>
+                </label>
+              <% }) %>
+            </div>
+          </div>
+        <% } %>
 
         <% if (safeFormOptions.capabilities.hasUnitAmountGoal || safeFormOptions.capabilities.hasDeadline || safeFormOptions.capabilities.hasLabelFormat) { %>
           <div class="form-section">

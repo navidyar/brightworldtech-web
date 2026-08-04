@@ -20,7 +20,7 @@ async function renderDatabasePage(req, res, next) {
 
     res.render('pages/database-check', {
       pageTitle: 'Database Check',
-      currentNav: 'database',
+      currentNav: 'admin-config-database',
       status
     });
   } catch (error) {

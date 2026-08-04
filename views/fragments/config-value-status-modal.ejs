@@ -13,10 +13,10 @@
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel config-value-modal config-value-status-modal" role="dialog" aria-modal="true" aria-labelledby="config-value-status-title">
+  <section class="modal-panel site-clean-modal configuration-value-modal configuration-value-status-modal" role="dialog" aria-modal="true" aria-labelledby="config-value-status-title">
     <header class="modal-header">
       <div>
-        <p class="eyebrow">Configuration</p>
+        <p class="eyebrow">Admin Configuration</p>
         <h2 id="config-value-status-title"><%= title %></h2>
       </div>
 
@@ -33,26 +33,26 @@
       <% } %>
 
       <% if (safeConfigValue) { %>
-        <div class="config-value-confirm-card">
-          <p class="eyebrow"><%= safeConfigValue.category_label || safeConfigValue.category_code || 'Configuration' %></p>
-          <h3><%= safeConfigValue.label || safeConfigValue.code %></h3>
-          <p><code><%= safeConfigValue.code %></code></p>
-          <% if (safeConfigValue.value) { %>
-            <p>Value: <strong><%= safeConfigValue.value %></strong></p>
-          <% } %>
-        </div>
+        <dl class="configuration-value-summary">
+          <div><dt>Category</dt><dd><%= safeConfigValue.category_label || safeConfigValue.category_code || 'Configuration' %></dd></div>
+          <div><dt>Label</dt><dd><strong><%= safeConfigValue.label || safeConfigValue.code %></strong></dd></div>
+          <div><dt>Code</dt><dd><code><%= safeConfigValue.code %></code></dd></div>
+          <% if (safeConfigValue.value) { %><div><dt>Stored Value</dt><dd><%= safeConfigValue.value %></dd></div><% } %>
+        </dl>
 
-        <% if (isActivate) { %>
-          <p class="config-value-confirm-copy">Activating this value makes it available again anywhere this category is used by the app.</p>
-        <% } else { %>
-          <p class="config-value-confirm-copy">Deactivating this value hides it from normal dropdowns without deleting existing history that already references it.</p>
-        <% } %>
+        <p class="configuration-confirm-copy">
+          <% if (isActivate) { %>
+            Activating this value makes it available again wherever this category is used.
+          <% } else { %>
+            Deactivating this value removes it from normal selection without deleting existing history.
+          <% } %>
+        </p>
 
         <form method="post" action="<%= actionPath %>" hx-post="<%= actionPath %>" hx-target="#modal-root" hx-swap="innerHTML">
           <input type="hidden" name="includeInactive" value="<%= safeIncludeInactive %>" />
 
           <div class="form-actions">
-            <button type="submit" class="primary-button <%= isActivate ? '' : 'danger-button' %>"><%= isActivate ? 'Activate Value' : 'Deactivate Value' %></button>
+            <button type="submit" class="<%= isActivate ? 'primary-button' : 'danger-button' %>"><%= isActivate ? 'Activate Value' : 'Deactivate Value' %></button>
             <button type="button" class="secondary-button" data-modal-close>Cancel</button>
           </div>
         </form>

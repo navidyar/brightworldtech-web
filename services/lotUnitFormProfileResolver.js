@@ -156,6 +156,54 @@ function normalizeRules(rules, lineage) {
   );
 }
 
+function normalizeLotRequirementConstraints(constraints) {
+  if (!Array.isArray(constraints)) {
+    throw new LotUnitFormProfileError('Lot requirement form constraints must be an array.');
+  }
+
+  const seenFieldKeys = new Set();
+
+  return Object.freeze(constraints.map((constraint, index) => {
+    if (!constraint || typeof constraint !== 'object') {
+      throw new LotUnitFormProfileError(`Lot requirement form constraint ${index} must be an object.`);
+    }
+
+    const fieldKey = String(constraint.fieldKey || '').trim();
+    const field = getUnitFormFieldDefinition(fieldKey);
+
+    if (!field) {
+      throw new LotUnitFormProfileError(
+        `Lot requirement form constraint ${index} references unknown field key: ${fieldKey}`
+      );
+    }
+
+    if (seenFieldKeys.has(fieldKey)) {
+      throw new LotUnitFormProfileError(`Duplicate Lot requirement form constraint for field ${fieldKey}.`);
+    }
+
+    seenFieldKeys.add(fieldKey);
+
+    const forceVisible = Boolean(constraint.forceVisible || constraint.forceRequired);
+    const forceRequired = Boolean(constraint.forceRequired);
+    const sources = Array.isArray(constraint.sources)
+      ? constraint.sources.map((source, sourceIndex) => {
+        const key = String(source?.key || '').trim();
+        const label = String(source?.label || '').trim();
+
+        if (!key || !label) {
+          throw new LotUnitFormProfileError(
+            `Lot requirement form constraint ${fieldKey} source ${sourceIndex} needs a key and label.`
+          );
+        }
+
+        return Object.freeze({ key, label });
+      })
+      : [];
+
+    return Object.freeze({ fieldKey, forceVisible, forceRequired, sources: Object.freeze(sources) });
+  }));
+}
+
 function makeSource(type, lot = null) {
   return Object.freeze({
     type,
@@ -172,17 +220,68 @@ function createInitialState(field) {
     visibilitySource: makeSource('application_default'),
     requirementSource: makeSource('application_default'),
     forcedVisibleBy: new Set(),
-    forcedRequiredBy: new Set()
+    forcedRequiredBy: new Set(),
+    lotRequirementVisibilitySources: new Map(),
+    lotRequirementRequirementSources: new Map()
   };
 }
 
 function isVisible(state) {
-  return state.resolvedVisibilityMode === VISIBILITY.VISIBLE || state.forcedVisibleBy.size > 0;
+  return state.resolvedVisibilityMode === VISIBILITY.VISIBLE
+    || state.forcedVisibleBy.size > 0
+    || state.lotRequirementVisibilitySources.size > 0;
 }
 
 function isRequired(state) {
   return isVisible(state)
-    && (state.resolvedRequirementMode === REQUIREMENT.REQUIRED || state.forcedRequiredBy.size > 0);
+    && (
+      state.resolvedRequirementMode === REQUIREMENT.REQUIRED
+      || state.forcedRequiredBy.size > 0
+      || state.lotRequirementRequirementSources.size > 0
+    );
+}
+
+function applyLinkedVisibilityDefaults(statesByKey) {
+  for (const state of statesByKey.values()) {
+    const sourceKey = String(state.field.inheritVisibilityFromFieldKey || '').trim();
+
+    if (!sourceKey || state.visibilitySource.type !== 'application_default') {
+      continue;
+    }
+
+    const sourceState = statesByKey.get(sourceKey);
+
+    if (!sourceState) {
+      throw new LotUnitFormProfileError(
+        `Field ${state.field.key} inherits visibility from unknown field ${sourceKey}.`
+      );
+    }
+
+    state.resolvedVisibilityMode = sourceState.resolvedVisibilityMode;
+    state.visibilitySource = Object.freeze({
+      type: 'linked_field_default',
+      lotId: sourceState.visibilitySource.lotId ?? null,
+      lotName: sourceState.visibilitySource.lotName ?? null,
+      fieldKey: sourceKey
+    });
+  }
+}
+
+function applyLotRequirementConstraints(statesByKey, constraints) {
+  for (const constraint of constraints) {
+    const state = statesByKey.get(constraint.fieldKey);
+
+    for (const source of constraint.sources) {
+      if (constraint.forceVisible) {
+        state.lotRequirementVisibilitySources.set(source.key, source);
+      }
+
+      if (constraint.forceRequired) {
+        state.lotRequirementRequirementSources.set(source.key, source);
+        state.lotRequirementVisibilitySources.set(source.key, source);
+      }
+    }
+  }
 }
 
 function applyDependencyRules(statesByKey, dependencyRules) {
@@ -237,6 +336,7 @@ function applyDependencyRules(statesByKey, dependencyRules) {
 function resolveLotUnitFormProfile({
   lineage,
   rules = [],
+  lotRequirementConstraints = [],
   registry = UNIT_FORM_FIELD_REGISTRY,
   dependencyRules = FIELD_DEPENDENCY_RULES
 }) {
@@ -246,6 +346,7 @@ function resolveLotUnitFormProfile({
 
   const normalizedLineage = normalizeLineage(lineage);
   const normalizedRules = normalizeRules(rules, normalizedLineage);
+  const normalizedLotRequirementConstraints = normalizeLotRequirementConstraints(lotRequirementConstraints);
   const lotsById = new Map(normalizedLineage.map((lot) => [lot.lotId, lot]));
   const rulesByLotId = new Map();
 
@@ -277,6 +378,8 @@ function resolveLotUnitFormProfile({
     }
   }
 
+  applyLinkedVisibilityDefaults(statesByKey);
+  applyLotRequirementConstraints(statesByKey, normalizedLotRequirementConstraints);
   applyDependencyRules(statesByKey, dependencyRules);
 
   const fields = registry.map((field) => {
@@ -285,6 +388,16 @@ function resolveLotUnitFormProfile({
     const required = isRequired(state);
     const forcedVisibleBy = Object.freeze([...state.forcedVisibleBy].sort());
     const forcedRequiredBy = Object.freeze([...state.forcedRequiredBy].sort());
+    const lotRequirementVisibilitySources = Object.freeze(
+      [...state.lotRequirementVisibilitySources.values()]
+        .sort((left, right) => left.label.localeCompare(right.label))
+        .map((source) => Object.freeze({ ...source }))
+    );
+    const lotRequirementRequirementSources = Object.freeze(
+      [...state.lotRequirementRequirementSources.values()]
+        .sort((left, right) => left.label.localeCompare(right.label))
+        .map((source) => Object.freeze({ ...source }))
+    );
 
     return Object.freeze({
       ...field,
@@ -296,7 +409,9 @@ function resolveLotUnitFormProfile({
       visibilitySource: state.visibilitySource,
       requirementSource: state.requirementSource,
       forcedVisibleBy,
-      forcedRequiredBy
+      forcedRequiredBy,
+      lotRequirementVisibilitySources,
+      lotRequirementRequirementSources
     });
   });
 
@@ -317,6 +432,10 @@ function resolveLotUnitFormProfile({
       suppressedRequiredFields: fields.filter((field) => field.requiredSuppressedByHidden).length,
       dependencyForcedFields: fields.filter(
         (field) => field.forcedVisibleBy.length > 0 || field.forcedRequiredBy.length > 0
+      ).length,
+      lotRequirementForcedFields: fields.filter(
+        (field) => field.lotRequirementVisibilitySources.length > 0
+          || field.lotRequirementRequirementSources.length > 0
       ).length
     })
   });

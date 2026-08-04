@@ -4,21 +4,34 @@ const overrideController = require('../controllers/overrideController');
 const techController = require('../controllers/techController');
 const unitRequestController = require('../controllers/unitRequestController');
 const catalogRequestController = require('../controllers/catalogRequestController');
+const qcReportingController = require('../controllers/qcReportingController');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
 const managementRoles = ['admin', 'management'];
 const techRoles = ['admin', 'management', 'tech_lead', 'tech'];
+const unitBrowserRoles = ['admin', 'management', 'tech_lead', 'qc', 'tech'];
+const unitHistoryRoles = ['admin', 'management', 'tech_lead', 'qc'];
+const qcReviewRoles = ['qc'];
+const qcCorrectionRoles = ['admin', 'management', 'tech_lead', 'tech'];
 const techDeleteRoles = ['admin', 'management', 'tech_lead'];
 const unitLifecycleRoles = ['admin', 'management', 'tech_lead'];
 const outcomeApprovalRoles = ['admin', 'management', 'tech_lead'];
 const techHistoryRoles = ['admin', 'management', 'tech_lead'];
+const completionReversalRoles = ['admin', 'management', 'tech_lead'];
 const overrideReviewRoles = ['admin', 'management', 'tech_lead'];
 
 /*
   Management routes
 */
+
+router.get(
+  '/management/qc-reporting',
+  requireAuth,
+  requireRole(managementRoles),
+  qcReportingController.renderManagementQcReportingPage
+);
 
 router.get(
   '/management/users',
@@ -120,42 +133,7 @@ router.post(
 );
 
 /*
-  Management override routes
-
-  Route order note:
-  Keep /management/overrides/table before parameterized routes.
-*/
-
-router.get(
-  '/management/overrides',
-  requireAuth,
-  requireRole(overrideReviewRoles),
-  overrideController.renderOverrideRequestsPage
-);
-
-router.get(
-  '/management/overrides/table',
-  requireAuth,
-  requireRole(overrideReviewRoles),
-  overrideController.renderOverrideRequestsTable
-);
-
-router.post(
-  '/management/overrides/:overrideRequestId/approve',
-  requireAuth,
-  requireRole(overrideReviewRoles),
-  overrideController.approveOverrideRequest
-);
-
-router.post(
-  '/management/overrides/:overrideRequestId/deny',
-  requireAuth,
-  requireRole(overrideReviewRoles),
-  overrideController.denyOverrideRequest
-);
-
-/*
-  Unit Requests
+  Requests
 
   One role-aware request area. Regular Tech users see only their own requests;
   Tech Leads, Management users, and Admins review the shared queue.
@@ -173,6 +151,34 @@ router.get(
   requireAuth,
   requireRole(techRoles),
   unitRequestController.renderUnitRequestDetail
+);
+
+router.get(
+  '/unit-requests/override/:overrideRequestId',
+  requireAuth,
+  requireRole(techRoles),
+  unitRequestController.renderOverrideRequestDetail
+);
+
+router.post(
+  '/unit-requests/override/:overrideRequestId/withdraw',
+  requireAuth,
+  requireRole(techRoles),
+  unitRequestController.withdrawOverrideRequest
+);
+
+router.post(
+  '/unit-requests/override/:overrideRequestId/approve',
+  requireAuth,
+  requireRole(overrideReviewRoles),
+  overrideController.approveOverrideRequest
+);
+
+router.post(
+  '/unit-requests/override/:overrideRequestId/reject',
+  requireAuth,
+  requireRole(overrideReviewRoles),
+  overrideController.denyOverrideRequest
 );
 
 router.post(
@@ -243,16 +249,52 @@ router.post(
 router.get(
   '/tech/units',
   requireAuth,
-  requireRole(techRoles),
+  requireRole(unitBrowserRoles),
   techController.renderTechUnitsPage
 );
 
 router.get(
   '/tech/units/table',
   requireAuth,
-  requireRole(techRoles),
+  requireRole(unitBrowserRoles),
   techController.renderTechUnitsTable
 );
+
+router.get(
+  '/tech/units/events',
+  requireAuth,
+  requireRole(unitBrowserRoles),
+  techController.streamTechUnitBrowserChanges
+);
+
+router.get(
+  '/tech/units/export/preview',
+  requireAuth,
+  requireRole(managementRoles),
+  techController.renderTechUnitsExportPreview
+);
+
+router.get(
+  '/tech/units/export/csv',
+  requireAuth,
+  requireRole(managementRoles),
+  techController.downloadTechUnitsCsv
+);
+
+router.get(
+  '/tech/units/export/xlsx',
+  requireAuth,
+  requireRole(managementRoles),
+  techController.downloadTechUnitsXlsx
+);
+
+router.get(
+  '/tech/units/qc-summary',
+  requireAuth,
+  requireRole(unitBrowserRoles),
+  techController.renderTechUnitsQcSummary
+);
+
 
 router.get(
   '/tech/units/lot-form-profile',
@@ -301,6 +343,13 @@ router.post(
   requireAuth,
   requireRole(techRoles),
   techController.createTechUnit
+);
+
+router.get(
+  '/tech/units/:unitId/record',
+  requireAuth,
+  requireRole(unitBrowserRoles),
+  techController.renderTechUnitRecord
 );
 
 /*
@@ -361,9 +410,44 @@ router.post(
 
 
 router.get(
+  '/tech/units/:unitId/qc-correction/modal',
+  requireAuth,
+  requireRole(qcCorrectionRoles),
+  techController.renderQcCorrectionModal
+);
+
+router.post(
+  '/tech/units/:unitId/qc-correction',
+  requireAuth,
+  requireRole(qcCorrectionRoles),
+  techController.submitQcCorrection
+);
+
+router.get(
+  '/tech/units/:unitId/qc-review/details/modal',
+  requireAuth,
+  requireRole(unitBrowserRoles),
+  techController.renderQcReviewDetailsModal
+);
+
+router.get(
+  '/tech/units/:unitId/qc-review/:decisionCode/modal',
+  requireAuth,
+  requireRole(qcReviewRoles),
+  techController.renderQcReviewModal
+);
+
+router.post(
+  '/tech/units/:unitId/qc-review',
+  requireAuth,
+  requireRole(qcReviewRoles),
+  techController.recordQcReview
+);
+
+router.get(
   '/tech/units/:unitId/history',
   requireAuth,
-  requireRole(techHistoryRoles),
+  requireRole(unitHistoryRoles),
   techController.renderTechUnitHistoryPanel
 );
 
@@ -415,6 +499,21 @@ router.post(
   requireAuth,
   requireRole(techRoles),
   techController.completeTechUnitWork
+);
+
+
+router.get(
+  '/tech/units/:unitId/completions/:completionId/reverse/modal',
+  requireAuth,
+  requireRole(completionReversalRoles),
+  techController.renderReverseTechUnitCompletionModal
+);
+
+router.post(
+  '/tech/units/:unitId/completions/:completionId/reverse',
+  requireAuth,
+  requireRole(completionReversalRoles),
+  techController.reverseTechUnitCompletion
 );
 
 router.get(
@@ -476,7 +575,7 @@ router.get(
 router.get(
   '/tech/units/:unitId',
   requireAuth,
-  requireRole(techRoles),
+  requireRole(unitBrowserRoles),
   techController.renderTechUnitDetailPage
 );
 

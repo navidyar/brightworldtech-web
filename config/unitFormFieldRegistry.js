@@ -267,7 +267,7 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
 
   defineField({
     key: 'memory_modules',
-    label: 'Memory Modules',
+    label: 'Current Memory Modules',
     section: 'memory',
     submissionName: 'memoryModules[index][...]',
     storagePath: 'unit_memory_modules and units.ram_gb summary',
@@ -290,10 +290,15 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
     ruleType: RULE_TYPE.SYSTEM_CONTROL,
     preservationPolicy: PRESERVATION.SYSTEM_MANAGED
   }),
+  configurableField('previous_memory_size', 'Previous Memory Size', 'memory', 'previousRamGb', 'units.previous_ram_gb', {
+    requirementConfigurable: false,
+    inheritVisibilityFromFieldKey: 'memory_modules',
+    requiredSemantics: null
+  }),
 
   defineField({
     key: 'storage_devices',
-    label: 'Storage Devices',
+    label: 'Current Storage Devices',
     section: 'storage',
     submissionName: 'storageDevices[index][...]',
     storagePath: 'unit_storage_devices and units.storage_gb summary',
@@ -316,10 +321,18 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
     ruleType: RULE_TYPE.SYSTEM_CONTROL,
     preservationPolicy: PRESERVATION.SYSTEM_MANAGED
   }),
+  configurableField('previous_storage_size', 'Previous Storage Size', 'storage', 'previousStorageGb', 'units.previous_storage_gb', {
+    requirementConfigurable: false,
+    inheritVisibilityFromFieldKey: 'storage_devices',
+    requiredSemantics: null
+  }),
 
   configurableField('operating_system', 'Operating System', 'system', 'operatingSystemConfigValueId', 'units.operating_system_config_value_id'),
   configurableField('os_build', 'OS Build', 'system', 'osBuild', 'unit_specifications.os_build'),
   configurableField('bios_version', 'BIOS Version', 'system', 'biosVersion', 'unit_specifications.bios_version'),
+  configurableField('battery_health', 'Battery Health', 'system', 'batteryHealthPercent', 'units.battery_health_percent', {
+    requiredSemantics: 'A percentage from 0.0 through 100.0 with no more than one decimal place is required.'
+  }),
   configurableField('absolute_status', 'Absolute Status', 'system', 'absoluteStatusConfigValueId', 'unit_specifications.absolute_status_config_value_id'),
   configurableField('physical_camera_status', 'Physical Camera', 'system', 'physicalCameraStatusConfigValueId', 'unit_specifications.physical_camera_status_config_value_id'),
   configurableField('touchscreen_status', 'Touchscreen', 'system', 'touchscreenStatusConfigValueId', 'unit_specifications.touchscreen_status_config_value_id'),
@@ -554,16 +567,34 @@ function assertValidUnitFormFieldRegistry(registry = UNIT_FORM_FIELD_REGISTRY, d
   }
 
   for (const field of registry) {
-    if (!field.parentKey) {
+    if (field.parentKey) {
+      if (field.parentKey === field.key) {
+        throw new Error(`Unit form field ${field.key} cannot reference itself as a parent.`);
+      }
+
+      if (!fieldsByKey.has(field.parentKey)) {
+        throw new Error(`Unit form field ${field.key} references unknown parent: ${field.parentKey}`);
+      }
+    }
+
+    const linkedVisibilityKey = String(field.inheritVisibilityFromFieldKey || '').trim();
+
+    if (!linkedVisibilityKey) {
       continue;
     }
 
-    if (field.parentKey === field.key) {
-      throw new Error(`Unit form field ${field.key} cannot reference itself as a parent.`);
+    if (linkedVisibilityKey === field.key) {
+      throw new Error(`Unit form field ${field.key} cannot inherit visibility from itself.`);
     }
 
-    if (!fieldsByKey.has(field.parentKey)) {
-      throw new Error(`Unit form field ${field.key} references unknown parent: ${field.parentKey}`);
+    const linkedField = fieldsByKey.get(linkedVisibilityKey);
+
+    if (!linkedField) {
+      throw new Error(`Unit form field ${field.key} inherits visibility from unknown field: ${linkedVisibilityKey}`);
+    }
+
+    if (linkedField.inheritVisibilityFromFieldKey) {
+      throw new Error(`Unit form field ${field.key} cannot inherit visibility through a linked-field chain.`);
     }
   }
 

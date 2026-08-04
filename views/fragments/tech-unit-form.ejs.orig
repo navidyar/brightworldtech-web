@@ -1,0 +1,1319 @@
+<%
+  const isEditMode = mode === 'edit';
+  const htmxAttrs = isModal ? `hx-post="${formAction}" hx-target="#modal-root" hx-swap="innerHTML"` : '';
+  const memoryInstallTypes = Array.isArray(formOptions.memoryInstallTypes) && formOptions.memoryInstallTypes.length > 0
+    ? formOptions.memoryInstallTypes
+    : [
+        { code: 'removable_module', label: 'Removable Module' },
+        { code: 'integrated_soldered', label: 'Integrated / Soldered' },
+        { code: 'unknown', label: 'Unknown' }
+      ];
+  const memoryRows = Array.isArray(formData.memoryModules) && formData.memoryModules.length > 0
+    ? formData.memoryModules
+    : [{ slotLabel: 'Slot 1', sizeGb: '', ramTypeConfigValueId: '', memoryInstallTypeCode: 'removable_module', speedMhz: '', manufacturerName: '', partNumber: '', serialNumber: '', changeNotes: '' }];
+  const storageRows = Array.isArray(formData.storageDevices) && formData.storageDevices.length > 0
+    ? formData.storageDevices
+    : [{ slotLabel: 'Drive 1', sizeGb: '', storageTypeConfigValueId: '', manufacturerName: '', modelNumber: '', serialNumber: '', firmwareVersion: '', wipeStatusConfigValueId: '', changeNotes: '' }];
+  const cosmeticIssueTypes = Array.isArray(formOptions.cosmeticIssueTypes) ? formOptions.cosmeticIssueTypes : [];
+  const hardwareIssueTypes = Array.isArray(formOptions.hardwareIssueTypes) ? formOptions.hardwareIssueTypes : [];
+  const issueLocations = Array.isArray(formOptions.issueLocations) ? formOptions.issueLocations : [];
+  const issueSeverities = Array.isArray(formOptions.issueSeverities) ? formOptions.issueSeverities : [];
+  const commentTypes = Array.isArray(formOptions.commentTypes) ? formOptions.commentTypes : [];
+  const cosmeticIssueRows = Array.isArray(formData.cosmeticIssues) && formData.cosmeticIssues.length > 0
+    ? formData.cosmeticIssues
+    : [{ issueTypeConfigValueId: '', severityConfigValueId: '', locationConfigValueId: '', issueRemark: '' }];
+  const hardwareIssueRows = Array.isArray(formData.hardwareIssues) && formData.hardwareIssues.length > 0
+    ? formData.hardwareIssues
+    : [{ issueTypeConfigValueId: '', customIssueLabel: '', locationConfigValueId: '', issueRemark: '' }];
+  const generalCommentType = commentTypes.find((commentType) => {
+    const normalizedCode = String(commentType.code || commentType.value || commentType.label || '').trim().toLowerCase();
+
+    return normalizedCode === 'general';
+  }) || null;
+  const generalCommentTypeConfigValueId = generalCommentType
+    ? generalCommentType.id
+    : (formOptions.defaultCommentTypeConfigValueId || '');
+  const overallGradeOptions = Array.isArray(formOptions.overallGradeOptions) ? formOptions.overallGradeOptions : [];
+  const absoluteStatusOptions = Array.isArray(formOptions.absoluteStatusOptions) ? formOptions.absoluteStatusOptions : [];
+  const physicalCameraStatusOptions = Array.isArray(formOptions.physicalCameraStatusOptions) ? formOptions.physicalCameraStatusOptions : [];
+  const touchscreenStatusOptions = Array.isArray(formOptions.touchscreenStatusOptions) ? formOptions.touchscreenStatusOptions : [];
+  const keyboardLanguageOptions = Array.isArray(formOptions.keyboardLanguageOptions) ? formOptions.keyboardLanguageOptions : [];
+  const diagnosticsStatusOptions = Array.isArray(formOptions.diagnosticsStatusOptions) ? formOptions.diagnosticsStatusOptions : [];
+  const virusCheckStatusOptions = Array.isArray(formOptions.virusCheckStatusOptions) ? formOptions.virusCheckStatusOptions : [];
+  const driverCheckStatusOptions = Array.isArray(formOptions.driverCheckStatusOptions) ? formOptions.driverCheckStatusOptions : [];
+  const skinnedStatusOptions = Array.isArray(formOptions.skinnedStatusOptions) ? formOptions.skinnedStatusOptions : [];
+  const outcomeOptions = Array.isArray(formOptions.outcomeOptions) && formOptions.outcomeOptions.length > 0
+    ? formOptions.outcomeOptions
+    : [
+        { code: 'pass', label: 'Pass' },
+        { code: 'fail', label: 'Fail' }
+      ];
+  const selectedOutcomeCode = String(formData.outcomeCode || '').trim().toLowerCase();
+  const outcomeApprovalRequested = Boolean(formData.outcomeApprovalRequested);
+  const productionWeightCapabilities = formOptions.productionWeightCapabilities || {};
+  const productionWeightDetails = formData.productionWeightDetails || {
+    formattedEffectiveWeight: '—',
+    sourceLabel: 'Calculated after save',
+    sourceCode: 'not_configured',
+    notes: '',
+    hasOverride: false
+  };
+  const canOverrideProductionWeight = Boolean(formOptions.canOverrideProductionWeight && productionWeightCapabilities.hasProductionWeightOverride);
+  const productionWeightHasUnitOverride = productionWeightDetails.sourceCode === 'unit_override' || Boolean(productionWeightDetails.hasOverride);
+  const initialDuplicateMatches = typeof duplicateMatches !== 'undefined' && Array.isArray(duplicateMatches) ? duplicateMatches : [];
+  const duplicateCheckWasForced = typeof duplicateCheckPerformed !== 'undefined' && Boolean(duplicateCheckPerformed);
+  const canRequestCatalogException = !isEditMode && Boolean(formOptions.canRequestCatalogException);
+  const authoritativeFieldErrors = typeof unitFormFieldErrors !== 'undefined' && Array.isArray(unitFormFieldErrors)
+    ? unitFormFieldErrors
+    : [];
+
+
+  function selected(currentValue, optionValue) {
+    return String(currentValue || '') === String(optionValue || '') ? 'selected' : '';
+  }
+
+  function selectedInstallType(currentValue, optionCode) {
+    const safeCurrentValue = currentValue || 'removable_module';
+
+    return String(safeCurrentValue) === String(optionCode || '') ? 'selected' : '';
+  }
+
+  function displayAssetTag(value) {
+    const assetTagPrefix = formOptions && formOptions.assetTagPrefix
+      ? String(formOptions.assetTagPrefix).trim().toUpperCase()
+      : 'BWT';
+    const rawValue = String(value || '').trim();
+
+    if (!rawValue) {
+      return '';
+    }
+
+    const compactPrefix = assetTagPrefix.replace(/[\s-]+/g, '').toUpperCase();
+    const compactValue = rawValue.replace(/[\s-]+/g, '').toUpperCase();
+
+    if (compactValue.startsWith(compactPrefix)) {
+      const suffix = compactValue.slice(compactPrefix.length);
+      return suffix ? `${assetTagPrefix}${suffix}` : rawValue;
+    }
+
+    if (/^\d+$/.test(compactValue)) {
+      return `${assetTagPrefix}${compactValue}`;
+    }
+
+    return rawValue;
+  }
+
+
+  function memoryTotalGb() {
+    return memoryRows.reduce((sum, row) => {
+      const value = Number(row.sizeGb || 0);
+
+      return Number.isFinite(value) && value > 0 ? sum + value : sum;
+    }, 0);
+  }
+
+  function storageTotalGb() {
+    return storageRows.reduce((sum, row) => {
+      const value = Number(row.sizeGb || 0);
+
+      return Number.isFinite(value) && value > 0 ? sum + value : sum;
+    }, 0);
+  }
+%>
+
+<% if (!formOptions.supported) { %>
+  <div class="message error tech-unit-form-error-summary">
+    <p><%= formOptions.message %></p>
+  </div>
+<% } %>
+
+<% if (errorMessages.length > 0) { %>
+  <div class="message error tech-unit-form-error-summary">
+    <% errorMessages.forEach((errorMessage) => { %>
+      <p><%= errorMessage %></p>
+    <% }) %>
+  </div>
+<% } %>
+
+<form class="app-form tech-unit-form" method="post" action="<%= formAction %>" data-tech-unit-form data-unit-form-mode="<%= mode %>" data-lot-unit-form-profile-url="/tech/units/lot-form-profile" data-lot-requirement-preview-url="/tech/units/lot-requirement-preview" <%- htmxAttrs %>>
+  <input type="hidden" name="currentUnitStatusConfigValueId" value="<%= formData.currentUnitStatusConfigValueId || formOptions.defaultUnitStatusId || '' %>" />
+  <input type="hidden" name="lotRequirementMode" value="<%= mode %>" />
+  <% if (isEditMode) { %>
+    <input type="hidden" name="lotRequirementUnitId" value="<%= formData.unitId || '' %>" />
+  <% } %>
+  <% if (!isEditMode) { %>
+    <input type="hidden" name="duplicateAssumptionNonce" value="<%= formData.duplicateAssumptionNonce || '' %>" data-duplicate-assumption-nonce />
+  <% } %>
+
+  <% if (authoritativeFieldErrors.length > 0) { %>
+    <div hidden data-unit-form-server-errors>
+      <% authoritativeFieldErrors.forEach((fieldError) => { %>
+        <span
+          data-unit-form-server-error
+          data-field-key="<%= fieldError.fieldKey || '' %>"
+          data-error-code="<%= fieldError.code || '' %>"
+          data-error-message="<%= fieldError.message || '' %>"
+        ></span>
+      <% }) %>
+    </div>
+  <% } %>
+
+  <div class="form-section tech-form-section--assignment">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Assignment</p>
+        <h3>Lot Assignment</h3>
+      </div>
+      <p>
+        Select the open child or standalone lot the Tech is working on before entering serials. Closed and parent/container lots cannot receive units.
+        The selected lot also controls whether a confirmed existing unit can be assumed during duplicate matching.
+      </p>
+    </div>
+
+    <div class="form-grid tech-lot-assignment-grid">
+      <%
+        const selectedAssignableLot = formOptions.lots.find((lot) => String(lot.lot_id) === String(formData.lotId || ''));
+        const selectedAssignableLotLabel = selectedAssignableLot
+          ? (selectedAssignableLot.isCurrentLotClosed
+            ? `${selectedAssignableLot.lot_name} (Closed — current lot)`
+            : selectedAssignableLot.lot_name)
+          : '';
+        const selectedAssignableLotAllowsAssumption = Boolean(
+          selectedAssignableLot
+          && Number(selectedAssignableLot.allow_duplicate_unit_assumption || 0) === 1
+        );
+      %>
+      <label class="form-field tech-assignable-lot-field">
+        <span>Assignable Lot</span>
+        <div class="tech-assignable-lot-combobox" data-assignable-lot-combobox>
+          <input
+            type="search"
+            class="tech-assignable-lot-combobox-input"
+            data-assignable-lot-combobox-input
+            value="<%= selectedAssignableLotLabel %>"
+            autocomplete="off"
+            placeholder="Search or select an assignable lot"
+            aria-label="Assignable Lot"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            aria-required="true"
+          />
+          <select name="lotId" data-lot-select data-assignable-lot-catalog hidden aria-hidden="true" tabindex="-1">
+            <option value="">Select assignable lot</option>
+            <% formOptions.lots.forEach((lot) => { %>
+              <%
+                const lotProductionWeightNumber = Number(lot.resolved_default_production_weight);
+                const lotProductionWeightValue = Number.isFinite(lotProductionWeightNumber) ? lotProductionWeightNumber.toFixed(2) : '';
+                const lotOptionLabel = lot.isCurrentLotClosed
+                  ? `${lot.lot_name} (Closed — current lot)`
+                  : lot.lot_name;
+              %>
+              <option
+                value="<%= lot.lot_id %>"
+                data-production-weight="<%= lotProductionWeightValue %>"
+                data-allow-duplicate-unit-assumption="<%= Number(lot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0' %>"
+                <%= selected(formData.lotId, lot.lot_id) %>
+              >
+                <%= lotOptionLabel %>
+              </option>
+            <% }) %>
+          </select>
+          <div class="tech-assignable-lot-options" data-assignable-lot-options role="listbox" hidden></div>
+        </div>
+        <small class="field-hint" data-assignable-lot-hint>
+          Search by lot name, then choose a listed assignable lot. Closed lots and parent/container lots cannot receive units.
+          <% if (formOptions.currentLotIsClosed) { %>
+            This unit remains in its current closed lot unless you select an open destination lot.
+          <% } %>
+        </small>
+      </label>
+
+      <p class="field-hint tech-lot-form-profile-status" data-lot-unit-form-profile-status data-status="idle" aria-live="polite">
+        Select an assignable Lot to apply its field visibility and requirement settings.
+      </p>
+
+      <div class="tech-lot-requirement-workflow-region" data-lot-requirement-workflow-region aria-live="polite">
+        <%- include('./tech-unit-lot-requirement-workflow', {
+          lotRequirementWorkflow: typeof lotRequirementWorkflow !== 'undefined' ? lotRequirementWorkflow : null
+        }) %>
+      </div>
+
+      <% if (!isEditMode) { %>
+        <p
+          class="tech-lot-assumption-status"
+          data-assignable-lot-assumption-status
+          data-status="<%= selectedAssignableLotAllowsAssumption ? 'enabled' : 'disabled' %>"
+          <%= selectedAssignableLot ? '' : 'hidden' %>
+          aria-live="polite"
+        >
+          Existing-unit assumption is
+          <span data-assignable-lot-assumption-status-state><%= selectedAssignableLotAllowsAssumption ? 'enabled' : 'not enabled' %></span>
+          for this lot.
+        </p>
+      <% } %>
+    </div>
+  </div>
+
+  <div class="form-section tech-form-section--identity"<% if (!isEditMode) { %> data-unit-form-auto-collapse<% } %>>
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Identity</p>
+        <h3>Unit Identity</h3>
+      </div>
+      <p>
+        Asset tags are generated only after a new unit is created. Unit serial and BIOS serial are checked early for possible existing units,
+        using case-insensitive matching across both serial fields.
+      </p>
+    </div>
+
+    <div class="form-grid">
+      <% if (isEditMode) { %>
+        <div class="form-field tech-unit-asset-tag-readonly">
+          <span>Asset Tag</span>
+          <output><%= displayAssetTag(formData.assetTag) || '—' %></output>
+          <small class="field-hint">Asset tags are permanent and cannot be changed.</small>
+        </div>
+      <% } %>
+
+      <label class="form-field" data-unit-form-field-key="unit_serial_number">
+        <span>Unit Serial Number</span>
+        <input
+          type="text"
+          name="unitSerialNumber"
+          value="<%= formData.unitSerialNumber %>"
+          placeholder="Physical serial from the unit"
+          autocomplete="off"
+          spellcheck="false"
+          maxlength="150"
+          data-duplicate-check-serial
+        />
+        <small class="field-hint">
+          Usually copied from the device label or chassis. The system checks both serial types after you leave this field.
+        </small>
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="bios_serial_number">
+        <span>BIOS Serial Number</span>
+        <input
+          type="text"
+          name="biosSerialNumber"
+          value="<%= formData.biosSerialNumber %>"
+          placeholder="Serial reported by BIOS or ScanTool"
+          autocomplete="off"
+          spellcheck="false"
+          maxlength="150"
+          data-duplicate-check-serial
+        />
+        <small class="field-hint">
+          BIOS serial is checked against both stored serial types after you leave this field.
+        </small>
+      </label>
+    </div>
+
+    <% if (!isEditMode) { %>
+      <div class="tech-unit-duplicate-check-region" data-duplicate-check-region aria-live="polite">
+        <% if (duplicateCheckWasForced) { %>
+          <%- include('./tech-unit-duplicate-check', {
+            duplicateMatches: initialDuplicateMatches,
+            hasSerialSearch: true,
+            destinationLotId: formData.lotId || '',
+            canRequestIntentionalDuplicate: typeof canRequestIntentionalDuplicate !== 'undefined' ? canRequestIntentionalDuplicate : false
+          }) %>
+        <% } %>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="form-section tech-form-section--catalog">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Model</p>
+        <h3>Manufacturer and Model</h3>
+      </div>
+      <p>
+        Select the manufacturer first, then search its managed model catalog. Choosing a model automatically applies its matching Unit Category.
+      </p>
+    </div>
+
+    <div class="form-grid">
+      <label class="form-field" data-unit-form-field-key="manufacturer">
+        <span>Manufacturer</span>
+        <select name="manufacturerId" data-manufacturer-select>
+          <option value="">Select manufacturer</option>
+          <% formOptions.manufacturers.forEach((manufacturer) => { %>
+            <option value="<%= manufacturer.id %>" <%= selected(formData.manufacturerId, manufacturer.id) %>>
+              <%= manufacturer.label %>
+            </option>
+          <% }) %>
+        </select>
+        <small class="field-hint">
+          Selecting a manufacturer loads only that manufacturer's model catalog.
+        </small>
+      </label>
+
+      <label class="form-field tech-unit-model-field" data-unit-form-field-key="unit_model">
+        <span>Unit Model</span>
+        <div class="tech-unit-model-combobox" data-unit-model-combobox>
+          <input
+            type="search"
+            class="tech-unit-model-combobox-input"
+            data-unit-model-combobox-input
+            autocomplete="off"
+            placeholder="Select manufacturer first"
+            aria-label="Unit Model"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            disabled
+          />
+          <input type="hidden" name="unitModelId" value="<%= formData.unitModelId || '' %>" data-unit-model-select />
+          <div class="tech-unit-model-options" data-unit-model-options role="listbox" hidden></div>
+          <select data-unit-model-catalog hidden aria-hidden="true" tabindex="-1">
+            <% formOptions.unitModels.forEach((unitModel) => { %>
+              <option
+                value="<%= unitModel.id %>"
+                data-manufacturer-id="<%= unitModel.manufacturerId || '' %>"
+                data-category-id="<%= unitModel.unitCategoryConfigValueId || '' %>"
+                data-model-active="<%= unitModel.isActive ? '1' : '0' %>"
+                <%= selected(formData.unitModelId, unitModel.id) %>
+              >
+                <%= unitModel.label %><%= unitModel.isActive ? '' : ' (Inactive)' %>
+              </option>
+            <% }) %>
+          </select>
+        </div>
+        <small class="field-hint" data-unit-model-hint>
+          Select a manufacturer to load its model catalog. Choosing a model sets the matching Unit Category.
+        </small>
+      </label>
+
+      <label class="form-field">
+        <span>Unit Category</span>
+        <select name="unitCategoryConfigValueId" required data-unit-category-select>
+          <option value="">Select category</option>
+          <% formOptions.unitCategories.forEach((category) => { %>
+            <option value="<%= category.id %>" data-production-weight="<%= category.defaultProductionWeightValue || '' %>" <%= selected(formData.unitCategoryConfigValueId, category.id) %>>
+              <%= category.label %>
+            </option>
+          <% }) %>
+        </select>
+        <small class="field-hint">
+          Selecting a managed model applies its matching category. Choose a category manually only when no catalog model is selected.
+        </small>
+      </label>
+    </div>
+
+    <% if (canRequestCatalogException) { %>
+      <div class="tech-catalog-request-action" data-unit-form-follows-key="unit_model">
+        <button type="button" class="secondary-button" data-catalog-request-button="model" disabled aria-disabled="true">Request Missing Model</button>
+        <small class="field-hint" data-catalog-request-model-hint>Select Manufacturer and Unit Category, then type the exact model name that is missing from the managed catalog.</small>
+      </div>
+    <% } %>
+  </div>
+
+<% if (isEditMode) { %>
+  <div class="form-section form-section--production-weight tech-form-section--weight">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Production Weight</p>
+        <h3>Production Weight</h3>
+      </div>
+      <p>
+        Review the effective weight before saving.
+      </p>
+    </div>
+
+    <div class="production-weight-preview-grid production-weight-preview-grid--simple">
+      <div class="production-weight-preview-card">
+        <span>Effective Weight</span>
+        <strong data-production-weight-preview-value><%= productionWeightDetails.formattedEffectiveWeight || '—' %></strong>
+        <small class="production-weight-unit-override-label" data-production-weight-unit-override-label data-initial-unit-override="<%= productionWeightHasUnitOverride ? 'true' : 'false' %>" <%= productionWeightHasUnitOverride ? '' : 'hidden' %>>Unit override</small>
+      </div>
+    </div>
+
+    <% if (productionWeightDetails.notes) { %>
+      <p class="field-hint production-weight-existing-note">
+        Current override note: <%= productionWeightDetails.notes %>
+      </p>
+    <% } %>
+
+    <% if (canOverrideProductionWeight) { %>
+      <div class="form-grid">
+        <label class="form-field">
+          <span>Unit Override Weight</span>
+          <input
+            type="number"
+            name="productionWeightOverride"
+            value="<%= formData.productionWeightOverride || '' %>"
+            step="0.01"
+            min="0"
+            placeholder="Optional custom weight"
+            autocomplete="off"
+            data-production-weight-override-input
+          />
+          <small class="field-hint">
+            Leave blank to use the selected lot/category weight.
+          </small>
+        </label>
+
+        <label class="form-field">
+          <span>Unit Override Notes</span>
+          <textarea name="productionWeightNotes" rows="3" maxlength="500" placeholder="Optional unit override note"><%= formData.productionWeightNotes || '' %></textarea>
+          <small class="field-hint">
+            Optional note for the unit override.
+          </small>
+        </label>
+      </div>
+    <% } %>
+  </div>
+<% } %>
+
+  <div class="form-section tech-form-section--processor" data-unit-form-auto-collapse>
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">CPU</p>
+        <h3>Processor Information</h3>
+      </div>
+      <p>
+        CPU details are used as a secondary confidence check when matching a unit by serial number.
+        The expected display format is CPU manufacturer, CPU model, and speed.
+      </p>
+    </div>
+
+    <div class="form-grid">
+      <label class="form-field" data-unit-form-follows-key="processor_model">
+        <span>Processor Type</span>
+        <select data-processor-brand-select disabled>
+          <option value="">Select Unit Model first</option>
+          <% (formOptions.processorBrands || []).forEach((processorBrand) => { %>
+            <option value="<%= processorBrand.id %>"><%= processorBrand.label %></option>
+          <% }) %>
+        </select>
+        <small class="field-hint" data-processor-brand-hint>
+          Processor types are limited to the selected Unit Model.
+        </small>
+      </label>
+
+      <label class="form-field tech-unit-processor-field" data-unit-form-field-key="processor_model">
+        <span>Processor</span>
+        <div class="tech-unit-processor-combobox" data-processor-combobox>
+          <input
+            type="search"
+            class="tech-unit-processor-combobox-input"
+            data-processor-combobox-input
+            autocomplete="off"
+            placeholder="Select Unit Model first"
+            aria-label="Processor"
+            aria-autocomplete="list"
+            aria-expanded="false"
+            disabled
+          />
+          <input type="hidden" name="processorModelId" value="<%= formData.processorModelId || '' %>" data-processor-model-select />
+          <div class="tech-unit-processor-options" data-processor-options role="listbox" hidden></div>
+          <select data-processor-catalog hidden aria-hidden="true" tabindex="-1">
+            <% formOptions.processorModels.forEach((processorModel) => { %>
+              <option
+                value="<%= processorModel.id %>"
+                data-processor-brand-id="<%= processorModel.processorBrandId || '' %>"
+                data-compatible-unit-model-ids="<%= (processorModel.compatibleUnitModelIds || []).join(',') %>"
+                data-base-speed-ghz="<%= processorModel.baseSpeedGhz || '' %>"
+                <%= selected(formData.processorModelId, processorModel.id) %>
+              >
+                <%= processorModel.label %>
+              </option>
+            <% }) %>
+          </select>
+        </div>
+        <small class="field-hint" data-processor-model-hint>
+          Select a compatible Processor Type, then search its allowed processor values.
+        </small>
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="processor_speed_ghz">
+        <span>Processor Speed GHz</span>
+        <input
+          type="number"
+          name="processorSpeedGhz"
+          value="<%= formData.processorSpeedGhz %>"
+          min="0"
+          step="0.01"
+          placeholder="Example: 2.40"
+          data-processor-speed-input
+        />
+        <small class="field-hint">
+          Store the numeric speed only. The frontend displays it with GHz.
+        </small>
+      </label>
+    </div>
+
+    <% if (canRequestCatalogException) { %>
+      <div class="tech-catalog-request-action" data-unit-form-follows-key="processor_model">
+        <button type="button" class="secondary-button" data-catalog-request-button="processor" disabled aria-disabled="true">Request Processor Addition</button>
+        <small class="field-hint" data-catalog-request-processor-hint>Select a Unit Model first. Use this only when the observed Processor Type or Processor is unavailable for that model.</small>
+      </div>
+    <% } %>
+  </div>
+
+  <div class="form-section tech-hardware-capacity-section" data-unit-form-auto-collapse>
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Hardware Capacity</p>
+        <h3>Memory &amp; Storage</h3>
+      </div>
+      <p>Record the configuration found before technician work and the configuration installed when the Unit is finished.</p>
+    </div>
+
+    <div class="hardware-capacity-matrix" aria-label="Previous and current memory and storage">
+      <div class="hardware-capacity-matrix__header" aria-hidden="true">
+        <span></span>
+        <strong>Previous</strong>
+        <strong>Current</strong>
+        <span></span>
+      </div>
+
+      <div class="hardware-capacity-matrix__row" data-hardware-capacity-row="memory">
+        <div class="hardware-capacity-matrix__name">
+          <strong>Memory Size</strong>
+        </div>
+
+        <% if (formOptions.previousMemorySupported !== false) { %>
+          <label class="form-field hardware-capacity-matrix__field" data-unit-form-field-key="previous_memory_size">
+            <span class="hardware-capacity-matrix__mobile-label">Previous</span>
+            <span class="hardware-capacity-input">
+              <input
+                type="number"
+                name="previousRamGb"
+                value="<%= formData.previousRamGb || '' %>"
+                min="1"
+                step="1"
+                inputmode="numeric"
+                placeholder="16"
+                data-previous-capacity="memory"
+              />
+              <span class="hardware-capacity-input__suffix">GB</span>
+            </span>
+          </label>
+        <% } else { %>
+          <div></div>
+        <% } %>
+
+        <label class="form-field hardware-capacity-matrix__field" data-unit-form-follows-key="memory_modules">
+          <span class="hardware-capacity-matrix__mobile-label">Current</span>
+          <span class="hardware-capacity-input">
+            <input
+              type="number"
+              name="ramGb"
+              value="<%= formData.ramGb || memoryTotalGb() || '' %>"
+              min="1"
+              step="1"
+              inputmode="numeric"
+              placeholder="32"
+              data-current-capacity="memory"
+              data-unit-form-companion-key="memory_modules"
+              data-memory-total-input
+              data-auto-from-components="<%= memoryTotalGb() > 0 && Number(formData.ramGb || memoryTotalGb()) === memoryTotalGb() ? 'true' : 'false' %>"
+            />
+            <span class="hardware-capacity-input__suffix">GB</span>
+          </span>
+        </label>
+
+        <button
+          type="button"
+          class="secondary-button hardware-capacity-copy-button"
+          data-copy-previous-capacity="memory"
+          data-unit-form-follows-key="previous_memory_size"
+          <%= formData.previousRamGb ? '' : 'disabled' %>
+        >Copy Previous</button>
+      </div>
+
+      <div class="hardware-capacity-matrix__row" data-hardware-capacity-row="storage">
+        <div class="hardware-capacity-matrix__name">
+          <strong>Storage Size</strong>
+        </div>
+
+        <% if (formOptions.previousStorageSupported !== false) { %>
+          <label class="form-field hardware-capacity-matrix__field" data-unit-form-field-key="previous_storage_size">
+            <span class="hardware-capacity-matrix__mobile-label">Previous</span>
+            <span class="hardware-capacity-input">
+              <input
+                type="number"
+                name="previousStorageGb"
+                value="<%= formData.previousStorageGb || '' %>"
+                min="1"
+                step="1"
+                inputmode="numeric"
+                placeholder="512"
+                data-previous-capacity="storage"
+              />
+              <span class="hardware-capacity-input__suffix">GB</span>
+            </span>
+          </label>
+        <% } else { %>
+          <div></div>
+        <% } %>
+
+        <label class="form-field hardware-capacity-matrix__field" data-unit-form-follows-key="storage_devices">
+          <span class="hardware-capacity-matrix__mobile-label">Current</span>
+          <span class="hardware-capacity-input">
+            <input
+              type="number"
+              name="storageGb"
+              value="<%= formData.storageGb || storageTotalGb() || '' %>"
+              min="1"
+              step="1"
+              inputmode="numeric"
+              placeholder="1024"
+              data-current-capacity="storage"
+              data-unit-form-companion-key="storage_devices"
+              data-storage-total-input
+              data-auto-from-components="<%= storageTotalGb() > 0 && Number(formData.storageGb || storageTotalGb()) === storageTotalGb() ? 'true' : 'false' %>"
+            />
+            <span class="hardware-capacity-input__suffix">GB</span>
+          </span>
+        </label>
+
+        <button
+          type="button"
+          class="secondary-button hardware-capacity-copy-button"
+          data-copy-previous-capacity="storage"
+          data-unit-form-follows-key="previous_storage_size"
+          <%= formData.previousStorageGb ? '' : 'disabled' %>
+        >Copy Previous</button>
+      </div>
+    </div>
+
+    <p class="field-hint hardware-capacity-matrix__hint">Lot Requirements evaluate Current Memory Size and Current Storage Size only. Previous values are optional.</p>
+  </div>
+
+  <div class="form-section tech-form-section--memory" data-unit-form-field-key="memory_modules" data-unit-form-repeatable-type="memory">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Memory</p>
+        <h3>Current Memory Modules <span class="muted-inline">(Optional Detail)</span></h3>
+      </div>
+      <p>
+        Optionally record each installed memory module. When these rows are used, their total can keep Current Memory Size synchronized.
+      </p>
+    </div>
+
+    <div class="workflow-list" data-module-list="memory">
+      <% memoryRows.forEach((moduleRow, index) => { %>
+        <article class="workflow-item slate" data-module-row="memory">
+          <span></span>
+          <div style="width: 100%;">
+            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+              <div>
+                <strong>Memory Module <span data-module-display-number><%= index + 1 %></span></strong>
+                <p>Slot, size, type, and install type.</p>
+              </div>
+              <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+            </div>
+
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Slot Label</span>
+                <input type="text" name="memoryModules[<%= index %>][slotLabel]" value="<%= moduleRow.slotLabel || '' %>" placeholder="Slot 1" maxlength="80" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Size GB</span>
+                <input type="number" name="memoryModules[<%= index %>][sizeGb]" value="<%= moduleRow.sizeGb || '' %>" min="1" step="1" placeholder="Example: 8" data-memory-size-input data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Memory Type</span>
+                <select name="memoryModules[<%= index %>][ramTypeConfigValueId]" data-module-field>
+                  <option value="">Select memory type</option>
+                  <% formOptions.ramTypes.forEach((ramType) => { %>
+                    <option value="<%= ramType.id %>" <%= selected(moduleRow.ramTypeConfigValueId, ramType.id) %>><%= ramType.label %></option>
+                  <% }) %>
+                </select>
+      </label>
+
+              <label class="form-field">
+                <span>Install Type</span>
+                <select name="memoryModules[<%= index %>][memoryInstallTypeCode]" data-module-field>
+                  <% memoryInstallTypes.forEach((installType) => { %>
+                    <option value="<%= installType.code %>" <%= selectedInstallType(moduleRow.memoryInstallTypeCode, installType.code) %>><%= installType.label %></option>
+                  <% }) %>
+                </select>
+                <small class="field-hint">Defaults to removable. Use integrated/soldered when memory cannot be removed.</small>
+              </label>
+
+              <input type="hidden" name="memoryModules[<%= index %>][speedMhz]" value="<%= moduleRow.speedMhz || '' %>" />
+              <input type="hidden" name="memoryModules[<%= index %>][manufacturerName]" value="<%= moduleRow.manufacturerName || '' %>" />
+              <input type="hidden" name="memoryModules[<%= index %>][partNumber]" value="<%= moduleRow.partNumber || '' %>" />
+              <input type="hidden" name="memoryModules[<%= index %>][serialNumber]" value="<%= moduleRow.serialNumber || '' %>" />
+
+              <label class="form-field">
+                <span>Change Notes</span>
+                <input type="text" name="memoryModules[<%= index %>][changeNotes]" value="<%= moduleRow.changeNotes || '' %>" maxlength="500" placeholder="Installed, replaced, upgraded, downgraded, etc." data-module-field />
+              </label>
+            </div>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+
+    <div class="form-actions" style="margin-top: 12px;">
+      <button type="button" class="secondary-button" data-add-module-row="memory">+ Add Memory Module</button>
+      <span class="field-hint">Recorded Module Total: <strong data-memory-total-display><%= memoryTotalGb() || 0 %></strong>GB</span>
+    </div>
+  </div>
+
+  <div class="form-section tech-form-section--storage" data-unit-form-field-key="storage_devices" data-unit-form-repeatable-type="storage">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Storage</p>
+        <h3>Current Storage Devices <span class="muted-inline">(Optional Detail)</span></h3>
+      </div>
+      <p>
+        Optionally record each installed storage device. When these rows are used, their total can keep Current Storage Size synchronized; prior saved device sets remain in history.
+      </p>
+    </div>
+
+    <div class="workflow-list" data-module-list="storage">
+      <% storageRows.forEach((deviceRow, index) => { %>
+        <article class="workflow-item slate" data-module-row="storage">
+          <span></span>
+          <div style="width: 100%;">
+            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+              <div>
+                <strong>Storage Device <span data-module-display-number><%= index + 1 %></span></strong>
+                <p>Drive slot, size, type, and wipe status.</p>
+              </div>
+              <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+            </div>
+
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Slot Label</span>
+                <input type="text" name="storageDevices[<%= index %>][slotLabel]" value="<%= deviceRow.slotLabel || '' %>" placeholder="Drive 1" maxlength="80" data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Size GB</span>
+                <input type="number" name="storageDevices[<%= index %>][sizeGb]" value="<%= deviceRow.sizeGb || '' %>" min="1" step="1" placeholder="Example: 256" data-storage-size-input data-module-field />
+              </label>
+
+              <label class="form-field">
+                <span>Storage Type</span>
+                <select name="storageDevices[<%= index %>][storageTypeConfigValueId]" data-module-field>
+                  <option value="">Select storage type</option>
+                  <% formOptions.storageTypes.forEach((storageType) => { %>
+                    <option value="<%= storageType.id %>" <%= selected(deviceRow.storageTypeConfigValueId, storageType.id) %>><%= storageType.label %></option>
+                  <% }) %>
+                </select>
+      </label>
+
+              <label class="form-field">
+                <span>Wipe Status</span>
+                <select name="storageDevices[<%= index %>][wipeStatusConfigValueId]" data-module-field>
+                  <option value="">Select wipe status</option>
+                  <% (formOptions.storageWipeStatuses || []).forEach((wipeStatus) => { %>
+                    <option value="<%= wipeStatus.id %>" <%= selected(deviceRow.wipeStatusConfigValueId, wipeStatus.id) %>><%= wipeStatus.label %></option>
+                  <% }) %>
+                </select>
+      </label>
+
+              <input type="hidden" name="storageDevices[<%= index %>][manufacturerName]" value="<%= deviceRow.manufacturerName || '' %>" />
+              <input type="hidden" name="storageDevices[<%= index %>][modelNumber]" value="<%= deviceRow.modelNumber || '' %>" />
+              <input type="hidden" name="storageDevices[<%= index %>][serialNumber]" value="<%= deviceRow.serialNumber || '' %>" />
+              <input type="hidden" name="storageDevices[<%= index %>][firmwareVersion]" value="<%= deviceRow.firmwareVersion || '' %>" />
+
+              <label class="form-field">
+                <span>Change Notes</span>
+                <input type="text" name="storageDevices[<%= index %>][changeNotes]" value="<%= deviceRow.changeNotes || '' %>" maxlength="500" placeholder="Installed, replaced, upgraded, downgraded, wiped, etc." data-module-field />
+              </label>
+            </div>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+
+    <div class="form-actions" style="margin-top: 12px;">
+      <button type="button" class="secondary-button" data-add-module-row="storage">+ Add Storage Device</button>
+      <span class="field-hint">Recorded Device Total: <strong data-storage-total-display><%= storageTotalGb() || 0 %></strong>GB</span>
+    </div>
+  </div>
+
+  <div class="form-section tech-form-section--system" data-unit-form-auto-collapse>
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Expanded Specifications</p>
+        <h3>Operating System, BIOS, and Status Fields</h3>
+      </div>
+      <p>
+        Record operating-system, BIOS, and diagnostic values together. ScanTool-only cellular and band details stay visible in the expanded unit mini-menu.
+      </p>
+    </div>
+
+    <div class="form-grid">
+      <label class="form-field" data-unit-form-field-key="operating_system">
+        <span>Operating System</span>
+        <select name="operatingSystemConfigValueId">
+          <option value="">Select OS</option>
+          <% formOptions.operatingSystems.forEach((operatingSystem) => { %>
+            <option value="<%= operatingSystem.id %>" <%= selected(formData.operatingSystemConfigValueId, operatingSystem.id) %>>
+              <%= operatingSystem.label %>
+            </option>
+          <% }) %>
+        </select>
+        <small class="field-hint">
+          Record the installed operating system when known. OS build and diagnostics are tracked in the fields below.
+        </small>
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="os_build">
+        <span>OS Build</span>
+        <input type="text" name="osBuild" value="<%= formData.osBuild || '' %>" maxlength="100" placeholder="Example: 23H2 / 22631" />
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="bios_version">
+        <span>BIOS Version</span>
+        <input type="text" name="biosVersion" value="<%= formData.biosVersion || '' %>" maxlength="100" placeholder="Example: 1.18.0" />
+      </label>
+
+      <% if (formOptions.batteryHealthSupported !== false) { %>
+        <label class="form-field" data-unit-form-field-key="battery_health">
+          <span>Battery Health</span>
+          <input type="number" name="batteryHealthPercent" value="<%= formData.batteryHealthPercent || '' %>" min="0" max="100" step="0.1" inputmode="decimal" placeholder="Example: 87.5" />
+          <small class="field-hint">Optional percentage from 0.0 through 100.0; tenths are supported.</small>
+        </label>
+      <% } %>
+
+      <label class="form-field" data-unit-form-field-key="absolute_status">
+        <span>Absolute Status</span>
+        <select name="absoluteStatusConfigValueId">
+          <option value="">Select status</option>
+          <% absoluteStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.absoluteStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="physical_camera_status">
+        <span>Physical Camera</span>
+        <select name="physicalCameraStatusConfigValueId">
+          <option value="">Select status</option>
+          <% physicalCameraStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.physicalCameraStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="touchscreen_status">
+        <span>Touchscreen</span>
+        <select name="touchscreenStatusConfigValueId">
+          <option value="">Select status</option>
+          <% touchscreenStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.touchscreenStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="keyboard_language">
+        <span>Keyboard Language</span>
+        <select name="keyboardLanguageConfigValueId">
+          <option value="">Select language</option>
+          <% keyboardLanguageOptions.forEach((languageOption) => { %>
+            <option value="<%= languageOption.id %>" <%= selected(formData.keyboardLanguageConfigValueId, languageOption.id) %>><%= languageOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="complete_diagnostics">
+        <span>Complete Diagnostics</span>
+        <select name="completeDiagnosticsStatusConfigValueId">
+          <option value="">Select status</option>
+          <% diagnosticsStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.completeDiagnosticsStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="virus_check">
+        <span>Virus Check</span>
+        <select name="virusCheckStatusConfigValueId">
+          <option value="">Select status</option>
+          <% virusCheckStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.virusCheckStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="driver_check">
+        <span>Driver Check</span>
+        <select name="driverCheckStatusConfigValueId">
+          <option value="">Select status</option>
+          <% driverCheckStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.driverCheckStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="skinned_status">
+        <span>Skinned</span>
+        <select name="skinnedStatusConfigValueId">
+          <option value="">Select status</option>
+          <% skinnedStatusOptions.forEach((statusOption) => { %>
+            <option value="<%= statusOption.id %>" <%= selected(formData.skinnedStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+          <% }) %>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <div class="form-section tech-form-section--cosmetic-issues" data-unit-form-field-key="cosmetic_issues" data-unit-form-repeatable-type="cosmeticIssue">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Cosmetic Issues</p>
+        <h3>Cosmetic Issue Rows</h3>
+      </div>
+      <p>
+        Add each cosmetic issue as its own row with an issue type, severity, location, and optional remarks. These rows are saved as the current cosmetic issue list while older rows remain in database history.
+      </p>
+    </div>
+
+    <% if (cosmeticIssueTypes.length === 0 || issueSeverities.length === 0 || issueLocations.length === 0) { %>
+      <div class="message error">
+        <p>Cosmetic issue options are not ready yet. Run the Step 3f SQL migration to seed issue types, severities, and locations.</p>
+      </div>
+    <% } %>
+
+    <div class="workflow-list" data-module-list="cosmeticIssue">
+      <% cosmeticIssueRows.forEach((issueRow, index) => { %>
+        <article class="workflow-item slate" data-module-row="cosmeticIssue">
+          <span></span>
+          <div style="width: 100%;">
+            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+              <div>
+                <strong>Cosmetic Issue <span data-module-display-number><%= index + 1 %></span></strong>
+                <p>Issue type, severity, location, and remarks.</p>
+              </div>
+              <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+            </div>
+
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Issue Type</span>
+                <select name="cosmeticIssues[<%= index %>][issueTypeConfigValueId]" data-module-field>
+                  <option value="">Select cosmetic issue</option>
+                  <% cosmeticIssueTypes.forEach((issueType) => { %>
+                    <option value="<%= issueType.id %>" <%= selected(issueRow.issueTypeConfigValueId, issueType.id) %>><%= issueType.label %></option>
+                  <% }) %>
+                </select>
+      </label>
+
+              <label class="form-field">
+                <span>Severity</span>
+                <select name="cosmeticIssues[<%= index %>][severityConfigValueId]" data-module-field>
+                  <option value="">Select severity</option>
+                  <% issueSeverities.forEach((severity) => { %>
+                    <option value="<%= severity.id %>" <%= selected(issueRow.severityConfigValueId, severity.id) %>><%= severity.label %></option>
+                  <% }) %>
+                </select>
+      </label>
+
+              <label class="form-field">
+                <span>Location</span>
+                <select name="cosmeticIssues[<%= index %>][locationConfigValueId]" data-module-field>
+                  <option value="">Select location</option>
+                  <% issueLocations.forEach((location) => { %>
+                    <option value="<%= location.id %>" <%= selected(issueRow.locationConfigValueId, location.id) %>><%= location.label %></option>
+                  <% }) %>
+                </select>
+      </label>
+
+              <label class="form-field">
+                <span>Remarks</span>
+                <input type="text" name="cosmeticIssues[<%= index %>][issueRemark]" value="<%= issueRow.issueRemark || '' %>" maxlength="500" placeholder="Short note explaining the issue" data-module-field />
+              </label>
+            </div>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+
+    <div class="form-actions" style="margin-top: 12px;">
+      <button type="button" class="secondary-button" data-add-module-row="cosmeticIssue">+ Add Cosmetic Issue</button>
+    </div>
+  </div>
+
+  <div class="form-section tech-form-section--hardware-issues" data-unit-form-field-key="hardware_issues" data-unit-form-repeatable-type="hardwareIssue">
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Hardware Issues</p>
+        <h3>Hardware Issue Rows</h3>
+      </div>
+      <p>
+        Add hardware failures as structured rows. Hardware issues can use a configured issue type or a custom issue name when the exact failure is not configured yet.
+      </p>
+    </div>
+
+    <% if (hardwareIssueTypes.length === 0 || issueLocations.length === 0) { %>
+      <div class="message error">
+        <p>Hardware issue options are not ready yet. Run the Step 3f SQL migration to seed hardware issue types and locations.</p>
+      </div>
+    <% } %>
+
+    <div class="workflow-list" data-module-list="hardwareIssue">
+      <% hardwareIssueRows.forEach((issueRow, index) => { %>
+        <article class="workflow-item slate" data-module-row="hardwareIssue">
+          <span></span>
+          <div style="width: 100%;">
+            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+              <div>
+                <strong>Hardware Issue <span data-module-display-number><%= index + 1 %></span></strong>
+                <p>Configured issue or custom issue, location, and remarks.</p>
+              </div>
+              <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+            </div>
+
+            <div class="form-grid">
+              <label class="form-field">
+                <span>Configured Issue</span>
+                <select name="hardwareIssues[<%= index %>][issueTypeConfigValueId]" data-module-field>
+                  <option value="">Select configured issue</option>
+                  <% hardwareIssueTypes.forEach((issueType) => { %>
+                    <option value="<%= issueType.id %>" <%= selected(issueRow.issueTypeConfigValueId, issueType.id) %>><%= issueType.label %></option>
+                  <% }) %>
+                </select>
+                <small class="field-hint">Use this when the issue exists in the configured list.</small>
+              </label>
+
+              <label class="form-field">
+                <span>Custom Issue</span>
+                <input type="text" name="hardwareIssues[<%= index %>][customIssueLabel]" value="<%= issueRow.customIssueLabel || '' %>" maxlength="120" placeholder="Example: Cannot install OS" data-module-field />
+                <small class="field-hint">Use this when the issue is not configured yet.</small>
+              </label>
+
+              <label class="form-field">
+                <span>Location</span>
+                <select name="hardwareIssues[<%= index %>][locationConfigValueId]" data-module-field>
+                  <option value="">Select location</option>
+                  <% issueLocations.forEach((location) => { %>
+                    <option value="<%= location.id %>" <%= selected(issueRow.locationConfigValueId, location.id) %>><%= location.label %></option>
+                  <% }) %>
+                </select>
+      </label>
+
+              <label class="form-field">
+                <span>Remarks</span>
+                <input type="text" name="hardwareIssues[<%= index %>][issueRemark]" value="<%= issueRow.issueRemark || '' %>" maxlength="500" placeholder="Short note explaining the issue" data-module-field />
+              </label>
+            </div>
+          </div>
+        </article>
+      <% }) %>
+    </div>
+
+    <div class="form-actions" style="margin-top: 12px;">
+      <button type="button" class="secondary-button" data-add-module-row="hardwareIssue">+ Add Hardware Issue</button>
+    </div>
+  </div>
+
+  <div class="form-section form-section--grade-outcome tech-form-section--outcome" data-unit-form-auto-collapse>
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Grade & Outcome</p>
+        <h3>Cosmetic Grade and Unit Pass/Fail</h3>
+      </div>
+      <p>
+        Cosmetic Grade A-D only describes appearance. Unit Pass/Fail describes the working condition and is tracked separately for completion reporting.
+      </p>
+    </div>
+
+    <% if (overallGradeOptions.length === 0) { %>
+      <div class="message error">
+        <p>Cosmetic Grade options are not ready yet. Run the Step 3g SQL migration to seed grade values.</p>
+      </div>
+    <% } %>
+
+    <% if (formOptions.outcomeOptionsSupported === false) { %>
+      <div class="message error">
+        <p>Unit Pass/Fail outcomes are not ready yet. Run the Step 4h SQL migration before saving unit outcomes.</p>
+      </div>
+    <% } %>
+
+    <div class="form-grid tech-grade-outcome-grid">
+      <label class="form-field" data-unit-form-field-key="overall_grade">
+        <span>Cosmetic Grade</span>
+        <select name="overallGradeConfigValueId">
+          <option value="">Select cosmetic grade</option>
+          <% overallGradeOptions.forEach((gradeOption) => { %>
+            <option value="<%= gradeOption.id %>" <%= selected(formData.overallGradeConfigValueId, gradeOption.id) %>><%= gradeOption.label %></option>
+          <% }) %>
+        </select>
+        <small class="field-hint">A-D grade is cosmetic only and does not determine pass/fail by itself.</small>
+      </label>
+
+      <fieldset class="form-field tech-outcome-field" data-unit-form-field-key="unit_outcome">
+        <legend>Unit Outcome</legend>
+        <div class="tech-outcome-options" role="radiogroup" aria-label="Unit outcome">
+          <% outcomeOptions.forEach((outcomeOption) => { %>
+            <label class="tech-outcome-option <%= selectedOutcomeCode === outcomeOption.code ? 'active' : '' %>">
+              <input type="radio" name="outcomeCode" value="<%= outcomeOption.code %>" <%= selectedOutcomeCode === outcomeOption.code ? 'checked' : '' %> />
+              <span><%= outcomeOption.label %></span>
+            </label>
+          <% }) %>
+        </div>
+        <small class="field-hint">Pass/Fail is based on the working condition of the unit, including hardware issues and cosmetic grade.</small>
+      </fieldset>
+
+      <label class="form-field" data-unit-form-field-key="overall_grade_notes">
+        <span>Cosmetic Grade Notes</span>
+        <input type="text" name="overallGradeNotes" value="<%= formData.overallGradeNotes || '' %>" maxlength="500" placeholder="Optional cosmetic grade note" />
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="outcome_notes">
+        <span>Outcome Notes</span>
+        <input type="text" name="outcomeNotes" value="<%= formData.outcomeNotes || '' %>" maxlength="500" placeholder="Optional Pass/Fail note" />
+      </label>
+    </div>
+
+    <div class="tech-outcome-approval-box" data-unit-form-follows-key="unit_outcome">
+      <label class="tech-outcome-approval-check">
+        <input type="checkbox" name="outcomeApprovalRequested" value="1" <%= outcomeApprovalRequested ? 'checked' : '' %> />
+        <span>Request Management/Lead approval for this Pass/Fail decision</span>
+      </label>
+
+      <label class="form-field">
+        <span>Approval Request Notes</span>
+        <textarea name="outcomeApprovalRequestNotes" rows="3" maxlength="1000" placeholder="Explain why you want Management/Lead to approve this Pass/Fail decision."><%= formData.outcomeApprovalRequestNotes || '' %></textarea>
+      </label>
+    </div>
+  </div>
+
+  <div class="form-section tech-form-section--comments" data-unit-form-auto-collapse>
+    <div class="form-section-header">
+      <div>
+        <p class="eyebrow">Comments</p>
+        <h3>Add General Comment</h3>
+      </div>
+      <p>
+        General comments are appended as history. Existing comments stay visible in the expanded unit mini-menu and are not overwritten by this field.
+      </p>
+    </div>
+
+    <input type="hidden" name="generalCommentTypeConfigValueId" data-unit-form-companion-key="general_comment" value="<%= generalCommentTypeConfigValueId %>" />
+
+    <div class="form-grid">
+      <label class="form-field form-field-wide" data-unit-form-field-key="general_comment">
+        <span>General Comment</span>
+        <textarea name="generalCommentText" rows="4" maxlength="2000" placeholder="Add a new general comment. Leave blank if no new comment is needed."><%= formData.generalCommentText || '' %></textarea>
+        <small class="field-hint">Hardware and cosmetic issue comments should be entered in their matching issue rows above.</small>
+      </label>
+    </div>
+  </div>
+
+  <input type="hidden" name="hardwareNotes" value="<%= formData.hardwareNotes || '' %>" />
+  <input type="hidden" name="cosmeticNotes" value="<%= formData.cosmeticNotes || '' %>" />
+
+  <template data-module-template="cosmeticIssue">
+    <article class="workflow-item slate" data-module-row="cosmeticIssue">
+      <span></span>
+      <div style="width: 100%;">
+        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+          <div>
+            <strong>Cosmetic Issue <span data-module-display-number>__DISPLAY__</span></strong>
+            <p>Issue type, severity, location, and remarks.</p>
+          </div>
+          <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+        </div>
+        <div class="form-grid">
+          <label class="form-field"><span>Issue Type</span><select name="cosmeticIssues[__INDEX__][issueTypeConfigValueId]" data-module-field><option value="">Select cosmetic issue</option><% cosmeticIssueTypes.forEach((issueType) => { %><option value="<%= issueType.id %>"><%= issueType.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Severity</span><select name="cosmeticIssues[__INDEX__][severityConfigValueId]" data-module-field><option value="">Select severity</option><% issueSeverities.forEach((severity) => { %><option value="<%= severity.id %>"><%= severity.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Location</span><select name="cosmeticIssues[__INDEX__][locationConfigValueId]" data-module-field><option value="">Select location</option><% issueLocations.forEach((location) => { %><option value="<%= location.id %>"><%= location.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Remarks</span><input type="text" name="cosmeticIssues[__INDEX__][issueRemark]" maxlength="500" placeholder="Short note explaining the issue" data-module-field /></label>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <template data-module-template="hardwareIssue">
+    <article class="workflow-item slate" data-module-row="hardwareIssue">
+      <span></span>
+      <div style="width: 100%;">
+        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+          <div>
+            <strong>Hardware Issue <span data-module-display-number>__DISPLAY__</span></strong>
+            <p>Configured issue or custom issue, location, and remarks.</p>
+          </div>
+          <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+        </div>
+        <div class="form-grid">
+          <label class="form-field"><span>Configured Issue</span><select name="hardwareIssues[__INDEX__][issueTypeConfigValueId]" data-module-field><option value="">Select configured issue</option><% hardwareIssueTypes.forEach((issueType) => { %><option value="<%= issueType.id %>"><%= issueType.label %></option><% }) %></select><small class="field-hint">Use this when the issue exists in the configured list.</small></label>
+          <label class="form-field"><span>Custom Issue</span><input type="text" name="hardwareIssues[__INDEX__][customIssueLabel]" maxlength="120" placeholder="Example: Cannot install OS" data-module-field /><small class="field-hint">Use this when the issue is not configured yet.</small></label>
+          <label class="form-field"><span>Location</span><select name="hardwareIssues[__INDEX__][locationConfigValueId]" data-module-field><option value="">Select location</option><% issueLocations.forEach((location) => { %><option value="<%= location.id %>"><%= location.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Remarks</span><input type="text" name="hardwareIssues[__INDEX__][issueRemark]" maxlength="500" placeholder="Short note explaining the issue" data-module-field /></label>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <template data-module-template="memory">
+    <article class="workflow-item slate" data-module-row="memory">
+      <span></span>
+      <div style="width: 100%;">
+        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+          <div>
+            <strong>Memory Module <span data-module-display-number>__DISPLAY__</span></strong>
+            <p>Slot, size, type, and install type.</p>
+          </div>
+          <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+        </div>
+
+        <div class="form-grid">
+          <label class="form-field"><span>Slot Label</span><input type="text" name="memoryModules[__INDEX__][slotLabel]" value="Slot __DISPLAY__" placeholder="Slot 1" maxlength="80" data-module-field /></label>
+          <label class="form-field"><span>Size GB</span><input type="number" name="memoryModules[__INDEX__][sizeGb]" min="1" step="1" placeholder="Example: 8" data-memory-size-input data-module-field /></label>
+          <label class="form-field"><span>Memory Type</span><select name="memoryModules[__INDEX__][ramTypeConfigValueId]" data-module-field><option value="">Select memory type</option><% formOptions.ramTypes.forEach((ramType) => { %><option value="<%= ramType.id %>"><%= ramType.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Install Type</span><select name="memoryModules[__INDEX__][memoryInstallTypeCode]" data-module-field><% memoryInstallTypes.forEach((installType) => { %><option value="<%= installType.code %>" <%= installType.code === 'removable_module' ? 'selected' : '' %>><%= installType.label %></option><% }) %></select><small class="field-hint">Defaults to removable.</small></label>
+          <input type="hidden" name="memoryModules[__INDEX__][speedMhz]" />
+          <input type="hidden" name="memoryModules[__INDEX__][manufacturerName]" />
+          <input type="hidden" name="memoryModules[__INDEX__][partNumber]" />
+          <input type="hidden" name="memoryModules[__INDEX__][serialNumber]" />
+          <label class="form-field"><span>Change Notes</span><input type="text" name="memoryModules[__INDEX__][changeNotes]" maxlength="500" placeholder="Installed, replaced, upgraded, downgraded, etc." data-module-field /></label>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <template data-module-template="storage">
+    <article class="workflow-item slate" data-module-row="storage">
+      <span></span>
+      <div style="width: 100%;">
+        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+          <div>
+            <strong>Storage Device <span data-module-display-number>__DISPLAY__</span></strong>
+            <p>Drive slot, size, type, and wipe status.</p>
+          </div>
+          <button type="button" class="secondary-button" data-remove-module-row>Remove</button>
+        </div>
+
+        <div class="form-grid">
+          <label class="form-field"><span>Slot Label</span><input type="text" name="storageDevices[__INDEX__][slotLabel]" value="Drive __DISPLAY__" placeholder="Drive 1" maxlength="80" data-module-field /></label>
+          <label class="form-field"><span>Size GB</span><input type="number" name="storageDevices[__INDEX__][sizeGb]" min="1" step="1" placeholder="Example: 256" data-storage-size-input data-module-field /></label>
+          <label class="form-field"><span>Storage Type</span><select name="storageDevices[__INDEX__][storageTypeConfigValueId]" data-module-field><option value="">Select storage type</option><% formOptions.storageTypes.forEach((storageType) => { %><option value="<%= storageType.id %>"><%= storageType.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Wipe Status</span><select name="storageDevices[__INDEX__][wipeStatusConfigValueId]" data-module-field><option value="">Select wipe status</option><% (formOptions.storageWipeStatuses || []).forEach((wipeStatus) => { %><option value="<%= wipeStatus.id %>"><%= wipeStatus.label %></option><% }) %></select></label>
+          <input type="hidden" name="storageDevices[__INDEX__][manufacturerName]" />
+          <input type="hidden" name="storageDevices[__INDEX__][modelNumber]" />
+          <input type="hidden" name="storageDevices[__INDEX__][serialNumber]" />
+          <input type="hidden" name="storageDevices[__INDEX__][firmwareVersion]" />
+          <label class="form-field"><span>Change Notes</span><input type="text" name="storageDevices[__INDEX__][changeNotes]" maxlength="500" placeholder="Installed, replaced, upgraded, downgraded, wiped, etc." data-module-field /></label>
+        </div>
+      </div>
+    </article>
+  </template>
+
+  <div class="form-actions">
+    <button class="primary-button" type="submit">
+      <%= isEditMode ? 'Update Unit' : 'Create Unit' %>
+    </button>
+
+    <% if (isModal) { %>
+      <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+    <% } else { %>
+      <a class="secondary-button" href="/tech/units">Cancel</a>
+    <% } %>
+  </div>
+</form>

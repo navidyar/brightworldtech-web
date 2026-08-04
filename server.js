@@ -12,9 +12,12 @@ const configRoutes = require('./routes/config');
 const lotRoutes = require('./routes/lots');
 const { createSessionStore } = require('./models/sessionStore');
 const unitRequestModel = require('./models/unitRequestModel');
+const {
+  scheduleOperationalOptionUsageRankingRefresh
+} = require('./models/operationalOptionRankingModel');
 const { loadCurrentUser } = require('./middleware/authMiddleware');
 const { attachAccessLocals } = require('./middleware/accessMiddleware');
-const { escapeHtml, formatDateTime, formatDate, formatTime, formatNumber, formatWeight } = require('./views/partials/helpers');
+const { escapeHtml, formatDateTime, formatDate, formatTime, formatNumber, formatRoleLabel, formatWeight } = require('./views/partials/helpers');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,6 +36,7 @@ app.locals.formatDateTime = formatDateTime;
 app.locals.formatDate = formatDate;
 app.locals.formatTime = formatTime;
 app.locals.formatNumber = formatNumber;
+app.locals.formatRoleLabel = formatRoleLabel;
 app.locals.formatWeight = formatWeight;
 app.locals.appName = 'BWTDallas App';
 
@@ -113,4 +117,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Server listening on port ${PORT}`);
   scheduleUnitRequestRetention();
+  scheduleOperationalOptionUsageRankingRefresh();
 });

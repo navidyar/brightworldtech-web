@@ -1,121 +1,164 @@
+<%
+  const requiredTableCount = Array.isArray(status.schema.requiredTables) ? status.schema.requiredTables.length : 0;
+  const requiredViewCount = Array.isArray(status.schema.requiredViews) ? status.schema.requiredViews.length : 0;
+  const missingTableCount = Array.isArray(status.schema.missingTables) ? status.schema.missingTables.length : 0;
+  const missingViewCount = Array.isArray(status.schema.missingViews) ? status.schema.missingViews.length : 0;
+  const missingObjectCount = missingTableCount + missingViewCount;
+%>
 <!DOCTYPE html>
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
 
-  <body>
+  <body class="configuration-clean-page">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 
       <div class="app-main">
         <%- include('../partials/topbar', { pageTitle }) %>
 
-        <main class="content-shell">
-          <section class="content-card">
-            <div class="content-header">
+        <main class="content-shell configuration-page database-check-page">
+          <%- include('../partials/configuration-nav', { currentNav }) %>
+
+          <section class="page-heading configuration-page-heading">
+            <div>
+              <h1>Database Check</h1>
+              <p>Review the live database connection, required schema objects, and selected table counts. This page is read-only.</p>
+            </div>
+          </section>
+
+          <section class="site-summary-panel database-check-summary-panel" aria-label="Database health summary">
+            <div class="site-summary-primary">
+              <span>Database connection</span>
+              <strong><%= status.database.connected ? 'Connected' : 'Unavailable' %></strong>
+              <small>
+                <% if (status.database.connected) { %>
+                  <%= status.database.connectionInfo.database_name %> · <%= status.database.connectionInfo.mysql_version %>
+                <% } else { %>
+                  <%= status.database.error %>
+                <% } %>
+              </small>
+            </div>
+
+            <div class="site-summary-stats">
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">T</span>
+                <span><small>Tables found</small><strong><%= formatNumber(status.schema.tableCount || 0) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">V</span>
+                <span><small>Views found</small><strong><%= formatNumber(status.schema.viewCount || 0) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true"><%= status.schema.ok ? '✓' : '!' %></span>
+                <span><small>Required objects</small><strong><%= status.schema.ok ? 'Complete' : `${formatNumber(missingObjectCount)} missing` %></strong></span>
+              </article>
+            </div>
+          </section>
+
+          <% if (!status.database.connected) { %>
+            <div class="message error"><p><%= status.database.error %></p></div>
+          <% } %>
+
+          <section class="site-clean-section site-clean-surface database-summary-counts-section">
+            <div class="site-clean-section-heading">
               <div>
-                <p class="eyebrow">Protected Admin Tool</p>
-                <h2>Database Check</h2>
+                <h2>Summary Counts</h2>
+                <p>Selected operational tables and their current row totals.</p>
+              </div>
+            </div>
+
+            <div class="table-card database-summary-counts-table">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Table</th>
+                      <th>Rows</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% if (!status.schema.summaryCounts.length) { %>
+                      <tr><td colspan="3">Summary counts are unavailable until the database connection succeeds.</td></tr>
+                    <% } %>
+
+                    <% status.schema.summaryCounts.forEach((table) => { %>
+                      <tr>
+                        <td><code><%= table.tableName %></code></td>
+                        <td><%= table.rowCount === null ? '—' : formatNumber(table.rowCount) %></td>
+                        <td><span class="pill <%= table.rowCount === null ? 'bad' : 'good' %>"><%= table.rowCount === null ? 'Missing' : 'Available' %></span></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="site-clean-section site-clean-surface database-required-objects-section">
+            <div class="site-clean-section-heading">
+              <div>
+                <h2>Required Schema Objects</h2>
+                <p><%= formatNumber(requiredTableCount) %> required tables and <%= formatNumber(requiredViewCount) %> required views are checked against the active schema.</p>
+              </div>
+            </div>
+
+            <div class="database-object-grid">
+              <div>
+                <h3>Required Tables</h3>
+                <div class="table-card">
+                  <div class="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Table</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <% if (!status.schema.requiredTables.length) { %>
+                          <tr><td colspan="2">Required table status is unavailable.</td></tr>
+                        <% } %>
+
+                        <% status.schema.requiredTables.forEach((table) => { %>
+                          <tr>
+                            <td><code><%= table.tableName %></code></td>
+                            <td><span class="pill <%= table.exists ? 'good' : 'bad' %>"><%= table.exists ? 'Found' : 'Missing' %></span></td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
 
-              <a class="secondary-button" href="/">Back to Dashboard</a>
-            </div>
-
-            <div class="status-grid compact">
-              <article class="status-card <%= status.database.connected ? 'status-good' : 'status-bad' %>">
-                <p class="status-label">Connection</p>
-                <h2><%= status.database.connected ? 'Connected' : 'Failed' %></h2>
-
-                <% if (status.database.connected) { %>
-                  <p><strong><%= status.database.connectionInfo.database_name %></strong></p>
-                  <p><%= status.database.connectionInfo.mysql_version %></p>
-                <% } else { %>
-                  <p><%= status.database.error %></p>
-                <% } %>
-              </article>
-
-              <article class="status-card <%= status.schema.ok ? 'status-good' : 'status-warning' %>">
-                <p class="status-label">Required Objects</p>
-                <h2><%= status.schema.ok ? 'Complete' : 'Incomplete' %></h2>
-                <p>
-                  <%= formatNumber(status.schema.tableCount) %> tables and
-                  <%= formatNumber(status.schema.viewCount || 0) %> views found.
-                </p>
-              </article>
-            </div>
-
-            <h2 class="section-title">Summary Counts</h2>
-
-            <div class="table-card">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Table</th>
-                    <th>Rows</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% status.schema.summaryCounts.forEach((table) => { %>
-                    <tr>
-                      <td><%= table.tableName %></td>
-                      <td><%= table.rowCount === null ? 'Missing' : formatNumber(table.rowCount) %></td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
-            </div>
-
-            <h2 class="section-title">Required Table Status</h2>
-
-            <div class="table-card">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Required Table</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% status.schema.requiredTables.forEach((table) => { %>
-                    <tr>
-                      <td><%= table.tableName %></td>
-                      <td>
-                        <% if (table.exists) { %>
-                          <span class="pill good">Found</span>
-                        <% } else { %>
-                          <span class="pill bad">Missing</span>
+              <div>
+                <h3>Required Views</h3>
+                <div class="table-card">
+                  <div class="table-scroll">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>View</th>
+                          <th>Status</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <% if (!status.schema.requiredViews.length) { %>
+                          <tr><td colspan="2">Required view status is unavailable.</td></tr>
                         <% } %>
-                      </td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
-            </div>
 
-            <h2 class="section-title">Required View Status</h2>
-
-            <div class="table-card">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Required View</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <% status.schema.requiredViews.forEach((view) => { %>
-                    <tr>
-                      <td><%= view.viewName %></td>
-                      <td>
-                        <% if (view.exists) { %>
-                          <span class="pill good">Found</span>
-                        <% } else { %>
-                          <span class="pill bad">Missing</span>
-                        <% } %>
-                      </td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
+                        <% status.schema.requiredViews.forEach((view) => { %>
+                          <tr>
+                            <td><code><%= view.viewName %></code></td>
+                            <td><span class="pill <%= view.exists ? 'good' : 'bad' %>"><%= view.exists ? 'Found' : 'Missing' %></span></td>
+                          </tr>
+                        <% }) %>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           </section>
         </main>

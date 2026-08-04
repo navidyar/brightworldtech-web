@@ -11,9 +11,16 @@
 
   const dashboardSectionActive =
     currentNav === 'dashboard' || String(currentNav || '').startsWith('dashboard:');
+  const adminConfigurationNavKeys = [
+    'admin-config-values',
+    'admin-config-processor-families',
+    'admin-config-models',
+    'admin-config-database'
+  ];
+  const adminSectionActive = adminConfigurationNavKeys.includes(currentNav);
   const managementSectionActive =
-    ['management', 'management-login-activity', 'management-config', 'management-unit-models', 'management-lots', 'management-overrides'].includes(currentNav);
-  const techSectionActive = currentNav === 'tech-units' || currentNav === 'unit-requests' || currentNav === 'management-overrides';
+    ['management', 'management-login-activity', 'management-lots', 'management-qc-reporting'].includes(currentNav);
+  const techSectionActive = currentNav === 'tech-units' || currentNav === 'unit-requests';
 %>
 
 <aside class="sidebar" id="app-sidebar" aria-label="Primary navigation">
@@ -51,14 +58,16 @@
     <% } %>
 
     <% if (canAccessMenuArea('admin')) { %>
-      <section class="sidebar-section">
-        <div class="sidebar-section-heading">
+      <section class="sidebar-section <%= adminSectionActive ? 'is-active' : '' %>">
+        <div class="sidebar-section-heading <%= adminSectionActive ? 'is-active' : '' %>">
           <span class="sidebar-icon" aria-hidden="true">✦</span>
           <span>Admin</span>
         </div>
 
         <div class="sidebar-subnav">
-          <span class="sidebar-sublink sidebar-sublink-muted">Admin tools planned</span>
+          <a href="/management/config" class="sidebar-sublink <%= adminSectionActive ? 'active' : '' %>" <%= currentNav === 'admin-config-values' ? 'aria-current="page"' : '' %>>
+            <span>Configuration</span>
+          </a>
         </div>
       </section>
     <% } %>
@@ -83,18 +92,10 @@
             <span>Lots</span>
           </a>
 
-          <% if (currentRoles.includes('admin')) { %>
-            <a href="/management/config" class="sidebar-sublink <%= currentNav === 'management-config' ? 'active' : '' %>" <%= currentNav === 'management-config' ? 'aria-current="page"' : '' %>>
-              <span>Config Values</span>
-            </a>
-            <a href="/management/config/models" class="sidebar-sublink <%= currentNav === 'management-unit-models' ? 'active' : '' %>" <%= currentNav === 'management-unit-models' ? 'aria-current="page"' : '' %>>
-              <span>Model Catalog</span>
-            </a>
-          <% } %>
-
-          <a href="/management/overrides" class="sidebar-sublink <%= currentNav === 'management-overrides' ? 'active' : '' %>" <%= currentNav === 'management-overrides' ? 'aria-current="page"' : '' %>>
-            <span>Overrides</span>
+          <a href="/management/qc-reporting" class="sidebar-sublink <%= currentNav === 'management-qc-reporting' ? 'active' : '' %>" <%= currentNav === 'management-qc-reporting' ? 'aria-current="page"' : '' %>>
+            <span>QC Reporting</span>
           </a>
+
         </div>
       </section>
     <% } %>
@@ -110,12 +111,9 @@
           <a href="/tech/units" class="sidebar-sublink <%= currentNav === 'tech-units' ? 'active' : '' %>" <%= currentNav === 'tech-units' ? 'aria-current="page"' : '' %>>
             <span>Units</span>
           </a>
-          <a href="/unit-requests" class="sidebar-sublink <%= currentNav === 'unit-requests' ? 'active' : '' %>" <%= currentNav === 'unit-requests' ? 'aria-current="page"' : '' %>>
-            <span>Unit Requests</span>
-          </a>
-          <% if (currentRoles.includes('tech_lead') && !currentRoles.some((roleCode) => ['admin', 'management'].includes(roleCode))) { %>
-            <a href="/management/overrides" class="sidebar-sublink <%= currentNav === 'management-overrides' ? 'active' : '' %>" <%= currentNav === 'management-overrides' ? 'aria-current="page"' : '' %>>
-              <span>Overrides</span>
+          <% if (typeof canAccessUnitRequests === 'function' && canAccessUnitRequests()) { %>
+            <a href="/unit-requests" class="sidebar-sublink <%= currentNav === 'unit-requests' ? 'active' : '' %>" <%= currentNav === 'unit-requests' ? 'aria-current="page"' : '' %>>
+              <span>Requests</span>
             </a>
           <% } %>
         </div>
@@ -148,12 +146,6 @@
       </section>
     <% } %>
 
-    <% if (canAccessMenuArea('database')) { %>
-      <a href="/database" class="sidebar-link <%= currentNav === 'database' ? 'active' : '' %>" <%= currentNav === 'database' ? 'aria-current="page"' : '' %>>
-        <span class="sidebar-icon" aria-hidden="true">⚙</span>
-        <span>Database Check</span>
-      </a>
-    <% } %>
   </nav>
 </aside>
 

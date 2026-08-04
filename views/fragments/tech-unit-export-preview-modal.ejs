@@ -1,0 +1,164 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeDataset = dataset && Array.isArray(dataset.columns) && Array.isArray(dataset.rows) ? dataset : null;
+  const safeAvailableColumns = Array.isArray(availableColumns) && availableColumns.length > 0
+    ? availableColumns
+    : (safeDataset ? safeDataset.columns : []);
+  const safePreviewRows = Array.isArray(previewRows) ? previewRows : [];
+  const safeCsvDownloadUrl = typeof csvDownloadUrl === 'string' ? csvDownloadUrl : '';
+  const safeXlsxDownloadUrl = typeof xlsxDownloadUrl === 'string' ? xlsxDownloadUrl : '';
+  const selectedColumnKeys = new Set(safeDataset ? safeDataset.columns.map((column) => column.key) : []);
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section
+    class="modal-panel site-clean-modal unit-export-preview-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="unit-export-preview-title"
+    aria-describedby="unit-export-preview-description"
+    tabindex="-1"
+    data-unit-export-modal
+  >
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Filtered Unit Export</p>
+        <h2 id="unit-export-preview-title">Export Data Preview</h2>
+        <p id="unit-export-preview-description" class="modal-description">
+          Select the columns to include, review every Unit matching the current Unit Browser scope, and download the same authorized dataset as CSV or XLSX.
+        </p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close data-modal-initial-focus aria-label="Close export preview">
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5.5 5.5 14.5 14.5M14.5 5.5 5.5 14.5" /></svg>
+      </button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error" role="alert">
+          <% safeErrors.forEach((errorMessage) => { %><p><%= errorMessage %></p><% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeDataset) { %>
+        <div class="site-summary-panel unit-export-preview-summary">
+          <div>
+            <span>Matching Units</span>
+            <strong><%= formatNumber(safeDataset.totalRows) %></strong>
+          </div>
+          <p>The selected columns will be applied to every matching Unit, regardless of browser pagination.</p>
+        </div>
+
+        <div class="unit-export-action-toolbar" data-unit-export-action-toolbar>
+          <div class="unit-export-action-summary">
+            <strong>Export selected columns</strong>
+            <span data-unit-export-selected-count aria-live="polite"><%= safeDataset.columns.length %> of <%= safeAvailableColumns.length %> selected</span>
+          </div>
+          <div class="action-row unit-export-download-actions">
+            <% if (safeCsvDownloadUrl) { %>
+              <a
+                class="secondary-button"
+                href="<%= safeCsvDownloadUrl %>"
+                data-unit-export-download
+                data-unit-export-base-url="<%= safeCsvDownloadUrl %>"
+              >Download CSV</a>
+            <% } %>
+            <% if (safeXlsxDownloadUrl) { %>
+              <a
+                class="primary-button"
+                href="<%= safeXlsxDownloadUrl %>"
+                data-unit-export-download
+                data-unit-export-base-url="<%= safeXlsxDownloadUrl %>"
+              >Download XLSX</a>
+            <% } %>
+          </div>
+          <p class="field-hint unit-export-selection-message" data-unit-export-selection-message aria-live="polite"></p>
+        </div>
+
+        <section class="site-clean-section unit-export-column-selection" aria-labelledby="unit-export-columns-title">
+          <div class="site-clean-section-heading unit-export-column-selection-heading">
+            <div>
+              <h3 id="unit-export-columns-title">Export Columns</h3>
+              <p>Select only the fields that should appear in the preview and downloaded file.</p>
+            </div>
+            <div class="action-row unit-export-column-selection-actions">
+              <button type="button" class="secondary-button" data-unit-export-select-all>Select All</button>
+              <button type="button" class="secondary-button" data-unit-export-clear-all>Clear All</button>
+            </div>
+          </div>
+          <fieldset class="unit-export-column-options" aria-describedby="unit-export-column-selection-help">
+            <legend class="visually-hidden">Choose Unit export columns</legend>
+            <span id="unit-export-column-selection-help" class="visually-hidden">At least one column must remain selected.</span>
+            <% safeAvailableColumns.forEach((column) => { %>
+              <label class="form-check unit-export-column-option">
+                <input
+                  class="form-check-input"
+                  type="checkbox"
+                  value="<%= column.key %>"
+                  data-unit-export-column
+                  <%= selectedColumnKeys.has(column.key) ? 'checked' : '' %>
+                >
+                <span class="form-check-label"><%= column.label %></span>
+              </label>
+            <% }) %>
+          </fieldset>
+        </section>
+
+        <section class="site-clean-section" aria-labelledby="unit-export-preview-table-title">
+          <div class="site-clean-section-heading">
+            <h3 id="unit-export-preview-table-title">All <%= formatNumber(safeDataset.totalRows) %> Matching Units</h3>
+          </div>
+          <% if (safePreviewRows.length > 0) { %>
+            <div class="unit-export-preview-table-frame">
+              <div
+                id="unit-export-preview-table-scroll"
+                class="table-scroll unit-export-preview-table-scroll"
+                role="region"
+                aria-label="Filtered Unit export preview table. Scroll horizontally to view all selected columns."
+                tabindex="0"
+                data-unit-export-table-scroll
+              >
+                <table class="table-card unit-export-preview-table">
+                  <thead><tr><% safeAvailableColumns.forEach((column) => { %><th data-export-column-key="<%= column.key %>" <%= selectedColumnKeys.has(column.key) ? '' : 'hidden' %>><%= column.label %></th><% }) %></tr></thead>
+                  <tbody>
+                    <tr class="unit-export-preview-scroll-row" role="presentation" data-unit-export-top-scroll-row hidden>
+                      <td role="presentation" colspan="<%= safeAvailableColumns.length %>">
+                        <div
+                          class="unit-export-preview-top-scroll"
+                          role="scrollbar"
+                          aria-label="Horizontal scrollbar for the Unit export preview table"
+                          aria-controls="unit-export-preview-table-scroll"
+                          aria-orientation="horizontal"
+                          aria-valuemin="0"
+                          aria-valuemax="0"
+                          aria-valuenow="0"
+                          tabindex="0"
+                          data-unit-export-top-scroll
+                          hidden
+                        >
+                          <div class="unit-export-preview-top-scroll-track" data-unit-export-top-scroll-track>
+                            <div class="unit-export-preview-top-scroll-thumb" data-unit-export-top-scroll-thumb></div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                    <% safePreviewRows.forEach((row) => { %>
+                      <tr><% safeAvailableColumns.forEach((column) => { %><td data-export-column-key="<%= column.key %>" <%= selectedColumnKeys.has(column.key) ? '' : 'hidden' %>><%= row[column.key] || '—' %></td><% }) %></tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          <% } else { %>
+            <p class="empty-state">No Units match the current filters.</p>
+          <% } %>
+        </section>
+      <% } %>
+    </div>
+
+    <footer class="modal-footer unit-export-modal-footer">
+      <div class="action-row">
+        <button type="button" class="secondary-button" data-modal-close>Close</button>
+      </div>
+    </footer>
+  </section>
+</div>

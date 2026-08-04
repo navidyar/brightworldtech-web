@@ -2,6 +2,7 @@
   const safePreview = preview || {};
   const safeErrorMessages = Array.isArray(errorMessages) ? errorMessages.filter(Boolean) : [];
   const canSubmit = Boolean(safePreview.ready) && !successMessage && safeErrorMessages.length === 0;
+  const showProductionWeight = Boolean(canViewProductionWeight);
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
@@ -32,8 +33,8 @@
               <dd><%= safePreview.lotName || '—' %></dd>
             </div>
             <div>
-              <dt>Credit</dt>
-              <dd><%= safePreview.formattedProductionWeight || '—' %> to <%= creditedToName %></dd>
+              <dt><%= showProductionWeight ? 'Credit' : 'Completed By' %></dt>
+              <dd><% if (showProductionWeight) { %><%= safePreview.formattedProductionWeight || '—' %> to <% } %><%= creditedToName %></dd>
             </div>
           </dl>
         </div>
@@ -64,15 +65,17 @@
               <dt>Credit To</dt>
               <dd><%= creditedToName %></dd>
             </div>
-            <div>
-              <dt>Current Lot Weight</dt>
-              <dd><%= safePreview.formattedProductionWeight || '—' %></dd>
-            </div>
+            <% if (showProductionWeight) { %>
+              <div>
+                <dt>Current Lot Weight</dt>
+                <dd><%= safePreview.formattedProductionWeight || '—' %></dd>
+              </div>
+            <% } %>
           </dl>
         </div>
 
         <p class="field-hint">
-          This records the unit completion credit for the current lot. It does not change the unit’s assignment, lot, grade, or Pass/Fail status.
+          This records the unit as completed for the current lot. It does not change the unit’s assignment, lot, grade, or Pass/Fail status.
         </p>
 
         <% if (canSubmit) { %>

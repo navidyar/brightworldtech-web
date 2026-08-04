@@ -118,16 +118,16 @@
     const requestType = currentRequestType();
 
     if (search) {
-      emptyMessage.textContent = `No Unit Requests match “${search}”.`;
+      emptyMessage.textContent = `No requests match “${search}”.`;
       return;
     }
 
     if (requestType !== 'all') {
-      emptyMessage.textContent = 'No Unit Requests match the selected Request Type.';
+      emptyMessage.textContent = 'No requests match the selected Request Type.';
       return;
     }
 
-    emptyMessage.textContent = `No ${currentStatus() === 'all' ? '' : `${currentStatus()} `}Unit Requests are available.`;
+    emptyMessage.textContent = `No ${currentStatus() === 'all' ? '' : `${currentStatus()} `}requests are available.`;
   }
 
   function filterRequestRows() {

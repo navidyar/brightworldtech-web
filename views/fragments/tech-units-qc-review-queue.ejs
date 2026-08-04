@@ -1,0 +1,74 @@
+<%
+  const safeQueue = queue || {};
+  const safeFilters = filters || {};
+  const selectedFilter = String(safeFilters.qcReviewFilter || '').trim();
+  const queueOptions = [
+    { code: '', label: 'All Units', count: Number(safeQueue.allUnits || 0) },
+    { code: 'awaiting', label: 'Awaiting QC', count: Number(safeQueue.awaitingUnits || 0) },
+    { code: 'accepted', label: 'Accepted', count: Number(safeQueue.acceptedUnits || 0) },
+    { code: 'corrected', label: 'Corrected', count: Number(safeQueue.correctedUnits || 0) },
+    { code: 'ready_recheck', label: 'Ready for Recheck', count: Number(safeQueue.readyForRecheckUnits || 0) },
+    { code: 'rejected', label: 'Pending Correction', count: Number(safeQueue.rejectedUnits || 0) }
+  ];
+  const queueQueryKeys = [
+    'search',
+    'lotId',
+    'categoryId',
+    'gradeFilter',
+    'techUserId',
+    'createdStartDate',
+    'createdEndDate',
+    'createdWindow',
+    'unitState',
+    'sort',
+    'perPage'
+  ];
+  const makeQueueUrl = (qcReviewFilter) => {
+    const params = new URLSearchParams();
+
+    queueQueryKeys.forEach((key) => {
+      const value = safeFilters[key];
+      if (value !== undefined && value !== null && String(value).trim() !== '') {
+        params.set(key, String(value));
+      }
+    });
+
+    if (qcReviewFilter) {
+      params.set('qcReviewFilter', qcReviewFilter);
+    }
+
+    const queryString = params.toString();
+    return queryString ? `/tech/units?${queryString}` : '/tech/units';
+  };
+%>
+
+<nav
+  id="tech-units-qc-review-queue"
+  class="tech-qc-review-queue <%= safeQueue.available ? '' : 'is-unavailable' %>"
+  data-tech-qc-review-queue
+  data-tech-qc-review-queue-version="<%= safeQueue.version || '' %>"
+  aria-label="Quality Control review queue"
+  aria-live="polite"
+  aria-atomic="true"
+  <%- oob ? 'hx-swap-oob="outerHTML"' : '' %>
+>
+  <span class="tech-qc-review-queue__label">QC Review Queue</span>
+
+  <% if (!safeQueue.available) { %>
+    <span class="tech-qc-review-queue__unavailable">QC storage is unavailable.</span>
+  <% } else { %>
+    <span class="tech-qc-review-queue__links">
+      <% queueOptions.forEach((option) => { %>
+        <a
+          class="tech-qc-review-queue__link <%= selectedFilter === option.code ? 'is-active' : '' %> <%= option.code === 'rejected' && option.count > 0 ? 'has-rejections' : (option.code === 'ready_recheck' && option.count > 0 ? 'has-rechecks' : '') %>"
+          href="<%= makeQueueUrl(option.code) %>"
+          aria-label="<%= option.label %>: <%= formatNumber(option.count) %> Unit<%= Number(option.count) === 1 ? '' : 's' %>"
+          <%= selectedFilter === option.code ? 'aria-current="page"' : '' %>
+        >
+          <span><%= option.label %></span>
+          <strong><%= formatNumber(option.count) %></strong>
+        </a>
+      <% }) %>
+    </span>
+  <% } %>
+</nav>

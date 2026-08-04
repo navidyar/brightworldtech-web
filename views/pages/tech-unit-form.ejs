@@ -2,9 +2,13 @@
 <html lang="en">
   <%- include('../partials/head', {
     pageTitle,
-    stylesheets: ['/css/tech-units-clean.css?v=20260722-stage4-lot-profile']
+    stylesheets: [
+      '/css/modal.css',
+      '/css/tech-units-clean.css?v=20260803-stage10q-hardware-none'
+    ]
   }) %>
-  <script defer src="/js/tech-unit-form.js?v=20260722-stage4-lot-profile"></script>
+  <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+  <script defer src="/js/tech-unit-form.js?v=20260803-stage10q-hardware-none"></script>
 
   <body>
     <%
@@ -29,6 +33,7 @@
               formOptions,
               formData,
               errorMessages,
+              unitFormFieldErrors: typeof unitFormFieldErrors !== 'undefined' ? unitFormFieldErrors : [],
               duplicateMatches: typeof duplicateMatches !== 'undefined' ? duplicateMatches : [],
               duplicateCheckPerformed: typeof duplicateCheckPerformed !== 'undefined' ? duplicateCheckPerformed : false,
               canRequestIntentionalDuplicate: typeof canRequestIntentionalDuplicate !== 'undefined' ? canRequestIntentionalDuplicate : false,
@@ -37,5 +42,7 @@
         </main>
       </div>
     </div>
+
+    <div id="modal-root"></div>
   </body>
 </html>

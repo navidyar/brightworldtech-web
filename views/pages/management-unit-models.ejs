@@ -1,6 +1,5 @@
 <%
   const selected = (actual, expected) => String(actual || '') === String(expected || '') ? 'selected' : '';
-  const checked = (value) => value ? 'checked' : '';
   const noticeMessages = {
     created: 'Unit model created.',
     updated: 'Unit model updated.',
@@ -8,57 +7,169 @@
     deactivated: 'Unit model deactivated.',
     'not-found': 'The selected model was not found.'
   };
+  const activeModelCount = models.filter((model) => model.isActive).length;
+  const inactiveModelCount = models.length - activeModelCount;
+  const visibleManufacturerCount = new Set(models.map((model) => model.manufacturerId)).size;
+  const visibleCategoryCount = new Set(models.map((model) => model.unitCategoryConfigValueId).filter(Boolean)).size;
+  const query = new URLSearchParams();
+  if (filters.manufacturerId) query.set('manufacturerId', String(filters.manufacturerId));
+  if (filters.unitCategoryConfigValueId) query.set('unitCategoryConfigValueId', String(filters.unitCategoryConfigValueId));
+  if (filters.includeInactive) query.set('includeInactive', '1');
+  if (filters.search) query.set('search', filters.search);
+  const queryString = query.toString();
 %>
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=step7f2-model-catalog-modal-repair'] }) %>
-  <body>
+  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=stage8-config-consistency'] }) %>
+
+  <body class="configuration-clean-page">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
+
       <div class="app-main">
         <%- include('../partials/topbar', { pageTitle }) %>
-        <main class="content-shell">
-          <section class="dashboard-hero accent-slate">
+
+        <main class="content-shell configuration-page model-catalog-page">
+          <%- include('../partials/configuration-nav', { currentNav }) %>
+
+          <section class="page-heading configuration-page-heading">
             <div>
-              <p class="eyebrow">Configuration</p>
-              <h2>Unit Model Catalog</h2>
-              <p>Maintain the manufacturer and category-specific models available on the Unit Create/Edit form. Inactive models remain visible on historical units but do not appear for new selection.</p>
+              <h1>Unit Model Catalog</h1>
+              <p>Maintain the manufacturer and category-specific models available during Unit intake. Inactive models remain attached to historical Units but are hidden from new selection.</p>
             </div>
-            <div class="hero-badge"><span>Visible Models</span><strong><%= formatNumber(models.filter((model) => model.isActive).length) %></strong></div>
+
+            <div class="site-clean-actions">
+              <a class="primary-button" href="/management/config/models/new/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/new/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Add Unit Model</a>
+            </div>
           </section>
 
           <% if (notice && noticeMessages[notice]) { %>
             <div class="message <%= notice === 'not-found' ? 'error' : 'success' %>"><p><%= noticeMessages[notice] %></p></div>
           <% } %>
 
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Catalog Filters</p>
-                <h2>Find a Model</h2>
-              </div>
-              <a class="primary-button" href="/management/config/models/new/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-get="/management/config/models/new/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-target="#modal-root" hx-swap="innerHTML">Add Unit Model</a>
+          <section class="site-summary-panel model-catalog-summary-panel" aria-label="Visible model totals">
+            <div class="site-summary-primary">
+              <span>Visible models</span>
+              <strong><%= formatNumber(models.length) %></strong>
+              <small><%= filters.includeInactive ? 'Active and inactive models are included.' : 'Only models available for new Unit intake are shown.' %></small>
             </div>
-            <form class="app-form tech-filter-form" method="get" action="/management/config/models">
-              <label class="form-field"><span>Manufacturer</span><select name="manufacturerId"><option value="">All manufacturers</option><% manufacturers.forEach((manufacturer) => { %><option value="<%= manufacturer.id %>" <%= selected(filters.manufacturerId, manufacturer.id) %>><%= manufacturer.label %></option><% }) %></select></label>
-              <label class="form-field"><span>Unit Category</span><select name="unitCategoryConfigValueId"><option value="">All categories</option><% unitCategories.forEach((category) => { %><option value="<%= category.id %>" <%= selected(filters.unitCategoryConfigValueId, category.id) %>><%= category.label %></option><% }) %></select></label>
-              <label class="form-field"><span>Search</span><input type="search" name="search" value="<%= filters.search || '' %>" placeholder="e.g. 5400, 840 G8, T14s" /></label>
-              <label class="form-field"><span>Status</span><select name="includeInactive"><option value="0" <%= !filters.includeInactive ? 'selected' : '' %>>Active only</option><option value="1" <%= filters.includeInactive ? 'selected' : '' %>>Active and inactive</option></select></label>
-              <div class="tech-filter-actions"><button class="primary-button" type="submit">Apply Filters</button><a class="secondary-button" href="/management/config/models">Reset</a></div>
+
+            <div class="site-summary-stats">
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">M</span>
+                <span><small>Manufacturers</small><strong><%= formatNumber(visibleManufacturerCount) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">C</span>
+                <span><small>Categories</small><strong><%= formatNumber(visibleCategoryCount) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">◌</span>
+                <span><small>Inactive shown</small><strong><%= formatNumber(inactiveModelCount) %></strong></span>
+              </article>
+            </div>
+          </section>
+
+          <section class="site-clean-section site-clean-surface model-catalog-filter-section">
+            <div class="site-clean-section-heading">
+              <div>
+                <h2>Catalog Filters</h2>
+                <p>Narrow the catalog by manufacturer, Unit category, model name, or status.</p>
+              </div>
+            </div>
+
+            <form class="app-form model-catalog-filter-form" method="get" action="/management/config/models">
+              <label class="form-field">
+                <span>Manufacturer</span>
+                <select name="manufacturerId">
+                  <option value="">All manufacturers</option>
+                  <% manufacturers.forEach((manufacturer) => { %>
+                    <option value="<%= manufacturer.id %>" <%= selected(filters.manufacturerId, manufacturer.id) %>><%= manufacturer.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Unit Category</span>
+                <select name="unitCategoryConfigValueId">
+                  <option value="">All categories</option>
+                  <% unitCategories.forEach((category) => { %>
+                    <option value="<%= category.id %>" <%= selected(filters.unitCategoryConfigValueId, category.id) %>><%= category.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Search</span>
+                <input type="search" name="search" value="<%= filters.search || '' %>" placeholder="Model name" />
+              </label>
+
+              <label class="form-field">
+                <span>Status</span>
+                <select name="includeInactive">
+                  <option value="0" <%= !filters.includeInactive ? 'selected' : '' %>>Active only</option>
+                  <option value="1" <%= filters.includeInactive ? 'selected' : '' %>>Active and inactive</option>
+                </select>
+              </label>
+
+              <div class="model-catalog-filter-actions">
+                <button class="primary-button" type="submit">Apply Filters</button>
+                <a class="secondary-button" href="/management/config/models">Reset</a>
+              </div>
             </form>
           </section>
 
-          <section class="content-card">
-            <div class="content-header"><div><p class="eyebrow">Catalog</p><h2><%= formatNumber(models.length) %> Model<%= models.length === 1 ? '' : 's' %></h2></div><a class="secondary-button" href="/management/config">Back to Config Values</a></div>
-            <div class="table-card"><div class="table-scroll"><table><thead><tr><th>Manufacturer</th><th>Category</th><th>Model</th><th>Order</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-              <% if (models.length === 0) { %><tr><td colspan="6">No models match the current filters.</td></tr><% } %>
-              <% models.forEach((model) => { %><tr class="<%= model.isActive ? '' : 'config-value-row--inactive' %>"><td><strong><%= model.manufacturerName %></strong></td><td><%= model.unitCategoryLabel %></td><td><strong><%= model.modelName %></strong></td><td><%= model.sortOrder %></td><td><span class="pill <%= model.isActive ? 'good' : 'bad' %>"><%= model.isActive ? 'Active' : 'Inactive' %></span></td><td><div class="config-value-row-actions"><a class="secondary-button" href="/management/config/models/<%= model.id %>/edit/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-get="/management/config/models/<%= model.id %>/edit/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a><a class="secondary-button" href="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-get="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal?manufacturerId=<%= filters.manufacturerId || '' %>&unitCategoryConfigValueId=<%= filters.unitCategoryConfigValueId || '' %>&includeInactive=<%= filters.includeInactive ? '1' : '0' %>&search=<%= encodeURIComponent(filters.search || '') %>" hx-target="#modal-root" hx-swap="innerHTML"><%= model.isActive ? 'Deactivate' : 'Activate' %></a></div></td></tr><% }) %>
-            </tbody></table></div></div>
+          <section class="site-clean-section site-clean-surface model-catalog-results-section">
+            <div class="site-clean-section-heading">
+              <div>
+                <h2>Model Catalog</h2>
+                <p><%= formatNumber(models.length) %> model<%= models.length === 1 ? '' : 's' %> match the current filters.</p>
+              </div>
+            </div>
+
+            <div class="table-card model-catalog-table">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Manufacturer</th>
+                      <th>Category</th>
+                      <th>Model</th>
+                      <th>Order</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% if (models.length === 0) { %>
+                      <tr><td colspan="6">No models match the current filters.</td></tr>
+                    <% } %>
+
+                    <% models.forEach((model) => { %>
+                      <tr class="<%= model.isActive ? '' : 'configuration-value-row--inactive' %>">
+                        <td><strong><%= model.manufacturerName %></strong></td>
+                        <td><%= model.unitCategoryLabel %></td>
+                        <td><strong><%= model.modelName %></strong></td>
+                        <td><%= model.sortOrder %></td>
+                        <td><span class="pill <%= model.isActive ? 'good' : 'neutral' %>"><%= model.isActive ? 'Active' : 'Inactive' %></span></td>
+                        <td>
+                          <div class="model-catalog-row-actions">
+                            <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                            <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML"><%= model.isActive ? 'Deactivate' : 'Activate' %></a>
+                          </div>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </section>
         </main>
       </div>
     </div>
+
     <div id="modal-root"></div>
-    <script defer src="/js/modal.js?v=step7f2-modal-scroll-lock"></script>
+    <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   </body>
 </html>

@@ -18,7 +18,27 @@
   }
 
   function formatGb(value) {
-    return value ? `${formatNumber(value)}GB` : '—';
+    if (value === null || value === undefined || String(value).trim() === '') {
+      return '—';
+    }
+
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric) || numeric < 0) {
+      return '—';
+    }
+
+    if (numeric === 0) {
+      return '0GB';
+    }
+
+    if (Number.isInteger(numeric) && numeric >= 1000) {
+      if (numeric % 1024 === 0) return `${numeric / 1024}TB`;
+      if (numeric % 1000 === 0) return `${numeric / 1000}TB`;
+      if (numeric % 256 === 0) return `${Number((numeric / 1024).toFixed(3))}TB`;
+    }
+
+    return `${formatNumber(numeric)}GB`;
   }
 
   function formatMhz(value) {
@@ -67,9 +87,14 @@
   const canDeleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const canManageUnitLifecycle = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const canApproveUnitOutcomes = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canEditTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
   const canCompleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
-  const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canReverseTechUnitCompletion = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'qc'].includes(roleCode));
+  const canRecordQcReview = currentUserRoles.includes('qc');
+  const canSubmitAnyQcCorrection = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const canViewTechWeightDetails = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canViewCurrentLotWeight = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const currentUserId = currentUser && Number.isInteger(Number(currentUser.user_id))
     ? Number(currentUser.user_id)
     : null;
@@ -85,6 +110,7 @@
     'lotId',
     'categoryId',
     'gradeFilter',
+    'qcReviewFilter',
     'techUserId',
     'createdStartDate',
     'createdEndDate',
@@ -188,6 +214,10 @@
   }
 %>
 
+<% if (!isSingleUnitViewPage && result && result.qcReviewQueue) { %>
+  <%- include('tech-units-qc-review-queue', { queue: result.qcReviewQueue, filters, oob: true }) %>
+<% } %>
+
 <% if (!isSingleUnitViewPage) { %>
   <strong id="tech-units-loaded-count" hx-swap-oob="true"><%= result && result.pagination ? formatNumber(result.pagination.totalRows) : (result && result.units ? formatNumber(result.units.length) : '—') %></strong>
 
@@ -198,7 +228,7 @@
   <table class="tech-units-table">
     <thead>
       <tr>
-        <th>Unit<%= isRegularTechUser ? '' : ' / Weight' %></th>
+        <th>Unit<%= canViewCurrentLotWeight ? ' / Weight' : '' %></th>
         <th>
           <a class="<%= sortLinkClass('date_desc', 'date_asc') %>" href="<%= makeUnitSortUrl(nextSortValue('date_desc', 'date_asc')) %>" <%= sortAriaCurrent('date_desc', 'date_asc') ? 'aria-current="page"' : '' %>>
             Date
@@ -225,26 +255,50 @@
             </a>
           </span>
         </th>
-        <th>Unit Actions</th>
+        <th class="tech-units-qc-column" scope="col">
+          <a
+            class="tech-units-qc-column-label <%= sortLinkClass('qc_status_desc', 'qc_status_asc') %>"
+            href="<%= makeUnitSortUrl(nextSortValue('qc_status_desc', 'qc_status_asc')) %>"
+            <%= sortAriaCurrent('qc_status_desc', 'qc_status_asc') ? 'aria-current="page"' : '' %>
+            aria-label="Sort Units by Quality Control status"
+          >
+            QC
+            <% if (sortDirectionIndicator('qc_status_desc', 'qc_status_asc', '↓', '↑')) { %><span aria-hidden="true"><%= sortDirectionIndicator('qc_status_desc', 'qc_status_asc', '↓', '↑') %></span><% } %>
+          </a>
+        </th>
+        <th class="tech-units-actions-column" scope="col">
+          <span class="tech-units-actions-column-label">Unit Actions</span>
+        </th>
       </tr>
     </thead>
 
-    <tbody>
-      <% if (result.units.length === 0) { %>
+    <% if (result.units.length === 0) { %>
+      <tbody data-unit-empty-state>
         <tr>
-          <td colspan="6">No units match the current filters.</td>
+          <td colspan="7">No units match the current filters.</td>
         </tr>
-      <% } %>
+      </tbody>
+    <% } %>
 
-      <% result.units.forEach((unit) => { %>
+    <% result.units.forEach((unit) => { %>
+      <tbody
+        id="tech-unit-record-<%= unit.unitId %>"
+        data-unit-record
+        data-unit-id="<%= unit.unitId %>"
+        data-unit-version="<%= unit.browserVersion || '' %>"
+      >
         <%
           const expanded = unit.expandedDetails || {};
           const identifiers = Array.isArray(expanded.identifiers) ? expanded.identifiers : [];
           const specifications = expanded.specifications || null;
           const currentGrade = expanded.currentGrade || null;
           const currentOutcome = expanded.currentOutcome || null;
+          const previousMemoryModules = Array.isArray(expanded.previousMemoryModules) ? expanded.previousMemoryModules : [];
           const memoryModules = Array.isArray(expanded.memoryModules) ? expanded.memoryModules : [];
+          const memoryComparisons = Array.isArray(expanded.memoryComparisons) ? expanded.memoryComparisons : [];
+          const previousStorageDevices = Array.isArray(expanded.previousStorageDevices) ? expanded.previousStorageDevices : [];
           const storageDevices = Array.isArray(expanded.storageDevices) ? expanded.storageDevices : [];
+          const storageComparisons = Array.isArray(expanded.storageComparisons) ? expanded.storageComparisons : [];
           const cellularModules = Array.isArray(expanded.cellularModules) ? expanded.cellularModules : [];
           const graphicsAdapters = Array.isArray(expanded.graphicsAdapters) ? expanded.graphicsAdapters : [];
           const cosmeticIssues = Array.isArray(expanded.cosmeticIssues) ? expanded.cosmeticIssues : [];
@@ -260,6 +314,23 @@
           const isReadOnlySearchResult = Boolean(unit.isReadOnlyForCurrentUser);
           const isAssignedToCurrentUser = Boolean(currentUserId && Number(unit.assignedToUserId) === currentUserId);
           const canRequestUnitOverride = isRegularTechOverrideRequester && Boolean(currentUserId) && !isAssignedToCurrentUser;
+          const latestManualOverride = unit.latestOverride || null;
+          const latestQcReview = unit.latestQcReview || null;
+          const latestQcCorrection = unit.latestQcCorrection || null;
+          const hasPendingManualOverride = Boolean(latestManualOverride && latestManualOverride.isPending);
+          const canSubmitQcCorrection = Boolean(
+            latestQcReview
+            && latestQcReview.decisionCode === 'rejected'
+            && !latestQcCorrection
+            && !unit.isParked
+            && (canSubmitAnyQcCorrection || (isRegularTechUser && isAssignedToCurrentUser))
+          );
+          const canRecordCurrentQcReview = Boolean(
+            canRecordQcReview
+            && unit.latestWorkCompletion
+            && !unit.isParked
+            && (!latestQcReview || (latestQcReview.decisionCode === 'rejected' && latestQcCorrection))
+          );
           const unitCreatedDate = formatUnitCreatedDate(unit.createdAt);
           const unitCreatedTime = formatUnitCreatedTime(unit.createdAt);
         %>
@@ -278,7 +349,7 @@
               <span class="tech-unit-summary-spec">
                 <strong><%= unit.specSummary %></strong>
                 <small>
-                  <span>Lot: <%= unit.lotName || '—' %></span>
+                  <span class="tech-unit-summary-lot"><span class="tech-unit-summary-lot-label">Lot:</span> <strong><%= unit.lotName || '—' %></strong></span>
                   <% if (unit.isLotClosed) { %>
                     <span aria-hidden="true">·</span>
                     <span>Closed lot</span>
@@ -290,7 +361,7 @@
                     <span>Parked</span>
                   <% } %>
                 </small>
-                <% if (!isRegularTechUser) { %>
+                <% if (canViewCurrentLotWeight) { %>
                   <span class="tech-unit-summary-weight-strip">
                     <span class="tech-unit-summary-weight-value">Current lot weight <strong><%= unit.formattedCurrentLotWeight || '—' %></strong></span>
                   </span>
@@ -312,6 +383,14 @@
             <span class="tech-unit-summary-work-stack">
               <small class="tech-outcome-status">Assigned To</small>
               <span class="tech-unit-summary-tech-user"><%= assignedTechName %></span>
+              <% if (latestManualOverride) { %>
+                <small class="tech-outcome-status">
+                  Override <%= latestManualOverride.statusLabel %>
+                  <% if (latestManualOverride.requestedDestinationLotName) { %>
+                    · <%= latestManualOverride.requestedDestinationLotName %>
+                  <% } %>
+                </small>
+              <% } %>
             </span>
           </td>
 
@@ -355,14 +434,73 @@
             </div>
           </td>
 
-          <td>
+          <td class="tech-units-qc-cell">
+            <% if (latestQcReview) { %>
+              <a
+                class="tech-qc-status-link"
+                href="/tech/units/<%= unit.unitId %>/qc-review/details/modal"
+                data-tech-modal-trigger
+                data-no-row-toggle
+                aria-label="View <%= unit.qcReviewStateLabel || ('Quality Control ' + latestQcReview.decisionLabel.toLowerCase()) %> details"
+                title="<%= unit.qcReviewStateLabel || ('QC ' + latestQcReview.decisionLabel) %> — click for details"
+              >
+                <%- include('tech-unit-qc-status-icon', { statusCode: unit.qcReviewStateCode, decisionCode: latestQcReview.decisionCode }) %>
+              </a>
+            <% } else { %>
+              <span
+                class="tech-qc-status-empty"
+                aria-label="Quality Control not performed"
+                title="QC not performed"
+              >
+                <%- include('tech-unit-qc-status-icon', { statusCode: 'not_reviewed', decisionCode: '' }) %>
+              </span>
+            <% } %>
+          </td>
+
+          <td class="tech-units-actions-cell">
             <% if (unit.unitId) { %>
               <div class="tech-summary-actions">
+                <% if (canRecordCurrentQcReview) { %>
+                  <a
+                    class="secondary-button tech-action-button tech-action-button--qc-accept"
+                    href="/tech/units/<%= unit.unitId %>/qc-review/accepted/modal"
+                    data-tech-modal-trigger
+                    data-no-row-toggle
+                  >
+                    Accept
+                  </a>
+                  <a
+                    class="danger-button tech-action-button tech-action-button--qc-reject"
+                    href="/tech/units/<%= unit.unitId %>/qc-review/rejected/modal"
+                    data-tech-modal-trigger
+                    data-no-row-toggle
+                  >
+                    Reject
+                  </a>
+                <% } %>
+                <% if (canRecordQcReview && unit.latestWorkCompletion && latestQcReview && latestQcReview.decisionCode === 'rejected' && !latestQcCorrection && !unit.isParked) { %>
+                  <span class="tech-chip tech-chip--qc-pending">Awaiting correction</span>
+                <% } %>
+                <% if (canRecordQcReview && !unit.latestWorkCompletion && !unit.isParked) { %>
+                  <span class="tech-chip">Awaiting completion</span>
+                <% } %>
+                <% if (canSubmitQcCorrection) { %>
+                  <a
+                    class="secondary-button tech-action-button tech-action-button--qc-corrected"
+                    href="/tech/units/<%= unit.unitId %>/qc-correction/modal"
+                    data-tech-modal-trigger
+                    data-no-row-toggle
+                  >
+                    Mark Corrected
+                  </a>
+                <% } else if (latestQcCorrection && latestQcReview && latestQcReview.decisionCode === 'rejected' && !canRecordQcReview) { %>
+                  <span class="tech-chip tech-chip--qc-ready">Ready for QC recheck</span>
+                <% } %>
                 <% if (canCompleteTechUnits && !unit.isParked && !isReadOnlySearchResult) { %>
                   <% if (unit.latestWorkCompletion) { %>
                     <button
                       type="button"
-                      class="secondary-button tech-print-label-action-button"
+                      class="secondary-button tech-action-button tech-action-button--print tech-print-label-action-button"
                       data-no-row-toggle
                       disabled
                       aria-disabled="true"
@@ -370,9 +508,19 @@
                     >
                       Print Label
                     </button>
+                    <% if (canReverseTechUnitCompletion && unit.latestWorkCompletion.creditSource === 'manual_completion') { %>
+                      <a
+                        class="secondary-button tech-action-button tech-action-button--undo tech-delete-action-button"
+                        href="/tech/units/<%= unit.unitId %>/completions/<%= unit.latestWorkCompletion.unitWorkCompletionId %>/reverse/modal"
+                        data-tech-modal-trigger
+                        data-no-row-toggle
+                      >
+                        Undo Completion
+                      </a>
+                    <% } %>
                   <% } else { %>
                     <a
-                      class="secondary-button"
+                      class="secondary-button tech-action-button tech-action-button--complete"
                       href="/tech/units/<%= unit.unitId %>/complete-work/modal"
                       data-tech-modal-trigger
                       data-no-row-toggle
@@ -381,8 +529,8 @@
                     </a>
                   <% } %>
                 <% } %>
-                <% if (!unit.isParked && !isReadOnlySearchResult) { %>
-                  <a class="secondary-button" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" data-no-row-toggle>
+                <% if (canEditTechUnits && !unit.isParked && !isReadOnlySearchResult) { %>
+                  <a class="secondary-button tech-action-button tech-action-button--edit" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" data-no-row-toggle>
                     Edit
                   </a>
                 <% } %>
@@ -390,7 +538,7 @@
                   <span class="tech-chip">Parked</span>
                   <% if (canManageUnitLifecycle) { %>
                     <a
-                      class="secondary-button"
+                      class="secondary-button tech-action-button tech-action-button--return"
                       href="/tech/units/<%= unit.unitId %>/return-to-active/modal"
                       data-tech-modal-trigger
                       data-no-row-toggle
@@ -400,7 +548,7 @@
                   <% } %>
                 <% } else if (canManageUnitLifecycle) { %>
                   <a
-                    class="secondary-button tech-delete-action-button"
+                    class="secondary-button tech-action-button tech-action-button--park tech-delete-action-button"
                     href="/tech/units/<%= unit.unitId %>/park/modal"
                     data-tech-modal-trigger
                     data-no-row-toggle
@@ -416,10 +564,10 @@
         </tr>
 
         <tr class="tech-detail-row" id="tech-unit-detail-<%= unit.unitId %>" <%= isSingleUnitViewPage ? '' : 'hidden' %>>
-          <td colspan="6">
+          <td colspan="7">
             <div class="tech-detail-offset">
               <div class="tech-detail-panel" data-unit-detail-panel>
-                <div class="tech-detail-header">
+                <div class="tech-detail-header tech-detail-header--details" data-unit-panel-header="details">
                   <div class="tech-detail-title">
                     <strong>Unit Details</strong>
                     <span><%= assetTagValue %> · <%= unit.specSummary || 'Unit record' %></span>
@@ -440,24 +588,62 @@
                       <% if (isReadOnlySearchResult) { %>
                         <span class="tech-chip">Read-only search result</span>
                       <% } %>
+                      <% if (latestManualOverride) { %>
+                        <span class="tech-chip">Override <%= latestManualOverride.statusLabel %></span>
+                      <% } %>
+                      <% if (latestQcReview) { %>
+                        <a
+                          class="tech-qc-detail-chip tech-qc-detail-chip--<%= latestQcReview.decisionCode %>"
+                          href="/tech/units/<%= unit.unitId %>/qc-review/details/modal"
+                          data-tech-modal-trigger
+                          data-no-row-toggle
+                        >
+                          <%- include('tech-unit-qc-status-icon', { statusCode: unit.qcReviewStateCode, decisionCode: latestQcReview.decisionCode }) %>
+                          QC <%= unit.qcReviewStateCode === 'corrected' ? 'Corrected' : (unit.qcReviewStateCode === 'ready_recheck' ? 'Ready for Recheck' : latestQcReview.decisionLabel) %>
+                        </a>
+                      <% } %>
                     </div>
 
                     <% if (unit.unitId) { %>
                       <% if (canRequestUnitOverride && !unit.isParked) { %>
+                        <% if (hasPendingManualOverride) { %>
+                          <button
+                            type="button"
+                            class="secondary-button tech-action-button tech-action-button--request"
+                            data-no-row-toggle
+                            disabled
+                            aria-disabled="true"
+                            title="Management must approve or deny the pending override before another request can be created."
+                          >
+                            Override Pending
+                          </button>
+                        <% } else { %>
+                          <a
+                            class="secondary-button tech-action-button tech-action-button--request"
+                            href="/tech/units/<%= unit.unitId %>/override/modal"
+                            data-tech-modal-trigger
+                            data-no-row-toggle
+                          >
+                            Request Override
+                          </a>
+                        <% } %>
+                      <% } %>
+
+                      <% if (canSubmitQcCorrection) { %>
                         <a
-                          class="secondary-button"
-                          href="/tech/units/<%= unit.unitId %>/override/modal"
+                          class="secondary-button tech-action-button tech-action-button--qc-corrected"
+                          href="/tech/units/<%= unit.unitId %>/qc-correction/modal"
                           data-tech-modal-trigger
                           data-no-row-toggle
                         >
-                          Request Override
+                          Mark Corrected
                         </a>
                       <% } %>
 
                       <% if (canViewTechWeightDetails) { %>
                         <button
                           type="button"
-                          class="secondary-button tech-personal-credit-action-button"
+                          class="secondary-button tech-action-button tech-action-button--info tech-personal-credit-action-button"
                           data-unit-panel-button
                           data-panel="my-weight"
                           data-no-row-toggle
@@ -472,7 +658,7 @@
                       <% if (canViewUnitHistory) { %>
                         <button
                           type="button"
-                          class="secondary-button tech-history-action-button"
+                          class="secondary-button tech-action-button tech-action-button--history tech-history-action-button"
                           data-unit-panel-button
                           data-panel="history"
                           data-no-row-toggle
@@ -496,6 +682,27 @@
                     <% } %>
                   </div>
                 </div>
+
+                <% if (canViewUnitHistory) { %>
+                  <div class="tech-detail-header tech-detail-header--history" data-unit-panel-header="history" hidden>
+                    <div class="tech-detail-title">
+                      <strong>Unit History</strong>
+                      <span><%= assetTagValue %> · Audit timeline, newest first</span>
+                    </div>
+
+                    <div class="tech-detail-actions tech-detail-actions--history">
+                      <button
+                        type="button"
+                        class="tech-detail-view-link"
+                        data-unit-panel-button
+                        data-panel="details"
+                        data-no-row-toggle
+                      >
+                        Back to Details
+                      </button>
+                    </div>
+                  </div>
+                <% } %>
 
                 <div class="tech-unit-panel-stack">
                   <div id="tech-unit-current-panel-<%= unit.unitId %>" class="tech-unit-panel-view" data-unit-panel-content="details">
@@ -536,7 +743,7 @@
                         <dd><%= unit.categoryLabel || '—' %></dd>
                       </div>
 
-                      <% if (!isRegularTechUser) { %>
+                      <% if (canViewCurrentLotWeight) { %>
                         <div>
                           <dt>Current Lot Weight</dt>
                           <dd>
@@ -613,7 +820,7 @@
                       <% if (currentOutcome && currentOutcome.isPendingApproval && canApproveUnitOutcomes) { %>
                         <div>
                           <dt>Review</dt>
-                          <dd><a href="/management/overrides?status=pending">Review in Overrides</a></dd>
+                          <dd><a href="/unit-requests?status=pending&requestType=existing_unit_override">Review Request</a></dd>
                         </div>
                       <% } %>
 
@@ -660,6 +867,31 @@
                       <div>
                         <dt>Processor Speed</dt>
                         <dd><%= unit.processorSpeedGhz ? `${unit.processorSpeedGhz}GHz` : '—' %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Previous Memory</dt>
+                        <dd><%= formatGb(previousMemoryModules.length > 0 ? expanded.previousMemoryTotalGb : unit.previousRamGb) %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Current Memory</dt>
+                        <dd><%= formatGb(memoryModules.length > 0 ? expanded.memoryTotalGb : unit.ramGb) %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Previous Storage</dt>
+                        <dd><%= formatGb(previousStorageDevices.length > 0 ? expanded.previousStorageTotalGb : unit.previousStorageGb) %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Current Storage</dt>
+                        <dd><%= formatGb(storageDevices.length > 0 ? expanded.storageTotalGb : unit.storageGb) %></dd>
+                      </div>
+
+                      <div>
+                        <dt>Battery Health</dt>
+                        <dd><%= unit.formattedBatteryHealth || '—' %></dd>
                       </div>
                     </dl>
                   </section>
@@ -754,79 +986,74 @@
                   </section>
                 </div>
 
-                <div class="tech-module-pair-layout">
-                  <section class="tech-notes-section tech-notes-section--memory">
-                  <div class="tech-section-title-row">
-                    <h3>Current Memory Modules</h3>
-                  </div>
-
-                  <% if (memoryModules.length > 0) { %>
-                    <p class="field-hint">Current Memory Total: <strong><%= formatGb(expanded.memoryTotalGb) %></strong></p>
-
-                    <div class="tech-detail-layout tech-current-module-layout">
-                      <% memoryModules.forEach((memoryModule) => { %>
-                          <section class="tech-detail-section tech-detail-section--memory-module">
-                          <dl class="tech-detail-list">
-                            <div>
-                              <dt>Slot</dt>
-                              <dd><%= memoryModule.slotLabel %></dd>
-                            </div>
-                            <div>
-                              <dt>Size / Type</dt>
-                              <dd><%= formatGb(memoryModule.sizeGb) %> <%= memoryModule.ramTypeLabel || '' %></dd>
-                            </div>
-                            <div>
-                              <dt>Install Type</dt>
-                              <dd><%= memoryModule.memoryInstallTypeLabel || 'Removable Module' %></dd>
-                            </div>
-                            <div>
-                              <dt>Source</dt>
-                              <dd><%= sourceLabel(memoryModule.sourceCode) %></dd>
-                            </div>
-                          </dl>
-                        </section>
-                      <% }) %>
+                <div class="tech-module-pair-layout tech-component-comparison-layout">
+                  <section class="tech-notes-section tech-notes-section--memory tech-component-comparison-section">
+                    <div class="tech-section-title-row tech-component-comparison-heading">
+                      <div>
+                        <h3>Memory Modules</h3>
+                        <span>Previous <strong><%= formatGb(previousMemoryModules.length > 0 ? expanded.previousMemoryTotalGb : unit.previousRamGb) %></strong> · Current <strong><%= formatGb(memoryModules.length > 0 ? expanded.memoryTotalGb : unit.ramGb) %></strong></span>
+                      </div>
                     </div>
-                  <% } else { %>
-                    <p class="field-hint">No detailed memory module rows yet. Legacy memory display: <%= unit.ramGb ? `${unit.ramGb}GB ${unit.ramTypeLabel !== '—' ? unit.ramTypeLabel : ''}` : '—' %></p>
-                  <% } %>
+
+                    <% if (memoryComparisons.length > 0) { %>
+                      <div class="tech-component-comparison-list">
+                        <% memoryComparisons.forEach((comparison) => { %>
+                          <article class="tech-component-comparison-row tech-component-comparison-row--<%= comparison.statusCode %>">
+                            <header>
+                              <strong><%= comparison.slotLabel %></strong>
+                              <span class="tech-component-change-chip tech-component-change-chip--<%= comparison.statusCode %>"><%= comparison.statusLabel %></span>
+                            </header>
+                            <div class="tech-component-comparison-values">
+                              <div>
+                                <span>Previous</span>
+                                <strong><%= comparison.previousText %></strong>
+                              </div>
+                              <div>
+                                <span>Current</span>
+                                <strong><%= comparison.currentText %></strong>
+                              </div>
+                            </div>
+                          </article>
+                        <% }) %>
+                      </div>
+                    <% } else { %>
+                      <p class="field-hint">No detailed Previous or Current memory module rows are recorded.</p>
+                    <% } %>
                   </section>
 
-                  <section class="tech-notes-section tech-notes-section--storage">
-                  <h3>Current Storage Devices</h3>
-
-                  <% if (storageDevices.length > 0) { %>
-                    <p class="field-hint">Current Storage Total: <strong><%= formatGb(expanded.storageTotalGb) %></strong></p>
-
-                    <div class="tech-detail-layout tech-current-module-layout">
-                      <% storageDevices.forEach((storageDevice) => { %>
-                          <section class="tech-detail-section tech-detail-section--storage-device">
-                          <dl class="tech-detail-list">
-                            <div>
-                              <dt>Slot</dt>
-                              <dd><%= storageDevice.slotLabel %></dd>
-                            </div>
-                            <div>
-                              <dt>Size / Type</dt>
-                              <dd><%= formatGb(storageDevice.sizeGb) %> <%= storageDevice.storageTypeLabel || '' %></dd>
-                            </div>
-                            <div>
-                              <dt>Wipe Status</dt>
-                              <dd><%= storageDevice.wipeStatusLabel || '—' %></dd>
-                            </div>
-                            <div>
-                              <dt>Source</dt>
-                              <dd><%= sourceLabel(storageDevice.sourceCode) %></dd>
-                            </div>
-                          </dl>
-                        </section>
-                      <% }) %>
+                  <section class="tech-notes-section tech-notes-section--storage tech-component-comparison-section">
+                    <div class="tech-section-title-row tech-component-comparison-heading">
+                      <div>
+                        <h3>Storage Devices</h3>
+                        <span>Previous <strong><%= formatGb(previousStorageDevices.length > 0 ? expanded.previousStorageTotalGb : unit.previousStorageGb) %></strong> · Current <strong><%= formatGb(storageDevices.length > 0 ? expanded.storageTotalGb : unit.storageGb) %></strong></span>
+                      </div>
                     </div>
-                  <% } else { %>
-                    <p class="field-hint">No detailed storage device rows yet. Legacy storage display: <%= unit.storageGb ? `${unit.storageGb}GB ${unit.storageTypeLabel !== '—' ? unit.storageTypeLabel : ''}` : '—' %></p>
-                  <% } %>
-                  </section>
 
+                    <% if (storageComparisons.length > 0) { %>
+                      <div class="tech-component-comparison-list">
+                        <% storageComparisons.forEach((comparison) => { %>
+                          <article class="tech-component-comparison-row tech-component-comparison-row--<%= comparison.statusCode %>">
+                            <header>
+                              <strong><%= comparison.slotLabel %></strong>
+                              <span class="tech-component-change-chip tech-component-change-chip--<%= comparison.statusCode %>"><%= comparison.statusLabel %></span>
+                            </header>
+                            <div class="tech-component-comparison-values">
+                              <div>
+                                <span>Previous</span>
+                                <strong><%= comparison.previousText %></strong>
+                              </div>
+                              <div>
+                                <span>Current</span>
+                                <strong><%= comparison.currentText %></strong>
+                              </div>
+                            </div>
+                          </article>
+                        <% }) %>
+                      </div>
+                    <% } else { %>
+                      <p class="field-hint">No detailed Previous or Current storage device rows are recorded.</p>
+                    <% } %>
+                  </section>
                 </div>
 
                 <section class="tech-notes-section tech-notes-section--cellular">
@@ -991,8 +1218,8 @@
             </div>
           </td>
         </tr>
-      <% }) %>
-    </tbody>
+      </tbody>
+    <% }) %>
   </table>
 </div>
 

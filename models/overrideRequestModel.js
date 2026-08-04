@@ -1,5 +1,6 @@
 const { pool } = require('./db');
 const lotModel = require('./lotModel');
+const unitWorkflowAudit = require('../services/unitWorkflowAudit');
 
 const OVERRIDE_TABLE = 'unit_override_requests';
 const MANUAL_TECH_OVERRIDE_REQUEST_TYPE = 'manual_tech_override_request';
@@ -35,8 +36,24 @@ async function tableExists(tableName) {
   return Number(rows[0].table_count) > 0;
 }
 
+async function columnExists(tableName, columnName) {
+  const [rows] = await pool.query(
+    `
+      SELECT COUNT(*) AS column_count
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?
+    `,
+    [tableName, columnName]
+  );
+
+  return Number(rows[0].column_count) > 0;
+}
+
 async function overrideTableExists() {
-  return tableExists(OVERRIDE_TABLE);
+  return await tableExists(OVERRIDE_TABLE)
+    && await columnExists(OVERRIDE_TABLE, 'requested_destination_lot_id');
 }
 
 function normalizeStatusFilter(statusFilter) {
@@ -93,6 +110,23 @@ function normalizeJsonValue(value) {
   }
 
   return JSON.stringify(value);
+}
+
+function parseRequestDetails(value) {
+  if (!value) {
+    return {};
+  }
+
+  if (typeof value === 'object') {
+    return value;
+  }
+
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (error) {
+    return {};
+  }
 }
 
 function getPersonName(row, prefix) {
@@ -233,7 +267,7 @@ function getDecisionLabel(decision) {
   }
 
   if (decision === 'manual_request') {
-    return 'Awaiting Management Review';
+    return 'Awaiting Tech Lead+ Review';
   }
 
   return decision || 'Not captured yet';
@@ -244,12 +278,30 @@ function mapOverrideRequest(row, lotMap) {
   const unitAssetTag = row.asset_number
     ? getDisplayAssetTag(row.asset_number)
     : null;
+  const requestDetails = parseRequestDetails(row.request_details);
+  const isOutcomeConfirmationRequest = row.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE;
+  const requesterNote = isOutcomeConfirmationRequest
+    ? String(requestDetails.request_notes || '').trim()
+    : String(row.reason || '').trim();
+  const requestedDestinationLotId = normalizeOptionalInteger(
+    row.requested_destination_lot_id || requestDetails.requested_destination_lot_id
+  );
+  const isDuplicateIntakeMoveRequest = requestDetails.source === 'duplicate_intake_existing_unit_request';
+  const duplicateIntakeActionKind = isDuplicateIntakeMoveRequest && requestDetails.action_kind === 'move'
+    ? 'move'
+    : isDuplicateIntakeMoveRequest
+      ? 'takeover'
+      : '';
 
   return {
     unitOverrideRequestId: Number(row.unit_override_request_id),
     unitId: row.unit_id ? Number(row.unit_id) : null,
     lotId: row.lot_id ? Number(row.lot_id) : null,
     lotName: row.lot_id ? lotMap.get(Number(row.lot_id)) || 'Lot name not available' : 'No lot selected',
+    requestedDestinationLotId,
+    requestedDestinationLotName: requestedDestinationLotId
+      ? lotMap.get(requestedDestinationLotId) || 'Lot name not available'
+      : 'No destination selected',
     unitAssetTag,
     unitLabel: unitAssetTag || 'No asset tag',
     requestType: row.request_type || 'lot_requirement_override',
@@ -258,7 +310,12 @@ function mapOverrideRequest(row, lotMap) {
     validationStatus: row.validation_status || null,
     enforcementDecision: row.enforcement_decision || null,
     reason: row.reason || '',
-    requestDetails: row.request_details || null,
+    requesterNote,
+    requestDetails,
+    isDuplicateIntakeMoveRequest,
+    isDuplicateIntakeLotMoveRequest: isDuplicateIntakeMoveRequest && duplicateIntakeActionKind === 'move',
+    duplicateIntakeActionKind,
+    duplicateIntakeRequestLabel: duplicateIntakeActionKind === 'move' ? 'Lot Move' : 'Move / Takeover Existing Unit',
     hasRecordedWork: Number(row.has_recorded_work || 0) === 1,
     reviewNotes: row.review_notes || '',
     requestedByUserId: row.requested_by_user_id ? Number(row.requested_by_user_id) : null,
@@ -287,7 +344,7 @@ async function listOverrideRequests(options = {}) {
   if (!exists) {
     return {
       supported: false,
-      message: 'The unit_override_requests table does not exist yet. Run the Step 2j SQL migration before using overrides.',
+      message: 'The override request lifecycle migration is not ready. Apply the Stage 7B database migration before using overrides.',
       statusFilter: normalizeStatusFilter(options.statusFilter),
       requests: []
     };
@@ -306,6 +363,12 @@ async function listOverrideRequests(options = {}) {
     params.push(statusFilter);
   }
 
+  const requestedByUserId = normalizeOptionalInteger(options.requestedByUserId);
+  if (requestedByUserId) {
+    where.push('r.requested_by_user_id = ?');
+    params.push(requestedByUserId);
+  }
+
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
   const [lotMap, assignableLots] = await Promise.all([
     getLotNameMap(),
@@ -318,6 +381,7 @@ async function listOverrideRequests(options = {}) {
         r.unit_override_request_id,
         r.unit_id,
         r.lot_id,
+        r.requested_destination_lot_id,
         r.request_type,
         r.request_status,
         r.validation_status,
@@ -338,6 +402,7 @@ async function listOverrideRequests(options = {}) {
           SELECT 1
           FROM unit_work_completions completion_check
           WHERE completion_check.unit_id = r.unit_id
+            AND completion_check.reversed_at IS NULL
         ) AS has_recorded_work,
         u.asset_number,
         requested_by.first_name AS requested_by_first_name,
@@ -408,6 +473,7 @@ async function getLatestOverrideRequestMapForUnits(unitIds) {
           r.unit_override_request_id,
           r.unit_id,
           r.lot_id,
+          r.requested_destination_lot_id,
           r.request_type,
           r.request_status,
           r.validation_status,
@@ -440,10 +506,11 @@ async function getLatestOverrideRequestMapForUnits(unitIds) {
         LEFT JOIN users reviewed_by
           ON reviewed_by.user_id = r.reviewed_by_user_id
         WHERE r.unit_id IN (${placeholders})
+          AND r.request_type = ?
       ) ranked_requests
       WHERE row_rank = 1
     `,
-    safeUnitIds
+    [...safeUnitIds, MANUAL_TECH_OVERRIDE_REQUEST_TYPE]
   );
 
   const requestMap = new Map();
@@ -478,6 +545,7 @@ async function listOverrideRequestsForUnit(unitId, limit = 25) {
         r.unit_override_request_id,
         r.unit_id,
         r.lot_id,
+        r.requested_destination_lot_id,
         r.request_type,
         r.request_status,
         r.validation_status,
@@ -547,6 +615,7 @@ async function getOverrideRequestById(overrideRequestId) {
         r.unit_override_request_id,
         r.unit_id,
         r.lot_id,
+        r.requested_destination_lot_id,
         r.request_type,
         r.request_status,
         r.validation_status,
@@ -591,7 +660,7 @@ async function getOverrideRequestById(overrideRequestId) {
   return rows[0] ? mapOverrideRequest(rows[0], lotMap) : null;
 }
 
-async function getPendingOverrideRequestForUnit({ unitId, lotId, requestType = null }) {
+async function getPendingOverrideRequestForUnit({ unitId, requestType = null }) {
   const exists = await overrideTableExists();
 
   if (!exists) {
@@ -599,36 +668,57 @@ async function getPendingOverrideRequestForUnit({ unitId, lotId, requestType = n
   }
 
   const normalizedUnitId = normalizeOptionalInteger(unitId);
-  const normalizedLotId = normalizeOptionalInteger(lotId);
   const normalizedRequestType = normalizeText(requestType);
 
   if (!normalizedUnitId) {
     return null;
   }
 
+  const lotMap = await getLotNameMap();
   const [rows] = await pool.query(
     `
       SELECT
-        unit_override_request_id,
-        unit_id,
-        lot_id,
-        request_status,
-        created_at
-      FROM unit_override_requests
-      WHERE unit_id = ?
-        AND LOWER(request_status) = 'pending'
-        AND (? IS NULL OR request_type = ?)
-        AND (
-          lot_id = ?
-          OR (? IS NULL AND lot_id IS NULL)
-        )
-      ORDER BY created_at DESC, unit_override_request_id DESC
+        r.unit_override_request_id,
+        r.unit_id,
+        r.lot_id,
+        r.requested_destination_lot_id,
+        r.request_type,
+        r.request_status,
+        r.validation_status,
+        r.enforcement_decision,
+        r.reason,
+        r.request_details,
+        r.requested_by_user_id,
+        r.reviewed_by_user_id,
+        r.review_notes,
+        r.reviewed_at,
+        r.expires_at,
+        r.created_at,
+        r.updated_at,
+        u.asset_number,
+        requested_by.first_name AS requested_by_first_name,
+        requested_by.last_name AS requested_by_last_name,
+        requested_by.email AS requested_by_email,
+        reviewed_by.first_name AS reviewed_by_first_name,
+        reviewed_by.last_name AS reviewed_by_last_name,
+        reviewed_by.email AS reviewed_by_email
+      FROM unit_override_requests r
+      LEFT JOIN units u
+        ON u.unit_id = r.unit_id
+      LEFT JOIN users requested_by
+        ON requested_by.user_id = r.requested_by_user_id
+      LEFT JOIN users reviewed_by
+        ON reviewed_by.user_id = r.reviewed_by_user_id
+      WHERE r.unit_id = ?
+        AND LOWER(r.request_status) = 'pending'
+        AND (? IS NULL OR r.request_type = ?)
+      ORDER BY r.created_at DESC, r.unit_override_request_id DESC
       LIMIT 1
     `,
-    [normalizedUnitId, normalizedRequestType, normalizedRequestType, normalizedLotId, normalizedLotId]
+    [normalizedUnitId, normalizedRequestType, normalizedRequestType]
   );
 
-  return rows[0] || null;
+  return rows[0] ? mapOverrideRequest(rows[0], lotMap) : null;
 }
 
 function getOutcomeConfirmationLabel(outcomeCode) {
@@ -761,6 +851,7 @@ async function syncOutcomeConfirmationRequestWithConnection(connection, {
 async function createOverrideRequest({
   unitId,
   lotId,
+  requestedDestinationLotId = null,
   requestType = 'lot_requirement_override',
   validationStatus = null,
   enforcementDecision = null,
@@ -772,45 +863,136 @@ async function createOverrideRequest({
   const exists = await overrideTableExists();
 
   if (!exists) {
-    throw new Error('Cannot create override request because unit_override_requests table does not exist.');
+    throw new Error('Cannot create override request because the Stage 7B override lifecycle migration is not ready.');
   }
 
   const normalizedReason = normalizeText(reason);
+  const normalizedUnitId = normalizeOptionalInteger(unitId);
+  const normalizedRequestType = normalizeText(requestType) || 'lot_requirement_override';
+  const normalizedRequestedByUserId = normalizeOptionalInteger(requestedByUserId);
+  const normalizedDestinationLotId = normalizeOptionalInteger(requestedDestinationLotId);
 
   if (!normalizedReason) {
     throw new Error('Override request reason is required.');
   }
 
-  const [result] = await pool.query(
-    `
-      INSERT INTO unit_override_requests (
-        unit_id,
-        lot_id,
-        request_type,
-        request_status,
-        validation_status,
-        enforcement_decision,
-        reason,
-        request_details,
-        requested_by_user_id,
-        expires_at
-      )
-      VALUES (?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
-    `,
-    [
-      normalizeOptionalInteger(unitId),
-      normalizeOptionalInteger(lotId),
-      normalizeText(requestType) || 'lot_requirement_override',
-      normalizeText(validationStatus),
-      normalizeText(enforcementDecision),
-      normalizedReason,
-      normalizeJsonValue(requestDetails),
-      normalizeOptionalInteger(requestedByUserId),
-      expiresAt || null
-    ]
-  );
+  if (normalizedRequestType !== MANUAL_TECH_OVERRIDE_REQUEST_TYPE) {
+    const [result] = await pool.query(
+      `
+        INSERT INTO unit_override_requests (
+          unit_id,
+          lot_id,
+          requested_destination_lot_id,
+          request_type,
+          request_status,
+          validation_status,
+          enforcement_decision,
+          reason,
+          request_details,
+          requested_by_user_id,
+          expires_at
+        )
+        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        normalizedUnitId,
+        normalizeOptionalInteger(lotId),
+        normalizedDestinationLotId,
+        normalizedRequestType,
+        normalizeText(validationStatus),
+        normalizeText(enforcementDecision),
+        normalizedReason,
+        normalizeJsonValue(requestDetails),
+        normalizedRequestedByUserId,
+        expiresAt || null
+      ]
+    );
 
-  return result.insertId;
+    return Number(result.insertId);
+  }
+
+  if (!normalizedUnitId || !normalizedRequestedByUserId || !normalizedDestinationLotId) {
+    const error = new Error('Manual override requests require a Unit, requester, and destination Lot.');
+    error.code = 'BWT_OVERRIDE_DESTINATION_LOT_REQUIRED';
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [unitRows] = await connection.query(
+      'SELECT unit_id FROM units WHERE unit_id = ? LIMIT 1 FOR UPDATE',
+      [normalizedUnitId]
+    );
+
+    if (unitRows.length === 0) {
+      const error = new Error('The selected Unit no longer exists.');
+      error.code = 'BWT_OVERRIDE_UNIT_NOT_FOUND';
+      throw error;
+    }
+
+    const [pendingRows] = await connection.query(
+      `
+        SELECT unit_override_request_id
+        FROM unit_override_requests
+        WHERE unit_id = ?
+          AND request_type = ?
+          AND LOWER(request_status) = 'pending'
+        ORDER BY created_at DESC, unit_override_request_id DESC
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [normalizedUnitId, normalizedRequestType]
+    );
+
+    if (pendingRows[0]) {
+      const error = new Error('A pending override request already exists for this Unit.');
+      error.code = 'BWT_OVERRIDE_ALREADY_PENDING';
+      error.overrideRequestId = Number(pendingRows[0].unit_override_request_id);
+      throw error;
+    }
+
+    const [result] = await connection.query(
+      `
+        INSERT INTO unit_override_requests (
+          unit_id,
+          lot_id,
+          requested_destination_lot_id,
+          request_type,
+          request_status,
+          validation_status,
+          enforcement_decision,
+          reason,
+          request_details,
+          requested_by_user_id,
+          expires_at
+        )
+        VALUES (?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        normalizedUnitId,
+        normalizeOptionalInteger(lotId),
+        normalizedDestinationLotId,
+        normalizedRequestType,
+        normalizeText(validationStatus),
+        normalizeText(enforcementDecision),
+        normalizedReason,
+        normalizeJsonValue(requestDetails),
+        normalizedRequestedByUserId,
+        expiresAt || null
+      ]
+    );
+
+    await connection.commit();
+    return Number(result.insertId);
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function approveOverrideRequest({
@@ -840,6 +1022,7 @@ async function approveOverrideRequest({
           r.unit_id,
           r.request_type,
           r.requested_by_user_id,
+          r.requested_destination_lot_id,
           r.request_status,
           u.assigned_to_user_id,
           u.created_by_user_id,
@@ -859,6 +1042,12 @@ async function approveOverrideRequest({
     if (!request || String(request.request_status || '').toLowerCase() !== 'pending') {
       await connection.rollback();
       return false;
+    }
+
+    if (Number(request.requested_by_user_id) === reviewerId) {
+      const error = new Error('A requester cannot approve their own request.');
+      error.code = 'BWT_OVERRIDE_SELF_REVIEW';
+      throw error;
     }
 
     if (Number(request.is_parked || 0) === 1) {
@@ -891,6 +1080,7 @@ async function approveOverrideRequest({
           SELECT 1
           FROM unit_work_completions
           WHERE unit_id = ?
+            AND reversed_at IS NULL
           LIMIT 1
         `,
         [request.unit_id]
@@ -901,13 +1091,15 @@ async function approveOverrideRequest({
     let approvedDestinationLotId = currentLotId;
     let destinationLot = null;
 
-    if (isManualTechOverride && hasRecordedWork) {
-      const requestedDestinationLotId = normalizeOptionalInteger(destinationLotId);
+    if (isManualTechOverride) {
+      const requestedDestinationLotId = normalizeOptionalInteger(destinationLotId)
+        || normalizeOptionalInteger(request.requested_destination_lot_id)
+        || currentLotId;
 
       if (!requestedDestinationLotId) {
         throw createOverrideDestinationLotError(
           'BWT_OVERRIDE_DESTINATION_LOT_REQUIRED',
-          'Select an open destination lot before approving an override for a unit with recorded work.'
+          'Select an open destination Lot before approving this override request.'
         );
       }
 
@@ -917,29 +1109,48 @@ async function approveOverrideRequest({
       if (!destinationLot) {
         throw createOverrideDestinationLotError(
           'BWT_INVALID_OVERRIDE_DESTINATION_LOT',
-          'The selected destination lot is not currently open and assignable.'
+          'The requested destination Lot is no longer open and assignable.'
         );
       }
 
       approvedDestinationLotId = requestedDestinationLotId;
     }
 
+    let destinationValidation = null;
+
+    if (isManualTechOverride && request.unit_id && approvedDestinationLotId) {
+      // Lazy-load to avoid a module cycle through Unit expanded-form outcome helpers.
+      const unitLotDestinationValidationModel = require('./unitLotDestinationValidationModel');
+      destinationValidation = await unitLotDestinationValidationModel.assertExistingUnitDestination({
+        unitId: request.unit_id,
+        destinationLotId: approvedDestinationLotId
+      });
+    }
+
     const lotChanged = Boolean(
       isManualTechOverride
-      && hasRecordedWork
       && approvedDestinationLotId
       && approvedDestinationLotId !== currentLotId
     );
     const normalizedReviewNotes = normalizeText(reviewNotes);
-    const finalReviewNotes = lotChanged
-      ? [normalizedReviewNotes, `Destination lot selected: ${destinationLot.lotName}.`].filter(Boolean).join('\n')
-      : normalizedReviewNotes;
+    const destinationNote = lotChanged && destinationLot
+      ? `Destination lot selected: ${destinationLot.lotName}.`
+      : '';
+    const validationWarningNote = destinationValidation && destinationValidation.warningMessages.length > 0
+      ? destinationValidation.warningMessages.join(' ')
+      : '';
+    const finalReviewNotes = [
+      normalizedReviewNotes,
+      destinationNote,
+      validationWarningNote
+    ].filter(Boolean).join('\n') || null;
 
     const [result] = await connection.query(
       `
         UPDATE unit_override_requests
         SET
           request_status = 'approved',
+          requested_destination_lot_id = ?,
           reviewed_by_user_id = ?,
           review_notes = ?,
           reviewed_at = NOW(),
@@ -950,6 +1161,7 @@ async function approveOverrideRequest({
           AND LOWER(request_status) = 'pending'
       `,
       [
+        isManualTechOverride ? approvedDestinationLotId : normalizeOptionalInteger(request.requested_destination_lot_id),
         reviewerId,
         finalReviewNotes,
         creditGranted ? 1 : 0,
@@ -965,7 +1177,21 @@ async function approveOverrideRequest({
     }
 
     if (isOutcomeConfirmation) {
-      await connection.query(
+      const [outcomeRows] = await connection.query(
+        `
+          SELECT outcome_code
+          FROM unit_outcomes
+          WHERE unit_id = ?
+            AND is_current = 1
+            AND approval_status_code = 'pending'
+          ORDER BY selected_at DESC, unit_outcome_id DESC
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [request.unit_id]
+      );
+      const pendingOutcome = outcomeRows[0] || null;
+      const [outcomeResult] = await connection.query(
         `
           UPDATE unit_outcomes
           SET
@@ -982,6 +1208,20 @@ async function approveOverrideRequest({
         `,
         [reviewerId, normalizedReviewNotes, request.unit_id]
       );
+      if (Number(outcomeResult.affectedRows || 0) === 1) {
+        const outcomeLabel = pendingOutcome && pendingOutcome.outcome_code === 'pass'
+          ? 'Pass'
+          : pendingOutcome && pendingOutcome.outcome_code === 'fail'
+            ? 'Fail'
+            : '';
+        await unitWorkflowAudit.recordOutcomeApproved(connection, {
+          unitId: request.unit_id,
+          actorUserId: reviewerId,
+          outcomeLabel,
+          approvalNotes: normalizedReviewNotes,
+          source: 'override_outcome_confirmation'
+        });
+      }
     } else if (requestedByUserId && request.unit_id) {
       const unitUpdates = [
         'assigned_to_user_id = ?',
@@ -1053,6 +1293,23 @@ async function approveOverrideRequest({
           ]
         );
       }
+
+      if (lotChanged && currentLotId) {
+        const lotValidationOverrideModel = require('./lotValidationOverrideModel');
+        await lotValidationOverrideModel.expireMovedUnitOverrides(currentLotId, connection);
+      }
+
+      await unitWorkflowAudit.recordOverrideApproved(connection, {
+        unitId: request.unit_id,
+        actorUserId: reviewerId,
+        requestId,
+        fromUserId: previousAssignedUserId,
+        toUserId: requestedByUserId,
+        fromLotId: currentLotId,
+        toLotId: approvedDestinationLotId,
+        priorTechCreditWeight: creditGranted ? creditWeight : null,
+        reviewNotes: finalReviewNotes
+      });
     }
 
     if (creditGranted && previousAssignedUserId && completionTableReady) {
@@ -1092,6 +1349,97 @@ async function approveOverrideRequest({
   }
 }
 
+
+async function withdrawOverrideRequest({ overrideRequestId, requestedByUserId, withdrawalNote = '' }) {
+  const requestId = normalizeOptionalInteger(overrideRequestId);
+  const requesterId = normalizeOptionalInteger(requestedByUserId);
+
+  if (!requestId || !requesterId) {
+    const error = new Error('The request could not be verified.');
+    error.code = 'BWT_OVERRIDE_REQUEST_INPUT_INVALID';
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      `
+        SELECT unit_id, request_type, request_status, requested_by_user_id
+        FROM unit_override_requests
+        WHERE unit_override_request_id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [requestId]
+    );
+    const request = rows[0] || null;
+
+    if (!request || Number(request.requested_by_user_id) !== requesterId) {
+      const error = new Error('You can withdraw only your own pending request.');
+      error.code = 'BWT_OVERRIDE_REQUEST_NOT_OWNER';
+      throw error;
+    }
+
+    if (String(request.request_status || '').toLowerCase() !== 'pending') {
+      const error = new Error('Only pending requests can be withdrawn.');
+      error.code = 'BWT_OVERRIDE_REQUEST_NOT_PENDING';
+      throw error;
+    }
+
+    const note = normalizeText(withdrawalNote) || 'Withdrawn by requester.';
+    const [result] = await connection.query(
+      `
+        UPDATE unit_override_requests
+        SET
+          request_status = 'cancelled',
+          reviewed_by_user_id = ?,
+          review_notes = ?,
+          reviewed_at = NOW(),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE unit_override_request_id = ?
+          AND LOWER(request_status) = 'pending'
+      `,
+      [requesterId, note, requestId]
+    );
+
+    if (Number(result.affectedRows) !== 1) {
+      const error = new Error('Only pending requests can be withdrawn.');
+      error.code = 'BWT_OVERRIDE_REQUEST_NOT_PENDING';
+      throw error;
+    }
+
+    if (request.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE) {
+      await connection.query(
+        `
+          UPDATE unit_outcomes
+          SET
+            approval_status_code = 'not_requested',
+            approved_by_user_id = NULL,
+            approved_at = NULL,
+            approval_notes = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE unit_id = ?
+            AND is_current = 1
+            AND approval_status_code = 'pending'
+          ORDER BY selected_at DESC, unit_outcome_id DESC
+          LIMIT 1
+        `,
+        [note, request.unit_id]
+      );
+    }
+
+    await connection.commit();
+    return true;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, reviewNotes }) {
   const requestId = normalizeOptionalInteger(overrideRequestId);
   const reviewerId = normalizeOptionalInteger(reviewedByUserId);
@@ -1107,7 +1455,7 @@ async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, review
 
     const [requestRows] = await connection.query(
       `
-        SELECT unit_id, request_type, request_status
+        SELECT unit_id, request_type, request_status, requested_by_user_id
         FROM unit_override_requests
         WHERE unit_override_request_id = ?
         FOR UPDATE
@@ -1119,6 +1467,12 @@ async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, review
     if (!request || String(request.request_status || '').toLowerCase() !== 'pending') {
       await connection.rollback();
       return false;
+    }
+
+    if (Number(request.requested_by_user_id) === reviewerId) {
+      const error = new Error('A requester cannot review their own request.');
+      error.code = 'BWT_OVERRIDE_SELF_REVIEW';
+      throw error;
     }
 
     const [result] = await connection.query(
@@ -1172,6 +1526,7 @@ async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, review
 
 module.exports = {
   overrideTableExists,
+  listAssignableLots,
   listOverrideRequests,
   getLatestOverrideRequestMapForUnits,
   listOverrideRequestsForUnit,
@@ -1180,5 +1535,6 @@ module.exports = {
   createOverrideRequest,
   syncOutcomeConfirmationRequestWithConnection,
   approveOverrideRequest,
-  denyOverrideRequest
+  denyOverrideRequest,
+  withdrawOverrideRequest
 };

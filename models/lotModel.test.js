@@ -75,3 +75,27 @@ test('deleteLotRequirement rejects invalid identifiers without querying the data
   assert.equal(await lotModel.deleteLotRequirement(1, -1), false);
   assert.equal(calls.length, 0);
 });
+
+test('listLotRequirements lets processor labels fall through past an empty model label', async () => {
+  const { lotModel, calls } = loadLotModelWithQueries([
+    [[{
+      lot_requirement_id: 31,
+      lot_id: 7,
+      requirement_key: 'processor',
+      operator_code: 'equals',
+      processor_model_id: 21,
+      requirement_number: null,
+      required_value: 'Intel · Core · i5-8365U'
+    }]]
+  ]);
+
+  const requirements = await lotModel.listLotRequirements(7);
+
+  assert.equal(requirements[0].required_value, 'Intel · Core · i5-8365U');
+  assert.equal(requirements[0].required_value_token, 'processor_model:21');
+
+  const sql = calls[0].sql;
+  const nullifiedConcatCount = (sql.match(/NULLIF\s*\(\s*CONCAT_WS/gi) || []).length;
+  assert.ok(nullifiedConcatCount >= 2, 'model and processor CONCAT_WS expressions must return NULL when empty');
+});
+

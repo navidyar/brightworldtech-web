@@ -11,10 +11,9 @@
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel unit-model-modal" role="dialog" aria-modal="true" aria-labelledby="unit-model-form-title">
+  <section class="modal-panel site-clean-modal unit-model-modal" role="dialog" aria-modal="true" aria-labelledby="unit-model-form-title">
     <header class="modal-header">
       <div>
-        <p class="eyebrow">Model Catalog</p>
         <h2 id="unit-model-form-title"><%= isEdit ? 'Edit Unit Model' : 'Add Unit Model' %></h2>
       </div>
 
@@ -32,8 +31,8 @@
         </div>
       <% } %>
 
-      <form class="app-form unit-model-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML">
-        <div class="form-grid">
+      <form class="app-form app-form-clean unit-model-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML">
+        <div class="form-grid unit-model-form-grid">
           <label class="form-field">
             <span>Manufacturer</span>
             <select name="manufacturerId" required>
@@ -53,29 +52,27 @@
               <% }) %>
             </select>
           </label>
-        </div>
 
-        <label class="form-field">
-          <span>Model Name</span>
-          <input type="text" name="modelName" value="<%= formData.modelName || '' %>" maxlength="150" placeholder="Example: Latitude 5400" required />
-        </label>
+          <label class="form-field unit-model-name-field">
+            <span>Model Name</span>
+            <input type="text" name="modelName" value="<%= formData.modelName || '' %>" maxlength="150" placeholder="Example: Latitude 5400" required />
+          </label>
 
-        <div class="form-grid">
           <label class="form-field">
             <span>Sort Order</span>
             <input type="number" name="sortOrder" value="<%= formData.sortOrder || 0 %>" step="1" />
           </label>
 
-          <label class="form-field">
-            <span>Status</span>
-            <select name="isActive">
-              <option value="1" <%= formData.isActive === '1' ? 'selected' : '' %>>Active</option>
-              <option value="0" <%= formData.isActive === '0' ? 'selected' : '' %>>Inactive</option>
-            </select>
+          <label class="configuration-inline-checkbox unit-model-active-toggle">
+            <input type="checkbox" name="isActive" value="1" <%= formData.isActive === '1' ? 'checked' : '' %> />
+            <span>
+              <strong>Active</strong>
+              <small>Available for new Unit intake.</small>
+            </span>
           </label>
         </div>
 
-        <p class="field-hint">Models are scoped to both manufacturer and unit category. Inactive models remain visible on historical Edit Unit records but do not appear for new selection.</p>
+        <p class="field-hint unit-model-form-note">Models are scoped to both manufacturer and Unit category. Inactive models remain visible on historical Unit records.</p>
 
         <div class="form-actions">
           <button class="primary-button" type="submit"><%= isEdit ? 'Save Model' : 'Create Model' %></button>

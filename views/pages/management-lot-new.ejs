@@ -15,17 +15,16 @@
         <main class="content-shell lot-new-page">
           <section class="dashboard-hero accent-green">
             <div>
-              <p class="eyebrow">Step 2c.1</p>
+              <p class="eyebrow">Management</p>
               <h2>Create Lot</h2>
               <p>
-                Create a Management-controlled lot that techs can later select when adding units.
-                Requirement rules will be added in the next step.
+                Create and configure a Lot before making it available to technicians.
               </p>
             </div>
 
             <div class="hero-badge">
               <span>Mode</span>
-              <strong>Basic Lot</strong>
+              <strong>New Lot</strong>
             </div>
           </section>
 
@@ -52,6 +51,15 @@
                 <p>
                   The lots table expects a lot type, but no lot type config values were found.
                   Check the config category for <code>lot_types</code>.
+                </p>
+              </div>
+            <% } %>
+
+            <% if (formOptions.capabilities.hasRequirementPolicy && formOptions.requirementPolicies.length !== 3) { %>
+              <div class="message error">
+                <p>
+                  Requirement enforcement needs active Strict, Warn Only, and Open / Mixed values.
+                  Check the <code>requirement_policies</code> config category.
                 </p>
               </div>
             <% } %>
@@ -146,6 +154,37 @@
                       <small>Same-lot matches and units currently in closed lots remain blocked and must use an override. Parked units remain eligible to be assumed into this lot.</small>
                     </span>
                   </label>
+                </div>
+              <% } %>
+
+              <% if (formOptions.capabilities.hasRequirementPolicy) { %>
+                <div class="form-section">
+                  <div class="form-section-header">
+                    <div>
+                      <p class="eyebrow">Requirements</p>
+                      <h3>Requirement Enforcement</h3>
+                    </div>
+                    <p>Choose how active Lot requirements affect Unit saves and moves.</p>
+                  </div>
+
+                  <div class="form-grid single-column">
+                    <% formOptions.requirementPolicies.forEach((policy) => { %>
+                      <label class="checkbox-card" for="requirementPolicy-<%= policy.code %>">
+                        <input
+                          id="requirementPolicy-<%= policy.code %>"
+                          type="radio"
+                          name="requirementPolicyConfigValueId"
+                          value="<%= policy.config_value_id %>"
+                          <%= String(formData.requirementPolicyConfigValueId || '') === String(policy.config_value_id) ? 'checked' : '' %>
+                          required
+                        />
+                        <span>
+                          <strong><%= policy.label %></strong>
+                          <small><%= policy.description %></small>
+                        </span>
+                      </label>
+                    <% }) %>
+                  </div>
                 </div>
               <% } %>
 

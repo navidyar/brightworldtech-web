@@ -1,0 +1,68 @@
+<%
+  const summaryView = qcSummary || {};
+  const summary = summaryView.summary || {};
+  const formatPercent = (value) => {
+    if (value === null || value === undefined || value === '') return '—';
+    return `${new Intl.NumberFormat('en-US', { maximumFractionDigits: 1 }).format(Number(value))}%`;
+  };
+  const formatCount = (value) => new Intl.NumberFormat('en-US').format(Number(value || 0));
+  const isGraded = summary.gradingStatus === 'graded';
+%>
+<div
+  class="tech-qc-summary-panel <%= summaryView.available ? '' : 'is-unavailable' %>"
+  data-tech-qc-summary
+  data-tech-qc-summary-version="<%= summaryView.version || '' %>"
+  role="status"
+  aria-live="polite"
+  aria-atomic="true"
+  aria-label="Quality Control performance summary"
+>
+  <% if (!summaryView.available) { %>
+    <div class="tech-qc-summary-unavailable">
+      <strong>QC performance unavailable</strong>
+      <span><%= summaryView.message %></span>
+    </div>
+  <% } else { %>
+    <div class="tech-qc-summary-primary">
+      <span class="tech-qc-summary-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><path d="M12 3.2 19 6v5.5c0 4.4-2.8 7.7-7 9.3-4.2-1.6-7-4.9-7-9.3V6l7-2.8Z" fill="none" stroke="currentColor" stroke-linejoin="round" stroke-width="1.7"/><path d="m8.6 12.1 2.1 2.1 4.7-4.8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"/></svg>
+      </span>
+      <div class="tech-qc-summary-primary-copy">
+        <span>QC Grade</span>
+        <strong><%= isGraded ? formatPercent(summary.qualityGrade) : 'Not yet graded' %></strong>
+        <small>
+          <%= summaryView.scopeLabel %>
+          <% if (summaryView.gradedTechnicians !== null && summaryView.gradedTechnicians !== undefined) { %>
+            · <%= formatCount(summaryView.gradedTechnicians) %> graded technician<%= Number(summaryView.gradedTechnicians) === 1 ? '' : 's' %>
+          <% } else { %>
+            · <%= formatCount(summary.reviewedUnits) %> reviewed Unit<%= Number(summary.reviewedUnits) === 1 ? '' : 's' %>
+          <% } %>
+          · All time
+        </small>
+      </div>
+    </div>
+
+    <div class="tech-qc-summary-stats">
+      <div class="tech-qc-summary-stat" aria-label="Current Acceptance: <%= formatPercent(summary.currentAcceptanceRate) %>; <%= formatCount(summary.currentlyAcceptedUnits) %> of <%= formatCount(summary.reviewedUnits) %> reviewed Units">
+        <span>Current Acceptance</span>
+        <strong><%= formatPercent(summary.currentAcceptanceRate) %></strong>
+        <small><%= formatCount(summary.currentlyAcceptedUnits) %> of <%= formatCount(summary.reviewedUnits) %> reviewed</small>
+      </div>
+      <div class="tech-qc-summary-stat" aria-label="Correction Resolution: <%= formatPercent(summary.correctionResolutionRate) %>; <%= formatCount(summary.correctedUnits) %> of <%= formatCount(summary.rejectedUnits) %> rejected Units">
+        <span>Correction Resolution</span>
+        <strong><%= formatPercent(summary.correctionResolutionRate) %></strong>
+        <small><%= formatCount(summary.correctedUnits) %> of <%= formatCount(summary.rejectedUnits) %> rejected</small>
+      </div>
+      <div class="tech-qc-summary-stat <%= Number(summary.readyForRecheckUnits || 0) > 0 ? 'has-recheck' : '' %>" aria-label="Ready for Recheck: <%= formatCount(summary.readyForRecheckUnits) %> Units">
+        <span>Ready for Recheck</span>
+        <strong><%= formatCount(summary.readyForRecheckUnits) %></strong>
+        <small><%= Number(summary.readyForRecheckUnits || 0) > 0 ? 'Technician marked corrected' : 'No Units waiting for QC' %></small>
+      </div>
+      <div class="tech-qc-summary-stat <%= Number(summary.pendingCorrectionUnits || 0) > 0 ? 'has-pending' : '' %>" aria-label="Pending Corrections: <%= formatCount(summary.pendingCorrectionUnits) %> Units">
+        <span>Pending Corrections</span>
+        <strong><%= formatCount(summary.pendingCorrectionUnits) %></strong>
+        <small><%= Number(summary.pendingCorrectionUnits || 0) > 0 ? 'Still awaiting technician correction' : 'No rejected Units pending' %></small>
+      </div>
+    </div>
+  <% } %>
+</div>

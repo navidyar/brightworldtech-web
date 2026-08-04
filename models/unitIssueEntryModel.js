@@ -1,4 +1,7 @@
 const { pool } = require('./db');
+const operationalOptionRankingModel = require('./operationalOptionRankingModel');
+const { sortOptionsByPopularity } = require('../services/operationalOptionRanking');
+const { isUnitFormFieldManaged } = require('../services/unitFormSubmissionPolicy');
 
 const ISSUE_TABLE = 'unit_issue_entries';
 const COMMENT_TABLE = 'unit_comments';
@@ -45,6 +48,43 @@ function normalizeOptionalInteger(value) {
   const parsed = Number(normalized);
 
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeSemanticToken(value) {
+  return normalizeText(value)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function isNoCosmeticIssueOption(option) {
+  const noIssueTokens = new Set([
+    'none',
+    'no_issue',
+    'no_issues',
+    'no_cosmetic_issue',
+    'no_cosmetic_issues'
+  ]);
+
+  return [option?.code, option?.value, option?.label]
+    .map((value) => normalizeSemanticToken(value))
+    .some((value) => noIssueTokens.has(value));
+}
+
+function isNoHardwareIssueOption(option) {
+  const noIssueTokens = new Set([
+    'none',
+    'no_issue',
+    'no_issues',
+    'hardware_none',
+    'hardware_issue_none',
+    'no_hardware_issue',
+    'no_hardware_issues'
+  ]);
+
+  return [option?.code, option?.value, option?.label]
+    .map((value) => normalizeSemanticToken(value))
+    .some((value) => noIssueTokens.has(value));
 }
 
 function normalizeIssueRows(rows) {
@@ -147,13 +187,15 @@ async function getIssueFormOptions() {
     hardwareIssueTypes,
     issueLocations,
     issueSeverities,
-    commentTypes
+    commentTypes,
+    operationalRankingSnapshot
   ] = await Promise.all([
     listConfigValuesByCategoryCodes(COSMETIC_ISSUE_CATEGORY_CODES),
     listConfigValuesByCategoryCodes(HARDWARE_ISSUE_CATEGORY_CODES),
     listConfigValuesByCategoryCodes(ISSUE_LOCATION_CATEGORY_CODES),
     listConfigValuesByCategoryCodes(ISSUE_SEVERITY_CATEGORY_CODES),
-    listConfigValuesByCategoryCodes(COMMENT_TYPE_CATEGORY_CODES)
+    listConfigValuesByCategoryCodes(COMMENT_TYPE_CATEGORY_CODES),
+    operationalOptionRankingModel.loadRankingSnapshot()
   ]);
 
   const defaultCommentType = commentTypes.find((commentType) => commentType.code === 'general') || commentTypes[0] || null;
@@ -161,12 +203,63 @@ async function getIssueFormOptions() {
   return {
     issueOptionsSupported: await tableExists(ISSUE_TABLE),
     commentOptionsSupported: await tableExists(COMMENT_TABLE),
-    cosmeticIssueTypes,
-    hardwareIssueTypes,
-    issueLocations,
+    cosmeticIssueTypes: sortOptionsByPopularity(
+      cosmeticIssueTypes.map((option) => ({
+        ...option,
+        isNoIssue: isNoCosmeticIssueOption(option)
+      })),
+      operationalRankingSnapshot,
+      {
+        optionScope: 'cosmetic_issue_type'
+      }
+    ),
+    hardwareIssueTypes: sortOptionsByPopularity(
+      hardwareIssueTypes.map((option) => ({
+        ...option,
+        isNoIssue: isNoHardwareIssueOption(option)
+      })),
+      operationalRankingSnapshot,
+      {
+        optionScope: 'hardware_issue_type'
+      }
+    ),
+    issueLocations: sortOptionsByPopularity(issueLocations, operationalRankingSnapshot, {
+      optionScope: 'issue_location'
+    }),
     issueSeverities,
     commentTypes,
     defaultCommentTypeConfigValueId: defaultCommentType ? String(defaultCommentType.id) : ''
+  };
+}
+
+async function getGeneralCommentValidationDataByUnitId(unitId) {
+  const safeUnitId = Number(unitId);
+
+  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0 || !await tableExists(COMMENT_TABLE)) {
+    return {
+      generalCommentTypeConfigValueId: '',
+      generalCommentText: ''
+    };
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT note_type_config_value_id, comment_text
+      FROM unit_comments
+      WHERE unit_id = ?
+        AND NULLIF(TRIM(comment_text), '') IS NOT NULL
+      ORDER BY created_at DESC, unit_comment_id DESC
+      LIMIT 1
+    `,
+    [safeUnitId]
+  );
+  const row = rows[0] || null;
+
+  return {
+    generalCommentTypeConfigValueId: row && row.note_type_config_value_id
+      ? String(row.note_type_config_value_id)
+      : '',
+    generalCommentText: row ? String(row.comment_text || '').trim() : ''
   };
 }
 
@@ -339,12 +432,15 @@ async function saveIssueDetailsForUnitWithConnection(connection, { unitId, formD
   const issueTableReady = await tableExists(ISSUE_TABLE, connection);
   const commentTableReady = await tableExists(COMMENT_TABLE, connection);
 
-  if (issueTableReady) {
+  if (issueTableReady && isUnitFormFieldManaged(formData, 'cosmetic_issues')) {
     await replaceCurrentIssuesForArea(connection, safeUnitId, 'cosmetic', formData.cosmeticIssues || [], currentUserId);
+  }
+
+  if (issueTableReady && isUnitFormFieldManaged(formData, 'hardware_issues')) {
     await replaceCurrentIssuesForArea(connection, safeUnitId, 'hardware', formData.hardwareIssues || [], currentUserId);
   }
 
-  if (commentTableReady) {
+  if (commentTableReady && isUnitFormFieldManaged(formData, 'general_comment')) {
     await appendGeneralComment(connection, safeUnitId, formData || {}, currentUserId);
   }
 }
@@ -368,6 +464,9 @@ module.exports = {
   getBlankIssueFormData,
   getIssueFormOptions,
   getIssueFormDataByUnitId,
+  getGeneralCommentValidationDataByUnitId,
+  isNoCosmeticIssueOption,
+  isNoHardwareIssueOption,
   saveIssueDetailsForUnit,
   saveIssueDetailsForUnitWithConnection
 };

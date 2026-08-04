@@ -148,7 +148,13 @@
                               <small>Inherited requirement is suppressed while hidden.</small>
                             <% } %>
                             <% if (field.dependencyLabels.length > 0) { %>
-                              <small>Forced by: <%= field.dependencyLabels.join(', ') %></small>
+                              <small>Forced by form dependency: <%= field.dependencyLabels.join(', ') %></small>
+                            <% } %>
+                            <% if (field.lotRequirementVisibilityLabels.length > 0) { %>
+                              <small>
+                                Active Lot requirement forces this field visible<%= field.lotRequirementRequirementLabels.length > 0 ? ' and required' : '' %>:
+                                <%= field.lotRequirementVisibilityLabels.join(', ') %>
+                              </small>
                             <% } %>
                           </td>
                           <td>

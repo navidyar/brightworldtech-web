@@ -19,7 +19,7 @@
           <section class="dashboard-hero accent-green">
             <div>
               <p class="eyebrow"><%= request.requestTypeLabel %></p>
-              <h2>Unit Request #<%= request.unitRequestId %></h2>
+              <h2>Request #<%= request.unitRequestId %></h2>
               <p>
                 <%= request.isIntentionalDuplicateRequest
                   ? 'Review the matching existing record, immutable requested intake snapshot, and request history.'
@@ -40,7 +40,7 @@
                   <% if (request.isArchived) { %> · Archived <%= request.archivedAt ? formatDateTime(request.archivedAt) : '—' %><% } %>
                 </p>
               </div>
-              <a class="secondary-button" href="<%= unitRequestQueueUrl %>">Back to Unit Requests</a>
+              <a class="secondary-button" href="<%= unitRequestQueueUrl %>">Back to Requests</a>
             </div>
 
             <% if (successMessage) { %><div class="message success"><p><%= successMessage %></p></div><% } %>
@@ -55,7 +55,8 @@
                     <div><dt>Current / Last Lot</dt><dd><%= request.matchedUnitCurrentLotName %></dd></div>
                     <div><dt>Unit Serial</dt><dd><%= request.matchedUnitSnapshot.unitSerialNumber || '—' %></dd></div>
                     <div><dt>BIOS Serial</dt><dd><%= request.matchedUnitSnapshot.biosSerialNumber || '—' %></dd></div>
-                    <div><dt>Model</dt><dd><%= request.matchedUnitSnapshot.modelSummary || '—' %></dd></div>
+                    <div><dt>Manufacturer</dt><dd><%= request.matchedUnitSnapshot.manufacturerLabel || '—' %></dd></div>
+                    <div><dt>Model</dt><dd><%= request.matchedUnitSnapshot.modelLabel || request.matchedUnitSnapshot.modelSummary || '—' %></dd></div>
                     <div><dt>Processor</dt><dd><%= request.matchedUnitSnapshot.cpuSummary || '—' %></dd></div>
                     <div><dt>Assigned To</dt><dd><%= request.matchedUnitSnapshot.assignedToName || 'Unassigned' %></dd></div>
                   </dl>
@@ -75,6 +76,21 @@
                   </dl>
                 </section>
               </div>
+
+              <% if (request.snapshotDisplay.manufacturerDiffers || request.snapshotDisplay.modelDiffers) { %>
+                <section class="unit-request-detail-section">
+                  <p class="eyebrow">Identity Differences</p>
+                  <p>The proposed Unit has different identity details from the matching record. This is permitted for an Intentional Duplicate request and is shown here for explicit review.</p>
+                  <dl class="unit-request-detail-list">
+                    <% if (request.snapshotDisplay.manufacturerDiffers) { %>
+                      <div><dt>Manufacturer</dt><dd><%= request.snapshotDisplay.existingManufacturerLabel || request.matchedUnitSnapshot.manufacturerLabel || '—' %> → <%= request.snapshotDisplay.manufacturerLabel || '—' %></dd></div>
+                    <% } %>
+                    <% if (request.snapshotDisplay.modelDiffers) { %>
+                      <div><dt>Model</dt><dd><%= request.snapshotDisplay.existingModelLabel || request.matchedUnitSnapshot.modelLabel || '—' %> → <%= request.snapshotDisplay.modelLabel || '—' %></dd></div>
+                    <% } %>
+                  </dl>
+                </section>
+              <% } %>
             <% } else if (request.catalogContext && request.catalogContext.kind === 'model') { %>
               <div class="unit-request-detail-grid unit-request-detail-overview">
                 <section class="unit-request-detail-card">
@@ -210,7 +226,7 @@
             <% } else if (canWithdrawRequest) { %>
               <section class="unit-request-review-panel">
                 <div><p class="eyebrow">Requester Action</p><h3>Withdraw Pending Request</h3><p>Withdrawing does not change any Unit record or catalog value and cannot be undone.</p></div>
-                <form method="post" action="/unit-requests/<%= request.unitRequestId %>/withdraw">
+                <form method="post" action="/unit-requests/<%= request.unitRequestId %>/withdraw" onsubmit="return window.confirm('Withdraw this pending request?');">
                   <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
                       <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
                       <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />

@@ -1,6 +1,28 @@
 const { pool } = require('./db');
 const lotModel = require('./lotModel');
 const productionWeightModel = require('./productionWeightModel');
+const operationalOptionRankingModel = require('./operationalOptionRankingModel');
+const {
+  attachContextScores,
+  serializeUsageScoresByContext,
+  sortOptionsByPopularity
+} = require('../services/operationalOptionRanking');
+const { isUnitFormFieldManaged } = require('../services/unitFormSubmissionPolicy');
+const unitAuditEventModel = require('./unitAuditEventModel');
+const lotValidationOverrideModel = require('./lotValidationOverrideModel');
+const unitWorkflowAudit = require('../services/unitWorkflowAudit');
+const {
+  mapQcReviewQueueCounts,
+  normalizeQcReviewFilter,
+  resolveQcReviewState
+} = require('../services/qcReviewQueue');
+const {
+  assertCanReverseUnitCompletion,
+  normalizeCompletionReversalReason
+} = require('../services/unitCompletionReversalPolicy');
+const {
+  filterNewDuplicateMatchesForEdit
+} = require('../services/unitDuplicateEditPolicy');
 
 const DEFAULT_UNIT_PAGE_SIZE = 50;
 const UNIT_PAGE_SIZE_OPTIONS = [50, 100, 250, 500];
@@ -14,11 +36,12 @@ const UNIT_SORT_OPTIONS = new Set([
   'grade_asc',
   'grade_desc',
   'outcome_pass_first',
-  'outcome_fail_first'
+  'outcome_fail_first',
+  'qc_status_desc',
+  'qc_status_asc'
 ]);
 const MAX_SEARCH_TERMS = 100;
 const ASSET_NUMBER_START = 2300000;
-
 const MEMORY_INSTALL_TYPE_OPTIONS = [
   { code: 'removable_module', label: 'Removable Module' },
   { code: 'integrated_soldered', label: 'Integrated / Soldered' },
@@ -132,15 +155,20 @@ async function getTableColumns(tableName) {
     'unit_models',
     'processor_brands',
     'processor_models',
+    'processor_families',
     'unit_model_processor_options',
     'unit_identifiers',
     'unit_memory_modules',
+    'unit_previous_memory_modules',
     'unit_storage_devices',
+    'unit_previous_storage_devices',
     'lots',
     'users',
     'roles',
     'user_roles',
     'unit_work_completions',
+    'unit_qc_checks',
+    'unit_qc_corrections',
     'unit_assignment_history',
     'unit_park_history'
   ];
@@ -392,6 +420,7 @@ async function listProcessorModels(options = {}) {
   const includeProcessorModelId = normalizeOptionalInteger(options.includeProcessorModelId);
   const columns = await getTableColumns('processor_models');
   const compatibilityColumns = await getTableColumns('unit_model_processor_options');
+  const processorFamilyColumns = await getTableColumns('processor_families');
 
   if (!hasColumn(columns, 'processor_model_id')) {
     return [];
@@ -424,9 +453,18 @@ async function listProcessorModels(options = {}) {
   const compatibilitySelect = hasCompatibilityMap
     ? "GROUP_CONCAT(DISTINCT umpo.unit_model_id ORDER BY umpo.unit_model_id SEPARATOR ',') AS compatible_unit_model_ids"
     : 'NULL AS compatible_unit_model_ids';
-  const groupBy = hasCompatibilityMap
-    ? `GROUP BY pm.processor_model_id, ${brandIdColumn ? `pm.${escapeIdentifier(brandIdColumn)},` : ''} ${familyColumn ? `pm.${escapeIdentifier(familyColumn)},` : ''} pm.${escapeIdentifier(modelColumn)}, ${speedColumn ? `pm.${escapeIdentifier(speedColumn)},` : ''} ${generationColumn ? `pm.${escapeIdentifier(generationColumn)}` : 'pm.processor_model_id'}`
-    : '';
+  const hasProcessorExportShortForm = hasColumn(processorFamilyColumns, 'export_short_form');
+  const processorShortFormSelect = hasProcessorExportShortForm
+    ? "GROUP_CONCAT(DISTINCT NULLIF(TRIM(pf.export_short_form), '') ORDER BY pf.sort_order, pf.processor_family_id SEPARATOR '||') AS processor_export_short_forms"
+    : 'NULL AS processor_export_short_forms';
+  const processorFamilyJoin = `
+    LEFT JOIN processor_family_members pfm
+      ON pfm.processor_model_id = pm.processor_model_id
+    LEFT JOIN processor_families pf
+      ON pf.processor_family_id = pfm.processor_family_id
+     AND pf.is_active = 1
+  `;
+  const groupBy = `GROUP BY pm.processor_model_id, ${brandIdColumn ? `pm.${escapeIdentifier(brandIdColumn)},` : ''} ${familyColumn ? `pm.${escapeIdentifier(familyColumn)},` : ''} pm.${escapeIdentifier(modelColumn)}, ${speedColumn ? `pm.${escapeIdentifier(speedColumn)},` : ''} ${generationColumn ? `pm.${escapeIdentifier(generationColumn)}` : 'pm.processor_model_id'}`;
 
   const [rows] = await pool.query(
     `
@@ -437,9 +475,13 @@ async function listProcessorModels(options = {}) {
         pm.${escapeIdentifier(modelColumn)} AS model_code,
         ${speedColumn ? `pm.${escapeIdentifier(speedColumn)}` : 'NULL'} AS base_speed_ghz,
         ${generationColumn ? `pm.${escapeIdentifier(generationColumn)}` : 'NULL'} AS generation,
-        ${compatibilitySelect}
+        ${compatibilitySelect},
+        GROUP_CONCAT(DISTINCT pf.processor_family_id ORDER BY pf.processor_family_id SEPARATOR ',') AS processor_family_ids,
+        GROUP_CONCAT(DISTINCT pf.name ORDER BY pf.name SEPARATOR '||') AS processor_family_labels,
+        ${processorShortFormSelect}
       FROM processor_models pm
       ${compatibilityJoin}
+      ${processorFamilyJoin}
       ${activeFilter}
       ${groupBy}
       ORDER BY processor_family, model_code, generation
@@ -463,7 +505,23 @@ async function listProcessorModels(options = {}) {
       compatibleUnitModelIds: String(row.compatible_unit_model_ids || '')
         .split(',')
         .map((value) => Number(value))
-        .filter((value) => Number.isInteger(value) && value > 0)
+        .filter((value) => Number.isInteger(value) && value > 0),
+      processorFamilyIds: String(row.processor_family_ids || '')
+        .split(',')
+        .map((value) => Number(value))
+        .filter((value) => Number.isInteger(value) && value > 0),
+      processorFamilyLabels: String(row.processor_family_labels || '')
+        .split('||')
+        .map((value) => value.trim())
+        .filter(Boolean),
+      processorExportShortForms: String(row.processor_export_short_forms || '')
+        .split('||')
+        .map((value) => value.trim())
+        .filter(Boolean),
+      exportShortForm: String(row.processor_export_short_forms || '')
+        .split('||')
+        .map((value) => value.trim())
+        .find(Boolean) || ''
     };
   });
 }
@@ -664,6 +722,18 @@ function normalizeOptionalInteger(value) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function normalizeOptionalNonNegativeInteger(value) {
+  const trimmed = String(value ?? '').trim();
+
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number(trimmed);
+
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
 function normalizeRequiredInteger(value) {
   const parsed = Number(String(value || '').trim());
 
@@ -701,9 +771,7 @@ function normalizeOptionalString(value, maxLength = 255) {
 function normalizeMemoryInstallTypeCode(value) {
   const normalized = String(value || '').trim();
 
-  return VALID_MEMORY_INSTALL_TYPE_CODES.has(normalized)
-    ? normalized
-    : DEFAULT_MEMORY_INSTALL_TYPE_CODE;
+  return VALID_MEMORY_INSTALL_TYPE_CODES.has(normalized) ? normalized : '';
 }
 
 function normalizeModuleRows(rows) {
@@ -728,7 +796,7 @@ function normalizeModuleRows(rows) {
 function normalizeMemoryModuleRow(row, index = 0) {
   const normalized = {
     slotLabel: normalizeOptionalString(row.slotLabel, 80),
-    sizeGb: normalizeOptionalInteger(row.sizeGb),
+    sizeGb: normalizeOptionalNonNegativeInteger(row.sizeGb),
     ramTypeConfigValueId: normalizeOptionalInteger(row.ramTypeConfigValueId),
     memoryInstallTypeCode: normalizeMemoryInstallTypeCode(row.memoryInstallTypeCode),
     speedMhz: normalizeOptionalInteger(row.speedMhz),
@@ -738,14 +806,24 @@ function normalizeMemoryModuleRow(row, index = 0) {
     changeNotes: normalizeOptionalString(row.changeNotes, 500)
   };
 
+  if (normalized.sizeGb === 0) {
+    normalized.ramTypeConfigValueId = null;
+    normalized.memoryInstallTypeCode = null;
+    normalized.speedMhz = null;
+    normalized.manufacturerName = null;
+    normalized.partNumber = null;
+    normalized.serialNumber = null;
+  }
+
   const hasAnyValue = Boolean(
-    normalized.sizeGb ||
+    normalized.sizeGb !== null ||
       normalized.ramTypeConfigValueId ||
       normalized.speedMhz ||
       normalized.manufacturerName ||
       normalized.partNumber ||
       normalized.serialNumber ||
-      normalized.changeNotes
+      normalized.changeNotes ||
+      normalized.memoryInstallTypeCode
   );
 
   if (!hasAnyValue) {
@@ -761,7 +839,7 @@ function normalizeMemoryModuleRow(row, index = 0) {
 function normalizeStorageDeviceRow(row, index = 0) {
   const normalized = {
     slotLabel: normalizeOptionalString(row.slotLabel, 80),
-    sizeGb: normalizeOptionalInteger(row.sizeGb),
+    sizeGb: normalizeOptionalNonNegativeInteger(row.sizeGb),
     storageTypeConfigValueId: normalizeOptionalInteger(row.storageTypeConfigValueId),
     manufacturerName: normalizeOptionalString(row.manufacturerName, 120),
     modelNumber: normalizeOptionalString(row.modelNumber, 120),
@@ -771,8 +849,17 @@ function normalizeStorageDeviceRow(row, index = 0) {
     changeNotes: normalizeOptionalString(row.changeNotes, 500)
   };
 
+  if (normalized.sizeGb === 0) {
+    normalized.storageTypeConfigValueId = null;
+    normalized.manufacturerName = null;
+    normalized.modelNumber = null;
+    normalized.serialNumber = null;
+    normalized.firmwareVersion = null;
+    normalized.wipeStatusConfigValueId = null;
+  }
+
   const hasAnyValue = Boolean(
-    normalized.sizeGb ||
+    normalized.sizeGb !== null ||
       normalized.storageTypeConfigValueId ||
       normalized.manufacturerName ||
       normalized.modelNumber ||
@@ -798,8 +885,20 @@ function getNormalizedMemoryModules(formData) {
     .filter(Boolean);
 }
 
+function getNormalizedPreviousMemoryModules(formData) {
+  return normalizeModuleRows(formData.previousMemoryModules)
+    .map((row, index) => normalizeMemoryModuleRow(row, index))
+    .filter(Boolean);
+}
+
 function getNormalizedStorageDevices(formData) {
   return normalizeModuleRows(formData.storageDevices)
+    .map((row, index) => normalizeStorageDeviceRow(row, index))
+    .filter(Boolean);
+}
+
+function getNormalizedPreviousStorageDevices(formData) {
+  return normalizeModuleRows(formData.previousStorageDevices)
     .map((row, index) => normalizeStorageDeviceRow(row, index))
     .filter(Boolean);
 }
@@ -814,7 +913,7 @@ function getBlankMemoryModuleRows() {
       slotLabel: 'Slot 1',
       sizeGb: '',
       ramTypeConfigValueId: '',
-      memoryInstallTypeCode: DEFAULT_MEMORY_INSTALL_TYPE_CODE,
+      memoryInstallTypeCode: '',
       speedMhz: '',
       manufacturerName: '',
       partNumber: '',
@@ -1053,7 +1152,8 @@ async function getTechUnitFormOptions(options = {}) {
     unitModels,
     processorBrands,
     processorModels,
-    productionWeightOptions
+    productionWeightOptions,
+    operationalRankingSnapshot
   ] = await Promise.all([
     listConfigValuesByCategoryCodes(['unit_categories', 'unit_category', 'unit_types', 'unit_type']),
     listConfigValuesByCategoryCodes(['unit_statuses', 'unit_status', 'current_unit_statuses', 'current_unit_status']),
@@ -1065,11 +1165,83 @@ async function getTechUnitFormOptions(options = {}) {
     listUnitModels({ includeUnitModelId: includeCurrentUnitModelId }),
     listProcessorBrands(),
     listProcessorModels({ includeProcessorModelId: includeCurrentProcessorModelId }),
-    productionWeightModel.listProductionWeightOptions()
+    productionWeightModel.listProductionWeightOptions(),
+    operationalOptionRankingModel.loadRankingSnapshot()
   ]);
 
+  const rankedUnitCategories = sortOptionsByPopularity(unitCategories, operationalRankingSnapshot, {
+    optionScope: 'unit_category'
+  });
+  const rankedRamTypes = sortOptionsByPopularity(ramTypes, operationalRankingSnapshot, {
+    optionScope: 'ram_type'
+  });
+  const rankedStorageTypes = sortOptionsByPopularity(storageTypes, operationalRankingSnapshot, {
+    optionScope: 'storage_type'
+  });
+  const rankedStorageWipeStatuses = sortOptionsByPopularity(storageWipeStatuses, operationalRankingSnapshot, {
+    optionScope: 'storage_wipe_status'
+  });
+  const rankedOperatingSystems = sortOptionsByPopularity(operatingSystems, operationalRankingSnapshot, {
+    optionScope: 'operating_system'
+  });
+  const rankedManufacturers = sortOptionsByPopularity(manufacturers, operationalRankingSnapshot, {
+    optionScope: 'manufacturer'
+  });
+  const rankedMemoryInstallTypes = sortOptionsByPopularity(MEMORY_INSTALL_TYPE_OPTIONS, operationalRankingSnapshot, {
+    optionScope: 'memory_install_type',
+    getOptionKey: (option) => option.code
+  });
+  const rankedUnitModels = sortOptionsByPopularity(
+    attachContextScores(unitModels, operationalRankingSnapshot, {
+      optionScope: 'unit_model',
+      contextScope: 'manufacturer',
+      getContextKeys: (option) => option.manufacturerId ? [option.manufacturerId] : []
+    }),
+    operationalRankingSnapshot,
+    {
+      optionScope: 'unit_model',
+      getContextScope: () => 'manufacturer',
+      getContextKey: (option) => option.manufacturerId || 0,
+      getGroupKey: (option) => String(option.manufacturerId || '').padStart(12, '0')
+    }
+  ).map((option) => ({
+    ...option,
+    operationalUsageScore: operationalRankingSnapshot.score(
+      'unit_model',
+      option.id,
+      'manufacturer',
+      option.manufacturerId || 0
+    ),
+    usageScoresByContextSerialized: serializeUsageScoresByContext(option.usageScoresByContext)
+  }));
+  const processorBrandsWithContextScores = attachContextScores(processorBrands, operationalRankingSnapshot, {
+    optionScope: 'processor_brand',
+    contextScope: 'unit_model',
+    getContextKeys: (brand) => processorModels
+      .filter((processorModel) => Number(processorModel.processorBrandId) === Number(brand.id))
+      .flatMap((processorModel) => processorModel.compatibleUnitModelIds || [])
+  });
+  const rankedProcessorBrands = sortOptionsByPopularity(processorBrandsWithContextScores, operationalRankingSnapshot, {
+    optionScope: 'processor_brand'
+  }).map((option) => ({
+    ...option,
+    usageScoresByContextSerialized: serializeUsageScoresByContext(option.usageScoresByContext)
+  }));
+  const rankedProcessorModels = sortOptionsByPopularity(
+    attachContextScores(processorModels, operationalRankingSnapshot, {
+      optionScope: 'processor_model',
+      contextScope: 'unit_model',
+      getContextKeys: (option) => option.compatibleUnitModelIds || []
+    }),
+    operationalRankingSnapshot,
+    { optionScope: 'processor_model' }
+  ).map((option) => ({
+    ...option,
+    usageScoresByContextSerialized: serializeUsageScoresByContext(option.usageScoresByContext)
+  }));
+
   const receivedStatus = unitStatuses.find((status) => status.code === 'received') || unitStatuses[0] || null;
-  const unitCategoriesWithProductionWeights = unitCategories.map((category) => {
+  const unitCategoriesWithProductionWeights = rankedUnitCategories.map((category) => {
     const defaultProductionWeight = productionWeightModel.findProductionWeightOptionForCategory(category, productionWeightOptions);
 
     return {
@@ -1093,17 +1265,20 @@ async function getTechUnitFormOptions(options = {}) {
     unitCategories: unitCategoriesWithProductionWeights,
     unitStatuses,
     defaultUnitStatusId: receivedStatus ? String(receivedStatus.id) : '',
-    memoryInstallTypes: MEMORY_INSTALL_TYPE_OPTIONS,
-    ramTypes,
-    storageTypes,
-    storageWipeStatuses,
-    operatingSystems,
-    manufacturers,
-    unitModels,
-    processorBrands,
-    processorModels,
+    memoryInstallTypes: rankedMemoryInstallTypes,
+    ramTypes: rankedRamTypes,
+    storageTypes: rankedStorageTypes,
+    storageWipeStatuses: rankedStorageWipeStatuses,
+    operatingSystems: rankedOperatingSystems,
+    manufacturers: rankedManufacturers,
+    unitModels: rankedUnitModels,
+    processorBrands: rankedProcessorBrands,
+    processorModels: rankedProcessorModels,
     productionWeightOptions,
-    productionWeightCapabilities: state.productionWeightCapabilities
+    productionWeightCapabilities: state.productionWeightCapabilities,
+    batteryHealthSupported: hasColumn(state.columns, 'battery_health_percent'),
+    previousMemorySupported: hasColumn(state.columns, 'previous_ram_gb'),
+    previousStorageSupported: hasColumn(state.columns, 'previous_storage_gb')
   };
 }
 
@@ -1119,11 +1294,14 @@ function getBlankUnitFormData(formOptions = null) {
     unitModelId: '',
     processorModelId: '',
     processorSpeedGhz: '',
+    previousRamGb: '',
     ramGb: '',
     ramTypeConfigValueId: '',
+    previousStorageGb: '',
     storageGb: '',
     storageTypeConfigValueId: '',
     operatingSystemConfigValueId: '',
+    batteryHealthPercent: '',
     productionWeightOverride: '',
     productionWeightNotes: '',
     productionWeightDetails: {
@@ -1134,7 +1312,9 @@ function getBlankUnitFormData(formOptions = null) {
       notes: '',
       hasOverride: false
     },
+    previousMemoryModules: [],
     memoryModules: getBlankMemoryModuleRows(),
+    previousStorageDevices: [],
     storageDevices: getBlankStorageDeviceRows(),
     hardwareNotes: '',
     cosmeticNotes: ''
@@ -1161,42 +1341,7 @@ async function getUnitById(unitId) {
   return rows[0] || null;
 }
 
-async function listCurrentMemoryModulesForUnit(unitId) {
-  const columns = await getTableColumns('unit_memory_modules');
-
-  if (columns.size === 0) {
-    return getBlankMemoryModuleRows();
-  }
-
-  const memoryInstallTypeSelect = hasColumn(columns, 'memory_install_type_code')
-    ? 'memory_install_type_code'
-    : `'${DEFAULT_MEMORY_INSTALL_TYPE_CODE}' AS memory_install_type_code`;
-
-  const [rows] = await pool.query(
-    `
-      SELECT
-        unit_memory_module_id,
-        slot_label,
-        size_gb,
-        ram_type_config_value_id,
-        ${memoryInstallTypeSelect},
-        speed_mhz,
-        manufacturer_name,
-        part_number,
-        serial_number,
-        change_notes
-      FROM unit_memory_modules
-      WHERE unit_id = ?
-        AND is_current = 1
-      ORDER BY slot_label, unit_memory_module_id
-    `,
-    [unitId]
-  );
-
-  if (rows.length === 0) {
-    return getBlankMemoryModuleRows();
-  }
-
+function mapMemoryModuleRows(rows = []) {
   return rows.map((row) => ({
     slotLabel: row.slot_label || '',
     sizeGb: row.size_gb !== null && row.size_gb !== undefined ? String(row.size_gb) : '',
@@ -1208,6 +1353,132 @@ async function listCurrentMemoryModulesForUnit(unitId) {
     serialNumber: row.serial_number || '',
     changeNotes: row.change_notes || ''
   }));
+}
+
+function mapStorageDeviceRows(rows = []) {
+  return rows.map((row) => ({
+    slotLabel: row.slot_label || '',
+    sizeGb: row.size_gb !== null && row.size_gb !== undefined ? String(row.size_gb) : '',
+    storageTypeConfigValueId: row.storage_type_config_value_id ? String(row.storage_type_config_value_id) : '',
+    manufacturerName: row.manufacturer_name || '',
+    modelNumber: row.model_number || '',
+    serialNumber: row.serial_number || '',
+    firmwareVersion: row.firmware_version || '',
+    wipeStatusConfigValueId: row.wipe_status_config_value_id ? String(row.wipe_status_config_value_id) : '',
+    changeNotes: row.change_notes || ''
+  }));
+}
+
+function getMemoryModuleSelect(columns) {
+  const memoryInstallTypeSelect = hasColumn(columns, 'memory_install_type_code')
+    ? 'memory_install_type_code'
+    : `'${DEFAULT_MEMORY_INSTALL_TYPE_CODE}' AS memory_install_type_code`;
+
+  return `
+    SELECT
+      unit_memory_module_id,
+      slot_label,
+      size_gb,
+      ram_type_config_value_id,
+      ${memoryInstallTypeSelect},
+      speed_mhz,
+      manufacturer_name,
+      part_number,
+      serial_number,
+      change_notes
+    FROM unit_memory_modules
+  `;
+}
+
+async function listCurrentMemoryModulesForUnit(unitId) {
+  const columns = await getTableColumns('unit_memory_modules');
+
+  if (columns.size === 0) {
+    return getBlankMemoryModuleRows();
+  }
+
+  const [rows] = await pool.query(
+    `
+      ${getMemoryModuleSelect(columns)}
+      WHERE unit_id = ?
+        AND is_current = 1
+      ORDER BY slot_label, unit_memory_module_id
+    `,
+    [unitId]
+  );
+
+  return rows.length > 0 ? mapMemoryModuleRows(rows) : getBlankMemoryModuleRows();
+}
+
+async function listLegacyPreviousMemoryModulesForUnit(unitId) {
+  const columns = await getTableColumns('unit_memory_modules');
+
+  if (
+    columns.size === 0
+    || !hasColumn(columns, 'is_current')
+    || !hasColumn(columns, 'removed_at')
+  ) {
+    return [];
+  }
+
+  const [snapshotRows] = await pool.query(
+    `
+      SELECT MAX(removed_at) AS latest_removed_at
+      FROM unit_memory_modules
+      WHERE unit_id = ?
+        AND is_current = 0
+        AND removed_at IS NOT NULL
+    `,
+    [unitId]
+  );
+  const latestRemovedAt = snapshotRows[0] ? snapshotRows[0].latest_removed_at : null;
+
+  if (!latestRemovedAt) {
+    return [];
+  }
+
+  const [rows] = await pool.query(
+    `
+      ${getMemoryModuleSelect(columns)}
+      WHERE unit_id = ?
+        AND is_current = 0
+        AND removed_at = ?
+      ORDER BY slot_label, unit_memory_module_id
+    `,
+    [unitId, latestRemovedAt]
+  );
+
+  return mapMemoryModuleRows(rows);
+}
+
+async function listPreviousMemoryModulesForUnit(unitId) {
+  const exists = await tableExists('unit_previous_memory_modules');
+
+  if (!exists) {
+    return listLegacyPreviousMemoryModulesForUnit(unitId);
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        unit_previous_memory_module_id,
+        slot_label,
+        size_gb,
+        ram_type_config_value_id,
+        memory_install_type_code,
+        speed_mhz,
+        manufacturer_name,
+        part_number,
+        serial_number,
+        change_notes
+      FROM unit_previous_memory_modules
+      WHERE unit_id = ?
+      ORDER BY sort_order, unit_previous_memory_module_id
+    `,
+    [unitId]
+  );
+
+  return mapMemoryModuleRows(rows);
 }
 
 async function listCurrentStorageDevicesForUnit(unitId) {
@@ -1238,21 +1509,37 @@ async function listCurrentStorageDevicesForUnit(unitId) {
     [unitId]
   );
 
-  if (rows.length === 0) {
-    return getBlankStorageDeviceRows();
+  return rows.length > 0 ? mapStorageDeviceRows(rows) : getBlankStorageDeviceRows();
+}
+
+async function listPreviousStorageDevicesForUnit(unitId) {
+  const exists = await tableExists('unit_previous_storage_devices');
+
+  if (!exists) {
+    return [];
   }
 
-  return rows.map((row) => ({
-    slotLabel: row.slot_label || '',
-    sizeGb: row.size_gb !== null && row.size_gb !== undefined ? String(row.size_gb) : '',
-    storageTypeConfigValueId: row.storage_type_config_value_id ? String(row.storage_type_config_value_id) : '',
-    manufacturerName: row.manufacturer_name || '',
-    modelNumber: row.model_number || '',
-    serialNumber: row.serial_number || '',
-    firmwareVersion: row.firmware_version || '',
-    wipeStatusConfigValueId: row.wipe_status_config_value_id ? String(row.wipe_status_config_value_id) : '',
-    changeNotes: row.change_notes || ''
-  }));
+  const [rows] = await pool.query(
+    `
+      SELECT
+        unit_previous_storage_device_id,
+        slot_label,
+        storage_type_config_value_id,
+        size_gb,
+        manufacturer_name,
+        model_number,
+        serial_number,
+        firmware_version,
+        wipe_status_config_value_id,
+        change_notes
+      FROM unit_previous_storage_devices
+      WHERE unit_id = ?
+      ORDER BY sort_order, unit_previous_storage_device_id
+    `,
+    [unitId]
+  );
+
+  return mapStorageDeviceRows(rows);
 }
 
 async function getUnitIdentifierValue(unitId, typeCode) {
@@ -1292,12 +1579,16 @@ async function getUnitFormDataById(unitId, formOptions = null) {
   const [
     unitSerialNumber,
     biosSerialNumber,
+    previousMemoryModules,
     memoryModules,
+    previousStorageDevices,
     storageDevices
   ] = await Promise.all([
     getUnitIdentifierValue(unitId, 'unit_serial_number'),
     getUnitIdentifierValue(unitId, 'bios_serial_number'),
+    listPreviousMemoryModulesForUnit(unitId),
     listCurrentMemoryModulesForUnit(unitId),
+    listPreviousStorageDevicesForUnit(unitId),
     listCurrentStorageDevicesForUnit(unitId)
   ]);
 
@@ -1331,15 +1622,22 @@ async function getUnitFormDataById(unitId, formOptions = null) {
     unitModelId: unit.unit_model_id ? String(unit.unit_model_id) : '',
     processorModelId: unit.processor_model_id ? String(unit.processor_model_id) : '',
     processorSpeedGhz: unit.processor_speed_ghz !== null && unit.processor_speed_ghz !== undefined ? String(unit.processor_speed_ghz) : '',
+    previousRamGb: unit.previous_ram_gb !== null && unit.previous_ram_gb !== undefined ? String(unit.previous_ram_gb) : '',
     ramGb: unit.ram_gb !== null && unit.ram_gb !== undefined ? String(unit.ram_gb) : '',
     ramTypeConfigValueId: unit.ram_type_config_value_id ? String(unit.ram_type_config_value_id) : '',
+    previousStorageGb: unit.previous_storage_gb !== null && unit.previous_storage_gb !== undefined ? String(unit.previous_storage_gb) : '',
     storageGb: unit.storage_gb !== null && unit.storage_gb !== undefined ? String(unit.storage_gb) : '',
     storageTypeConfigValueId: unit.storage_type_config_value_id ? String(unit.storage_type_config_value_id) : '',
     operatingSystemConfigValueId: unit.operating_system_config_value_id ? String(unit.operating_system_config_value_id) : '',
+    batteryHealthPercent: unit.battery_health_percent !== null && unit.battery_health_percent !== undefined
+      ? String(unit.battery_health_percent)
+      : '',
     productionWeightOverride: unit.production_weight_override !== null && unit.production_weight_override !== undefined ? productionWeightModel.formatWeightValue(unit.production_weight_override) : '',
     productionWeightNotes: unit.production_weight_notes || '',
     productionWeightDetails,
+    previousMemoryModules,
     memoryModules,
+    previousStorageDevices,
     storageDevices,
     hardwareNotes: unit.hardware_notes || '',
     cosmeticNotes: unit.cosmetic_notes || ''
@@ -1535,6 +1833,177 @@ function getCurrentGradeJoinSql(gradeAssessmentsTableIsReady) {
         ON current_grade_value.config_value_id = current_grade.overall_grade_config_value_id`;
 }
 
+function getQcReviewStateJoinSql(
+  qcReviewSchemaIsReady,
+  {
+    lotHistoryTableIsReady = false,
+    completionHasWorkCycleKey = false,
+    correctionSchemaIsReady = false
+  } = {}
+) {
+  if (!qcReviewSchemaIsReady) {
+    return '';
+  }
+
+  const currentCycleJoinSql = lotHistoryTableIsReady
+    ? `
+          LEFT JOIN (
+            SELECT
+              ranked_history.unit_id,
+              ranked_history.to_lot_id,
+              ranked_history.unit_lot_history_id,
+              ranked_history.moved_at
+            FROM (
+              SELECT
+                history.unit_id,
+                history.to_lot_id,
+                history.unit_lot_history_id,
+                history.moved_at,
+                ROW_NUMBER() OVER (
+                  PARTITION BY history.unit_id, history.to_lot_id
+                  ORDER BY history.moved_at DESC, history.unit_lot_history_id DESC
+                ) AS row_rank
+              FROM unit_lot_history history
+            ) ranked_history
+            WHERE ranked_history.row_rank = 1
+          ) current_cycle
+            ON current_cycle.unit_id = completion_unit.unit_id
+           AND current_cycle.to_lot_id = completion_unit.lot_id`
+    : '';
+  const currentCycleHistoryIdSql = lotHistoryTableIsReady
+    ? 'current_cycle.unit_lot_history_id'
+    : 'NULL';
+  const currentCycleStartedAtSql = lotHistoryTableIsReady
+    ? 'COALESCE(current_cycle.moved_at, completion_unit.created_at)'
+    : 'completion_unit.created_at';
+  const currentWorkCycleConditionSql = completionHasWorkCycleKey
+    ? `
+            AND (
+              completion.work_cycle_key = CASE
+                WHEN ${currentCycleHistoryIdSql} IS NOT NULL THEN CONCAT(
+                  'move:',
+                  completion.unit_id,
+                  ':',
+                  completion_unit.lot_id,
+                  ':',
+                  ${currentCycleHistoryIdSql}
+                )
+                ELSE CONCAT('initial:', completion.unit_id, ':', completion_unit.lot_id)
+              END
+              OR (
+                completion.work_cycle_key IS NULL
+                AND completion.completed_at >= ${currentCycleStartedAtSql}
+              )
+            )`
+    : `
+            AND completion.completed_at >= ${currentCycleStartedAtSql}`;
+  const correctionJoinSql = correctionSchemaIsReady
+    ? `
+      LEFT JOIN (
+        SELECT
+          rejected_qc_check_id,
+          MAX(unit_qc_correction_id) AS latest_correction_id
+        FROM unit_qc_corrections
+        GROUP BY rejected_qc_check_id
+      ) qc_correction_state
+        ON qc_correction_state.rejected_qc_check_id = qc_review_state.latest_qc_check_id`
+    : '';
+
+  return `
+      LEFT JOIN (
+        SELECT
+          ranked_completion.unit_id,
+          ranked_completion.unit_work_completion_id
+        FROM (
+          SELECT
+            completion.unit_id,
+            completion.unit_work_completion_id,
+            ROW_NUMBER() OVER (
+              PARTITION BY completion.unit_id
+              ORDER BY completion.completed_at DESC, completion.unit_work_completion_id DESC
+            ) AS row_rank
+          FROM unit_work_completions completion
+          INNER JOIN units completion_unit
+            ON completion_unit.unit_id = completion.unit_id
+          ${currentCycleJoinSql}
+          WHERE completion.credit_source = 'manual_completion'
+            AND completion.reversed_at IS NULL
+            AND completion.lot_id = completion_unit.lot_id
+            ${currentWorkCycleConditionSql}
+        ) ranked_completion
+        WHERE ranked_completion.row_rank = 1
+      ) qc_current_completion
+        ON qc_current_completion.unit_id = u.unit_id
+      LEFT JOIN (
+        SELECT
+          summary.unit_work_completion_id,
+          latest_qc.unit_qc_check_id AS latest_qc_check_id,
+          latest_qc.decision_code AS latest_decision_code,
+          summary.has_rejection
+        FROM (
+          SELECT
+            qc.unit_work_completion_id,
+            MAX(qc.unit_qc_check_id) AS latest_qc_check_id,
+            MAX(CASE WHEN qc.decision_code = 'rejected' THEN 1 ELSE 0 END) AS has_rejection
+          FROM unit_qc_checks qc
+          GROUP BY qc.unit_work_completion_id
+        ) summary
+        INNER JOIN unit_qc_checks latest_qc
+          ON latest_qc.unit_qc_check_id = summary.latest_qc_check_id
+      ) qc_review_state
+        ON qc_review_state.unit_work_completion_id = qc_current_completion.unit_work_completion_id
+      ${correctionJoinSql}`;
+}
+
+function getQcReviewStateSelectSql(qcReviewSchemaIsReady, correctionSchemaIsReady = false) {
+  if (!qcReviewSchemaIsReady) {
+    return `
+        NULL AS qc_current_completion_id,
+        NULL AS qc_latest_qc_check_id,
+        NULL AS qc_latest_decision_code,
+        0 AS qc_has_rejection,
+        0 AS qc_has_correction_submission`;
+  }
+
+  return `
+        qc_current_completion.unit_work_completion_id AS qc_current_completion_id,
+        qc_review_state.latest_qc_check_id AS qc_latest_qc_check_id,
+        qc_review_state.latest_decision_code AS qc_latest_decision_code,
+        COALESCE(qc_review_state.has_rejection, 0) AS qc_has_rejection,
+        ${correctionSchemaIsReady ? 'CASE WHEN qc_correction_state.latest_correction_id IS NULL THEN 0 ELSE 1 END' : '0'} AS qc_has_correction_submission`;
+}
+
+function getQcReviewFilterConditionSql(qcReviewFilter, correctionSchemaIsReady = false) {
+  if (qcReviewFilter === 'awaiting') {
+    return `qc_current_completion.unit_work_completion_id IS NOT NULL
+      AND qc_review_state.latest_decision_code IS NULL`;
+  }
+
+  if (qcReviewFilter === 'accepted') {
+    return `qc_review_state.latest_decision_code = 'accepted'
+      AND COALESCE(qc_review_state.has_rejection, 0) = 0`;
+  }
+
+  if (qcReviewFilter === 'corrected') {
+    return `qc_review_state.latest_decision_code = 'accepted'
+      AND COALESCE(qc_review_state.has_rejection, 0) = 1`;
+  }
+
+  if (qcReviewFilter === 'ready_recheck') {
+    return correctionSchemaIsReady
+      ? `qc_review_state.latest_decision_code = 'rejected'
+        AND qc_correction_state.latest_correction_id IS NOT NULL`
+      : '1 = 0';
+  }
+
+  if (qcReviewFilter === 'rejected') {
+    return `qc_review_state.latest_decision_code = 'rejected'
+      ${correctionSchemaIsReady ? 'AND qc_correction_state.latest_correction_id IS NULL' : ''}`;
+  }
+
+  return '';
+}
+
 function getCurrentOutcomeJoinSql(outcomesTableIsReady) {
   if (!outcomesTableIsReady) {
     return '';
@@ -1575,7 +2044,31 @@ function getGradeSortRankSql() {
         END`;
 }
 
-function getUnitOrderBySql(sort, { gradeAssessmentsTableIsReady = false, outcomesTableIsReady = false } = {}) {
+function getQcStatusSortRankSql(correctionSchemaIsReady = false) {
+  return `
+        CASE
+          WHEN qc_current_completion.unit_work_completion_id IS NULL THEN 10
+          WHEN qc_review_state.latest_decision_code IS NULL THEN 40
+          WHEN qc_review_state.latest_decision_code = 'accepted'
+            AND COALESCE(qc_review_state.has_rejection, 0) = 0 THEN 20
+          WHEN qc_review_state.latest_decision_code = 'accepted'
+            AND COALESCE(qc_review_state.has_rejection, 0) = 1 THEN 30
+          WHEN qc_review_state.latest_decision_code = 'rejected'
+            AND ${correctionSchemaIsReady ? 'qc_correction_state.latest_correction_id IS NOT NULL' : '0 = 1'} THEN 50
+          WHEN qc_review_state.latest_decision_code = 'rejected' THEN 60
+          ELSE 70
+        END`;
+}
+
+function getUnitOrderBySql(
+  sort,
+  {
+    gradeAssessmentsTableIsReady = false,
+    outcomesTableIsReady = false,
+    qcReviewSchemaIsReady = false,
+    correctionSchemaIsReady = false
+  } = {}
+) {
   const normalizedSort = normalizeUnitSort(sort);
 
   if (normalizedSort === 'date_asc') {
@@ -1624,6 +2117,16 @@ function getUnitOrderBySql(sort, { gradeAssessmentsTableIsReady = false, outcome
           WHEN 'fail' THEN ${failRank}
           ELSE 90
         END ASC,
+        u.created_at DESC,
+        u.unit_id DESC`;
+  }
+
+  if ((normalizedSort === 'qc_status_desc' || normalizedSort === 'qc_status_asc') && qcReviewSchemaIsReady) {
+    const qcDirection = normalizedSort === 'qc_status_desc' ? 'DESC' : 'ASC';
+
+    return `
+      ORDER BY
+        ${getQcStatusSortRankSql(correctionSchemaIsReady)} ${qcDirection},
         u.created_at DESC,
         u.unit_id DESC`;
   }
@@ -1682,7 +2185,14 @@ async function listTechUnits(filters = {}) {
   }
 
   const { filterLots, lotMap } = await getLotMap();
-  const filterLotIds = new Set(filterLots.map((lot) => String(lot.lot_id)));
+  const requestedLotId = normalizePositiveFilterId(filters.lotId);
+  const requestedLot = requestedLotId ? lotMap.get(requestedLotId) : null;
+  const availableFilterLots = filters.allowAnyLotFilter === true
+    && requestedLot
+    && !filterLots.some((lot) => Number(lot.lot_id) === requestedLotId)
+      ? sortLotsByName([...filterLots, requestedLot])
+      : filterLots;
+  const filterLotIds = new Set(availableFilterLots.map((lot) => String(lot.lot_id)));
 
   const [
     unitCategories,
@@ -1696,7 +2206,8 @@ async function listTechUnits(filters = {}) {
     processorModels,
     rawOverallGradeOptions,
     techUserOptions,
-    productionWeightOptions
+    productionWeightOptions,
+    browserOperationalRankingSnapshot
   ] = await Promise.all([
     listConfigValuesByCategoryCodes(['unit_categories', 'unit_category', 'unit_types', 'unit_type']),
     listConfigValuesByCategoryCodes(['unit_statuses', 'unit_status', 'current_unit_statuses', 'current_unit_status']),
@@ -1709,12 +2220,16 @@ async function listTechUnits(filters = {}) {
     listProcessorModels(),
     listConfigValuesByCategoryCodes(COSMETIC_GRADE_CATEGORY_CODES),
     listTechUsersWithUnits(),
-    productionWeightModel.listProductionWeightOptions()
+    productionWeightModel.listProductionWeightOptions(),
+    operationalOptionRankingModel.loadRankingSnapshot()
   ]);
 
+  const rankedBrowserUnitCategories = sortOptionsByPopularity(unitCategories, browserOperationalRankingSnapshot, {
+    optionScope: 'unit_category'
+  });
   const unitIdentifiersTableIsReady = await tableExists('unit_identifiers');
 
-  const unitCategoryMap = mapById(unitCategories);
+  const unitCategoryMap = mapById(rankedBrowserUnitCategories);
   const unitStatusMap = mapById(unitStatuses);
   const ramTypeMap = mapById(ramTypes);
   const storageTypeMap = mapById(storageTypes);
@@ -1744,6 +2259,37 @@ async function listTechUnits(filters = {}) {
   const requestedUnitId = normalizePositiveFilterId(filters.unitId);
   const restrictToCurrentAssignment = filters.restrictToCurrentAssignment === true && Boolean(currentUserId) && searchTerms.length === 0;
   const isParkedUnitState = unitState === 'parked';
+  const requestedQcReviewFilter = normalizeQcReviewFilter(filters.qcReviewFilter);
+  const [completionColumns, qcReviewColumns, qcCorrectionColumns] = isParkedUnitState
+    ? [new Map(), new Map(), new Map()]
+    : await Promise.all([
+      getTableColumns('unit_work_completions'),
+      getTableColumns('unit_qc_checks'),
+      getTableColumns('unit_qc_corrections')
+    ]);
+  const qcReviewSchemaIsReady = [
+    'unit_work_completion_id',
+    'unit_id',
+    'lot_id',
+    'credit_source',
+    'completed_at',
+    'reversed_at'
+  ].every((columnName) => completionColumns.has(columnName))
+    && [
+      'unit_qc_check_id',
+      'unit_work_completion_id',
+      'decision_code'
+    ].every((columnName) => qcReviewColumns.has(columnName));
+  const qcCorrectionSchemaIsReady = [
+    'unit_qc_correction_id',
+    'unit_work_completion_id',
+    'rejected_qc_check_id'
+  ].every((columnName) => qcCorrectionColumns.has(columnName));
+  const lotHistoryTableIsReady = qcReviewSchemaIsReady
+    ? await tableExists('unit_lot_history')
+    : false;
+  const completionHasWorkCycleKey = completionColumns.has('work_cycle_key');
+  const qcReviewFilter = qcReviewSchemaIsReady ? requestedQcReviewFilter : '';
   const ownershipUserSql = getUnitOwnerUserSql(state, 'u');
 
   where.push(`${getUnitParkedSql(state, 'u')} = ${isParkedUnitState ? '1' : '0'}`);
@@ -1894,8 +2440,7 @@ async function listTechUnits(filters = {}) {
     }
   }
 
-  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
-  const unitFromSql = `
+  const unitJoinSql = `
       FROM units u
       LEFT JOIN manufacturers m
         ON m.manufacturer_id = u.manufacturer_id
@@ -1919,8 +2464,79 @@ async function listTechUnits(filters = {}) {
         ON assigned_user.user_id = ${ownershipUserSql}
       ${getCurrentGradeJoinSql(gradeAssessmentsTableIsReady)}
       ${getCurrentOutcomeJoinSql(outcomesTableIsReady)}
-      ${whereSql}
+      ${getQcReviewStateJoinSql(qcReviewSchemaIsReady, {
+        lotHistoryTableIsReady,
+        completionHasWorkCycleKey,
+        correctionSchemaIsReady: qcCorrectionSchemaIsReady
+      })}
   `;
+  const baseWhereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+  const baseUnitFromSql = `${unitJoinSql}${baseWhereSql}`;
+  let qcReviewQueue;
+
+  if (qcReviewSchemaIsReady) {
+    const [qcQueueRows] = await pool.query(
+      `
+        SELECT
+          COUNT(*) AS all_units,
+          COALESCE(SUM(
+            CASE
+              WHEN qc_current_completion.unit_work_completion_id IS NOT NULL
+                AND qc_review_state.latest_decision_code IS NULL THEN 1
+              ELSE 0
+            END
+          ), 0) AS awaiting_units,
+          COALESCE(SUM(
+            CASE
+              WHEN qc_review_state.latest_decision_code = 'accepted'
+                AND COALESCE(qc_review_state.has_rejection, 0) = 0 THEN 1
+              ELSE 0
+            END
+          ), 0) AS accepted_units,
+          COALESCE(SUM(
+            CASE
+              WHEN qc_review_state.latest_decision_code = 'accepted'
+                AND COALESCE(qc_review_state.has_rejection, 0) = 1 THEN 1
+              ELSE 0
+            END
+          ), 0) AS corrected_units,
+          COALESCE(SUM(
+            CASE
+              WHEN qc_review_state.latest_decision_code = 'rejected'
+                AND ${qcCorrectionSchemaIsReady ? 'qc_correction_state.latest_correction_id IS NOT NULL' : '0 = 1'} THEN 1
+              ELSE 0
+            END
+          ), 0) AS ready_for_recheck_units,
+          COALESCE(SUM(
+            CASE
+              WHEN qc_review_state.latest_decision_code = 'rejected'
+                ${qcCorrectionSchemaIsReady ? 'AND qc_correction_state.latest_correction_id IS NULL' : ''} THEN 1
+              ELSE 0
+            END
+          ), 0) AS rejected_units
+        ${baseUnitFromSql}
+      `,
+      params
+    );
+    qcReviewQueue = mapQcReviewQueueCounts(qcQueueRows[0]);
+  } else {
+    const [baseCountRows] = await pool.query(
+      `
+        SELECT COUNT(*) AS all_units
+        ${baseUnitFromSql}
+      `,
+      params
+    );
+    qcReviewQueue = mapQcReviewQueueCounts(baseCountRows[0], { available: false });
+  }
+
+  const qcReviewConditionSql = getQcReviewFilterConditionSql(qcReviewFilter, qcCorrectionSchemaIsReady);
+  if (qcReviewConditionSql) {
+    where.push(`(${qcReviewConditionSql})`);
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+  const unitFromSql = `${unitJoinSql}${whereSql}`;
 
   const [countRows] = await pool.query(
     `
@@ -1939,9 +2555,15 @@ async function listTechUnits(filters = {}) {
         u.*,
         assigned_user.first_name AS assigned_first_name,
         assigned_user.last_name AS assigned_last_name,
-        assigned_user.email AS assigned_email
+        assigned_user.email AS assigned_email,
+        ${getQcReviewStateSelectSql(qcReviewSchemaIsReady, qcCorrectionSchemaIsReady)}
       ${unitFromSql}
-      ${getUnitOrderBySql(sort, { gradeAssessmentsTableIsReady, outcomesTableIsReady })}
+      ${getUnitOrderBySql(sort, {
+        gradeAssessmentsTableIsReady,
+        outcomesTableIsReady,
+        qcReviewSchemaIsReady,
+        correctionSchemaIsReady: qcCorrectionSchemaIsReady
+      })}
       ${rowLimitSql}
     `,
     rowParams
@@ -1954,6 +2576,7 @@ async function listTechUnits(filters = {}) {
     const manufacturerLabel = optionLabelById(manufacturerMap, row.manufacturer_id, '');
     const modelLabel = optionLabelById(unitModelMap, row.unit_model_id, '');
     const processorLabel = optionLabelById(processorModelMap, row.processor_model_id, '');
+    const processorOption = processorModelMap.get(Number(row.processor_model_id)) || null;
     const ramTypeLabel = configLabelById(ramTypeMap, row.ram_type_config_value_id, '');
     const storageTypeLabel = configLabelById(storageTypeMap, row.storage_type_config_value_id, '');
     const operatingSystemLabel = configLabelById(operatingSystemMap, row.operating_system_config_value_id, '');
@@ -1981,14 +2604,18 @@ async function listTechUnits(filters = {}) {
       currentAssignmentUserId !== currentUserId
     );
 
+    const qcReviewState = resolveQcReviewState(row);
     const specParts = [
       manufacturerLabel,
       modelLabel,
       processorLabel,
-      row.ram_gb ? `${row.ram_gb}GB Memory` : '',
+      row.ram_gb !== null && row.ram_gb !== undefined ? `${row.ram_gb}GB Memory` : '',
       ramTypeLabel,
-      row.storage_gb ? `${row.storage_gb}GB Storage` : '',
-      storageTypeLabel
+      row.storage_gb !== null && row.storage_gb !== undefined ? `${row.storage_gb}GB Storage` : '',
+      storageTypeLabel,
+      row.battery_health_percent !== null && row.battery_health_percent !== undefined
+        ? `${Number(row.battery_health_percent).toFixed(1)}% Battery`
+        : ''
     ].filter(Boolean);
 
     return {
@@ -2017,18 +2644,29 @@ async function listTechUnits(filters = {}) {
       manufacturerLabel: manufacturerLabel || '—',
       modelLabel: modelLabel || '—',
       processorLabel: processorLabel || '—',
+      processorShortForm: processorOption ? String(processorOption.exportShortForm || '') : '',
       processorSpeedGhz: row.processor_speed_ghz !== null && row.processor_speed_ghz !== undefined ? row.processor_speed_ghz : '',
-      ramGb: row.ram_gb || '',
+      previousRamGb: row.previous_ram_gb !== null && row.previous_ram_gb !== undefined ? row.previous_ram_gb : '',
+      ramGb: row.ram_gb !== null && row.ram_gb !== undefined ? row.ram_gb : '',
       ramTypeLabel: ramTypeLabel || '—',
-      storageGb: row.storage_gb || '',
+      previousStorageGb: row.previous_storage_gb !== null && row.previous_storage_gb !== undefined ? row.previous_storage_gb : '',
+      storageGb: row.storage_gb !== null && row.storage_gb !== undefined ? row.storage_gb : '',
       storageTypeLabel: storageTypeLabel || '—',
       operatingSystemLabel: operatingSystemLabel || '—',
+      batteryHealthPercent: row.battery_health_percent !== null && row.battery_health_percent !== undefined
+        ? Number(row.battery_health_percent)
+        : null,
+      formattedBatteryHealth: row.battery_health_percent !== null && row.battery_health_percent !== undefined
+        ? `${Number(row.battery_health_percent).toFixed(1)}%`
+        : '—',
       specSummary: specParts.length > 0 ? specParts.join(' · ') : 'No specs entered yet',
       hardwareNotes: row.hardware_notes || '',
       cosmeticNotes: row.cosmetic_notes || '',
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       completedAt: row.completed_at,
+      qcReviewStateCode: qcReviewState.code,
+      qcReviewStateLabel: qcReviewState.label,
       assignedToUserId: currentAssignmentUserId,
       assignedToName: [row.assigned_first_name, row.assigned_last_name].filter(Boolean).join(' ').trim() || row.assigned_email || '',
       isUnassigned: state.assignmentCapabilities.hasAssignedToUserId ? !row.assigned_to_user_id : false,
@@ -2051,6 +2689,7 @@ async function listTechUnits(filters = {}) {
       lotId: isParkedUnitState ? '' : filters.lotId,
       categoryId: isParkedUnitState ? '' : filters.categoryId,
       gradeFilter: isParkedUnitState ? '' : filters.gradeFilter,
+      qcReviewFilter: isParkedUnitState ? '' : qcReviewFilter,
       techUserId: isParkedUnitState ? '' : filters.techUserId,
       createdStartDate: isParkedUnitState ? '' : filters.createdStartDate,
       createdEndDate: isParkedUnitState ? '' : filters.createdEndDate,
@@ -2062,11 +2701,12 @@ async function listTechUnits(filters = {}) {
     },
     unitState,
     canViewParkedUnits,
-    lots: filterLots,
-    unitCategories,
+    lots: availableFilterLots,
+    unitCategories: rankedBrowserUnitCategories,
     overallGradeOptions,
     gradeFilterOptions,
     rawOverallGradeOptions,
+    qcReviewQueue,
     techUserOptions,
     pagination
   };
@@ -2304,6 +2944,44 @@ async function findDuplicateUnitsForForm(formData, options = {}) {
   return findDuplicateUnitsFromIdentifiers(identifierEntries, options.excludeUnitId || null);
 }
 
+async function getStoredSerialNormalizedValuesForUnit(unitId, connection = pool) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+
+  if (!safeUnitId || !await tableExists('unit_identifiers')) {
+    return new Set();
+  }
+
+  const [rows] = await connection.query(
+    `
+      SELECT ui.normalized_value
+      FROM unit_identifiers ui
+      INNER JOIN config_values cv
+        ON cv.config_value_id = ui.identifier_type_config_value_id
+      INNER JOIN config_categories cc
+        ON cc.config_category_id = cv.config_category_id
+      WHERE ui.unit_id = ?
+        AND cc.code = 'unit_identifier_types'
+        AND cv.code IN ('unit_serial_number', 'bios_serial_number')
+        AND NULLIF(TRIM(ui.normalized_value), '') IS NOT NULL
+    `,
+    [safeUnitId]
+  );
+
+  return new Set(rows.map((row) => normalizeIdentifierComparableValue(row.normalized_value)).filter(Boolean));
+}
+
+async function findNewDuplicateUnitsForEdit(formData, unitId, assetNumber = null, connection = pool) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const suppliedAssetNumber = normalizeAssetTagInput(assetNumber || formData.assetTag);
+  const identifierEntries = buildIdentifierEntries(formData, suppliedAssetNumber);
+  const [duplicateMatches, existingSerialNormalizedValues] = await Promise.all([
+    findDuplicateUnitsFromIdentifiers(identifierEntries, safeUnitId, connection),
+    getStoredSerialNormalizedValuesForUnit(safeUnitId, connection)
+  ]);
+
+  return filterNewDuplicateMatchesForEdit(duplicateMatches, existingSerialNormalizedValues);
+}
+
 function buildDuplicateCandidateSummary(row) {
   const cpuNameParts = [
     row.processor_brand_label,
@@ -2330,6 +3008,8 @@ function buildDuplicateCandidateSummary(row) {
     isClosedLot: Number(row.lot_is_closed || 0) === 1,
     unitSerialNumber: normalizeIdentifierText(row.unit_serial_number) || '',
     biosSerialNumber: normalizeIdentifierText(row.bios_serial_number) || '',
+    manufacturerLabel: row.manufacturer_label || '',
+    modelLabel: row.model_label || '',
     modelSummary: modelParts.length > 0 ? modelParts.join(' · ') : '',
     cpuSummary,
     assignedToUserId: row.assigned_to_user_id ? Number(row.assigned_to_user_id) : null,
@@ -2338,11 +3018,20 @@ function buildDuplicateCandidateSummary(row) {
   };
 }
 
-async function findSerialDuplicateCandidates({ unitSerialNumber = '', biosSerialNumber = '' } = {}, connection = pool) {
+async function findSerialDuplicateCandidates({
+  unitSerialNumber = '',
+  biosSerialNumber = '',
+  excludeUnitId = null,
+  ignoredNormalizedValues = []
+} = {}, connection = pool) {
+  const ignoredValues = ignoredNormalizedValues instanceof Set
+    ? ignoredNormalizedValues
+    : new Set(Array.isArray(ignoredNormalizedValues) ? ignoredNormalizedValues : []);
+  const safeExcludeUnitId = normalizeOptionalInteger(excludeUnitId);
   const inputValues = [
     { field: 'unitSerialNumber', label: 'Unit Serial', normalizedValue: normalizeIdentifierComparableValue(unitSerialNumber) },
     { field: 'biosSerialNumber', label: 'BIOS Serial', normalizedValue: normalizeIdentifierComparableValue(biosSerialNumber) }
-  ].filter((entry) => entry.normalizedValue);
+  ].filter((entry) => entry.normalizedValue && !ignoredValues.has(entry.normalizedValue));
 
   const normalizedValues = [...new Set(inputValues.map((entry) => entry.normalizedValue))];
 
@@ -2428,10 +3117,15 @@ async function findSerialDuplicateCandidates({ unitSerialNumber = '', biosSerial
         ON assigned_user.user_id = u.assigned_to_user_id
       WHERE ui.identifier_type_config_value_id IN (${serialTypeIds.map(() => '?').join(', ')})
         AND ui.normalized_value IN (${normalizedValues.map(() => '?').join(', ')})
+        ${safeExcludeUnitId ? 'AND ui.unit_id <> ?' : ''}
       ORDER BY u.unit_id ASC, ui.unit_identifier_id ASC
       LIMIT 40
     `,
-    [...serialTypeIds, ...normalizedValues]
+    [
+      ...serialTypeIds,
+      ...normalizedValues,
+      ...(safeExcludeUnitId ? [safeExcludeUnitId] : [])
+    ]
   );
 
   const candidates = new Map();
@@ -2479,14 +3173,16 @@ function getDuplicateAssumptionEligibility({
   destinationLot = null,
   destinationIsAssignable = false,
   lotAssumptionPolicyAvailable = false,
-  actorRoleCodes = []
+  actorRoleCodes = [],
+  actorUserId = null
 } = {}) {
   if (!isRegularTechDuplicateAssumptionActor(actorRoleCodes)) {
     return {
       allowed: false,
       requiresOverride: false,
+      actionKind: 'none',
       code: 'BWT_DUPLICATE_ASSUMPTION_ROLE_REQUIRED',
-      message: 'Existing-unit assumption is available only to regular Tech users during Create Unit intake. Tech Leads, Management, and Admin should use the Unit Browser workflow.'
+      message: 'Existing-unit movement from Create Unit is available only to regular Tech users. Tech Leads, Management, and Admin should use the Unit Browser workflow.'
     };
   }
 
@@ -2494,8 +3190,9 @@ function getDuplicateAssumptionEligibility({
     return {
       allowed: false,
       requiresOverride: false,
+      actionKind: 'none',
       code: 'BWT_DUPLICATE_ASSUMPTION_MIGRATION_REQUIRED',
-      message: 'Duplicate unit assumption is not ready yet. Run the Step 7e.2 database migration first.'
+      message: 'Duplicate unit movement is not ready yet. Run the Step 7e.2 database migration first.'
     };
   }
 
@@ -2503,8 +3200,9 @@ function getDuplicateAssumptionEligibility({
     return {
       allowed: false,
       requiresOverride: false,
+      actionKind: 'none',
       code: 'BWT_DUPLICATE_ASSUMPTION_DESTINATION_REQUIRED',
-      message: 'Select an open work lot before assessing whether this existing unit can be assumed.'
+      message: 'Select an open work lot before assessing the existing unit.'
     };
   }
 
@@ -2512,17 +3210,9 @@ function getDuplicateAssumptionEligibility({
     return {
       allowed: false,
       requiresOverride: false,
+      actionKind: 'none',
       code: 'BWT_DUPLICATE_ASSUMPTION_DESTINATION_INVALID',
       message: 'The selected work lot is no longer open, visible, and assignable.'
-    };
-  }
-
-  if (Number(destinationLot.allow_duplicate_unit_assumption || 0) !== 1) {
-    return {
-      allowed: false,
-      requiresOverride: false,
-      code: 'BWT_DUPLICATE_ASSUMPTION_DESTINATION_DISABLED',
-      message: 'The selected work lot does not allow duplicate-match unit assumption. Choose an enabled work lot or use the override workflow.'
     };
   }
 
@@ -2530,8 +3220,44 @@ function getDuplicateAssumptionEligibility({
     return {
       allowed: false,
       requiresOverride: false,
+      actionKind: 'none',
       code: 'BWT_DUPLICATE_ASSUMPTION_CANDIDATE_INVALID',
       message: 'The selected duplicate candidate could not be verified.'
+    };
+  }
+
+  const safeActorUserId = normalizeOptionalInteger(actorUserId);
+  const assignedToCurrentActor = Boolean(
+    safeActorUserId
+    && normalizeOptionalInteger(candidate.assignedToUserId) === safeActorUserId
+  );
+  const sameDestinationLot = Boolean(
+    candidate.lotId
+    && Number(candidate.lotId) === Number(destinationLot.lot_id)
+  );
+  const actionKind = assignedToCurrentActor ? 'move' : 'takeover';
+
+  if (!candidate.isParked && assignedToCurrentActor && sameDestinationLot) {
+    return {
+      allowed: false,
+      requiresOverride: false,
+      actionKind: 'none',
+      assignedToCurrentActor: true,
+      code: 'BWT_DUPLICATE_ASSUMPTION_ALREADY_ASSIGNED_IN_DESTINATION',
+      message: 'This unit is already assigned to you in the selected work lot. Open the existing Unit instead of requesting a takeover of your own assignment.'
+    };
+  }
+
+  if (Number(destinationLot.allow_duplicate_unit_assumption || 0) !== 1) {
+    return {
+      allowed: false,
+      requiresOverride: true,
+      actionKind,
+      assignedToCurrentActor,
+      code: 'BWT_DUPLICATE_ASSUMPTION_DESTINATION_DISABLED',
+      message: assignedToCurrentActor
+        ? 'The selected work lot requires Tech Lead+ approval before your existing Unit can be moved into it. Submit a Lot Move request.'
+        : 'The selected work lot does not allow a direct move or takeover from duplicate intake. Submit a Move / Takeover request for Tech Lead+ review.'
     };
   }
 
@@ -2539,8 +3265,10 @@ function getDuplicateAssumptionEligibility({
     return {
       allowed: true,
       requiresOverride: false,
+      actionKind: 'takeover',
+      assignedToCurrentActor: false,
       code: '',
-      message: 'This Parked unit can be returned directly into the selected work lot and assigned to you.'
+      message: 'This Parked unit can be moved directly into the selected work lot and assigned to you.'
     };
   }
 
@@ -2548,17 +3276,21 @@ function getDuplicateAssumptionEligibility({
     return {
       allowed: false,
       requiresOverride: false,
+      actionKind: 'none',
+      assignedToCurrentActor,
       code: 'BWT_DUPLICATE_ASSUMPTION_SOURCE_INVALID',
       message: 'This Active unit has no current lot. Use the Unit Browser so an elevated user can correct its operational state.'
     };
   }
 
-  if (Number(candidate.lotId) === Number(destinationLot.lot_id)) {
+  if (sameDestinationLot) {
     return {
       allowed: false,
       requiresOverride: true,
+      actionKind: 'takeover',
+      assignedToCurrentActor: false,
       code: 'BWT_DUPLICATE_ASSUMPTION_SAME_LOT',
-      message: 'This unit is already Active in the selected work lot. It cannot be assumed again in the same lot because that could lead to duplicate processing or credit. Request an override when intentional rework is needed.'
+      message: 'This unit is already Active in the selected work lot and assigned to another Tech. Submit a Move / Takeover request when reassignment or intentional rework needs Tech Lead+ approval.'
     };
   }
 
@@ -2566,16 +3298,24 @@ function getDuplicateAssumptionEligibility({
     return {
       allowed: false,
       requiresOverride: true,
+      actionKind,
+      assignedToCurrentActor,
       code: 'BWT_DUPLICATE_ASSUMPTION_CLOSED_SOURCE',
-      message: 'This unit is currently in a closed lot. A regular Tech must request an override instead of assuming it directly.'
+      message: assignedToCurrentActor
+        ? 'This Unit is already assigned to you but is in a closed lot. Submit a Lot Move request for Tech Lead+ review.'
+        : 'This unit is currently in a closed lot. Submit a Move / Takeover request instead of moving it directly.'
     };
   }
 
   return {
     allowed: true,
     requiresOverride: false,
+    actionKind,
+    assignedToCurrentActor,
     code: '',
-    message: 'This existing unit can be assumed into the selected work lot and assigned to you.'
+    message: assignedToCurrentActor
+      ? 'This Unit is already assigned to you and can be moved directly into the selected work lot.'
+      : 'This existing unit can be moved into the selected work lot and assigned to you.'
   };
 }
 
@@ -2583,10 +3323,21 @@ async function getDuplicateAssumptionCandidates({
   unitSerialNumber = '',
   biosSerialNumber = '',
   destinationLotId = null,
-  actorRoleCodes = []
+  actorRoleCodes = [],
+  actorUserId = null,
+  currentUnitId = null
 } = {}) {
+  const safeCurrentUnitId = normalizeOptionalInteger(currentUnitId);
+  const existingSerialNormalizedValues = safeCurrentUnitId
+    ? await getStoredSerialNormalizedValuesForUnit(safeCurrentUnitId)
+    : new Set();
   const [candidates, lotColumns, lotState] = await Promise.all([
-    findSerialDuplicateCandidates({ unitSerialNumber, biosSerialNumber }),
+    findSerialDuplicateCandidates({
+      unitSerialNumber,
+      biosSerialNumber,
+      excludeUnitId: safeCurrentUnitId,
+      ignoredNormalizedValues: existingSerialNormalizedValues
+    }),
     getTableColumns('lots'),
     getLotMap()
   ]);
@@ -2600,12 +3351,15 @@ async function getDuplicateAssumptionCandidates({
 
   return candidates.map((candidate) => ({
     ...candidate,
+    destinationLotId: safeDestinationLotId,
+    destinationLotName: destinationLot ? String(destinationLot.lot_name || '') : '',
     duplicateAssumption: getDuplicateAssumptionEligibility({
       candidate,
       destinationLot,
       destinationIsAssignable,
       lotAssumptionPolicyAvailable,
-      actorRoleCodes
+      actorRoleCodes,
+      actorUserId
     })
   }));
 }
@@ -2648,7 +3402,7 @@ async function assumeExistingTechUnitFromDuplicateMatch({
   }
 
   if (!isRegularTechDuplicateAssumptionActor(actorRoleCodes)) {
-    throw createDuplicateAssumptionError('BWT_DUPLICATE_ASSUMPTION_ROLE_REQUIRED', 'Existing-unit assumption is available only to regular Tech users during Create Unit intake.');
+    throw createDuplicateAssumptionError('BWT_DUPLICATE_ASSUMPTION_ROLE_REQUIRED', 'Existing Unit Move/Takeover is available only to regular Tech users during Create Unit intake.');
   }
 
   if (!hasColumn(lotColumns, 'allow_duplicate_unit_assumption')) {
@@ -2708,7 +3462,8 @@ async function assumeExistingTechUnitFromDuplicateMatch({
       destinationLot,
       destinationIsAssignable,
       lotAssumptionPolicyAvailable: true,
-      actorRoleCodes
+      actorRoleCodes,
+      actorUserId: safeAssumedByUserId
     });
 
     if (!eligibility.allowed) {
@@ -2767,6 +3522,10 @@ async function assumeExistingTechUnitFromDuplicateMatch({
       notes: assumptionNote
     });
 
+    if (!wasParked && previousLotId && previousLotId !== safeDestinationLotId) {
+      await lotValidationOverrideModel.expireMovedUnitOverrides(previousLotId, connection);
+    }
+
     if (wasParked || previousAssignedToUserId !== safeAssumedByUserId) {
       await recordUnitAssignmentHistory(connection, {
         unitId: safeUnitId,
@@ -2789,6 +3548,16 @@ async function assumeExistingTechUnitFromDuplicateMatch({
       });
     }
 
+    await unitWorkflowAudit.recordExistingUnitAssumed(connection, {
+      unitId: safeUnitId,
+      actorUserId: safeAssumedByUserId,
+      wasParked,
+      fromLotId: wasParked ? null : previousLotId,
+      toLotId: safeDestinationLotId,
+      fromAssignedUserId: wasParked ? null : previousAssignedToUserId,
+      notes: assumptionNote
+    });
+
     await connection.commit();
 
     return {
@@ -2805,10 +3574,27 @@ async function assumeExistingTechUnitFromDuplicateMatch({
   }
 }
 
-async function saveUnitIdentifier(connection, unitId, typeMap, entry) {
+async function saveUnitIdentifier(connection, unitId, typeMap, entry, { strictInsert = false } = {}) {
   const identifierTypeId = typeMap.get(entry.typeCode);
 
   if (!identifierTypeId || !entry.value || !entry.normalizedValue) {
+    return;
+  }
+
+  if (strictInsert) {
+    await connection.query(
+      `
+        INSERT INTO unit_identifiers (
+          unit_id,
+          identifier_type_config_value_id,
+          identifier_value,
+          normalized_value,
+          is_primary
+        )
+        VALUES (?, ?, ?, ?, ?)
+      `,
+      [unitId, identifierTypeId, entry.value, entry.normalizedValue, entry.isPrimary ? 1 : 0]
+    );
     return;
   }
 
@@ -2830,7 +3616,7 @@ async function saveUnitIdentifier(connection, unitId, typeMap, entry) {
   );
 }
 
-async function saveUnitIdentifiers(connection, unitId, formData, assetNumber) {
+async function saveUnitIdentifiers(connection, unitId, formData, assetNumber, { strictInsert = false } = {}) {
   const exists = await tableExists('unit_identifiers');
 
   if (!exists) {
@@ -2838,25 +3624,70 @@ async function saveUnitIdentifiers(connection, unitId, formData, assetNumber) {
   }
 
   const typeMap = await getIdentifierTypeMap(connection);
-  const serialTypeIds = ['unit_serial_number', 'bios_serial_number']
+  const serialFieldByTypeCode = new Map([
+    ['unit_serial_number', 'unit_serial_number'],
+    ['bios_serial_number', 'bios_serial_number']
+  ]);
+  const managedSerialTypeCodes = [...serialFieldByTypeCode.entries()]
+    .filter(([, fieldKey]) => isUnitFormFieldManaged(formData, fieldKey))
+    .map(([typeCode]) => typeCode);
+  const managedSerialTypeIds = managedSerialTypeCodes
     .map((typeCode) => typeMap.get(typeCode))
     .filter(Boolean);
 
-  if (serialTypeIds.length > 0) {
+  if (managedSerialTypeIds.length > 0) {
     await connection.query(
       `
         DELETE FROM unit_identifiers
         WHERE unit_id = ?
-          AND identifier_type_config_value_id IN (${serialTypeIds.map(() => '?').join(', ')})
+          AND identifier_type_config_value_id IN (${managedSerialTypeIds.map(() => '?').join(', ')})
       `,
-      [unitId, ...serialTypeIds]
+      [unitId, ...managedSerialTypeIds]
     );
   }
 
-  const identifierEntries = buildIdentifierEntries(formData, assetNumber);
+  const identifierEntries = buildIdentifierEntries(formData, assetNumber)
+    .filter((entry) => {
+      const fieldKey = serialFieldByTypeCode.get(entry.typeCode);
+      return !fieldKey || isUnitFormFieldManaged(formData, fieldKey);
+    });
 
   for (const entry of identifierEntries) {
-    await saveUnitIdentifier(connection, unitId, typeMap, entry);
+    await saveUnitIdentifier(connection, unitId, typeMap, entry, { strictInsert });
+  }
+}
+
+
+async function assertIntentionalDuplicateIdentifiersSaved(connection, unitId, formData) {
+  const typeMap = await getIdentifierTypeMap(connection);
+  const expectedSerials = buildIdentifierEntries(formData)
+    .filter((entry) => ['unit_serial_number', 'bios_serial_number'].includes(entry.typeCode))
+    .map((entry) => ({
+      ...entry,
+      identifierTypeId: typeMap.get(entry.typeCode)
+    }))
+    .filter((entry) => entry.identifierTypeId);
+
+  if (expectedSerials.length === 0) {
+    return;
+  }
+
+  const [rows] = await connection.query(
+    `
+      SELECT identifier_type_config_value_id, normalized_value
+      FROM unit_identifiers
+      WHERE unit_id = ?
+        AND identifier_type_config_value_id IN (${expectedSerials.map(() => '?').join(', ')})
+    `,
+    [unitId, ...expectedSerials.map((entry) => entry.identifierTypeId)]
+  );
+  const storedKeys = new Set(rows.map((row) => `${Number(row.identifier_type_config_value_id)}:${String(row.normalized_value || '')}`));
+  const missing = expectedSerials.filter((entry) => !storedKeys.has(`${Number(entry.identifierTypeId)}:${entry.normalizedValue}`));
+
+  if (missing.length > 0) {
+    const error = new Error('The approved Intentional Duplicate could not store its duplicate serial identifiers. Apply the Stage 7D identifier-index correction before approving this request.');
+    error.code = 'BWT_INTENTIONAL_DUPLICATE_IDENTIFIER_STORAGE_BLOCKED';
+    throw error;
   }
 }
 
@@ -2911,7 +3742,7 @@ async function insertCurrentMemoryModule(connection, tableColumns, unitId, modul
   addColumnValueIfPresent(columns, values, tableColumns, 'slot_label', moduleRow.slotLabel);
   addColumnValueIfPresent(columns, values, tableColumns, 'size_gb', moduleRow.sizeGb);
   addColumnValueIfPresent(columns, values, tableColumns, 'ram_type_config_value_id', moduleRow.ramTypeConfigValueId);
-  addColumnValueIfPresent(columns, values, tableColumns, 'memory_install_type_code', moduleRow.memoryInstallTypeCode || DEFAULT_MEMORY_INSTALL_TYPE_CODE);
+  addColumnValueIfPresent(columns, values, tableColumns, 'memory_install_type_code', moduleRow.memoryInstallTypeCode);
   addColumnValueIfPresent(columns, values, tableColumns, 'speed_mhz', moduleRow.speedMhz);
   addColumnValueIfPresent(columns, values, tableColumns, 'manufacturer_name', moduleRow.manufacturerName || null);
   addColumnValueIfPresent(columns, values, tableColumns, 'part_number', moduleRow.partNumber || null);
@@ -2967,7 +3798,116 @@ async function insertCurrentStorageDevice(connection, tableColumns, unitId, devi
   );
 }
 
+async function replacePreviousRows(connection, tableName, unitId) {
+  const tableColumns = await getTableColumns(tableName);
+
+  if (tableColumns.size === 0 || !hasColumn(tableColumns, 'unit_id')) {
+    return tableColumns;
+  }
+
+  await connection.query(
+    `DELETE FROM ${escapeIdentifier(tableName)} WHERE unit_id = ?`,
+    [unitId]
+  );
+
+  return tableColumns;
+}
+
+async function insertPreviousMemoryModule(connection, tableColumns, unitId, moduleRow, sortOrder, currentUserId) {
+  const columns = [];
+  const values = [];
+
+  addColumnValueIfPresent(columns, values, tableColumns, 'unit_id', unitId);
+  addColumnValueIfPresent(columns, values, tableColumns, 'sort_order', sortOrder);
+  addColumnValueIfPresent(columns, values, tableColumns, 'slot_label', moduleRow.slotLabel);
+  addColumnValueIfPresent(columns, values, tableColumns, 'size_gb', moduleRow.sizeGb);
+  addColumnValueIfPresent(columns, values, tableColumns, 'ram_type_config_value_id', moduleRow.ramTypeConfigValueId);
+  addColumnValueIfPresent(columns, values, tableColumns, 'memory_install_type_code', moduleRow.memoryInstallTypeCode);
+  addColumnValueIfPresent(columns, values, tableColumns, 'speed_mhz', moduleRow.speedMhz);
+  addColumnValueIfPresent(columns, values, tableColumns, 'manufacturer_name', moduleRow.manufacturerName || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'part_number', moduleRow.partNumber || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'serial_number', moduleRow.serialNumber || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'change_notes', moduleRow.changeNotes || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'changed_by_user_id', currentUserId || null);
+
+  await connection.query(
+    `
+      INSERT INTO unit_previous_memory_modules (${columns.map(escapeIdentifier).join(', ')})
+      VALUES (${columns.map(() => '?').join(', ')})
+    `,
+    values
+  );
+}
+
+async function insertPreviousStorageDevice(connection, tableColumns, unitId, deviceRow, sortOrder, currentUserId) {
+  const columns = [];
+  const values = [];
+
+  addColumnValueIfPresent(columns, values, tableColumns, 'unit_id', unitId);
+  addColumnValueIfPresent(columns, values, tableColumns, 'sort_order', sortOrder);
+  addColumnValueIfPresent(columns, values, tableColumns, 'slot_label', deviceRow.slotLabel);
+  addColumnValueIfPresent(columns, values, tableColumns, 'storage_type_config_value_id', deviceRow.storageTypeConfigValueId);
+  addColumnValueIfPresent(columns, values, tableColumns, 'size_gb', deviceRow.sizeGb);
+  addColumnValueIfPresent(columns, values, tableColumns, 'manufacturer_name', deviceRow.manufacturerName || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'model_number', deviceRow.modelNumber || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'serial_number', deviceRow.serialNumber || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'firmware_version', deviceRow.firmwareVersion || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'wipe_status_config_value_id', deviceRow.wipeStatusConfigValueId);
+  addColumnValueIfPresent(columns, values, tableColumns, 'change_notes', deviceRow.changeNotes || null);
+  addColumnValueIfPresent(columns, values, tableColumns, 'changed_by_user_id', currentUserId || null);
+
+  await connection.query(
+    `
+      INSERT INTO unit_previous_storage_devices (${columns.map(escapeIdentifier).join(', ')})
+      VALUES (${columns.map(() => '?').join(', ')})
+    `,
+    values
+  );
+}
+
+async function saveUnitPreviousMemoryModules(connection, unitId, formData, currentUserId) {
+  if (!isUnitFormFieldManaged(formData, 'previous_memory_size')) {
+    return;
+  }
+
+  const exists = await tableExists('unit_previous_memory_modules');
+
+  if (!exists) {
+    return;
+  }
+
+  const rows = getNormalizedPreviousMemoryModules(formData);
+  const tableColumns = await replacePreviousRows(connection, 'unit_previous_memory_modules', unitId);
+
+  for (const [index, moduleRow] of rows.entries()) {
+    await insertPreviousMemoryModule(connection, tableColumns, unitId, moduleRow, index + 1, currentUserId);
+  }
+}
+
+async function saveUnitPreviousStorageDevices(connection, unitId, formData, currentUserId) {
+  if (!isUnitFormFieldManaged(formData, 'previous_storage_size')) {
+    return;
+  }
+
+  const exists = await tableExists('unit_previous_storage_devices');
+
+  if (!exists) {
+    return;
+  }
+
+  const rows = getNormalizedPreviousStorageDevices(formData);
+  const tableColumns = await replacePreviousRows(connection, 'unit_previous_storage_devices', unitId);
+
+  for (const [index, deviceRow] of rows.entries()) {
+    await insertPreviousStorageDevice(connection, tableColumns, unitId, deviceRow, index + 1, currentUserId);
+  }
+}
+
 async function saveUnitMemoryModules(connection, unitId, formData, currentUserId) {
+  if (!isUnitFormFieldManaged(formData, 'memory_modules')) {
+    return;
+  }
+
   const exists = await tableExists('unit_memory_modules');
 
   if (!exists) {
@@ -2983,6 +3923,10 @@ async function saveUnitMemoryModules(connection, unitId, formData, currentUserId
 }
 
 async function saveUnitStorageDevices(connection, unitId, formData, currentUserId) {
+  if (!isUnitFormFieldManaged(formData, 'storage_devices')) {
+    return;
+  }
+
   const exists = await tableExists('unit_storage_devices');
 
   if (!exists) {
@@ -2998,7 +3942,9 @@ async function saveUnitStorageDevices(connection, unitId, formData, currentUserI
 }
 
 async function saveUnitModuleRows(connection, unitId, formData, currentUserId) {
+  await saveUnitPreviousMemoryModules(connection, unitId, formData, currentUserId);
   await saveUnitMemoryModules(connection, unitId, formData, currentUserId);
+  await saveUnitPreviousStorageDevices(connection, unitId, formData, currentUserId);
   await saveUnitStorageDevices(connection, unitId, formData, currentUserId);
 }
 
@@ -3037,20 +3983,64 @@ function buildWritePayload(formData, currentUserId, mode, assetNumber, unitColum
   addColumn('lot_id', normalizeRequiredInteger(formData.lotId));
   addColumn('unit_category_config_value_id', normalizeRequiredInteger(formData.unitCategoryConfigValueId));
   addColumn('current_unit_status_config_value_id', normalizeRequiredInteger(formData.currentUnitStatusConfigValueId));
-  addColumn('manufacturer_id', normalizeOptionalInteger(formData.manufacturerId));
-  addColumn('unit_model_id', normalizeOptionalInteger(formData.unitModelId));
-  addColumn('processor_model_id', normalizeOptionalInteger(formData.processorModelId));
-  addColumn('processor_speed_ghz', normalizeOptionalDecimal(formData.processorSpeedGhz));
+  if (isUnitFormFieldManaged(formData, 'manufacturer')) {
+    addColumn('manufacturer_id', normalizeOptionalInteger(formData.manufacturerId));
+  }
+  if (isUnitFormFieldManaged(formData, 'unit_model')) {
+    addColumn('unit_model_id', normalizeOptionalInteger(formData.unitModelId));
+  }
+  if (isUnitFormFieldManaged(formData, 'processor_model')) {
+    addColumn('processor_model_id', normalizeOptionalInteger(formData.processorModelId));
+  }
+  if (isUnitFormFieldManaged(formData, 'processor_speed_ghz')) {
+    addColumn('processor_speed_ghz', normalizeOptionalDecimal(formData.processorSpeedGhz));
+  }
+  const normalizedPreviousMemoryModules = getNormalizedPreviousMemoryModules(formData);
   const normalizedMemoryModules = getNormalizedMemoryModules(formData);
+  const normalizedPreviousStorageDevices = getNormalizedPreviousStorageDevices(formData);
   const normalizedStorageDevices = getNormalizedStorageDevices(formData);
-  const memoryTotalGb = normalizedMemoryModules.length > 0 ? sumModuleSizeGb(normalizedMemoryModules) : normalizeOptionalInteger(formData.ramGb);
-  const storageTotalGb = normalizedStorageDevices.length > 0 ? sumModuleSizeGb(normalizedStorageDevices) : normalizeOptionalInteger(formData.storageGb);
+  const submittedPreviousMemoryTotalGb = normalizeOptionalNonNegativeInteger(formData.previousRamGb);
+  const submittedMemoryTotalGb = normalizeOptionalNonNegativeInteger(formData.ramGb);
+  const submittedPreviousStorageTotalGb = normalizeOptionalNonNegativeInteger(formData.previousStorageGb);
+  const submittedStorageTotalGb = normalizeOptionalNonNegativeInteger(formData.storageGb);
+  const previousMemoryTotalGb = submittedPreviousMemoryTotalGb !== null
+    ? submittedPreviousMemoryTotalGb
+    : (normalizedPreviousMemoryModules.length > 0 ? sumModuleSizeGb(normalizedPreviousMemoryModules) : null);
+  const memoryTotalGb = submittedMemoryTotalGb !== null
+    ? submittedMemoryTotalGb
+    : (normalizedMemoryModules.length > 0 ? sumModuleSizeGb(normalizedMemoryModules) : null);
+  const previousStorageTotalGb = submittedPreviousStorageTotalGb !== null
+    ? submittedPreviousStorageTotalGb
+    : (normalizedPreviousStorageDevices.length > 0 ? sumModuleSizeGb(normalizedPreviousStorageDevices) : null);
+  const storageTotalGb = submittedStorageTotalGb !== null
+    ? submittedStorageTotalGb
+    : (normalizedStorageDevices.length > 0 ? sumModuleSizeGb(normalizedStorageDevices) : null);
 
-  addColumn('ram_gb', memoryTotalGb || null);
-  addColumn('ram_type_config_value_id', normalizeOptionalInteger(formData.ramTypeConfigValueId));
-  addColumn('storage_gb', storageTotalGb || null);
-  addColumn('storage_type_config_value_id', normalizeOptionalInteger(formData.storageTypeConfigValueId));
-  addColumn('operating_system_config_value_id', normalizeOptionalInteger(formData.operatingSystemConfigValueId));
+  if (isUnitFormFieldManaged(formData, 'previous_memory_size') && (!unitColumns || hasColumn(unitColumns, 'previous_ram_gb'))) {
+    addColumn('previous_ram_gb', previousMemoryTotalGb ?? null);
+  }
+  if (isUnitFormFieldManaged(formData, 'memory_modules')) {
+    addColumn('ram_gb', memoryTotalGb ?? null);
+  }
+  if (isUnitFormFieldManaged(formData, 'memory_modules')) {
+    addColumn('ram_type_config_value_id', memoryTotalGb === 0 ? null : normalizeOptionalInteger(formData.ramTypeConfigValueId));
+  }
+  if (isUnitFormFieldManaged(formData, 'previous_storage_size') && (!unitColumns || hasColumn(unitColumns, 'previous_storage_gb'))) {
+    addColumn('previous_storage_gb', previousStorageTotalGb ?? null);
+  }
+  if (isUnitFormFieldManaged(formData, 'storage_devices')) {
+    addColumn('storage_gb', storageTotalGb ?? null);
+  }
+  if (isUnitFormFieldManaged(formData, 'storage_devices')) {
+    addColumn('storage_type_config_value_id', storageTotalGb === 0 ? null : normalizeOptionalInteger(formData.storageTypeConfigValueId));
+  }
+  if (isUnitFormFieldManaged(formData, 'operating_system')) {
+    addColumn('operating_system_config_value_id', normalizeOptionalInteger(formData.operatingSystemConfigValueId));
+  }
+  if (isUnitFormFieldManaged(formData, 'battery_health')) {
+    const batteryHealthPercent = normalizeOptionalDecimal(formData.batteryHealthPercent);
+    addColumn('battery_health_percent', batteryHealthPercent);
+  }
   addColumn('hardware_notes', normalizeText(formData.hardwareNotes));
   addColumn('cosmetic_notes', normalizeText(formData.cosmeticNotes));
 
@@ -3110,7 +4100,17 @@ async function createIntentionalDuplicateTechUnitWithConnection(connection, form
 
   const unitId = Number(result.insertId);
 
-  await saveUnitIdentifiers(connection, unitId, formData, assetNumber);
+  try {
+    await saveUnitIdentifiers(connection, unitId, formData, assetNumber, { strictInsert: true });
+  } catch (error) {
+    if (error && error.code === 'ER_DUP_ENTRY') {
+      const identifierError = new Error('The approved Intentional Duplicate could not store its duplicate serial identifiers because the identifier index still enforces global uniqueness. Apply the Stage 7D identifier-index correction and approve a new request.');
+      identifierError.code = 'BWT_INTENTIONAL_DUPLICATE_IDENTIFIER_STORAGE_BLOCKED';
+      throw identifierError;
+    }
+    throw error;
+  }
+  await assertIntentionalDuplicateIdentifiersSaved(connection, unitId, formData);
   await saveUnitModuleRows(connection, unitId, formData, currentUserId);
 
   return {
@@ -3119,7 +4119,7 @@ async function createIntentionalDuplicateTechUnitWithConnection(connection, form
   };
 }
 
-async function createTechUnit(formData, currentUserId) {
+async function createTechUnit(formData, currentUserId, options = {}) {
   const state = await getUnitTableState();
 
   if (!state.exists || !state.primaryKeyColumn) {
@@ -3164,6 +4164,14 @@ async function createTechUnit(formData, currentUserId) {
 
     await saveUnitIdentifiers(connection, unitId, formData, assetNumber);
     await saveUnitModuleRows(connection, unitId, formData, currentUserId);
+
+    if (typeof options.beforeCommit === 'function') {
+      await options.beforeCommit({
+        connection,
+        unitId: Number(unitId),
+        assetNumber: Number(assetNumber)
+      });
+    }
 
     await connection.commit();
 
@@ -3234,9 +4242,10 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
     actorRoleCodes: options.actorRoleCodes
   });
 
-  const duplicateMatches = await findDuplicateUnitsFromIdentifiers(
-    buildIdentifierEntries(formData, unit.asset_number),
-    unitId
+  const duplicateMatches = await findNewDuplicateUnitsForEdit(
+    formData,
+    unitId,
+    unit.asset_number
   );
 
   if (duplicateMatches.length > 0) {
@@ -3291,6 +4300,21 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
       });
     }
 
+    if (lotChanged && previousLotId) {
+      await lotValidationOverrideModel.expireMovedUnitOverrides(previousLotId, connection);
+    }
+
+    if (typeof options.beforeCommit === 'function') {
+      await options.beforeCommit({
+        connection,
+        unitId: Number(unitId),
+        assetNumber: Number(unit.asset_number),
+        previousLotId,
+        nextLotId,
+        lotChanged
+      });
+    }
+
     await connection.commit();
 
     return {
@@ -3311,7 +4335,8 @@ async function updateTechUnit(unitId, formData, currentUserId, options = {}) {
   return updateExistingTechUnit(unitId, formData, currentUserId, {
     recordLotHistory: true,
     lotMoveNotes: 'Unit lot changed from the Tech Unit edit form.',
-    actorRoleCodes: options.actorRoleCodes
+    actorRoleCodes: options.actorRoleCodes,
+    beforeCommit: options.beforeCommit
   });
 }
 
@@ -3319,7 +4344,8 @@ async function useExistingTechUnit(unitId, formData, currentUserId, options = {}
   return updateExistingTechUnit(unitId, formData, currentUserId, {
     recordLotHistory: true,
     lotMoveNotes: 'Duplicate detection confirmed this was an existing unit; unit record was updated instead of creating a duplicate.',
-    actorRoleCodes: options.actorRoleCodes
+    actorRoleCodes: options.actorRoleCodes,
+    beforeCommit: options.beforeCommit
   });
 }
 
@@ -3344,6 +4370,7 @@ const UNIT_RELATED_TABLE_LABELS = {
   unit_work_completions: 'Earned-weight records',
   unit_override_requests: 'Override requests',
   unit_lot_validation_overrides: 'Lot-validation overrides',
+  unit_audit_events: 'Audit events',
   unit_qc_checks: 'QC records',
   unit_status_history: 'Status history',
   unit_support_tasks: 'Support-task records',
@@ -3801,8 +4828,8 @@ async function getTechUnitLifecycleSummaryById(unitId) {
     row.manufacturer_name,
     row.model_name,
     row.processor_model_code,
-    row.ram_gb ? `${row.ram_gb}GB Memory` : '',
-    row.storage_gb ? `${row.storage_gb}GB Storage` : ''
+    row.ram_gb !== null && row.ram_gb !== undefined ? `${row.ram_gb}GB Memory` : '',
+    row.storage_gb !== null && row.storage_gb !== undefined ? `${row.storage_gb}GB Storage` : ''
   ].filter(Boolean);
 
   return {
@@ -3996,6 +5023,10 @@ async function parkTechUnit({ unitId, parkedByUserId, actorRoleCodes }) {
       throw createUnitLifecycleError('BWT_UNIT_ALREADY_PARKED', 'This unit is already parked or was changed by another user.');
     }
 
+    if (currentLotId) {
+      await lotValidationOverrideModel.expireMovedUnitOverrides(currentLotId, connection);
+    }
+
     if (currentAssignedToUserId) {
       await recordUnitAssignmentHistory(connection, {
         unitId: safeUnitId,
@@ -4014,6 +5045,13 @@ async function parkTechUnit({ unitId, parkedByUserId, actorRoleCodes }) {
       fromAssignedToUserId: currentAssignedToUserId,
       changedByUserId: safeParkedByUserId,
       notes: 'Unit parked. Current lot and assignment were cleared; existing records and earned credit were retained.'
+    });
+
+    await unitWorkflowAudit.recordParked(connection, {
+      unitId: safeUnitId,
+      actorUserId: safeParkedByUserId,
+      fromLotId: currentLotId,
+      fromAssignedUserId: currentAssignedToUserId
     });
 
     await connection.commit();
@@ -4136,6 +5174,13 @@ async function returnTechUnitToActive({
       toAssignedToUserId: safeAssignedToUserId,
       changedByUserId: safeReturnedByUserId,
       notes: 'Unit returned to Active. Historical work and credit records were retained without changes.'
+    });
+
+    await unitWorkflowAudit.recordReturnedToActive(connection, {
+      unitId: safeUnitId,
+      actorUserId: safeReturnedByUserId,
+      toLotId: safeDestinationLotId,
+      toAssignedUserId: safeAssignedToUserId
     });
 
     await connection.commit();
@@ -4433,6 +5478,14 @@ async function assignTechUnit({ unitId, toUserId = null, changedByUserId = null,
         overrideRequestId,
         notes
       });
+      await unitWorkflowAudit.recordAssignmentChanged(connection, {
+        unitId: safeUnitId,
+        actorUserId: normalizedChangedByUserId,
+        fromUserId: previousUserId,
+        toUserId: normalizedToUserId,
+        source: changeSource,
+        notes
+      });
     }
 
     await connection.commit();
@@ -4470,7 +5523,7 @@ async function getResolvedProductionWeightForUnit(unit) {
 
 async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByUserId, creditSource = 'manual_completion', overrideRequestId = null, weightValue = null, notes = null, actorRoleCodes = [] }) {
   if (!await tableExists('unit_work_completions')) {
-    throw new Error('The unit_work_completions table is not ready yet. Run the Step 6f.0 SQL migration first.');
+    throw new Error('The unit_work_completions table is not ready yet. Run the required completion migration first.');
   }
 
   const safeUnitId = normalizeRequiredInteger(unitId);
@@ -4484,7 +5537,7 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
   const completionPreview = await getUnitWorkCompletionPreview(safeUnitId);
 
   if (!completionPreview.ready) {
-    throw new Error(completionPreview.errorMessage || 'Lot work completion could not be recorded.');
+    throw new Error(completionPreview.errorMessage || 'Unit completion could not be recorded.');
   }
 
   const unit = completionPreview.unit;
@@ -4534,27 +5587,355 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
     insertValues.push(workCycleKey);
   }
 
+  const connection = await pool.getConnection();
+
   try {
-    await pool.query(
+    await connection.beginTransaction();
+    const [insertResult] = await connection.query(
       `
         INSERT INTO unit_work_completions (${insertColumns.map(escapeIdentifier).join(', ')})
         VALUES (${insertColumns.map(() => '?').join(', ')})
       `,
       insertValues
     );
+    const completionId = Number(insertResult.insertId);
+
+    if (safeCreditSource === 'manual_completion') {
+      const [completedByRows] = await connection.query(
+        `
+          SELECT first_name, last_name, email
+          FROM users
+          WHERE user_id = ?
+          LIMIT 1
+        `,
+        [safeCompletedByUserId]
+      );
+      const completedByRow = completedByRows[0] || {};
+      const completedByName = [completedByRow.first_name, completedByRow.last_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || completedByRow.email || `User #${safeCompletedByUserId}`;
+
+      await unitAuditEventModel.createUnitAuditEvent({
+        unitId: safeUnitId,
+        actorUserId: safeRecordedByUserId || safeCompletedByUserId,
+        eventType: 'unit_completed',
+        eventSource: 'tech_unit_completion',
+        eventSummary: 'Marked Unit completion',
+        metadata: {
+          completionId,
+          lotId: normalizeOptionalInteger(unit.lot_id),
+          completedByUserId: safeCompletedByUserId,
+          workCycleKey
+        },
+        changes: [
+          {
+            fieldKey: 'unit_completion',
+            fieldLabel: 'Unit Completion',
+            changeType: 'added',
+            oldValueText: '',
+            newValueText: `Completed by ${completedByName}`,
+            oldValue: null,
+            newValue: { completionId, completedByUserId: safeCompletedByUserId },
+            sortOrder: 10
+          },
+          {
+            fieldKey: 'completion_lot',
+            fieldLabel: 'Lot',
+            changeType: 'recorded',
+            oldValueText: '',
+            newValueText: completionPreview.lotName || 'No active lot',
+            oldValue: null,
+            newValue: normalizeOptionalInteger(unit.lot_id),
+            sortOrder: 20
+          },
+          {
+            fieldKey: 'completion_credit',
+            fieldLabel: 'Production Credit',
+            changeType: 'added',
+            oldValueText: '',
+            newValueText: Number(resolvedWeight).toFixed(2),
+            oldValue: null,
+            newValue: resolvedWeight,
+            sortOrder: 30
+          }
+        ]
+      }, connection);
+    }
+
+    await connection.commit();
+
+    return {
+      unitWorkCompletionId: completionId,
+      workCycleKey,
+      productionWeight: resolvedWeight
+    };
   } catch (error) {
+    await connection.rollback();
+
     if (error && error.code === 'ER_DUP_ENTRY' && workCycleKey) {
-      throw new Error('Lot work is already marked complete for this unit’s current lot stay.');
+      throw new Error('Unit completion is already recorded for this unit’s current Lot stay.');
     }
 
     throw error;
+  } finally {
+    connection.release();
   }
-
-  return true;
 }
 
+function emptyCompletionReversalPreview(errorMessage, values = {}) {
+  return {
+    ready: false,
+    unitId: values.unitId || null,
+    unitWorkCompletionId: values.unitWorkCompletionId || null,
+    unitLabel: values.unitLabel || 'Unit not found',
+    lotName: values.lotName || 'Unknown lot',
+    completedByName: values.completedByName || 'Unknown user',
+    completedAt: values.completedAt || null,
+    formattedProductionWeight: values.formattedProductionWeight || '—',
+    errorMessage
+  };
+}
 
-async function getCurrentLotCycleRecord(unit) {
+async function getUnitWorkCompletionReversalPreview(unitId, unitWorkCompletionId) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const safeCompletionId = normalizeRequiredInteger(unitWorkCompletionId);
+
+  if (!safeUnitId || !safeCompletionId) {
+    return emptyCompletionReversalPreview('The selected Unit completion is invalid.', {
+      unitId: safeUnitId,
+      unitWorkCompletionId: safeCompletionId
+    });
+  }
+
+  if (!await tableExists('unit_work_completions')) {
+    return emptyCompletionReversalPreview('Unit completion records are not available.', {
+      unitId: safeUnitId,
+      unitWorkCompletionId: safeCompletionId
+    });
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        c.unit_work_completion_id,
+        c.unit_id,
+        c.lot_id,
+        c.completed_by_user_id,
+        c.completed_at,
+        c.production_weight_value,
+        c.credit_source,
+        c.reversed_at,
+        c.reversal_reason,
+        u.asset_number,
+        l.name AS lot_name,
+        completed_by.first_name AS completed_by_first_name,
+        completed_by.last_name AS completed_by_last_name,
+        completed_by.email AS completed_by_email
+      FROM unit_work_completions c
+      INNER JOIN units u
+        ON u.unit_id = c.unit_id
+      LEFT JOIN lots l
+        ON l.lot_id = c.lot_id
+      LEFT JOIN users completed_by
+        ON completed_by.user_id = c.completed_by_user_id
+      WHERE c.unit_work_completion_id = ?
+        AND c.unit_id = ?
+      LIMIT 1
+    `,
+    [safeCompletionId, safeUnitId]
+  );
+  const row = rows[0];
+
+  if (!row) {
+    return emptyCompletionReversalPreview('The selected Unit completion could not be found.', {
+      unitId: safeUnitId,
+      unitWorkCompletionId: safeCompletionId
+    });
+  }
+
+  const common = {
+    unitId: safeUnitId,
+    unitWorkCompletionId: safeCompletionId,
+    unitLabel: getDisplayAssetTag(row.asset_number) || `Unit #${safeUnitId}`,
+    lotName: row.lot_name || 'No active lot',
+    completedByName: getUserDisplayNameFromRow(row, 'completed_by') || 'Unknown user',
+    completedAt: row.completed_at,
+    formattedProductionWeight: row.production_weight_value !== null && row.production_weight_value !== undefined
+      ? Number(row.production_weight_value).toFixed(2)
+      : '—'
+  };
+
+  if (row.credit_source !== 'manual_completion') {
+    return emptyCompletionReversalPreview('Only a manually recorded Unit completion can be undone from this workflow.', common);
+  }
+
+  if (row.reversed_at) {
+    return emptyCompletionReversalPreview('This Unit completion has already been undone.', common);
+  }
+
+  return {
+    ...common,
+    ready: true,
+    productionWeight: Number(row.production_weight_value),
+    errorMessage: ''
+  };
+}
+
+async function reverseUnitWorkCompletion({
+  unitId,
+  unitWorkCompletionId,
+  reversedByUserId,
+  reason,
+  actorRoleCodes = []
+}) {
+  assertCanReverseUnitCompletion(actorRoleCodes);
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const safeCompletionId = normalizeRequiredInteger(unitWorkCompletionId);
+  const safeReversedByUserId = normalizeRequiredInteger(reversedByUserId);
+  const safeReason = normalizeCompletionReversalReason(reason);
+
+  if (!safeUnitId || !safeCompletionId || !safeReversedByUserId) {
+    throw new Error('A valid Unit, completion record, and reversing user are required.');
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      `
+        SELECT
+          c.unit_work_completion_id,
+          c.unit_id,
+          c.lot_id,
+          c.completed_by_user_id,
+          c.completed_at,
+          c.production_weight_value,
+          c.credit_source,
+          c.work_cycle_key,
+          c.reversed_at,
+          u.asset_number,
+          l.name AS lot_name,
+          completed_by.first_name AS completed_by_first_name,
+          completed_by.last_name AS completed_by_last_name,
+          completed_by.email AS completed_by_email
+        FROM unit_work_completions c
+        INNER JOIN units u
+          ON u.unit_id = c.unit_id
+        LEFT JOIN lots l
+          ON l.lot_id = c.lot_id
+        LEFT JOIN users completed_by
+          ON completed_by.user_id = c.completed_by_user_id
+        WHERE c.unit_work_completion_id = ?
+          AND c.unit_id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [safeCompletionId, safeUnitId]
+    );
+    const row = rows[0];
+
+    if (!row) {
+      throw new Error('The selected Unit completion could not be found.');
+    }
+
+    if (row.credit_source !== 'manual_completion') {
+      throw new Error('Only a manually recorded Unit completion can be undone from this workflow.');
+    }
+
+    if (row.reversed_at) {
+      throw new Error('This Unit completion has already been undone.');
+    }
+
+    const [updateResult] = await connection.query(
+      `
+        UPDATE unit_work_completions
+        SET reversed_at = CURRENT_TIMESTAMP(6),
+            reversed_by_user_id = ?,
+            reversal_reason = ?
+        WHERE unit_work_completion_id = ?
+          AND unit_id = ?
+          AND reversed_at IS NULL
+        LIMIT 1
+      `,
+      [safeReversedByUserId, safeReason, safeCompletionId, safeUnitId]
+    );
+
+    if (Number(updateResult.affectedRows || 0) !== 1) {
+      throw new Error('The Unit completion changed before it could be undone. Refresh and try again.');
+    }
+
+    const completedByName = getUserDisplayNameFromRow(row, 'completed_by') || 'Unknown user';
+    const formattedWeight = Number(row.production_weight_value).toFixed(2);
+
+    await unitAuditEventModel.createUnitAuditEvent({
+      unitId: safeUnitId,
+      actorUserId: safeReversedByUserId,
+      eventType: 'unit_completion_reversed',
+      eventSource: 'tech_unit_completion_reversal',
+      eventSummary: 'Undid Unit completion',
+      metadata: {
+        completionId: safeCompletionId,
+        lotId: normalizeOptionalInteger(row.lot_id),
+        completedByUserId: normalizeOptionalInteger(row.completed_by_user_id),
+        originalCompletedAt: row.completed_at,
+        workCycleKey: row.work_cycle_key || null,
+        reason: safeReason
+      },
+      changes: [
+        {
+          fieldKey: 'unit_completion',
+          fieldLabel: 'Unit Completion',
+          changeType: 'revoked',
+          oldValueText: `Completed by ${completedByName}`,
+          newValueText: 'Undone',
+          oldValue: { completionId: safeCompletionId, completedByUserId: row.completed_by_user_id },
+          newValue: null,
+          sortOrder: 10
+        },
+        {
+          fieldKey: 'completion_credit',
+          fieldLabel: 'Production Credit',
+          changeType: 'removed',
+          oldValueText: formattedWeight,
+          newValueText: '',
+          oldValue: Number(row.production_weight_value),
+          newValue: null,
+          sortOrder: 20
+        },
+        {
+          fieldKey: 'completion_reversal_reason',
+          fieldLabel: 'Reason',
+          changeType: 'added',
+          oldValueText: '',
+          newValueText: safeReason,
+          oldValue: null,
+          newValue: safeReason,
+          sortOrder: 30
+        }
+      ]
+    }, connection);
+
+    await connection.commit();
+
+    return {
+      unitWorkCompletionId: safeCompletionId,
+      unitId: safeUnitId,
+      lotName: row.lot_name || 'No active lot',
+      completedByName,
+      formattedProductionWeight: formattedWeight,
+      reason: safeReason
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function getCurrentLotCycleRecord(unit, connection = pool) {
   const unitId = normalizeRequiredInteger(unit && unit.unit_id);
   const lotId = normalizeOptionalInteger(unit && unit.lot_id);
 
@@ -4562,7 +5943,7 @@ async function getCurrentLotCycleRecord(unit) {
     return null;
   }
 
-  const [rows] = await pool.query(
+  const [rows] = await connection.query(
     `
       SELECT unit_lot_history_id, moved_at
       FROM unit_lot_history
@@ -4577,15 +5958,15 @@ async function getCurrentLotCycleRecord(unit) {
   return rows[0] || null;
 }
 
-async function getCurrentLotCycleStart(unit) {
-  const cycleRecord = await getCurrentLotCycleRecord(unit);
+async function getCurrentLotCycleStart(unit, connection = pool) {
+  const cycleRecord = await getCurrentLotCycleRecord(unit, connection);
 
   return cycleRecord && cycleRecord.moved_at
     ? cycleRecord.moved_at
     : (unit && unit.created_at ? unit.created_at : null);
 }
 
-async function getCurrentLotWorkCycleKey(unit) {
+async function getCurrentLotWorkCycleKey(unit, connection = pool) {
   const unitId = normalizeRequiredInteger(unit && unit.unit_id);
   const lotId = normalizeOptionalInteger(unit && unit.lot_id);
 
@@ -4593,7 +5974,7 @@ async function getCurrentLotWorkCycleKey(unit) {
     return null;
   }
 
-  const cycleRecord = await getCurrentLotCycleRecord(unit);
+  const cycleRecord = await getCurrentLotCycleRecord(unit, connection);
 
   return cycleRecord && cycleRecord.unit_lot_history_id
     ? `move:${unitId}:${lotId}:${cycleRecord.unit_lot_history_id}`
@@ -4625,6 +6006,7 @@ async function hasRecordedManualCompletionForCurrentLotCycle(unit) {
       WHERE unit_id = ?
         AND lot_id = ?
         AND credit_source = 'manual_completion'
+        AND reversed_at IS NULL
         AND completed_at >= ?
       ORDER BY completed_at DESC, unit_work_completion_id DESC
       LIMIT 1
@@ -4790,6 +6172,27 @@ async function getLatestWorkCompletionMapForUnits(unitIds) {
     return result;
   }
 
+  const hasLotHistory = await tableExists('unit_lot_history');
+  const currentLotHistoryExpression = hasLotHistory
+    ? `(
+        SELECT history.unit_lot_history_id
+        FROM unit_lot_history history
+        WHERE history.unit_id = current_unit.unit_id
+          AND history.to_lot_id = current_unit.lot_id
+        ORDER BY history.moved_at DESC, history.unit_lot_history_id DESC
+        LIMIT 1
+      )`
+    : 'NULL';
+  const currentLotMovedAtExpression = hasLotHistory
+    ? `(
+        SELECT history.moved_at
+        FROM unit_lot_history history
+        WHERE history.unit_id = current_unit.unit_id
+          AND history.to_lot_id = current_unit.lot_id
+        ORDER BY history.moved_at DESC, history.unit_lot_history_id DESC
+        LIMIT 1
+      )`
+    : 'NULL';
   const placeholders = ids.map(() => '?').join(', ');
   const [rows] = await pool.query(
     `
@@ -4801,30 +6204,72 @@ async function getLatestWorkCompletionMapForUnits(unitIds) {
         c.completed_at,
         c.production_weight_value,
         c.credit_source,
+        c.work_cycle_key,
+        current_unit.lot_id AS current_lot_id,
+        current_unit.created_at AS unit_created_at,
+        ${currentLotHistoryExpression} AS current_lot_history_id,
+        ${currentLotMovedAtExpression} AS current_lot_moved_at,
         l.name AS lot_name,
         completed_by.first_name AS completed_by_first_name,
         completed_by.last_name AS completed_by_last_name,
         completed_by.email AS completed_by_email
       FROM unit_work_completions c
-      INNER JOIN (
-        SELECT unit_id, MAX(unit_work_completion_id) AS latest_completion_id
-        FROM unit_work_completions
-        WHERE unit_id IN (${placeholders})
-        GROUP BY unit_id
-      ) latest_completion
-        ON latest_completion.latest_completion_id = c.unit_work_completion_id
+      INNER JOIN units current_unit
+        ON current_unit.unit_id = c.unit_id
       LEFT JOIN lots l
         ON l.lot_id = c.lot_id
       LEFT JOIN users completed_by
         ON completed_by.user_id = c.completed_by_user_id
+      WHERE c.unit_id IN (${placeholders})
+        AND c.credit_source = 'manual_completion'
+        AND c.reversed_at IS NULL
+      ORDER BY c.completed_at DESC, c.unit_work_completion_id DESC
     `,
     ids
   );
 
   rows.forEach((row) => {
-    result.set(Number(row.unit_id), {
+    const unitId = Number(row.unit_id);
+
+    if (result.has(unitId)) {
+      return;
+    }
+
+    const currentLotId = normalizeOptionalInteger(row.current_lot_id);
+    const completionLotId = normalizeOptionalInteger(row.lot_id);
+
+    if (!currentLotId || currentLotId !== completionLotId) {
+      return;
+    }
+
+    const currentHistoryId = normalizeOptionalInteger(row.current_lot_history_id);
+    const expectedWorkCycleKey = currentHistoryId
+      ? `move:${unitId}:${currentLotId}:${currentHistoryId}`
+      : `initial:${unitId}:${currentLotId}`;
+
+    if (row.work_cycle_key && row.work_cycle_key !== expectedWorkCycleKey) {
+      return;
+    }
+
+    if (!row.work_cycle_key) {
+      const cycleStartedAt = row.current_lot_moved_at || row.unit_created_at;
+      const completedAt = row.completed_at ? new Date(row.completed_at) : null;
+      const cycleStart = cycleStartedAt ? new Date(cycleStartedAt) : null;
+
+      if (
+        completedAt
+        && cycleStart
+        && !Number.isNaN(completedAt.getTime())
+        && !Number.isNaN(cycleStart.getTime())
+        && completedAt < cycleStart
+      ) {
+        return;
+      }
+    }
+
+    result.set(unitId, {
       unitWorkCompletionId: Number(row.unit_work_completion_id),
-      lotId: row.lot_id ? Number(row.lot_id) : null,
+      lotId: completionLotId,
       lotName: row.lot_name || 'No active lot',
       completedByUserId: row.completed_by_user_id ? Number(row.completed_by_user_id) : null,
       completedByName: getUserDisplayNameFromRow(row, 'completed_by') || 'Unknown user',
@@ -4866,6 +6311,7 @@ async function getUnitWorkCompletionsForUser(unitId, userId) {
         ON l.lot_id = c.lot_id
       WHERE c.unit_id = ?
         AND c.completed_by_user_id = ?
+        AND c.reversed_at IS NULL
       ORDER BY c.completed_at DESC, c.unit_work_completion_id DESC
       LIMIT 100
     `,
@@ -4913,6 +6359,9 @@ async function getUnitOperationalHistory(unitId) {
             c.lot_id,
             c.completed_by_user_id,
             c.completed_at,
+            c.reversed_at,
+            c.reversal_reason,
+            c.reversed_by_user_id,
             c.production_weight_value,
             c.credit_source,
             c.recorded_by_user_id,
@@ -4923,7 +6372,10 @@ async function getUnitOperationalHistory(unitId) {
             completed_by.email AS completed_by_email,
             recorded_by.first_name AS recorded_by_first_name,
             recorded_by.last_name AS recorded_by_last_name,
-            recorded_by.email AS recorded_by_email
+            recorded_by.email AS recorded_by_email,
+            reversed_by.first_name AS reversed_by_first_name,
+            reversed_by.last_name AS reversed_by_last_name,
+            reversed_by.email AS reversed_by_email
           FROM unit_work_completions c
           LEFT JOIN lots l
             ON l.lot_id = c.lot_id
@@ -4931,6 +6383,8 @@ async function getUnitOperationalHistory(unitId) {
             ON completed_by.user_id = c.completed_by_user_id
           LEFT JOIN users recorded_by
             ON recorded_by.user_id = c.recorded_by_user_id
+          LEFT JOIN users reversed_by
+            ON reversed_by.user_id = c.reversed_by_user_id
           WHERE c.unit_id = ?
           ORDER BY c.completed_at DESC, c.unit_work_completion_id DESC
           LIMIT 100
@@ -5047,6 +6501,10 @@ async function getUnitOperationalHistory(unitId) {
       completedByName: getUserDisplayNameFromRow(row, 'completed_by') || 'Unknown user',
       recordedByName: getUserDisplayNameFromRow(row, 'recorded_by') || '',
       completedAt: row.completed_at,
+      reversedAt: row.reversed_at || null,
+      reversedByName: getUserDisplayNameFromRow(row, 'reversed_by') || '',
+      reversalReason: row.reversal_reason || '',
+      isReversed: Boolean(row.reversed_at),
       productionWeight: row.production_weight_value !== null && row.production_weight_value !== undefined
         ? Number(row.production_weight_value)
         : null,
@@ -5141,6 +6599,7 @@ async function hasAnyRecordedManualCompletion(unitId) {
       FROM unit_work_completions
       WHERE unit_id = ?
         AND credit_source = 'manual_completion'
+        AND reversed_at IS NULL
       LIMIT 1
     `,
     [safeUnitId]
@@ -5217,7 +6676,11 @@ module.exports = {
   getUnitFormDataById,
   listTechUnits,
   findDuplicateUnitsForForm,
+  getStoredSerialNormalizedValuesForUnit,
+  filterNewDuplicateMatchesForEdit,
+  findNewDuplicateUnitsForEdit,
   findSerialDuplicateCandidates,
+  getDuplicateAssumptionEligibility,
   getDuplicateAssumptionCandidates,
   assumeExistingTechUnitFromDuplicateMatch,
   getDuplicateUnitMessage,
@@ -5238,7 +6701,9 @@ module.exports = {
   getUnitOperationalHistory,
   getUnitWorkCompletionsForUser,
   getUnitWorkCompletionPreview,
+  getUnitWorkCompletionReversalPreview,
   recordUnitWorkCompletion,
+  reverseUnitWorkCompletion,
   getAssetTagPrefix,
   getDisplayAssetTag,
   normalizeAssetTagInput,

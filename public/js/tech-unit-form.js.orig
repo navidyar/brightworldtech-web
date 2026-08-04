@@ -7,6 +7,1072 @@
     return select && select.selectedOptions.length > 0 ? select.selectedOptions[0] : null;
   }
 
+  const REPEATABLE_REQUIRED_MESSAGES = Object.freeze({
+    memory: 'Add at least one complete memory module with a positive size.',
+    storage: 'Add at least one complete storage device with a positive size.',
+    cosmeticIssue: 'Add at least one complete cosmetic issue with an issue type, severity, and location.',
+    hardwareIssue: 'Add at least one complete hardware issue using a configured issue or custom issue name.'
+  });
+
+  const LOT_UNIT_FORM_PROFILE_REFRESH_INTERVAL_MS = 30000;
+  const LOT_UNIT_FORM_PROFILE_SUBMIT_VERIFICATION_MAX_AGE_MS = 5000;
+  const LOT_UNIT_FORM_PROFILE_STORAGE_KEY = 'bwt-lot-unit-form-profile-updated';
+  const LOT_REQUIREMENT_WORKFLOW_REFRESH_DELAY_MS = 350;
+  const LOT_REQUIREMENT_WORKFLOW_SUBMIT_VERIFICATION_MAX_AGE_MS = 5000;
+  const LOT_REQUIREMENT_WORKFLOW_STORAGE_KEY = 'bwt-lot-requirements-updated';
+  const LOT_REQUIREMENT_WRAPPER_KEYS = Object.freeze({
+    unit_type: 'unit_category',
+    manufacturer: 'manufacturer',
+    model: 'unit_model',
+    processor: 'processor_model',
+    ram_gb: 'memory_modules',
+    ram_type: 'memory_modules',
+    storage_gb: 'storage_devices',
+    storage_type: 'storage_devices'
+  });
+
+  function getLotUnitFormProfileStatus(form) {
+    return form ? form.querySelector('[data-lot-unit-form-profile-status]') : null;
+  }
+
+  function setLotUnitFormProfileStatus(form, message, status) {
+    const statusElement = getLotUnitFormProfileStatus(form);
+
+    if (!statusElement) {
+      return;
+    }
+
+    statusElement.textContent = message;
+    statusElement.dataset.status = status || 'idle';
+  }
+
+  function getLotConfigurableFieldWrappers(form) {
+    return form ? Array.from(form.querySelectorAll('[data-unit-form-field-key]')) : [];
+  }
+
+  let unitFormValidationErrorSequence = 0;
+
+  function getValidationWrapper(control) {
+    if (!control) {
+      return null;
+    }
+
+    return control.closest('[data-unit-form-field-key], .form-field, .form-section') || null;
+  }
+
+  function getDirectValidationError(wrapper) {
+    if (!wrapper) {
+      return null;
+    }
+
+    return Array.from(wrapper.children).find((child) => child.hasAttribute('data-unit-form-field-error')) || null;
+  }
+
+  function removeAriaDescribedByToken(control, token) {
+    if (!control || !token) {
+      return;
+    }
+
+    const remaining = String(control.getAttribute('aria-describedby') || '')
+      .split(/\s+/)
+      .filter(Boolean)
+      .filter((value) => value !== token);
+
+    if (remaining.length > 0) {
+      control.setAttribute('aria-describedby', remaining.join(' '));
+    } else {
+      control.removeAttribute('aria-describedby');
+    }
+  }
+
+  function clearValidationError(wrapper) {
+    if (!wrapper) {
+      return;
+    }
+
+    const errorElement = getDirectValidationError(wrapper);
+    const errorId = errorElement ? errorElement.id : '';
+
+    wrapper.classList.remove('has-unit-form-validation-error');
+    wrapper.querySelectorAll('[aria-invalid="true"]').forEach((control) => {
+      control.removeAttribute('aria-invalid');
+      removeAriaDescribedByToken(control, errorId);
+    });
+
+    if (errorElement) {
+      errorElement.remove();
+    }
+  }
+
+  function showValidationError(control, customMessage = '') {
+    const wrapper = getValidationWrapper(control);
+
+    if (!wrapper || !control) {
+      return;
+    }
+
+    let errorElement = getDirectValidationError(wrapper);
+
+    if (!errorElement) {
+      unitFormValidationErrorSequence += 1;
+      errorElement = document.createElement('small');
+      errorElement.id = `unit-form-validation-error-${unitFormValidationErrorSequence}`;
+      errorElement.className = 'unit-form-field-error';
+      errorElement.setAttribute('data-unit-form-field-error', '');
+      errorElement.setAttribute('role', 'alert');
+      wrapper.appendChild(errorElement);
+    }
+
+    errorElement.textContent = customMessage || control.validationMessage || 'Complete this required field.';
+    wrapper.classList.add('has-unit-form-validation-error');
+    control.setAttribute('aria-invalid', 'true');
+
+    const describedBy = new Set(String(control.getAttribute('aria-describedby') || '').split(/\s+/).filter(Boolean));
+    describedBy.add(errorElement.id);
+    control.setAttribute('aria-describedby', Array.from(describedBy).join(' '));
+  }
+
+  function isUsableInvalidControl(control) {
+    return Boolean(
+      control
+      && control.form
+      && !control.disabled
+      && !control.closest('[hidden]')
+      && control.validity
+      && !control.validity.valid
+    );
+  }
+
+  function findFirstInvalidControl(form, preferredControl) {
+    if (isUsableInvalidControl(preferredControl)) {
+      return preferredControl;
+    }
+
+    return Array.from(form ? form.elements : []).find(isUsableInvalidControl) || null;
+  }
+
+  function revealInvalidControl(control) {
+    if (!isUsableInvalidControl(control)) {
+      return;
+    }
+
+    showValidationError(control);
+
+    const wrapper = getValidationWrapper(control) || control;
+
+    try {
+      control.focus({ preventScroll: true });
+    } catch (error) {
+      control.focus();
+    }
+
+    wrapper.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+  }
+
+  function scheduleInvalidControlFocus(form, preferredControl) {
+    if (!form) {
+      return;
+    }
+
+    if (form._unitFormValidationFocusTimer) {
+      window.clearTimeout(form._unitFormValidationFocusTimer);
+    }
+
+    if (form._unitFormValidationFollowupTimer) {
+      window.clearTimeout(form._unitFormValidationFollowupTimer);
+    }
+
+    form._unitFormValidationFocusTimer = window.setTimeout(() => {
+      delete form._unitFormValidationFocusTimer;
+
+      window.requestAnimationFrame(() => {
+        const control = findFirstInvalidControl(form, preferredControl);
+
+        if (!control) {
+          return;
+        }
+
+        revealInvalidControl(control);
+
+        // Some browsers restore the submit button's scroll position after the
+        // invalid event completes. Re-assert the first invalid field once the
+        // native validation cycle has fully settled.
+        form._unitFormValidationFollowupTimer = window.setTimeout(() => {
+          delete form._unitFormValidationFollowupTimer;
+          const currentFirstInvalidControl = findFirstInvalidControl(form, preferredControl);
+
+          if (currentFirstInvalidControl) {
+            revealInvalidControl(currentFirstInvalidControl);
+          }
+        }, 80);
+      });
+    }, 0);
+  }
+
+  function clearResolvedValidationError(control) {
+    const wrapper = getValidationWrapper(control);
+
+    if (!wrapper || !wrapper.classList.contains('has-unit-form-validation-error')) {
+      return;
+    }
+
+    const invalidControl = Array.from(wrapper.querySelectorAll('input, select, textarea'))
+      .find((candidate) => !candidate.disabled && !candidate.closest('[hidden]') && candidate.validity && !candidate.validity.valid);
+
+    if (!invalidControl) {
+      clearValidationError(wrapper);
+    }
+  }
+
+
+  function applyAuthoritativeServerFieldErrors(form) {
+    if (!form || form.dataset.unitFormServerErrorsApplied === 'true') {
+      return;
+    }
+
+    const errorElements = Array.from(form.querySelectorAll('[data-unit-form-server-error]'));
+
+    if (errorElements.length === 0) {
+      return;
+    }
+
+    let firstVisibleControl = null;
+
+    errorElements.forEach((errorElement) => {
+      const fieldKey = errorElement.getAttribute('data-field-key') || '';
+      const message = errorElement.getAttribute('data-error-message') || 'Complete this field.';
+      const wrapper = fieldKey
+        ? form.querySelector(`[data-unit-form-field-key="${fieldKey}"]`)
+        : null;
+
+      if (!wrapper || wrapper.hidden || wrapper.closest('[hidden]')) {
+        return;
+      }
+
+      const control = wrapper.hasAttribute('data-unit-form-repeatable-type')
+        ? getRepeatableValidationAnchor(wrapper)
+        : getRequirementControls(wrapper)[0];
+
+      if (!control || control.disabled) {
+        return;
+      }
+
+      showValidationError(control, message);
+
+      if (!firstVisibleControl) {
+        firstVisibleControl = control;
+      }
+    });
+
+    form.dataset.unitFormServerErrorsApplied = 'true';
+
+    if (firstVisibleControl) {
+      scheduleInvalidControlFocus(form, firstVisibleControl);
+    }
+  }
+
+  function getRequiredIndicatorTarget(wrapper) {
+    if (!wrapper) {
+      return null;
+    }
+
+    if (wrapper.matches('.form-section')) {
+      return wrapper.querySelector('.form-section-header h3');
+    }
+
+    if (wrapper.matches('fieldset')) {
+      return wrapper.querySelector('legend');
+    }
+
+    return Array.from(wrapper.children).find((child) => child.tagName === 'SPAN') || null;
+  }
+
+  function updateLotRequiredIndicator(wrapper, required) {
+    const target = getRequiredIndicatorTarget(wrapper);
+    let indicator = target ? target.querySelector('[data-unit-form-required-indicator]') : null;
+
+    wrapper.classList.toggle('is-lot-required', Boolean(required));
+    wrapper.setAttribute('aria-required', required ? 'true' : 'false');
+
+    if (!target) {
+      return;
+    }
+
+    if (required && !indicator) {
+      indicator = document.createElement('span');
+      indicator.setAttribute('data-unit-form-required-indicator', '');
+      indicator.setAttribute('aria-hidden', 'true');
+      indicator.textContent = ' *';
+      target.appendChild(indicator);
+    }
+
+    if (!required && indicator) {
+      indicator.remove();
+    }
+  }
+
+  function clearControlRequirement(wrapper) {
+    if (!wrapper) {
+      return;
+    }
+
+    clearValidationError(wrapper);
+
+    wrapper.querySelectorAll('input, select, textarea').forEach((control) => {
+      control.required = false;
+      control.removeAttribute('aria-required');
+      control.setCustomValidity('');
+    });
+  }
+
+  function getRequirementControls(wrapper) {
+    if (!wrapper) {
+      return [];
+    }
+
+    const fieldKey = wrapper.getAttribute('data-unit-form-field-key');
+
+    if (fieldKey === 'unit_model') {
+      const input = wrapper.querySelector('[data-unit-model-combobox-input]');
+      return input ? [input] : [];
+    }
+
+    if (fieldKey === 'processor_model') {
+      const input = wrapper.querySelector('[data-processor-combobox-input]');
+      return input ? [input] : [];
+    }
+
+    if (fieldKey === 'unit_outcome') {
+      return Array.from(wrapper.querySelectorAll('input[type="radio"][name="outcomeCode"]'));
+    }
+
+    return Array.from(wrapper.querySelectorAll('input:not([type="hidden"]), select, textarea'))
+      .filter((control) => !control.hasAttribute('data-processor-brand-select'));
+  }
+
+  function applyControlRequirement(wrapper, required) {
+    clearControlRequirement(wrapper);
+
+    if (!required || wrapper.hasAttribute('data-unit-form-repeatable-type')) {
+      updateLotRequiredIndicator(wrapper, required);
+      return;
+    }
+
+    const controls = getRequirementControls(wrapper);
+
+    controls.forEach((control, index) => {
+      if (control.type === 'radio') {
+        control.required = true;
+      } else if (index === 0) {
+        control.required = true;
+      }
+
+      control.setAttribute('aria-required', 'true');
+    });
+
+    updateLotRequiredIndicator(wrapper, required);
+  }
+
+  function hasCompleteRepeatableRow(wrapper) {
+    const rowType = wrapper ? wrapper.getAttribute('data-unit-form-repeatable-type') : '';
+    const rows = wrapper ? Array.from(wrapper.querySelectorAll(`[data-module-row="${rowType}"]`)) : [];
+
+    if (rowType === 'memory') {
+      return rows.some((row) => {
+        const sizeInput = row.querySelector('[name$="[sizeGb]"]');
+        const size = Number(sizeInput ? sizeInput.value : 0);
+        return Number.isInteger(size) && size > 0;
+      });
+    }
+
+    if (rowType === 'storage') {
+      return rows.some((row) => {
+        const sizeInput = row.querySelector('[name$="[sizeGb]"]');
+        const size = Number(sizeInput ? sizeInput.value : 0);
+        return Number.isInteger(size) && size > 0;
+      });
+    }
+
+    if (rowType === 'cosmeticIssue') {
+      return rows.some((row) => Boolean(
+        row.querySelector('[name$="[issueTypeConfigValueId]"]')?.value
+        && row.querySelector('[name$="[severityConfigValueId]"]')?.value
+        && row.querySelector('[name$="[locationConfigValueId]"]')?.value
+      ));
+    }
+
+    if (rowType === 'hardwareIssue') {
+      return rows.some((row) => Boolean(
+        row.querySelector('[name$="[issueTypeConfigValueId]"]')?.value
+        || String(row.querySelector('[name$="[customIssueLabel]"]')?.value || '').trim()
+      ));
+    }
+
+    return true;
+  }
+
+  function getRepeatableValidationAnchor(wrapper) {
+    if (!wrapper) {
+      return null;
+    }
+
+    const rowType = wrapper.getAttribute('data-unit-form-repeatable-type');
+
+    if (rowType === 'memory' || rowType === 'storage') {
+      return wrapper.querySelector('[name$="[sizeGb]"]');
+    }
+
+    return wrapper.querySelector('[data-module-field]');
+  }
+
+  function validateRequiredRepeatableSection(wrapper, reportValidity) {
+    if (!wrapper || !wrapper.hasAttribute('data-unit-form-repeatable-type')) {
+      return true;
+    }
+
+    const anchor = getRepeatableValidationAnchor(wrapper);
+    const rowType = wrapper.getAttribute('data-unit-form-repeatable-type');
+    const required = wrapper.dataset.lotRequired === 'true' && !wrapper.hidden;
+    const valid = !required || hasCompleteRepeatableRow(wrapper);
+
+    if (anchor) {
+      anchor.setCustomValidity(valid ? '' : (REPEATABLE_REQUIRED_MESSAGES[rowType] || 'Complete at least one row.'));
+
+      if (!valid && reportValidity) {
+        anchor.reportValidity();
+      }
+    }
+
+    return valid;
+  }
+
+  function validateAllRequiredRepeatableSections(form, reportValidity) {
+    const wrappers = form
+      ? Array.from(form.querySelectorAll('[data-unit-form-repeatable-type]'))
+      : [];
+
+    for (const wrapper of wrappers) {
+      if (!validateRequiredRepeatableSection(wrapper, reportValidity)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function updateProfileManagedSubmissionState(form, scope, visible) {
+    if (!form || !scope) {
+      return;
+    }
+
+    const createMode = form.getAttribute('data-unit-form-mode') === 'create';
+    const controls = Array.from(scope.querySelectorAll('[name]'));
+
+    controls.forEach((control) => {
+      if (!createMode || visible) {
+        if (control.getAttribute('data-lot-profile-disabled') === 'true') {
+          control.disabled = false;
+          control.removeAttribute('data-lot-profile-disabled');
+        }
+        return;
+      }
+
+      if (!control.disabled) {
+        control.disabled = true;
+        control.setAttribute('data-lot-profile-disabled', 'true');
+      }
+    });
+  }
+
+  function updateCompanionSubmissionState(form, fieldKey, visible) {
+    if (!form || !fieldKey) {
+      return;
+    }
+
+    form.querySelectorAll(`[data-unit-form-companion-key="${fieldKey}"]`).forEach((control) => {
+      const createMode = form.getAttribute('data-unit-form-mode') === 'create';
+
+      if (!createMode || visible) {
+        if (control.getAttribute('data-lot-profile-disabled') === 'true') {
+          control.disabled = false;
+          control.removeAttribute('data-lot-profile-disabled');
+        }
+        return;
+      }
+
+      if (!control.disabled) {
+        control.disabled = true;
+        control.setAttribute('data-lot-profile-disabled', 'true');
+      }
+    });
+  }
+
+  function applyFollowerVisibility(form, visibleByKey) {
+    if (!form) {
+      return;
+    }
+
+    form.querySelectorAll('[data-unit-form-follows-key]').forEach((follower) => {
+      const parentKey = follower.getAttribute('data-unit-form-follows-key');
+      const visible = visibleByKey.has(parentKey) ? Boolean(visibleByKey.get(parentKey)) : true;
+
+      follower.hidden = !visible;
+      updateProfileManagedSubmissionState(form, follower, visible);
+    });
+  }
+
+  function updateAutoCollapsedSections(form) {
+    if (!form) {
+      return;
+    }
+
+    form.querySelectorAll('[data-unit-form-auto-collapse]').forEach((section) => {
+      const managedChildren = Array.from(section.querySelectorAll('[data-unit-form-field-key], [data-unit-form-follows-key]'));
+      section.hidden = managedChildren.length > 0 && managedChildren.every((child) => child.hidden);
+    });
+  }
+
+  function applyDefaultLotUnitFormProfile(form) {
+    const visibleByKey = new Map();
+
+    getLotConfigurableFieldWrappers(form).forEach((wrapper) => {
+      const fieldKey = wrapper.getAttribute('data-unit-form-field-key');
+
+      wrapper.hidden = false;
+      wrapper.dataset.lotRequired = 'false';
+      applyControlRequirement(wrapper, false);
+      updateProfileManagedSubmissionState(form, wrapper, true);
+      updateCompanionSubmissionState(form, fieldKey, true);
+      validateRequiredRepeatableSection(wrapper, false);
+      visibleByKey.set(fieldKey, true);
+    });
+
+    applyFollowerVisibility(form, visibleByKey);
+    updateAutoCollapsedSections(form);
+  }
+
+  function resetLotUnitFormProfile(form) {
+    if (!form) {
+      return;
+    }
+
+    if (form._lotUnitFormProfileAbortController) {
+      form._lotUnitFormProfileAbortController.abort();
+      delete form._lotUnitFormProfileAbortController;
+    }
+
+    delete form.dataset.lotUnitFormProfileSignature;
+    delete form.dataset.lotUnitFormProfileLotId;
+    delete form.dataset.lotUnitFormProfileCheckedAt;
+    delete form.dataset.lotProfileSubmitVerifiedAt;
+    delete form.dataset.lotProfileSubmitVerifiedLotId;
+    applyDefaultLotUnitFormProfile(form);
+    setLotUnitFormProfileStatus(
+      form,
+      'Select an assignable Lot to apply its field visibility and requirement settings.',
+      'idle'
+    );
+  }
+
+  function parseLotUnitFormProfileMarkup(markup) {
+    const holder = document.createElement('template');
+    holder.innerHTML = String(markup || '').trim();
+    const errorElement = holder.content.querySelector('[data-unit-form-profile-error]');
+
+    if (errorElement) {
+      throw new Error(errorElement.getAttribute('data-error-message') || 'The selected Lot form settings could not be loaded.');
+    }
+
+    const profileElement = holder.content.querySelector('[data-unit-form-profile]');
+
+    if (!profileElement) {
+      throw new Error('The selected Lot returned an invalid Unit form profile.');
+    }
+
+    const fields = Array.from(profileElement.querySelectorAll('[data-unit-form-profile-field]')).map((fieldElement) => ({
+      key: fieldElement.getAttribute('data-field-key') || '',
+      label: fieldElement.getAttribute('data-field-label') || '',
+      visible: fieldElement.getAttribute('data-visible') === '1',
+      required: fieldElement.getAttribute('data-required') === '1'
+    }));
+
+    return {
+      lotId: profileElement.getAttribute('data-lot-id') || '',
+      lotName: profileElement.getAttribute('data-lot-name') || 'Selected Lot',
+      fields
+    };
+  }
+
+  function getLotUnitFormProfileSignature(profile) {
+    return [
+      String(profile?.lotId || ''),
+      ...(Array.isArray(profile?.fields) ? profile.fields : []).map((field) => (
+        `${field.key}:${field.visible ? '1' : '0'}:${field.required ? '1' : '0'}`
+      ))
+    ].join('|');
+  }
+
+
+  function applyLotUnitFormProfile(form, profile, options = {}) {
+    const fieldStateByKey = new Map(profile.fields.map((field) => [field.key, field]));
+    let hiddenCount = 0;
+    let requiredCount = 0;
+
+    const visibleByKey = new Map();
+
+    getLotConfigurableFieldWrappers(form).forEach((wrapper) => {
+      const fieldKey = wrapper.getAttribute('data-unit-form-field-key');
+      const fieldState = fieldStateByKey.get(fieldKey);
+      const visible = fieldState ? Boolean(fieldState.visible) : true;
+      const required = visible && fieldState ? Boolean(fieldState.required) : false;
+
+      wrapper.hidden = !visible;
+      wrapper.dataset.lotRequired = required ? 'true' : 'false';
+      applyControlRequirement(wrapper, required);
+      updateProfileManagedSubmissionState(form, wrapper, visible);
+      updateCompanionSubmissionState(form, fieldKey, visible);
+      validateRequiredRepeatableSection(wrapper, false);
+      visibleByKey.set(fieldKey, visible);
+
+      if (!visible) {
+        hiddenCount += 1;
+      }
+
+      if (required) {
+        requiredCount += 1;
+      }
+    });
+
+    applyFollowerVisibility(form, visibleByKey);
+    updateAutoCollapsedSections(form);
+
+    const statusPrefix = options.updatedWhileOpen
+      ? `${profile.lotName} settings were updated while this form was open.`
+      : `${profile.lotName} settings applied.`;
+
+    setLotUnitFormProfileStatus(
+      form,
+      `${statusPrefix} ${requiredCount} required and ${hiddenCount} hidden field${hiddenCount === 1 ? '' : 's'}. Values are retained when fields become hidden.`,
+      'applied'
+    );
+    scheduleLotRequirementWorkflowRefresh(form, { immediate: true, background: true });
+  }
+
+  async function refreshLotUnitFormProfile(form, options = {}) {
+    if (!form) {
+      return { ok: false, changed: false };
+    }
+
+    const background = Boolean(options.background);
+    const force = Boolean(options.force);
+    const lotSelect = getAssignableLotCatalog(form);
+    const lotId = lotSelect ? String(lotSelect.value || '').trim() : '';
+
+    if (!lotId) {
+      resetLotUnitFormProfile(form);
+      return { ok: true, changed: false };
+    }
+
+    if (form._lotUnitFormProfileAbortController) {
+      if (background && !force) {
+        return { ok: true, changed: false, skipped: true };
+      }
+
+      form._lotUnitFormProfileAbortController.abort();
+    }
+
+    const abortController = new AbortController();
+    form._lotUnitFormProfileAbortController = abortController;
+
+    if (!background) {
+      applyDefaultLotUnitFormProfile(form);
+      setLotUnitFormProfileStatus(form, 'Loading the selected Lot’s Unit form settings…', 'loading');
+    }
+
+    try {
+      const profileUrl = new URL(
+        form.getAttribute('data-lot-unit-form-profile-url') || '/tech/units/lot-form-profile',
+        window.location.origin
+      );
+      profileUrl.searchParams.set('lotId', lotId);
+      profileUrl.searchParams.set('_profileCheck', String(Date.now()));
+      const response = await fetch(profileUrl.toString(), {
+        headers: { 'HX-Request': 'true' },
+        cache: 'no-store',
+        signal: abortController.signal
+      });
+      const markup = await response.text();
+      const profile = parseLotUnitFormProfileMarkup(markup);
+      const currentLotId = String(getAssignableLotCatalog(form)?.value || '').trim();
+
+      if (form._lotUnitFormProfileAbortController !== abortController || currentLotId !== lotId) {
+        return { ok: false, changed: false, stale: true };
+      }
+
+      if (!response.ok) {
+        throw new Error('The selected Lot form settings could not be loaded.');
+      }
+
+      if (String(profile.lotId) !== lotId) {
+        throw new Error('The selected Lot returned mismatched Unit form settings.');
+      }
+
+      const nextSignature = getLotUnitFormProfileSignature(profile);
+      const previousSignature = String(form.dataset.lotUnitFormProfileSignature || '');
+      const changed = Boolean(previousSignature && previousSignature !== nextSignature);
+      const firstApplication = !previousSignature;
+
+      if (!background || firstApplication || changed) {
+        applyLotUnitFormProfile(form, profile, { updatedWhileOpen: background && changed });
+      }
+
+      form.dataset.lotUnitFormProfileSignature = nextSignature;
+      form.dataset.lotUnitFormProfileLotId = lotId;
+      form.dataset.lotUnitFormProfileCheckedAt = String(Date.now());
+
+      return { ok: true, changed };
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return { ok: false, changed: false, aborted: true };
+      }
+
+      if (!background) {
+        applyDefaultLotUnitFormProfile(form);
+        delete form.dataset.lotUnitFormProfileSignature;
+        delete form.dataset.lotUnitFormProfileLotId;
+        setLotUnitFormProfileStatus(
+          form,
+          `${error.message || 'The selected Lot form settings could not be loaded.'} All configurable fields remain visible and optional.`,
+          'error'
+        );
+      } else {
+        setLotUnitFormProfileStatus(
+          form,
+          `${error.message || 'The latest Lot form settings could not be verified.'} The last successfully loaded settings remain applied. Saving is paused until the settings can be verified.`,
+          'error'
+        );
+      }
+
+      return { ok: false, changed: false, error };
+    } finally {
+      if (form._lotUnitFormProfileAbortController === abortController) {
+        delete form._lotUnitFormProfileAbortController;
+      }
+    }
+  }
+
+  function refreshOpenLotUnitForms(options = {}) {
+    if (document.visibilityState === 'hidden') {
+      return;
+    }
+
+    document.querySelectorAll('[data-tech-unit-form]').forEach((form) => {
+      const lotSelect = getAssignableLotCatalog(form);
+
+      if (lotSelect && lotSelect.value) {
+        refreshLotUnitFormProfile(form, { background: true, ...options });
+      }
+    });
+  }
+
+  function getLotRequirementWorkflowRegion(form) {
+    return form ? form.querySelector('[data-lot-requirement-workflow-region]') : null;
+  }
+
+  function getLotRequirementWorkflowElement(form) {
+    const region = getLotRequirementWorkflowRegion(form);
+    return region ? region.querySelector('[data-lot-requirement-workflow]') : null;
+  }
+
+  function clearLotRequirementFieldStates(form) {
+    if (!form) {
+      return;
+    }
+
+    form.querySelectorAll('.has-lot-requirement-error, .has-lot-requirement-warning').forEach((wrapper) => {
+      wrapper.classList.remove('has-lot-requirement-error', 'has-lot-requirement-warning');
+    });
+  }
+
+  function resetLotRequirementWorkflow(form) {
+    const region = getLotRequirementWorkflowRegion(form);
+
+    if (!region) {
+      return;
+    }
+
+    if (form._lotRequirementWorkflowAbortController) {
+      form._lotRequirementWorkflowAbortController.abort();
+      delete form._lotRequirementWorkflowAbortController;
+    }
+
+    delete form.dataset.lotRequirementWorkflowVerifiedAt;
+    delete form.dataset.lotRequirementWorkflowVerifiedLotId;
+    delete form.dataset.lotRequirementWorkflowVerifiedFingerprint;
+    clearLotRequirementFieldStates(form);
+    region.innerHTML = `
+      <div class="tech-lot-requirement-workflow tech-lot-requirement-workflow--neutral" data-lot-requirement-workflow data-save-allowed="1" data-status="idle" data-policy-code="">
+        <div class="tech-lot-requirement-workflow__header">
+          <div><strong>Lot Requirements</strong><p>Select an assignable Lot to check the current Unit values.</p></div>
+          <span class="status-pill muted">Waiting</span>
+        </div>
+      </div>
+    `;
+  }
+
+  function getLotRequirementFormFingerprint(form) {
+    if (!form) {
+      return '';
+    }
+
+    const entries = [];
+    const formData = new FormData(form);
+
+    formData.forEach((value, key) => {
+      if (typeof value === 'string' && key !== 'duplicateAssumptionNonce') {
+        entries.push(`${key}=${value}`);
+      }
+    });
+
+    return entries.sort().join('&');
+  }
+
+  function buildLotRequirementPreviewRequestBody(form) {
+    const params = new URLSearchParams();
+
+    new FormData(form).forEach((value, key) => {
+      if (typeof value === 'string') {
+        params.append(key, value);
+      }
+    });
+
+    return params;
+  }
+
+  function parseLotRequirementWorkflowMarkup(markup) {
+    const holder = document.createElement('template');
+    holder.innerHTML = String(markup || '').trim();
+    const workflow = holder.content.querySelector('[data-lot-requirement-workflow]');
+
+    if (!workflow) {
+      throw new Error('The selected Lot returned an invalid requirement result.');
+    }
+
+    return {
+      markup: holder.innerHTML,
+      saveAllowed: workflow.getAttribute('data-save-allowed') === '1',
+      status: workflow.getAttribute('data-status') || 'unknown',
+      policyCode: workflow.getAttribute('data-policy-code') || '',
+      issues: Array.from(workflow.querySelectorAll('[data-lot-requirement-issue]')).map((issue) => ({
+        requirementKey: issue.getAttribute('data-requirement-key') || '',
+        status: issue.getAttribute('data-requirement-status') || ''
+      }))
+    };
+  }
+
+  function applyLotRequirementFieldStates(form, result) {
+    clearLotRequirementFieldStates(form);
+
+    if (!form || !result || !Array.isArray(result.issues)) {
+      return;
+    }
+
+    const strictBlocked = !result.saveAllowed && result.policyCode === 'strict';
+
+    result.issues.forEach((issue) => {
+      const wrapperKey = LOT_REQUIREMENT_WRAPPER_KEYS[issue.requirementKey];
+      const wrapper = wrapperKey
+        ? form.querySelector(`[data-unit-form-field-key="${wrapperKey}"]`)
+        : null;
+
+      if (!wrapper || wrapper.hidden) {
+        return;
+      }
+
+      wrapper.classList.add(strictBlocked ? 'has-lot-requirement-error' : 'has-lot-requirement-warning');
+    });
+  }
+
+  function applyLotRequirementWorkflowMarkup(form, markup) {
+    const region = getLotRequirementWorkflowRegion(form);
+    const result = parseLotRequirementWorkflowMarkup(markup);
+
+    if (!region) {
+      return result;
+    }
+
+    region.innerHTML = result.markup;
+    applyLotRequirementFieldStates(form, result);
+    return result;
+  }
+
+  async function refreshLotRequirementWorkflow(form, options = {}) {
+    if (!form) {
+      return { ok: false, saveAllowed: false };
+    }
+
+    const lotSelect = getAssignableLotCatalog(form);
+    const lotId = lotSelect ? String(lotSelect.value || '').trim() : '';
+    const region = getLotRequirementWorkflowRegion(form);
+
+    if (!lotId) {
+      resetLotRequirementWorkflow(form);
+      return { ok: true, saveAllowed: true, status: 'idle' };
+    }
+
+    if (!region) {
+      return { ok: false, saveAllowed: false };
+    }
+
+    if (form._lotRequirementWorkflowAbortController) {
+      form._lotRequirementWorkflowAbortController.abort();
+    }
+
+    const abortController = new AbortController();
+    form._lotRequirementWorkflowAbortController = abortController;
+    const background = Boolean(options.background);
+
+    if (!background) {
+      region.setAttribute('aria-busy', 'true');
+    }
+
+    try {
+      const requestBody = buildLotRequirementPreviewRequestBody(form);
+      const response = await fetch(
+        form.getAttribute('data-lot-requirement-preview-url') || '/tech/units/lot-requirement-preview',
+        {
+          method: 'POST',
+          headers: {
+            'HX-Request': 'true',
+            'Accept': 'text/html',
+            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8'
+          },
+          body: requestBody.toString(),
+          cache: 'no-store',
+          signal: abortController.signal
+        }
+      );
+      const markup = await response.text();
+      const currentLotId = String(getAssignableLotCatalog(form)?.value || '').trim();
+
+      if (form._lotRequirementWorkflowAbortController !== abortController || currentLotId !== lotId) {
+        return { ok: false, saveAllowed: false, stale: true };
+      }
+
+      const result = applyLotRequirementWorkflowMarkup(form, markup);
+
+      if (!response.ok) {
+        return {
+          ok: false,
+          ...result,
+          httpStatus: response.status,
+          serverRenderedError: true
+        };
+      }
+
+      form.dataset.lotRequirementWorkflowCheckedAt = String(Date.now());
+      return { ok: true, ...result };
+    } catch (error) {
+      if (error.name === 'AbortError') {
+        return { ok: false, saveAllowed: false, aborted: true };
+      }
+
+      clearLotRequirementFieldStates(form);
+      region.innerHTML = `
+        <div class="tech-lot-requirement-workflow tech-lot-requirement-workflow--error" data-lot-requirement-workflow data-save-allowed="0" data-status="error" data-policy-code="strict">
+          <div class="tech-lot-requirement-workflow__header">
+            <div><strong>Lot requirements could not be checked</strong><p>Saving is paused until the latest requirements can be verified.</p></div>
+            <span class="status-pill danger">Unavailable</span>
+          </div>
+        </div>
+      `;
+      return { ok: false, saveAllowed: false, error };
+    } finally {
+      region.removeAttribute('aria-busy');
+
+      if (form._lotRequirementWorkflowAbortController === abortController) {
+        delete form._lotRequirementWorkflowAbortController;
+      }
+    }
+  }
+
+  function scheduleLotRequirementWorkflowRefresh(form, options = {}) {
+    if (!form) {
+      return;
+    }
+
+    delete form.dataset.lotRequirementWorkflowVerifiedAt;
+    delete form.dataset.lotRequirementWorkflowVerifiedLotId;
+    delete form.dataset.lotRequirementWorkflowVerifiedFingerprint;
+
+    if (form._lotRequirementWorkflowRefreshTimer) {
+      window.clearTimeout(form._lotRequirementWorkflowRefreshTimer);
+    }
+
+    form._lotRequirementWorkflowRefreshTimer = window.setTimeout(() => {
+      delete form._lotRequirementWorkflowRefreshTimer;
+      refreshLotRequirementWorkflow(form, { background: Boolean(options.background) });
+    }, options.immediate ? 0 : LOT_REQUIREMENT_WORKFLOW_REFRESH_DELAY_MS);
+  }
+
+  function refreshOpenLotRequirementWorkflows(options = {}) {
+    if (document.visibilityState === 'hidden') {
+      return;
+    }
+
+    document.querySelectorAll('[data-tech-unit-form]').forEach((form) => {
+      const lotSelect = getAssignableLotCatalog(form);
+
+      if (lotSelect && lotSelect.value) {
+        refreshLotRequirementWorkflow(form, { background: true, ...options });
+      }
+    });
+  }
+
+  function isLotRequirementWorkflowControl(control) {
+    const name = control ? String(control.name || '') : '';
+
+    return Boolean(
+      name === 'lotId'
+      || name === 'unitCategoryConfigValueId'
+      || name === 'manufacturerId'
+      || name === 'unitModelId'
+      || name === 'processorModelId'
+      || name === 'ramGb'
+      || name === 'ramTypeConfigValueId'
+      || name === 'storageGb'
+      || name === 'storageTypeConfigValueId'
+      || /^memoryModules\[\d+\]\[(sizeGb|ramTypeConfigValueId)\]$/.test(name)
+      || /^storageDevices\[\d+\]\[(sizeGb|storageTypeConfigValueId)\]$/.test(name)
+    );
+  }
+
+  function revealLotRequirementWorkflowIssue(form) {
+    if (!form) {
+      return;
+    }
+
+    const firstVisibleWrapper = form.querySelector('.has-lot-requirement-error:not([hidden])');
+    const target = firstVisibleWrapper || getLotRequirementWorkflowRegion(form);
+
+    if (!target) {
+      return;
+    }
+
+    target.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+    const focusTarget = firstVisibleWrapper
+      ? firstVisibleWrapper.querySelector('input:not([type="hidden"]), select, textarea')
+      : null;
+
+    if (focusTarget && !focusTarget.disabled) {
+      try {
+        focusTarget.focus({ preventScroll: true });
+      } catch (error) {
+        focusTarget.focus();
+      }
+    }
+  }
+
   function normalizeSerialInput(input) {
     if (!input) {
       return '';
@@ -82,6 +1148,12 @@
 
     if (duplicateAssumptionNonce && duplicateAssumptionNonce.value) {
       params.set('duplicateAssumptionNonce', duplicateAssumptionNonce.value);
+    }
+
+    const currentUnitIdInput = form.querySelector('[name="lotRequirementUnitId"]');
+
+    if (currentUnitIdInput && currentUnitIdInput.value) {
+      params.set('currentUnitId', currentUnitIdInput.value);
     }
 
     region.innerHTML = '<p class="field-hint tech-unit-duplicate-check-pending">Checking for existing serial matches…</p>';
@@ -234,6 +1306,7 @@
     setAssignableLotInputValidity(form, '');
     updateAssignableLotAssumptionStatus(form);
     updateIntentionalDuplicateRequestControls(form);
+    resetLotUnitFormProfile(form);
   }
 
   function updateAssignableLotHint(form) {
@@ -297,7 +1370,7 @@
 
       if (hint) {
         hint.textContent = readiness.ready
-          ? 'Complete the reviewer reason in the next step. No new Unit or Asset Tag is created until approval.'
+          ? 'Complete the reviewer reason in the next step. A new Unit and Asset Tag are created only after approval.'
           : readiness.message;
         hint.hidden = false;
       }
@@ -407,6 +1480,10 @@
     updateIntentionalDuplicateRequestControls(form);
     updateProductionWeightPreview(form);
     refreshDuplicateCheckForSelectedLot(form);
+    refreshLotUnitFormProfile(form).then(() => {
+      applyAuthoritativeServerFieldErrors(form);
+    });
+    scheduleLotRequirementWorkflowRefresh(form, { immediate: true });
   }
 
   function resolveExactAssignableLotMatch(form) {
@@ -445,6 +1522,32 @@
 
     updateAssignableLotHint(form);
     updateAssignableLotAssumptionStatus(form);
+  }
+
+
+  function resolveAssignableLotIdForDuplicateAction(form) {
+    const catalog = getAssignableLotCatalog(form);
+    const comboboxInput = getAssignableLotComboboxInput(form);
+
+    if (!catalog || !comboboxInput) {
+      return '';
+    }
+
+    const selectedOption = getAssignableLotOptionById(form, catalog.value);
+    const typedLabel = normalizeModelSearch(comboboxInput.value);
+    const selectedLabel = normalizeModelSearch(getAssignableLotOptionLabel(selectedOption));
+
+    if (selectedOption && typedLabel && typedLabel === selectedLabel) {
+      return String(catalog.value || '');
+    }
+
+    if (typedLabel && resolveExactAssignableLotMatch(form)) {
+      return String(catalog.value || '');
+    }
+
+    setAssignableLotInputValidity(form, 'Choose an assignable lot from the list before continuing.');
+    comboboxInput.reportValidity();
+    return '';
   }
 
   function getUnitModelCatalog(form) {
@@ -525,6 +1628,63 @@
     setUnitModelComboboxLayer(form, false);
   }
 
+  function setCatalogRequestButtonState(button, isEnabled) {
+    if (!button) {
+      return;
+    }
+
+    button.disabled = !isEnabled;
+    button.setAttribute('aria-disabled', isEnabled ? 'false' : 'true');
+  }
+
+  function updateCatalogRequestControls(form) {
+    if (!form) {
+      return;
+    }
+
+    const manufacturerSelect = form.querySelector('[data-manufacturer-select]');
+    const categorySelect = form.querySelector('[data-unit-category-select]');
+    const modelSelectionInput = getUnitModelSelectionInput(form);
+    const modelComboboxInput = getUnitModelComboboxInput(form);
+    const modelButton = form.querySelector('[data-catalog-request-button="model"]');
+    const modelHint = form.querySelector('[data-catalog-request-model-hint]');
+    const typedModelName = String(modelComboboxInput ? modelComboboxInput.value : '').trim();
+    const hasSelectedModel = Boolean(modelSelectionInput && modelSelectionInput.value);
+    const canRequestModel = Boolean(
+      manufacturerSelect && manufacturerSelect.value
+      && categorySelect && categorySelect.value
+      && !hasSelectedModel
+      && typedModelName.length >= 2
+    );
+
+    setCatalogRequestButtonState(modelButton, canRequestModel);
+
+    if (modelHint) {
+      if (!manufacturerSelect || !manufacturerSelect.value) {
+        modelHint.textContent = 'Select Manufacturer first.';
+      } else if (!categorySelect || !categorySelect.value) {
+        modelHint.textContent = 'Select Unit Category, then type the exact missing model name.';
+      } else if (hasSelectedModel) {
+        modelHint.textContent = 'A managed Unit Model is selected. Clear it and type a different observed model name only when the needed model is missing.';
+      } else if (typedModelName.length < 2) {
+        modelHint.textContent = 'Type the exact missing model name to request a managed catalog addition.';
+      } else {
+        modelHint.textContent = 'Request a controlled review for this exact observed model name.';
+      }
+    }
+
+    const processorButton = form.querySelector('[data-catalog-request-button="processor"]');
+    const processorHint = form.querySelector('[data-catalog-request-processor-hint]');
+    const canRequestProcessor = Boolean(modelSelectionInput && modelSelectionInput.value);
+    setCatalogRequestButtonState(processorButton, canRequestProcessor);
+
+    if (processorHint) {
+      processorHint.textContent = canRequestProcessor
+        ? 'Use this only when the observed Processor Type or Processor is unavailable for the selected Unit Model.'
+        : 'Select a Unit Model first. Processor requests are always tied to one managed Unit Model.';
+    }
+  }
+
   function setUnitModelInputValidity(form, message) {
     const comboboxInput = getUnitModelComboboxInput(form);
 
@@ -546,6 +1706,8 @@
     }
 
     setUnitModelInputValidity(form, '');
+    updateCatalogRequestControls(form);
+    scheduleLotRequirementWorkflowRefresh(form);
   }
 
   function getVisibleUnitModelOptions(form, includeSelectedOption, ignoreSearch) {
@@ -684,6 +1846,7 @@
     setUnitModelInputValidity(form, '');
     applySelectedModelMetadata(form);
     closeUnitModelOptions(form);
+    scheduleLotRequirementWorkflowRefresh(form);
   }
 
   function resolveExactUnitModelMatch(form) {
@@ -874,6 +2037,7 @@
     }
 
     setProcessorInputValidity(form, '');
+    scheduleLotRequirementWorkflowRefresh(form);
   }
 
   function syncProcessorBrandChoices(form, preserveSelection) {
@@ -1041,6 +2205,7 @@
     setProcessorInputValidity(form, '');
     applySelectedProcessorMetadata(form, false);
     closeProcessorOptions(form);
+    scheduleLotRequirementWorkflowRefresh(form);
   }
 
   function resolveExactProcessorMatch(form) {
@@ -1183,6 +2348,39 @@
     }
   }
 
+  function updateCopyPreviousButtons(form) {
+    if (!form) {
+      return;
+    }
+
+    form.querySelectorAll('[data-copy-previous-capacity]').forEach((button) => {
+      const capacityType = button.getAttribute('data-copy-previous-capacity');
+      const previousInput = form.querySelector(`[data-previous-capacity="${capacityType}"]`);
+      button.disabled = !previousInput || !String(previousInput.value || '').trim();
+    });
+  }
+
+  function synchronizeCurrentCapacityFromComponents(input, total) {
+    if (!input) {
+      return;
+    }
+
+    const previousComponentTotal = Number(input.getAttribute('data-component-total') || 0);
+    const currentValue = String(input.value || '').trim();
+    const followsComponents = input.getAttribute('data-auto-from-components') === 'true';
+    const currentMatchesPreviousComponentTotal = previousComponentTotal > 0 && Number(currentValue) === previousComponentTotal;
+
+    if (total > 0 && (!currentValue || followsComponents || currentMatchesPreviousComponentTotal)) {
+      input.value = String(total);
+      input.setAttribute('data-auto-from-components', 'true');
+    } else if (total <= 0 && followsComponents && currentMatchesPreviousComponentTotal) {
+      input.value = '';
+      input.setAttribute('data-auto-from-components', 'false');
+    }
+
+    input.setAttribute('data-component-total', String(total));
+  }
+
   function updateModuleTotals(form) {
     const memoryTotal = Array.from(form.querySelectorAll('[data-memory-size-input]')).reduce((sum, input) => {
       const value = Number(input.value || 0);
@@ -1198,24 +2396,19 @@
 
     const memoryInput = form.querySelector('[data-memory-total-input]');
     const storageInput = form.querySelector('[data-storage-total-input]');
-    const memoryDisplay = form.querySelector('[data-memory-total-display]');
-    const storageDisplay = form.querySelector('[data-storage-total-display]');
+    const memoryDisplays = Array.from(form.querySelectorAll('[data-memory-total-display]'));
+    const storageDisplays = Array.from(form.querySelectorAll('[data-storage-total-display]'));
 
-    if (memoryInput) {
-      memoryInput.value = memoryTotal > 0 ? String(memoryTotal) : '';
-    }
+    synchronizeCurrentCapacityFromComponents(memoryInput, memoryTotal);
+    synchronizeCurrentCapacityFromComponents(storageInput, storageTotal);
 
-    if (storageInput) {
-      storageInput.value = storageTotal > 0 ? String(storageTotal) : '';
-    }
-
-    if (memoryDisplay) {
+    memoryDisplays.forEach((memoryDisplay) => {
       memoryDisplay.textContent = String(memoryTotal || 0);
-    }
+    });
 
-    if (storageDisplay) {
+    storageDisplays.forEach((storageDisplay) => {
       storageDisplay.textContent = String(storageTotal || 0);
-    }
+    });
   }
 
   function addModuleRow(form, rowType) {
@@ -1244,6 +2437,7 @@
 
     renumberModuleRows(form, rowType);
     updateModuleTotals(form);
+    validateRequiredRepeatableSection(list.closest('[data-unit-form-repeatable-type]'), false);
   }
 
   function removeModuleRow(button) {
@@ -1255,6 +2449,7 @@
     }
 
     const rowType = row.getAttribute('data-module-row');
+    const section = row.closest('[data-unit-form-repeatable-type]');
     const rows = getModuleRows(form, rowType);
 
     if (rows.length <= 1) {
@@ -1271,6 +2466,7 @@
 
     renumberModuleRows(form, rowType);
     updateModuleTotals(form);
+    validateRequiredRepeatableSection(section, false);
   }
 
   function renderModalMarkup(markup) {
@@ -1325,6 +2521,59 @@
     region.insertAdjacentHTML('afterbegin', `<div class="message success tech-intentional-duplicate-request-feedback" data-intentional-duplicate-request-feedback><p>Intentional Duplicate request #${requestId || '—'} is pending review. No new Unit or Asset Tag was created. <a href="${requestUrl}">View Unit Request</a></p></div>`);
   }
 
+  function showCatalogRequestOpenError(form, message) {
+    const action = form ? form.querySelector('.tech-catalog-request-action') : null;
+
+    if (!action) {
+      return;
+    }
+
+    action.querySelectorAll('[data-catalog-request-open-error]').forEach((item) => item.remove());
+    action.insertAdjacentHTML('afterbegin', `<div class="message error" data-catalog-request-open-error><p>${message}</p></div>`);
+  }
+
+  async function openCatalogRequestModal(button) {
+    const form = getFormFromElement(button);
+    const requestKind = button ? button.getAttribute('data-catalog-request-button') : '';
+
+    if (!form || !['model', 'processor'].includes(requestKind) || button.disabled) {
+      return;
+    }
+
+    const params = new URLSearchParams();
+
+    if (requestKind === 'model') {
+      const manufacturerSelect = form.querySelector('[data-manufacturer-select]');
+      const categorySelect = form.querySelector('[data-unit-category-select]');
+      const modelInput = getUnitModelComboboxInput(form);
+      params.set('manufacturerId', manufacturerSelect ? manufacturerSelect.value : '');
+      params.set('unitCategoryConfigValueId', categorySelect ? categorySelect.value : '');
+      params.set('requestedModelName', modelInput ? modelInput.value.trim() : '');
+    } else {
+      const unitModelInput = getUnitModelSelectionInput(form);
+      const processorBrandSelect = getProcessorBrandSelect(form);
+      const processorInput = getProcessorComboboxInput(form);
+      const selectedBrandOption = getSelectedOption(processorBrandSelect);
+      params.set('unitModelId', unitModelInput ? unitModelInput.value : '');
+      params.set('requestedProcessorType', selectedBrandOption && selectedBrandOption.value ? selectedBrandOption.textContent.trim() : '');
+      params.set('requestedProcessorName', processorInput ? processorInput.value.trim() : '');
+    }
+
+    button.disabled = true;
+
+    try {
+      const response = await fetch(`/tech/unit-catalog-requests/${encodeURIComponent(requestKind)}/modal?${params.toString()}`, {
+        headers: { 'HX-Request': 'true' }
+      });
+
+      renderModalMarkup(await response.text());
+    } catch (error) {
+      showCatalogRequestOpenError(form, 'The Catalog Exception request could not be opened. Confirm the selected model details and try again.');
+    } finally {
+      updateCatalogRequestControls(form);
+    }
+  }
+
   async function openDuplicateAssumeModal(button) {
     const form = getFormFromElement(button);
     const unitId = button.getAttribute('data-duplicate-assume-unit-id');
@@ -1333,9 +2582,14 @@
       return;
     }
 
+    const destinationLotId = resolveAssignableLotIdForDuplicateAction(form);
+
+    if (!destinationLotId) {
+      return;
+    }
+
     const unitSerialInput = form.querySelector('[name="unitSerialNumber"]');
     const biosSerialInput = form.querySelector('[name="biosSerialNumber"]');
-    const destinationLotSelect = form.querySelector('[name="lotId"]');
     const params = new URLSearchParams();
 
     if (unitSerialInput && normalizeSerialInput(unitSerialInput)) {
@@ -1346,9 +2600,7 @@
       params.set('biosSerialNumber', biosSerialInput.value);
     }
 
-    if (destinationLotSelect && destinationLotSelect.value) {
-      params.set('destinationLotId', destinationLotSelect.value);
-    }
+    params.set('destinationLotId', destinationLotId);
 
     const duplicateAssumptionNonce = form.querySelector('[data-duplicate-assumption-nonce]');
 
@@ -1380,6 +2632,10 @@
     const unitId = button.getAttribute('data-intentional-duplicate-request-unit-id');
 
     if (!form || !unitId) {
+      return;
+    }
+
+    if (!resolveAssignableLotIdForDuplicateAction(form)) {
       return;
     }
 
@@ -1417,15 +2673,45 @@
 
   async function openDuplicateOverrideModal(button) {
     const unitId = button.getAttribute('data-duplicate-request-override-unit-id');
+    const form = getFormFromElement(button);
 
-    if (!unitId) {
+    if (!unitId || !form) {
+      return;
+    }
+
+    const destinationLotId = resolveAssignableLotIdForDuplicateAction(form);
+
+    if (!destinationLotId) {
       return;
     }
 
     button.disabled = true;
 
     try {
-      const response = await fetch(`/tech/units/${encodeURIComponent(unitId)}/override/modal`, {
+      const params = new URLSearchParams();
+      params.set('destinationLotId', destinationLotId);
+
+      const unitSerialInput = form ? form.querySelector('[name="unitSerialNumber"]') : null;
+      const biosSerialInput = form ? form.querySelector('[name="biosSerialNumber"]') : null;
+      const duplicateAssumptionNonce = form ? form.querySelector('[data-duplicate-assumption-nonce]') : null;
+
+      if (unitSerialInput && normalizeSerialInput(unitSerialInput)) {
+        params.set('unitSerialNumber', unitSerialInput.value);
+      }
+
+      if (biosSerialInput && normalizeSerialInput(biosSerialInput)) {
+        params.set('biosSerialNumber', biosSerialInput.value);
+      }
+
+      if (duplicateAssumptionNonce && duplicateAssumptionNonce.value) {
+        params.set('duplicateAssumptionNonce', duplicateAssumptionNonce.value);
+      }
+
+      params.set('requestContext', 'duplicate_intake');
+
+      const queryString = params.toString();
+      const modalUrl = `/tech/units/${encodeURIComponent(unitId)}/override/modal${queryString ? `?${queryString}` : ''}`;
+      const response = await fetch(modalUrl, {
         headers: { 'HX-Request': 'true' }
       });
 
@@ -1435,7 +2721,7 @@
       const region = form ? form.querySelector('[data-duplicate-check-region]') : null;
 
       if (region) {
-        region.insertAdjacentHTML('afterbegin', '<div class="message error"><p>The override request could not be opened. Use the Unit Browser to review the existing unit.</p></div>');
+        region.insertAdjacentHTML('afterbegin', '<div class="message error"><p>The Move / Takeover request could not be opened. Use Open Existing Unit to review the matching record.</p></div>');
       }
     } finally {
       button.disabled = false;
@@ -1456,8 +2742,14 @@
     renumberModuleRows(form, 'memory');
     renumberModuleRows(form, 'storage');
     updateModuleTotals(form);
+    updateCopyPreviousButtons(form);
     updateProductionWeightPreview(form);
     updateIntentionalDuplicateRequestControls(form);
+    updateCatalogRequestControls(form);
+    refreshLotUnitFormProfile(form).then(() => {
+      applyAuthoritativeServerFieldErrors(form);
+    });
+    scheduleLotRequirementWorkflowRefresh(form, { immediate: true, background: true });
 
     const processorSpeedInput = form.querySelector('[data-processor-speed-input]');
 
@@ -1491,6 +2783,34 @@
   document.addEventListener('intentional-duplicate-request-submitted', showIntentionalDuplicateRequestSubmitted);
 
   document.addEventListener('click', (event) => {
+    const copyPreviousButton = event.target.closest('[data-copy-previous-capacity]');
+
+    if (copyPreviousButton) {
+      event.preventDefault();
+      const form = getFormFromElement(copyPreviousButton);
+      const capacityType = copyPreviousButton.getAttribute('data-copy-previous-capacity');
+      const previousInput = form ? form.querySelector(`[data-previous-capacity="${capacityType}"]`) : null;
+      const currentInput = form ? form.querySelector(`[data-current-capacity="${capacityType}"]`) : null;
+      const previousValue = previousInput ? String(previousInput.value || '').trim() : '';
+
+      if (currentInput && previousValue) {
+        currentInput.value = previousValue;
+        currentInput.setAttribute('data-auto-from-components', 'false');
+        currentInput.dispatchEvent(new Event('input', { bubbles: true }));
+        currentInput.focus();
+      }
+
+      return;
+    }
+
+    const catalogRequestButton = event.target.closest('[data-catalog-request-button]');
+
+    if (catalogRequestButton) {
+      event.preventDefault();
+      openCatalogRequestModal(catalogRequestButton);
+      return;
+    }
+
     const assumeButton = event.target.closest('[data-duplicate-assume-unit-id]');
 
     if (assumeButton) {
@@ -1515,7 +2835,51 @@
     }
   });
 
+  document.addEventListener('click', (event) => {
+    const submitter = event.target.closest('[data-tech-unit-form] button[type="submit"], [data-tech-unit-form] input[type="submit"]');
+    const form = submitter ? getFormFromElement(submitter) : null;
+
+    if (!form) {
+      return;
+    }
+
+    // Run after the browser and custom submit handlers have had a chance to
+    // establish their validity state. This makes repeat submission attempts
+    // consistently return to the first unresolved field.
+    window.setTimeout(() => {
+      const invalidControl = findFirstInvalidControl(form);
+
+      if (invalidControl) {
+        showValidationError(invalidControl);
+        scheduleInvalidControlFocus(form, invalidControl);
+      }
+    }, 0);
+  }, true);
+
+  document.addEventListener('invalid', (event) => {
+    const control = event.target;
+    const form = getFormFromElement(control);
+
+    if (!form || !isUsableInvalidControl(control)) {
+      return;
+    }
+
+    event.preventDefault();
+    showValidationError(control);
+    scheduleInvalidControlFocus(form, control);
+  }, true);
+
   document.addEventListener('change', (event) => {
+    const validationControl = event.target.closest('input, select, textarea');
+
+    if (validationControl && getFormFromElement(validationControl)) {
+      clearResolvedValidationError(validationControl);
+
+      if (isLotRequirementWorkflowControl(validationControl)) {
+        scheduleLotRequirementWorkflowRefresh(getFormFromElement(validationControl));
+      }
+    }
+
     const modelFilterSelect = event.target.closest('[data-manufacturer-select], [data-unit-category-select]');
 
     if (modelFilterSelect) {
@@ -1525,6 +2889,7 @@
       closeUnitModelOptions(form);
       updateProductionWeightPreview(form);
       updateIntentionalDuplicateRequestControls(form);
+      updateCatalogRequestControls(form);
       return;
     }
 
@@ -1536,6 +2901,10 @@
       updateIntentionalDuplicateRequestControls(form);
       updateProductionWeightPreview(form);
       refreshDuplicateCheckForSelectedLot(form);
+      refreshLotUnitFormProfile(form).then(() => {
+        applyAuthoritativeServerFieldErrors(form);
+      });
+      scheduleLotRequirementWorkflowRefresh(form, { immediate: true });
       return;
     }
 
@@ -1551,6 +2920,7 @@
 
       updateProcessorFilter(form, true);
       closeProcessorOptions(form);
+      updateCatalogRequestControls(form);
       return;
     }
 
@@ -1560,9 +2930,45 @@
       const form = getFormFromElement(moduleField);
       updateModuleTotals(form);
     }
+
+    const repeatableField = event.target.closest('[data-module-field]');
+
+    if (repeatableField) {
+      validateRequiredRepeatableSection(repeatableField.closest('[data-unit-form-repeatable-type]'), false);
+      clearResolvedValidationError(repeatableField);
+    }
   });
 
   document.addEventListener('input', (event) => {
+    const validationControl = event.target.closest('input, select, textarea');
+
+    if (validationControl && getFormFromElement(validationControl)) {
+      clearResolvedValidationError(validationControl);
+
+      if (isLotRequirementWorkflowControl(validationControl)) {
+        scheduleLotRequirementWorkflowRefresh(getFormFromElement(validationControl));
+      }
+    }
+
+    const currentCapacityInput = event.target.closest('[data-current-capacity]');
+
+    if (currentCapacityInput) {
+      currentCapacityInput.setAttribute('data-auto-from-components', 'false');
+    }
+
+    const previousCapacityInput = event.target.closest('[data-previous-capacity]');
+
+    if (previousCapacityInput) {
+      updateCopyPreviousButtons(getFormFromElement(previousCapacityInput));
+    }
+
+    const repeatableField = event.target.closest('[data-module-field]');
+
+    if (repeatableField) {
+      validateRequiredRepeatableSection(repeatableField.closest('[data-unit-form-repeatable-type]'), false);
+      clearResolvedValidationError(repeatableField);
+    }
+
     const assignableLotComboboxInput = event.target.closest('[data-assignable-lot-combobox-input]');
 
     if (assignableLotComboboxInput) {
@@ -1597,6 +3003,7 @@
       updateUnitModelFilter(form, true);
       updateProcessorFilter(form, false);
       renderUnitModelOptions(form, true);
+      updateCatalogRequestControls(form);
       return;
     }
 
@@ -1613,6 +3020,7 @@
 
       setProcessorInputValidity(form, '');
       renderProcessorOptions(form, true);
+      updateCatalogRequestControls(form);
       return;
     }
 
@@ -1819,6 +3227,135 @@
   document.addEventListener('submit', (event) => {
     const form = event.target.closest('[data-tech-unit-form]');
 
+    if (!form) {
+      return;
+    }
+
+    const lotSelect = getAssignableLotCatalog(form);
+
+    if (!lotSelect || !lotSelect.value) {
+      return;
+    }
+
+    const selectedLotId = String(lotSelect.value);
+    const verifiedAt = Number(form.dataset.lotProfileSubmitVerifiedAt || 0);
+    const verifiedLotId = String(form.dataset.lotProfileSubmitVerifiedLotId || '');
+    const verificationIsCurrent = verifiedLotId === selectedLotId
+      && verifiedAt > 0
+      && (Date.now() - verifiedAt) <= LOT_UNIT_FORM_PROFILE_SUBMIT_VERIFICATION_MAX_AGE_MS;
+
+    if (verificationIsCurrent) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (form.dataset.lotProfileSubmitRefreshPending === 'true') {
+      return;
+    }
+
+    form.dataset.lotProfileSubmitRefreshPending = 'true';
+    const submitter = event.submitter || null;
+
+    refreshLotUnitFormProfile(form, { background: true, force: true }).then((result) => {
+      delete form.dataset.lotProfileSubmitRefreshPending;
+
+      if (!result || !result.ok) {
+        const statusElement = getLotUnitFormProfileStatus(form);
+
+        if (statusElement) {
+          statusElement.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+        }
+        return;
+      }
+
+      form.dataset.lotProfileSubmitVerifiedAt = String(Date.now());
+      form.dataset.lotProfileSubmitVerifiedLotId = selectedLotId;
+
+      if (typeof form.requestSubmit === 'function') {
+        try {
+          form.requestSubmit(submitter || undefined);
+        } catch (error) {
+          form.requestSubmit();
+        }
+      } else {
+        form.submit();
+      }
+    });
+  }, true);
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target.closest('[data-tech-unit-form]');
+
+    if (!form) {
+      return;
+    }
+
+    const lotSelect = getAssignableLotCatalog(form);
+
+    if (!lotSelect || !lotSelect.value) {
+      return;
+    }
+
+    const selectedLotId = String(lotSelect.value);
+    const currentFingerprint = getLotRequirementFormFingerprint(form);
+    const verifiedAt = Number(form.dataset.lotRequirementWorkflowVerifiedAt || 0);
+    const verifiedLotId = String(form.dataset.lotRequirementWorkflowVerifiedLotId || '');
+    const verifiedFingerprint = String(form.dataset.lotRequirementWorkflowVerifiedFingerprint || '');
+    const verificationIsCurrent = verifiedLotId === selectedLotId
+      && verifiedFingerprint === currentFingerprint
+      && verifiedAt > 0
+      && (Date.now() - verifiedAt) <= LOT_REQUIREMENT_WORKFLOW_SUBMIT_VERIFICATION_MAX_AGE_MS;
+
+    if (verificationIsCurrent) {
+      const workflow = getLotRequirementWorkflowElement(form);
+
+      if (workflow && workflow.getAttribute('data-save-allowed') === '0') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        revealLotRequirementWorkflowIssue(form);
+      }
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (form.dataset.lotRequirementWorkflowSubmitPending === 'true') {
+      return;
+    }
+
+    form.dataset.lotRequirementWorkflowSubmitPending = 'true';
+    const submitter = event.submitter || null;
+
+    refreshLotRequirementWorkflow(form, { background: true }).then((result) => {
+      delete form.dataset.lotRequirementWorkflowSubmitPending;
+
+      if (!result || !result.ok || !result.saveAllowed) {
+        revealLotRequirementWorkflowIssue(form);
+        return;
+      }
+
+      form.dataset.lotRequirementWorkflowVerifiedAt = String(Date.now());
+      form.dataset.lotRequirementWorkflowVerifiedLotId = selectedLotId;
+      form.dataset.lotRequirementWorkflowVerifiedFingerprint = getLotRequirementFormFingerprint(form);
+
+      if (typeof form.requestSubmit === 'function') {
+        try {
+          form.requestSubmit(submitter || undefined);
+        } catch (error) {
+          form.requestSubmit();
+        }
+      } else {
+        form.submit();
+      }
+    });
+  }, true);
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target.closest('[data-tech-unit-form]');
+
     if (!form || !form.querySelector('[data-duplicate-assumption-nonce]')) {
       return;
     }
@@ -1881,6 +3418,11 @@
     const form = event.target.closest('[data-tech-unit-form]');
 
     if (!form) {
+      return;
+    }
+
+    if (!validateAllRequiredRepeatableSections(form, true)) {
+      event.preventDefault();
       return;
     }
 
@@ -1949,18 +3491,51 @@
       const form = getFormFromElement(addButton);
       const rowType = addButton.getAttribute('data-add-module-row');
       addModuleRow(form, rowType);
+      scheduleLotRequirementWorkflowRefresh(form);
       return;
     }
 
     const removeButton = event.target.closest('[data-remove-module-row]');
 
     if (removeButton) {
+      const form = getFormFromElement(removeButton);
       removeModuleRow(removeButton);
+      scheduleLotRequirementWorkflowRefresh(form);
     }
   });
 
   document.addEventListener('DOMContentLoaded', () => {
     initializeForms(document);
+
+    if (!window._lotUnitFormProfileRefreshInterval) {
+      window._lotUnitFormProfileRefreshInterval = window.setInterval(() => {
+        refreshOpenLotUnitForms();
+        refreshOpenLotRequirementWorkflows();
+      }, LOT_UNIT_FORM_PROFILE_REFRESH_INTERVAL_MS);
+    }
+  });
+
+  window.addEventListener('focus', () => {
+    refreshOpenLotUnitForms({ force: true });
+    refreshOpenLotRequirementWorkflows();
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      refreshOpenLotUnitForms({ force: true });
+      refreshOpenLotRequirementWorkflows();
+    }
+  });
+
+  window.addEventListener('storage', (event) => {
+    if (event.key === LOT_UNIT_FORM_PROFILE_STORAGE_KEY) {
+      refreshOpenLotUnitForms({ force: true });
+    }
+
+    if (event.key === LOT_REQUIREMENT_WORKFLOW_STORAGE_KEY) {
+      refreshOpenLotUnitForms({ force: true });
+      refreshOpenLotRequirementWorkflows();
+    }
   });
 
   document.body.addEventListener('htmx:afterSwap', (event) => {

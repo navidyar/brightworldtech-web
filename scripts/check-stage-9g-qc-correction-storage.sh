@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+bash scripts/mysql-app.sh <<'SQL'
+SELECT TABLE_NAME, TABLE_ROWS
+FROM information_schema.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'unit_qc_corrections';
+
+SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_KEY, EXTRA
+FROM information_schema.COLUMNS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'unit_qc_corrections'
+ORDER BY ORDINAL_POSITION;
+
+SELECT DISTINCT INDEX_NAME
+FROM information_schema.STATISTICS
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'unit_qc_corrections'
+ORDER BY INDEX_NAME;
+
+SELECT CONSTRAINT_NAME, REFERENCED_TABLE_NAME
+FROM information_schema.REFERENTIAL_CONSTRAINTS
+WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'unit_qc_corrections'
+ORDER BY CONSTRAINT_NAME;
+
+SELECT COUNT(*) AS qc_correction_row_count
+FROM unit_qc_corrections;
+SQL

@@ -12,7 +12,7 @@ const formOptions = {
   unitCategories: [{ id: 1, label: 'Laptop' }],
   manufacturers: [{ id: 2, label: 'Dell' }],
   unitModels: [{ id: 3, label: 'Latitude 5400' }],
-  processorModels: [{ id: 4, label: 'Intel Core i5' }],
+  processorModels: [{ id: 4, label: 'Intel Core i5', processorFamilyIds: [18], processorFamilyLabels: ['Intel i5-8th Gen'] }],
   ramTypes: [{ id: 5, label: 'DDR4' }],
   storageTypes: [{ id: 6, label: 'NVMe' }]
 };
@@ -52,6 +52,27 @@ test('submitted snapshots use current repeatable rows for totals and types', () 
   assert.deepEqual(snapshot.valuesByKey.ram_type.ids, [5]);
   assert.equal(snapshot.valuesByKey.storage_gb.numberValue, 256);
   assert.deepEqual(snapshot.valuesByKey.storage_type.ids, [6]);
+});
+
+test('submitted zero-size rows produce zero totals without component types', () => {
+  const snapshot = buildSubmittedUnitSnapshot({
+    formData: {
+      ...formData,
+      ramGb: '0',
+      ramTypeConfigValueId: '5',
+      storageGb: '0',
+      storageTypeConfigValueId: '6',
+      memoryModules: [{ sizeGb: '0', ramTypeConfigValueId: '', memoryInstallTypeCode: '' }],
+      storageDevices: [{ sizeGb: '0', storageTypeConfigValueId: '', wipeStatusConfigValueId: '' }]
+    },
+    formOptions,
+    lotId: 10
+  });
+
+  assert.equal(snapshot.valuesByKey.ram_gb.numberValue, 0);
+  assert.deepEqual(snapshot.valuesByKey.ram_type.ids, []);
+  assert.equal(snapshot.valuesByKey.storage_gb.numberValue, 0);
+  assert.deepEqual(snapshot.valuesByKey.storage_type.ids, []);
 });
 
 test('Strict policy blocks rejected Unit form values', () => {
@@ -114,4 +135,23 @@ test('policy aliases normalize to supported workflow behavior', () => {
   assert.equal(normalizeRequirementPolicyCode('warning'), 'warn_only');
   assert.equal(normalizeRequirementPolicyCode('mixed'), 'open_mixed');
   assert.equal(normalizeRequirementPolicyCode('unknown-value'), 'strict');
+});
+
+
+test('submitted Processor selections expose their family memberships to Lot validation', () => {
+  const workflow = buildTechLotRequirementWorkflow({
+    lot: { lot_id: 10, lot_name: 'Processor Family Lot', requirement_policy_code: 'strict' },
+    requirements: [requirement({
+      requirement_key: 'processor_family',
+      requirement_label: 'Processor Family',
+      manufacturer_id: null,
+      processor_family_id: 18,
+      required_value: 'Intel i5-8th Gen'
+    })],
+    formData,
+    formOptions
+  });
+
+  assert.equal(workflow.status, 'accepted');
+  assert.equal(workflow.saveAllowed, true);
 });

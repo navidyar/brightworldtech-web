@@ -1,7 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const SHARED_APP_HREF = '/css/app.css?v=20260723-shared-ui-foundation';
+const SHARED_APP_HREF = '/css/app.css?v=20260731-stage10c-hardware-matrix';
 const SHARED_FEATURE_HREF = '/css/features.css?v=20260723-shared-ui-foundation';
 
 function findIndexOrFail(content, value, label, errors) {

@@ -26,6 +26,18 @@
       : safeCandidate.lotName;
   }
 
+  function isMoveOnlyAction() {
+    return Boolean(
+      safeCandidate
+      && safeCandidate.duplicateAssumption
+      && safeCandidate.duplicateAssumption.actionKind === 'move'
+    );
+  }
+
+  function actionLabel() {
+    return isMoveOnlyAction() ? 'Move Existing Unit' : 'Move / Take Over Existing Unit';
+  }
+
   function matchedByLabel() {
     return matchingIdentifiers.map((identifier) => {
       const sourceFields = Array.isArray(identifier.matchingInputs) && identifier.matchingInputs.length > 0
@@ -41,7 +53,7 @@
     <header class="modal-header">
       <div>
         <p class="eyebrow">Duplicate Match</p>
-        <h2 id="tech-duplicate-assume-title">Assume Existing Unit</h2>
+        <h2 id="tech-duplicate-assume-title"><%= actionLabel() %></h2>
       </div>
       <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
     </header>
@@ -58,8 +70,8 @@
       <% if (safeCandidate) { %>
         <div class="message warning">
           <p>
-            This does not create a new Asset Tag or unit record. It moves <strong><%= unitLabel() %></strong>
-            into your selected work lot and assigns it to you. Prior history and earned credit remain unchanged.
+            This is the same physical unit. No new Asset Tag or Unit record will be created. It moves <strong><%= unitLabel() %></strong>
+            into the selected work lot<%= isMoveOnlyAction() ? '' : ' and assigns it to you' %>. Prior history and earned credit remain unchanged.
           </p>
         </div>
 
@@ -76,6 +88,10 @@
             <div>
               <dt>Current / Last Work Lot</dt>
               <dd><%= sourceLotLabel() %></dd>
+            </div>
+            <div>
+              <dt>Destination Lot</dt>
+              <dd><%= safeCandidate.destinationLotName || 'Selected destination unavailable' %></dd>
             </div>
             <div>
               <dt>Current Assignment</dt>
@@ -104,10 +120,11 @@
 
             <div class="message info">
               <p><%= safeCandidate.duplicateAssumption.message %></p>
+              <p>This direct action is available because <strong><%= safeCandidate.destinationLotName || 'the selected destination Lot' %></strong> allows duplicate-match Unit assumption. It does not create an approval request and does not require a reviewer reason.</p>
             </div>
 
             <div class="form-actions">
-              <button class="primary-button" type="submit">Assume Existing Unit</button>
+              <button class="primary-button" type="submit"><%= actionLabel() %></button>
               <button type="button" class="secondary-button" data-modal-close>Cancel</button>
             </div>
           </form>

@@ -3,6 +3,9 @@ const { pool } = require('./db');
 const productionWeightModel = require('./productionWeightModel');
 const { getNewLotInitialActiveValue } = require('../services/lotCreationPolicy');
 const {
+  buildRequirementPolicyOptions
+} = require('../config/lotRequirementPolicyRegistry');
+const {
   normalizeOperatorCode,
   normalizeRequirementKey
 } = require('../config/lotRequirementRegistry');
@@ -235,20 +238,6 @@ async function getDefaultLotStatusConfigValueId() {
   );
 }
 
-async function getDefaultRequirementPolicyConfigValueId(hasUnlimitedGoal) {
-  if (hasUnlimitedGoal) {
-    return findPreferredConfigValueId(
-      ['requirement_policies', 'requirement_policy', 'lot_requirement_policies', 'lot_requirement_policy'],
-      ['open', 'mixed', 'no_requirements', 'none', 'flexible', 'not_strict', 'strict']
-    );
-  }
-
-  return findPreferredConfigValueId(
-    ['requirement_policies', 'requirement_policy', 'lot_requirement_policies', 'lot_requirement_policy'],
-    ['strict', 'required', 'enforced', 'validate', 'open', 'mixed']
-  );
-}
-
 async function listParentLotOptions(options = {}) {
   const lotColumns = await getColumnSet('lots');
   const includeLotIds = Array.isArray(options.includeLotIds)
@@ -360,12 +349,19 @@ async function getLotFormOptions(options = {}) {
   const [
     capabilities,
     lotTypeResult,
+    requirementPolicyResult,
     gradeResult,
     productionWeightOptions,
     parentLots
   ] = await Promise.all([
     getLotSchemaCapabilities(),
     listConfigValuesForFirstExistingCategory(['lot_types', 'lot_type']),
+    listConfigValuesForFirstExistingCategory([
+      'requirement_policies',
+      'requirement_policy',
+      'lot_requirement_policies',
+      'lot_requirement_policy'
+    ]),
     listConfigValuesForFirstExistingCategory(['unit_grades', 'unit_grade', 'grades']),
     productionWeightModel.listProductionWeightOptions(),
     listParentLotOptions({ includeLotIds: includeParentLotIds })
@@ -375,6 +371,8 @@ async function getLotFormOptions(options = {}) {
     capabilities,
     lotTypes: lotTypeResult.values,
     lotTypeCategory: lotTypeResult.category,
+    requirementPolicies: buildRequirementPolicyOptions(requirementPolicyResult.values),
+    requirementPolicyCategory: requirementPolicyResult.category,
     grades: gradeResult.values,
     gradeCategory: gradeResult.category,
     productionWeightOptions,
@@ -621,6 +619,10 @@ async function listLots(options = {}) {
     ? 'l.lot_type_config_value_id AS lot_type_config_value_id'
     : 'NULL AS lot_type_config_value_id';
 
+  const requirementPolicyConfigValueIdSelect = hasRequirementPolicy
+    ? 'l.requirement_policy_config_value_id AS requirement_policy_config_value_id'
+    : 'NULL AS requirement_policy_config_value_id';
+
   const defaultGradeConfigValueIdSelect = hasDefaultGrade
     ? 'l.default_grade_config_value_id AS default_grade_config_value_id'
     : 'NULL AS default_grade_config_value_id';
@@ -655,6 +657,7 @@ async function listLots(options = {}) {
       ${defaultProductionWeightSelect},
       ${resolvedDefaultProductionWeightSelect},
       ${lotTypeConfigValueIdSelect},
+      ${requirementPolicyConfigValueIdSelect},
       ${defaultGradeConfigValueIdSelect},
       ${unitGoalSelect},
       ${deadlineSelect},
@@ -751,6 +754,9 @@ async function createLot(formData, currentUserId) {
   const lotCode = generateLotCode(lotName);
   const parentLotId = formData.parentLotId ? Number(formData.parentLotId) : null;
   const lotTypeConfigValueId = formData.lotTypeConfigValueId ? Number(formData.lotTypeConfigValueId) : null;
+  const requirementPolicyConfigValueId = formData.requirementPolicyConfigValueId
+    ? Number(formData.requirementPolicyConfigValueId)
+    : null;
   const defaultGradeConfigValueId = formData.defaultGradeConfigValueId ? Number(formData.defaultGradeConfigValueId) : null;
   const customDefaultProductionWeight = productionWeightModel.normalizeWeightValue(formData.defaultProductionWeight);
   const defaultProductionWeightPayload = formData.defaultProductionWeightConfigValueId
@@ -787,12 +793,8 @@ async function createLot(formData, currentUserId) {
   }
 
   if (hasColumn(lotColumns, 'requirement_policy_config_value_id')) {
-    const requirementPolicyConfigValueId = await getDefaultRequirementPolicyConfigValueId(hasUnlimitedGoal);
-
     if (!requirementPolicyConfigValueId) {
-      throw new Error(
-        'Cannot create lot because lots.requirement_policy_config_value_id is required, but no config value was found in requirement_policies, requirement_policy, lot_requirement_policies, or lot_requirement_policy. Add a config value such as strict, open, mixed, no_requirements, or none.'
-      );
+      throw new Error('Requirement enforcement policy is required when creating a Lot.');
     }
 
     addColumn('requirement_policy_config_value_id', requirementPolicyConfigValueId);
@@ -864,6 +866,9 @@ async function updateLot(lotId, formData, currentUserId) {
   const lotName = String(formData.lotName || '').trim();
   const parentLotId = formData.parentLotId ? Number(formData.parentLotId) : null;
   const lotTypeConfigValueId = formData.lotTypeConfigValueId ? Number(formData.lotTypeConfigValueId) : null;
+  const requirementPolicyConfigValueId = formData.requirementPolicyConfigValueId
+    ? Number(formData.requirementPolicyConfigValueId)
+    : null;
   const defaultGradeConfigValueId = formData.defaultGradeConfigValueId ? Number(formData.defaultGradeConfigValueId) : null;
   const customDefaultProductionWeight = productionWeightModel.normalizeWeightValue(formData.defaultProductionWeight);
   const defaultProductionWeightPayload = formData.defaultProductionWeightConfigValueId
@@ -892,11 +897,11 @@ async function updateLot(lotId, formData, currentUserId) {
   addColumn('updated_by_user_id', currentUserId || null);
 
   if (hasColumn(lotColumns, 'requirement_policy_config_value_id')) {
-    const requirementPolicyConfigValueId = await getDefaultRequirementPolicyConfigValueId(hasUnlimitedGoal);
-
-    if (requirementPolicyConfigValueId) {
-      addColumn('requirement_policy_config_value_id', requirementPolicyConfigValueId);
+    if (!requirementPolicyConfigValueId) {
+      throw new Error('Requirement enforcement policy is required when updating a Lot.');
     }
+
+    addColumn('requirement_policy_config_value_id', requirementPolicyConfigValueId);
   }
 
   if (assignments.length === 0) {
@@ -1176,22 +1181,31 @@ async function listLotRequirements(lotId) {
         lr.manufacturer_id,
         lr.unit_model_id,
         lr.processor_model_id,
+        lr.processor_family_id,
+        processor_family.membership_version AS processor_family_membership_version,
         lr.requirement_text,
         lr.requirement_number,
         COALESCE(
           requirement_value.label,
           manufacturer.name,
-          CONCAT_WS(
-            ' · ',
-            model_manufacturer.name,
-            unit_model.model_name,
-            NULLIF(unit_model.model_number, '')
+          NULLIF(
+            CONCAT_WS(
+              ' · ',
+              model_manufacturer.name,
+              unit_model.model_name,
+              NULLIF(unit_model.model_number, '')
+            ),
+            ''
           ),
-          CONCAT_WS(
-            ' · ',
-            processor_brand.name,
-            NULLIF(processor_model.processor_family, ''),
-            processor_model.model_code
+          NULLIF(processor_family.name, ''),
+          NULLIF(
+            CONCAT_WS(
+              ' · ',
+              processor_brand.name,
+              NULLIF(processor_model.processor_family, ''),
+              processor_model.model_code
+            ),
+            ''
           ),
           lr.requirement_text,
           CAST(lr.requirement_number AS CHAR)
@@ -1213,6 +1227,10 @@ async function listLotRequirements(lotId) {
         ON unit_model.unit_model_id = lr.unit_model_id
       LEFT JOIN manufacturers model_manufacturer
         ON model_manufacturer.manufacturer_id = unit_model.manufacturer_id
+      LEFT JOIN processor_families processor_family
+        ON processor_family.processor_family_id = lr.processor_family_id
+      LEFT JOIN processor_brands processor_family_brand
+        ON processor_family_brand.processor_brand_id = processor_family.processor_brand_id
       LEFT JOIN processor_models processor_model
         ON processor_model.processor_model_id = lr.processor_model_id
       LEFT JOIN processor_brands processor_brand

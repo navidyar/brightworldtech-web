@@ -1,0 +1,24 @@
+<div class="processor-family-member-tools">
+  <label class="form-field">
+    <span>Find Processor</span>
+    <input type="search" placeholder="Search processor name, family, or generation" data-processor-member-search />
+  </label>
+  <button type="button" class="secondary-button" data-select-visible-processors>Select visible</button>
+  <button type="button" class="secondary-button" data-clear-visible-processors>Clear visible</button>
+</div>
+
+<div class="processor-family-member-list" data-processor-member-list>
+  <% if (!processors.length) { %>
+    <p class="empty-state">No processors are available for the selected brand.</p>
+  <% } %>
+
+  <% processors.forEach((processor) => { %>
+    <label class="processor-family-member-row" data-processor-member-row data-search-text="<%= `${processor.label} ${processor.legacyFamily} ${processor.generation}`.toLowerCase() %>">
+      <input type="checkbox" name="memberProcessorModelIds" value="<%= processor.id %>" <%= processor.isMember ? 'checked' : '' %> />
+      <span>
+        <strong><%= processor.label %></strong>
+        <small><%= [processor.legacyFamily, processor.generation, processor.baseSpeedGhz ? `${processor.baseSpeedGhz}GHz` : '', processor.isActive ? '' : 'Inactive'].filter(Boolean).join(' · ') || 'No additional catalog details' %></small>
+      </span>
+    </label>
+  <% }) %>
+</div>

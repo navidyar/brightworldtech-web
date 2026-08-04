@@ -30,6 +30,12 @@
   display: none !important;
 }
 
+/* Keep Unit form error summaries visually separate from the first form section.
+   The page/modal scope is intentionally more specific than legacy message rules. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form-error-summary {
+  margin-bottom: 16px;
+}
+
 /* Tech Unit Lot-requirement workflow. This is feature-specific presentation;
    the shared visual tokens continue to come from theme.css and app.css. */
 .tech-unit-form [data-lot-requirement-workflow-region] {

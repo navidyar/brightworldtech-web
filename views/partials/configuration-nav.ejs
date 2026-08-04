@@ -1,0 +1,36 @@
+<%
+  const configurationItems = [
+    {
+      key: 'admin-config-values',
+      label: 'Config Values',
+      href: '/management/config'
+    },
+    {
+      key: 'admin-config-processor-families',
+      label: 'Processor Families',
+      href: '/management/config/processor-families'
+    },
+    {
+      key: 'admin-config-models',
+      label: 'Model Catalog',
+      href: '/management/config/models'
+    },
+    {
+      key: 'admin-config-database',
+      label: 'Database Check',
+      href: '/management/config/database'
+    }
+  ];
+%>
+
+<nav class="configuration-nav" aria-label="Admin configuration sections">
+  <% configurationItems.forEach((item) => { %>
+    <a
+      class="configuration-nav-link <%= currentNav === item.key ? 'active' : '' %>"
+      href="<%= item.href %>"
+      <%= currentNav === item.key ? 'aria-current="page"' : '' %>
+    >
+      <%= item.label %>
+    </a>
+  <% }) %>
+</nav>

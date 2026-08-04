@@ -17,6 +17,67 @@ function normalizePositiveInteger(value) {
   return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : null;
 }
 
+function getOverrideRequestContext(req) {
+  const rawValue = req && req.body && req.body.requestContext !== undefined
+    ? req.body.requestContext
+    : req && req.query
+      ? req.query.requestContext
+      : '';
+  const normalizedValue = String(rawValue || '').trim().toLowerCase();
+
+  return normalizedValue === 'duplicate_intake' ? 'duplicate_intake' : 'manual';
+}
+
+function normalizeDuplicateSerial(value) {
+  return String(value || '').trim().replace(/\s+/g, ' ').toUpperCase().slice(0, 150);
+}
+
+function getTechOverrideModalContext(req) {
+  const requestContext = getOverrideRequestContext(req);
+  const body = req && req.body ? req.body : {};
+  const query = req && req.query ? req.query : {};
+
+  return {
+    requestContext,
+    pageTitle: requestContext === 'duplicate_intake'
+      ? 'Request Move / Takeover'
+      : 'Request Override',
+    duplicateIntakeContext: {
+      unitSerialNumber: normalizeDuplicateSerial(body.duplicateIntakeUnitSerialNumber || query.unitSerialNumber),
+      biosSerialNumber: normalizeDuplicateSerial(body.duplicateIntakeBiosSerialNumber || query.biosSerialNumber),
+      duplicateAssumptionNonce: String(body.duplicateAssumptionNonce || query.duplicateAssumptionNonce || '').trim(),
+      destinationLotId: normalizePositiveInteger(body.requestedDestinationLotId || query.destinationLotId)
+    }
+  };
+}
+
+async function hasVerifiedDuplicateIntakeContext(req, unitId, modalContext) {
+  if (!modalContext || modalContext.requestContext !== 'duplicate_intake') {
+    return true;
+  }
+
+  const context = modalContext.duplicateIntakeContext || {};
+  const sessionNonce = req && req.session ? String(req.session.duplicateAssumptionCreateNonce || '').trim() : '';
+
+  if (!sessionNonce || !context.duplicateAssumptionNonce || sessionNonce !== context.duplicateAssumptionNonce) {
+    return false;
+  }
+
+  if (!context.unitSerialNumber && !context.biosSerialNumber) {
+    return false;
+  }
+
+  const candidates = await techUnitModel.getDuplicateAssumptionCandidates({
+    unitSerialNumber: context.unitSerialNumber,
+    biosSerialNumber: context.biosSerialNumber,
+    destinationLotId: context.destinationLotId,
+    actorRoleCodes: getCurrentRoleCodes(req),
+    actorUserId: req.currentUser ? req.currentUser.user_id : null
+  });
+
+  return candidates.some((candidate) => Number(candidate.unitId) === Number(unitId));
+}
+
 function isRegularTechOverrideRequester(req) {
   const roleCodes = getCurrentRoleCodes(req);
 
@@ -31,11 +92,27 @@ function getEffectiveAssignedUserId(unit) {
   return normalizePositiveInteger(unit.assigned_to_user_id) || normalizePositiveInteger(unit.created_by_user_id);
 }
 
-function getTechOverrideRequestEligibility(req, unit) {
+function getDuplicateIntakeActionKind(req, unit, modalContext = {}) {
+  if (!modalContext || modalContext.requestContext !== 'duplicate_intake') {
+    return 'override';
+  }
+
+  const currentUserId = normalizePositiveInteger(req && req.currentUser ? req.currentUser.user_id : null);
+  return currentUserId && getEffectiveAssignedUserId(unit) === currentUserId ? 'move' : 'takeover';
+}
+
+function getTechOverrideRequestEligibility(req, unit, {
+  requestContext = 'manual',
+  requestedDestinationLotId = null
+} = {}) {
+  const fromDuplicateIntake = requestContext === 'duplicate_intake';
+
   if (!isRegularTechOverrideRequester(req)) {
     return {
       allowed: false,
-      message: 'Override requests are available only to regular Tech users for units assigned to another Tech. Tech Leads, Management, and Admin manage assignments directly.'
+      message: fromDuplicateIntake
+        ? 'Move / Takeover requests are available only to regular Tech users during Create Unit intake. Tech Leads, Management, and Admin can manage the existing Unit directly.'
+        : 'Override requests are available only to regular Tech users for units assigned to another Tech. Tech Leads, Management, and Admin manage assignments directly.'
     };
   }
 
@@ -55,10 +132,23 @@ function getTechOverrideRequestEligibility(req, unit) {
     };
   }
 
-  if (getEffectiveAssignedUserId(unit) === currentUserId) {
+  const isAssignedToCurrentUser = getEffectiveAssignedUserId(unit) === currentUserId;
+
+  if (!fromDuplicateIntake && isAssignedToCurrentUser) {
     return {
       allowed: false,
       message: 'You cannot request an override for a unit already assigned to you.'
+    };
+  }
+
+  if (
+    fromDuplicateIntake
+    && isAssignedToCurrentUser
+    && normalizePositiveInteger(unit.lot_id) === normalizePositiveInteger(requestedDestinationLotId)
+  ) {
+    return {
+      allowed: false,
+      message: 'This Unit is already assigned to you in the selected destination Lot. Open the existing Unit instead of requesting a takeover of your own assignment.'
     };
   }
 
@@ -68,60 +158,26 @@ function getTechOverrideRequestEligibility(req, unit) {
   };
 }
 
-function getStatusFilter(req) {
-  const statusFilter = String(req.query.status || 'pending').trim().toLowerCase();
-
-  return VALID_STATUS_FILTERS.has(statusFilter) ? statusFilter : 'pending';
-}
-
-function getSuccessMessage(query) {
-  if (query.approved === '1') {
-    return 'Override request approved.';
-  }
-
-  if (query.denied === '1') {
-    return 'Override request denied.';
-  }
-
-  if (query.skipped === 'not-pending') {
-    return 'That override request was already reviewed by someone else.';
-  }
-
-  return null;
-}
-
-function getErrorMessages(query) {
-  if (query.skipped === 'invalid-prior-credit') {
-    return ['Prior Tech credit was not applied. Enter a custom value from 0.10 through 10.00 when the checkbox is selected.'];
-  }
-
-  if (query.skipped === 'destination-lot-required') {
-    return ['Select an open destination lot before approving an override for a unit with recorded work.'];
-  }
-
-  if (query.skipped === 'unit-parked') {
-    return ['This unit is parked. Return it to Active before approving an override request.'];
-  }
-
-  if (query.skipped === 'invalid-destination-lot') {
-    return ['The selected destination lot is no longer open and assignable. Refresh the queue and choose another lot.'];
-  }
-
-  return [];
-}
-
 function getReturnStatus(req) {
   const returnStatus = String(req.body.returnStatus || req.query.status || 'pending').trim().toLowerCase();
 
   return VALID_STATUS_FILTERS.has(returnStatus) ? returnStatus : 'pending';
 }
 
-
-function setOverrideNoStoreHeaders(res) {
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  res.set('Pragma', 'no-cache');
-  res.set('Expires', '0');
+function getUnifiedReturnUrl(req, overrideRequestId, query = {}) {
+  const params = new URLSearchParams({ status: getReturnStatus(req) });
+  const requestType = String(req.body.returnRequestType || req.query.requestType || '').trim();
+  const search = String(req.body.returnSearch || req.query.search || '').trim();
+  if (requestType && requestType !== 'all') params.set('requestType', requestType);
+  if (search) params.set('search', search.slice(0, 150));
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') params.set(key, value);
+  });
+  return overrideRequestId
+    ? `/unit-requests/override/${encodeURIComponent(overrideRequestId)}?${params.toString()}`
+    : `/unit-requests?${params.toString()}`;
 }
+
 
 function getReviewNotes(req) {
   return String(req.body.reviewNotes || '').trim();
@@ -137,6 +193,32 @@ function getPriorTechCreditWeight(req) {
 
 function getDestinationLotId(req) {
   return String(req.body.destinationLotId || '').trim();
+}
+
+function getRequestedDestinationLotId(req) {
+  const value = req && req.body && req.body.requestedDestinationLotId !== undefined
+    ? req.body.requestedDestinationLotId
+    : req && req.query
+      ? req.query.destinationLotId
+      : null;
+
+  return normalizePositiveInteger(value);
+}
+
+function resolveRequestedDestinationLotId({ requestedDestinationLotId, unit, assignableLots }) {
+  const safeLots = Array.isArray(assignableLots) ? assignableLots : [];
+  const requestedId = normalizePositiveInteger(requestedDestinationLotId);
+  const currentLotId = normalizePositiveInteger(unit && unit.lot_id);
+
+  if (requestedId && safeLots.some((lot) => Number(lot.lotId) === requestedId)) {
+    return requestedId;
+  }
+
+  if (currentLotId && safeLots.some((lot) => Number(lot.lotId) === currentLotId)) {
+    return currentLotId;
+  }
+
+  return null;
 }
 
 function getOverrideRequestId(req) {
@@ -177,42 +259,6 @@ async function getLotLabel(lotId) {
   return lot ? lot.lot_name : 'Lot name not available';
 }
 
-async function renderOverrideRequestsPage(req, res, next) {
-  try {
-    const statusFilter = getStatusFilter(req);
-    const result = await overrideRequestModel.listOverrideRequests({ statusFilter });
-
-    setOverrideNoStoreHeaders(res);
-
-    return res.render('pages/management-overrides', {
-      pageTitle: 'Override Requests',
-      currentNav: 'management-overrides',
-      result,
-      statusFilter,
-      successMessage: getSuccessMessage(req.query),
-      errorMessages: getErrorMessages(req.query)
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-async function renderOverrideRequestsTable(req, res, next) {
-  try {
-    const statusFilter = getStatusFilter(req);
-    const result = await overrideRequestModel.listOverrideRequests({ statusFilter });
-
-    setOverrideNoStoreHeaders(res);
-
-    return res.render('fragments/override-request-table', {
-      result,
-      statusFilter
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
 async function approveOverrideRequest(req, res, next) {
   try {
     const overrideRequestId = getOverrideRequestId(req);
@@ -238,25 +284,33 @@ async function approveOverrideRequest(req, res, next) {
     });
 
     if (!wasApproved) {
-      return res.redirect(`/management/overrides?status=${encodeURIComponent(returnStatus)}&skipped=not-pending`);
+      return res.redirect(getUnifiedReturnUrl(req, overrideRequestId, { skipped: 'not-pending' }));
     }
 
-    return res.redirect(`/management/overrides?status=${encodeURIComponent(returnStatus)}&approved=1`);
+    return res.redirect(getUnifiedReturnUrl(req, overrideRequestId, { approved: '1' }));
   } catch (error) {
     if (error && error.code === 'BWT_INVALID_PRIOR_TECH_CREDIT_WEIGHT') {
-      return res.redirect(`/management/overrides?status=${encodeURIComponent(getReturnStatus(req))}&skipped=invalid-prior-credit`);
+      return res.redirect(getUnifiedReturnUrl(req, getOverrideRequestId(req), { skipped: 'invalid-prior-credit' }));
     }
 
     if (error && error.code === 'BWT_OVERRIDE_DESTINATION_LOT_REQUIRED') {
-      return res.redirect(`/management/overrides?status=${encodeURIComponent(getReturnStatus(req))}&skipped=destination-lot-required`);
+      return res.redirect(getUnifiedReturnUrl(req, getOverrideRequestId(req), { skipped: 'destination-lot-required' }));
     }
 
     if (error && error.code === 'BWT_UNIT_PARKED') {
-      return res.redirect(`/management/overrides?status=${encodeURIComponent(getReturnStatus(req))}&skipped=unit-parked`);
+      return res.redirect(getUnifiedReturnUrl(req, getOverrideRequestId(req), { skipped: 'unit-parked' }));
     }
 
     if (error && error.code === 'BWT_INVALID_OVERRIDE_DESTINATION_LOT') {
-      return res.redirect(`/management/overrides?status=${encodeURIComponent(getReturnStatus(req))}&skipped=invalid-destination-lot`);
+      return res.redirect(getUnifiedReturnUrl(req, getOverrideRequestId(req), { skipped: 'invalid-destination-lot' }));
+    }
+
+    if (error && error.code === 'BWT_LOT_DESTINATION_VALIDATION_BLOCKED') {
+      return res.redirect(getUnifiedReturnUrl(req, getOverrideRequestId(req), { skipped: 'destination-validation', detail: String(error.message || '').slice(0, 1000) }));
+    }
+
+    if (error && error.code === 'BWT_OVERRIDE_SELF_REVIEW') {
+      return res.redirect(getUnifiedReturnUrl(req, getOverrideRequestId(req), { error: 'self-review' }));
     }
 
     next(error);
@@ -283,22 +337,38 @@ async function denyOverrideRequest(req, res, next) {
     });
 
     if (!wasDenied) {
-      return res.redirect(`/management/overrides?status=${encodeURIComponent(returnStatus)}&skipped=not-pending`);
+      return res.redirect(getUnifiedReturnUrl(req, overrideRequestId, { skipped: 'not-pending' }));
     }
 
-    return res.redirect(`/management/overrides?status=${encodeURIComponent(returnStatus)}&denied=1`);
+    return res.redirect(getUnifiedReturnUrl(req, overrideRequestId, { rejected: '1' }));
   } catch (error) {
+    if (error && error.code === 'BWT_OVERRIDE_SELF_REVIEW') {
+      return res.redirect(getUnifiedReturnUrl(req, getOverrideRequestId(req), { error: 'self-review' }));
+    }
     next(error);
   }
 }
 
+function getDuplicateIntakeRequestWording(modalContext = {}) {
+  const moveOnly = modalContext.requestContext === 'duplicate_intake'
+    && modalContext.duplicateIntakeActionKind === 'move';
+
+  return {
+    requestName: moveOnly ? 'Lot Move' : 'Move / Takeover',
+    pendingName: moveOnly ? 'Lot Move request' : 'Move / Takeover request',
+    successName: moveOnly ? 'Lot Move request' : 'Move / Takeover request'
+  };
+}
+
 async function renderTechOverrideRequestModal(req, res, next) {
+  const modalContext = getTechOverrideModalContext(req);
+
   try {
     const unitId = getUnitId(req);
 
     if (!unitId) {
       return res.status(400).render('fragments/tech-override-request-modal', {
-        pageTitle: 'Request Override',
+        ...modalContext,
         unit: null,
         unitLabel: 'Invalid unit',
         lotLabel: 'Unknown lot',
@@ -316,14 +386,14 @@ async function renderTechOverrideRequestModal(req, res, next) {
 
     if (!tableIsReady) {
       return res.status(400).render('fragments/tech-override-request-modal', {
-        pageTitle: 'Request Override',
+        ...modalContext,
         unit: null,
         unitLabel: 'Unit without asset tag',
         lotLabel: 'Unknown lot',
         existingPendingRequest: null,
         supported: false,
         successMessage: null,
-        errorMessages: ['Override requests are not ready yet. Run the Step 2j SQL migration first.'],
+        errorMessages: ['Override requests are not ready yet. Apply the Stage 7B override lifecycle migration first.'],
         formData: {
           reason: ''
         }
@@ -332,9 +402,13 @@ async function renderTechOverrideRequestModal(req, res, next) {
 
     const unit = await techUnitModel.getUnitById(unitId);
 
+    if (unit) {
+      modalContext.duplicateIntakeActionKind = getDuplicateIntakeActionKind(req, unit, modalContext);
+    }
+
     if (!unit) {
       return res.status(404).render('fragments/tech-override-request-modal', {
-        pageTitle: 'Request Override',
+        ...modalContext,
         unit: null,
         unitLabel: 'Unit not found',
         lotLabel: 'Unknown lot',
@@ -348,11 +422,29 @@ async function renderTechOverrideRequestModal(req, res, next) {
       });
     }
 
-    const overrideEligibility = getTechOverrideRequestEligibility(req, unit);
+    if (!await hasVerifiedDuplicateIntakeContext(req, unit.unit_id, modalContext)) {
+      return res.status(403).render('fragments/tech-override-request-modal', {
+        ...modalContext,
+        unit,
+        unitLabel: buildUnitLabel(unit),
+        lotLabel: await getLotLabel(unit.lot_id),
+        existingPendingRequest: null,
+        supported: false,
+        successMessage: null,
+        errorMessages: ['This duplicate-intake match is no longer valid. Close Create Unit, reopen it, and refresh the serial match before requesting a move or takeover.'],
+        formData: { reason: '' }
+      });
+    }
+
+    const overrideEligibility = getTechOverrideRequestEligibility(req, unit, {
+      requestContext: modalContext.requestContext,
+      requestedDestinationLotId: modalContext.duplicateIntakeContext.destinationLotId || getRequestedDestinationLotId(req)
+    });
+    const requestWording = getDuplicateIntakeRequestWording(modalContext);
 
     if (!overrideEligibility.allowed) {
       return res.status(403).render('fragments/tech-override-request-modal', {
-        pageTitle: 'Request Override',
+        ...modalContext,
         unit,
         unitLabel: buildUnitLabel(unit),
         lotLabel: await getLotLabel(unit.lot_id),
@@ -366,17 +458,28 @@ async function renderTechOverrideRequestModal(req, res, next) {
       });
     }
 
-    const existingPendingRequest = await overrideRequestModel.getPendingOverrideRequestForUnit({
-      unitId: unit.unit_id,
-      lotId: unit.lot_id,
-      requestType: 'manual_tech_override_request'
-    });
+    const [existingPendingRequest, assignableLots] = await Promise.all([
+      overrideRequestModel.getPendingOverrideRequestForUnit({
+        unitId: unit.unit_id,
+        requestType: 'manual_tech_override_request'
+      }),
+      overrideRequestModel.listAssignableLots()
+    ]);
+    const requestedDestinationLotId = existingPendingRequest
+      ? existingPendingRequest.requestedDestinationLotId
+      : resolveRequestedDestinationLotId({
+        requestedDestinationLotId: getRequestedDestinationLotId(req),
+        unit,
+        assignableLots
+      });
 
     return res.render('fragments/tech-override-request-modal', {
-      pageTitle: 'Request Override',
+      ...modalContext,
       unit,
       unitLabel: buildUnitLabel(unit),
       lotLabel: await getLotLabel(unit.lot_id),
+      assignableLots,
+      requestedDestinationLotId,
       existingPendingRequest,
       supported: true,
       successMessage: null,
@@ -391,13 +494,15 @@ async function renderTechOverrideRequestModal(req, res, next) {
 }
 
 async function createTechOverrideRequest(req, res, next) {
+  const modalContext = getTechOverrideModalContext(req);
+
   try {
     const unitId = getUnitId(req);
     const reason = getOverrideReason(req);
 
     if (!unitId) {
       return res.status(400).render('fragments/tech-override-request-modal', {
-        pageTitle: 'Request Override',
+        ...modalContext,
         unit: null,
         unitLabel: 'Invalid unit',
         lotLabel: 'Unknown lot',
@@ -413,9 +518,13 @@ async function createTechOverrideRequest(req, res, next) {
 
     const unit = await techUnitModel.getUnitById(unitId);
 
+    if (unit) {
+      modalContext.duplicateIntakeActionKind = getDuplicateIntakeActionKind(req, unit, modalContext);
+    }
+
     if (!unit) {
       return res.status(404).render('fragments/tech-override-request-modal', {
-        pageTitle: 'Request Override',
+        ...modalContext,
         unit: null,
         unitLabel: 'Unit not found',
         lotLabel: 'Unknown lot',
@@ -429,11 +538,29 @@ async function createTechOverrideRequest(req, res, next) {
       });
     }
 
-    const overrideEligibility = getTechOverrideRequestEligibility(req, unit);
+    if (!await hasVerifiedDuplicateIntakeContext(req, unit.unit_id, modalContext)) {
+      return res.status(403).render('fragments/tech-override-request-modal', {
+        ...modalContext,
+        unit,
+        unitLabel: buildUnitLabel(unit),
+        lotLabel: await getLotLabel(unit.lot_id),
+        existingPendingRequest: null,
+        supported: false,
+        successMessage: null,
+        errorMessages: ['This duplicate-intake match is no longer valid. Close Create Unit, reopen it, and refresh the serial match before requesting a move or takeover.'],
+        formData: { reason }
+      });
+    }
+
+    const overrideEligibility = getTechOverrideRequestEligibility(req, unit, {
+      requestContext: modalContext.requestContext,
+      requestedDestinationLotId: modalContext.duplicateIntakeContext.destinationLotId || getRequestedDestinationLotId(req)
+    });
+    const requestWording = getDuplicateIntakeRequestWording(modalContext);
 
     if (!overrideEligibility.allowed) {
       return res.status(403).render('fragments/tech-override-request-modal', {
-        pageTitle: 'Request Override',
+        ...modalContext,
         unit,
         unitLabel: buildUnitLabel(unit),
         lotLabel: await getLotLabel(unit.lot_id),
@@ -447,22 +574,33 @@ async function createTechOverrideRequest(req, res, next) {
       });
     }
 
-    const existingPendingRequest = await overrideRequestModel.getPendingOverrideRequestForUnit({
-      unitId: unit.unit_id,
-      lotId: unit.lot_id,
-      requestType: 'manual_tech_override_request'
+    const [existingPendingRequest, assignableLots] = await Promise.all([
+      overrideRequestModel.getPendingOverrideRequestForUnit({
+        unitId: unit.unit_id,
+        requestType: 'manual_tech_override_request'
+      }),
+      overrideRequestModel.listAssignableLots()
+    ]);
+    const requestedDestinationLotId = resolveRequestedDestinationLotId({
+      requestedDestinationLotId: getRequestedDestinationLotId(req),
+      unit,
+      assignableLots
     });
 
     if (existingPendingRequest) {
       return res.status(409).render('fragments/tech-override-request-modal', {
-        pageTitle: 'Request Override',
+        ...modalContext,
         unit,
         unitLabel: buildUnitLabel(unit),
         lotLabel: await getLotLabel(unit.lot_id),
+        assignableLots,
+        requestedDestinationLotId: existingPendingRequest.requestedDestinationLotId,
         existingPendingRequest,
         supported: true,
         successMessage: null,
-        errorMessages: ['A pending override request already exists for this unit and lot. Management must approve or deny it first.'],
+        errorMessages: [modalContext.requestContext === 'duplicate_intake'
+          ? `A pending ${requestWording.pendingName} already exists for this Unit. Tech Lead+ must approve or deny it first.`
+          : 'A pending override request already exists for this Unit. Tech Lead+ must approve or deny it first.'],
         formData: {
           reason
         }
@@ -470,6 +608,12 @@ async function createTechOverrideRequest(req, res, next) {
     }
 
     const errorMessages = [];
+
+    if (!requestedDestinationLotId) {
+      errorMessages.push(modalContext.requestContext === 'duplicate_intake'
+        ? `Select an open destination Lot for this ${requestWording.requestName} request.`
+        : 'Select an open destination Lot for this override request.');
+    }
 
     if (!reason || reason.length < 10) {
       errorMessages.push('Please enter a reason with at least 10 characters.');
@@ -481,10 +625,12 @@ async function createTechOverrideRequest(req, res, next) {
 
     if (errorMessages.length > 0) {
       return res.status(400).render('fragments/tech-override-request-modal', {
-        pageTitle: 'Request Override',
+        ...modalContext,
         unit,
         unitLabel: buildUnitLabel(unit),
         lotLabel: await getLotLabel(unit.lot_id),
+        assignableLots,
+        requestedDestinationLotId,
         existingPendingRequest: null,
         supported: true,
         successMessage: null,
@@ -495,35 +641,91 @@ async function createTechOverrideRequest(req, res, next) {
       });
     }
 
-    const overrideRequestId = await overrideRequestModel.createOverrideRequest({
+    let overrideRequestId;
+
+    try {
+      overrideRequestId = await overrideRequestModel.createOverrideRequest({
+        unitId: unit.unit_id,
+        lotId: unit.lot_id,
+        requestedDestinationLotId,
+        requestType: 'manual_tech_override_request',
+        validationStatus: 'not_checked',
+        enforcementDecision: 'manual_request',
+        reason,
+        requestDetails: {
+          source: modalContext.requestContext === 'duplicate_intake'
+            ? 'duplicate_intake_existing_unit_request'
+            : 'tech_units_manual_request',
+          action_kind: modalContext.requestContext === 'duplicate_intake'
+            ? modalContext.duplicateIntakeActionKind
+            : 'override',
+          message: modalContext.requestContext === 'duplicate_intake'
+            ? `${requestWording.requestName} request created from duplicate intake.`
+            : 'Manual override request created from Tech Units.',
+          unit_id: unit.unit_id,
+          lot_id: unit.lot_id,
+          requested_destination_lot_id: requestedDestinationLotId,
+          asset_number: unit.asset_number || null,
+          duplicate_match_unit_serial_number: modalContext.duplicateIntakeContext.unitSerialNumber || null,
+          duplicate_match_bios_serial_number: modalContext.duplicateIntakeContext.biosSerialNumber || null
+        },
+        requestedByUserId: req.currentUser.user_id
+      });
+    } catch (error) {
+      if (error && error.code === 'BWT_OVERRIDE_ALREADY_PENDING') {
+        const pendingRequest = await overrideRequestModel.getPendingOverrideRequestForUnit({
+          unitId: unit.unit_id,
+          requestType: 'manual_tech_override_request'
+        });
+
+        return res.status(409).render('fragments/tech-override-request-modal', {
+          ...modalContext,
+          unit,
+          unitLabel: buildUnitLabel(unit),
+          lotLabel: await getLotLabel(unit.lot_id),
+          assignableLots,
+          requestedDestinationLotId: pendingRequest ? pendingRequest.requestedDestinationLotId : requestedDestinationLotId,
+          existingPendingRequest: pendingRequest,
+          supported: true,
+          successMessage: null,
+          errorMessages: [modalContext.requestContext === 'duplicate_intake'
+            ? `A pending ${requestWording.pendingName} already exists for this Unit. Tech Lead+ must approve or deny it first.`
+            : 'A pending override request already exists for this Unit. Tech Lead+ must approve or deny it first.'],
+          formData: { reason }
+        });
+      }
+
+      throw error;
+    }
+
+    const pendingRequest = await overrideRequestModel.getPendingOverrideRequestForUnit({
       unitId: unit.unit_id,
-      lotId: unit.lot_id,
-      requestType: 'manual_tech_override_request',
-      validationStatus: 'not_checked',
-      enforcementDecision: 'manual_request',
-      reason,
-      requestDetails: {
-        source: 'tech_units_manual_request',
-        message: 'Manual override request created from Tech Units expanded detail menu.',
-        unit_id: unit.unit_id,
-        lot_id: unit.lot_id,
-        asset_number: unit.asset_number || null
-      },
-      requestedByUserId: req.currentUser.user_id
+      requestType: 'manual_tech_override_request'
     });
 
-    res.set('HX-Trigger', 'override-requested');
+    res.set('HX-Trigger', JSON.stringify({
+      'override-requested': {
+        unitId: unit.unit_id,
+        overrideRequestId
+      }
+    }));
 
     return res.render('fragments/tech-override-request-modal', {
-      pageTitle: 'Request Override',
+      ...modalContext,
       unit,
       unitLabel: buildUnitLabel(unit),
       lotLabel: await getLotLabel(unit.lot_id),
-      existingPendingRequest: {
-        unitOverrideRequestId: overrideRequestId
+      assignableLots,
+      requestedDestinationLotId,
+      existingPendingRequest: pendingRequest || {
+        unitOverrideRequestId: overrideRequestId,
+        requestedDestinationLotId,
+        requestedDestinationLotName: assignableLots.find((lot) => Number(lot.lotId) === requestedDestinationLotId)?.lotName || 'Destination Lot'
       },
       supported: true,
-      successMessage: `Override request #${overrideRequestId} was sent to Management.`,
+      successMessage: modalContext.requestContext === 'duplicate_intake'
+        ? `${requestWording.successName} #${overrideRequestId} is pending Tech Lead+ review.`
+        : `Override request #${overrideRequestId} is pending Tech Lead+ review.`,
       errorMessages: [],
       formData: {
         reason: ''
@@ -535,8 +737,6 @@ async function createTechOverrideRequest(req, res, next) {
 }
 
 module.exports = {
-  renderOverrideRequestsPage,
-  renderOverrideRequestsTable,
   approveOverrideRequest,
   denyOverrideRequest,
   renderTechOverrideRequestModal,

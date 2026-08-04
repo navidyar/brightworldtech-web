@@ -16,8 +16,8 @@ test('the live Unit form binds every Lot-configurable registry field exactly onc
   const result = validateUnitFormFieldBindings(markup);
 
   assert.equal(result.valid, true, JSON.stringify(result));
-  assert.equal(result.expectedCount, 26);
-  assert.equal(result.actualCount, 26);
+  assert.equal(result.expectedCount, 29);
+  assert.equal(result.actualCount, 29);
   assert.deepEqual(result.unknownFollowerKeys, []);
   assert.deepEqual(result.unknownCompanionKeys, []);
   assert.ok(result.followerKeys.includes('unit_outcome'));

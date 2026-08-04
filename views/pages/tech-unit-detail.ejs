@@ -4,11 +4,11 @@
     pageTitle,
     stylesheets: [
       '/css/modal.css',
-      '/css/tech-units-clean.css?v=20260723-stage5d-unit-view'
+      '/css/tech-units-clean.css?v=20260803-stage10v1-history-detail-colors'
     ]
   }) %>
-  <script defer src="/js/modal.js"></script>
-  <script defer src="/js/tech-units.js"></script>
+  <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+  <script defer src="/js/tech-units.js?v=20260804-stage10v6-custom-header-scrollbar"></script>
 
   <body>
     <div class="app-shell">
@@ -27,11 +27,16 @@
             <a class="secondary-button" href="/tech/units">Back to Tech Units</a>
           </section>
 
-          <%- include('../fragments/tech-units-table', {
-            result,
-            filters,
-            singleUnitView: true
-          }) %>
+          <div
+            id="tech-unit-detail-record"
+            data-tech-unit-detail-refresh-url="/tech/units/<%= result.units[0].unitId %>/record"
+          >
+            <%- include('../fragments/tech-units-table', {
+              result,
+              filters,
+              singleUnitView: true
+            }) %>
+          </div>
         </main>
 
         <div id="modal-root"></div>

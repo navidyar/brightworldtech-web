@@ -2,6 +2,7 @@
 
 const { resolveLotUnitFormProfile } = require('../services/lotUnitFormProfileResolver');
 const { normalizeSubmittedLotFormRules } = require('../services/lotUnitFormRuleEditor');
+const { buildLotRequirementFormConstraints } = require('../config/lotRequirementFormPolicy');
 
 const MAXIMUM_LOT_ANCESTRY_DEPTH = 100;
 
@@ -292,6 +293,32 @@ async function getEffectiveUnitFormProfileForLot(lotId, connection = null) {
   return resolveLotUnitFormProfile({ lineage, rules });
 }
 
+async function getRequirementAwareUnitFormProfileForLot(lotId) {
+  const lotModel = require('./lotModel');
+  const normalizedLotId = normalizeLotId(lotId);
+  const [lineage, lot, requirements] = await Promise.all([
+    getLotLineage(normalizedLotId),
+    lotModel.getLotById(normalizedLotId),
+    lotModel.listLotRequirements(normalizedLotId)
+  ]);
+
+  if (!lot) {
+    throw new LotUnitFormProfileDataError(`Lot ${normalizedLotId} was not found.`, 'LOT_NOT_FOUND');
+  }
+
+  const rules = await listRulesForLotLineage(lineage);
+  const lotRequirementConstraints = buildLotRequirementFormConstraints(
+    requirements,
+    lot.requirement_policy_code
+  );
+
+  return resolveLotUnitFormProfile({
+    lineage,
+    rules,
+    lotRequirementConstraints
+  });
+}
+
 async function listAllLotIds(connection = null) {
   const db = connection || getDefaultConnection();
   const [rows] = await db.query('SELECT lot_id FROM lots ORDER BY lot_id');
@@ -301,6 +328,7 @@ async function listAllLotIds(connection = null) {
 module.exports = {
   LotUnitFormProfileDataError,
   getEffectiveUnitFormProfileForLot,
+  getRequirementAwareUnitFormProfileForLot,
   getLotLineage,
   listAllLotIds,
   listRulesForLot,

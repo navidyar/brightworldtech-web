@@ -1,5 +1,5 @@
 /* ==========================================================
-   Unit Requests
+   Requests
    Lookup-fidelity request queue: one compact review workspace
    and one results panel, using small type, pale-blue utility
    areas, thin borders, and a restrained shadow.
@@ -487,34 +487,106 @@
 
 .unit-request-review-panel {
   display: grid;
-  grid-template-columns: minmax(200px, 0.8fr) minmax(320px, 1.2fr);
-  gap: 22px;
-  padding: 18px;
+  grid-template-columns: minmax(180px, 0.7fr) minmax(0, 1.8fr);
+  gap: 18px;
+  padding: 16px 18px;
   background: var(--surface);
 }
 
 .unit-request-review-panel > div > p:last-child {
   margin-bottom: 0;
   color: var(--muted);
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
 .unit-request-review-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(210px, 0.85fr);
+  align-items: stretch;
+  gap: 16px;
+  min-width: 0;
 }
 
 .unit-request-review-actions form,
 .unit-request-review-panel > form {
-  display: grid;
-  gap: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
   margin: 0;
 }
 
 .unit-request-review-actions form + form {
-  padding-left: 14px;
+  padding-left: 16px;
   border-left: 1px solid var(--line-soft);
+}
+
+.unit-request-review-actions .form-field,
+.unit-request-review-actions .form-grid {
+  margin: 0;
+}
+
+.unit-request-review-actions .form-grid {
+  gap: 8px;
+}
+
+.unit-request-review-actions .form-field {
+  gap: 5px;
+}
+
+.unit-request-review-actions .form-field > span:first-child {
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.unit-request-review-actions .form-field :is(input:not([type="checkbox"]), select) {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 9px;
+  border-radius: 6px;
+  font-size: 0.84rem;
+}
+
+.unit-request-review-actions .form-field textarea {
+  min-height: 72px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.unit-request-inline-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.25;
+  cursor: pointer;
+}
+
+.unit-request-inline-check input[type="checkbox"] {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+  min-height: 16px;
+  margin: 0;
+  padding: 0;
+  border-radius: 4px;
+  flex: 0 0 16px;
+}
+
+.unit-request-review-actions form > button {
+  width: auto;
+  min-width: 132px;
+  min-height: 34px;
+  margin-top: auto;
+  padding: 6px 12px;
+  align-self: flex-start;
+  border-radius: 6px;
+  font-size: 0.84rem;
 }
 
 .unit-request-event-list {
@@ -643,10 +715,15 @@
   }
 
   .unit-request-review-actions form + form {
-    padding-top: 14px;
+    padding-top: 12px;
     padding-left: 0;
     border-top: 1px solid var(--line-soft);
     border-left: 0;
+  }
+
+  .unit-request-review-actions form > button {
+    width: 100%;
+    align-self: stretch;
   }
 }
 

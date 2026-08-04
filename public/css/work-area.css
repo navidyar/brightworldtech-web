@@ -924,9 +924,13 @@ body label:has(input[type="radio"]:is(:focus, :focus-visible)) {
   border-radius: 7px;
   color: inherit;
   font: inherit;
-  font-weight: 720;
-  line-height: 1.2;
+  font-size: inherit;
+  font-style: inherit;
+  font-weight: inherit;
+  letter-spacing: inherit;
+  line-height: inherit;
   text-decoration: none;
+  text-transform: inherit;
 }
 
 .table-sort-link:hover,

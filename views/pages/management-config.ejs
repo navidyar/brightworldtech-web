@@ -26,256 +26,250 @@
   };
   const isPasswordLinkExpirySetting = (category, value) => getConfigCategoryCode(category) === 'security_settings'
     && String(value && value.code ? value.code : '').toLowerCase() === 'password_link_expiry_hours';
+  const visibleValueCount = categorySections.reduce((sectionTotal, section) => (
+    sectionTotal + section.categories.reduce((categoryTotal, category) => categoryTotal + category.values.length, 0)
+  ), 0);
 %>
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=step5g-config-polish'] }) %>
+  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=stage8-config-clean'] }) %>
 
-  <body>
+  <body class="configuration-clean-page">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 
       <div class="app-main">
         <%- include('../partials/topbar', { pageTitle }) %>
 
-        <main class="content-shell">
-          <section class="dashboard-hero accent-slate">
+        <main class="content-shell configuration-page">
+          <%- include('../partials/configuration-nav', { currentNav }) %>
+
+          <section class="page-heading configuration-page-heading">
             <div>
-              <p class="eyebrow">Step 5g</p>
-              <h2>Configuration Values</h2>
-              <p>
-                Review, create, edit, activate, and deactivate app configuration values. Inactive values stay hidden by default so normal maintenance stays focused on currently available options.
-              </p>
+              <h1>Configuration Values</h1>
+              <p>Maintain the shared values used by Unit, Lot, user, and security workflows. Open a category to review its values or add a new one.</p>
             </div>
 
-            <div class="hero-badge">
-              <span>Active Values</span>
-              <strong><%= formatNumber(summary.activeValueCount || 0) %></strong>
+            <div class="site-clean-actions">
+              <a class="primary-button" href="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Create Config Value</a>
+              <% if (includeInactiveValues) { %>
+                <a class="secondary-button" href="/management/config">Hide Inactive</a>
+              <% } else { %>
+                <a class="secondary-button" href="/management/config?includeInactive=1">Show Inactive</a>
+              <% } %>
             </div>
           </section>
 
-          <section class="dashboard-grid">
-            <article class="dashboard-card">
-              <p class="card-label">Categories</p>
-              <h3><%= formatNumber(summary.categoryCount) %></h3>
-              <p>Config groups found in the database.</p>
-            </article>
+          <section class="site-summary-panel configuration-summary-panel" aria-label="Configuration totals">
+            <div class="site-summary-primary">
+              <span>Visible values</span>
+              <strong><%= formatNumber(visibleValueCount) %></strong>
+              <small><%= includeInactiveValues ? 'Active and inactive values are shown.' : 'Inactive values are hidden from this view.' %></small>
+            </div>
 
-            <article class="dashboard-card">
-              <p class="card-label">Active Values</p>
-              <h3><%= formatNumber(summary.activeValueCount || 0) %></h3>
-              <p>Selectable values currently available to the application.</p>
-            </article>
-
-            <article class="dashboard-card">
-              <p class="card-label">Inactive Values</p>
-              <h3><%= formatNumber(summary.inactiveValueCount || 0) %></h3>
-              <p><%= includeInactiveValues ? 'Inactive values are currently visible.' : 'Inactive values are hidden by default.' %></p>
-            </article>
+            <div class="site-summary-stats">
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">▦</span>
+                <span><small>Categories</small><strong><%= formatNumber(summary.categoryCount) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">✓</span>
+                <span><small>Active values</small><strong><%= formatNumber(summary.activeValueCount || 0) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">◌</span>
+                <span><small>Inactive values</small><strong><%= formatNumber(summary.inactiveValueCount || 0) %></strong></span>
+              </article>
+            </div>
           </section>
 
-          <section class="content-card config-values-control-card">
-            <div class="content-header config-values-control-header">
+          <section class="site-clean-section site-clean-surface configuration-browser-section" data-configuration-browser>
+            <div class="site-clean-section-heading configuration-browser-heading">
               <div>
-                <p class="eyebrow">Management</p>
-                <h2>Configuration Controls</h2>
-                <p>
-                  Admin users can maintain selectable app values here. Codes should stay stable, labels should stay user-friendly, and inactive values should be used when an option should no longer appear in normal forms.
-                </p>
-
-                <div class="config-filter-state <%= includeInactiveValues ? 'config-filter-state--expanded' : '' %>">
-                  <strong><%= includeInactiveValues ? 'Inactive values visible' : 'Active values only' %></strong>
-                  <span><%= includeInactiveValues ? 'Reviewing active and inactive values.' : 'Inactive values are hidden by default.' %></span>
-                </div>
+                <h2>Configuration Browser</h2>
+                <p>Search by category, label, code, stored value, or description. Categories stay collapsed until you need them.</p>
               </div>
 
-              <div class="config-values-actions">
-                <a class="primary-button" href="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Create Config Value</a>
-                <a class="secondary-button" href="/management/config/models">Manage Unit Models</a>
-
-                <% if (includeInactiveValues) { %>
-                  <a class="secondary-button" href="/management/config">Hide inactive values</a>
-                <% } else { %>
-                  <a class="secondary-button" href="/management/config?includeInactive=1">Show inactive values</a>
-                <% } %>
+              <div class="configuration-browser-heading-actions">
+                <button class="secondary-button button-small" type="button" data-configuration-expand-all>Expand All</button>
+                <button class="secondary-button button-small" type="button" data-configuration-collapse-all>Collapse All</button>
               </div>
             </div>
 
-            <div class="config-guidance-grid">
-              <article>
-                <strong>Codes</strong>
-                <p>Stable app keys. Avoid changing codes after values are used by lots, units, or dropdowns.</p>
-              </article>
-              <article>
-                <strong>Labels</strong>
-                <p>User-facing text. Update labels when wording needs cleanup without changing the stored code.</p>
-              </article>
-              <article>
-                <strong>Values</strong>
-                <p>Optional stored data. Production Weight Types use numeric values such as 1.00 or 0.50.</p>
-              </article>
-              <article>
-                <strong>Inactive values</strong>
-                <p>Hide retired options without deleting history that may still reference them.</p>
-              </article>
-            </div>
-          </section>
-
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Configuration</p>
-                <h2>Configuration Groups</h2>
-              </div>
+            <div class="configuration-browser-toolbar">
+              <label class="form-field configuration-browser-search">
+                <span>Search Configuration</span>
+                <input type="search" placeholder="Category, label, code, value, or description" autocomplete="off" data-configuration-search />
+              </label>
+              <p class="configuration-browser-status" data-configuration-status aria-live="polite"><%= formatNumber(visibleValueCount) %> values across <%= formatNumber(summary.categoryCount) %> categories.</p>
             </div>
 
-            <div class="config-section-list">
+            <div class="configuration-empty-state" data-configuration-empty hidden>
+              No configuration values match that search.
+            </div>
+
+            <div class="configuration-group-list" data-configuration-groups>
               <% if (categorySections.length === 0) { %>
-                <div class="workflow-item warning">
-                  <span></span>
-                  <div>
-                    <strong>No config categories found</strong>
-                    <p>The config tables exist, but no categories were returned.</p>
-                  </div>
-                </div>
+                <div class="configuration-empty-state">No configuration categories were returned.</div>
               <% } %>
 
               <% categorySections.forEach((section) => { %>
-                <section class="config-section">
-                  <div class="config-section-header">
+                <section class="configuration-group" data-configuration-group>
+                  <header class="configuration-group-heading">
                     <div>
-                      <p class="eyebrow">Configuration Group</p>
-                      <h3><%= section.label %></h3>
+                      <h2><%= section.label %></h2>
                       <p><%= section.description %></p>
                     </div>
-
-                    <div class="config-section-stats">
+                    <div class="configuration-group-counts" aria-label="Group totals">
                       <span><strong><%= formatNumber(section.categoryCount) %></strong> categories</span>
                       <span><strong><%= formatNumber(section.activeValueCount) %></strong> active</span>
-                      <span><strong><%= formatNumber(section.inactiveValueCount) %></strong> inactive</span>
+                      <% if (section.inactiveValueCount > 0) { %>
+                        <span><strong><%= formatNumber(section.inactiveValueCount) %></strong> inactive</span>
+                      <% } %>
                     </div>
-                  </div>
+                  </header>
 
-                  <div class="workflow-list">
+                  <div class="configuration-category-list">
                     <% section.categories.forEach((category) => { %>
-                      <div class="workflow-item slate config-category-card">
-                        <span></span>
-                        <div class="config-category-content">
-                          <div class="config-category-title-row">
-                            <div>
-                              <strong><%= category.label || category.code %></strong>
-                              <p>
-                                <code><%= category.code %></code>
-                                ·
-                                <%= formatNumber(category.activeValueCount) %> active
-                                <% if (category.inactiveValueCount > 0) { %>
-                                  · <%= formatNumber(category.inactiveValueCount) %> inactive
-                                <% } %>
-                                <% if (!category.isActive) { %>
-                                  · inactive category
-                                <% } %>
-                              </p>
+                      <%
+                        const categorySearchText = [
+                          section.label,
+                          section.description,
+                          category.label,
+                          category.code,
+                          category.description
+                        ].filter(Boolean).join(' ').toLowerCase();
+                        const supportsDragOrdering = Boolean(category.supportsDragOrdering && category.values.length >= 3);
+                        const tableColumnCount = supportsDragOrdering ? 7 : 6;
+                      %>
+                      <details class="configuration-category" data-configuration-category data-search-text="<%= categorySearchText %>">
+                        <summary class="configuration-category-summary">
+                          <span class="configuration-category-summary-title">
+                            <strong><%= category.label || category.code %></strong>
+                            <code><%= category.code %></code>
+                          </span>
+                          <span class="configuration-category-summary-meta">
+                            <span><%= formatNumber(category.values.length) %> shown</span>
+                            <span><%= formatNumber(category.activeValueCount) %> active</span>
+                            <% if (category.inactiveValueCount > 0) { %><span><%= formatNumber(category.inactiveValueCount) %> inactive</span><% } %>
+                            <% if (!category.isActive) { %><span class="pill neutral">Inactive category</span><% } %>
+                            <% if (isSystemUsedCategory(category)) { %><span class="pill neutral">System-used</span><% } %>
+                            <% if (category.usesPopularitySorting) { %><span class="pill neutral">Popularity sorted</span><% } %>
+                            <% if (supportsDragOrdering) { %><span class="pill neutral">Drag order</span><% } %>
+                          </span>
+                        </summary>
+
+                        <div class="configuration-category-body">
+                          <div class="configuration-category-toolbar">
+                            <div class="configuration-category-toolbar-copy">
+                              <p><%= category.description || 'No category description is configured.' %></p>
+                              <% if (supportsDragOrdering) { %>
+                                <p class="configuration-ordering-help">Drag the grip to reorder this list. Changes save automatically. Search can remain active; matching values move while hidden values keep their positions. Use the arrow keys while the grip is focused for keyboard ordering.</p>
+                                <p class="configuration-ordering-status" data-configuration-order-status aria-live="polite"></p>
+                              <% } else if (category.usesPopularitySorting) { %>
+                                <p class="configuration-ordering-help">Operational dropdowns use the cached popularity order. This table keeps the configured fallback order.</p>
+                              <% } %>
                             </div>
-
-                            <div class="config-category-pills">
-                              <% if (category.isActive) { %>
-                                <span class="pill good">Active</span>
-                              <% } else { %>
-                                <span class="pill bad">Inactive</span>
-                              <% } %>
-
-                              <% if (isSystemUsedCategory(category)) { %>
-                                <span class="pill config-pill-system">System-used</span>
-                              <% } %>
-
-                              <% if (isProductionWeightCategory(category)) { %>
-                                <span class="pill config-pill-weight">Production weights</span>
-                              <% } %>
-
-                              <% if (category.hiddenInactiveValueCount > 0) { %>
-                                <span class="pill muted"><%= formatNumber(category.hiddenInactiveValueCount) %> hidden</span>
-                              <% } %>
-
-                              <a class="secondary-button config-inline-action" href="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Add Value</a>
-                            </div>
+                            <a class="secondary-button button-small" href="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Add Value</a>
                           </div>
 
-                          <% if (category.description) { %>
-                            <p><%= category.description %></p>
-                          <% } %>
-
-                          <div class="table-card config-values-table-card">
-                            <table>
-                              <thead>
-                                <tr>
-                                  <th>Label</th>
-                                  <th>Code</th>
-                                  <th>Value</th>
-                                  <th>Status</th>
-                                  <th>Description</th>
-                                  <th>Actions</th>
-                                </tr>
-                              </thead>
-
-                              <tbody>
-                                <% if (category.values.length === 0) { %>
+                          <div class="table-card configuration-values-table" data-reorderable="<%= supportsDragOrdering ? '1' : '0' %>">
+                            <div class="table-scroll">
+                              <table>
+                                <thead>
                                   <tr>
-                                    <td colspan="6">
-                                      <% if (category.inactiveValueCount > 0 && !includeInactiveValues) { %>
-                                        This category only has inactive values. Use Show inactive values to review them.
-                                      <% } else { %>
-                                        No values in this category.
-                                      <% } %>
-                                    </td>
+                                    <% if (supportsDragOrdering) { %><th class="configuration-order-column">Order</th><% } %>
+                                    <th>Label</th>
+                                    <th>Code</th>
+                                    <th>Stored Value</th>
+                                    <th>Status</th>
+                                    <th>Description</th>
+                                    <th>Actions</th>
                                   </tr>
-                                <% } %>
+                                </thead>
 
-                                <% category.values.forEach((value) => { %>
-                                  <tr class="<%= value.isActive ? '' : 'config-value-row--inactive' %>">
-                                    <td>
-                                      <div class="config-value-label-stack">
-                                        <strong><%= value.label || value.code %></strong>
-                                        <% if (isSystemUsedCategory(category)) { %>
-                                          <span>System-used value</span>
-                                        <% } %>
-                                      </div>
-                                    </td>
-                                    <td><code><%= value.code %></code></td>
-                                    <td>
-                                      <% if (isProductionWeightCategory(category) && value.value) { %>
-                                        <span class="config-weight-chip"><%= value.value %></span>
-                                      <% } else { %>
-                                        <span class="config-value-plain"><%= value.value || '—' %></span>
-                                      <% } %>
-                                    </td>
-                                    <td>
-                                      <% if (value.isActive) { %>
-                                        <span class="pill good">Active</span>
-                                      <% } else { %>
-                                        <span class="pill bad">Inactive</span>
-                                      <% } %>
-                                    </td>
-                                    <td><%= value.description || '—' %></td>
-                                    <td>
-                                      <div class="config-value-row-actions">
-                                        <a class="secondary-button" href="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
-
-                                        <% if (isPasswordLinkExpirySetting(category, value)) { %>
-                                          <span class="pill config-pill-system">Required</span>
-                                        <% } else if (value.isActive) { %>
-                                          <a class="secondary-button danger-button" href="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Deactivate</a>
+                                <tbody
+                                  <% if (supportsDragOrdering) { %>
+                                    data-configuration-reorder-list
+                                    data-reorder-url="/management/config/categories/<%= category.config_category_id %>/order"
+                                    data-include-inactive="<%= includeInactiveValues ? '1' : '0' %>"
+                                  <% } %>>
+                                  <% if (category.values.length === 0) { %>
+                                    <tr data-configuration-no-values>
+                                      <td colspan="<%= tableColumnCount %>">
+                                        <% if (category.inactiveValueCount > 0 && !includeInactiveValues) { %>
+                                          This category only has inactive values. Use Show Inactive to review them.
                                         <% } else { %>
-                                          <a class="secondary-button" href="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Activate</a>
+                                          No values are configured in this category.
                                         <% } %>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                <% }) %>
-                              </tbody>
-                            </table>
+                                      </td>
+                                    </tr>
+                                  <% } %>
+
+                                  <% category.values.forEach((value) => { %>
+                                    <%
+                                      const valueSearchText = [
+                                        section.label,
+                                        category.label,
+                                        category.code,
+                                        value.label,
+                                        value.code,
+                                        value.value,
+                                        value.description,
+                                        value.isActive ? 'active' : 'inactive'
+                                      ].filter(Boolean).join(' ').toLowerCase();
+                                    %>
+                                    <tr class="<%= value.isActive ? '' : 'configuration-value-row--inactive' %>" data-configuration-value-row data-search-text="<%= valueSearchText %>" <% if (supportsDragOrdering) { %>data-configuration-order-row data-config-value-id="<%= value.config_value_id %>"<% } %>>
+                                      <% if (supportsDragOrdering) { %>
+                                        <td class="configuration-order-cell">
+                                          <button
+                                            class="configuration-drag-handle"
+                                            type="button"
+                                            data-configuration-drag-handle
+                                            aria-label="Reorder <%= value.label || value.code %>. Drag with a mouse or touch, or use the arrow keys.">
+                                            <svg viewBox="0 0 18 18" aria-hidden="true" focusable="false">
+                                              <circle cx="6" cy="4" r="1.2"></circle>
+                                              <circle cx="12" cy="4" r="1.2"></circle>
+                                              <circle cx="6" cy="9" r="1.2"></circle>
+                                              <circle cx="12" cy="9" r="1.2"></circle>
+                                              <circle cx="6" cy="14" r="1.2"></circle>
+                                              <circle cx="12" cy="14" r="1.2"></circle>
+                                            </svg>
+                                          </button>
+                                        </td>
+                                      <% } %>
+                                      <td><strong><%= value.label || value.code %></strong></td>
+                                      <td><code><%= value.code %></code></td>
+                                      <td>
+                                        <% if (isProductionWeightCategory(category) && value.value) { %>
+                                          <span class="configuration-value-emphasis"><%= value.value %></span>
+                                        <% } else { %>
+                                          <%= value.value || '—' %>
+                                        <% } %>
+                                      </td>
+                                      <td><span class="pill <%= value.isActive ? 'good' : 'neutral' %>"><%= value.isActive ? 'Active' : 'Inactive' %></span></td>
+                                      <td><%= value.description || '—' %></td>
+                                      <td>
+                                        <div class="configuration-value-actions">
+                                          <a class="secondary-button button-small" href="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+
+                                          <% if (isPasswordLinkExpirySetting(category, value)) { %>
+                                            <span class="pill neutral">Required</span>
+                                          <% } else if (value.isActive) { %>
+                                            <a class="danger-button button-small" href="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Deactivate</a>
+                                          <% } else { %>
+                                            <a class="secondary-button button-small" href="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Activate</a>
+                                          <% } %>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  <% }) %>
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      </details>
                     <% }) %>
                   </div>
                 </section>
@@ -288,6 +282,7 @@
       </div>
     </div>
 
-    <script defer src="/js/modal.js"></script>
+    <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+    <script defer src="/js/config-values.js?v=20260803-stage10s-pointer-filtered-drag-order"></script>
   </body>
 </html>

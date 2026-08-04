@@ -42,6 +42,7 @@ DB_PASSWORD=replace-me
 DB_ROOT_PASSWORD=replace-me
 
 ASSET_TAG_PREFIX=BWT
+CONFIG_USAGE_RANKING_REFRESH_MINUTES=120
 ```
 
 A session secret can be generated with:
@@ -105,8 +106,17 @@ docker compose exec -T app npm run validate:unit-form-registry
 docker compose exec -T app npm run validate:unit-form-bindings
 docker compose exec -T app npm run validate:lot-unit-form-profiles
 docker compose exec -T app npm run validate:lot-requirements
+docker compose exec -T app npm run validate:lot-enforcement-policies
+docker compose exec -T app npm run validate:processor-families
 docker compose exec -T app npm run validate:lot-validation
 docker compose exec -T app npm run validate:lot-validation-overrides
+docker compose exec -T app npm run validate:unit-audit
+docker compose exec -T app npm run validate:unit-export-foundation
+docker compose exec -T app npm run validate:unit-export-files
+docker compose exec -T app npm run validate:previous-current-hardware
+docker compose exec -T app npm run validate:previous-hardware-components
+docker compose exec -T app npm run validate:zero-capacity-slots
+docker compose exec -T app npm run validate:operational-option-rankings
 ```
 
 Run Node commands inside the `app` container. The host does not normally contain the project's npm dependencies.
@@ -119,16 +129,21 @@ Back up the database before applying a migration. Do not delete `mysql/data`, re
 
 ## Applying a handoff patch
 
-Place the patch in `handoff/`, then dry-run it before applying:
+Place the patch in `handoff/`. Run the dry run first and review its output before applying anything:
 
 ```bash
 cd /home/bwtdallas-webserver/app
-patch --dry-run -p0 < handoff/example.patch
-patch -p0 < handoff/example.patch
-docker compose up -d --build
+patch --dry-run --batch --forward -p0 < handoff/example.patch
 ```
 
-Run only the tests and manual checks relevant to the changed feature unless a full regression check is requested.
+Only after the dry run succeeds cleanly, run the apply command separately:
+
+```bash
+cd /home/bwtdallas-webserver/app
+patch --batch --forward -p0 < handoff/example.patch
+```
+
+Rebuild separately after the patch applies successfully. Run only the tests and manual checks relevant to the changed feature unless a full regression check is requested.
 
 ## CSS organization
 
@@ -145,9 +160,21 @@ Page-specific CSS should be limited to genuinely unique layout or behavior. Func
 - Newly created Lots are hidden until Management manually unhides them.
 - Lot Unit Form Configuration controls which Unit fields are visible and required.
 - Lot Requirements evaluate whether a Unit qualifies for a Lot; they are separate from form visibility and required-field rules.
-- Strict Lot requirements block Unit Create/Edit until the Unit qualifies or has a current Management acceptance. Warn Only and Open/Mixed policies remain non-blocking.
-- Admin and Management may accept a Lot requirement exception with a required reason. The acceptance expires when requirements change or the Unit leaves the Lot.
-- Hidden existing Unit data must be preserved when a Lot configuration hides a field.
+- Each Lot has an explicit Strict, Warn Only, or Open / Mixed requirement policy. The policy is independent from the Unit amount goal; Strict blocks technical mismatches, while the other policies report them without blocking.
+- Admin and Management may accept a Lot requirement exception with a required reason. Acceptance, revocation, and expiration records remain visible in Unit History.
+- Unit Create/Edit rechecks the latest Lot form profile on the server. Required fields are enforced, hidden Create values are rejected, and hidden existing data is preserved without being rewritten.
+- Previous and Current memory/storage are recorded as separate structured module/device rows. Both sides preserve type and component details, while totals and Lot requirements use Current rows only. A component size of `0` is an explicit empty slot/bay record; it is saved, contributes zero to totals, and does not require a component type.
+- Unit History is shown as a compact chronological timeline. New actions use grouped audit events; older activity is reconstructed only from available historical records.
+- Tech Leads, Management users, and Admins may undo a manual Unit completion with a required reason. Reversed credits are excluded from productivity totals and remain visible in Unit History.
+- Parking, return-to-active, assignment changes, duplicate assumptions, outcome approvals, override approvals, and automatic exception expirations are recorded as grouped Unit audit events.
+- Before a Unit enters or is reassigned within a Lot, the server rechecks destination form requirements and technical requirements. Strict failures are blocked; Warn Only and Open/Mixed mismatches remain non-blocking.
+- Duplicate serial intake separates moving or taking over the existing Unit from requesting a distinct Intentional Duplicate. Intentional Duplicate requests preserve the proposed Unit snapshot for explicit Tech Lead+ review.
+- Admin-only Configuration contains Config Values, Processor Families, the Unit Model Catalog, and Database Check under one shared navigation and compact visual system. Lot requirement forms may select existing Processor Families but cannot manage shared family membership.
+- Processor Families group explicit processor catalog values for reusable Lot requirements. Safe name-based matches are assigned automatically, while ambiguous processors remain visible for Admin review.
+- Admin and Management may preview and export all Units matching the current Unit Browser scope. CSV and XLSX exports use the same authorized dataset, and the export modal allows the included columns to be selected before download.
+- Unit hardware records keep previous and current memory/storage separate. Current capacity is calculated from the installed module/device rows and remains the only capacity checked by Lot Requirements; previous capacity is optional historical input. Unit Details, History, CSV/XLSX exports, and export summaries preserve separate previous/current values and totals.
+- Eligible operational selectors use a cached popularity ranking without changing Configuration's canonical/manual order. Unit Models are ranked within Manufacturer, Processors and Processor Types are ranked within Unit Model, and catalog/status lists with semantic progression keep their fixed configured order. Rankings combine lifetime, 90-day, and 30-day usage, refresh outside page requests every 120 minutes by default, retain the last successful cache on failure, and may be refreshed manually with `npm run refresh:operational-option-rankings` inside the app container.
+- Configuration categories that keep manual order and contain at least three active values can be reordered by dragging their rows. The order saves immediately in normalized 10-point increments; mouse, touch, and keyboard controls are available, and filtered search results can be reordered without moving hidden values from their existing positions.
 
 ## Troubleshooting
 

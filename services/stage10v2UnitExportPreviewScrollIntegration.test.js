@@ -1,0 +1,87 @@
+'use strict';
+
+const test = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const ROOT = path.resolve(__dirname, '..');
+const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+
+test('all available Unit export columns are selected by default', () => {
+  const contract = require('../config/unitExportContract');
+
+  assert.equal(contract.UNIT_EXPORT_COLUMNS.length, 24);
+  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
+  assert.deepEqual(contract.DEFAULT_UNIT_EXPORT_COLUMNS, contract.UNIT_EXPORT_COLUMNS);
+  assert.equal(contract.UNIT_EXPORT_COLUMNS.some((column) => column.defaultSelected === false), false);
+});
+
+test('Export Preview renders a second horizontal scrollbar directly below the table headers', () => {
+  const modal = read('views/fragments/tech-unit-export-preview-modal.ejs');
+  const tableScrollIndex = modal.indexOf('data-unit-export-table-scroll');
+  const headerIndex = modal.indexOf('<thead>', tableScrollIndex);
+  const scrollRowIndex = modal.indexOf('data-unit-export-top-scroll-row', headerIndex);
+  const topScrollIndex = modal.indexOf('class="unit-export-preview-top-scroll"', scrollRowIndex);
+  const previewRowIndex = modal.indexOf('safePreviewRows.forEach', topScrollIndex);
+
+  assert.ok(tableScrollIndex > 0);
+  assert.ok(headerIndex > tableScrollIndex);
+  assert.ok(scrollRowIndex > headerIndex);
+  assert.ok(topScrollIndex > scrollRowIndex);
+  assert.ok(previewRowIndex > topScrollIndex);
+  assert.match(modal, /data-unit-export-top-scroll-track/);
+  assert.match(modal, /data-unit-export-top-scroll-thumb/);
+  assert.doesNotMatch(modal, /data-unit-export-top-scroll-spacer/);
+  assert.match(modal, /aria-label="Horizontal scrollbar for the Unit export preview table"/);
+});
+
+test('the custom header scrollbar follows native table scrolling and controls table scrollLeft', () => {
+  const client = read('public/js/tech-units.js');
+
+  assert.match(client, /function initializeUnitExportTableScroll\(modal\)/);
+  assert.match(client, /tableScroll\.addEventListener\('scroll', refresh/);
+  assert.match(client, /tableScroll\.scrollLeft = \(clampedOffset \/ geometry\.thumbTravel\) \* geometry\.maxScrollLeft/);
+  assert.match(client, /topScrollThumb\.style\.transform = `translateX\(\$\{thumbOffset\}px\)`/);
+});
+
+test('top export scrollbar sizes itself to the table and hides when horizontal overflow is absent', () => {
+  const client = read('public/js/tech-units.js');
+
+  assert.match(client, /const contentWidth = Math\.max\(/);
+  assert.match(client, /const proportionalThumbWidth = contentWidth > 0/);
+  assert.match(client, /topScrollThumb\.style\.width = `\$\{thumbWidth\}px`/);
+  assert.match(client, /scrollRow\.hidden = !hasHorizontalOverflow/);
+  assert.match(client, /topScroll\.hidden = !hasHorizontalOverflow/);
+  assert.match(client, /topScroll\.style\.width = `\$\{viewportWidth\}px`/);
+  assert.match(client, /contentWidth > viewportWidth \+ 1/);
+});
+
+test('column changes and browser resizing recalculate the synchronized scrollbar', () => {
+  const client = read('public/js/tech-units.js');
+
+  assert.match(client, /window\.requestAnimationFrame\(\(\) => \{\s*initializeUnitExportTableScroll\(modal\);\s*\}\)/);
+  assert.match(client, /window\.addEventListener\('resize', \(\) => \{\s*initializeUnitExportTableScroll/);
+});
+
+test('Export Preview uses a restrained custom blue-gray scrollbar instead of the default gray chrome', () => {
+  const css = read('public/css/app.css');
+
+  assert.match(css, /\.unit-export-preview-top-scroll-track\s*\{[\s\S]*?background:\s*#e8eef5;/);
+  assert.match(css, /\.unit-export-preview-top-scroll-thumb\s*\{[\s\S]*?background:\s*#6f88a5;/);
+  assert.match(css, /\.unit-export-preview-table-scroll\s*\{[\s\S]*?scrollbar-color:\s*#6f88a5 #e8eef5;[\s\S]*?scrollbar-width:\s*thin;/);
+  assert.match(css, /::-webkit-scrollbar-thumb[\s\S]*?background:\s*#6f88a5;/);
+  assert.match(css, /::-webkit-scrollbar-thumb:hover[\s\S]*?background:\s*#526f8f;/);
+  assert.match(css, /::-webkit-scrollbar-track[\s\S]*?background:\s*#e8eef5;/);
+});
+
+test('Stage 10V.6 cache-busts the changed shared CSS and Unit Browser script', () => {
+  assert.match(read('views/partials/head.ejs'), /app\.css\?v=20260804-stage10v6-custom-header-scrollbar/);
+
+  for (const relativePath of [
+    'views/pages/tech-units.ejs',
+    'views/pages/tech-unit-detail.ejs'
+  ]) {
+    assert.match(read(relativePath), /tech-units\.js\?v=20260804-stage10v6-custom-header-scrollbar/);
+  }
+});

@@ -65,6 +65,55 @@ function parsePositiveInteger(value) {
   return Number.isInteger(number) && number > 0 ? number : null;
 }
 
+function parseOrderedConfigValueIds(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (error) {
+      return [];
+    }
+  }
+
+  return [];
+}
+
+function getProjectedActiveValueCount(selectedCategory, formData, configValue = null) {
+  if (!selectedCategory) {
+    return 0;
+  }
+
+  const selectedCategoryId = Number(selectedCategory.config_category_id);
+  const desiredActive = formData.isActive === '1';
+  let activeValueCount = Number(selectedCategory.activeValueCount || 0);
+
+  if (!configValue) {
+    return activeValueCount + (desiredActive ? 1 : 0);
+  }
+
+  const originalCategoryId = Number(configValue.config_category_id);
+  const originalActive = Boolean(configValue.isActive);
+
+  if (originalCategoryId === selectedCategoryId) {
+    activeValueCount -= originalActive ? 1 : 0;
+  }
+
+  activeValueCount += desiredActive ? 1 : 0;
+  return Math.max(0, activeValueCount);
+}
+
+function categoryUsesDragOrderingAfterSave(selectedCategory, formData, configValue = null) {
+  return Boolean(
+    selectedCategory
+    && !selectedCategory.usesPopularitySorting
+    && getProjectedActiveValueCount(selectedCategory, formData, configValue) >= 3
+  );
+}
+
 function parseSortOrder(value) {
   if (value === null || value === undefined || String(value).trim() === '') {
     return 0;
@@ -185,8 +234,8 @@ async function renderConfigPage(req, res, next) {
     const summary = await configModel.getConfigSummary();
 
     res.render('pages/management-config', {
-      pageTitle: 'Config Values',
-      currentNav: 'management-config',
+      pageTitle: 'Configuration',
+      currentNav: 'admin-config-values',
       categories,
       categorySections,
       summary,
@@ -235,13 +284,20 @@ async function createConfigValue(req, res, next) {
       });
     }
 
+    const configCategoryId = parsePositiveInteger(formData.configCategoryId);
+    const selectedCategory = categories.find((category) => Number(category.config_category_id) === configCategoryId) || null;
+    const becomesDragOrdered = categoryUsesDragOrderingAfterSave(selectedCategory, formData);
+    const sortOrder = selectedCategory?.dragOrderingManaged || becomesDragOrdered
+      ? await configModel.getNextConfigValueSortOrder(configCategoryId)
+      : parseSortOrder(formData.sortOrder);
+
     await configModel.createConfigValue({
-      configCategoryId: parsePositiveInteger(formData.configCategoryId),
+      configCategoryId,
       code: formData.code,
       label: formData.label,
       value: formData.value,
       description: formData.description,
-      sortOrder: parseSortOrder(formData.sortOrder),
+      sortOrder,
       isActive: formData.isActive === '1'
     });
 
@@ -320,14 +376,27 @@ async function updateConfigValue(req, res, next) {
       });
     }
 
+    const configCategoryId = parsePositiveInteger(formData.configCategoryId);
+    const selectedCategory = categories.find((category) => Number(category.config_category_id) === configCategoryId) || null;
+    let sortOrder = parseSortOrder(formData.sortOrder);
+    const sameCategory = Number(configValue.config_category_id) === configCategoryId;
+    const activatingValue = !configValue.isActive && formData.isActive === '1';
+    const targetUsesDragOrdering = categoryUsesDragOrderingAfterSave(selectedCategory, formData, configValue);
+
+    if (selectedCategory?.dragOrderingManaged || targetUsesDragOrdering) {
+      sortOrder = sameCategory && !activatingValue
+        ? Number(configValue.sort_order || 0)
+        : await configModel.getNextConfigValueSortOrder(configCategoryId);
+    }
+
     await configModel.updateConfigValue({
       configValueId,
-      configCategoryId: parsePositiveInteger(formData.configCategoryId),
+      configCategoryId,
       code: formData.code,
       label: formData.label,
       value: formData.value,
       description: formData.description,
-      sortOrder: parseSortOrder(formData.sortOrder),
+      sortOrder,
       isActive: formData.isActive === '1'
     });
 
@@ -338,6 +407,37 @@ async function updateConfigValue(req, res, next) {
     );
   } catch (error) {
     next(error);
+  }
+}
+
+async function reorderConfigValues(req, res, next) {
+  try {
+    const configCategoryId = parsePositiveInteger(req.params.configCategoryId);
+    const orderedConfigValueIds = parseOrderedConfigValueIds(req.body.orderedConfigValueIds);
+    const includeInactiveValues = parseIncludeInactiveFlag(req.body.includeInactive);
+
+    const result = await configModel.reorderConfigValues({
+      configCategoryId,
+      orderedConfigValueIds,
+      includeInactiveValues
+    });
+
+    return res.json({
+      ok: true,
+      configCategoryId: result.configCategoryId,
+      orderedConfigValueIds: result.orderedConfigValueIds,
+      updatedCount: result.updatedCount
+    });
+  } catch (error) {
+    if (error && Number.isInteger(error.statusCode) && error.statusCode >= 400 && error.statusCode < 500) {
+      return res.status(error.statusCode).json({
+        ok: false,
+        code: error.code || 'CONFIG_ORDER_INVALID',
+        error: error.message || 'The configuration order could not be saved.'
+      });
+    }
+
+    return next(error);
   }
 }
 
@@ -415,6 +515,7 @@ module.exports = {
   createConfigValue,
   renderEditConfigValueModal,
   updateConfigValue,
+  reorderConfigValues,
   renderConfigValueStatusModal,
   updateConfigValueStatus
 };

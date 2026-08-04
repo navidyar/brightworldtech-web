@@ -13,6 +13,12 @@
       timeZone: 'UTC'
     }).format(date);
   };
+  const pageRoleCodes = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
+  const canCreateTechUnits = typeof canCreateOrEditTechUnits === 'function'
+    ? canCreateOrEditTechUnits()
+    : pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
+  const isQcUnitBrowserUser = pageRoleCodes.includes('qc') && !canCreateTechUnits;
+  const canExportTechUnits = pageRoleCodes.some((roleCode) => ['admin', 'management'].includes(roleCode));
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -20,13 +26,13 @@
     pageTitle,
     stylesheets: [
       '/css/modal.css',
-      '/css/tech-units-clean.css?v=20260722-stage4-lot-profile'
+      '/css/tech-units-clean.css?v=20260803-stage10v1-history-detail-colors'
     ]
   }) %>
-  <script defer src="/js/modal.js"></script>
-  <script defer src="/js/tech-units.js"></script>
+  <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+  <script defer src="/js/tech-units.js?v=20260804-stage10v6-custom-header-scrollbar"></script>
   <script defer src="/js/tech-units-date-picker.js"></script>
-  <script defer src="/js/tech-unit-form.js?v=20260722-stage4-lot-profile"></script>
+  <script defer src="/js/tech-unit-form.js?v=20260803-stage10q-hardware-none"></script>
 
   <body>
     <div class="app-shell">
@@ -37,15 +43,35 @@
 
         <main class="content-shell tech-units-clean-page">
           <section class="tech-units-clean-page-heading">
-            <h1>Tech Units Browser</h1>
+            <h1><%= isQcUnitBrowserUser ? 'QC Unit Browser' : 'Tech Units Browser' %></h1>
 
-            <a class="primary-button tech-units-clean-create-button" href="/tech/units/new" hx-get="/tech/units/new/modal" hx-target="#modal-root" hx-swap="innerHTML">
-              Create Unit
-            </a>
+            <div class="tech-units-clean-heading-actions">
+              <% if (canExportTechUnits) { %>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  hx-get="<%= exportPreviewUrl %>"
+                  hx-target="#modal-root"
+                  hx-swap="innerHTML"
+                >
+                  Export Preview
+                </button>
+              <% } %>
+
+              <% if (canCreateTechUnits) { %>
+                <a class="primary-button tech-units-clean-create-button" href="/tech/units/new" hx-get="/tech/units/new/modal" hx-target="#modal-root" hx-swap="innerHTML">
+                  Create Unit
+                </a>
+              <% } %>
+            </div>
           </section>
 
           <% if (successMessage) { %>
             <div class="message success tech-units-clean-message"><%= successMessage %></div>
+          <% } %>
+
+          <% if (typeof warningMessage !== 'undefined' && warningMessage) { %>
+            <div class="message warning tech-units-clean-message"><%= warningMessage %></div>
           <% } %>
 
           <% if (!result.supported) { %>
@@ -58,24 +84,46 @@
                 const gradeFilterOptions = Array.isArray(result.gradeFilterOptions) ? result.gradeFilterOptions : [];
                 const techUserOptions = Array.isArray(result.techUserOptions) ? result.techUserOptions : [];
                 const pagination = result.pagination || {};
-                const pageRoleCodes = Array.isArray(currentRoles) ? currentRoles : [];
                 const isRegularTechBrowserUser = pageRoleCodes.includes('tech') && !pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
                 const canViewParkedUnits = pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
                 const isLast24HourDrilldown = filters.createdWindow === '24h';
                 const isGradeFilterSelected = (grade) => String(filters.gradeFilter || '') === String(grade.filterValue || '');
               %>
+              <section class="tech-units-clean-section tech-units-qc-summary-section" aria-labelledby="tech-units-qc-summary-heading">
+                <div class="tech-units-clean-section-heading">
+                  <h2 id="tech-units-qc-summary-heading">QC Performance</h2>
+                </div>
+
+                <div
+                  id="tech-units-qc-summary"
+                  data-tech-qc-summary-refresh-url="<%= qcSummaryUrl %>"
+                  hx-get="<%= qcSummaryUrl %>"
+                  hx-trigger="load"
+                  hx-swap="innerHTML"
+                >
+                  <div class="tech-qc-summary-loading" role="status">Loading QC performance...</div>
+                </div>
+              </section>
+
               <section class="tech-units-clean-section tech-units-clean-filters-section" aria-labelledby="tech-units-filters-heading">
                 <div class="tech-units-clean-section-heading tech-units-clean-section-heading--filters">
                   <h2 id="tech-units-filters-heading">Search &amp; Filters</h2>
 
-                  <% if (isLast24HourDrilldown || filters.unitState === 'parked' || filters.categoryId || filters.lotId || filters.gradeFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
+                  <% if (isLast24HourDrilldown || filters.unitState === 'parked' || filters.categoryId || filters.lotId || filters.gradeFilter || filters.qcReviewFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
                     <div class="tech-filter-panel-header-actions">
                       <span class="tech-filter-active-pill">Filtered View</span>
                     </div>
                   <% } %>
                 </div>
 
+                <% if (filters.unitState !== 'parked' && result.qcReviewQueue) { %>
+                  <%- include('../fragments/tech-units-qc-review-queue', { queue: result.qcReviewQueue, filters, oob: false }) %>
+                <% } %>
+
                 <form class="tech-filter-form tech-filter-panel tech-units-clean-filter-workspace" method="get" action="/tech/units">
+                  <% if (filters.qcReviewFilter) { %>
+                    <input type="hidden" name="qcReviewFilter" value="<%= filters.qcReviewFilter %>" />
+                  <% } %>
                   <input type="hidden" name="perPage" value="<%= pagination.perPageParam || filters.perPage || '50' %>" />
                   <% if (filters.sort) { %>
                     <input type="hidden" name="sort" value="<%= filters.sort %>" />
@@ -220,7 +268,7 @@
                 </div>
 
                 <div class="tech-units-clean-results-panel">
-                  <div class="tech-table-shell" id="tech-units-list" hx-get="<%= tableUrl %>" hx-trigger="load, unit-saved from:body, unit-work-completed from:body, unit-permanently-deleted from:body, unit-parked from:body, unit-returned-active from:body" hx-swap="innerHTML">
+                  <div class="tech-table-shell" id="tech-units-list" data-tech-units-refresh-url="<%= tableUrl %>" hx-get="<%= tableUrl %>" hx-trigger="load" hx-swap="innerHTML">
                     <div class="tech-loading-card">
                       Loading units...
                     </div>

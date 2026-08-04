@@ -129,22 +129,33 @@
     selectInput.disabled = true;
     selectInput.required = false;
 
+    const numericInput = optionSet.numericInput || {};
+    const minimum = numericInput.minimum ?? 0.01;
+    const maximum = numericInput.maximum;
+    const step = numericInput.step ?? 0.01;
+    const exampleValue = String(numericInput.exampleValue || '').trim();
+
     textWrap.hidden = false;
     textInput.disabled = false;
     textInput.required = true;
     textInput.type = 'number';
-    textInput.min = '0.01';
-    textInput.step = '0.01';
-    textInput.placeholder = selectedRequirementKey === 'ram_gb'
-      ? 'Example: 16'
-      : 'Example: 512';
+    textInput.min = String(minimum);
+    textInput.step = String(step);
+    textInput.placeholder = exampleValue ? `Example: ${exampleValue}` : 'Enter required value';
+
+    if (maximum === null || maximum === undefined || maximum === '') {
+      textInput.removeAttribute('max');
+    } else {
+      textInput.max = String(maximum);
+    }
 
     if (/^[a-z_]+:\d+$/.test(textInput.value)) {
       textInput.value = '';
     }
 
     if (fieldHint) {
-      fieldHint.textContent = 'Enter a total size in GB. Minimum and maximum comparisons are available.';
+      const suffix = optionSet.unitSuffix ? ` Values are measured in ${optionSet.unitSuffix.trim()}.` : '';
+      fieldHint.textContent = `${optionSet.helpText || 'Enter the required numeric value.'}${suffix} Minimum and maximum comparisons are available.`;
     }
   }
 

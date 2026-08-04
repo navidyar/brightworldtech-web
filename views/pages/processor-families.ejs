@@ -1,0 +1,156 @@
+<%
+  const inactiveFamilyCount = Math.max(0, Number(summary.familyCount || 0) - Number(summary.activeFamilyCount || 0));
+%>
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: ['/css/modal.css?v=stage8-config-consistency']
+  }) %>
+  <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+  <script defer src="/js/processor-families.js?v=stage8-config-consistency"></script>
+
+  <body class="configuration-clean-page">
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell configuration-page processor-family-page">
+          <%- include('../partials/configuration-nav', { currentNav }) %>
+
+          <section class="page-heading configuration-page-heading processor-family-page-heading">
+            <div>
+              <h1>Processor Families</h1>
+              <p>Maintain reusable processor groups for Lot requirements. Membership changes apply to every Lot that references the family.</p>
+            </div>
+            <div class="site-clean-actions">
+              <a class="primary-button" href="/management/config/processor-families/new/modal" hx-get="/management/config/processor-families/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Create Family</a>
+            </div>
+          </section>
+
+          <% if (successMessage) { %>
+            <div class="message success"><%= successMessage %></div>
+          <% } %>
+
+          <section class="site-summary-panel processor-family-summary-panel" aria-label="Processor family totals">
+            <div class="site-summary-primary">
+              <span>Processor families</span>
+              <strong><%= formatNumber(summary.familyCount) %></strong>
+              <small><%= formatNumber(summary.activeFamilyCount) %> active families are available for new Lot requirements.</small>
+            </div>
+
+            <div class="site-summary-stats">
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">◌</span>
+                <span><small>Inactive families</small><strong><%= formatNumber(inactiveFamilyCount) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">P</span>
+                <span><small>Mapped processors</small><strong><%= formatNumber(summary.mappedProcessorCount) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">!</span>
+                <span><small>Needs review</small><strong><%= formatNumber(summary.unmappedProcessorCount) %></strong></span>
+              </article>
+            </div>
+          </section>
+
+          <section class="site-clean-section site-clean-surface processor-family-catalog-section">
+            <div class="site-clean-section-heading processor-family-toolbar">
+              <div>
+                <h2>Family Catalog</h2>
+                <p>Preset families were populated only where processor names supported a safe match.</p>
+              </div>
+              <label class="form-field processor-family-search">
+                <span>Search</span>
+                <input type="search" placeholder="Family, brand, or processor count" data-processor-family-table-search />
+              </label>
+            </div>
+
+            <div class="table-card">
+              <div class="table-scroll">
+                <table class="processor-family-table" data-processor-family-table>
+                  <thead>
+                    <tr>
+                      <th>Family</th>
+                      <th>Brand</th>
+                      <th>Short Form</th>
+                      <th>Processors</th>
+                      <th>Lot Requirements</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% if (!families.length) { %>
+                      <tr><td colspan="7">No processor families are configured. Apply the Processor Family migration first.</td></tr>
+                    <% } %>
+
+                    <% families.forEach((family) => { %>
+                      <tr data-processor-family-row data-search-text="<%= `${family.name} ${family.code} ${family.brand_name} ${family.member_count} ${family.requirement_count}`.toLowerCase() %>">
+                        <td>
+                          <strong><%= family.name %></strong>
+                          <% if (family.description) { %><br /><span class="table-muted-line"><%= family.description %></span><% } %>
+                        </td>
+                        <td><%= family.brand_name %></td>
+                        <td><code><%= family.export_short_form || '—' %></code></td>
+                        <td><%= formatNumber(family.member_count) %></td>
+                        <td><%= formatNumber(family.requirement_count) %></td>
+                        <td><span class="pill <%= Number(family.is_active) === 1 ? 'good' : 'neutral' %>"><%= Number(family.is_active) === 1 ? 'Active' : 'Inactive' %></span></td>
+                        <td>
+                          <a class="secondary-button button-small" href="/management/config/processor-families/<%= family.processor_family_id %>/edit/modal" hx-get="/management/config/processor-families/<%= family.processor_family_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
+          <section class="site-clean-section site-clean-surface processor-family-unmapped-section">
+            <div class="site-clean-section-heading processor-family-toolbar">
+              <div>
+                <h2>Processors Needing Review</h2>
+                <p>These active processors remain uncategorized because their names did not support a safe automatic match.</p>
+              </div>
+            </div>
+
+            <div class="table-card">
+              <div class="table-scroll">
+                <table class="processor-family-table">
+                  <thead>
+                    <tr>
+                      <th>Processor</th>
+                      <th>Brand</th>
+                      <th>Existing Family</th>
+                      <th>Generation</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% if (!unmappedProcessors.length) { %>
+                      <tr><td colspan="4">All active processors belong to at least one Processor Family.</td></tr>
+                    <% } %>
+
+                    <% unmappedProcessors.forEach((processor) => { %>
+                      <tr>
+                        <td><strong><%= processor.modelCode %></strong></td>
+                        <td><%= processor.brandName %></td>
+                        <td><%= processor.legacyFamily || '—' %></td>
+                        <td><%= processor.generation || '—' %></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div id="modal-root"></div>
+  </body>
+</html>

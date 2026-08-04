@@ -47,7 +47,8 @@
     </div>
 
     <div class="tech-lot-requirement-workflow__counts">
-      <span><strong><%= workflow.requirementCount %></strong> requirement<%= workflow.requirementCount === 1 ? '' : 's' %></span>
+      <span><strong><%= workflow.requirementCount %></strong> rule<%= workflow.requirementCount === 1 ? '' : 's' %></span>
+      <span><strong><%= workflow.requirementGroupCount || workflow.checks.length %></strong> field<%= (workflow.requirementGroupCount || workflow.checks.length) === 1 ? '' : 's' %> checked</span>
       <span><strong><%= passedCount %></strong> passed</span>
       <span><strong><%= workflow.issueCount %></strong> issue<%= workflow.issueCount === 1 ? '' : 's' %></span>
     </div>

@@ -26,6 +26,7 @@ function getRoleOrderSql(alias = 'r') {
       WHEN 'admin' THEN 10
       WHEN 'management' THEN 20
       WHEN 'tech_lead' THEN 30
+      WHEN 'qc' THEN 35
       WHEN 'tech' THEN 40
       ELSE 999
     END
@@ -390,6 +391,7 @@ function formatRoleLabel(roleCode) {
     admin: 'Admin',
     management: 'Management',
     tech_lead: 'Tech Lead',
+    qc: 'Quality Control',
     tech: 'Tech',
     unknown: 'Unknown'
   };

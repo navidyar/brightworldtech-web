@@ -1,14 +1,28 @@
 <%
-  const canViewManagementOverrides =
-    typeof canAccessMenuArea === 'function' && canAccessMenuArea('management');
+  const isDuplicateIntakeRequest = typeof requestContext !== 'undefined' && requestContext === 'duplicate_intake';
+  const safeDuplicateIntakeContext = typeof duplicateIntakeContext !== 'undefined' && duplicateIntakeContext
+    ? duplicateIntakeContext
+    : {};
+  const safeAssignableLots = typeof assignableLots !== 'undefined' && Array.isArray(assignableLots)
+    ? assignableLots
+    : [];
+  const selectedDestinationLotId = typeof requestedDestinationLotId !== 'undefined'
+    ? Number(requestedDestinationLotId || 0)
+    : 0;
+  const isMoveOnlyRequest = isDuplicateIntakeRequest
+    && typeof duplicateIntakeActionKind !== 'undefined'
+    && duplicateIntakeActionKind === 'move';
+  const duplicateRequestTitle = isMoveOnlyRequest ? 'Request Lot Move' : 'Request Move / Takeover Existing Unit';
+  const duplicateRequestReasonLabel = isMoveOnlyRequest ? 'Reason for Lot Move' : 'Reason for Move / Takeover';
+  const duplicateRequestButtonLabel = isMoveOnlyRequest ? 'Send Lot Move Request' : 'Send Move / Takeover Request';
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
   <section class="modal-panel tech-override-modal" role="dialog" aria-modal="true" aria-labelledby="tech-override-title">
     <div class="modal-header">
       <div>
-        <p class="eyebrow">Override Request</p>
-        <h2 id="tech-override-title">Request Management Override</h2>
+        <p class="eyebrow"><%= isDuplicateIntakeRequest ? 'Existing Unit Request' : 'Override Request' %></p>
+        <h2 id="tech-override-title"><%= isDuplicateIntakeRequest ? duplicateRequestTitle : 'Request Management Override' %></h2>
       </div>
 
       <button type="button" class="modal-close" data-modal-close aria-label="Close modal">×</button>
@@ -28,23 +42,27 @@
             </div>
 
             <div>
-              <dt>Lot</dt>
+              <dt>Current Lot</dt>
               <dd><%= lotLabel %></dd>
             </div>
 
             <div>
+              <dt>Requested Destination</dt>
+              <dd><%= existingPendingRequest && existingPendingRequest.requestedDestinationLotName ? existingPendingRequest.requestedDestinationLotName : '—' %></dd>
+            </div>
+
+            <div>
               <dt>Status</dt>
-              <dd>Pending Management Review</dd>
+              <dd>Pending Tech Lead+ Review</dd>
             </div>
           </dl>
         </div>
 
         <div class="form-actions">
-          <button type="button" class="primary-button" data-modal-close>Done</button>
-
-          <% if (canViewManagementOverrides) { %>
-            <a class="secondary-button" href="/management/overrides">View Overrides</a>
+          <% if (existingPendingRequest && existingPendingRequest.unitOverrideRequestId) { %>
+            <a class="primary-button" href="/unit-requests/override/<%= existingPendingRequest.unitOverrideRequestId %>">View Request</a>
           <% } %>
+          <button type="button" class="secondary-button" data-modal-close>Done</button>
         </div>
       <% } else { %>
         <% if (errorMessages.length > 0) { %>
@@ -63,28 +81,44 @@
             </div>
 
             <div>
-              <dt>Lot</dt>
+              <dt>Current Lot</dt>
               <dd><%= lotLabel %></dd>
             </div>
+
+            <% if (existingPendingRequest && existingPendingRequest.requestedDestinationLotName) { %>
+              <div>
+                <dt>Requested Destination</dt>
+                <dd><%= existingPendingRequest.requestedDestinationLotName %></dd>
+              </div>
+            <% } %>
           </dl>
         </div>
 
         <% if (existingPendingRequest) { %>
-          <div class="message error">
+          <div class="message warning">
             <p>
-              Override request #<%= existingPendingRequest.unitOverrideRequestId %> is already pending for this unit.
+              Override request #<%= existingPendingRequest.unitOverrideRequestId %> is already pending for this Unit.
               Management must approve or deny it before another request can be created.
             </p>
           </div>
 
           <div class="form-actions">
-            <button type="button" class="primary-button" data-modal-close>Close</button>
-
-            <% if (canViewManagementOverrides) { %>
-              <a class="secondary-button" href="/management/overrides">View Overrides</a>
-            <% } %>
+            <a class="primary-button" href="/unit-requests/override/<%= existingPendingRequest.unitOverrideRequestId %>">View Request</a>
+            <button type="button" class="secondary-button" data-modal-close>Close</button>
           </div>
         <% } else if (supported) { %>
+          <% if (isDuplicateIntakeRequest) { %>
+            <div class="message info">
+              <p>
+                <% if (isMoveOnlyRequest) { %>
+                  This Unit is already assigned to you. Use this request only when Tech Lead+ approval is required to move it into another Lot. No assignment takeover and no new Asset Tag will occur.
+                <% } else { %>
+                  Use this request when the serial match belongs to the same physical Unit and Tech Lead+ approval is needed to move, reassign, or intentionally rework the existing record. No new Asset Tag will be created.
+                <% } %>
+              </p>
+            </div>
+          <% } %>
+
           <form
             class="app-form tech-override-form"
             method="post"
@@ -93,22 +127,43 @@
             hx-target="#modal-root"
             hx-swap="innerHTML"
           >
+            <input type="hidden" name="requestContext" value="<%= isDuplicateIntakeRequest ? 'duplicate_intake' : 'manual' %>" />
+            <% if (isDuplicateIntakeRequest) { %>
+              <input type="hidden" name="duplicateIntakeUnitSerialNumber" value="<%= safeDuplicateIntakeContext.unitSerialNumber || '' %>" />
+              <input type="hidden" name="duplicateIntakeBiosSerialNumber" value="<%= safeDuplicateIntakeContext.biosSerialNumber || '' %>" />
+              <input type="hidden" name="duplicateAssumptionNonce" value="<%= safeDuplicateIntakeContext.duplicateAssumptionNonce || '' %>" />
+            <% } %>
             <label class="form-field">
-              <span>Reason for Override</span>
+              <span>Requested Destination Lot</span>
+              <select name="requestedDestinationLotId" required>
+                <option value="">Select destination Lot</option>
+                <% safeAssignableLots.forEach((lot) => { %>
+                  <option value="<%= lot.lotId %>" <%= Number(lot.lotId) === selectedDestinationLotId ? 'selected' : '' %>><%= lot.lotName %></option>
+                <% }) %>
+              </select>
+              <small class="field-hint">
+                <%= isMoveOnlyRequest
+                  ? 'Choose the different Lot this already-assigned Unit should enter after approval.'
+                  : 'Select the current Lot for an assignment-only takeover, or another Lot when Tech Lead+ should move the existing Unit after approval.' %>
+              </small>
+            </label>
+
+            <label class="form-field">
+              <span><%= isDuplicateIntakeRequest ? duplicateRequestReasonLabel : 'Reason for Override' %></span>
               <textarea
                 name="reason"
                 rows="5"
                 maxlength="1000"
                 required
-                placeholder="Explain why this unit should be accepted or reviewed by Management."
+                placeholder="<%= isDuplicateIntakeRequest ? (isMoveOnlyRequest ? 'Explain why your existing Unit should move to the selected Lot.' : 'Explain why the existing Unit should be moved, reassigned, or reworked.') : 'Explain why this Unit should be reassigned or moved after Tech Lead+ review.' %>"
               ><%= formData.reason %></textarea>
               <small class="field-hint">
-                Minimum 10 characters. This is sent to Management for approval or denial.
+                Minimum 10 characters. This request remains Pending until Tech Lead+ approves or denies it.
               </small>
             </label>
 
             <div class="form-actions">
-              <button class="primary-button" type="submit">Send Override Request</button>
+              <button class="primary-button" type="submit"><%= isDuplicateIntakeRequest ? duplicateRequestButtonLabel : 'Send Override Request' %></button>
               <button type="button" class="secondary-button" data-modal-close>Cancel</button>
             </div>
           </form>
