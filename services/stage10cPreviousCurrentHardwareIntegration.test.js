@@ -36,14 +36,14 @@ test('previous hardware fields are persisted, validated, audited, and visible in
   assert.match(duplicateModal, /'previousStorageGb'/);
 });
 
-test('Lot Requirements remain current-only while previous values are visibility configurable', () => {
+test('Lot Requirements remain current-only while Previous sections support visibility and optional/required form configuration', () => {
   const previousMemory = getUnitFormFieldDefinition('previous_memory_size');
   const previousStorage = getUnitFormFieldDefinition('previous_storage_size');
 
   assert.equal(previousMemory.visibilityConfigurable, true);
-  assert.equal(previousMemory.requirementConfigurable, false);
+  assert.equal(previousMemory.requirementConfigurable, true);
   assert.equal(previousStorage.visibilityConfigurable, true);
-  assert.equal(previousStorage.requirementConfigurable, false);
+  assert.equal(previousStorage.requirementConfigurable, true);
   assert.equal(getLotRequirementField('ram_gb').label, 'Current Memory Size');
   assert.equal(getLotRequirementField('storage_gb').label, 'Current Storage Size');
   assert.equal(getLotRequirementField('previous_memory_size'), null);

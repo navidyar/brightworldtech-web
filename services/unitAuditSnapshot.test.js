@@ -64,3 +64,23 @@ test('general comments are recorded as append-only changes', () => {
   assert.equal(event.changes[0].fieldKey, 'general_comment');
   assert.equal(event.changes[0].changeType, 'added');
 });
+
+
+test('Lot audit snapshots use lot_name instead of exposing raw Lot IDs', () => {
+  const options = {
+    ...formOptions,
+    lots: [
+      { lot_id: 9, lot_name: 'Dallas Parent Lot' },
+      { lot_id: 40, lot_name: 'Dallas Child Lot' }
+    ]
+  };
+
+  const before = buildUnitAuditSnapshot({ assetTag: 'BWT1', lotId: '9' }, options);
+  const after = buildUnitAuditSnapshot({ assetTag: 'BWT1', lotId: '40' }, options);
+  const changes = diffUnitAuditSnapshots(before, after, { mode: 'edit' });
+  const lotChange = changes.find((change) => change.fieldKey === 'assignable_lot');
+
+  assert.ok(lotChange);
+  assert.equal(lotChange.oldValueText, 'Dallas Parent Lot');
+  assert.equal(lotChange.newValueText, 'Dallas Child Lot');
+});

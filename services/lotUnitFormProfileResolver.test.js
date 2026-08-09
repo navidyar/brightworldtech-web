@@ -22,7 +22,7 @@ test('resolves application defaults without stored rules', () => {
   const profile = resolveLotUnitFormProfile({ lineage: rootOnly });
 
   assert.equal(profile.selectedLot.lotId, 10);
-  assert.equal(profile.fields.length, 57);
+  assert.equal(profile.fields.length, 53);
   assert.equal(getResolvedUnitFormField(profile, 'assignable_lot').required, true);
   assert.equal(getResolvedUnitFormField(profile, 'bios_serial_number').visible, true);
   assert.equal(getResolvedUnitFormField(profile, 'bios_serial_number').required, false);

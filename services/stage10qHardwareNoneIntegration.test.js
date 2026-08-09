@@ -69,11 +69,13 @@ test('Lot-required Hardware Issues accept explicit None and use user-facing guid
 });
 
 test('Stage 10Q assets are cache-busted on all Unit form entry points', () => {
-  for (const relativePath of [
-    'views/pages/tech-unit-detail.ejs',
-    'views/pages/tech-unit-form.ejs',
-    'views/pages/tech-units.ejs'
-  ]) {
-    assert.match(read(relativePath), /stage10q-hardware-none/);
-  }
+  const detailPage = read('views/pages/tech-unit-detail.ejs');
+  const formPage = read('views/pages/tech-unit-form.ejs');
+  const browserPage = read('views/pages/tech-units.ejs');
+
+  assert.match(detailPage, /tech-units-clean\.css\?v=/);
+  assert.match(formPage, /tech-units-clean\.css\?v=/);
+  assert.match(browserPage, /tech-units-clean\.css\?v=/);
+  assert.match(formPage, /tech-unit-form\.js\?v=20260804-stage10w2-refinements/);
+  assert.match(browserPage, /tech-unit-form\.js\?v=20260804-stage10w2-refinements/);
 });

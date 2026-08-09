@@ -58,5 +58,5 @@ test('unreviewed Units use the shared subtle neutral QC symbol instead of a dash
   assert.match(icon, /tech-qc-status-indicator__mark--neutral[\s\S]*?M7\.8 11h6\.4/);
   assert.match(appCss, /--qc-neutral-ink:/);
   assert.match(appCss, /\.tech-qc-status-indicator--not-reviewed \{[\s\S]*?--tech-qc-icon-ink: var\(--qc-neutral-ink\);/);
-  assert.match(head, /app\.css\?v=20260731-stage10c-hardware-matrix/);
+  assert.match(head, /app\.css\?v=20260804-stage10w-ranking-administration/);
 });

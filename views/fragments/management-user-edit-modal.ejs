@@ -4,6 +4,11 @@
   const safeFormData = formData || {};
   const selectedRoles = Array.isArray(safeFormData.roleCodes) ? safeFormData.roleCodes : [];
   const safeReturnPath = returnPath === 'inactive' ? 'inactive' : 'active';
+  const isRoleEditingLocked = Boolean(roleEditingLocked);
+  const lockedRoleCode = roleEditingLockCode === 'admin' ? 'admin' : 'management';
+  const lockedRoleLabel = lockedRoleCode === 'admin' ? 'Admin' : 'Management';
+  const currentRoleCode = selectedRoles[0] || user.primary_role_code || '';
+  const currentRoleLabel = user.primary_role_name || user.role_names || currentRoleCode || 'No role assigned';
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
@@ -45,26 +50,49 @@
         </label>
 
         <label class="form-field">
+          <span>BWT Username</span>
+          <input type="text" value="<%= user.username || '' %>" readonly autocomplete="off" aria-describedby="management-user-username-help" />
+          <small id="management-user-username-help" class="management-user-role-help">Generated when the account is created and kept stable for ScanTools, TechTools, and future API matching.</small>
+        </label>
+
+        <label class="form-field">
           <span>Email Address</span>
           <input type="email" name="email" value="<%= safeFormData.email || '' %>" autocomplete="off" inputmode="email" spellcheck="false" required />
         </label>
 
         <div>
           <p class="eyebrow management-user-modal-roles-label">Primary Access Role</p>
-          <p class="management-user-role-help">Choose one primary account access role. QC grants read-only cross-technician Unit access; production work, packing, and task activity remain separate operational records.</p>
+          <% if (isRoleEditingLocked) { %>
+            <p class="management-user-role-help">Your current <%= lockedRoleLabel %> role is locked while you edit your own account. Another authorized user must make any role change.</p>
+            <% if (currentRoleCode) { %>
+              <input type="hidden" name="roleCodes" value="<%= currentRoleCode %>" />
+            <% } %>
 
-          <div class="workflow-list management-user-modal-roles">
-            <% safeRoles.forEach((role) => { %>
-              <label class="workflow-item <%= selectedRoles.includes(role.code) ? 'active' : '' %>">
-                <input type="radio" name="roleCodes" value="<%= role.code %>" <%= selectedRoles.includes(role.code) ? 'checked' : '' %> />
-
+            <div class="workflow-list management-user-modal-roles">
+              <div class="workflow-item active" aria-label="Current access role">
+                <span aria-hidden="true"></span>
                 <div>
-                  <strong><%= role.name %></strong>
-                  <p><%= role.description || role.code %></p>
+                  <strong><%= currentRoleLabel %></strong>
+                  <p>Current role — role editing is unavailable for your own <%= lockedRoleLabel %> account.</p>
                 </div>
-              </label>
-            <% }) %>
-          </div>
+              </div>
+            </div>
+          <% } else { %>
+            <p class="management-user-role-help">Choose one primary account access role. QC grants read-only cross-technician Unit access; production work, packing, and task activity remain separate operational records.</p>
+
+            <div class="workflow-list management-user-modal-roles">
+              <% safeRoles.forEach((role) => { %>
+                <label class="workflow-item <%= selectedRoles.includes(role.code) ? 'active' : '' %>">
+                  <input type="radio" name="roleCodes" value="<%= role.code %>" <%= selectedRoles.includes(role.code) ? 'checked' : '' %> />
+
+                  <div>
+                    <strong><%= role.name %></strong>
+                    <p><%= role.description || role.code %></p>
+                  </div>
+                </label>
+              <% }) %>
+            </div>
+          <% } %>
         </div>
 
         <div class="action-row">

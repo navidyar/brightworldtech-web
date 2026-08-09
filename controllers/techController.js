@@ -22,6 +22,9 @@ const { getBlockingMessage: getLotRequirementBlockingMessage } = require('../ser
 const { buildUnitFormAuditEvent } = require('../services/unitAuditSnapshot');
 const { buildUnitHistoryTimeline } = require('../services/unitHistoryTimeline');
 const { buildQcStatusPresentation } = require('../services/qcStatusPresentation');
+const { getQcReviewActionAvailability } = require('../services/qcReviewActionAvailability');
+const { buildUnitWeightBrowserPresentation } = require('../services/unitWeightBrowserPresentation');
+const catalogRequestAccessPolicy = require('../services/catalogRequestAccessPolicy');
 const {
   parseHardwareCapacityToGb,
   normalizeHardwareCapacityForStorage
@@ -157,10 +160,7 @@ function userCanOverrideProductionWeight(req) {
 }
 
 function canRequestCatalogException(req) {
-  const roleCodes = getCurrentRoleCodes(req);
-
-  return roleCodes.includes('tech')
-    && !roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  return catalogRequestAccessPolicy.canSubmitCatalogRequest(getCurrentRoleCodes(req));
 }
 
 function markProductionWeightPermission(formData, formOptions, { allowOverrideInput = true } = {}) {
@@ -277,6 +277,11 @@ function canViewParkedUnits(req) {
     .some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
 }
 
+function canSearchParkedUnits(req) {
+  return getCurrentRoleCodes(req)
+    .some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
+}
+
 function canViewAnyLotFilter(req) {
   return getCurrentRoleCodes(req)
     .some((roleCode) => ['admin', 'management'].includes(roleCode));
@@ -320,6 +325,7 @@ function getFiltersFromRequest(req) {
     currentUserId: req && req.currentUser ? req.currentUser.user_id : null,
     restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req),
     canViewParkedUnits: canViewParkedUnits(req),
+    canSearchParkedUnits: canSearchParkedUnits(req),
     allowAnyLotFilter: canViewAnyLotFilter(req)
   };
 }
@@ -440,14 +446,39 @@ async function attachLatestQcCorrections(result) {
 
   return {
     ...result,
+    units: result.units.map((unit) => {
+      const latestQcCorrection = unit.latestQcReview && unit.latestQcReview.decisionCode === 'rejected'
+        ? latestCorrectionMap.get(Number(unit.latestQcReview.qcCheckId)) || null
+        : null;
+
+      return {
+        ...unit,
+        latestQcCorrection,
+        qcReviewActionAvailability: getQcReviewActionAvailability({
+          hasCompletion: Boolean(unit.latestWorkCompletion),
+          isParked: Boolean(unit.isParked),
+          latestDecisionCode: unit.latestQcReview ? unit.latestQcReview.decisionCode : '',
+          hasCorrection: Boolean(latestQcCorrection)
+        })
+      };
+    })
+  };
+}
+
+function attachUnitWeightBrowserPresentation(result) {
+  if (!result || !result.supported || !Array.isArray(result.units)) {
+    return result;
+  }
+
+  return {
+    ...result,
     units: result.units.map((unit) => ({
       ...unit,
-      latestQcCorrection: unit.latestQcReview && unit.latestQcReview.decisionCode === 'rejected'
-        ? latestCorrectionMap.get(Number(unit.latestQcReview.qcCheckId)) || null
-        : null
+      ...buildUnitWeightBrowserPresentation(unit)
     }))
   };
 }
+
 
 function attachTechUnitBrowserVersions(result) {
   if (!result || !result.supported || !Array.isArray(result.units)) {
@@ -489,8 +520,9 @@ async function buildTechUnitsResult(filters) {
   const completionResult = await attachLatestWorkCompletion(overrideResult);
   const qcResult = await attachLatestQcReviews(completionResult);
   const correctionResult = await attachLatestQcCorrections(qcResult);
+  const weightPresentationResult = attachUnitWeightBrowserPresentation(correctionResult);
 
-  return attachTechUnitBrowserVersions(correctionResult);
+  return attachTechUnitBrowserVersions(weightPresentationResult);
 }
 
 function normalizeModuleRowsFromBody(value) {
@@ -526,15 +558,11 @@ function getMemoryModulesFromRequest(req, collectionName = 'memoryModules') {
     const isEmptySlot = sizeGb === '0';
 
     return {
+      componentRowId: normalizeModuleField(row.componentRowId),
       slotLabel: normalizeModuleField(row.slotLabel),
       sizeGb,
       ramTypeConfigValueId: isEmptySlot ? '' : normalizeModuleField(row.ramTypeConfigValueId),
-      memoryInstallTypeCode: isEmptySlot ? '' : normalizeMemoryInstallTypeCode(row.memoryInstallTypeCode),
-      speedMhz: isEmptySlot ? '' : normalizeModuleField(row.speedMhz),
-      manufacturerName: isEmptySlot ? '' : normalizeModuleField(row.manufacturerName),
-      partNumber: isEmptySlot ? '' : normalizeModuleField(row.partNumber),
-      serialNumber: isEmptySlot ? '' : normalizeModuleField(row.serialNumber),
-      changeNotes: normalizeModuleField(row.changeNotes)
+      memoryInstallTypeCode: isEmptySlot ? '' : normalizeMemoryInstallTypeCode(row.memoryInstallTypeCode)
     };
   });
 }
@@ -545,15 +573,11 @@ function getStorageDevicesFromRequest(req, collectionName = 'storageDevices') {
     const isEmptySlot = sizeGb === '0';
 
     return {
+      componentRowId: normalizeModuleField(row.componentRowId),
       slotLabel: normalizeModuleField(row.slotLabel),
       sizeGb,
       storageTypeConfigValueId: isEmptySlot ? '' : normalizeModuleField(row.storageTypeConfigValueId),
-      manufacturerName: isEmptySlot ? '' : normalizeModuleField(row.manufacturerName),
-      modelNumber: isEmptySlot ? '' : normalizeModuleField(row.modelNumber),
-      serialNumber: isEmptySlot ? '' : normalizeModuleField(row.serialNumber),
-      firmwareVersion: isEmptySlot ? '' : normalizeModuleField(row.firmwareVersion),
-      wipeStatusConfigValueId: isEmptySlot ? '' : normalizeModuleField(row.wipeStatusConfigValueId),
-      changeNotes: normalizeModuleField(row.changeNotes)
+      wipeStatusConfigValueId: isEmptySlot ? '' : normalizeModuleField(row.wipeStatusConfigValueId)
     };
   });
 }
@@ -815,20 +839,8 @@ function validateMemoryModules(formData, propertyName = 'memoryModules', rowLabe
       errors.push(`${rowLabel} has an invalid memory install type.`);
     }
 
-    if (moduleRow.speedMhz && !isPositiveInteger(moduleRow.speedMhz)) {
-      errors.push(`${rowLabel} speed must be a positive whole number.`);
-    }
-
     if (moduleRow.slotLabel.length > 80) {
       errors.push(`${rowLabel} slot label must be 80 characters or fewer.`);
-    }
-
-    if (moduleRow.manufacturerName.length > 120 || moduleRow.partNumber.length > 120 || moduleRow.serialNumber.length > 120) {
-      errors.push(`${rowLabel} manufacturer, part number, and serial number must each be 120 characters or fewer.`);
-    }
-
-    if (moduleRow.changeNotes.length > 500) {
-      errors.push(`${rowLabel} notes must be 500 characters or fewer.`);
     }
   });
 
@@ -865,19 +877,6 @@ function validateStorageDevices(formData, propertyName = 'storageDevices', rowLa
 
     if (deviceRow.slotLabel.length > 80) {
       errors.push(`${rowLabel} slot label must be 80 characters or fewer.`);
-    }
-
-    if (
-      deviceRow.manufacturerName.length > 120 ||
-      deviceRow.modelNumber.length > 120 ||
-      deviceRow.serialNumber.length > 120 ||
-      deviceRow.firmwareVersion.length > 120
-    ) {
-      errors.push(`${rowLabel} manufacturer, model, serial, and firmware fields must each be 120 characters or fewer.`);
-    }
-
-    if (deviceRow.changeNotes.length > 500) {
-      errors.push(`${rowLabel} notes must be 500 characters or fewer.`);
     }
   });
 
@@ -1178,6 +1177,19 @@ async function validateUnitForm(formData, formOptions, mode) {
 
   if (validationFormData.cosmeticNotes.length > 1000) {
     errors.push('Cosmetic notes must be 1000 characters or fewer.');
+  }
+
+  if (validationFormData.overallGradeConfigValueId) {
+    const selectedGradeId = Number(validationFormData.overallGradeConfigValueId);
+    const allowedGrade = (Array.isArray(formOptions.overallGradeOptions) ? formOptions.overallGradeOptions : [])
+      .some((option) => (
+        Number(option.id) === selectedGradeId
+        || (Array.isArray(option.filterIds) && option.filterIds.includes(selectedGradeId))
+      ));
+
+    if (!allowedGrade) {
+      errors.push('Choose a valid Cosmetic Grade: A, AB, B, C, or D.');
+    }
   }
 
   if (formOptions.canOverrideProductionWeight && validationFormData.productionWeightOverride && !isPositiveOrZeroNumber(validationFormData.productionWeightOverride)) {
@@ -1866,22 +1878,26 @@ async function saveExpandedDetailsIfPossible(unitId, formData, currentUserId) {
 }
 
 async function createTechUnitWithAudit({ formData, formOptions, currentUserId }) {
-  return techUnitModel.createTechUnit(formData, currentUserId, {
-    beforeCommit: async ({ connection, unitId, assetNumber }) => {
+  let committedAssetNumber = null;
+
+  const unitId = await techUnitModel.createTechUnit(formData, currentUserId, {
+    beforeCommit: async ({ connection, unitId: pendingUnitId, assetNumber }) => {
+      committedAssetNumber = Number(assetNumber) || null;
+
       await unitIssueEntryModel.saveIssueDetailsForUnitWithConnection(connection, {
-        unitId,
+        unitId: pendingUnitId,
         formData,
         currentUserId
       });
       await unitExpandedFormModel.saveExpandedDetailsForUnitWithConnection(connection, {
-        unitId,
+        unitId: pendingUnitId,
         formData,
         currentUserId
       });
 
       const event = buildUnitFormAuditEvent({
         mode: 'create',
-        unitId,
+        unitId: pendingUnitId,
         actorUserId: currentUserId,
         afterFormData: {
           ...formData,
@@ -1893,6 +1909,36 @@ async function createTechUnitWithAudit({ formData, formOptions, currentUserId })
       await unitAuditEventModel.createUnitAuditEvent(event, connection);
     }
   });
+
+  return {
+    unitId: Number(unitId),
+    assetTag: committedAssetNumber
+      ? techUnitModel.getDisplayAssetTag(committedAssetNumber)
+      : ''
+  };
+}
+
+function buildUnitFormSavedTriggerDetail({
+  operation,
+  unitId,
+  assetTag,
+  unitSerialNumber,
+  biosSerialNumber
+} = {}) {
+  return {
+    source: 'tech-unit-form',
+    operation: operation === 'edit' ? 'edit' : 'create',
+    unitId: Number(unitId) || null,
+    assetTag: String(assetTag || '').trim(),
+    unitSerialNumber: normalizeSerialInput(unitSerialNumber),
+    biosSerialNumber: normalizeSerialInput(biosSerialNumber)
+  };
+}
+
+function setUnitFormSavedTrigger(res, detail) {
+  res.set('HX-Trigger-After-Swap', JSON.stringify({
+    'unit-saved': detail
+  }));
 }
 
 async function updateTechUnitWithAudit({
@@ -2170,7 +2216,6 @@ async function renderTechUnitsPage(req, res, next) {
       filters: result.filters || filters,
       tableUrl: buildTechUnitsTableUrl(result.filters || filters),
       qcSummaryUrl: buildTechUnitsQcSummaryUrl(result.filters || filters, req),
-      exportPreviewUrl: buildTechUnitsExportPreviewUrl(result.filters || filters),
       successMessage: req.query.created === '1'
         ? 'Unit created successfully.'
         : req.query.updated === '1'
@@ -2374,7 +2419,8 @@ async function buildSingleTechUnitResult(req, unitId) {
     perPage: '10',
     currentUserId: req.currentUser.user_id,
     restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req),
-    canViewParkedUnits: canViewParkedUnits(req)
+    canViewParkedUnits: canViewParkedUnits(req),
+    canSearchParkedUnits: canSearchParkedUnits(req)
   };
   const result = await buildTechUnitsResult(filters);
 
@@ -2916,7 +2962,7 @@ async function completeTechUnitWork(req, res, next) {
       );
     }
 
-    await techUnitModel.recordUnitWorkCompletion({
+    const completionResult = await techUnitModel.recordUnitWorkCompletion({
       unitId: preview.unitId,
       completedByUserId: req.currentUser.user_id,
       recordedByUserId: req.currentUser.user_id,
@@ -2934,9 +2980,14 @@ async function completeTechUnitWork(req, res, next) {
       return res.render(
         'fragments/tech-unit-complete-work-modal',
         buildCompleteWorkModalView({
-          preview,
+          preview: {
+            ...preview,
+            grantsProductionCredit: completionResult.grantsProductionCredit
+          },
           req,
-          successMessage: 'Unit completion was recorded successfully.'
+          successMessage: completionResult.grantsProductionCredit
+            ? 'Unit completion and production credit were recorded successfully.'
+            : 'Unit completion was recorded. The existing production cycle was retained, so no additional unit or weight credit was added.'
         })
       );
     }
@@ -3053,7 +3104,7 @@ function buildUnitParkModalView({ mode = 'park', unit = null, formOptions = {}, 
     unit,
     formOptions: {
       lots: Array.isArray(formOptions.lots) ? formOptions.lots : [],
-      technicians: Array.isArray(formOptions.technicians) ? formOptions.technicians : []
+      assignees: Array.isArray(formOptions.assignees) ? formOptions.assignees : []
     },
     formData: {
       destinationLotId: String(formData.destinationLotId || ''),
@@ -3180,7 +3231,7 @@ async function renderReturnTechUnitToActiveModal(req, res, next) {
 
 async function returnTechUnitToActive(req, res, next) {
   let unit = null;
-  let formOptions = { lots: [], technicians: [] };
+  let formOptions = { lots: [], assignees: [] };
   const formData = getLifecycleFormData(req);
 
   try {
@@ -3597,8 +3648,10 @@ async function createTechUnitModal(req, res, next) {
       });
     }
 
+    let savedUnit;
+
     try {
-      await createTechUnitWithAudit({
+      savedUnit = await createTechUnitWithAudit({
         formData,
         formOptions,
         currentUserId: req.currentUser.user_id
@@ -3638,7 +3691,13 @@ async function createTechUnitModal(req, res, next) {
       throw saveError;
     }
 
-    res.set('HX-Trigger', 'unit-saved');
+    setUnitFormSavedTrigger(res, buildUnitFormSavedTriggerDetail({
+      operation: 'create',
+      unitId: savedUnit.unitId,
+      assetTag: savedUnit.assetTag,
+      unitSerialNumber: formData.unitSerialNumber,
+      biosSerialNumber: formData.biosSerialNumber
+    }));
     return res.send('');
   } catch (error) {
     next(error);
@@ -4004,7 +4063,13 @@ async function updateTechUnitModal(req, res, next) {
     }
 
     publishUnitBrowserChange({ unitId, changeType: 'unit-updated' });
-    res.set('HX-Trigger', 'unit-saved');
+    setUnitFormSavedTrigger(res, buildUnitFormSavedTriggerDetail({
+      operation: 'edit',
+      unitId,
+      assetTag: existingFormData && existingFormData.assetTag,
+      unitSerialNumber: formData.unitSerialNumber,
+      biosSerialNumber: formData.biosSerialNumber
+    }));
     return res.send('');
   } catch (error) {
     next(error);

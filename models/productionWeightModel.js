@@ -73,11 +73,11 @@ function mapUnitCategoryCodeToProductionWeightCode(unitCategoryCode) {
   return PRODUCTION_WEIGHT_CODE_ALIASES.get(normalizedCode) || normalizedCode;
 }
 
-async function listProductionWeightOptions() {
+async function listProductionWeightOptions(connection = pool) {
   const placeholders = PRODUCTION_WEIGHT_CATEGORY_CODES.map(() => '?').join(', ');
   const orderPlaceholders = PRODUCTION_WEIGHT_CATEGORY_CODES.map(() => '?').join(', ');
 
-  const [rows] = await pool.query(
+  const [rows] = await connection.query(
     `
       SELECT
         cv.config_value_id,

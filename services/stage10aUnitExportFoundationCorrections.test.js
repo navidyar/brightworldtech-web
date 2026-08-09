@@ -26,28 +26,29 @@ test('Battery Health accepts tenths but rejects extra precision and out-of-range
 });
 
 test('Lot requirement numeric presentation is field-specific', () => {
-  const registry = read('config/lotRequirementRegistry.js');
   const optionModel = read('models/requirementOptionModel.js');
   const script = read('public/js/lot-requirements.js');
   const modal = read('views/fragments/lot-requirement-form-modal.ejs');
 
-  assert.match(registry, /key: 'storage_gb'[\s\S]*?exampleValue: '512'/);
-  assert.match(registry, /key: 'battery_health'[\s\S]*?decimalPlaces: 1[\s\S]*?exampleValue: '87\.5'/);
+  assert.equal(getLotRequirementField('storage_gb').exampleValue, '512');
+  assert.equal(getLotRequirementField('battery_health').decimalPlaces, 1);
+  assert.equal(getLotRequirementField('battery_health').exampleValue, '87.5');
   assert.match(optionModel, /numericInput:[\s\S]*?exampleValue/);
   assert.match(script, /textInput\.placeholder = exampleValue \? `Example: \$\{exampleValue\}`/);
   assert.match(script, /maximum === null[\s\S]*?removeAttribute\('max'\)/);
   assert.doesNotMatch(modal, /placeholder="Example: 512"/);
 });
 
-test('Unit export preview is hidden and denied outside Admin and Management', () => {
-  const routes = read('routes/management.js');
-  const controller = read('controllers/techController.js');
-  const page = read('views/pages/tech-units.ejs');
+test('Lot Unit export is exposed only on Management Lot Details while legacy endpoints remain protected', () => {
+  const managementRoutes = read('routes/management.js');
+  const lotRoutes = read('routes/lots.js');
+  const techPage = read('views/pages/tech-units.ejs');
+  const lotPage = read('views/pages/management-lot-detail.ejs');
 
-  assert.match(routes, /'\/tech\/units\/export\/preview'[\s\S]*?requireRole\(managementRoles\)/);
-  assert.match(controller, /function canExportTechUnits[\s\S]*?\['admin', 'management'\]/);
-  assert.match(controller, /if \(!canExportTechUnits\(req\)\)[\s\S]*?status\(403\)/);
-  assert.match(page, /const canExportTechUnits = pageRoleCodes\.some[\s\S]*?if \(canExportTechUnits\)[\s\S]*?Export Preview/);
+  assert.match(managementRoutes, /'\/tech\/units\/export\/preview'[\s\S]*?requireRole\(managementRoles\)/);
+  assert.match(lotRoutes, /'\/management\/lots\/:lotId\/export\/preview'[\s\S]*?requireRole\(lotManagementRoles\)/);
+  assert.doesNotMatch(techPage, /Export Preview/);
+  assert.match(lotPage, /Export Units/);
 });
 
 test('Export preview provides an explicit horizontally scrollable table region', () => {

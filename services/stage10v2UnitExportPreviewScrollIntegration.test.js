@@ -64,19 +64,23 @@ test('column changes and browser resizing recalculate the synchronized scrollbar
   assert.match(client, /window\.addEventListener\('resize', \(\) => \{\s*initializeUnitExportTableScroll/);
 });
 
-test('Export Preview uses a restrained custom blue-gray scrollbar instead of the default gray chrome', () => {
+test('Export Preview uses the shared restrained blue-gray scrollbar contract', () => {
+  const theme = read('public/css/theme.css');
   const css = read('public/css/app.css');
 
-  assert.match(css, /\.unit-export-preview-top-scroll-track\s*\{[\s\S]*?background:\s*#e8eef5;/);
-  assert.match(css, /\.unit-export-preview-top-scroll-thumb\s*\{[\s\S]*?background:\s*#6f88a5;/);
-  assert.match(css, /\.unit-export-preview-table-scroll\s*\{[\s\S]*?scrollbar-color:\s*#6f88a5 #e8eef5;[\s\S]*?scrollbar-width:\s*thin;/);
-  assert.match(css, /::-webkit-scrollbar-thumb[\s\S]*?background:\s*#6f88a5;/);
-  assert.match(css, /::-webkit-scrollbar-thumb:hover[\s\S]*?background:\s*#526f8f;/);
-  assert.match(css, /::-webkit-scrollbar-track[\s\S]*?background:\s*#e8eef5;/);
+  assert.match(theme, /--ui-scrollbar-track:\s*#e8eef5;/);
+  assert.match(theme, /--ui-scrollbar-thumb:\s*#6f88a5;/);
+  assert.match(theme, /--ui-scrollbar-thumb-hover:\s*#526f8f;/);
+  assert.match(css, /\.unit-export-preview-top-scroll-track\s*\{[\s\S]*?background:\s*var\(--ui-scrollbar-track\);/);
+  assert.match(css, /\.unit-export-preview-top-scroll-thumb\s*\{[\s\S]*?background:\s*var\(--ui-scrollbar-thumb\);/);
+  assert.match(css, /scrollbar-color:\s*var\(--ui-scrollbar-thumb\) var\(--ui-scrollbar-track\);/);
+  assert.match(css, /\*::-webkit-scrollbar-thumb[\s\S]*?background:\s*var\(--ui-scrollbar-thumb\);/);
+  assert.match(css, /\*::-webkit-scrollbar-thumb:hover[\s\S]*?background:\s*var\(--ui-scrollbar-thumb-hover\);/);
+  assert.match(css, /\*::-webkit-scrollbar-track[\s\S]*?background:\s*var\(--ui-scrollbar-track\);/);
 });
 
 test('Stage 10V.6 cache-busts the changed shared CSS and Unit Browser script', () => {
-  assert.match(read('views/partials/head.ejs'), /app\.css\?v=20260804-stage10v6-custom-header-scrollbar/);
+  assert.match(read('views/partials/head.ejs'), /app\.css\?v=20260804-stage10w-ranking-administration/);
 
   for (const relativePath of [
     'views/pages/tech-units.ejs',

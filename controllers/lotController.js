@@ -32,6 +32,9 @@ const {
   normalizeRequirementKey
 } = require('../config/lotRequirementRegistry');
 const { analyzeRequirementNumber } = require('../services/lotRequirementNumberPolicy');
+const unitExportService = require('../services/unitExportService');
+const unitExportFileService = require('../services/unitExportFileService');
+const { UNIT_EXPORT_COLUMNS } = require('../config/unitExportContract');
 
 const requirementFieldOptions = listLotRequirementFields().map((field) => ({
   value: field.key,
@@ -66,7 +69,8 @@ function getBlankLotFormData(formOptions = {}) {
     deadline: '',
     labelFormat: '',
     objectives: '',
-    notes: ''
+    notes: '',
+    startNewProductionCycleOnMove: '0'
   };
 }
 
@@ -81,6 +85,7 @@ function getLotFormDataFromRequest(req) {
     defaultProductionWeight: String(req.body.defaultProductionWeight || '').trim(),
     hasUnlimitedGoal: req.body.hasUnlimitedGoal === '1' ? '1' : '0',
     allowDuplicateUnitAssumption: req.body.allowDuplicateUnitAssumption === '1' ? '1' : '0',
+    startNewProductionCycleOnMove: req.body.startNewProductionCycleOnMove === '1' ? '1' : '0',
     unitAmountGoal: String(req.body.unitAmountGoal || '').trim(),
     deadline: String(req.body.deadline || '').trim(),
     labelFormat: String(req.body.labelFormat || '').trim(),
@@ -165,6 +170,7 @@ function getLotFormDataFromLot(lot) {
     defaultProductionWeight: lot.default_production_weight !== null && lot.default_production_weight !== undefined ? String(lot.default_production_weight) : '',
     hasUnlimitedGoal: lot.isUnlimited ? '1' : '0',
     allowDuplicateUnitAssumption: Number(lot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0',
+    startNewProductionCycleOnMove: Number(lot.start_new_production_cycle_on_move || 0) === 1 ? '1' : '0',
     unitAmountGoal: lot.isUnlimited ? '' : String(lot.unitGoal || lot.unit_amount_goal || ''),
     deadline: formatDateForInput(lot.deadline),
     labelFormat: lot.label_format || '',
@@ -229,6 +235,16 @@ function validateLotForm(formData, formOptions, currentLotId = null) {
 
   if (currentLotId && formData.parentLotId && Number(formData.parentLotId) === Number(currentLotId)) {
     errors.push('A lot cannot be its own parent lot.');
+  }
+
+  if (formData.parentLotId && Number.isInteger(Number(formData.parentLotId))) {
+    const selectedParentIsAllowed = (formOptions.parentLots || []).some(
+      (parentLot) => Number(parentLot.lot_id) === Number(formData.parentLotId)
+    );
+
+    if (!selectedParentIsAllowed) {
+      errors.push('That Parent Lot cannot be selected because it is this Lot, one of its descendants, or is otherwise unavailable.');
+    }
   }
 
   if (formData.lotTypeConfigValueId && !Number.isInteger(Number(formData.lotTypeConfigValueId))) {
@@ -305,6 +321,12 @@ function validateRequirementForm(formData, requirementValueOptionsByKey = {}) {
 
     if (!analysis.valid) {
       errors.push(analysis.message);
+    }
+  } else if (fieldDefinition?.storageKind === 'text') {
+    const maximumLength = Number(fieldDefinition.maximumLength || 120);
+
+    if (formData.requiredValue.length > maximumLength) {
+      errors.push(`${fieldDefinition.label} must be ${maximumLength} characters or fewer.`);
     }
   } else {
     const optionSet = requirementValueOptionsByKey[fieldDefinition?.key];
@@ -459,7 +481,7 @@ async function getLotDetailViewData(lotId) {
   }
 
   const lots = await lotModel.listLots({ includeHidden: true });
-  const requirements = await lotModel.listLotRequirements(lotId);
+  const requirements = await lotModel.listEffectiveLotRequirements(lotId);
   const validationReport = await lotValidationModel.buildLotValidationReport(lotId);
   const enforcementSummary = lotEnforcementModel.buildLotEnforcementSummary(validationReport);
   const requirementValueOptionsByKey = await getRequirementValueOptionsByKey();
@@ -815,6 +837,153 @@ async function createLot(req, res, next) {
   }
 }
 
+
+function getLotExportColumnSelection(req) {
+  const query = req && req.query ? req.query : {};
+
+  return {
+    value: query.columns,
+    selectionProvided: Object.prototype.hasOwnProperty.call(query, 'columns')
+  };
+}
+
+function buildLotExportDownloadUrl(lotId, format) {
+  return `/management/lots/${Number(lotId)}/export/${format}`;
+}
+
+function buildLotExportPresentation(lotScope) {
+  const selectedLotName = String(lotScope?.selectedLot?.lot_name || 'Selected Lot').trim();
+  const includedCount = Array.isArray(lotScope?.includedLots) ? lotScope.includedLots.length : 0;
+  const isDescendantScope = lotScope?.mode === 'descendants';
+
+  return {
+    eyebrow: 'Lot Unit Export',
+    title: `Export ${selectedLotName}`,
+    description: isDescendantScope
+      ? `Select the columns to include and export active Units assigned to all descendant Lots under ${selectedLotName}.`
+      : `Select the columns to include and export active Units assigned directly to ${selectedLotName}.`,
+    summaryText: isDescendantScope
+      ? `${includedCount} descendant Lot${includedCount === 1 ? '' : 's'} included. Units assigned directly to ${selectedLotName} are not included in this parent-Lot export.`
+      : `Only Units currently assigned directly to ${selectedLotName} are included.`
+  };
+}
+
+async function renderLotUnitExportPreview(req, res) {
+  const lotId = Number(req.params.lotId);
+
+  try {
+    const lotScope = await lotModel.getLotExportScope(lotId);
+
+    if (!lotScope) {
+      return res.status(404).render('fragments/tech-unit-export-preview-modal', {
+        dataset: null,
+        availableColumns: UNIT_EXPORT_COLUMNS,
+        previewRows: [],
+        csvDownloadUrl: '',
+        xlsxDownloadUrl: '',
+        exportPresentation: {
+          eyebrow: 'Lot Unit Export',
+          title: 'Export unavailable',
+          description: 'The selected Lot could not be found.',
+          summaryText: ''
+        },
+        errorMessages: ['The selected Lot could not be found.']
+      });
+    }
+
+    const fullDataset = await unitExportService.buildLotScopedUnitExportDataset(lotScope);
+    const columnSelection = getLotExportColumnSelection(req);
+    const dataset = unitExportService.applyUnitExportColumnSelection(
+      fullDataset,
+      columnSelection.value,
+      columnSelection
+    );
+    const exportPresentation = buildLotExportPresentation(lotScope);
+
+    return res.render('fragments/tech-unit-export-preview-modal', {
+      dataset,
+      availableColumns: UNIT_EXPORT_COLUMNS,
+      previewRows: dataset.rows,
+      csvDownloadUrl: buildLotExportDownloadUrl(lotId, 'csv'),
+      xlsxDownloadUrl: buildLotExportDownloadUrl(lotId, 'xlsx'),
+      exportPresentation,
+      errorMessages: []
+    });
+  } catch (error) {
+    console.error('Lot Unit export preview could not be prepared:', error);
+    return res.render('fragments/tech-unit-export-preview-modal', {
+      dataset: null,
+      availableColumns: UNIT_EXPORT_COLUMNS,
+      previewRows: [],
+      csvDownloadUrl: '',
+      xlsxDownloadUrl: '',
+      exportPresentation: {
+        eyebrow: 'Lot Unit Export',
+        title: 'Export unavailable',
+        description: 'The Lot Unit export could not be prepared.',
+        summaryText: ''
+      },
+      errorMessages: [error && error.message
+        ? error.message
+        : 'The Lot Unit export could not be prepared.']
+    });
+  }
+}
+
+async function downloadLotUnitExport(req, res, next, format) {
+  const lotId = Number(req.params.lotId);
+
+  try {
+    const lotScope = await lotModel.getLotExportScope(lotId);
+
+    if (!lotScope) {
+      return res.status(404).type('text/plain').send('The selected Lot could not be found.');
+    }
+
+    const fullDataset = await unitExportService.buildLotScopedUnitExportDataset(lotScope);
+    const columnSelection = getLotExportColumnSelection(req);
+    const dataset = unitExportService.applyUnitExportColumnSelection(
+      fullDataset,
+      columnSelection.value,
+      columnSelection
+    );
+    const normalizedFormat = String(format || '').trim().toLowerCase();
+    const fileBuffer = normalizedFormat === 'csv'
+      ? unitExportFileService.buildCsvBuffer(dataset)
+      : unitExportFileService.buildXlsxWorkbookBuffer(dataset);
+    const contentType = normalizedFormat === 'csv'
+      ? unitExportFileService.CSV_CONTENT_TYPE
+      : unitExportFileService.XLSX_CONTENT_TYPE;
+    const filename = unitExportFileService.buildUnitExportFilename(normalizedFormat, dataset.filters);
+
+    res.status(200);
+    res.set({
+      'Content-Type': contentType,
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': String(fileBuffer.length),
+      'Cache-Control': 'no-store, max-age=0',
+      Pragma: 'no-cache',
+      'X-Content-Type-Options': 'nosniff'
+    });
+
+    return res.send(fileBuffer);
+  } catch (error) {
+    if (error && error.code === 'BWT_UNIT_EXPORT_COLUMNS_REQUIRED') {
+      return res.status(400).type('text/plain').send(error.message);
+    }
+
+    return next(error);
+  }
+}
+
+async function downloadLotUnitsCsv(req, res, next) {
+  return downloadLotUnitExport(req, res, next, 'csv');
+}
+
+async function downloadLotUnitsXlsx(req, res, next) {
+  return downloadLotUnitExport(req, res, next, 'xlsx');
+}
+
 async function renderLotDetailPage(req, res, next) {
   try {
     const lotId = Number(req.params.lotId);
@@ -962,6 +1131,7 @@ async function renderEditLotModal(req, res, next) {
 
     const lot = await lotModel.getLotById(lotId);
     const formOptions = await lotModel.getLotFormOptions({
+      currentLotId: lotId,
       includeParentLotIds: lot?.parent_lot_id ? [lot.parent_lot_id] : []
     });
 
@@ -992,6 +1162,7 @@ async function updateLotModal(req, res, next) {
     const lotId = Number(req.params.lotId);
     const lot = await lotModel.getLotById(lotId);
     const formOptions = await lotModel.getLotFormOptions({
+      currentLotId: lotId,
       includeParentLotIds: lot?.parent_lot_id ? [lot.parent_lot_id] : []
     });
 
@@ -1022,6 +1193,23 @@ async function updateLotModal(req, res, next) {
 
     return sendHtmxRedirect(req, res, addCacheBuster('/management/lots?updated=1'));
   } catch (error) {
+    if (error && String(error.code || '').startsWith('LOT_PARENT_')) {
+      const lotId = Number(req.params.lotId);
+      const lot = await lotModel.getLotById(lotId);
+      const formOptions = await lotModel.getLotFormOptions({
+        currentLotId: lotId,
+        includeParentLotIds: lot?.parent_lot_id ? [lot.parent_lot_id] : []
+      });
+
+      return res.status(400).render('fragments/lot-form-modal', {
+        mode: 'edit',
+        lot,
+        formOptions,
+        formData: getLotFormDataFromRequest(req),
+        errorMessages: [error.message]
+      });
+    }
+
     next(error);
   }
 }
@@ -1283,6 +1471,73 @@ async function renderLotRequirementsModal(req, res, next) {
     return res.render('fragments/lot-requirements-modal', {
       lot: lotDetailViewData.lot,
       requirements: lotDetailViewData.requirements,
+      successMessage: '',
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+
+async function customizeInheritedLotRequirementField(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const requirementId = Number(req.params.requirementId);
+
+    if (!Number.isSafeInteger(lotId) || lotId <= 0
+      || !Number.isSafeInteger(requirementId) || requirementId <= 0) {
+      return res.status(404).render('fragments/lot-requirements-modal', {
+        lot: null,
+        requirements: [],
+        successMessage: '',
+        errorMessages: ['The selected inherited requirement could not be found.']
+      });
+    }
+
+    const lotDetailViewData = await getLotDetailViewData(lotId);
+
+    if (!lotDetailViewData) {
+      return res.status(404).render('fragments/lot-requirements-modal', {
+        lot: null,
+        requirements: [],
+        successMessage: '',
+        errorMessages: ['The selected Lot could not be found.']
+      });
+    }
+
+    const inheritedRequirement = lotDetailViewData.requirements.find((requirement) => (
+      Number(requirement.lot_requirement_id) === requirementId
+      && Number(requirement.is_inherited) === 1
+      && Number(requirement.source_lot_id) === Number(lotDetailViewData.lot.parent_lot_id)
+    ));
+
+    if (!inheritedRequirement) {
+      return res.status(409).render('fragments/lot-requirements-modal', {
+        lot: lotDetailViewData.lot,
+        requirements: lotDetailViewData.requirements,
+        successMessage: '',
+        errorMessages: [
+          'That requirement is no longer inherited from this Lot\'s direct parent. Refresh the Requirements list and try again.'
+        ]
+      });
+    }
+
+    const result = await lotModel.customizeInheritedRequirementField(
+      lotId,
+      requirementId,
+      req.currentUser.user_id
+    );
+    const refreshedViewData = await getLotDetailViewData(lotId);
+    const fieldLabel = inheritedRequirement.requirement_label || inheritedRequirement.requirement_key || 'Requirement';
+    const successMessage = result.alreadyCustomized
+      ? `${fieldLabel} already has child-specific requirements.`
+      : `${fieldLabel} is now customized for this Lot. The direct parent rules for this field were copied here and can now be edited or deleted.`;
+
+    return res.render('fragments/lot-requirements-modal', {
+      lot: refreshedViewData.lot,
+      requirements: refreshedViewData.requirements,
+      successMessage,
       errorMessages: []
     });
   } catch (error) {
@@ -1720,6 +1975,7 @@ module.exports = {
   deleteLot,
   renderLotDetailPage,
   renderLotRequirementsModal,
+  customizeInheritedLotRequirementField,
   renderLotUnitFormRulesModalPage,
   renderLotUnitValidationModal,
   acceptLotUnitValidationOverride,
@@ -1730,5 +1986,8 @@ module.exports = {
   updateLotRequirementModal,
   renderDeleteLotRequirementModal,
   deleteLotRequirement,
+  renderLotUnitExportPreview,
+  downloadLotUnitsCsv,
+  downloadLotUnitsXlsx,
   updateLotUnitFormRules
 };

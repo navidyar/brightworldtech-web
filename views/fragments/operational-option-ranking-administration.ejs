@@ -1,0 +1,147 @@
+<section
+  id="operational-ranking-administration"
+  class="site-clean-section site-clean-surface operational-ranking-administration"
+  aria-labelledby="operational-ranking-heading">
+  <div class="site-clean-section-heading operational-ranking-heading-row">
+    <div>
+      <h2 id="operational-ranking-heading">Operational List Sorting</h2>
+      <p>Monitor the cached popularity order used by Unit forms without recalculating rankings during page loads.</p>
+    </div>
+
+    <form
+      class="operational-ranking-refresh-form"
+      method="post"
+      action="/management/config/operational-rankings/refresh"
+      hx-post="/management/config/operational-rankings/refresh"
+      hx-target="#operational-ranking-administration"
+      hx-swap="outerHTML"
+      hx-indicator="#operational-ranking-refresh-indicator">
+      <button
+        class="secondary-button button-small"
+        type="submit"
+        <%= !rankingAdministration.supported || rankingAdministration.health.isRunning ? 'disabled' : '' %>>
+        Refresh Now
+      </button>
+      <span id="operational-ranking-refresh-indicator" class="operational-ranking-refresh-indicator htmx-indicator" aria-live="polite">Refreshing…</span>
+    </form>
+  </div>
+
+  <div class="operational-ranking-summary" aria-label="Operational ranking status">
+    <span class="operational-ranking-health operational-ranking-health--<%= rankingAdministration.health.key %>">
+      <span class="operational-ranking-health-dot" aria-hidden="true"></span>
+      <strong><%= rankingAdministration.health.label %></strong>
+    </span>
+    <span>Last successful refresh: <strong><%= rankingAdministration.completedAtRelative %></strong></span>
+    <span><strong><%= formatNumber(rankingAdministration.rankingRowCount) %></strong> cached rankings</span>
+    <span><strong><%= formatNumber(rankingAdministration.durationMs) %> ms</strong> last duration</span>
+  </div>
+
+  <% if (rankingAdministration.message) { %>
+    <p class="operational-ranking-message operational-ranking-message--<%= rankingAdministration.messageType %>" role="status"><%= rankingAdministration.message %></p>
+  <% } %>
+
+  <div class="operational-ranking-controls">
+    <form
+      class="operational-ranking-interval-form"
+      method="post"
+      action="/management/config/operational-rankings/interval"
+      hx-post="/management/config/operational-rankings/interval"
+      hx-target="#operational-ranking-administration"
+      hx-swap="outerHTML">
+      <label for="operational-ranking-refresh-minutes">Refresh interval</label>
+      <select id="operational-ranking-refresh-minutes" name="refreshMinutes" <%= !rankingAdministration.supported ? 'disabled' : '' %>>
+        <% rankingAdministration.allowedRefreshIntervals.forEach((interval) => { %>
+          <option value="<%= interval.minutes %>" <%= interval.minutes === rankingAdministration.refreshMinutes ? 'selected' : '' %>><%= interval.label %></option>
+        <% }) %>
+      </select>
+      <button class="secondary-button button-small" type="submit" <%= !rankingAdministration.supported ? 'disabled' : '' %>>Save</button>
+    </form>
+
+    <p class="operational-ranking-schedule-note">
+      <%= rankingAdministration.health.description %>
+      <% if (rankingAdministration.nextRefreshAt) { %>
+        Next due: <strong><%= formatDateTime(rankingAdministration.nextRefreshAt) %></strong>.
+      <% } %>
+    </p>
+  </div>
+
+  <details class="operational-ranking-details" <%= rankingAdministration.detailsOpen ? 'open' : '' %>>
+    <summary>
+      <span class="operational-ranking-details-label operational-ranking-details-label--closed">View Details</span>
+      <span class="operational-ranking-details-label operational-ranking-details-label--open">Hide Details</span>
+    </summary>
+
+    <div class="operational-ranking-details-body">
+      <dl class="operational-ranking-facts">
+        <div>
+          <dt>Last successful refresh</dt>
+          <dd><%= rankingAdministration.completedAt ? formatDateTime(rankingAdministration.completedAt) : 'Not available' %></dd>
+        </div>
+        <div>
+          <dt>Refresh interval</dt>
+          <dd><%= rankingAdministration.refreshIntervalLabel %></dd>
+        </div>
+        <div>
+          <dt>Scheduler check</dt>
+          <dd>Every 15 minutes</dd>
+        </div>
+        <div>
+          <dt>Cache behavior</dt>
+          <dd>Previous successful cache remains active during refreshes and failures.</dd>
+        </div>
+      </dl>
+
+      <% if (rankingAdministration.lastError) { %>
+        <details class="operational-ranking-error-details">
+          <summary>Last refresh error</summary>
+          <p><%= rankingAdministration.lastError %></p>
+        </details>
+      <% } %>
+
+      <div class="table-card operational-ranking-table">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Selector</th>
+                <th>Sorting</th>
+                <th>Context</th>
+                <th>Cached Values</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="operational-ranking-table-group-row">
+                <th colspan="4" scope="rowgroup">Popularity-sorted operational selectors</th>
+              </tr>
+              <% rankingAdministration.popularityRows.forEach((row) => { %>
+                <tr>
+                  <td><strong><%= row.label %></strong></td>
+                  <td><span class="pill good"><%= row.sortingLabel %></span></td>
+                  <td><%= row.contextLabel %></td>
+                  <td>
+                    <strong><%= formatNumber(row.cachedValueCount) %></strong>
+                    <% if (row.contextLabel !== 'Global' && row.contextCount > 0) { %>
+                      <small><%= formatNumber(row.contextCount) %> context<%= row.contextCount === 1 ? '' : 's' %></small>
+                    <% } %>
+                  </td>
+                </tr>
+              <% }) %>
+
+              <tr class="operational-ranking-table-group-row">
+                <th colspan="4" scope="rowgroup">Configuration-managed lists</th>
+              </tr>
+              <% rankingAdministration.manualRows.forEach((row) => { %>
+                <tr>
+                  <td><strong><%= row.label %></strong></td>
+                  <td><span class="pill neutral"><%= row.sortingLabel %></span></td>
+                  <td><%= row.contextLabel %></td>
+                  <td>—</td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </details>
+</section>

@@ -30,7 +30,8 @@ test('storage editor keeps Previous lean and Current operational', () => {
   assert.match(markup, /data-module-list="previousStorage"/);
   assert.match(markup, /name="previousStorageDevices\[<%= index %>\]\[sizeGb\]"/);
   assert.match(markup, /name="previousStorageDevices\[<%= index %>\]\[storageTypeConfigValueId\]"/);
-  assert.match(previousStorageBlock, /type="hidden" name="previousStorageDevices\[<%= index %>\]\[wipeStatusConfigValueId\]"/);
+  assert.doesNotMatch(previousStorageBlock, /wipeStatusConfigValueId/);
+  assert.match(previousStorageBlock, /name="previousStorageDevices\[<%= index %>\]\[componentRowId\]"/);
   assert.doesNotMatch(previousStorageBlock, /<span>Wipe Status<\/span>/);
   assert.doesNotMatch(previousStorageBlock, /<span>Notes<\/span>/);
   assert.match(currentStorageBlock, /name="storageDevices\[<%= index %>\]\[storageTypeConfigValueId\]"/);
@@ -50,28 +51,19 @@ test('Previous-to-Current copy preserves supported component properties', () => 
     'slotLabel',
     'sizeGb',
     'ramTypeConfigValueId',
-    'memoryInstallTypeCode',
-    'speedMhz',
-    'manufacturerName',
-    'partNumber',
-    'serialNumber',
-    'changeNotes'
+    'memoryInstallTypeCode'
   ]) {
     assert.match(memoryCopy, new RegExp(`'${fieldName}'`));
   }
   for (const fieldName of [
     'slotLabel',
     'sizeGb',
-    'storageTypeConfigValueId',
-    'manufacturerName',
-    'modelNumber',
-    'serialNumber',
-    'firmwareVersion'
+    'storageTypeConfigValueId'
   ]) {
     assert.match(storageCopy, new RegExp(`'${fieldName}'`));
   }
-  assert.doesNotMatch(storageCopy, /'wipeStatusConfigValueId'/);
-  assert.doesNotMatch(storageCopy, /'changeNotes'/);
+  assert.doesNotMatch(memoryCopy, /speedMhz|manufacturerName|partNumber|serialNumber|changeNotes/);
+  assert.doesNotMatch(storageCopy, /manufacturerName|modelNumber|serialNumber|firmwareVersion|wipeStatusConfigValueId|changeNotes/);
   assert.match(source, /updateModuleTotals\(form\)/);
 });
 

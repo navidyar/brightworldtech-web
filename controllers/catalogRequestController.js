@@ -1,18 +1,6 @@
 const unitRequestModel = require('../models/unitRequestModel');
 const unitModelCatalogModel = require('../models/unitModelCatalogModel');
-
-const ELEVATED_ROLE_CODES = new Set(['admin', 'management', 'tech_lead']);
-
-function getRoleCodes(req) {
-  return req && req.currentUser && Array.isArray(req.currentUser.roles)
-    ? req.currentUser.roles.map((roleCode) => String(roleCode || '').trim())
-    : [];
-}
-
-function isRegularTechRequester(req) {
-  const roleCodes = getRoleCodes(req);
-  return roleCodes.includes('tech') && !roleCodes.some((roleCode) => ELEVATED_ROLE_CODES.has(roleCode));
-}
+const catalogRequestAccessPolicy = require('../services/catalogRequestAccessPolicy');
 
 function normalizeId(value) {
   const parsed = Number.parseInt(String(value || '').trim(), 10);
@@ -21,6 +9,15 @@ function normalizeId(value) {
 
 function normalizeText(value, maxLength = 1000) {
   return String(value || '').trim().replace(/\s+/g, ' ').slice(0, maxLength);
+}
+
+function normalizeProcessorSpeed(value) {
+  const rawValue = String(value ?? '').trim();
+  if (!rawValue) return '';
+  const parsed = Number(rawValue);
+  return Number.isFinite(parsed) && parsed >= 0.01 && parsed <= 99.99
+    ? parsed.toFixed(2)
+    : '';
 }
 
 function isHtmxRequest(req) {
@@ -34,7 +31,8 @@ function buildCatalogModalView({
   successRequestId = null,
   requesterNote = '',
   requestedProcessorType = '',
-  requestedProcessorName = ''
+  requestedProcessorName = '',
+  requestedProcessorSpeedGhz = ''
 } = {}) {
   return {
     requestKind,
@@ -43,7 +41,8 @@ function buildCatalogModalView({
     successRequestId,
     requesterNote,
     requestedProcessorType,
-    requestedProcessorName
+    requestedProcessorName,
+    requestedProcessorSpeedGhz
   };
 }
 
@@ -100,6 +99,7 @@ async function getProcessorRequestContext(source = {}) {
   const unitModelId = normalizeId(source.unitModelId);
   const requestedProcessorType = normalizeText(source.requestedProcessorType, 100);
   const requestedProcessorName = normalizeText(source.requestedProcessorName, 150);
+  const requestedProcessorSpeedGhz = normalizeProcessorSpeed(source.requestedProcessorSpeedGhz);
   const unitModel = unitModelId ? await unitModelCatalogModel.getUnitModelById(unitModelId) : null;
   const errors = [];
 
@@ -114,6 +114,7 @@ async function getProcessorRequestContext(source = {}) {
     unitCategoryLabel: unitModel ? unitModel.unitCategoryLabel : '',
     requestedProcessorType,
     requestedProcessorName,
+    requestedProcessorSpeedGhz,
     errors
   };
 }
@@ -124,10 +125,10 @@ function renderErrorModal(res, view) {
 
 async function renderModelCatalogRequestModal(req, res, next) {
   try {
-    if (!isRegularTechRequester(req)) {
+    if (!catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(req)) {
       return res.status(403).render('fragments/tech-unit-catalog-request-modal', buildCatalogModalView({
         requestKind: 'model',
-        errorMessages: ['Only regular Tech users can submit Catalog Exception requests from Create Unit. Management can maintain the catalog directly.']
+        errorMessages: ['Your role cannot submit Catalog Exception requests from Add/Edit Unit.']
       }));
     }
 
@@ -144,10 +145,10 @@ async function renderModelCatalogRequestModal(req, res, next) {
 
 async function renderProcessorCatalogRequestModal(req, res, next) {
   try {
-    if (!isRegularTechRequester(req)) {
+    if (!catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(req)) {
       return res.status(403).render('fragments/tech-unit-catalog-request-modal', buildCatalogModalView({
         requestKind: 'processor',
-        errorMessages: ['Only regular Tech users can submit Catalog Exception requests from Create Unit. Management can maintain the catalog directly.']
+        errorMessages: ['Your role cannot submit Catalog Exception requests from Add/Edit Unit.']
       }));
     }
 
@@ -157,7 +158,8 @@ async function renderProcessorCatalogRequestModal(req, res, next) {
       context,
       errorMessages: context.errors,
       requestedProcessorType: context.requestedProcessorType,
-      requestedProcessorName: context.requestedProcessorName
+      requestedProcessorName: context.requestedProcessorName,
+      requestedProcessorSpeedGhz: context.requestedProcessorSpeedGhz
     }));
   } catch (error) {
     next(error);
@@ -166,10 +168,10 @@ async function renderProcessorCatalogRequestModal(req, res, next) {
 
 async function createModelCatalogRequest(req, res, next) {
   try {
-    if (!isRegularTechRequester(req)) {
+    if (!catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(req)) {
       return res.status(403).render('fragments/tech-unit-catalog-request-modal', buildCatalogModalView({
         requestKind: 'model',
-        errorMessages: ['Only regular Tech users can submit Catalog Exception requests from Create Unit.']
+        errorMessages: ['Your role cannot submit Catalog Exception requests from Add/Edit Unit.']
       }));
     }
 
@@ -219,10 +221,10 @@ async function createModelCatalogRequest(req, res, next) {
 
 async function createProcessorCatalogRequest(req, res, next) {
   try {
-    if (!isRegularTechRequester(req)) {
+    if (!catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(req)) {
       return res.status(403).render('fragments/tech-unit-catalog-request-modal', buildCatalogModalView({
         requestKind: 'processor',
-        errorMessages: ['Only regular Tech users can submit Catalog Exception requests from Create Unit.']
+        errorMessages: ['Your role cannot submit Catalog Exception requests from Add/Edit Unit.']
       }));
     }
 
@@ -230,10 +232,12 @@ async function createProcessorCatalogRequest(req, res, next) {
     const requesterNote = normalizeText(req.body?.requesterNote, 1000);
     const requestedProcessorType = normalizeText(req.body?.requestedProcessorType, 100);
     const requestedProcessorName = normalizeText(req.body?.requestedProcessorName, 150);
+    const requestedProcessorSpeedGhz = normalizeProcessorSpeed(req.body?.requestedProcessorSpeedGhz);
     const errors = [...context.errors];
 
     if (requestedProcessorType.length < 2) errors.push('Enter the observed Processor Type.');
-    if (requestedProcessorName.length < 2) errors.push('Enter the exact Processor value observed in BIOS or ScanTools.');
+    if (requestedProcessorName.length < 2) errors.push('Enter the exact Processor value observed in BIOS, ScanTools, or TechTools.');
+    if (!requestedProcessorSpeedGhz) errors.push('Enter an observed Processor Speed from 0.01 through 99.99 GHz.');
 
     if (errors.length > 0) {
       return renderErrorModal(res, buildCatalogModalView({
@@ -242,7 +246,8 @@ async function createProcessorCatalogRequest(req, res, next) {
         errorMessages: errors,
         requesterNote,
         requestedProcessorType,
-        requestedProcessorName
+        requestedProcessorName,
+        requestedProcessorSpeedGhz
       }));
     }
 
@@ -251,6 +256,7 @@ async function createProcessorCatalogRequest(req, res, next) {
       unitModelId: context.unitModelId,
       requestedProcessorType,
       requestedProcessorName,
+      requestedProcessorSpeedGhz,
       requesterNote
     });
 
@@ -272,6 +278,7 @@ async function createProcessorCatalogRequest(req, res, next) {
         requesterNote: normalizeText(req.body?.requesterNote, 1000),
         requestedProcessorType: normalizeText(req.body?.requestedProcessorType, 100),
         requestedProcessorName: normalizeText(req.body?.requestedProcessorName, 150),
+        requestedProcessorSpeedGhz: normalizeProcessorSpeed(req.body?.requestedProcessorSpeedGhz),
         errorMessages: [error.message || 'The Processor Catalog request could not be submitted.']
       }));
     } catch (renderError) {

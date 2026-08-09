@@ -62,7 +62,7 @@ async function buildWorkflowForForm({
 
   const [lot, requirements] = await Promise.all([
     lotModel.getLotById(safeLotId),
-    lotModel.listLotRequirements(safeLotId)
+    lotModel.listEffectiveLotRequirements(safeLotId)
   ]);
 
   if (!lot) {

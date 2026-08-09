@@ -27,13 +27,13 @@
 
         <form class="auth-form" method="post" action="/login">
           <label class="form-field">
-            <span>Email Address</span>
+            <span>Email or Username</span>
             <input
-              type="email"
-              name="email"
-              value="<%= formData.email %>"
+              type="text"
+              name="identifier"
+              value="<%= formData.identifier %>"
               autocomplete="username"
-              inputmode="email"
+              autocapitalize="none"
               spellcheck="false"
               required
             />
@@ -53,7 +53,7 @@
         </form>
 
         <p class="auth-footnote">
-          Password setup and reset links are created by Management or Admin users.
+          Sign in with your BWT username or email address. Password setup and reset links are created by Management or Admin users.
         </p>
       </section>
     </main>

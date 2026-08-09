@@ -1,6 +1,7 @@
 'use strict';
 
 const { formatHardwareCapacityGb } = require('./hardwareCapacity');
+const { cosmeticGradeLabelsMatch } = require('./cosmeticGradeNormalization');
 
 const {
   getLotRequirementField,
@@ -96,7 +97,28 @@ function createCatalogActual({ ids = [], labels = [], sourceLabel }) {
     isSupported: true,
     ids: normalizedIds,
     numberValue: null,
+    textValues: [],
     displayValue: normalizedLabels.join(', '),
+    sourceLabel: sourceLabel || 'Unit record'
+  };
+}
+
+function normalizeComparableText(value) {
+  return String(value || '').trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+}
+
+function createTextActual({ values = [], labels = [], sourceLabel }) {
+  const rawValues = Array.isArray(values) ? values : [values];
+  const normalizedValues = [...new Set(rawValues.map(normalizeComparableText).filter(Boolean))];
+  const displayLabels = joinUniqueLabels((Array.isArray(labels) ? labels : [labels]).filter(Boolean));
+
+  return {
+    kind: 'text',
+    isSupported: true,
+    ids: [],
+    numberValue: null,
+    textValues: normalizedValues,
+    displayValue: displayLabels.length > 0 ? displayLabels.join(', ') : rawValues.filter(Boolean).join(', '),
     sourceLabel: sourceLabel || 'Unit record'
   };
 }
@@ -109,6 +131,7 @@ function createNumberActual({ value, sourceLabel, suffix = '', formatter = null 
     isSupported: true,
     ids: [],
     numberValue: numericValue,
+    textValues: [],
     displayValue: numericValue === null ? '' : (formatter ? formatter(numericValue) : `${numericValue}${suffix}`),
     sourceLabel: sourceLabel || 'Unit record'
   };
@@ -120,6 +143,7 @@ function createUnsupportedActual(message) {
     isSupported: false,
     ids: [],
     numberValue: null,
+    textValues: [],
     displayValue: '',
     sourceLabel: '',
     unsupportedMessage: message || 'This requirement cannot be evaluated from the current unit data.'
@@ -332,6 +356,11 @@ function buildCurrentMemoryActual(baseRow, memoryRows) {
         ids: typeRows.map((row) => row.ram_type_config_value_id),
         labels: typeRows.map((row) => row.ram_type_label || row.ram_type_code),
         sourceLabel: 'Current memory modules'
+      }),
+      installType: createTextActual({
+        values: meaningfulRows.map((row) => row.memory_install_type_code),
+        labels: meaningfulRows.map((row) => row.memory_install_type_label || row.memory_install_type_code),
+        sourceLabel: 'Current memory modules'
       })
     };
   }
@@ -346,7 +375,8 @@ function buildCurrentMemoryActual(baseRow, memoryRows) {
       ids: [baseRow.ram_type_config_value_id],
       labels: [baseRow.ram_type_label || baseRow.ram_type_code],
       sourceLabel: 'Unit memory summary'
-    })
+    }),
+    installType: createTextActual({ values: [], labels: [], sourceLabel: 'Current memory modules' })
   };
 }
 
@@ -371,6 +401,11 @@ function buildCurrentStorageActual(baseRow, storageRows) {
         ids: typeRows.map((row) => row.storage_type_config_value_id),
         labels: typeRows.map((row) => row.storage_type_label || row.storage_type_code),
         sourceLabel: 'Current storage devices'
+      }),
+      wipeStatus: createCatalogActual({
+        ids: meaningfulRows.map((row) => row.wipe_status_config_value_id),
+        labels: meaningfulRows.map((row) => row.wipe_status_label || row.wipe_status_code),
+        sourceLabel: 'Current storage devices'
       })
     };
   }
@@ -385,7 +420,8 @@ function buildCurrentStorageActual(baseRow, storageRows) {
       ids: [baseRow.storage_type_config_value_id],
       labels: [baseRow.storage_type_label || baseRow.storage_type_code],
       sourceLabel: 'Unit storage summary'
-    })
+    }),
+    wipeStatus: createCatalogActual({ ids: [], labels: [], sourceLabel: 'Current storage devices' })
   };
 }
 
@@ -448,20 +484,38 @@ function buildUnitSnapshots({
           labels: [baseRow.processor_display_label || baseRow.processor_model_code],
           sourceLabel: 'Processor model'
         }),
+        unit_serial_number: createTextActual({ values: [identity.unitSerial], labels: [identity.unitSerial], sourceLabel: 'Unit Serial Number' }),
+        bios_serial_number: createTextActual({ values: [identity.biosSerial], labels: [identity.biosSerial], sourceLabel: 'BIOS Serial Number' }),
         processor_family: createCatalogActual({
           ids: parseIntegerList(baseRow.processor_family_ids),
           labels: parseLabelList(baseRow.processor_family_labels),
           sourceLabel: 'Processor family membership'
         }),
+        processor_speed_ghz: createNumberActual({ value: baseRow.processor_speed_ghz, sourceLabel: 'Processor speed', suffix: ' GHz' }),
         ram_gb: memory.total,
         ram_type: memory.type,
+        memory_install_type: memory.installType,
         storage_gb: storage.total,
         storage_type: storage.type,
+        storage_wipe_status: storage.wipeStatus,
+        operating_system: createCatalogActual({ ids: [baseRow.operating_system_config_value_id], labels: [baseRow.operating_system_label || baseRow.operating_system_code], sourceLabel: 'Operating system' }),
+        os_build: createTextActual({ values: [baseRow.os_build], labels: [baseRow.os_build], sourceLabel: 'OS build' }),
+        bios_version: createTextActual({ values: [baseRow.bios_version], labels: [baseRow.bios_version], sourceLabel: 'BIOS version' }),
         battery_health: createNumberActual({
           value: baseRow.battery_health_percent,
           sourceLabel: 'Unit battery health',
           suffix: '%'
-        })
+        }),
+        absolute_status: createCatalogActual({ ids: [baseRow.absolute_status_config_value_id], labels: [baseRow.absolute_status_label], sourceLabel: 'Absolute status' }),
+        physical_camera_status: createCatalogActual({ ids: [baseRow.physical_camera_status_config_value_id], labels: [baseRow.physical_camera_status_label], sourceLabel: 'Physical camera status' }),
+        touchscreen_status: createCatalogActual({ ids: [baseRow.touchscreen_status_config_value_id], labels: [baseRow.touchscreen_status_label], sourceLabel: 'Touchscreen status' }),
+        keyboard_language: createCatalogActual({ ids: [baseRow.keyboard_language_config_value_id], labels: [baseRow.keyboard_language_label], sourceLabel: 'Keyboard language' }),
+        complete_diagnostics: createCatalogActual({ ids: [baseRow.complete_diagnostics_status_config_value_id], labels: [baseRow.complete_diagnostics_status_label], sourceLabel: 'Complete diagnostics' }),
+        virus_check: createCatalogActual({ ids: [baseRow.virus_check_status_config_value_id], labels: [baseRow.virus_check_status_label], sourceLabel: 'Virus check' }),
+        driver_check: createCatalogActual({ ids: [baseRow.driver_check_status_config_value_id], labels: [baseRow.driver_check_status_label], sourceLabel: 'Driver check' }),
+        skinned_status: createCatalogActual({ ids: [baseRow.skinned_status_config_value_id], labels: [baseRow.skinned_status_label], sourceLabel: 'Skinned status' }),
+        overall_grade: createCatalogActual({ ids: [baseRow.overall_grade_config_value_id], labels: [baseRow.overall_grade_label], sourceLabel: 'Current cosmetic grade' }),
+        unit_outcome: createTextActual({ values: [baseRow.outcome_code], labels: [baseRow.outcome_label || baseRow.outcome_code], sourceLabel: 'Current Unit outcome' })
       }
     };
   });
@@ -501,7 +555,7 @@ function evaluateRequirement(unitSnapshot, requirement) {
     requirementLabel: requirement.requirement_label || field?.label || requirementKey,
     operatorCode,
     operatorLabel: requirement.operator_label || operator?.label || operatorCode,
-    requiredValue: String(requirement.required_value || '').trim(),
+    requiredValue: String(requirement.required_value ?? '').trim(),
     actualValue: actual.displayValue || '—',
     sourceLabel: actual.sourceLabel || '—'
   };
@@ -577,6 +631,42 @@ function evaluateRequirement(unitSnapshot, requirement) {
     };
   }
 
+  if (field.storageKind === 'text' || field.storageKind === 'text_option') {
+    const requiredText = normalizeComparableText(requirement.requirement_text);
+
+    if (!requiredText) {
+      return {
+        ...baseCheck,
+        passed: false,
+        status: 'needs_review',
+        statusLabel: getStatusLabel('needs_review'),
+        message: 'This requirement is missing its configured text value.'
+      };
+    }
+
+    if (!Array.isArray(actual.textValues) || actual.textValues.length === 0) {
+      return {
+        ...baseCheck,
+        passed: false,
+        status: 'rejected',
+        statusLabel: getStatusLabel('rejected'),
+        message: `The unit has no recorded ${field.label.toLowerCase()} value.`
+      };
+    }
+
+    const passed = actual.textValues.includes(requiredText);
+
+    return {
+      ...baseCheck,
+      passed,
+      status: passed ? 'accepted' : 'rejected',
+      statusLabel: getStatusLabel(passed ? 'accepted' : 'rejected'),
+      message: passed
+        ? `${field.label} matches the requirement.`
+        : `Expected ${baseCheck.requiredValue}; found ${baseCheck.actualValue}.`
+    };
+  }
+
   const requiredId = getRequiredCatalogId(requirement, field.storageKind);
 
   if (!requiredId) {
@@ -599,7 +689,11 @@ function evaluateRequirement(unitSnapshot, requirement) {
     };
   }
 
-  const passed = actual.ids.includes(requiredId);
+  const passedById = actual.ids.includes(requiredId);
+  const passed = passedById || (
+    requirementKey === 'overall_grade'
+    && cosmeticGradeLabelsMatch(baseCheck.requiredValue, actual.displayValue)
+  );
 
   return {
     ...baseCheck,

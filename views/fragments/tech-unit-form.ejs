@@ -1,6 +1,6 @@
 <%
   const isEditMode = mode === 'edit';
-  const htmxAttrs = isModal ? `hx-post="${formAction}" hx-target="#modal-root" hx-swap="innerHTML"` : '';
+  const htmxAttrs = isModal ? `hx-post="${formAction}" hx-target="#modal-root" hx-swap="innerHTML" hx-disabled-elt="find button[type='submit']"` : '';
   const memoryInstallTypes = Array.isArray(formOptions.memoryInstallTypes) && formOptions.memoryInstallTypes.length > 0
     ? formOptions.memoryInstallTypes
     : [
@@ -81,7 +81,8 @@
   const productionWeightHasUnitOverride = productionWeightDetails.sourceCode === 'unit_override' || Boolean(productionWeightDetails.hasOverride);
   const initialDuplicateMatches = typeof duplicateMatches !== 'undefined' && Array.isArray(duplicateMatches) ? duplicateMatches : [];
   const duplicateCheckWasForced = typeof duplicateCheckPerformed !== 'undefined' && Boolean(duplicateCheckPerformed);
-  const canRequestCatalogException = !isEditMode && Boolean(formOptions.canRequestCatalogException);
+  const canRequestModelCatalogException = Boolean(formOptions.canRequestCatalogException);
+  const canRequestProcessorCatalogException = Boolean(formOptions.canRequestCatalogException);
   const authoritativeFieldErrors = typeof unitFormFieldErrors !== 'undefined' && Array.isArray(unitFormFieldErrors)
     ? unitFormFieldErrors
     : [];
@@ -370,6 +371,7 @@
           spellcheck="false"
           maxlength="150"
           data-duplicate-check-serial
+          data-serial-enter-no-submit
         />
         <small class="field-hint">
           Usually copied from the device label or chassis. The system checks both serial types after you leave this field.
@@ -387,6 +389,7 @@
           spellcheck="false"
           maxlength="150"
           data-duplicate-check-serial
+          data-serial-enter-no-submit
         />
         <small class="field-hint">
           BIOS serial is checked against both stored serial types after you leave this field.
@@ -488,8 +491,8 @@
 
     </div>
 
-    <% if (canRequestCatalogException) { %>
-      <div class="tech-catalog-request-action" data-unit-form-follows-key="unit_model">
+    <% if (canRequestModelCatalogException) { %>
+      <div class="tech-catalog-request-action" data-catalog-request-action-kind="model">
         <button type="button" class="secondary-button" data-catalog-request-button="model" disabled aria-disabled="true">Request Missing Model</button>
         <small class="field-hint" data-catalog-request-model-hint>Select Manufacturer and Unit Category, then type the exact model name that is missing from the managed catalog.</small>
       </div>
@@ -537,7 +540,7 @@
             data-production-weight-override-input
           />
           <small class="field-hint">
-            Leave blank to use the selected lot/category weight.
+            Leave blank to use the selected Lot/category weight. An individual Unit override stays with the Unit and continues to take precedence after it moves to another Lot.
           </small>
         </label>
 
@@ -637,17 +640,39 @@
       </label>
     </div>
 
-    <% if (canRequestCatalogException) { %>
-      <div class="tech-catalog-request-action" data-unit-form-follows-key="processor_model">
+    <% if (canRequestProcessorCatalogException) { %>
+      <div class="message info tech-processor-catalog-empty-message" data-processor-catalog-empty-message hidden>
+        <p>No compatible processors are cataloged for this Unit Model. Enter the observed values below and send them for review.</p>
+      </div>
+
+      <div class="tech-catalog-request-fields" data-processor-catalog-request-fields hidden>
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Observed Processor Type</span>
+            <input type="text" maxlength="100" placeholder="Example: Intel, AMD, Apple, Qualcomm" autocomplete="off" data-processor-request-type-input />
+          </label>
+          <label class="form-field">
+            <span>Observed Processor</span>
+            <input type="text" maxlength="150" placeholder="Exact value from BIOS, ScanTools, or TechTools" autocomplete="off" data-processor-request-name-input />
+          </label>
+          <label class="form-field">
+            <span>Observed Processor Speed GHz</span>
+            <input type="number" min="0.01" max="99.99" step="0.01" placeholder="Example: 2.40" autocomplete="off" data-processor-request-speed-input />
+          </label>
+        </div>
+        <small class="field-hint">These values are used only to prepare the catalog request. They do not save directly to the Unit.</small>
+      </div>
+
+      <div class="tech-catalog-request-action" data-catalog-request-action-kind="processor">
         <button type="button" class="secondary-button" data-catalog-request-button="processor" disabled aria-disabled="true">Request Processor Addition</button>
-        <small class="field-hint" data-catalog-request-processor-hint>Select a Unit Model first. Use this only when the observed Processor Type or Processor is unavailable for that model.</small>
+        <small class="field-hint" data-catalog-request-processor-hint>Select a Unit Model first. Use this when the observed Processor Type, Processor, or Processor Speed is unavailable for that model.</small>
       </div>
     <% } %>
   </div>
 
   <div class="visually-hidden" aria-hidden="true" data-hardware-derived-totals>
-    <div data-unit-form-field-key="previous_memory_size">
-      <input
+    <div>
+      <input data-unit-form-companion-key="previous_memory_size"
         type="hidden"
         name="previousRamGb"
         value="<%= hasExplicitCapacityRows(previousMemoryRows) ? memoryRowsTotalGb(previousMemoryRows) : (formData.previousRamGb || '') %>"
@@ -663,8 +688,8 @@
       data-memory-total-input
       data-auto-from-components="<%= hasExplicitCapacityRows(memoryRows) ? 'true' : 'false' %>"
     />
-    <div data-unit-form-field-key="previous_storage_size">
-      <input
+    <div>
+      <input data-unit-form-companion-key="previous_storage_size"
         type="hidden"
         name="previousStorageGb"
         value="<%= hasExplicitCapacityRows(previousStorageRows) ? storageRowsTotalGb(previousStorageRows) : (formData.previousStorageGb || '') %>"
@@ -692,14 +717,14 @@
     </div>
 
     <div class="tech-memory-editor tech-memory-editor--compare" data-memory-editor>
-      <section class="tech-memory-state tech-memory-state--previous" data-unit-form-follows-key="previous_memory_size" aria-label="Previous memory modules">
+      <section class="tech-memory-state tech-memory-state--previous" data-unit-form-field-key="previous_memory_size" aria-label="Previous memory modules">
         <div class="tech-memory-state-bar">
           <div class="tech-memory-state-title">
             <strong>Previous</strong>
             <span><strong data-previous-memory-total-display><%= formatCapacity(hasExplicitCapacityRows(previousMemoryRows) ? memoryRowsTotalGb(previousMemoryRows) : formData.previousRamGb) || "0GB" %></strong> total</span>
           </div>
           <div class="tech-memory-state-actions">
-            <button type="button" class="secondary-button" data-add-module-row="previousMemory">+ Add</button>
+            <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="previousMemory">+ Add</button>
             <button type="button" class="secondary-button tech-memory-copy-button" data-copy-previous-memory <%= hasExplicitCapacityRows(previousMemoryRows) ? '' : 'disabled aria-disabled="true"' %>>Copy to Current</button>
           </div>
         </div>
@@ -712,12 +737,8 @@
               <label class="form-field tech-memory-size-field"><span>Size</span><input type="text" inputmode="decimal" name="previousMemoryModules[<%= index %>][sizeGb]" value="<%= formatCapacity(moduleRow.sizeGb) %>" placeholder="0, 8GB, or 1TB" autocomplete="off" spellcheck="false" data-capacity-input data-previous-memory-size-input data-module-field /></label>
               <label class="form-field tech-memory-type-field"><span>Memory Type</span><select name="previousMemoryModules[<%= index %>][ramTypeConfigValueId]" data-module-field><option value="">Select memory type</option><% formOptions.ramTypes.forEach((ramType) => { %><option value="<%= ramType.id %>" <%= selected(moduleRow.ramTypeConfigValueId, ramType.id) %>><%= ramType.label %></option><% }) %></select></label>
               <label class="form-field tech-memory-install-field"><span>Install Type</span><select name="previousMemoryModules[<%= index %>][memoryInstallTypeCode]" data-module-field><option value="">Select install type</option><% memoryInstallTypes.forEach((installType) => { %><option value="<%= installType.code %>" <%= selectedInstallType(moduleRow.memoryInstallTypeCode, installType.code) %>><%= installType.label %></option><% }) %></select></label>
-              <input type="hidden" name="previousMemoryModules[<%= index %>][speedMhz]" value="<%= moduleRow.speedMhz || '' %>" />
-              <input type="hidden" name="previousMemoryModules[<%= index %>][manufacturerName]" value="<%= moduleRow.manufacturerName || '' %>" />
-              <input type="hidden" name="previousMemoryModules[<%= index %>][partNumber]" value="<%= moduleRow.partNumber || '' %>" />
-              <input type="hidden" name="previousMemoryModules[<%= index %>][serialNumber]" value="<%= moduleRow.serialNumber || '' %>" />
-              <input type="hidden" name="previousMemoryModules[<%= index %>][changeNotes]" value="<%= moduleRow.changeNotes || '' %>" />
-              <button type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove previous memory module <%= index + 1 %>">Remove</button>
+              <input type="hidden" name="previousMemoryModules[<%= index %>][componentRowId]" value="<%= moduleRow.componentRowId || '' %>" />
+              <button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove previous memory module <%= index + 1 %>">Remove</button>
             </div>
           <% }) %>
         </div>
@@ -729,7 +750,7 @@
             <strong>Current</strong>
             <span><strong data-memory-total-display><%= formatCapacity(hasExplicitCapacityRows(memoryRows) ? memoryTotalGb() : formData.ramGb) || "0GB" %></strong> total</span>
           </div>
-          <button type="button" class="secondary-button" data-add-module-row="memory">+ Add</button>
+          <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="memory">+ Add</button>
         </div>
 
         <div class="tech-memory-row-list" data-module-list="memory">
@@ -740,12 +761,8 @@
               <label class="form-field tech-memory-size-field"><span>Size</span><input type="text" inputmode="decimal" name="memoryModules[<%= index %>][sizeGb]" value="<%= formatCapacity(moduleRow.sizeGb) %>" placeholder="0, 8GB, or 1TB" autocomplete="off" spellcheck="false" data-capacity-input data-memory-size-input data-module-field /></label>
               <label class="form-field tech-memory-type-field"><span>Memory Type</span><select name="memoryModules[<%= index %>][ramTypeConfigValueId]" data-module-field><option value="">Select memory type</option><% formOptions.ramTypes.forEach((ramType) => { %><option value="<%= ramType.id %>" <%= selected(moduleRow.ramTypeConfigValueId, ramType.id) %>><%= ramType.label %></option><% }) %></select></label>
               <label class="form-field tech-memory-install-field"><span>Install Type</span><select name="memoryModules[<%= index %>][memoryInstallTypeCode]" data-module-field><option value="">Select install type</option><% memoryInstallTypes.forEach((installType) => { %><option value="<%= installType.code %>" <%= selectedInstallType(moduleRow.memoryInstallTypeCode, installType.code) %>><%= installType.label %></option><% }) %></select></label>
-              <input type="hidden" name="memoryModules[<%= index %>][speedMhz]" value="<%= moduleRow.speedMhz || '' %>" />
-              <input type="hidden" name="memoryModules[<%= index %>][manufacturerName]" value="<%= moduleRow.manufacturerName || '' %>" />
-              <input type="hidden" name="memoryModules[<%= index %>][partNumber]" value="<%= moduleRow.partNumber || '' %>" />
-              <input type="hidden" name="memoryModules[<%= index %>][serialNumber]" value="<%= moduleRow.serialNumber || '' %>" />
-              <input type="hidden" name="memoryModules[<%= index %>][changeNotes]" value="<%= moduleRow.changeNotes || '' %>" />
-              <button type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove current memory module <%= index + 1 %>">Remove</button>
+              <input type="hidden" name="memoryModules[<%= index %>][componentRowId]" value="<%= moduleRow.componentRowId || '' %>" />
+              <button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove current memory module <%= index + 1 %>">Remove</button>
             </div>
           <% }) %>
         </div>
@@ -763,14 +780,14 @@
     </div>
 
     <div class="tech-memory-editor tech-memory-editor--compare tech-storage-editor" data-storage-editor>
-      <section class="tech-memory-state tech-memory-state--previous" data-unit-form-follows-key="previous_storage_size" aria-label="Previous storage devices">
+      <section class="tech-memory-state tech-memory-state--previous" data-unit-form-field-key="previous_storage_size" aria-label="Previous storage devices">
         <div class="tech-memory-state-bar">
           <div class="tech-memory-state-title">
             <strong>Previous</strong>
             <span><strong data-previous-storage-total-display><%= formatCapacity(hasExplicitCapacityRows(previousStorageRows) ? storageRowsTotalGb(previousStorageRows) : formData.previousStorageGb) || "0GB" %></strong> total</span>
           </div>
           <div class="tech-memory-state-actions">
-            <button type="button" class="secondary-button" data-add-module-row="previousStorage">+ Add</button>
+            <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="previousStorage">+ Add</button>
             <button type="button" class="secondary-button tech-memory-copy-button" data-copy-previous-storage <%= hasExplicitCapacityRows(previousStorageRows) ? '' : 'disabled aria-disabled="true"' %>>Copy to Current</button>
           </div>
         </div>
@@ -782,13 +799,8 @@
               <input type="hidden" name="previousStorageDevices[<%= index %>][slotLabel]" value="<%= deviceRow.slotLabel || `Drive ${index + 1}` %>" />
               <label class="form-field tech-memory-size-field"><span>Size</span><input type="text" inputmode="decimal" name="previousStorageDevices[<%= index %>][sizeGb]" value="<%= formatCapacity(deviceRow.sizeGb) %>" placeholder="0, 512GB, or 1TB" autocomplete="off" spellcheck="false" data-capacity-input data-previous-storage-size-input data-module-field /></label>
               <label class="form-field tech-memory-type-field"><span>Storage Type</span><select name="previousStorageDevices[<%= index %>][storageTypeConfigValueId]" data-module-field><option value="">Select storage type</option><% formOptions.storageTypes.forEach((storageType) => { %><option value="<%= storageType.id %>" <%= selected(deviceRow.storageTypeConfigValueId, storageType.id) %>><%= storageType.label %></option><% }) %></select></label>
-              <input type="hidden" name="previousStorageDevices[<%= index %>][wipeStatusConfigValueId]" value="<%= deviceRow.wipeStatusConfigValueId || '' %>" />
-              <input type="hidden" name="previousStorageDevices[<%= index %>][manufacturerName]" value="<%= deviceRow.manufacturerName || '' %>" />
-              <input type="hidden" name="previousStorageDevices[<%= index %>][modelNumber]" value="<%= deviceRow.modelNumber || '' %>" />
-              <input type="hidden" name="previousStorageDevices[<%= index %>][serialNumber]" value="<%= deviceRow.serialNumber || '' %>" />
-              <input type="hidden" name="previousStorageDevices[<%= index %>][firmwareVersion]" value="<%= deviceRow.firmwareVersion || '' %>" />
-              <input type="hidden" name="previousStorageDevices[<%= index %>][changeNotes]" value="<%= deviceRow.changeNotes || '' %>" />
-              <button type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove previous storage device <%= index + 1 %>">Remove</button>
+              <input type="hidden" name="previousStorageDevices[<%= index %>][componentRowId]" value="<%= deviceRow.componentRowId || '' %>" />
+              <button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove previous storage device <%= index + 1 %>">Remove</button>
             </div>
           <% }) %>
         </div>
@@ -800,7 +812,7 @@
             <strong>Current</strong>
             <span><strong data-storage-total-display><%= formatCapacity(hasExplicitCapacityRows(storageRows) ? storageTotalGb() : formData.storageGb) || "0GB" %></strong> total</span>
           </div>
-          <button type="button" class="secondary-button" data-add-module-row="storage">+ Add</button>
+          <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="storage">+ Add</button>
         </div>
 
         <div class="tech-memory-row-list" data-module-list="storage">
@@ -811,12 +823,8 @@
               <label class="form-field tech-memory-size-field"><span>Size</span><input type="text" inputmode="decimal" name="storageDevices[<%= index %>][sizeGb]" value="<%= formatCapacity(deviceRow.sizeGb) %>" placeholder="0, 512GB, or 1TB" autocomplete="off" spellcheck="false" data-capacity-input data-storage-size-input data-module-field /></label>
               <label class="form-field tech-memory-type-field"><span>Storage Type</span><select name="storageDevices[<%= index %>][storageTypeConfigValueId]" data-module-field><option value="">Select storage type</option><% formOptions.storageTypes.forEach((storageType) => { %><option value="<%= storageType.id %>" <%= selected(deviceRow.storageTypeConfigValueId, storageType.id) %>><%= storageType.label %></option><% }) %></select></label>
               <label class="form-field tech-memory-install-field"><span>Wipe Status</span><select name="storageDevices[<%= index %>][wipeStatusConfigValueId]" data-module-field><option value="">Select wipe status</option><% (formOptions.storageWipeStatuses || []).forEach((wipeStatus) => { %><option value="<%= wipeStatus.id %>" <%= selected(deviceRow.wipeStatusConfigValueId, wipeStatus.id) %>><%= wipeStatus.label %></option><% }) %></select></label>
-              <input type="hidden" name="storageDevices[<%= index %>][manufacturerName]" value="<%= deviceRow.manufacturerName || '' %>" />
-              <input type="hidden" name="storageDevices[<%= index %>][modelNumber]" value="<%= deviceRow.modelNumber || '' %>" />
-              <input type="hidden" name="storageDevices[<%= index %>][serialNumber]" value="<%= deviceRow.serialNumber || '' %>" />
-              <input type="hidden" name="storageDevices[<%= index %>][firmwareVersion]" value="<%= deviceRow.firmwareVersion || '' %>" />
-              <input type="hidden" name="storageDevices[<%= index %>][changeNotes]" value="<%= deviceRow.changeNotes || '' %>" />
-              <button type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove current storage device <%= index + 1 %>">Remove</button>
+              <input type="hidden" name="storageDevices[<%= index %>][componentRowId]" value="<%= deviceRow.componentRowId || '' %>" />
+              <button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove current storage device <%= index + 1 %>">Remove</button>
             </div>
           <% }) %>
         </div>
@@ -958,7 +966,7 @@
           <p class="eyebrow">Cosmetic Issues</p>
           <h3>Cosmetic Issue Rows</h3>
         </div>
-        <button type="button" class="secondary-button" data-add-module-row="cosmeticIssue" aria-label="Add cosmetic issue">+ Add</button>
+        <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="cosmeticIssue" aria-label="Add cosmetic issue">+ Add</button>
       </div>
       <p>
         Choose None when the unit has no cosmetic issue. Severity and location are required only when an actual cosmetic issue is selected.
@@ -982,7 +990,7 @@
                 <strong>Cosmetic Issue <span data-module-display-number><%= index + 1 %></span></strong>
                 <p>Severity and location apply only to an actual cosmetic issue.</p>
               </div>
-              <button type="button" class="secondary-button" data-remove-module-row aria-label="Remove cosmetic issue <%= index + 1 %>">Remove</button>
+              <button tabindex="-1" type="button" class="secondary-button" data-remove-module-row aria-label="Remove cosmetic issue <%= index + 1 %>">Remove</button>
             </div>
 
             <div class="form-grid">
@@ -1036,7 +1044,7 @@
           <p class="eyebrow">Hardware Issues</p>
           <h3>Hardware Issue Rows</h3>
         </div>
-        <button type="button" class="secondary-button" data-add-module-row="hardwareIssue" aria-label="Add hardware issue">+ Add</button>
+        <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="hardwareIssue" aria-label="Add hardware issue">+ Add</button>
       </div>
       <p>
         Choose None when the unit has no hardware issue. For an actual issue, select a configured issue or enter a custom issue name.
@@ -1060,7 +1068,7 @@
                 <strong>Hardware Issue <span data-module-display-number><%= index + 1 %></span></strong>
                 <p>Custom issue and location apply only to an actual hardware issue.</p>
               </div>
-              <button type="button" class="secondary-button" data-remove-module-row aria-label="Remove hardware issue <%= index + 1 %>">Remove</button>
+              <button tabindex="-1" type="button" class="secondary-button" data-remove-module-row aria-label="Remove hardware issue <%= index + 1 %>">Remove</button>
             </div>
 
             <div class="form-grid">
@@ -1111,7 +1119,7 @@
         <h3>Cosmetic Grade and Unit Pass/Fail</h3>
       </div>
       <p>
-        Cosmetic Grade A-D only describes appearance. Unit Pass/Fail describes the working condition and is tracked separately for completion reporting.
+        Cosmetic Grade A, AB, B, C, or D only describes appearance. Unit Pass/Fail describes the working condition and is tracked separately for completion reporting.
       </p>
     </div>
 
@@ -1133,10 +1141,10 @@
         <select name="overallGradeConfigValueId">
           <option value="">Select cosmetic grade</option>
           <% overallGradeOptions.forEach((gradeOption) => { %>
-            <option value="<%= gradeOption.id %>" <%= selected(formData.overallGradeConfigValueId, gradeOption.id) %>><%= gradeOption.label %></option>
+            <option value="<%= gradeOption.id %>" <%= selected(formData.overallGradeConfigValueId, gradeOption.id) || (Array.isArray(gradeOption.filterIds) && gradeOption.filterIds.map(String).includes(String(formData.overallGradeConfigValueId || ''))) ? 'selected' : '' %>><%= gradeOption.label %></option>
           <% }) %>
         </select>
-        <small class="field-hint">A-D grade is cosmetic only and does not determine pass/fail by itself.</small>
+        <small class="field-hint">A, AB, B, C, or D is cosmetic only and does not determine pass/fail by itself.</small>
       </label>
 
       <fieldset class="form-field tech-outcome-field" data-unit-form-field-key="unit_outcome">
@@ -1144,7 +1152,7 @@
         <div class="tech-outcome-options" role="radiogroup" aria-label="Unit outcome">
           <% outcomeOptions.forEach((outcomeOption) => { %>
             <label class="tech-outcome-option <%= selectedOutcomeCode === outcomeOption.code ? 'active' : '' %>">
-              <input type="radio" name="outcomeCode" value="<%= outcomeOption.code %>" <%= selectedOutcomeCode === outcomeOption.code ? 'checked' : '' %> />
+              <input type="radio" name="outcomeCode" value="<%= outcomeOption.code %>" tabindex="0" data-outcome-tab-stop <%= selectedOutcomeCode === outcomeOption.code ? 'checked' : '' %> />
               <span><%= outcomeOption.label %></span>
             </label>
           <% }) %>
@@ -1210,7 +1218,7 @@
             <strong>Cosmetic Issue <span data-module-display-number>__DISPLAY__</span></strong>
             <p>Severity and location apply only to an actual cosmetic issue.</p>
           </div>
-          <button type="button" class="secondary-button" data-remove-module-row aria-label="Remove cosmetic issue __DISPLAY__">Remove</button>
+          <button tabindex="-1" type="button" class="secondary-button" data-remove-module-row aria-label="Remove cosmetic issue __DISPLAY__">Remove</button>
         </div>
         <div class="form-grid">
           <label class="form-field"><span>Issue Type</span><select name="cosmeticIssues[__INDEX__][issueTypeConfigValueId]" data-module-field data-cosmetic-issue-type-select><option value="">Select cosmetic issue</option><% cosmeticIssueTypes.forEach((issueType) => { %><option value="<%= issueType.id %>" data-no-issue="<%= issueType.isNoIssue ? 'true' : 'false' %>"><%= issueType.label %></option><% }) %></select><input type="hidden" name="cosmeticIssues[__INDEX__][isNoIssue]" value="" data-cosmetic-no-issue-flag /></label>
@@ -1231,7 +1239,7 @@
             <strong>Hardware Issue <span data-module-display-number>__DISPLAY__</span></strong>
             <p>Custom issue and location apply only to an actual hardware issue.</p>
           </div>
-          <button type="button" class="secondary-button" data-remove-module-row aria-label="Remove hardware issue __DISPLAY__">Remove</button>
+          <button tabindex="-1" type="button" class="secondary-button" data-remove-module-row aria-label="Remove hardware issue __DISPLAY__">Remove</button>
         </div>
         <div class="form-grid">
           <label class="form-field"><span>Configured Issue</span><select name="hardwareIssues[__INDEX__][issueTypeConfigValueId]" data-module-field data-hardware-issue-type-select><option value="">Select configured issue</option><% hardwareIssueTypes.forEach((issueType) => { %><option value="<%= issueType.id %>" data-no-issue="<%= issueType.isNoIssue ? 'true' : 'false' %>"><%= issueType.label %></option><% }) %></select><input type="hidden" name="hardwareIssues[__INDEX__][isNoIssue]" value="" data-hardware-no-issue-flag /><small class="field-hint">Choose None when there is no hardware issue.</small></label>
@@ -1250,12 +1258,8 @@
       <label class="form-field tech-memory-size-field"><span>Size</span><input type="text" inputmode="decimal" name="previousMemoryModules[__INDEX__][sizeGb]" placeholder="0, 8GB, or 1TB" autocomplete="off" spellcheck="false" data-capacity-input data-previous-memory-size-input data-module-field /></label>
       <label class="form-field tech-memory-type-field"><span>Memory Type</span><select name="previousMemoryModules[__INDEX__][ramTypeConfigValueId]" data-module-field><option value="">Select memory type</option><% formOptions.ramTypes.forEach((ramType) => { %><option value="<%= ramType.id %>"><%= ramType.label %></option><% }) %></select></label>
       <label class="form-field tech-memory-install-field"><span>Install Type</span><select name="previousMemoryModules[__INDEX__][memoryInstallTypeCode]" data-module-field><option value="">Select install type</option><% memoryInstallTypes.forEach((installType) => { %><option value="<%= installType.code %>"><%= installType.label %></option><% }) %></select></label>
-      <input type="hidden" name="previousMemoryModules[__INDEX__][speedMhz]" />
-      <input type="hidden" name="previousMemoryModules[__INDEX__][manufacturerName]" />
-      <input type="hidden" name="previousMemoryModules[__INDEX__][partNumber]" />
-      <input type="hidden" name="previousMemoryModules[__INDEX__][serialNumber]" />
-      <input type="hidden" name="previousMemoryModules[__INDEX__][changeNotes]" />
-      <button type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove previous memory module __DISPLAY__">Remove</button>
+      <input type="hidden" name="previousMemoryModules[__INDEX__][componentRowId]" />
+      <button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove previous memory module __DISPLAY__">Remove</button>
     </div>
   </template>
 
@@ -1266,12 +1270,8 @@
       <label class="form-field tech-memory-size-field"><span>Size</span><input type="text" inputmode="decimal" name="memoryModules[__INDEX__][sizeGb]" placeholder="0, 8GB, or 1TB" autocomplete="off" spellcheck="false" data-capacity-input data-memory-size-input data-module-field /></label>
       <label class="form-field tech-memory-type-field"><span>Memory Type</span><select name="memoryModules[__INDEX__][ramTypeConfigValueId]" data-module-field><option value="">Select memory type</option><% formOptions.ramTypes.forEach((ramType) => { %><option value="<%= ramType.id %>"><%= ramType.label %></option><% }) %></select></label>
       <label class="form-field tech-memory-install-field"><span>Install Type</span><select name="memoryModules[__INDEX__][memoryInstallTypeCode]" data-module-field><option value="">Select install type</option><% memoryInstallTypes.forEach((installType) => { %><option value="<%= installType.code %>"><%= installType.label %></option><% }) %></select></label>
-      <input type="hidden" name="memoryModules[__INDEX__][speedMhz]" />
-      <input type="hidden" name="memoryModules[__INDEX__][manufacturerName]" />
-      <input type="hidden" name="memoryModules[__INDEX__][partNumber]" />
-      <input type="hidden" name="memoryModules[__INDEX__][serialNumber]" />
-      <input type="hidden" name="memoryModules[__INDEX__][changeNotes]" />
-      <button type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove current memory module __DISPLAY__">Remove</button>
+      <input type="hidden" name="memoryModules[__INDEX__][componentRowId]" />
+      <button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove current memory module __DISPLAY__">Remove</button>
     </div>
   </template>
 
@@ -1281,13 +1281,8 @@
       <input type="hidden" name="previousStorageDevices[__INDEX__][slotLabel]" value="Drive __DISPLAY__" />
       <label class="form-field tech-memory-size-field"><span>Size</span><input type="text" inputmode="decimal" name="previousStorageDevices[__INDEX__][sizeGb]" placeholder="0, 512GB, or 1TB" autocomplete="off" spellcheck="false" data-capacity-input data-previous-storage-size-input data-module-field /></label>
       <label class="form-field tech-memory-type-field"><span>Storage Type</span><select name="previousStorageDevices[__INDEX__][storageTypeConfigValueId]" data-module-field><option value="">Select storage type</option><% formOptions.storageTypes.forEach((storageType) => { %><option value="<%= storageType.id %>"><%= storageType.label %></option><% }) %></select></label>
-      <input type="hidden" name="previousStorageDevices[__INDEX__][wipeStatusConfigValueId]" />
-      <input type="hidden" name="previousStorageDevices[__INDEX__][manufacturerName]" />
-      <input type="hidden" name="previousStorageDevices[__INDEX__][modelNumber]" />
-      <input type="hidden" name="previousStorageDevices[__INDEX__][serialNumber]" />
-      <input type="hidden" name="previousStorageDevices[__INDEX__][firmwareVersion]" />
-      <input type="hidden" name="previousStorageDevices[__INDEX__][changeNotes]" />
-      <button type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove previous storage device __DISPLAY__">Remove</button>
+      <input type="hidden" name="previousStorageDevices[__INDEX__][componentRowId]" />
+      <button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove previous storage device __DISPLAY__">Remove</button>
     </div>
   </template>
 
@@ -1298,12 +1293,8 @@
       <label class="form-field tech-memory-size-field"><span>Size</span><input type="text" inputmode="decimal" name="storageDevices[__INDEX__][sizeGb]" placeholder="0, 512GB, or 1TB" autocomplete="off" spellcheck="false" data-capacity-input data-storage-size-input data-module-field /></label>
       <label class="form-field tech-memory-type-field"><span>Storage Type</span><select name="storageDevices[__INDEX__][storageTypeConfigValueId]" data-module-field><option value="">Select storage type</option><% formOptions.storageTypes.forEach((storageType) => { %><option value="<%= storageType.id %>"><%= storageType.label %></option><% }) %></select></label>
       <label class="form-field tech-memory-install-field"><span>Wipe Status</span><select name="storageDevices[__INDEX__][wipeStatusConfigValueId]" data-module-field><option value="">Select wipe status</option><% (formOptions.storageWipeStatuses || []).forEach((wipeStatus) => { %><option value="<%= wipeStatus.id %>"><%= wipeStatus.label %></option><% }) %></select></label>
-      <input type="hidden" name="storageDevices[__INDEX__][manufacturerName]" />
-      <input type="hidden" name="storageDevices[__INDEX__][modelNumber]" />
-      <input type="hidden" name="storageDevices[__INDEX__][serialNumber]" />
-      <input type="hidden" name="storageDevices[__INDEX__][firmwareVersion]" />
-      <input type="hidden" name="storageDevices[__INDEX__][changeNotes]" />
-      <button type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove current storage device __DISPLAY__">Remove</button>
+      <input type="hidden" name="storageDevices[__INDEX__][componentRowId]" />
+      <button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row aria-label="Remove current storage device __DISPLAY__">Remove</button>
     </div>
   </template>
 

@@ -47,7 +47,7 @@ async function main() {
   console.log('');
   console.log('Admin user setup link created.');
   console.log('');
-  console.log(`User: ${user.first_name} ${user.last_name} <${user.email}>`);
+  console.log(`User: ${user.first_name} ${user.last_name} (${user.username}) <${user.email}>`);
   console.log(`Expires: ${expiresAt.toISOString()}`);
   console.log('');
   console.log(setupUrl);

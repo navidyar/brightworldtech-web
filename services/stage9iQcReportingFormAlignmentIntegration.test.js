@@ -53,9 +53,9 @@ test('QC reporting alignment assets are cache-busted consistently', () => {
   const notFoundPage = read('views/pages/not-found.ejs');
   const validator = read('services/sharedCssFoundationValidator.js');
 
-  assert.match(head, /app\.css\?v=20260731-stage10c-hardware-matrix/);
+  assert.match(head, /app\.css\?v=20260804-stage10w-ranking-administration/);
   assert.match(head, /management-reporting-controls\.js\?v=20260729-stage9i-qc-reporting-clarity/);
-  assert.match(errorPage, /app\.css\?v=20260731-stage10c-hardware-matrix/);
-  assert.match(notFoundPage, /app\.css\?v=20260731-stage10c-hardware-matrix/);
-  assert.match(validator, /app\.css\?v=20260731-stage10c-hardware-matrix/);
+  assert.match(errorPage, /app\.css\?v=20260804-stage10w-ranking-administration/);
+  assert.match(notFoundPage, /app\.css\?v=20260804-stage10w-ranking-administration/);
+  assert.match(validator, /SHARED_APP_PATH = '\/css\/app\.css'/);
 });

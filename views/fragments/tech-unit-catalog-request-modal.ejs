@@ -6,7 +6,7 @@
   const title = isModelRequest ? 'Request Model Addition' : 'Request Processor Addition';
   const description = isModelRequest
     ? 'This creates a review request only. It does not add a model or create a Unit until Management or Admin approves it.'
-    : 'This creates a review request only. It does not change the processor catalog or create a Unit until Management or Admin approves it.';
+    : 'This creates a review request only. It does not change the current Unit. After Management or Admin approval, the processor becomes selectable for this Unit Model.';
 %>
 
 <div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close data-modal-escape-close>
@@ -86,7 +86,12 @@
               </label>
               <label class="form-field">
                 <span>Observed Processor</span>
-                <input type="text" name="requestedProcessorName" value="<%= requestedProcessorName || '' %>" maxlength="150" required placeholder="Exact value from BIOS or ScanTools" />
+                <input type="text" name="requestedProcessorName" value="<%= requestedProcessorName || '' %>" maxlength="150" required placeholder="Exact value from BIOS, ScanTools, or TechTools" />
+              </label>
+              <label class="form-field">
+                <span>Observed Processor Speed GHz</span>
+                <input type="number" name="requestedProcessorSpeedGhz" value="<%= requestedProcessorSpeedGhz || '' %>" min="0.01" max="99.99" step="0.01" required placeholder="Example: 2.40" />
+                <small class="field-hint">Enter the numeric GHz value reported by the source tool or BIOS.</small>
               </label>
             </div>
 

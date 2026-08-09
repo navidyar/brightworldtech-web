@@ -60,7 +60,7 @@ test('eligible Configuration tables render compact drag handles and popularity l
   assert.match(page, /Popularity sorted/);
   assert.match(page, /Drag order/);
   assert.match(page, /Changes save automatically/);
-  assert.match(page, /stage10s-pointer-filtered-drag-order/);
+  assert.match(page, /stage10w-ranking-administration/);
 });
 
 test('client drag ordering supports pointer input, keyboard, autosave, rollback, and filtered search', () => {
@@ -108,5 +108,5 @@ test('shared Configuration styling keeps the reorder affordance compact', () => 
   assert.match(css, /cursor: grab/);
   assert.match(css, /\.configuration-order-column/);
   assert.match(css, /\.configuration-ordering-status\[data-state='error'\]/);
-  assert.match(head, /stage10s-pointer-filtered-drag-order/);
+  assert.match(head, /app\.css\?v=20260804-stage10w-ranking-administration/);
 });

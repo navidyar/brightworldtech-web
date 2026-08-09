@@ -18,7 +18,7 @@
         <main class="content-shell unit-requests-page">
           <section class="dashboard-hero accent-green">
             <div>
-              <p class="eyebrow"><%= request.requestType === 'outcome_confirmation' ? 'Outcome Confirmation' : (request.isDuplicateIntakeMoveRequest ? request.duplicateIntakeRequestLabel : 'Existing Unit Override') %></p>
+              <p class="eyebrow"><%= request.requestType === 'outcome_confirmation' ? 'Outcome Confirmation' : (request.isParkedTakeoverRequest ? 'Parked Unit Takeover' : (request.isDuplicateIntakeMoveRequest ? request.duplicateIntakeRequestLabel : 'Existing Unit Override')) %></p>
               <h2>Request #<%= request.unitOverrideRequestId %></h2>
               <p>Review the existing Unit, current assignment, requested destination, reason, and validation result.</p>
             </div>
@@ -52,10 +52,10 @@
 
               <section class="unit-request-detail-card">
                 <p class="eyebrow">Request Context</p>
-                <h3><%= request.isDuplicateIntakeMoveRequest ? 'Duplicate Intake' : request.requestTypeLabel %></h3>
+                <h3><%= request.isParkedTakeoverRequest ? 'Search Units · Parked Unit' : (request.isDuplicateIntakeMoveRequest ? 'Duplicate Intake' : request.requestTypeLabel) %></h3>
                 <dl class="unit-request-detail-list">
                   <div><dt>Requester</dt><dd><%= request.requestedByName %></dd></div>
-                  <div><dt>Origin</dt><dd><%= request.isDuplicateIntakeMoveRequest ? 'Create Unit duplicate intake' : 'Tech Units' %></dd></div>
+                  <div><dt>Origin</dt><dd><%= request.isParkedTakeoverRequest ? 'Search Units parked result' : (request.isDuplicateIntakeMoveRequest ? 'Create Unit duplicate intake' : 'Tech Units') %></dd></div>
                   <div><dt>Submitted</dt><dd><%= request.createdAt ? formatDateTime(request.createdAt) : '—' %></dd></div>
                   <div><dt>Recorded Work</dt><dd><%= request.hasRecordedWork ? 'Yes' : 'No' %></dd></div>
                   <div><dt>Expires</dt><dd><%= request.expiresAt ? formatDateTime(request.expiresAt) : 'No automatic expiration' %></dd></div>
@@ -73,7 +73,9 @@
                 <div>
                   <p class="eyebrow">Reviewer Action</p>
                   <h3>Approve or Reject</h3>
-                  <p>Approval rechecks the selected destination Lot before changing the Unit assignment or Lot.</p>
+                  <p><%= request.isParkedTakeoverRequest
+                    ? 'Approval rechecks the selected destination Lot, returns the Unit to Active, and assigns it to the requesting Tech.'
+                    : 'Approval rechecks the selected destination Lot before changing the Unit assignment or Lot.' %></p>
                 </div>
 
                 <div class="unit-request-review-actions">
@@ -91,11 +93,15 @@
                           <% }) %>
                         </select>
                       </label>
-                      <label class="unit-request-inline-check">
-                        <input type="checkbox" name="priorTechCreditGranted" value="1" />
-                        <span>Give prior technician credit</span>
-                      </label>
-                      <label class="form-field"><span>Prior Technician Weight <small>(only when credit is selected)</small></span><input type="text" name="priorTechCreditWeight" inputmode="decimal" placeholder="0.10–10.00" /></label>
+                      <% if (!request.isParkedTakeoverRequest) { %>
+                        <label class="unit-request-inline-check">
+                          <input type="checkbox" name="priorTechCreditGranted" value="1" />
+                          <span>Give prior technician credit</span>
+                        </label>
+                        <label class="form-field"><span>Prior Technician Weight <small>(only when credit is selected)</small></span><input type="text" name="priorTechCreditWeight" inputmode="decimal" placeholder="0.10–10.00" /></label>
+                      <% } else { %>
+                        <p class="field-hint">Approval returns the Parked Unit to Active, places it in the selected Lot, and assigns it to the requesting Tech. Existing historical work and credit remain unchanged.</p>
+                      <% } %>
                     <% } else { %>
                       <input type="hidden" name="destinationLotId" value="<%= request.requestedDestinationLotId || request.lotId || '' %>" />
                     <% } %>

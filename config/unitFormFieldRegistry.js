@@ -284,14 +284,8 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
   repeatableChild('memory_module_size', 'Memory: Size GB', 'memory', 'memory_modules', 'memoryModules[index][sizeGb]', 'unit_memory_modules.size_gb'),
   repeatableChild('memory_module_type', 'Memory: Memory Type', 'memory', 'memory_modules', 'memoryModules[index][ramTypeConfigValueId]', 'unit_memory_modules.ram_type_config_value_id'),
   repeatableChild('memory_install_type', 'Memory: Install Type', 'memory', 'memory_modules', 'memoryModules[index][memoryInstallTypeCode]', 'unit_memory_modules.memory_install_type_code'),
-  repeatableChild('memory_change_notes', 'Memory: Change Notes', 'memory', 'memory_modules', 'memoryModules[index][changeNotes]', 'unit_memory_modules.change_notes'),
-  repeatableChild('memory_hidden_metadata', 'Memory Hidden Metadata', 'memory', 'memory_modules', 'memoryModules[index][metadata]', 'unit_memory_modules metadata columns', {
-    defaultVisible: false,
-    ruleType: RULE_TYPE.SYSTEM_CONTROL,
-    preservationPolicy: PRESERVATION.SYSTEM_MANAGED
-  }),
   configurableField('previous_memory_size', 'Previous Memory Size', 'memory', 'previousRamGb', 'units.previous_ram_gb', {
-    requirementConfigurable: false,
+    requirementConfigurable: true,
     inheritVisibilityFromFieldKey: 'memory_modules',
     requiredSemantics: null
   }),
@@ -315,14 +309,8 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
   repeatableChild('storage_device_size', 'Storage: Size GB', 'storage', 'storage_devices', 'storageDevices[index][sizeGb]', 'unit_storage_devices.size_gb'),
   repeatableChild('storage_device_type', 'Storage: Storage Type', 'storage', 'storage_devices', 'storageDevices[index][storageTypeConfigValueId]', 'unit_storage_devices.storage_type_config_value_id'),
   repeatableChild('storage_wipe_status', 'Storage: Wipe Status', 'storage', 'storage_devices', 'storageDevices[index][wipeStatusConfigValueId]', 'unit_storage_devices.wipe_status_config_value_id'),
-  repeatableChild('storage_change_notes', 'Storage: Change Notes', 'storage', 'storage_devices', 'storageDevices[index][changeNotes]', 'unit_storage_devices.change_notes'),
-  repeatableChild('storage_hidden_metadata', 'Storage Hidden Metadata', 'storage', 'storage_devices', 'storageDevices[index][metadata]', 'unit_storage_devices metadata columns', {
-    defaultVisible: false,
-    ruleType: RULE_TYPE.SYSTEM_CONTROL,
-    preservationPolicy: PRESERVATION.SYSTEM_MANAGED
-  }),
   configurableField('previous_storage_size', 'Previous Storage Size', 'storage', 'previousStorageGb', 'units.previous_storage_gb', {
-    requirementConfigurable: false,
+    requirementConfigurable: true,
     inheritVisibilityFromFieldKey: 'storage_devices',
     requiredSemantics: null
   }),
@@ -399,7 +387,7 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
     defaultVisible: true,
     defaultRequired: false,
     visibilityConfigurable: true,
-    requirementConfigurable: false,
+    requirementConfigurable: true,
     preservationPolicy: PRESERVATION.PRESERVE_WHEN_HIDDEN
   }),
   defineField({
@@ -414,7 +402,7 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
     defaultVisible: true,
     defaultRequired: false,
     visibilityConfigurable: true,
-    requirementConfigurable: false,
+    requirementConfigurable: true,
     preservationPolicy: PRESERVATION.PRESERVE_WHEN_HIDDEN
   }),
   protectedControl({

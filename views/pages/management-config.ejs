@@ -20,6 +20,7 @@
 
   const getConfigCategoryCode = (category) => String(category && category.code ? category.code : '').toLowerCase();
   const isProductionWeightCategory = (category) => getConfigCategoryCode(category) === 'production_weight_types';
+  const isCanonicalCosmeticGradeCategory = (category) => getConfigCategoryCode(category) === 'cosmetic_grades';
   const isSystemUsedCategory = (category) => {
     const categoryCode = getConfigCategoryCode(category);
     return systemConfigCategoryCodes.has(categoryCode) || isProductionWeightCategory(category);
@@ -83,6 +84,8 @@
             </div>
           </section>
 
+          <%- include('../fragments/operational-option-ranking-administration', { rankingAdministration }) %>
+
           <section class="site-clean-section site-clean-surface configuration-browser-section" data-configuration-browser>
             <div class="site-clean-section-heading configuration-browser-heading">
               <div>
@@ -139,7 +142,8 @@
                           category.code,
                           category.description
                         ].filter(Boolean).join(' ').toLowerCase();
-                        const supportsDragOrdering = Boolean(category.supportsDragOrdering && category.values.length >= 3);
+                        const canonicalCosmeticGrades = isCanonicalCosmeticGradeCategory(category);
+                        const supportsDragOrdering = Boolean(!canonicalCosmeticGrades && category.supportsDragOrdering && category.values.length >= 3);
                         const tableColumnCount = supportsDragOrdering ? 7 : 6;
                       %>
                       <details class="configuration-category" data-configuration-category data-search-text="<%= categorySearchText %>">
@@ -154,6 +158,7 @@
                             <% if (category.inactiveValueCount > 0) { %><span><%= formatNumber(category.inactiveValueCount) %> inactive</span><% } %>
                             <% if (!category.isActive) { %><span class="pill neutral">Inactive category</span><% } %>
                             <% if (isSystemUsedCategory(category)) { %><span class="pill neutral">System-used</span><% } %>
+                            <% if (canonicalCosmeticGrades) { %><span class="pill neutral">Canonical / read-only</span><% } %>
                             <% if (category.usesPopularitySorting) { %><span class="pill neutral">Popularity sorted</span><% } %>
                             <% if (supportsDragOrdering) { %><span class="pill neutral">Drag order</span><% } %>
                           </span>
@@ -170,7 +175,11 @@
                                 <p class="configuration-ordering-help">Operational dropdowns use the cached popularity order. This table keeps the configured fallback order.</p>
                               <% } %>
                             </div>
-                            <a class="secondary-button button-small" href="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Add Value</a>
+                            <% if (canonicalCosmeticGrades) { %>
+                              <span class="pill neutral">A · AB · B · C · D</span>
+                            <% } else { %>
+                              <a class="secondary-button button-small" href="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Add Value</a>
+                            <% } %>
                           </div>
 
                           <div class="table-card configuration-values-table" data-reorderable="<%= supportsDragOrdering ? '1' : '0' %>">
@@ -251,14 +260,18 @@
                                       <td><%= value.description || '—' %></td>
                                       <td>
                                         <div class="configuration-value-actions">
-                                          <a class="secondary-button button-small" href="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
-
-                                          <% if (isPasswordLinkExpirySetting(category, value)) { %>
-                                            <span class="pill neutral">Required</span>
-                                          <% } else if (value.isActive) { %>
-                                            <a class="danger-button button-small" href="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Deactivate</a>
+                                          <% if (canonicalCosmeticGrades) { %>
+                                            <span class="pill neutral">System-managed</span>
                                           <% } else { %>
-                                            <a class="secondary-button button-small" href="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Activate</a>
+                                            <a class="secondary-button button-small" href="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+
+                                            <% if (isPasswordLinkExpirySetting(category, value)) { %>
+                                              <span class="pill neutral">Required</span>
+                                            <% } else if (value.isActive) { %>
+                                              <a class="danger-button button-small" href="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Deactivate</a>
+                                            <% } else { %>
+                                              <a class="secondary-button button-small" href="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Activate</a>
+                                            <% } %>
                                           <% } %>
                                         </div>
                                       </td>
@@ -283,6 +296,6 @@
     </div>
 
     <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
-    <script defer src="/js/config-values.js?v=20260803-stage10s-pointer-filtered-drag-order"></script>
+    <script defer src="/js/config-values.js?v=20260804-stage10w-ranking-administration"></script>
   </body>
 </html>

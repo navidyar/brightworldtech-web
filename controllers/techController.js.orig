@@ -22,6 +22,12 @@ const { getBlockingMessage: getLotRequirementBlockingMessage } = require('../ser
 const { buildUnitFormAuditEvent } = require('../services/unitAuditSnapshot');
 const { buildUnitHistoryTimeline } = require('../services/unitHistoryTimeline');
 const { buildQcStatusPresentation } = require('../services/qcStatusPresentation');
+const { getQcReviewActionAvailability } = require('../services/qcReviewActionAvailability');
+const catalogRequestAccessPolicy = require('../services/catalogRequestAccessPolicy');
+const {
+  parseHardwareCapacityToGb,
+  normalizeHardwareCapacityForStorage
+} = require('../services/hardwareCapacity');
 const {
   subscribeToUnitBrowserChanges,
   publishUnitBrowserChange
@@ -37,7 +43,6 @@ const VALID_MEMORY_INSTALL_TYPE_CODES = new Set([
   'unknown'
 ]);
 
-const DEFAULT_MEMORY_INSTALL_TYPE_CODE = 'removable_module';
 
 function normalizePositiveInteger(value) {
   const parsed = Number(value);
@@ -144,16 +149,17 @@ function getCurrentRoleCodes(req) {
     : [];
 }
 
-function userCanOverrideProductionWeight(req) {
+function userCanViewProductionWeight(req) {
   return getCurrentRoleCodes(req)
     .some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
 }
 
-function canRequestCatalogException(req) {
-  const roleCodes = getCurrentRoleCodes(req);
+function userCanOverrideProductionWeight(req) {
+  return userCanViewProductionWeight(req);
+}
 
-  return roleCodes.includes('tech')
-    && !roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+function canRequestCatalogException(req) {
+  return catalogRequestAccessPolicy.canSubmitCatalogRequest(getCurrentRoleCodes(req));
 }
 
 function markProductionWeightPermission(formData, formOptions, { allowOverrideInput = true } = {}) {
@@ -168,6 +174,22 @@ function markProductionWeightPermission(formData, formOptions, { allowOverrideIn
     productionWeightOverride: canOverrideProductionWeight ? formData.productionWeightOverride : '',
     productionWeightNotes: canOverrideProductionWeight ? formData.productionWeightNotes : '',
     canOverrideProductionWeight
+  };
+}
+
+
+function redactProductionWeightFromTimeline(timeline) {
+  const safeTimeline = timeline || {};
+  const events = (Array.isArray(safeTimeline.events) ? safeTimeline.events : []).map((event) => ({
+    ...event,
+    changes: (Array.isArray(event.changes) ? event.changes : []).filter((change) => !/production weight|production credit|current lot weight/i.test(String(change.label || ''))),
+    notes: (Array.isArray(event.notes) ? event.notes : []).filter((note) => !/^prior tech credit:/i.test(String(note || '').trim()))
+  }));
+
+  return {
+    ...safeTimeline,
+    events,
+    totalChanges: events.reduce((sum, event) => sum + (Array.isArray(event.changes) ? event.changes.length : 0), 0)
   };
 }
 
@@ -219,6 +241,7 @@ function buildCompleteWorkModalView({ preview = null, req = null, successMessage
       errorMessage: ''
     },
     creditedToName: getCurrentUserDisplayName(req),
+    canViewProductionWeight: userCanViewProductionWeight(req),
     successMessage,
     errorMessages: Array.isArray(errorMessages) ? errorMessages : []
   };
@@ -251,6 +274,11 @@ function buildReverseCompletionModalView({
 function canViewParkedUnits(req) {
   return getCurrentRoleCodes(req)
     .some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+}
+
+function canSearchParkedUnits(req) {
+  return getCurrentRoleCodes(req)
+    .some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
 }
 
 function canViewAnyLotFilter(req) {
@@ -296,6 +324,7 @@ function getFiltersFromRequest(req) {
     currentUserId: req && req.currentUser ? req.currentUser.user_id : null,
     restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req),
     canViewParkedUnits: canViewParkedUnits(req),
+    canSearchParkedUnits: canSearchParkedUnits(req),
     allowAnyLotFilter: canViewAnyLotFilter(req)
   };
 }
@@ -416,12 +445,22 @@ async function attachLatestQcCorrections(result) {
 
   return {
     ...result,
-    units: result.units.map((unit) => ({
-      ...unit,
-      latestQcCorrection: unit.latestQcReview && unit.latestQcReview.decisionCode === 'rejected'
+    units: result.units.map((unit) => {
+      const latestQcCorrection = unit.latestQcReview && unit.latestQcReview.decisionCode === 'rejected'
         ? latestCorrectionMap.get(Number(unit.latestQcReview.qcCheckId)) || null
-        : null
-    }))
+        : null;
+
+      return {
+        ...unit,
+        latestQcCorrection,
+        qcReviewActionAvailability: getQcReviewActionAvailability({
+          hasCompletion: Boolean(unit.latestWorkCompletion),
+          isParked: Boolean(unit.isParked),
+          latestDecisionCode: unit.latestQcReview ? unit.latestQcReview.decisionCode : '',
+          hasCorrection: Boolean(latestQcCorrection)
+        })
+      };
+    })
   };
 }
 
@@ -493,39 +532,37 @@ function normalizeModuleField(value) {
 }
 
 function normalizeMemoryInstallTypeCode(value) {
-  const normalized = normalizeModuleField(value);
-
-  return VALID_MEMORY_INSTALL_TYPE_CODES.has(normalized)
-    ? normalized
-    : DEFAULT_MEMORY_INSTALL_TYPE_CODE;
+  return normalizeModuleField(value);
 }
 
-function getMemoryModulesFromRequest(req) {
-  return normalizeModuleRowsFromBody(req.body.memoryModules).map((row) => ({
-    slotLabel: normalizeModuleField(row.slotLabel),
-    sizeGb: normalizeModuleField(row.sizeGb),
-    ramTypeConfigValueId: normalizeModuleField(row.ramTypeConfigValueId),
-    memoryInstallTypeCode: normalizeMemoryInstallTypeCode(row.memoryInstallTypeCode),
-    speedMhz: normalizeModuleField(row.speedMhz),
-    manufacturerName: normalizeModuleField(row.manufacturerName),
-    partNumber: normalizeModuleField(row.partNumber),
-    serialNumber: normalizeModuleField(row.serialNumber),
-    changeNotes: normalizeModuleField(row.changeNotes)
-  }));
+function getMemoryModulesFromRequest(req, collectionName = 'memoryModules') {
+  return normalizeModuleRowsFromBody(req.body[collectionName]).map((row) => {
+    const sizeGb = normalizeHardwareCapacityForStorage(row.sizeGb);
+    const isEmptySlot = sizeGb === '0';
+
+    return {
+      componentRowId: normalizeModuleField(row.componentRowId),
+      slotLabel: normalizeModuleField(row.slotLabel),
+      sizeGb,
+      ramTypeConfigValueId: isEmptySlot ? '' : normalizeModuleField(row.ramTypeConfigValueId),
+      memoryInstallTypeCode: isEmptySlot ? '' : normalizeMemoryInstallTypeCode(row.memoryInstallTypeCode)
+    };
+  });
 }
 
-function getStorageDevicesFromRequest(req) {
-  return normalizeModuleRowsFromBody(req.body.storageDevices).map((row) => ({
-    slotLabel: normalizeModuleField(row.slotLabel),
-    sizeGb: normalizeModuleField(row.sizeGb),
-    storageTypeConfigValueId: normalizeModuleField(row.storageTypeConfigValueId),
-    manufacturerName: normalizeModuleField(row.manufacturerName),
-    modelNumber: normalizeModuleField(row.modelNumber),
-    serialNumber: normalizeModuleField(row.serialNumber),
-    firmwareVersion: normalizeModuleField(row.firmwareVersion),
-    wipeStatusConfigValueId: normalizeModuleField(row.wipeStatusConfigValueId),
-    changeNotes: normalizeModuleField(row.changeNotes)
-  }));
+function getStorageDevicesFromRequest(req, collectionName = 'storageDevices') {
+  return normalizeModuleRowsFromBody(req.body[collectionName]).map((row) => {
+    const sizeGb = normalizeHardwareCapacityForStorage(row.sizeGb);
+    const isEmptySlot = sizeGb === '0';
+
+    return {
+      componentRowId: normalizeModuleField(row.componentRowId),
+      slotLabel: normalizeModuleField(row.slotLabel),
+      sizeGb,
+      storageTypeConfigValueId: isEmptySlot ? '' : normalizeModuleField(row.storageTypeConfigValueId),
+      wipeStatusConfigValueId: isEmptySlot ? '' : normalizeModuleField(row.wipeStatusConfigValueId)
+    };
+  });
 }
 
 function getIssueRowsFromBody(value) {
@@ -537,7 +574,8 @@ function getCosmeticIssuesFromRequest(req) {
     issueTypeConfigValueId: normalizeModuleField(row.issueTypeConfigValueId),
     severityConfigValueId: normalizeModuleField(row.severityConfigValueId),
     locationConfigValueId: normalizeModuleField(row.locationConfigValueId),
-    issueRemark: normalizeModuleField(row.issueRemark)
+    issueRemark: normalizeModuleField(row.issueRemark),
+    isNoIssue: normalizeModuleField(row.isNoIssue)
   }));
 }
 
@@ -546,7 +584,8 @@ function getHardwareIssuesFromRequest(req) {
     issueTypeConfigValueId: normalizeModuleField(row.issueTypeConfigValueId),
     customIssueLabel: normalizeModuleField(row.customIssueLabel),
     locationConfigValueId: normalizeModuleField(row.locationConfigValueId),
-    issueRemark: normalizeModuleField(row.issueRemark)
+    issueRemark: normalizeModuleField(row.issueRemark),
+    isNoIssue: normalizeModuleField(row.isNoIssue)
   }));
 }
 
@@ -593,15 +632,36 @@ function getPositiveIntegerOrBlank(value) {
 
   const parsed = Number(trimmed);
 
-  return Number.isInteger(parsed) && parsed > 0 ? String(parsed) : trimmed;
+  return Number.isInteger(parsed) && parsed > 0 ? String(parsed) : '';
 }
 
 function getModuleTotalGb(rows) {
   return rows.reduce((sum, row) => {
-    const parsed = Number(row.sizeGb);
+    const parsed = parseHardwareCapacityToGb(row.sizeGb);
 
-    return Number.isFinite(parsed) && parsed > 0 ? sum + parsed : sum;
+    return parsed.valid && parsed.gb !== null ? sum + parsed.gb : sum;
   }, 0);
+}
+
+function hasStructuredCapacityEntry(rows) {
+  return rows.some((row) => {
+    const parsed = parseHardwareCapacityToGb(row.sizeGb);
+
+    return parsed.valid && parsed.gb !== null;
+  });
+}
+
+function getComponentCapacityTotalGb(rows, submittedLegacyTotal) {
+  const componentTotal = getModuleTotalGb(rows);
+
+  if (hasStructuredCapacityEntry(rows)) {
+    return String(componentTotal);
+  }
+
+  // The visible total fields were removed in Stage 10E. Preserve a valid
+  // summary-only legacy value when no structured rows exist, but never allow
+  // stale zero/negative/non-integer hidden values to block form submission.
+  return getPositiveIntegerOrBlank(submittedLegacyTotal);
 }
 
 function normalizeSerialInput(value) {
@@ -612,9 +672,13 @@ function normalizeSerialInput(value) {
 }
 
 function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
+  const previousMemoryModules = getMemoryModulesFromRequest(req, 'previousMemoryModules');
   const memoryModules = getMemoryModulesFromRequest(req);
+  const previousStorageDevices = getStorageDevicesFromRequest(req, 'previousStorageDevices');
   const storageDevices = getStorageDevicesFromRequest(req);
+  const previousMemoryTotalGb = getModuleTotalGb(previousMemoryModules);
   const memoryTotalGb = getModuleTotalGb(memoryModules);
+  const previousStorageTotalGb = getModuleTotalGb(previousStorageDevices);
   const storageTotalGb = getModuleTotalGb(storageDevices);
   const issueDetails = getIssueDetailsFromRequest(req);
   const expandedDetails = getExpandedDetailsFromRequest(req);
@@ -631,15 +695,17 @@ function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
     unitModelId: String(req.body.unitModelId || '').trim(),
     processorModelId: String(req.body.processorModelId || '').trim(),
     processorSpeedGhz: String(req.body.processorSpeedGhz || '').trim(),
-    previousRamGb: String(req.body.previousRamGb || '').trim(),
-    ramGb: String(req.body.ramGb || '').trim() || (memoryTotalGb > 0 ? String(memoryTotalGb) : ''),
+    previousRamGb: getComponentCapacityTotalGb(previousMemoryModules, req.body.previousRamGb),
+    ramGb: getComponentCapacityTotalGb(memoryModules, req.body.ramGb),
     ramTypeConfigValueId: String(req.body.ramTypeConfigValueId || '').trim(),
-    previousStorageGb: String(req.body.previousStorageGb || '').trim(),
-    storageGb: String(req.body.storageGb || '').trim() || (storageTotalGb > 0 ? String(storageTotalGb) : ''),
+    previousStorageGb: getComponentCapacityTotalGb(previousStorageDevices, req.body.previousStorageGb),
+    storageGb: getComponentCapacityTotalGb(storageDevices, req.body.storageGb),
     storageTypeConfigValueId: String(req.body.storageTypeConfigValueId || '').trim(),
     operatingSystemConfigValueId: String(req.body.operatingSystemConfigValueId || '').trim(),
     batteryHealthPercent: String(req.body.batteryHealthPercent || '').trim(),
+    previousMemoryModules,
     memoryModules,
+    previousStorageDevices,
     storageDevices,
     cosmeticIssues: issueDetails.cosmeticIssues,
     hardwareIssues: issueDetails.hardwareIssues,
@@ -673,6 +739,12 @@ function isPositiveInteger(value) {
   const parsed = Number(value);
 
   return Number.isInteger(parsed) && parsed > 0;
+}
+
+function isNonNegativeInteger(value) {
+  const parsed = Number(value);
+
+  return Number.isInteger(parsed) && parsed >= 0;
 }
 
 function isNumberInRangeWithPrecision(value, minimum, maximum, maximumDecimalPlaces) {
@@ -720,63 +792,65 @@ function moduleRowHasAnyValue(row, ignoredFields = []) {
   });
 }
 
-function validateMemoryModules(formData) {
+function validateMemoryModules(formData, propertyName = 'memoryModules', rowLabelPrefix = 'Memory module') {
   const errors = [];
 
-  (formData.memoryModules || []).forEach((moduleRow, index) => {
-    if (!moduleRowHasAnyValue(moduleRow, ['slotLabel', 'memoryInstallTypeCode'])) {
+  (formData[propertyName] || []).forEach((moduleRow, index) => {
+    if (!moduleRowHasAnyValue(moduleRow, ['slotLabel'])) {
       return;
     }
 
-    const rowLabel = `Memory module ${index + 1}`;
+    const rowLabel = `${rowLabelPrefix} ${index + 1}`;
 
-    if (!moduleRow.sizeGb || !isPositiveInteger(moduleRow.sizeGb)) {
-      errors.push(`${rowLabel} requires a valid positive memory size.`);
+    const parsedCapacity = parseHardwareCapacityToGb(moduleRow.sizeGb);
+
+    if (!parsedCapacity.valid || parsedCapacity.gb === null) {
+      errors.push(`${rowLabel}: ${parsedCapacity.message || 'Enter 0 for an empty slot, or a size such as 16GB, 512GB, 1TB, or 2TB.'}`);
     }
 
-    if (moduleRow.ramTypeConfigValueId && !isPositiveInteger(moduleRow.ramTypeConfigValueId)) {
+    const isEmptySlot = parsedCapacity.valid && parsedCapacity.gb === 0;
+
+    if (!isEmptySlot && !moduleRow.ramTypeConfigValueId) {
+      errors.push(`${rowLabel} requires a Memory Type selection.`);
+    } else if (moduleRow.ramTypeConfigValueId && !isPositiveInteger(moduleRow.ramTypeConfigValueId)) {
       errors.push(`${rowLabel} has an invalid memory type.`);
     }
 
-    if (!VALID_MEMORY_INSTALL_TYPE_CODES.has(moduleRow.memoryInstallTypeCode || DEFAULT_MEMORY_INSTALL_TYPE_CODE)) {
+    if (!isEmptySlot && !moduleRow.memoryInstallTypeCode) {
+      errors.push(`${rowLabel} requires an Install Type selection.`);
+    } else if (moduleRow.memoryInstallTypeCode && !VALID_MEMORY_INSTALL_TYPE_CODES.has(moduleRow.memoryInstallTypeCode)) {
       errors.push(`${rowLabel} has an invalid memory install type.`);
-    }
-
-    if (moduleRow.speedMhz && !isPositiveInteger(moduleRow.speedMhz)) {
-      errors.push(`${rowLabel} speed must be a positive whole number.`);
     }
 
     if (moduleRow.slotLabel.length > 80) {
       errors.push(`${rowLabel} slot label must be 80 characters or fewer.`);
-    }
-
-    if (moduleRow.manufacturerName.length > 120 || moduleRow.partNumber.length > 120 || moduleRow.serialNumber.length > 120) {
-      errors.push(`${rowLabel} manufacturer, part number, and serial number must each be 120 characters or fewer.`);
-    }
-
-    if (moduleRow.changeNotes.length > 500) {
-      errors.push(`${rowLabel} notes must be 500 characters or fewer.`);
     }
   });
 
   return errors;
 }
 
-function validateStorageDevices(formData) {
+function validateStorageDevices(formData, propertyName = 'storageDevices', rowLabelPrefix = 'Storage device') {
   const errors = [];
 
-  (formData.storageDevices || []).forEach((deviceRow, index) => {
+  (formData[propertyName] || []).forEach((deviceRow, index) => {
     if (!moduleRowHasAnyValue(deviceRow, ['slotLabel'])) {
       return;
     }
 
-    const rowLabel = `Storage device ${index + 1}`;
+    const rowLabel = `${rowLabelPrefix} ${index + 1}`;
 
-    if (!deviceRow.sizeGb || !isPositiveInteger(deviceRow.sizeGb)) {
-      errors.push(`${rowLabel} requires a valid positive storage size.`);
+    const parsedCapacity = parseHardwareCapacityToGb(deviceRow.sizeGb);
+
+    if (!parsedCapacity.valid || parsedCapacity.gb === null) {
+      errors.push(`${rowLabel}: ${parsedCapacity.message || 'Enter 0 for an empty slot, or a size such as 512GB, 1TB, or 2TB.'}`);
     }
 
-    if (deviceRow.storageTypeConfigValueId && !isPositiveInteger(deviceRow.storageTypeConfigValueId)) {
+    const isEmptySlot = parsedCapacity.valid && parsedCapacity.gb === 0;
+
+    if (!isEmptySlot && !deviceRow.storageTypeConfigValueId) {
+      errors.push(`${rowLabel} requires a Storage Type selection.`);
+    } else if (deviceRow.storageTypeConfigValueId && !isPositiveInteger(deviceRow.storageTypeConfigValueId)) {
       errors.push(`${rowLabel} has an invalid storage type.`);
     }
 
@@ -787,26 +861,75 @@ function validateStorageDevices(formData) {
     if (deviceRow.slotLabel.length > 80) {
       errors.push(`${rowLabel} slot label must be 80 characters or fewer.`);
     }
-
-    if (
-      deviceRow.manufacturerName.length > 120 ||
-      deviceRow.modelNumber.length > 120 ||
-      deviceRow.serialNumber.length > 120 ||
-      deviceRow.firmwareVersion.length > 120
-    ) {
-      errors.push(`${rowLabel} manufacturer, model, serial, and firmware fields must each be 120 characters or fewer.`);
-    }
-
-    if (deviceRow.changeNotes.length > 500) {
-      errors.push(`${rowLabel} notes must be 500 characters or fewer.`);
-    }
   });
 
   return errors;
 }
 
 function issueRowHasAnyValue(row) {
-  return Object.values(row || {}).some((value) => String(value || '').trim());
+  return Object.entries(row || {}).some(([key, value]) => (
+    key !== 'isNoIssue' && String(value || '').trim()
+  ));
+}
+
+function getNoCosmeticIssueTypeIdSet(formOptions = {}) {
+  return new Set(
+    (Array.isArray(formOptions.cosmeticIssueTypes) ? formOptions.cosmeticIssueTypes : [])
+      .filter((option) => option && option.isNoIssue)
+      .map((option) => String(option.id || '').trim())
+      .filter(Boolean)
+  );
+}
+
+function normalizeCosmeticIssueRowsForSubmission(formData, formOptions = {}) {
+  const noIssueTypeIds = getNoCosmeticIssueTypeIdSet(formOptions);
+  const rows = Array.isArray(formData && formData.cosmeticIssues)
+    ? formData.cosmeticIssues
+    : [];
+
+  rows.forEach((issueRow) => {
+    const selectedTypeId = String(issueRow.issueTypeConfigValueId || '').trim();
+    const isNoIssue = Boolean(selectedTypeId && noIssueTypeIds.has(selectedTypeId));
+
+    issueRow.isNoIssue = isNoIssue ? '1' : '';
+
+    if (isNoIssue) {
+      issueRow.severityConfigValueId = '';
+      issueRow.locationConfigValueId = '';
+    }
+  });
+
+  return formData;
+}
+
+function getNoHardwareIssueTypeIdSet(formOptions = {}) {
+  return new Set(
+    (Array.isArray(formOptions.hardwareIssueTypes) ? formOptions.hardwareIssueTypes : [])
+      .filter((option) => option && option.isNoIssue)
+      .map((option) => String(option.id || '').trim())
+      .filter(Boolean)
+  );
+}
+
+function normalizeHardwareIssueRowsForSubmission(formData, formOptions = {}) {
+  const noIssueTypeIds = getNoHardwareIssueTypeIdSet(formOptions);
+  const rows = Array.isArray(formData && formData.hardwareIssues)
+    ? formData.hardwareIssues
+    : [];
+
+  rows.forEach((issueRow) => {
+    const selectedTypeId = String(issueRow.issueTypeConfigValueId || '').trim();
+    const isNoIssue = Boolean(selectedTypeId && noIssueTypeIds.has(selectedTypeId));
+
+    issueRow.isNoIssue = isNoIssue ? '1' : '';
+
+    if (isNoIssue) {
+      issueRow.customIssueLabel = '';
+      issueRow.locationConfigValueId = '';
+    }
+  });
+
+  return formData;
 }
 
 function validateIssueDetails(formData) {
@@ -823,11 +946,13 @@ function validateIssueDetails(formData) {
       errors.push(`${rowLabel} requires a valid issue type.`);
     }
 
-    if (!issueRow.severityConfigValueId || !isPositiveInteger(issueRow.severityConfigValueId)) {
+    const isNoIssue = issueRow.isNoIssue === '1';
+
+    if (!isNoIssue && (!issueRow.severityConfigValueId || !isPositiveInteger(issueRow.severityConfigValueId))) {
       errors.push(`${rowLabel} requires a valid severity.`);
     }
 
-    if (!issueRow.locationConfigValueId || !isPositiveInteger(issueRow.locationConfigValueId)) {
+    if (!isNoIssue && (!issueRow.locationConfigValueId || !isPositiveInteger(issueRow.locationConfigValueId))) {
       errors.push(`${rowLabel} requires a valid location.`);
     }
 
@@ -847,7 +972,9 @@ function validateIssueDetails(formData) {
       errors.push(`${rowLabel} has an invalid configured issue type.`);
     }
 
-    if (!issueRow.issueTypeConfigValueId && !issueRow.customIssueLabel) {
+    const isNoIssue = issueRow.isNoIssue === '1';
+
+    if (!isNoIssue && !issueRow.issueTypeConfigValueId && !issueRow.customIssueLabel) {
       errors.push(`${rowLabel} requires either a configured issue type or a custom issue.`);
     }
 
@@ -955,6 +1082,10 @@ function validateExpandedDetails(formData) {
 
 async function validateUnitForm(formData, formOptions, mode) {
   const errors = [];
+
+  normalizeCosmeticIssueRowsForSubmission(formData, formOptions);
+  normalizeHardwareIssueRowsForSubmission(formData, formOptions);
+
   const validationFormData = buildManagedValidationFormData(formData);
 
   if (!formOptions.supported) {
@@ -984,20 +1115,20 @@ async function validateUnitForm(formData, formOptions, mode) {
     errors.push('BIOS serial number must be 150 characters or fewer.');
   }
 
-  if (validationFormData.previousRamGb && !isPositiveInteger(validationFormData.previousRamGb)) {
-    errors.push('Previous memory size must be a positive whole number.');
+  if (validationFormData.previousRamGb && !isNonNegativeInteger(validationFormData.previousRamGb)) {
+    errors.push('Previous memory size must be a non-negative whole number.');
   }
 
-  if (validationFormData.ramGb && !isPositiveInteger(validationFormData.ramGb)) {
-    errors.push('Current memory total must be a positive whole number.');
+  if (validationFormData.ramGb && !isNonNegativeInteger(validationFormData.ramGb)) {
+    errors.push('Current memory total must be a non-negative whole number.');
   }
 
-  if (validationFormData.previousStorageGb && !isPositiveInteger(validationFormData.previousStorageGb)) {
-    errors.push('Previous storage size must be a positive whole number.');
+  if (validationFormData.previousStorageGb && !isNonNegativeInteger(validationFormData.previousStorageGb)) {
+    errors.push('Previous storage size must be a non-negative whole number.');
   }
 
-  if (validationFormData.storageGb && !isPositiveInteger(validationFormData.storageGb)) {
-    errors.push('Current storage total must be a positive whole number.');
+  if (validationFormData.storageGb && !isNonNegativeInteger(validationFormData.storageGb)) {
+    errors.push('Current storage total must be a non-negative whole number.');
   }
 
   if (validationFormData.processorModelId && !isPositiveInteger(validationFormData.processorModelId)) {
@@ -1039,7 +1170,9 @@ async function validateUnitForm(formData, formOptions, mode) {
     errors.push('Production weight notes must be 500 characters or fewer.');
   }
 
+  errors.push(...validateMemoryModules(validationFormData, 'previousMemoryModules', 'Previous memory module'));
   errors.push(...validateMemoryModules(validationFormData));
+  errors.push(...validateStorageDevices(validationFormData, 'previousStorageDevices', 'Previous storage device'));
   errors.push(...validateStorageDevices(validationFormData));
   errors.push(...validateIssueDetails(validationFormData));
   errors.push(...validateExpandedDetails(validationFormData));
@@ -1650,6 +1783,7 @@ async function getTechUnitFormOptionsWithIssues(req = null, options = {}) {
     ...formOptions,
     ...issueFormOptions,
     ...expandedFormOptions,
+    canViewProductionWeight: userCanViewProductionWeight(req),
     canOverrideProductionWeight: userCanOverrideProductionWeight(req),
     canRequestCatalogException: canRequestCatalogException(req)
   };
@@ -1887,6 +2021,9 @@ async function prepareTechUnitFormSubmission({
     };
   }
 
+  normalizeCosmeticIssueRowsForSubmission(formData, formOptions);
+  normalizeHardwareIssueRowsForSubmission(formData, formOptions);
+
   const submissionPolicy = await applyLatestLotUnitFormSubmissionPolicy({
     mode,
     formData,
@@ -1894,6 +2031,7 @@ async function prepareTechUnitFormSubmission({
     existingFormData
   });
   const authoritativeFormData = submissionPolicy.formData;
+
   const errorMessages = [];
 
   appendUniqueMessages(errorMessages, submissionPolicy.errors);
@@ -2218,7 +2356,8 @@ async function buildSingleTechUnitResult(req, unitId) {
     perPage: '10',
     currentUserId: req.currentUser.user_id,
     restrictToCurrentAssignment: isRegularTechUnitBrowserUser(req),
-    canViewParkedUnits: canViewParkedUnits(req)
+    canViewParkedUnits: canViewParkedUnits(req),
+    canSearchParkedUnits: canSearchParkedUnits(req)
   };
   const result = await buildTechUnitsResult(filters);
 
@@ -2669,7 +2808,7 @@ async function renderTechUnitHistoryPanel(req, res, next) {
         assetTagPrefix: techUnitModel.getAssetTagPrefix()
       })
     ]);
-    const timeline = buildUnitHistoryTimeline({
+    const rawTimeline = buildUnitHistoryTimeline({
       auditEvents,
       historyDetails,
       overrideHistory,
@@ -2677,6 +2816,9 @@ async function renderTechUnitHistoryPanel(req, res, next) {
       acceptanceHistory: lotValidationAcceptanceHistory,
       creationContext
     });
+    const timeline = userCanViewProductionWeight(req)
+      ? rawTimeline
+      : redactProductionWeightFromTimeline(rawTimeline);
 
     return res.render('fragments/tech-unit-history-panel', {
       unitId,
@@ -3021,7 +3163,7 @@ async function renderReturnTechUnitToActiveModal(req, res, next) {
 
 async function returnTechUnitToActive(req, res, next) {
   let unit = null;
-  let formOptions = { lots: [], technicians: [] };
+  let formOptions = { lots: [], assignees: [] };
   const formData = getLifecycleFormData(req);
 
   try {

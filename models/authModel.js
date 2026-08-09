@@ -1,4 +1,5 @@
 const { pool } = require('./db');
+const { buildUsernameStem, nextAvailableUsername, normalizeUsername } = require('../services/userUsernamePolicy');
 
 const PASSWORD_LINK_EXPIRY_CATEGORY_CODE = 'security_settings';
 const PASSWORD_LINK_EXPIRY_VALUE_CODE = 'password_link_expiry_hours';
@@ -82,10 +83,16 @@ function normalizeEmail(email) {
   return String(email || '').trim().toLowerCase();
 }
 
-async function getUserByEmail(email) {
-  const normalizedEmail = normalizeEmail(email);
+function normalizeLoginIdentifier(identifier) {
+  return String(identifier || '').trim();
+}
 
-  const [rows] = await pool.query(
+async function getUserByLoginIdentifier(identifier, connection = pool) {
+  const normalizedIdentifier = normalizeLoginIdentifier(identifier);
+  const normalizedEmail = normalizeEmail(normalizedIdentifier);
+  const normalizedUsername = normalizeUsername(normalizedIdentifier);
+
+  const [rows] = await connection.query(
     `
       SELECT
         u.user_id,
@@ -93,6 +100,38 @@ async function getUserByEmail(email) {
         status.code AS account_status_code,
         u.first_name,
         u.last_name,
+        u.username,
+        u.email,
+        u.password_hash,
+        u.failed_login_count,
+        u.locked_until,
+        u.last_login_at,
+        u.is_active
+      FROM users u
+      LEFT JOIN config_values status
+        ON status.config_value_id = u.account_status_config_value_id
+      WHERE LOWER(u.email) = ?
+        OR u.username = ?
+      LIMIT 1
+    `,
+    [normalizedEmail, normalizedUsername]
+  );
+
+  return rows[0] || null;
+}
+
+async function getUserByEmail(email, connection = pool) {
+  const normalizedEmail = normalizeEmail(email);
+
+  const [rows] = await connection.query(
+    `
+      SELECT
+        u.user_id,
+        u.account_status_config_value_id,
+        status.code AS account_status_code,
+        u.first_name,
+        u.last_name,
+        u.username,
         u.email,
         u.password_hash,
         u.failed_login_count,
@@ -118,6 +157,7 @@ async function getUserByIdWithRoles(userId) {
         u.user_id,
         u.first_name,
         u.last_name,
+        u.username,
         u.email,
         u.is_active,
         status.code AS account_status_code,
@@ -134,6 +174,7 @@ async function getUserByIdWithRoles(userId) {
         u.user_id,
         u.first_name,
         u.last_name,
+        u.username,
         u.email,
         u.is_active,
         status.code
@@ -223,17 +264,36 @@ async function recordSuccessfulLogin(userId) {
   }
 }
 
-async function recordFailedLogin(email) {
-  const normalizedEmail = normalizeEmail(email);
+async function recordFailedLogin(identifier, connection = pool) {
+  const normalizedIdentifier = normalizeLoginIdentifier(identifier);
+  const normalizedEmail = normalizeEmail(normalizedIdentifier);
+  const normalizedUsername = normalizeUsername(normalizedIdentifier);
 
-  await pool.query(
+  await connection.query(
     `
       UPDATE users
       SET failed_login_count = failed_login_count + 1
       WHERE LOWER(email) = ?
+        OR username = ?
     `,
-    [normalizedEmail]
+    [normalizedEmail, normalizedUsername]
   );
+}
+
+async function allocateUsernameWithConnection({ firstName, lastName }, connection) {
+  const stem = buildUsernameStem(firstName, lastName);
+  const [rows] = await connection.query(
+    `
+      SELECT username
+      FROM users
+      WHERE username = ?
+        OR username LIKE CONCAT(?, '%')
+      FOR UPDATE
+    `,
+    [stem, stem]
+  );
+
+  return nextAvailableUsername(stem, rows.map((row) => row.username));
 }
 
 async function createUserWithRoles({ firstName, lastName, email, roleCodes }) {
@@ -245,27 +305,56 @@ async function createUserWithRoles({ firstName, lastName, email, roleCodes }) {
     await connection.beginTransaction();
 
     const pendingStatusId = await getConfigValueId('account_statuses', 'pending_setup', connection);
-
-    const [userResult] = await connection.query(
+    const [existingRows] = await connection.query(
       `
-        INSERT INTO users (
-          account_status_config_value_id,
-          first_name,
-          last_name,
-          email,
-          is_active
-        )
-        VALUES (?, ?, ?, ?, 1)
-        ON DUPLICATE KEY UPDATE
-          user_id = LAST_INSERT_ID(user_id),
-          first_name = VALUES(first_name),
-          last_name = VALUES(last_name),
-          updated_at = CURRENT_TIMESTAMP
+        SELECT user_id, username
+        FROM users
+        WHERE LOWER(email) = ?
+        LIMIT 1
+        FOR UPDATE
       `,
-      [pendingStatusId, firstName, lastName, normalizedEmail]
+      [normalizedEmail]
     );
 
-    const userId = userResult.insertId;
+    let userId;
+
+    if (existingRows[0]) {
+      userId = Number(existingRows[0].user_id);
+      const username = existingRows[0].username
+        ? normalizeUsername(existingRows[0].username)
+        : await allocateUsernameWithConnection({ firstName, lastName }, connection);
+
+      await connection.query(
+        `
+          UPDATE users
+          SET
+            first_name = ?,
+            last_name = ?,
+            username = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE user_id = ?
+        `,
+        [firstName, lastName, username, userId]
+      );
+    } else {
+      const username = await allocateUsernameWithConnection({ firstName, lastName }, connection);
+      const [userResult] = await connection.query(
+        `
+          INSERT INTO users (
+            account_status_config_value_id,
+            first_name,
+            last_name,
+            username,
+            email,
+            is_active
+          )
+          VALUES (?, ?, ?, ?, ?, 1)
+        `,
+        [pendingStatusId, firstName, lastName, username, normalizedEmail]
+      );
+
+      userId = Number(userResult.insertId);
+    }
 
     await connection.query(
       `
@@ -351,6 +440,7 @@ async function getValidPasswordLink(tokenHash) {
         link_type.code AS link_type_code,
         u.first_name,
         u.last_name,
+        u.username,
         u.email,
         u.is_active,
         status.code AS account_status_code
@@ -424,10 +514,13 @@ module.exports = {
   normalizePasswordLinkExpiryHours,
   getPasswordLinkExpiryHours,
   normalizeEmail,
+  normalizeLoginIdentifier,
+  getUserByLoginIdentifier,
   getUserByEmail,
   getUserByIdWithRoles,
   recordSuccessfulLogin,
   recordFailedLogin,
+  allocateUsernameWithConnection,
   createUserWithRoles,
   createPasswordLink,
   getValidPasswordLink,

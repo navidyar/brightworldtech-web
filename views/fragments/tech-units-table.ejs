@@ -313,7 +313,11 @@
           const assignedTechName = unit.assignedToName || 'Unassigned';
           const isReadOnlySearchResult = Boolean(unit.isReadOnlyForCurrentUser);
           const isAssignedToCurrentUser = Boolean(currentUserId && Number(unit.assignedToUserId) === currentUserId);
-          const canRequestUnitOverride = isRegularTechOverrideRequester && Boolean(currentUserId) && !isAssignedToCurrentUser;
+          const canRequestUnitOverride = Boolean(
+            isRegularTechOverrideRequester
+            && currentUserId
+            && (unit.isParked || !isAssignedToCurrentUser)
+          );
           const latestManualOverride = unit.latestOverride || null;
           const latestQcReview = unit.latestQcReview || null;
           const latestQcCorrection = unit.latestQcCorrection || null;
@@ -325,11 +329,15 @@
             && !unit.isParked
             && (canSubmitAnyQcCorrection || (isRegularTechUser && isAssignedToCurrentUser))
           );
-          const canRecordCurrentQcReview = Boolean(
+          const qcReviewActionAvailability = unit.qcReviewActionAvailability || {};
+          const canShowQcReviewActions = Boolean(
             canRecordQcReview
-            && unit.latestWorkCompletion
-            && !unit.isParked
-            && (!latestQcReview || (latestQcReview.decisionCode === 'rejected' && latestQcCorrection))
+            && qcReviewActionAvailability.visible
+          );
+          const canRecordCurrentQcReview = Boolean(
+            canShowQcReviewActions
+            && qcReviewActionAvailability.acceptEnabled
+            && qcReviewActionAvailability.rejectEnabled
           );
           const unitCreatedDate = formatUnitCreatedDate(unit.createdAt);
           const unitCreatedTime = formatUnitCreatedTime(unit.createdAt);
@@ -362,8 +370,17 @@
                   <% } %>
                 </small>
                 <% if (canViewCurrentLotWeight) { %>
-                  <span class="tech-unit-summary-weight-strip">
-                    <span class="tech-unit-summary-weight-value">Current lot weight <strong><%= unit.formattedCurrentLotWeight || '—' %></strong></span>
+                  <span class="tech-unit-summary-weight-strip" aria-label="Current Unit weight settings">
+                    <span class="tech-unit-summary-weight-value">
+                      <span class="tech-unit-summary-weight-label">Current lot weight</span>
+                      <strong><%= unit.formattedCurrentLotWeight || '—' %></strong>
+                    </span>
+                    <% if (unit.showIndividualWeightPill) { %>
+                      <span class="tech-unit-summary-weight-value tech-unit-summary-weight-value--override" title="This individual Unit weight overrides the current Lot weight.">
+                        <span class="tech-unit-summary-weight-label">Individual weight</span>
+                        <strong><%= unit.formattedIndividualWeightPill || '—' %></strong>
+                      </span>
+                    <% } %>
                   </span>
                 <% } %>
               </span>
@@ -460,23 +477,50 @@
           <td class="tech-units-actions-cell">
             <% if (unit.unitId) { %>
               <div class="tech-summary-actions">
-                <% if (canRecordCurrentQcReview) { %>
-                  <a
-                    class="secondary-button tech-action-button tech-action-button--qc-accept"
-                    href="/tech/units/<%= unit.unitId %>/qc-review/accepted/modal"
-                    data-tech-modal-trigger
-                    data-no-row-toggle
-                  >
-                    Accept
-                  </a>
-                  <a
-                    class="danger-button tech-action-button tech-action-button--qc-reject"
-                    href="/tech/units/<%= unit.unitId %>/qc-review/rejected/modal"
-                    data-tech-modal-trigger
-                    data-no-row-toggle
-                  >
-                    Reject
-                  </a>
+                <% if (canShowQcReviewActions) { %>
+                  <% if (qcReviewActionAvailability.acceptEnabled) { %>
+                    <a
+                      class="secondary-button tech-action-button tech-action-button--qc-accept"
+                      href="/tech/units/<%= unit.unitId %>/qc-review/accepted/modal"
+                      data-tech-modal-trigger
+                      data-no-row-toggle
+                    >
+                      Accept
+                    </a>
+                  <% } else { %>
+                    <button
+                      type="button"
+                      class="secondary-button tech-action-button tech-action-button--qc-accept decision-action-disabled"
+                      data-no-row-toggle
+                      disabled
+                      aria-disabled="true"
+                      title="<%= qcReviewActionAvailability.acceptDisabledReason || 'Accept is not available for the current QC state.' %>"
+                    >
+                      Accept
+                    </button>
+                  <% } %>
+
+                  <% if (qcReviewActionAvailability.rejectEnabled) { %>
+                    <a
+                      class="danger-button tech-action-button tech-action-button--qc-reject"
+                      href="/tech/units/<%= unit.unitId %>/qc-review/rejected/modal"
+                      data-tech-modal-trigger
+                      data-no-row-toggle
+                    >
+                      Reject
+                    </a>
+                  <% } else { %>
+                    <button
+                      type="button"
+                      class="danger-button tech-action-button tech-action-button--qc-reject decision-action-disabled"
+                      data-no-row-toggle
+                      disabled
+                      aria-disabled="true"
+                      title="<%= qcReviewActionAvailability.rejectDisabledReason || 'Reject is not available for the current QC state.' %>"
+                    >
+                      Reject
+                    </button>
+                  <% } %>
                 <% } %>
                 <% if (canRecordQcReview && unit.latestWorkCompletion && latestQcReview && latestQcReview.decisionCode === 'rejected' && !latestQcCorrection && !unit.isParked) { %>
                   <span class="tech-chip tech-chip--qc-pending">Awaiting correction</span>
@@ -571,6 +615,9 @@
                   <div class="tech-detail-title">
                     <strong>Unit Details</strong>
                     <span><%= assetTagValue %> · <%= unit.specSummary || 'Unit record' %></span>
+                    <% if (unit.latestWorkCompletion && unit.latestWorkCompletion.completedAt) { %>
+                      <span class="tech-detail-completion-at">Completed: <%= formatDateTime(unit.latestWorkCompletion.completedAt) %></span>
+                    <% } %>
                   </div>
 
                   <div class="tech-detail-actions">
@@ -605,7 +652,7 @@
                     </div>
 
                     <% if (unit.unitId) { %>
-                      <% if (canRequestUnitOverride && !unit.isParked) { %>
+                      <% if (canRequestUnitOverride) { %>
                         <% if (hasPendingManualOverride) { %>
                           <button
                             type="button"
@@ -613,9 +660,9 @@
                             data-no-row-toggle
                             disabled
                             aria-disabled="true"
-                            title="Management must approve or deny the pending override before another request can be created."
+                            title="Tech Lead+ must approve or deny the pending request before another request can be created."
                           >
-                            Override Pending
+                            <%= unit.isParked ? 'Takeover Pending' : 'Override Pending' %>
                           </button>
                         <% } else { %>
                           <a
@@ -624,7 +671,7 @@
                             data-tech-modal-trigger
                             data-no-row-toggle
                           >
-                            Request Override
+                            <%= unit.isParked ? 'Request Takeover' : 'Request Override' %>
                           </a>
                         <% } %>
                       <% } %>

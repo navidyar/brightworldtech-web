@@ -21,7 +21,7 @@ function getIntelCoreGeneration(modelNumber) {
     }
 
     const oneDigitGeneration = Number(digits.slice(0, 1));
-    return oneDigitGeneration >= 6 && oneDigitGeneration <= 9 ? oneDigitGeneration : null;
+    return oneDigitGeneration >= 4 && oneDigitGeneration <= 9 ? oneDigitGeneration : null;
   }
 
   return null;
@@ -43,14 +43,14 @@ function classifyIntel(modelCode) {
   const normalized = normalizeText(modelCode);
   const upper = normalized.toUpperCase();
   const families = [];
-  const ultraMatch = upper.match(/\bCORE\s+ULTRA\s+([3579])\s+([12])\d{2}\b/);
+  const ultraMatch = upper.match(/\bCORE\s+ULTRA\s+([3579])\s+([12])\d{2}[A-Z0-9-]*\b/);
 
   if (ultraMatch) {
     families.push(`intel-core-ultra-${ultraMatch[1]}-series-${ultraMatch[2]}`);
     return families;
   }
 
-  const coreMatch = upper.match(/\bI([3579])[-\s]?((?:10\d{3}|(?:11|12|13|14)\d{2,3}|[6-9]\d{3}))[A-Z0-9-]*\b/);
+  const coreMatch = upper.match(/\bI([3579])[-\s]?((?:10\d{2,3}|(?:11|12|13|14)\d{2,3}|[4-9]\d{3}))[A-Z0-9-]*\b/);
 
   if (coreMatch) {
     const generation = getIntelCoreGeneration(coreMatch[2]);
@@ -62,16 +62,39 @@ function classifyIntel(modelCode) {
 
   const coreMMatch = upper.match(/\bCORE\s+M([357])[-\s]?((?:6|7|8|9)\w+|(?:10|11|12|13|14)\w+)\b/);
   if (coreMMatch) {
-    const generationDigits = String(coreMMatch[2]).match(/^\d{1,2}/)?.[0] || '';
-    const generation = Number(generationDigits);
-    if (generation >= 6 && generation <= 14) {
+    const generation = getIntelCoreGeneration(coreMMatch[2]);
+    if (generation) {
       families.push(`intel-core-m${coreMMatch[1]}-${ordinal(generation)}-gen`);
     }
     return families;
   }
 
+  const xeonGenerationRules = [
+    [/\bXEON\s+E3-\d+M\s+V5\b/, 6],
+    [/\bXEON\s+E3-\d+M\s+V6\b/, 7],
+    [/\bXEON\s+E-22\d{2}M\b/, 9],
+    [/\bXEON\s+E-21\d{2}M\b/, 8],
+    [/\bXEON\s+W-10\d{3}M\b/, 10],
+    [/\bXEON\s+W-11\d{3}M\b/, 11]
+  ];
+  const xeonMatch = xeonGenerationRules.find(([pattern]) => pattern.test(upper));
+  if (xeonMatch) {
+    families.push(`intel-xeon-mobile-${ordinal(xeonMatch[1])}-gen`);
+    return families;
+  }
+
+  if (/\bINTEL\s+PROCESSOR\s+N\d+\b/.test(upper)) {
+    families.push('intel-processor-n-series');
+    return families;
+  }
+
   if (/\bCELERON\b/.test(upper)) {
     families.push('intel-celeron');
+    return families;
+  }
+
+  if (/\bPENTIUM\s+GOLD\b/.test(upper)) {
+    families.push('intel-pentium-gold');
     return families;
   }
 
@@ -84,6 +107,11 @@ function classifyIntel(modelCode) {
 
 function classifyAmd(modelCode) {
   const upper = normalizeText(modelCode).toUpperCase();
+
+  if (/\b(?:AMD\s+)?PRO\s+A10-8700B\b/.test(upper)) {
+    return ['amd-pro-a10-6th-gen'];
+  }
+
   const match = upper.match(/\bRYZEN\s+([3579])(?:\s+PRO)?\s+([2-9])\d{3}[A-Z0-9-]*\b/);
 
   if (!match) return [];
@@ -101,6 +129,7 @@ function classifyApple(modelCode) {
 function classifyQualcomm(modelCode) {
   const upper = normalizeText(modelCode).toUpperCase();
 
+  if (/\bMICROSOFT\s+SQ[123]\b/.test(upper)) return ['qualcomm-microsoft-sq'];
   if (/\bSNAPDRAGON\s+X\b/.test(upper)) return ['qualcomm-snapdragon-x'];
   if (/\bSNAPDRAGON\s+8CX\b/.test(upper)) return ['qualcomm-snapdragon-8cx'];
   if (/\bSNAPDRAGON\s+7C\b/.test(upper)) return ['qualcomm-snapdragon-7c'];

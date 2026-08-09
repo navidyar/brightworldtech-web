@@ -4,6 +4,10 @@ const overrideRequestModel = require('./overrideRequestModel');
 const operationalOptionRankingModel = require('./operationalOptionRankingModel');
 const { sortOptionsByPopularity } = require('../services/operationalOptionRanking');
 const {
+  getCanonicalCosmeticGradeFromOption,
+  normalizeCosmeticGradeOptions
+} = require('../services/cosmeticGradeNormalization');
+const {
   isAnyUnitFormFieldManaged,
   isUnitFormFieldManaged
 } = require('../services/unitFormSubmissionPolicy');
@@ -176,46 +180,6 @@ async function listConfigValuesByCategoryCodes(categoryCodes, connection = pool)
 }
 
 
-function normalizeGradeToken(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .replace(/^(cosmetic_)?grade_/, '')
-    .replace(/_grade$/, '');
-}
-
-function isNotYetGradedToken(value) {
-  return ['n_a', 'na', 'not_applicable', 'not_yet_graded', 'not_graded', 'ungraded'].includes(normalizeGradeToken(value));
-}
-
-function normalizeOverallGradeOptions(options) {
-  const safeOptions = Array.isArray(options) ? options : [];
-  const seen = new Set();
-  const normalizedOptions = [];
-
-  safeOptions.forEach((option) => {
-    const isNotYetGraded = [option.code, option.value, option.label].some(isNotYetGradedToken);
-    const displayLabel = isNotYetGraded ? 'Not Yet Graded' : (option.label || option.code || option.value || '');
-    const displayKey = isNotYetGraded ? 'not_yet_graded' : normalizeGradeToken(displayLabel);
-    const fallbackKey = normalizeGradeToken(option.code || option.value || option.id || '');
-    const dedupeKey = displayKey || fallbackKey || String(option.id || '');
-
-    if (!dedupeKey || seen.has(dedupeKey)) {
-      return;
-    }
-
-    seen.add(dedupeKey);
-
-    normalizedOptions.push({
-      ...option,
-      label: displayLabel
-    });
-  });
-
-  return normalizedOptions;
-}
 
 function getBlankExpandedFormData() {
   return {
@@ -278,7 +242,7 @@ async function getExpandedFormOptions() {
       { code: 'fail', label: 'Fail' }
     ],
     graphicsOptionsSupported: await tableExists('unit_graphics_adapters'),
-    overallGradeOptions: normalizeOverallGradeOptions(rawOverallGradeOptions),
+    overallGradeOptions: normalizeCosmeticGradeOptions(rawOverallGradeOptions),
     absoluteStatusOptions,
     physicalCameraStatusOptions,
     touchscreenStatusOptions,
@@ -670,6 +634,54 @@ async function saveUnitSpecifications(connection, unitId, formData, currentUserI
   );
 }
 
+async function resolveCanonicalCosmeticGradeConfigValueId(connection, selectedConfigValueId) {
+  const selectedId = normalizeOptionalInteger(selectedConfigValueId);
+
+  if (!selectedId) {
+    return null;
+  }
+
+  const [selectedRows] = await connection.query(
+    `
+      SELECT
+        cv.config_value_id,
+        cv.code,
+        cv.label,
+        cv.value,
+        cc.code AS category_code
+      FROM config_values cv
+      JOIN config_categories cc
+        ON cc.config_category_id = cv.config_category_id
+      WHERE cv.config_value_id = ?
+      LIMIT 1
+    `,
+    [selectedId]
+  );
+  const selectedRow = selectedRows[0] || null;
+  const canonicalGrade = getCanonicalCosmeticGradeFromOption(selectedRow || {});
+
+  if (!canonicalGrade) {
+    return null;
+  }
+
+  const [canonicalRows] = await connection.query(
+    `
+      SELECT cv.config_value_id
+      FROM config_values cv
+      JOIN config_categories cc
+        ON cc.config_category_id = cv.config_category_id
+      WHERE cc.code = 'cosmetic_grades'
+        AND LOWER(cv.code) = ?
+        AND COALESCE(cv.is_active, 1) = 1
+      ORDER BY cv.config_value_id
+      LIMIT 1
+    `,
+    [canonicalGrade.toLowerCase()]
+  );
+
+  return Number(canonicalRows[0]?.config_value_id || selectedId);
+}
+
 async function saveOverallGrade(connection, unitId, formData, currentUserId) {
   if (!isAnyUnitFormFieldManaged(formData, ['overall_grade', 'overall_grade_notes'])) {
     return;
@@ -679,7 +691,10 @@ async function saveOverallGrade(connection, unitId, formData, currentUserId) {
     return;
   }
 
-  const nextGradeId = normalizeOptionalInteger(formData.overallGradeConfigValueId);
+  const nextGradeId = await resolveCanonicalCosmeticGradeConfigValueId(
+    connection,
+    formData.overallGradeConfigValueId
+  );
 
   if (!nextGradeId) {
     return;

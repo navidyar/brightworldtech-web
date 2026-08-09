@@ -89,6 +89,6 @@ test('Configuration assets use the Stage 10S cache version', () => {
   const page = read('views/pages/management-config.ejs');
   const head = read('views/partials/head.ejs');
 
-  assert.match(page, /stage10s-pointer-filtered-drag-order/);
-  assert.match(head, /stage10s-pointer-filtered-drag-order/);
+  assert.match(page, /stage10w-ranking-administration/);
+  assert.match(head, /app\.css\?v=20260804-stage10w-ranking-administration/);
 });

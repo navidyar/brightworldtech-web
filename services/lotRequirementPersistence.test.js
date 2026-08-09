@@ -55,3 +55,19 @@ test('stored values round-trip to editor tokens', () => {
   assert.equal(getRequirementValueToken({ processor_model_id: 21 }), 'processor_model:21');
   assert.equal(getRequirementValueToken({ requirement_number: '32.00' }), '32');
 });
+
+test('free-text exact requirements persist through requirement_text', () => {
+  const payload = buildRequirementValuePayload('os_build', '23H2 / 22631');
+
+  assert.equal(payload.requirement_text, '23H2 / 22631');
+  assert.equal(payload.requirement_number, null);
+  assert.equal(getRequirementValueToken(payload), '23H2 / 22631');
+});
+
+test('static option requirements persist stable text codes', () => {
+  const installType = buildRequirementValuePayload('memory_install_type', 'integrated_soldered');
+  const outcome = buildRequirementValuePayload('unit_outcome', 'pass');
+
+  assert.equal(installType.requirement_text, 'integrated_soldered');
+  assert.equal(outcome.requirement_text, 'pass');
+});

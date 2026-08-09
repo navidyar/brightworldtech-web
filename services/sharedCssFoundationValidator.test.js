@@ -14,21 +14,23 @@ const {
 test('head template requires page CSS before shared visual and feature CSS', () => {
   const valid = `
     stylesheets.forEach((stylesheetHref) => {})
-    /css/app.css?v=20260731-stage10c-hardware-matrix
-    /css/features.css?v=20260723-shared-ui-foundation
+    /css/theme.css?v=any-cache-key
+    /css/app.css?v=another-cache-key
+    /css/features.css?v=feature-cache-key
   `;
   assert.deepEqual(validateHeadTemplate(valid), []);
 
   const invalid = `
-    /css/app.css?v=20260731-stage10c-hardware-matrix
+    /css/theme.css?v=any-cache-key
+    /css/app.css?v=another-cache-key
     stylesheets.forEach((stylesheetHref) => {})
-    /css/features.css?v=20260723-shared-ui-foundation
+    /css/features.css?v=feature-cache-key
   `;
   assert.ok(validateHeadTemplate(invalid).some((error) => error.includes('after legacy/page')));
 });
 
 test('shared visual CSS rejects protected feature selectors', () => {
-  const valid = '--ui-blue: #315e9d; .primary-button{} .secondary-button{} .danger-button{} .modal-panel{} .table-card{} .form-section{}';
+  const valid = '--ui-blue: #315e9d; --ui-scrollbar-thumb:#6f88a5; ::-webkit-scrollbar{} .primary-button{} .secondary-button{} .danger-button{} .modal-panel{} .table-card{} .form-section{}';
   assert.deepEqual(validateSharedVisualCss(valid), []);
 
   const invalid = `${valid} .lot-tree-toggle{}`;

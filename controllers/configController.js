@@ -1,9 +1,27 @@
 const configModel = require('../models/configModel');
+const operationalOptionRankingModel = require('../models/operationalOptionRankingModel');
+const {
+  buildOperationalOptionRankingAdministration,
+  formatRefreshIntervalLabel,
+  parseAllowedRefreshIntervalMinutes
+} = require('../services/operationalOptionRankingAdministration');
 
 const PASSWORD_LINK_EXPIRY_CATEGORY_CODE = 'security_settings';
 const PASSWORD_LINK_EXPIRY_VALUE_CODE = 'password_link_expiry_hours';
 const MIN_PASSWORD_LINK_EXPIRY_HOURS = 1;
 const MAX_PASSWORD_LINK_EXPIRY_HOURS = 24;
+const CANONICAL_COSMETIC_GRADE_CATEGORY_CODE = 'cosmetic_grades';
+
+function isCanonicalCosmeticGradeCategory(category) {
+  return String(category && category.code ? category.code : '').trim().toLowerCase()
+    === CANONICAL_COSMETIC_GRADE_CATEGORY_CODE;
+}
+
+function isCanonicalCosmeticGradeValue(configValue) {
+  return String(configValue && configValue.category_code ? configValue.category_code : '').trim().toLowerCase()
+    === CANONICAL_COSMETIC_GRADE_CATEGORY_CODE;
+}
+
 
 function isPasswordLinkExpirySetting(configValue) {
   return Boolean(
@@ -184,6 +202,8 @@ async function validateConfigValueForm(formData, options = {}) {
 
     if (!category) {
       errorMessages.push('The selected configuration category could not be found.');
+    } else if (isCanonicalCosmeticGradeCategory(category)) {
+      errorMessages.push('Cosmetic Grades are system-managed canonical values (A, AB, B, C, D) and cannot be created or edited here.');
     }
   }
 
@@ -226,12 +246,42 @@ async function validateConfigValueForm(formData, options = {}) {
   return errorMessages;
 }
 
+async function loadOperationalRankingAdministration(categories, options = {}) {
+  const [refreshState, scopeSummaryRows, refreshMinutes] = await Promise.all([
+    operationalOptionRankingModel.getRefreshState(),
+    operationalOptionRankingModel.listRankingScopeSummaries(),
+    operationalOptionRankingModel.getConfiguredRefreshMinutes()
+  ]);
+
+  return buildOperationalOptionRankingAdministration({
+    refreshState,
+    scopeSummaryRows,
+    categories,
+    refreshMinutes,
+    message: options.message || null,
+    messageType: options.messageType || 'success',
+    detailsOpen: options.detailsOpen === true
+  });
+}
+
+async function renderOperationalRankingAdministration(res, options = {}) {
+  const categories = await configModel.listConfigCategoriesWithValues({ includeInactiveValues: false });
+  const rankingAdministration = await loadOperationalRankingAdministration(categories, options);
+
+  return res.render('fragments/operational-option-ranking-administration', {
+    rankingAdministration
+  });
+}
+
 async function renderConfigPage(req, res, next) {
   try {
     const includeInactiveValues = parseIncludeInactiveFlag(req.query.includeInactive);
     const categories = await configModel.listConfigCategoriesWithValues({ includeInactiveValues });
     const categorySections = configModel.groupConfigCategories(categories);
-    const summary = await configModel.getConfigSummary();
+    const [summary, rankingAdministration] = await Promise.all([
+      configModel.getConfigSummary(),
+      loadOperationalRankingAdministration(categories)
+    ]);
 
     res.render('pages/management-config', {
       pageTitle: 'Configuration',
@@ -239,10 +289,87 @@ async function renderConfigPage(req, res, next) {
       categories,
       categorySections,
       summary,
+      rankingAdministration,
       includeInactiveValues
     });
   } catch (error) {
     next(error);
+  }
+}
+
+async function refreshOperationalOptionRankings(req, res, next) {
+  try {
+    const result = await operationalOptionRankingModel.refreshOperationalOptionUsageRankings();
+    let message = 'Operational list rankings were not refreshed.';
+    let messageType = 'notice';
+
+    if (!result.supported) {
+      message = result.reason || 'Ranking storage is not ready.';
+      messageType = 'error';
+    } else if (!result.refreshed) {
+      message = result.reason || 'Another ranking refresh is already running.';
+    } else {
+      message = `Rankings refreshed successfully. ${result.rankingRowCount} cached ranking row${result.rankingRowCount === 1 ? '' : 's'} calculated in ${result.durationMs} ms.`;
+      messageType = 'success';
+    }
+
+    return renderOperationalRankingAdministration(res, {
+      message,
+      messageType,
+      detailsOpen: true
+    });
+  } catch (error) {
+    console.error('Manual operational option ranking refresh failed:', error);
+
+    try {
+      return renderOperationalRankingAdministration(res, {
+        message: 'Refresh failed. The previous successful rankings remain active.',
+        messageType: 'error',
+        detailsOpen: true
+      });
+    } catch (renderError) {
+      return next(renderError);
+    }
+  }
+}
+
+async function updateOperationalOptionRankingInterval(req, res, next) {
+  const refreshMinutes = parseAllowedRefreshIntervalMinutes(req.body.refreshMinutes);
+
+  if (!refreshMinutes) {
+    try {
+      return renderOperationalRankingAdministration(res, {
+        message: 'Choose one of the available refresh intervals.',
+        messageType: 'error',
+        detailsOpen: true
+      });
+    } catch (renderError) {
+      return next(renderError);
+    }
+  }
+
+  try {
+    await operationalOptionRankingModel.setConfiguredRefreshMinutes(refreshMinutes);
+
+    return renderOperationalRankingAdministration(res, {
+      message: `Refresh interval updated to ${formatRefreshIntervalLabel(refreshMinutes)}. The scheduler checks for due work every 15 minutes.`,
+      messageType: 'success',
+      detailsOpen: true
+    });
+  } catch (error) {
+    if (error && Number.isInteger(error.statusCode) && error.statusCode >= 400 && error.statusCode < 500) {
+      try {
+        return renderOperationalRankingAdministration(res, {
+          message: error.message || 'The refresh interval could not be updated.',
+          messageType: 'error',
+          detailsOpen: true
+        });
+      } catch (renderError) {
+        return next(renderError);
+      }
+    }
+
+    return next(error);
   }
 }
 
@@ -326,6 +453,15 @@ async function renderEditConfigValueModal(req, res, next) {
       });
     }
 
+    if (isCanonicalCosmeticGradeValue(configValue)) {
+      return res.status(400).render('fragments/config-value-status-modal', {
+        actionType: 'error',
+        configValue,
+        includeInactiveValues,
+        errorMessages: ['Cosmetic Grades are system-managed canonical values (A, AB, B, C, D). They are view-only in Configuration.']
+      });
+    }
+
     const categories = await configModel.listConfigCategoriesForForm();
 
     return res.render('fragments/config-value-form-modal', {
@@ -350,6 +486,15 @@ async function updateConfigValue(req, res, next) {
 
     if (!configValue) {
       return sendHtmxRedirect(req, res, getConfigReturnUrl(formData.includeInactive === '1', 'error=not_found'));
+    }
+
+    if (isCanonicalCosmeticGradeValue(configValue)) {
+      return res.status(400).render('fragments/config-value-status-modal', {
+        actionType: 'error',
+        configValue,
+        includeInactiveValues: formData.includeInactive === '1',
+        errorMessages: ['Cosmetic Grades are system-managed canonical values (A, AB, B, C, D). They are view-only in Configuration.']
+      });
     }
 
     const protectedSecuritySetting = isPasswordLinkExpirySetting(configValue);
@@ -415,6 +560,15 @@ async function reorderConfigValues(req, res, next) {
     const configCategoryId = parsePositiveInteger(req.params.configCategoryId);
     const orderedConfigValueIds = parseOrderedConfigValueIds(req.body.orderedConfigValueIds);
     const includeInactiveValues = parseIncludeInactiveFlag(req.body.includeInactive);
+    const category = configCategoryId ? await configModel.getConfigCategoryById(configCategoryId) : null;
+
+    if (isCanonicalCosmeticGradeCategory(category)) {
+      return res.status(400).json({
+        ok: false,
+        code: 'CANONICAL_COSMETIC_GRADES_READ_ONLY',
+        error: 'Cosmetic Grades use the fixed order A, AB, B, C, D and cannot be reordered.'
+      });
+    }
 
     const result = await configModel.reorderConfigValues({
       configCategoryId,
@@ -457,6 +611,15 @@ async function renderConfigValueStatusModal(req, res, next) {
       });
     }
 
+    if (isCanonicalCosmeticGradeValue(configValue)) {
+      return res.status(400).render('fragments/config-value-status-modal', {
+        actionType: 'error',
+        configValue,
+        includeInactiveValues,
+        errorMessages: ['Cosmetic Grades are required canonical values and cannot be activated or deactivated individually.']
+      });
+    }
+
     if (actionType === 'deactivate' && isPasswordLinkExpirySetting(configValue)) {
       return res.status(400).render('fragments/config-value-status-modal', {
         actionType: 'error',
@@ -488,6 +651,15 @@ async function updateConfigValueStatus(req, res, next) {
       return sendHtmxRedirect(req, res, getConfigReturnUrl(includeInactiveValues, 'error=not_found'));
     }
 
+    if (isCanonicalCosmeticGradeValue(configValue)) {
+      return res.status(400).render('fragments/config-value-status-modal', {
+        actionType: 'error',
+        configValue,
+        includeInactiveValues,
+        errorMessages: ['Cosmetic Grades are required canonical values and cannot be activated or deactivated individually.']
+      });
+    }
+
     if (!shouldActivate && isPasswordLinkExpirySetting(configValue)) {
       return res.status(400).render('fragments/config-value-status-modal', {
         actionType: 'error',
@@ -511,6 +683,8 @@ async function updateConfigValueStatus(req, res, next) {
 
 module.exports = {
   renderConfigPage,
+  refreshOperationalOptionRankings,
+  updateOperationalOptionRankingInterval,
   renderNewConfigValueModal,
   createConfigValue,
   renderEditConfigValueModal,

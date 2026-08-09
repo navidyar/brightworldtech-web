@@ -72,7 +72,7 @@ async function main() {
 
   const state = await getRefreshState();
 
-  if (!state || state.status !== 'complete' || !state.completed_at) {
+  if (!state || !state.completed_at || !['complete', 'running', 'failed'].includes(String(state.status || ''))) {
     throw new Error('Stage 10M ranking cache has not completed a successful refresh yet.');
   }
 

@@ -43,7 +43,7 @@
               <strong>Lot-controlled form profile</strong>
               <p>
                 Choose what this Lot overrides. Inherit uses the nearest parent Lot setting, or the application default for a root Lot.
-                This stage configures and previews the profile only; the live Add/Edit Unit form is not connected yet.
+                These settings are applied directly to the live Add/Edit Unit form. System-managed, derived, and permission-gated controls remain protected rather than creating unsafe Lot overrides.
               </p>
               <p><strong>Inheritance path:</strong> <%= safeProfile.lineage.map((lineageLot) => lineageLot.name).join(' › ') %></p>
             </div>

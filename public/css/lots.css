@@ -1698,8 +1698,17 @@ table tr.lot-hidden-row td {
   margin: 0;
 }
 
+.lot-detail-page-heading > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
 .lot-detail-page-heading h1 {
-  overflow-wrap: anywhere;
+  max-width: 100%;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
 }
 
 .lot-detail-action-bar {
@@ -1856,11 +1865,18 @@ table tr.lot-hidden-row td {
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1120px) {
   .lot-detail-page-heading {
     align-items: stretch;
     flex-direction: column;
   }
+
+  .lot-detail-action-bar {
+    width: 100%;
+  }
+}
+
+@media (max-width: 760px) {
 
   .modal-panel.site-clean-modal .lot-delete-summary dl {
     grid-template-columns: 1fr;
@@ -1934,6 +1950,17 @@ table tr.lot-hidden-row td {
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+}
+
+.lot-requirement-row-actions form {
+  margin: 0;
+}
+
+.lot-requirements-inheritance-note {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.4;
 }
 
 .lot-requirement-delete-summary {
@@ -4074,4 +4101,137 @@ body.lots-lookup-ui-preview #modal-root .lot-unit-management-acceptance-details 
   body.lots-lookup-ui-preview #modal-root .modal-body {
     padding: 14px 16px 16px;
   }
+}
+
+/* Stage 10W.6 — searchable catalog values in the Lot requirement modal. */
+body.lots-lookup-ui-preview #modal-root .lot-requirement-value-combobox {
+  position: relative;
+  min-width: 0;
+}
+
+body.lots-lookup-ui-preview #modal-root .lot-requirement-value-search {
+  width: 100%;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none'%3E%3Ccircle cx='8.5' cy='8.5' r='4.75' stroke='%23476c9a' stroke-width='1.6'/%3E%3Cpath d='m12 12 4 4' stroke='%23476c9a' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 17px 17px;
+}
+
+body.lots-lookup-ui-preview #modal-root .lot-requirement-value-options {
+  position: absolute;
+  z-index: 80;
+  top: calc(100% + 5px);
+  right: 0;
+  left: 0;
+  max-height: min(300px, 42vh);
+  padding: 5px;
+  overflow-y: auto;
+  border: 1px solid #b9cde5;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 12px 28px rgba(25, 47, 76, 0.18);
+}
+
+body.lots-lookup-ui-preview #modal-root .lot-requirement-value-option {
+  display: block;
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #29394e;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 450;
+  line-height: 1.35;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+body.lots-lookup-ui-preview #modal-root .lot-requirement-value-option:hover,
+body.lots-lookup-ui-preview #modal-root .lot-requirement-value-option.is-active {
+  background: #eef5fd;
+  color: #234f86;
+}
+
+body.lots-lookup-ui-preview #modal-root .lot-requirement-value-option[aria-selected='true'] {
+  background: #e6f0fb;
+  color: #234f86;
+  font-weight: 650;
+}
+
+body.lots-lookup-ui-preview #modal-root :is(.lot-requirement-value-empty, .lot-requirement-value-result-note) {
+  margin: 0;
+  padding: 9px 10px;
+  color: #6b7c91;
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+body.lots-lookup-ui-preview #modal-root .lot-requirement-value-result-note {
+  border-top: 1px solid #e2e9f1;
+}
+
+/* Stage 10W.6.1 — let the searchable requirement list escape the modal shell. */
+body.lots-lookup-ui-preview #modal-root .lot-requirement-modal.modal-panel.site-clean-modal {
+  overflow: visible;
+}
+
+/* Stage 10W.9 — keep strict-Lot validation actions reachable on short viewports. */
+body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal-backdrop {
+  padding-block: 16px;
+}
+
+body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal.modal-panel.site-clean-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 32px);
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+}
+
+body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal > .modal-header {
+  flex: 0 0 auto;
+}
+
+body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal > .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 720px) {
+  body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal-backdrop {
+    padding: 10px;
+  }
+
+  body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal.modal-panel.site-clean-modal {
+    max-height: calc(100vh - 20px);
+    max-height: calc(100dvh - 20px);
+  }
+}
+
+
+/* Stage 10W.20 — keep corrupted Lot hierarchy rows visible and repairable. */
+.management-lots-table tr.lot-hierarchy-error-row > td {
+  background: #fffaf2;
+}
+
+.management-lots-table .lot-hierarchy-error-note {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 2px 7px;
+  border: 1px solid #e4b66b;
+  border-radius: 999px;
+  color: #704116;
+  background: #fff3d7;
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1.25;
 }

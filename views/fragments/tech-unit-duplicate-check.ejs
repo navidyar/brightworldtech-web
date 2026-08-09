@@ -4,6 +4,8 @@
   const canCreateIntentionalDuplicateRequest = !editDuplicateCheck
     && typeof canRequestIntentionalDuplicate !== 'undefined'
     && Boolean(canRequestIntentionalDuplicate);
+  const hasIntentionalDuplicateDestination = typeof destinationLotId !== 'undefined'
+    && Boolean(String(destinationLotId || '').trim());
 
   function displayAssetTag(match) {
     return match && match.assetTag ? match.assetTag : 'Existing unit without an Asset Tag';
@@ -126,8 +128,17 @@
             <% } %>
 
             <% if (canCreateIntentionalDuplicateRequest) { %>
-              <button type="button" class="secondary-button" data-intentional-duplicate-request-unit-id="<%= match.unitId %>" disabled aria-disabled="true">Request Intentional Duplicate</button>
-              <small class="field-hint" data-intentional-duplicate-request-readiness>Select an Assignable Lot, Unit Category, and Unit Status before requesting an intentional duplicate.</small>
+              <button
+                type="button"
+                class="secondary-button"
+                data-intentional-duplicate-request-unit-id="<%= match.unitId %>"
+                <%= hasIntentionalDuplicateDestination ? 'aria-disabled="false"' : 'disabled aria-disabled="true"' %>
+              >Request Intentional Duplicate</button>
+              <small class="field-hint" data-intentional-duplicate-request-readiness>
+                <%= hasIntentionalDuplicateDestination
+                  ? 'Use this only for a different physical unit that reuses the serial. The complete Create Unit form is verified before submission.'
+                  : 'Select an Assignable Lot before requesting an intentional duplicate.' %>
+              </small>
             <% } %>
 
             <a class="secondary-button" href="/tech/units/<%= match.unitId %>" target="_blank" rel="noopener">Open Existing Unit</a>

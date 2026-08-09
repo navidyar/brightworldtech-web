@@ -279,18 +279,9 @@ async function loadExpandedDetails(unitIds, detailModel = null) {
   return detailsByUnitId;
 }
 
-async function buildFilteredUnitExportDataset(filters = {}, dependencies = {}) {
-  const unitModel = dependencies.techUnitModel || require('../models/techUnitModel');
-  const detailModel = dependencies.unitExpandedDetailModel || require('../models/unitExpandedDetailModel');
-  const exportFilters = {
-    ...filters,
-    page: '1',
-    perPage: 'all'
-  };
-  const result = await unitModel.listTechUnits(exportFilters);
-
+async function buildUnitExportDatasetFromListResult(result, exportFilters, detailModel, scope) {
   if (!result || !result.supported) {
-    const error = new Error(result && result.message ? result.message : 'Filtered Unit export is unavailable.');
+    const error = new Error(result && result.message ? result.message : 'Unit export is unavailable.');
     error.code = 'BWT_UNIT_EXPORT_UNAVAILABLE';
     throw error;
   }
@@ -299,7 +290,7 @@ async function buildFilteredUnitExportDataset(filters = {}, dependencies = {}) {
   const expectedRows = Number(result.pagination && result.pagination.totalRows);
 
   if (Number.isFinite(expectedRows) && expectedRows !== units.length) {
-    const error = new Error(`Filtered Unit export count mismatch: browser query reported ${expectedRows}, but ${units.length} Unit record(s) were loaded.`);
+    const error = new Error(`Unit export count mismatch: Unit query reported ${expectedRows}, but ${units.length} Unit record(s) were loaded.`);
     error.code = 'BWT_UNIT_EXPORT_COUNT_MISMATCH';
     throw error;
   }
@@ -323,8 +314,83 @@ async function buildFilteredUnitExportDataset(filters = {}, dependencies = {}) {
     filters: result.filters || exportFilters,
     browserTotalRows: Number.isFinite(expectedRows) ? expectedRows : rows.length,
     capacityTotals,
-    scope: buildUnitExportScope(result)
+    scope: Array.isArray(scope) ? scope : buildUnitExportScope(result)
   };
+}
+
+async function buildFilteredUnitExportDataset(filters = {}, dependencies = {}) {
+  const unitModel = dependencies.techUnitModel || require('../models/techUnitModel');
+  const detailModel = dependencies.unitExpandedDetailModel || require('../models/unitExpandedDetailModel');
+  const exportFilters = {
+    ...filters,
+    page: '1',
+    perPage: 'all'
+  };
+  const result = await unitModel.listTechUnits(exportFilters);
+
+  return buildUnitExportDatasetFromListResult(result, exportFilters, detailModel);
+}
+
+function buildLotUnitExportScope(lotScope = {}) {
+  const selectedLot = lotScope.selectedLot || {};
+  const includedLots = Array.isArray(lotScope.includedLots) ? lotScope.includedLots : [];
+  const selectedLotName = normalizeText(selectedLot.lot_name || selectedLot.name) || 'Selected Lot';
+  const includedNames = includedLots
+    .map((lot) => normalizeText(lot && (lot.lot_name || lot.name)))
+    .filter(Boolean);
+  const isDescendantScope = lotScope.mode === 'descendants';
+
+  return [
+    { label: 'Unit State', value: 'Active Units' },
+    {
+      label: 'Lot Scope',
+      value: isDescendantScope
+        ? `${selectedLotName} — descendant Lots`
+        : selectedLotName
+    },
+    {
+      label: 'Included Lots',
+      value: includedNames.length > 0
+        ? `${includedNames.length}: ${includedNames.join(', ')}`
+        : 'No Lots'
+    }
+  ];
+}
+
+async function buildLotScopedUnitExportDataset(lotScope = {}, dependencies = {}) {
+  const unitModel = dependencies.techUnitModel || require('../models/techUnitModel');
+  const detailModel = dependencies.unitExpandedDetailModel || require('../models/unitExpandedDetailModel');
+  const includedLotIds = Array.isArray(lotScope.includedLotIds)
+    ? lotScope.includedLotIds
+        .map((lotId) => Number(lotId))
+        .filter((lotId) => Number.isSafeInteger(lotId) && lotId > 0)
+    : [];
+
+  if (includedLotIds.length === 0) {
+    const error = new Error('The selected Lot does not have an exportable Unit scope.');
+    error.code = 'BWT_LOT_EXPORT_SCOPE_EMPTY';
+    throw error;
+  }
+
+  const exportFilters = {
+    lotIds: includedLotIds,
+    unitState: 'active',
+    sort: 'date_desc',
+    page: '1',
+    perPage: 'all',
+    restrictToCurrentAssignment: false,
+    allowAnyLotFilter: true,
+    canViewParkedUnits: true,
+    canSearchParkedUnits: false
+  };
+  const result = await unitModel.listTechUnits(exportFilters);
+
+  return buildUnitExportDatasetFromListResult(
+    result,
+    exportFilters,
+    detailModel,
+    buildLotUnitExportScope(lotScope)
+  );
 }
 
 module.exports = {
@@ -332,6 +398,8 @@ module.exports = {
   applyUnitExportColumnSelection,
   buildCapacityTotals,
   buildFilteredUnitExportDataset,
+  buildLotScopedUnitExportDataset,
+  buildLotUnitExportScope,
   buildUnitExportScope,
   buildUnitExportRow,
   combineRemarks,

@@ -3,7 +3,7 @@
   <%- include('../partials/head', {
     pageTitle,
     stylesheets: [
-      '/css/lots.css',
+      '/css/lots.css?v=20260807-stage10w20-lot-hierarchy-integrity',
       '/css/modal.css'
     ]
   }) %>
@@ -49,7 +49,7 @@
       const orderedLots = [];
       const visitedLotIds = new Set();
 
-      function addLotAndChildren(lot, level) {
+      function addLotAndChildren(lot, level, hierarchyIssue = false) {
         const lotId = String(lot.lot_id);
 
         if (visitedLotIds.has(lotId)) {
@@ -60,23 +60,28 @@
 
         orderedLots.push({
           ...lot,
-          hierarchyLevel: level
+          hierarchyLevel: level,
+          hierarchyIssue
         });
 
         const childLots = (childLotsByParentId.get(lotId) || []).slice().sort(sortLotsByName);
 
         childLots.forEach((childLot) => {
-          addLotAndChildren(childLot, level + 1);
+          addLotAndChildren(childLot, level + 1, hierarchyIssue);
         });
       }
 
       rootLots.forEach((rootLot) => {
-        addLotAndChildren(rootLot, 0);
+        const parentId = rootLot.parent_lot_id ? String(rootLot.parent_lot_id) : '';
+        const hasMissingParent = Boolean(parentId && !lotsById.has(parentId));
+        addLotAndChildren(rootLot, 0, hasMissingParent);
       });
 
       lots.forEach((lot) => {
         if (!visitedLotIds.has(String(lot.lot_id))) {
-          addLotAndChildren(lot, 0);
+          // Anything left after walking all roots belongs to a circular/unresolved hierarchy.
+          // Keep it visible so Management can repair the relationship instead of losing access.
+          addLotAndChildren(lot, 0, true);
         }
       });
 
@@ -195,10 +200,10 @@
                       const hierarchyLevel = Math.min(Number(lot.hierarchyLevel || 0), 6);
                     %>
 
-                    <tr class="<%= ['lot-clickable-row', hierarchyLevel > 0 ? 'lot-child-row lot-tree-child-row' : 'lot-parent-row lot-tree-root-row', `lot-level-${Math.min(hierarchyLevel, 6)}`, Number(lot.is_active) === 1 ? '' : 'lot-hidden-row', Number(lot.is_closed) === 1 ? 'lot-closed-row' : ''].filter(Boolean).join(' ') %>" data-lot-id="<%= lot.lot_id %>" data-parent-lot-id="<%= parentLot ? parentLot.lot_id : '' %>" data-lot-level="<%= hierarchyLevel %>" data-view-href="/management/lots/<%= lot.lot_id %>" tabindex="0" role="link" aria-label="View <%= lot.lot_name %>">
+                    <tr class="<%= ['lot-clickable-row', hierarchyLevel > 0 ? 'lot-child-row lot-tree-child-row' : 'lot-parent-row lot-tree-root-row', `lot-level-${Math.min(hierarchyLevel, 6)}`, lot.hierarchyIssue ? 'lot-hierarchy-error-row' : '', Number(lot.is_active) === 1 ? '' : 'lot-hidden-row', Number(lot.is_closed) === 1 ? 'lot-closed-row' : ''].filter(Boolean).join(' ') %>" data-lot-id="<%= lot.lot_id %>" data-parent-lot-id="<%= parentLot ? parentLot.lot_id : '' %>" data-lot-level="<%= hierarchyLevel %>" data-hierarchy-error="<%= lot.hierarchyIssue ? '1' : '0' %>" data-view-href="/management/lots/<%= lot.lot_id %>" tabindex="0" role="link" aria-label="View <%= lot.lot_name %>">
                       <td class="lot-hierarchy-cell" style="--lot-level: <%= hierarchyLevel %>;">
                         <div class="lot-hierarchy-wrap">
-                          <% if (childLots.length > 0) { %>
+                          <% if (childLots.length > 0 && !lot.hierarchyIssue) { %>
                             <button class="lot-tree-toggle" type="button" aria-expanded="false" aria-label="Show child lots for <%= lot.lot_name %>">
                               <span class="lot-tree-toggle-visual" aria-hidden="true">
                                 <span class="lot-tree-toggle-icon" aria-hidden="true">▸</span>
@@ -211,6 +216,11 @@
                           <div class="lot-hierarchy-main">
                             <strong class="lot-display-name"><%= lot.lot_name %></strong>
 
+
+                            <% if (lot.hierarchyIssue) { %>
+                              <br />
+                              <span class="lot-hierarchy-error-note">Hierarchy error · repair Parent Lot</span>
+                            <% } %>
 
                             <% if (parentLot) { %>
                               <br />

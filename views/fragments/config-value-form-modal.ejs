@@ -68,8 +68,9 @@
                     data-drag-order-managed="<%= category.dragOrderingManaged ? '1' : '0' %>"
                     data-popularity-sorted="<%= category.usesPopularitySorting ? '1' : '0' %>"
                     data-active-value-count="<%= category.activeValueCount || 0 %>"
+                    <%= String(category.code || '').toLowerCase() === 'cosmetic_grades' ? 'disabled' : '' %>
                     <%= String(safeFormData.configCategoryId || '') === String(category.config_category_id) ? 'selected' : '' %>>
-                    <%= category.label || category.code %><%= category.isActive ? '' : ' (Inactive category)' %>
+                    <%= category.label || category.code %><%= String(category.code || '').toLowerCase() === 'cosmetic_grades' ? ' (System-managed)' : (category.isActive ? '' : ' (Inactive category)') %>
                   </option>
                 <% }) %>
               </select>

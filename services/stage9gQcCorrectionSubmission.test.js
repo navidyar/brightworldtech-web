@@ -53,8 +53,8 @@ async function withCorrectionStubs(callback, { assignedToUserId = 19, existingCo
   const originals = {
     lifecycle: techUnitModel.getTechUnitLifecycleSummaryById,
     completion: techUnitModel.getLatestWorkCompletionMapForUnits,
-    review: unitQcCheckModel.getLatestQcCheckForCompletion,
-    correction: unitQcCorrectionModel.getLatestCorrectionForQcCheck,
+    reviewHistory: unitQcCheckModel.listQcChecksForCompletion,
+    correctionHistory: unitQcCorrectionModel.listCorrectionsForCompletion,
     record: unitQcCorrectionModel.recordCorrectionSubmission
   };
   const recorded = [];
@@ -69,13 +69,15 @@ async function withCorrectionStubs(callback, { assignedToUserId = 19, existingCo
   techUnitModel.getLatestWorkCompletionMapForUnits = async (unitIds) => new Map([
     [Number(unitIds[0]), { unitWorkCompletionId: 501 }]
   ]);
-  unitQcCheckModel.getLatestQcCheckForCompletion = async () => ({
+  unitQcCheckModel.listQcChecksForCompletion = async () => [{
     qcCheckId: 801,
     decisionCode: 'rejected',
     decisionLabel: 'Rejected',
     notes: 'Replace the damaged keyboard.'
-  });
-  unitQcCorrectionModel.getLatestCorrectionForQcCheck = async () => existingCorrection;
+  }];
+  unitQcCorrectionModel.listCorrectionsForCompletion = async () => existingCorrection
+    ? [{ ...existingCorrection, rejectedQcCheckId: 801 }]
+    : [];
   unitQcCorrectionModel.recordCorrectionSubmission = async (payload) => {
     recorded.push(payload);
     return payload;
@@ -86,8 +88,8 @@ async function withCorrectionStubs(callback, { assignedToUserId = 19, existingCo
   } finally {
     techUnitModel.getTechUnitLifecycleSummaryById = originals.lifecycle;
     techUnitModel.getLatestWorkCompletionMapForUnits = originals.completion;
-    unitQcCheckModel.getLatestQcCheckForCompletion = originals.review;
-    unitQcCorrectionModel.getLatestCorrectionForQcCheck = originals.correction;
+    unitQcCheckModel.listQcChecksForCompletion = originals.reviewHistory;
+    unitQcCorrectionModel.listCorrectionsForCompletion = originals.correctionHistory;
     unitQcCorrectionModel.recordCorrectionSubmission = originals.record;
   }
 }

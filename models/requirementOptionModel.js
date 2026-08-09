@@ -2,11 +2,35 @@
 
 const { pool } = require('./db');
 const { getLotRequirementField } = require('../config/lotRequirementRegistry');
+const { normalizeCosmeticGradeRequirementOptions } = require('../services/cosmeticGradeNormalization');
 
 const CONFIG_CATEGORY_CODES_BY_SOURCE = Object.freeze({
   unit_type: ['unit_categories', 'unit_category'],
   ram_type: ['ram_types', 'ram_type'],
-  storage_type: ['storage_types', 'storage_type']
+  storage_type: ['storage_types', 'storage_type', 'ssd_types', 'ssd_type'],
+  storage_wipe_status: ['storage_wipe_statuses', 'storage_wipe_status', 'wipe_statuses', 'wipe_status'],
+  operating_system: ['operating_systems', 'operating_system'],
+  absolute_status: ['absolute_statuses', 'absolute_status'],
+  physical_camera_status: ['physical_camera_statuses', 'camera_statuses', 'physical_camera_status'],
+  touchscreen_status: ['touchscreen_statuses', 'touchscreen_status'],
+  keyboard_language: ['keyboard_languages', 'keyboard_language'],
+  complete_diagnostics: ['diagnostics_statuses', 'complete_diagnostics_statuses', 'diagnostics_status'],
+  virus_check: ['virus_check_statuses', 'virus_check_status'],
+  driver_check: ['driver_check_statuses', 'driver_check_status'],
+  skinned_status: ['skinned_statuses', 'skinned_status'],
+  overall_grade: ['cosmetic_grades', 'overall_unit_grades', 'unit_grades', 'unit_grade']
+});
+
+const STATIC_OPTIONS_BY_SOURCE = Object.freeze({
+  memory_install_type: Object.freeze([
+    Object.freeze({ value: 'removable_module', label: 'Removable', code: 'removable_module' }),
+    Object.freeze({ value: 'integrated_soldered', label: 'Integrated / Soldered', code: 'integrated_soldered' }),
+    Object.freeze({ value: 'unknown', label: 'Unknown', code: 'unknown' })
+  ]),
+  unit_outcome: Object.freeze([
+    Object.freeze({ value: 'pass', label: 'Pass', code: 'pass' }),
+    Object.freeze({ value: 'fail', label: 'Fail', code: 'fail' })
+  ])
 });
 
 async function listConfigValueOptions(categoryCodes) {
@@ -168,7 +192,11 @@ async function listOptionsForSource(optionSource) {
   }
 
   if (CONFIG_CATEGORY_CODES_BY_SOURCE[optionSource]) {
-    return listConfigValueOptions(CONFIG_CATEGORY_CODES_BY_SOURCE[optionSource]);
+    const options = await listConfigValueOptions(CONFIG_CATEGORY_CODES_BY_SOURCE[optionSource]);
+
+    return optionSource === 'overall_grade'
+      ? normalizeCosmeticGradeRequirementOptions(options)
+      : options;
   }
 
   if (optionSource === 'manufacturer') {
@@ -185,6 +213,13 @@ async function listOptionsForSource(optionSource) {
 
   if (optionSource === 'processor_family') {
     return listProcessorFamilyOptions();
+  }
+
+  if (STATIC_OPTIONS_BY_SOURCE[optionSource]) {
+    return STATIC_OPTIONS_BY_SOURCE[optionSource].map((option) => ({
+      ...option,
+      source: optionSource
+    }));
   }
 
   return [];
@@ -220,6 +255,18 @@ async function getRequirementValueOptionsByKey(requirementKeys) {
           step: 1 / (10 ** (definition.decimalPlaces ?? 2)),
           exampleValue: definition.exampleValue || ''
         },
+        allowedOperators: [...definition.allowedOperators]
+      };
+      continue;
+    }
+
+    if (definition.storageKind === 'text') {
+      optionMap[definition.key] = {
+        type: 'text',
+        source: 'text',
+        options: [],
+        helpText: definition.helpText || '',
+        maximumLength: definition.maximumLength || 120,
         allowedOperators: [...definition.allowedOperators]
       };
       continue;

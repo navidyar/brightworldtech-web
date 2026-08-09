@@ -1,6 +1,8 @@
 const { pool } = require('./db');
 const lotModel = require('./lotModel');
 const productionWeightModel = require('./productionWeightModel');
+const productionWeightSyncModel = require('./productionWeightSyncModel');
+const productionCycleModel = require('./productionCycleModel');
 const operationalOptionRankingModel = require('./operationalOptionRankingModel');
 const {
   attachContextScores,
@@ -8,6 +10,10 @@ const {
   sortOptionsByPopularity
 } = require('../services/operationalOptionRanking');
 const { isUnitFormFieldManaged } = require('../services/unitFormSubmissionPolicy');
+const {
+  getCosmeticGradeSortRank: getCanonicalCosmeticGradeSortRank,
+  normalizeCosmeticGradeOptions
+} = require('../services/cosmeticGradeNormalization');
 const unitAuditEventModel = require('./unitAuditEventModel');
 const lotValidationOverrideModel = require('./lotValidationOverrideModel');
 const unitWorkflowAudit = require('../services/unitWorkflowAudit');
@@ -23,6 +29,12 @@ const {
 const {
   filterNewDuplicateMatchesForEdit
 } = require('../services/unitDuplicateEditPolicy');
+const {
+  MEMORY_DETAIL_COLUMNS,
+  STORAGE_DETAIL_COLUMNS,
+  mergePreservedMemoryDetails,
+  mergePreservedStorageDetails
+} = require('../services/componentDetailPreservation');
 
 const DEFAULT_UNIT_PAGE_SIZE = 50;
 const UNIT_PAGE_SIZE_OPTIONS = [50, 100, 250, 500];
@@ -795,6 +807,7 @@ function normalizeModuleRows(rows) {
 
 function normalizeMemoryModuleRow(row, index = 0) {
   const normalized = {
+    componentRowId: normalizeOptionalInteger(row.componentRowId),
     slotLabel: normalizeOptionalString(row.slotLabel, 80),
     sizeGb: normalizeOptionalNonNegativeInteger(row.sizeGb),
     ramTypeConfigValueId: normalizeOptionalInteger(row.ramTypeConfigValueId),
@@ -838,6 +851,7 @@ function normalizeMemoryModuleRow(row, index = 0) {
 
 function normalizeStorageDeviceRow(row, index = 0) {
   const normalized = {
+    componentRowId: normalizeOptionalInteger(row.componentRowId),
     slotLabel: normalizeOptionalString(row.slotLabel, 80),
     sizeGb: normalizeOptionalNonNegativeInteger(row.sizeGb),
     storageTypeConfigValueId: normalizeOptionalInteger(row.storageTypeConfigValueId),
@@ -1006,54 +1020,6 @@ function mapById(items) {
   return map;
 }
 
-function normalizeGradeToken(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '')
-    .replace(/^(cosmetic_)?grade_/, '')
-    .replace(/_grade$/, '');
-}
-
-function isNotYetGradedToken(value) {
-  return ['n_a', 'na', 'not_applicable', 'not_yet_graded', 'not_graded', 'ungraded'].includes(normalizeGradeToken(value));
-}
-
-function normalizeCosmeticGradeOptions(options) {
-  const safeOptions = Array.isArray(options) ? options : [];
-  const groups = new Map();
-
-  safeOptions.forEach((option) => {
-    const isNotYetGraded = [option.code, option.value, option.label].some(isNotYetGradedToken);
-    const displayLabel = isNotYetGraded ? 'Not Yet Graded' : (option.label || option.code || option.value || '');
-    const tokenCandidates = [displayLabel, option.code, option.value, option.label]
-      .map(normalizeGradeToken)
-      .filter(Boolean);
-    const gradeToken = isNotYetGraded ? 'not_yet_graded' : tokenCandidates[0];
-
-    if (!gradeToken) {
-      return;
-    }
-
-    if (!groups.has(gradeToken)) {
-      groups.set(gradeToken, {
-        ...option,
-        label: displayLabel,
-        filterIds: []
-      });
-    }
-
-    const group = groups.get(gradeToken);
-    const id = Number(option.id);
-
-    if (Number.isInteger(id) && id > 0 && !group.filterIds.includes(id)) {
-      group.filterIds.push(id);
-    }
-  });
-
-  return Array.from(groups.values());
-}
 
 function getCosmeticGradeFilterIds(gradeOptions, selectedGradeId) {
   const safeGradeId = normalizePositiveFilterId(selectedGradeId);
@@ -1073,22 +1039,11 @@ function getCosmeticGradeFilterIds(gradeOptions, selectedGradeId) {
 }
 
 function getCosmeticGradeSortRank(option = {}) {
-  const token = normalizeGradeToken(option.label || option.code || option.value);
-  const baseGrade = token.match(/^[a-z]/)?.[0] || '';
-
-  if (baseGrade && baseGrade.length === 1) {
-    const letterRank = baseGrade.charCodeAt(0) - 'a'.charCodeAt(0);
-    const suffixRank = token.includes('plus') ? 0 : token.includes('minus') ? 2 : 1;
-
-    return (letterRank * 10) + suffixRank;
-  }
-
-  return 999;
+  return getCanonicalCosmeticGradeSortRank(option.label || option.code || option.value);
 }
 
 function buildCosmeticGradeFilterOptions(overallGradeOptions) {
   const gradeOptions = (Array.isArray(overallGradeOptions) ? overallGradeOptions : [])
-    .filter((option) => !isNotYetGradedToken(option.code) && !isNotYetGradedToken(option.value) && !isNotYetGradedToken(option.label))
     .map((option) => ({
       ...option,
       filterValue: `grade:${option.id}`
@@ -1343,6 +1298,7 @@ async function getUnitById(unitId) {
 
 function mapMemoryModuleRows(rows = []) {
   return rows.map((row) => ({
+    componentRowId: row.component_row_id ? String(row.component_row_id) : '',
     slotLabel: row.slot_label || '',
     sizeGb: row.size_gb !== null && row.size_gb !== undefined ? String(row.size_gb) : '',
     ramTypeConfigValueId: row.ram_type_config_value_id ? String(row.ram_type_config_value_id) : '',
@@ -1357,6 +1313,7 @@ function mapMemoryModuleRows(rows = []) {
 
 function mapStorageDeviceRows(rows = []) {
   return rows.map((row) => ({
+    componentRowId: row.component_row_id ? String(row.component_row_id) : '',
     slotLabel: row.slot_label || '',
     sizeGb: row.size_gb !== null && row.size_gb !== undefined ? String(row.size_gb) : '',
     storageTypeConfigValueId: row.storage_type_config_value_id ? String(row.storage_type_config_value_id) : '',
@@ -1376,7 +1333,7 @@ function getMemoryModuleSelect(columns) {
 
   return `
     SELECT
-      unit_memory_module_id,
+      unit_memory_module_id AS component_row_id,
       slot_label,
       size_gb,
       ram_type_config_value_id,
@@ -1461,7 +1418,7 @@ async function listPreviousMemoryModulesForUnit(unitId) {
   const [rows] = await pool.query(
     `
       SELECT
-        unit_previous_memory_module_id,
+        unit_previous_memory_module_id AS component_row_id,
         slot_label,
         size_gb,
         ram_type_config_value_id,
@@ -1491,7 +1448,7 @@ async function listCurrentStorageDevicesForUnit(unitId) {
   const [rows] = await pool.query(
     `
       SELECT
-        unit_storage_device_id,
+        unit_storage_device_id AS component_row_id,
         slot_label,
         storage_type_config_value_id,
         size_gb,
@@ -1522,7 +1479,7 @@ async function listPreviousStorageDevicesForUnit(unitId) {
   const [rows] = await pool.query(
     `
       SELECT
-        unit_previous_storage_device_id,
+        unit_previous_storage_device_id AS component_row_id,
         slot_label,
         storage_type_config_value_id,
         size_gb,
@@ -1714,7 +1671,14 @@ async function listTechUsersWithUnits() {
   });
 }
 
-async function listActiveAssignableTechnicians() {
+const RETURN_TO_ACTIVE_ASSIGNEE_ROLE_CODES = Object.freeze([
+  'admin',
+  'management',
+  'tech_lead',
+  'tech'
+]);
+
+async function listActiveReturnToActiveAssignees() {
   const [userColumns, roleColumns, userRoleColumns] = await Promise.all([
     getTableColumns('users'),
     getTableColumns('roles'),
@@ -1726,6 +1690,7 @@ async function listActiveAssignableTechnicians() {
   }
 
   const activeUserFilter = hasColumn(userColumns, 'is_active') ? 'AND COALESCE(u.is_active, 1) = 1' : '';
+  const rolePlaceholders = RETURN_TO_ACTIVE_ASSIGNEE_ROLE_CODES.map(() => '?').join(', ');
 
   const [rows] = await pool.query(
     `
@@ -1740,11 +1705,12 @@ async function listActiveAssignableTechnicians() {
         ON ur.user_id = u.user_id
       INNER JOIN roles r
         ON r.role_id = ur.role_id
-      WHERE r.code IN ('tech', 'tech_lead')
+      WHERE r.code IN (${rolePlaceholders})
         ${activeUserFilter}
       GROUP BY u.user_id, u.first_name, u.last_name, u.email
       ORDER BY u.first_name, u.last_name, u.email
-    `
+    `,
+    RETURN_TO_ACTIVE_ASSIGNEE_ROLE_CODES
   );
 
   return rows.map((row) => {
@@ -1772,6 +1738,16 @@ function normalizePositiveFilterId(value) {
   const numericValue = Number(value);
 
   return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : null;
+}
+
+function normalizePositiveFilterIds(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return Array.from(new Set(values
+    .map((value) => normalizePositiveFilterId(value))
+    .filter(Boolean)));
 }
 
 
@@ -2035,11 +2011,11 @@ function getGradeSortRankSql() {
         CASE
           WHEN current_grade_value.config_value_id IS NULL THEN 100
           WHEN ${gradeValueSql} REGEXP 'not[^a-z0-9]*yet[^a-z0-9]*graded|not[^a-z0-9]*graded|ungraded|n/?a' THEN 100
-          WHEN ${gradeValueSql} LIKE 'a%' THEN 10
-          WHEN ${gradeValueSql} LIKE 'b%' THEN 20
-          WHEN ${gradeValueSql} LIKE 'c%' THEN 30
-          WHEN ${gradeValueSql} LIKE 'd%' THEN 40
-          WHEN ${gradeValueSql} LIKE 'e%' THEN 50
+          WHEN ${gradeValueSql} = 'a' THEN 10
+          WHEN ${gradeValueSql} = 'ab' THEN 20
+          WHEN ${gradeValueSql} = 'b' THEN 30
+          WHEN ${gradeValueSql} = 'c' THEN 40
+          WHEN ${gradeValueSql} = 'd' THEN 50
           ELSE 70
         END`;
 }
@@ -2186,6 +2162,7 @@ async function listTechUnits(filters = {}) {
 
   const { filterLots, lotMap } = await getLotMap();
   const requestedLotId = normalizePositiveFilterId(filters.lotId);
+  const requestedLotIds = normalizePositiveFilterIds(filters.lotIds);
   const requestedLot = requestedLotId ? lotMap.get(requestedLotId) : null;
   const availableFilterLots = filters.allowAnyLotFilter === true
     && requestedLot
@@ -2248,6 +2225,7 @@ async function listTechUnits(filters = {}) {
   const canViewParkedUnits = filters.canViewParkedUnits === true;
   const requestedUnitState = String(filters.unitState || 'active').trim().toLowerCase();
   const unitState = canViewParkedUnits && requestedUnitState === 'parked' ? 'parked' : 'active';
+  const searchIncludesParkedUnits = filters.canSearchParkedUnits === true && searchTerms.length > 0;
   const categoryFilterId = normalizePositiveFilterId(filters.categoryId);
   const techUserFilterId = normalizePositiveFilterId(filters.techUserId);
   const createdStartDate = normalizeDashboardDrilldownDate(filters.createdStartDate);
@@ -2258,7 +2236,7 @@ async function listTechUnits(filters = {}) {
   const currentUserId = normalizePositiveFilterId(filters.currentUserId);
   const requestedUnitId = normalizePositiveFilterId(filters.unitId);
   const restrictToCurrentAssignment = filters.restrictToCurrentAssignment === true && Boolean(currentUserId) && searchTerms.length === 0;
-  const isParkedUnitState = unitState === 'parked';
+  const isParkedUnitState = unitState === 'parked' && !searchIncludesParkedUnits;
   const requestedQcReviewFilter = normalizeQcReviewFilter(filters.qcReviewFilter);
   const [completionColumns, qcReviewColumns, qcCorrectionColumns] = isParkedUnitState
     ? [new Map(), new Map(), new Map()]
@@ -2292,14 +2270,19 @@ async function listTechUnits(filters = {}) {
   const qcReviewFilter = qcReviewSchemaIsReady ? requestedQcReviewFilter : '';
   const ownershipUserSql = getUnitOwnerUserSql(state, 'u');
 
-  where.push(`${getUnitParkedSql(state, 'u')} = ${isParkedUnitState ? '1' : '0'}`);
+  if (!searchIncludesParkedUnits) {
+    where.push(`${getUnitParkedSql(state, 'u')} = ${isParkedUnitState ? '1' : '0'}`);
+  }
 
   if (requestedUnitId) {
     where.push('u.unit_id = ?');
     params.push(requestedUnitId);
   }
 
-  if (!isParkedUnitState && filters.lotId) {
+  if (!isParkedUnitState && requestedLotIds.length > 0) {
+    where.push(`u.lot_id IN (${requestedLotIds.map(() => '?').join(', ')})`);
+    params.push(...requestedLotIds);
+  } else if (!isParkedUnitState && filters.lotId) {
     const lotId = Number(filters.lotId);
 
     if (Number.isInteger(lotId) && lotId > 0 && filterLotIds.has(String(lotId))) {
@@ -2372,7 +2355,7 @@ async function listTechUnits(filters = {}) {
     }
   }
 
-  if (!isParkedUnitState && searchTerms.length > 0) {
+  if (searchTerms.length > 0) {
     const isMultiSearch = searchTerms.length > 1;
     const searchGroups = [];
 
@@ -2594,14 +2577,17 @@ async function listTechUnits(filters = {}) {
       ? productionWeightModel.normalizeWeightValue(row.production_weight_override)
       : null;
 
-    const currentAssignmentUserId = state.assignmentCapabilities.hasAssignedToUserId && row.assigned_to_user_id
-      ? Number(row.assigned_to_user_id)
-      : (row.created_by_user_id ? Number(row.created_by_user_id) : null);
+    const rowIsParked = isUnitParked(row);
+    const currentAssignmentUserId = rowIsParked
+      ? null
+      : state.assignmentCapabilities.hasAssignedToUserId && row.assigned_to_user_id
+        ? Number(row.assigned_to_user_id)
+        : (row.created_by_user_id ? Number(row.created_by_user_id) : null);
     const isReadOnlyForCurrentUser = Boolean(
       filters.restrictToCurrentAssignment === true &&
       searchTerms.length > 0 &&
       currentUserId &&
-      currentAssignmentUserId !== currentUserId
+      (rowIsParked || currentAssignmentUserId !== currentUserId)
     );
 
     const qcReviewState = resolveQcReviewState(row);
@@ -2671,7 +2657,7 @@ async function listTechUnits(filters = {}) {
       assignedToName: [row.assigned_first_name, row.assigned_last_name].filter(Boolean).join(' ').trim() || row.assigned_email || '',
       isUnassigned: state.assignmentCapabilities.hasAssignedToUserId ? !row.assigned_to_user_id : false,
       isReadOnlyForCurrentUser,
-      isParked: isUnitParked(row),
+      isParked: rowIsParked,
       parkedAt: state.parkingCapabilities.hasParkedAt
         ? row.parked_at
         : (state.legacyArchiveCapabilities.hasArchivedAt ? row.archived_at : null)
@@ -2685,7 +2671,7 @@ async function listTechUnits(filters = {}) {
     units,
     filters: {
       ...filters,
-      search: isParkedUnitState ? '' : filters.search,
+      search: filters.search,
       lotId: isParkedUnitState ? '' : filters.lotId,
       categoryId: isParkedUnitState ? '' : filters.categoryId,
       gradeFilter: isParkedUnitState ? '' : filters.gradeFilter,
@@ -2695,11 +2681,13 @@ async function listTechUnits(filters = {}) {
       createdEndDate: isParkedUnitState ? '' : filters.createdEndDate,
       createdWindow: isParkedUnitState ? '' : filters.createdWindow,
       unitState,
+      searchIncludesParkedUnits,
       sort,
       page: String(pagination.page),
       perPage: pagination.perPageParam
     },
     unitState,
+    searchIncludesParkedUnits,
     canViewParkedUnits,
     lots: availableFilterLots,
     unitCategories: rankedBrowserUnitCategories,
@@ -3244,7 +3232,7 @@ function getDuplicateAssumptionEligibility({
       actionKind: 'none',
       assignedToCurrentActor: true,
       code: 'BWT_DUPLICATE_ASSUMPTION_ALREADY_ASSIGNED_IN_DESTINATION',
-      message: 'This unit is already assigned to you in the selected work lot. Open the existing Unit instead of requesting a takeover of your own assignment.'
+      message: 'This Unit is already assigned to you in the selected work lot. Open the existing Unit when it is the same physical device. If this is a different physical device that reuses the serial, submit an Intentional Duplicate request.'
     };
   }
 
@@ -3519,7 +3507,14 @@ async function assumeExistingTechUnitFromDuplicateMatch({
       fromLotId: wasParked ? null : previousLotId,
       toLotId: safeDestinationLotId,
       movedByUserId: safeAssumedByUserId,
-      notes: assumptionNote
+      notes: assumptionNote,
+      allowNewProductionCycle: !wasParked
+    });
+
+    await productionWeightSyncModel.syncEffectiveManualCompletionWeights({
+      connection,
+      unitIds: [safeUnitId],
+      apply: true
     });
 
     if (!wasParked && previousLotId && previousLotId !== safeDestinationLotId) {
@@ -3734,6 +3729,67 @@ async function deactivateCurrentRows(connection, tableName, unitId) {
   return tableColumns;
 }
 
+async function loadComponentDetailMap(
+  connection,
+  tableName,
+  idColumn,
+  unitId,
+  detailColumns,
+  { currentOnly = false } = {}
+) {
+  const tableColumns = await getTableColumns(tableName);
+
+  if (
+    tableColumns.size === 0
+    || !hasColumn(tableColumns, idColumn)
+    || !hasColumn(tableColumns, 'unit_id')
+  ) {
+    return new Map();
+  }
+
+  const selectedDetails = detailColumns.filter((columnName) => hasColumn(tableColumns, columnName));
+
+  if (selectedDetails.length === 0) {
+    return new Map();
+  }
+
+  const selectColumns = [idColumn, ...selectedDetails];
+  const currentPredicate = currentOnly && hasColumn(tableColumns, 'is_current')
+    ? 'AND is_current = 1'
+    : '';
+
+  try {
+    const [rows] = await connection.query(
+      `
+        SELECT ${selectColumns.map(escapeIdentifier).join(', ')}
+        FROM ${escapeIdentifier(tableName)}
+        WHERE unit_id = ?
+        ${currentPredicate}
+      `,
+      [unitId]
+    );
+
+    return new Map(rows.map((row) => [Number(row[idColumn]), row]));
+  } catch (error) {
+    const optionalSchemaErrorCodes = new Set([
+      'ER_BAD_FIELD_ERROR',
+      'ER_NO_SUCH_TABLE',
+      'ER_PARSE_ERROR'
+    ]);
+
+    if (!optionalSchemaErrorCodes.has(error && error.code)) {
+      throw error;
+    }
+
+    console.warn('Optional component-detail preservation was skipped for a legacy table schema.', {
+      tableName,
+      code: error.code
+    });
+
+    return new Map();
+  }
+}
+
 async function insertCurrentMemoryModule(connection, tableColumns, unitId, moduleRow, currentUserId) {
   const columns = [];
   const values = [];
@@ -3877,10 +3933,24 @@ async function saveUnitPreviousMemoryModules(connection, unitId, formData, curre
   }
 
   const rows = getNormalizedPreviousMemoryModules(formData);
+  const detailMap = await loadComponentDetailMap(
+    connection,
+    'unit_previous_memory_modules',
+    'unit_previous_memory_module_id',
+    unitId,
+    MEMORY_DETAIL_COLUMNS
+  );
   const tableColumns = await replacePreviousRows(connection, 'unit_previous_memory_modules', unitId);
 
   for (const [index, moduleRow] of rows.entries()) {
-    await insertPreviousMemoryModule(connection, tableColumns, unitId, moduleRow, index + 1, currentUserId);
+    await insertPreviousMemoryModule(
+      connection,
+      tableColumns,
+      unitId,
+      mergePreservedMemoryDetails(moduleRow, detailMap),
+      index + 1,
+      currentUserId
+    );
   }
 }
 
@@ -3896,10 +3966,24 @@ async function saveUnitPreviousStorageDevices(connection, unitId, formData, curr
   }
 
   const rows = getNormalizedPreviousStorageDevices(formData);
+  const detailMap = await loadComponentDetailMap(
+    connection,
+    'unit_previous_storage_devices',
+    'unit_previous_storage_device_id',
+    unitId,
+    STORAGE_DETAIL_COLUMNS
+  );
   const tableColumns = await replacePreviousRows(connection, 'unit_previous_storage_devices', unitId);
 
   for (const [index, deviceRow] of rows.entries()) {
-    await insertPreviousStorageDevice(connection, tableColumns, unitId, deviceRow, index + 1, currentUserId);
+    await insertPreviousStorageDevice(
+      connection,
+      tableColumns,
+      unitId,
+      mergePreservedStorageDetails(deviceRow, detailMap),
+      index + 1,
+      currentUserId
+    );
   }
 }
 
@@ -3915,10 +3999,24 @@ async function saveUnitMemoryModules(connection, unitId, formData, currentUserId
   }
 
   const memoryModules = getNormalizedMemoryModules(formData);
+  const detailMap = await loadComponentDetailMap(
+    connection,
+    'unit_memory_modules',
+    'unit_memory_module_id',
+    unitId,
+    MEMORY_DETAIL_COLUMNS,
+    { currentOnly: true }
+  );
   const tableColumns = await deactivateCurrentRows(connection, 'unit_memory_modules', unitId);
 
   for (const moduleRow of memoryModules) {
-    await insertCurrentMemoryModule(connection, tableColumns, unitId, moduleRow, currentUserId);
+    await insertCurrentMemoryModule(
+      connection,
+      tableColumns,
+      unitId,
+      mergePreservedMemoryDetails(moduleRow, detailMap),
+      currentUserId
+    );
   }
 }
 
@@ -3934,10 +4032,24 @@ async function saveUnitStorageDevices(connection, unitId, formData, currentUserI
   }
 
   const storageDevices = getNormalizedStorageDevices(formData);
+  const detailMap = await loadComponentDetailMap(
+    connection,
+    'unit_storage_devices',
+    'unit_storage_device_id',
+    unitId,
+    STORAGE_DETAIL_COLUMNS,
+    { currentOnly: true }
+  );
   const tableColumns = await deactivateCurrentRows(connection, 'unit_storage_devices', unitId);
 
   for (const deviceRow of storageDevices) {
-    await insertCurrentStorageDevice(connection, tableColumns, unitId, deviceRow, currentUserId);
+    await insertCurrentStorageDevice(
+      connection,
+      tableColumns,
+      unitId,
+      mergePreservedStorageDetails(deviceRow, detailMap, { includeWipeStatus: true }),
+      currentUserId
+    );
   }
 }
 
@@ -4184,43 +4296,22 @@ async function createTechUnit(formData, currentUserId, options = {}) {
   }
 }
 
-async function recordUnitLotHistory(connection, { unitId, fromLotId, toLotId, movedByUserId, notes = null }) {
-  const exists = await tableExists('unit_lot_history');
-
-  if (!exists) {
-    return;
-  }
-
-  const normalizedUnitId = normalizeRequiredInteger(unitId);
-  const normalizedToLotId = normalizeRequiredInteger(toLotId);
-  const normalizedUserId = normalizeRequiredInteger(movedByUserId);
-
-  if (!normalizedUnitId || !normalizedToLotId || !normalizedUserId) {
-    return;
-  }
-
-  const normalizedFromLotId = normalizeOptionalInteger(fromLotId);
-  const normalizedNotes = normalizeText(notes);
-
-  await connection.query(
-    `
-      INSERT INTO unit_lot_history (
-        unit_id,
-        from_lot_id,
-        to_lot_id,
-        moved_by_user_id,
-        notes
-      )
-      VALUES (?, ?, ?, ?, ?)
-    `,
-    [
-      normalizedUnitId,
-      normalizedFromLotId,
-      normalizedToLotId,
-      normalizedUserId,
-      normalizedNotes
-    ]
-  );
+async function recordUnitLotHistory(connection, {
+  unitId,
+  fromLotId,
+  toLotId,
+  movedByUserId,
+  notes = null,
+  allowNewProductionCycle = true
+}) {
+  return productionCycleModel.recordLotMove({
+    unitId,
+    fromLotId,
+    toLotId,
+    movedByUserId,
+    notes,
+    allowNewProductionCycle
+  }, connection);
 }
 
 async function updateExistingTechUnit(unitId, formData, currentUserId, options = {}) {
@@ -4296,9 +4387,16 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
         fromLotId: previousLotId,
         toLotId: nextLotId,
         movedByUserId: currentUserId,
-        notes: options.lotMoveNotes || 'Unit moved while updating an existing unit record.'
+        notes: options.lotMoveNotes || 'Unit moved while updating an existing unit record.',
+        allowNewProductionCycle: options.allowNewProductionCycleOnMove !== false
       });
     }
+
+    await productionWeightSyncModel.syncEffectiveManualCompletionWeights({
+      connection,
+      unitIds: [Number(unitId)],
+      apply: true
+    });
 
     if (lotChanged && previousLotId) {
       await lotValidationOverrideModel.expireMovedUnitOverrides(previousLotId, connection);
@@ -4915,14 +5013,14 @@ function assertUnitIsNotParked(unit) {
 }
 
 async function getReturnToActiveOptions() {
-  const [{ assignableLots }, technicians] = await Promise.all([
+  const [{ assignableLots }, assignees] = await Promise.all([
     getLotMap(),
-    listActiveAssignableTechnicians()
+    listActiveReturnToActiveAssignees()
   ]);
 
   return {
     lots: assignableLots,
-    technicians
+    assignees
   };
 }
 
@@ -4933,13 +5031,13 @@ async function assertReturnAssigneeIsEligible(assignedToUserId) {
     return null;
   }
 
-  const technicians = await listActiveAssignableTechnicians();
-  const isEligible = technicians.some((technician) => technician.id === normalizedAssignedToUserId);
+  const assignees = await listActiveReturnToActiveAssignees();
+  const isEligible = assignees.some((assignee) => assignee.id === normalizedAssignedToUserId);
 
   if (!isEligible) {
     throw createUnitLifecycleError(
       'BWT_RETURN_ASSIGNEE_NOT_ELIGIBLE',
-      'Choose an active Tech or Tech Lead, or leave the assignment unassigned.'
+      'Choose an active Admin, Management, Tech Lead, or Tech user, or leave the assignment unassigned.'
     );
   }
 
@@ -5153,7 +5251,14 @@ async function returnTechUnitToActive({
       fromLotId: null,
       toLotId: safeDestinationLotId,
       movedByUserId: safeReturnedByUserId,
-      notes: 'Unit returned to Active from the Parked lifecycle.'
+      notes: 'Unit returned to Active from the Parked lifecycle.',
+      allowNewProductionCycle: false
+    });
+
+    await productionWeightSyncModel.syncEffectiveManualCompletionWeights({
+      connection,
+      unitIds: [safeUnitId],
+      apply: true
     });
 
     if (safeAssignedToUserId) {
@@ -5349,8 +5454,8 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
     ? productionWeightModel.normalizeWeightValue(weightValue)
     : await getResolvedProductionWeightForUnit(unit);
 
-  if (resolvedWeight === null || resolvedWeight < 0.10 || resolvedWeight > 10.00) {
-    throw new Error('A completion credit weight from 0.10 through 10.00 is required.');
+  if (resolvedWeight === null || resolvedWeight < 0.10) {
+    throw new Error('A completion credit weight of at least 0.10 is required.');
   }
 
   const safeCreditSource = normalizeText(creditSource) || 'manual_completion';
@@ -5551,16 +5656,21 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
     ? productionWeightModel.normalizeWeightValue(weightValue)
     : completionPreview.productionWeight;
 
-  if (resolvedWeight === null || resolvedWeight < 0.10 || resolvedWeight > 10.00) {
-    throw new Error('A completion credit weight from 0.10 through 10.00 is required.');
+  if (resolvedWeight === null || resolvedWeight < 0.10) {
+    throw new Error('A completion credit weight of at least 0.10 is required.');
   }
 
   const safeCreditSource = normalizeText(creditSource) || 'manual_completion';
   const completionColumns = await getTableColumns('unit_work_completions');
   const supportsWorkCycleKey = hasColumn(completionColumns, 'work_cycle_key');
+  const supportsProductionCycleKey = hasColumn(completionColumns, 'production_cycle_key');
+  const supportsProductionCreditFlag = hasColumn(completionColumns, 'grants_production_credit');
   const workCycleKey = supportsWorkCycleKey && safeCreditSource === 'manual_completion'
     ? await getCurrentLotWorkCycleKey(unit)
     : null;
+  const productionCycleState = safeCreditSource === 'manual_completion'
+    ? await productionCycleModel.getCompletionProductionCycleState(safeUnitId)
+    : { productionCycleKey: null, grantsProductionCredit: true, schemaReady: false };
   const insertColumns = [
     'unit_id',
     'lot_id',
@@ -5585,6 +5695,20 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
   if (supportsWorkCycleKey) {
     insertColumns.push('work_cycle_key');
     insertValues.push(workCycleKey);
+  }
+
+  if (supportsProductionCycleKey) {
+    insertColumns.push('production_cycle_key');
+    insertValues.push(productionCycleState.productionCycleKey || null);
+  }
+
+  if (supportsProductionCreditFlag) {
+    insertColumns.push('grants_production_credit');
+    insertValues.push(
+      safeCreditSource === 'manual_completion'
+        ? (productionCycleState.grantsProductionCredit ? 1 : 0)
+        : 1
+    );
   }
 
   const connection = await pool.getConnection();
@@ -5626,7 +5750,9 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
           completionId,
           lotId: normalizeOptionalInteger(unit.lot_id),
           completedByUserId: safeCompletedByUserId,
-          workCycleKey
+          workCycleKey,
+          productionCycleKey: productionCycleState.productionCycleKey || null,
+          grantsProductionCredit: productionCycleState.grantsProductionCredit !== false
         },
         changes: [
           {
@@ -5652,11 +5778,13 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
           {
             fieldKey: 'completion_credit',
             fieldLabel: 'Production Credit',
-            changeType: 'added',
+            changeType: productionCycleState.grantsProductionCredit ? 'added' : 'recorded',
             oldValueText: '',
-            newValueText: Number(resolvedWeight).toFixed(2),
+            newValueText: productionCycleState.grantsProductionCredit
+              ? Number(resolvedWeight).toFixed(2)
+              : 'Existing production cycle retained — no additional unit or weight credit',
             oldValue: null,
-            newValue: resolvedWeight,
+            newValue: productionCycleState.grantsProductionCredit ? resolvedWeight : null,
             sortOrder: 30
           }
         ]
@@ -5668,6 +5796,8 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
     return {
       unitWorkCompletionId: completionId,
       workCycleKey,
+      productionCycleKey: productionCycleState.productionCycleKey || null,
+      grantsProductionCredit: productionCycleState.grantsProductionCredit !== false,
       productionWeight: resolvedWeight
     };
   } catch (error) {
@@ -6096,7 +6226,7 @@ async function getUnitWorkCompletionPreview(unitId) {
 
   const productionWeight = await getResolvedProductionWeightForUnit(unit);
 
-  if (productionWeight === null || productionWeight < 0.10 || productionWeight > 10.00) {
+  if (productionWeight === null || productionWeight < 0.10) {
     return {
       ready: false,
       unit,
@@ -6105,9 +6235,11 @@ async function getUnitWorkCompletionPreview(unitId) {
       lotName: lot.name || 'Current lot',
       productionWeight: null,
       formattedProductionWeight: '—',
-      errorMessage: 'This unit needs a production weight from 0.10 through 10.00 before lot work can be completed.'
+      errorMessage: 'This unit needs a production weight of at least 0.10 before lot work can be completed.'
     };
   }
+
+  const productionCycleState = await productionCycleModel.getCompletionProductionCycleState(safeUnitId);
 
   if (await hasRecordedManualCompletionForCurrentLotCycle(unit)) {
     return {
@@ -6131,6 +6263,9 @@ async function getUnitWorkCompletionPreview(unitId) {
     lotName: lot.name || 'Current lot',
     productionWeight,
     formattedProductionWeight: Number(productionWeight).toFixed(2),
+    productionCycleKey: productionCycleState.productionCycleKey || null,
+    grantsProductionCredit: productionCycleState.grantsProductionCredit !== false,
+    productionCycleSchemaReady: productionCycleState.schemaReady === true,
     errorMessage: ''
   };
 }
@@ -6296,6 +6431,11 @@ async function getUnitWorkCompletionsForUser(unitId, userId) {
     return [];
   }
 
+  const completionColumns = await getTableColumns('unit_work_completions');
+  const productionCreditFilter = hasColumn(completionColumns, 'grants_production_credit')
+    ? 'AND c.grants_production_credit = 1'
+    : '';
+
   const [rows] = await pool.query(
     `
       SELECT
@@ -6312,6 +6452,7 @@ async function getUnitWorkCompletionsForUser(unitId, userId) {
       WHERE c.unit_id = ?
         AND c.completed_by_user_id = ?
         AND c.reversed_at IS NULL
+        ${productionCreditFilter}
       ORDER BY c.completed_at DESC, c.unit_work_completion_id DESC
       LIMIT 100
     `,
@@ -6524,7 +6665,9 @@ async function getUnitOperationalHistory(unitId) {
       notes: row.notes || ''
     })),
     lotMoves: (lotRows[0] || []).map((row) => ({
+      fromLotId: normalizeOptionalInteger(row.from_lot_id),
       fromLotName: row.from_lot_name || 'No active lot',
+      toLotId: normalizeOptionalInteger(row.to_lot_id),
       toLotName: row.to_lot_name || 'No active lot',
       movedByName: getUserDisplayNameFromRow(row, 'moved_by') || 'System',
       movedAt: row.moved_at,
@@ -6533,7 +6676,9 @@ async function getUnitOperationalHistory(unitId) {
     lifecycleEvents: (parkRows[0] || []).map((row) => ({
       eventType: row.event_type || 'parked',
       eventLabel: row.event_type === 'returned_to_active' ? 'Returned to Active' : 'Parked',
+      fromLotId: normalizeOptionalInteger(row.from_lot_id),
       fromLotName: row.from_lot_name || 'No active lot',
+      toLotId: normalizeOptionalInteger(row.to_lot_id),
       toLotName: row.to_lot_name || 'No active lot',
       fromAssignedToName: getUserDisplayNameFromRow(row, 'from_user') || 'Unassigned',
       toAssignedToName: getUserDisplayNameFromRow(row, 'to_user') || 'Unassigned',

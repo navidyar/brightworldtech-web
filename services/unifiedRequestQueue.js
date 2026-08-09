@@ -84,11 +84,13 @@ function mapOverrideRequest(request) {
   const requestType = isOutcomeConfirmation ? OUTCOME_CONFIRMATION_TYPE : EXISTING_UNIT_OVERRIDE_TYPE;
   const requestTypeLabel = isOutcomeConfirmation
     ? 'Outcome Confirmation'
-    : request.isDuplicateIntakeLotMoveRequest
-      ? 'Lot Move'
-      : request.isDuplicateIntakeMoveRequest
-        ? 'Move / Takeover Existing Unit'
-        : 'Existing Unit Override';
+    : request.isParkedTakeoverRequest
+      ? 'Parked Unit Takeover'
+      : request.isDuplicateIntakeLotMoveRequest
+        ? 'Lot Move'
+        : request.isDuplicateIntakeMoveRequest
+          ? 'Move / Takeover Existing Unit'
+          : 'Existing Unit Override';
   const listContextSecondary = request.requestedDestinationLotName && request.requestedDestinationLotName !== 'No destination selected'
     ? `${request.lotName} → ${request.requestedDestinationLotName}`
     : request.lotName;

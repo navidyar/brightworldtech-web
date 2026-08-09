@@ -184,7 +184,8 @@
     const childrenByParentId = buildChildrenMap(rows);
 
     rows.forEach((row) => {
-      const isRootRow = !row.dataset.parentLotId;
+      const hasHierarchyError = row.dataset.hierarchyError === '1';
+      const isRootRow = !row.dataset.parentLotId || hasHierarchyError;
       setRowVisible(row, isRootRow);
       setToggleState(row, false);
     });

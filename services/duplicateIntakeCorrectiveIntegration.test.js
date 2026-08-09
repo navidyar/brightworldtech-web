@@ -38,11 +38,15 @@ test('the direct Move and Takeover confirmation identifies the destination and e
   assert.match(modal, /does not create an approval request and does not require a reviewer reason/);
 });
 
-test('Intentional Duplicate readiness names the base Create Unit fields rather than attributing them to Lot requirements', () => {
+test('Intentional Duplicate remains available after a destination Lot is selected while server validation protects submission', () => {
   const view = read('views/fragments/tech-unit-duplicate-check.ejs');
   const source = read('public/js/tech-unit-form.js');
+  const controller = read('controllers/techController.js');
 
-  assert.match(view, /Assignable Lot, Unit Category, and Unit Status/);
-  assert.match(source, /missingLabels\.push\('a Unit Category'\)/);
-  assert.match(source, /missingLabels\.push\('a Unit Status'\)/);
+  assert.match(view, /hasIntentionalDuplicateDestination/);
+  assert.match(view, /different physical unit that reuses the serial/);
+  assert.match(source, /const hasAssignableLot = Boolean\(lotSelect/);
+  assert.doesNotMatch(source, /missingLabels\.push\('a Unit Category'\)/);
+  assert.doesNotMatch(source, /missingLabels\.push\('a Unit Status'\)/);
+  assert.match(controller, /const validationErrors = await validateUnitForm\(formData, formOptions, 'create'\)/);
 });

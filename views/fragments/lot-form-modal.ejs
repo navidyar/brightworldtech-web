@@ -66,6 +66,21 @@
                 </span>
               </label>
             <% } %>
+            <% if (safeFormOptions.capabilities.hasStartNewProductionCycleOnMove) { %>
+              <label class="lot-inline-option form-field-wide" for="startNewProductionCycleOnMoveModal">
+                <input
+                  id="startNewProductionCycleOnMoveModal"
+                  type="checkbox"
+                  name="startNewProductionCycleOnMove"
+                  value="1"
+                  <%= safeFormData.startNewProductionCycleOnMove === '1' ? 'checked' : '' %>
+                />
+                <span>
+                  <strong>Start a new production cycle for completed Units moved into this Lot</strong>
+                  <small>Use for rework/reprocessing Lots. The physical Unit is not duplicated; after the move it must be completed again before the new production unit and weight are earned.</small>
+                </span>
+              </label>
+            <% } %>
             <label class="form-field">
               <span>Lot Name</span>
               <input type="text" name="lotName" value="<%= safeFormData.lotName || '' %>" maxlength="120" placeholder="Example: Dell Latitude 5400 - Customer Lot" required />
@@ -119,6 +134,7 @@
               <label class="form-field">
                 <span>Custom Lot Default Weight</span>
                 <input type="number" name="defaultProductionWeight" value="<%= safeFormData.defaultProductionWeight || '' %>" min="0" step="0.01" placeholder="Example: 1.25" list="production-weight-examples" />
+                <small class="field-hint">Saving a new Lot weight immediately becomes the effective weight for every Unit currently in this Lot unless that Unit has an individual override. There is no application maximum.</small>
                 <datalist id="production-weight-examples">
                   <% safeFormOptions.productionWeightOptions.forEach((weightOption) => { %>
                     <% if (weightOption.formattedWeightValue && weightOption.formattedWeightValue !== '—') { %>

@@ -7,6 +7,7 @@ const path = require('node:path');
 
 const ROOT = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
+const { getLotRequirementField } = require('../config/lotRequirementRegistry');
 
 test('Battery Health is registered, validated, stored, audited, and exposed in the Unit form', () => {
   const registry = read('config/unitFormFieldRegistry.js');
@@ -25,12 +26,13 @@ test('Battery Health is registered, validated, stored, audited, and exposed in t
 });
 
 test('Battery Health participates in Lot visibility and numeric requirements', () => {
-  const registry = read('config/lotRequirementRegistry.js');
   const formPolicy = read('config/lotRequirementFormPolicy.js');
   const evaluator = read('services/lotRequirementEvaluator.js');
   const validationModel = read('models/lotValidationModel.js');
 
-  assert.match(registry, /key: 'battery_health'[\s\S]*?storageKind: 'number'[\s\S]*?unitSuffix: '%'/);
+  const batteryRequirement = getLotRequirementField('battery_health');
+  assert.equal(batteryRequirement.storageKind, 'number');
+  assert.equal(batteryRequirement.unitSuffix, '%');
   assert.match(formPolicy, /battery_health: 'battery_health'/);
   assert.match(evaluator, /battery_health:[\s\S]*?baseRow\.battery_health_percent/);
   assert.match(validationModel, /u\.battery_health_percent/);
@@ -51,15 +53,16 @@ test('Processor Families provide the authoritative export Short Form', () => {
   assert.match(unitModel, /processorShortForm:/);
 });
 
-test('export preview route is limited to Admin and Management and uses current filters', () => {
-  const routes = read('routes/management.js');
-  const controller = read('controllers/techController.js');
-  const page = read('views/pages/tech-units.ejs');
+test('Lot Details owns the current export entry point and remains limited to Admin and Management', () => {
+  const routes = read('routes/lots.js');
+  const controller = read('controllers/lotController.js');
+  const page = read('views/pages/management-lot-detail.ejs');
+  const techPage = read('views/pages/tech-units.ejs');
 
-  assert.match(routes, /'\/tech\/units\/export\/preview'[\s\S]*?requireRole\(managementRoles\)[\s\S]*?renderTechUnitsExportPreview/);
-  assert.match(controller, /buildFilteredUnitExportDataset\(filters\)/);
-  assert.match(controller, /buildTechUnitsExportPreviewUrl/);
-  assert.match(page, /canExportTechUnits[\s\S]*?\['admin', 'management'\][\s\S]*?Export Preview/);
+  assert.match(routes, /'\/management\/lots\/:lotId\/export\/preview'[\s\S]*?requireRole\(lotManagementRoles\)[\s\S]*?renderLotUnitExportPreview/);
+  assert.match(controller, /buildLotScopedUnitExportDataset\(lotScope\)/);
+  assert.match(page, /Export Units/);
+  assert.doesNotMatch(techPage, /Export Preview/);
 });
 
 test('Stage 10A migration is idempotent and validates both new columns', () => {

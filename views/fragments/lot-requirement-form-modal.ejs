@@ -63,17 +63,39 @@
               </select>
             </label>
 
-            <label class="form-field" data-required-value-select-wrap hidden>
-              <span>Required Value</span>
-              <select name="requiredValue" data-required-value-select disabled>
-                <option value="">Select value</option>
-              </select>
+            <div class="form-field" data-required-value-select-wrap hidden>
+              <label for="lot-requirement-value-search">Required Value</label>
+              <div class="lot-requirement-value-combobox" data-required-value-combobox>
+                <input
+                  type="search"
+                  id="lot-requirement-value-search"
+                  class="lot-requirement-value-search"
+                  placeholder="Search or select a value"
+                  autocomplete="off"
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-expanded="false"
+                  aria-controls="lot-requirement-value-options"
+                  data-required-value-search
+                  disabled
+                />
+                <select name="requiredValue" data-required-value-select disabled hidden aria-hidden="true" tabindex="-1">
+                  <option value="">Select value</option>
+                </select>
+                <div
+                  id="lot-requirement-value-options"
+                  class="lot-requirement-value-options"
+                  role="listbox"
+                  data-required-value-options
+                  hidden
+                ></div>
+              </div>
               <small class="field-hint" data-required-value-select-hint></small>
-            </label>
+            </div>
 
             <label class="form-field" data-required-value-text-wrap>
               <span>Required Value</span>
-              <input type="number" name="requiredValue" value="<%= safeFormData.requiredValue || '' %>" min="0.01" step="0.01" placeholder="Select a requirement field" required data-required-value-text />
+              <input type="text" name="requiredValue" value="<%= safeFormData.requiredValue || '' %>" min="0.01" step="0.01" placeholder="Select a requirement field" required data-required-value-text />
             </label>
 
             <label class="form-field">

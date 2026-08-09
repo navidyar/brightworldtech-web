@@ -24,7 +24,7 @@
               <p>
                 <%= isInactiveView
                   ? 'Review inactive users and reactivate returning employees without losing their work history.'
-                  : 'Create users, assign one primary access role, generate setup links, and deactivate employees without deleting their history.' %>
+                  : 'Create users, assign one primary access role, issue BWT usernames and setup links, and deactivate employees without deleting their history.' %>
               </p>
             </div>
 
@@ -90,7 +90,7 @@
             <% } %>
 
             <div class="message management-user-note">
-              <p><strong>Role assignment rule:</strong> each user receives one primary access role. Admin users can assign Admin. Management users can assign Management, Tech Lead, QC, or Tech. QC is a restricted review role; packing and task activity remain operational records rather than account roles.</p>
+              <p><strong>Role assignment rule:</strong> each user receives one primary access role. Admin users can assign Admin to other users, but cannot demote their own Admin account. Management users can assign Management, Tech Lead, QC, or Tech to other users, but cannot change their own Management role. QC is a restricted review role; packing and task activity remain operational records rather than account roles.</p>
             </div>
 
             <div class="table-card management-users-table-card" style="margin-top: 20px;">
@@ -119,6 +119,7 @@
                       <td>
                         <div class="management-user-identity">
                           <strong><%= user.first_name %> <%= user.last_name %></strong>
+                          <span class="management-user-username">Username: <b><%= user.username || 'Migration required' %></b></span>
                           <span><%= user.email %></span>
                           <% if (Number(user.user_id) === Number(currentUserId)) { %>
                             <em>Current user</em>

@@ -18,7 +18,6 @@
     ? canCreateOrEditTechUnits()
     : pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
   const isQcUnitBrowserUser = pageRoleCodes.includes('qc') && !canCreateTechUnits;
-  const canExportTechUnits = pageRoleCodes.some((roleCode) => ['admin', 'management'].includes(roleCode));
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -26,13 +25,13 @@
     pageTitle,
     stylesheets: [
       '/css/modal.css',
-      '/css/tech-units-clean.css?v=20260803-stage10v1-history-detail-colors'
+      '/css/tech-units-clean.css?v=20260806-stage10w162-matched-weight-pill-styles'
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
-  <script defer src="/js/tech-units.js?v=20260804-stage10v6-custom-header-scrollbar"></script>
+  <script defer src="/js/tech-units.js?v=20260806-stage10w151-unit-save-confirmation-placement"></script>
   <script defer src="/js/tech-units-date-picker.js"></script>
-  <script defer src="/js/tech-unit-form.js?v=20260803-stage10q-hardware-none"></script>
+  <script defer src="/js/tech-unit-form.js?v=20260806-stage10w12-unit-form-tab-order"></script>
 
   <body>
     <div class="app-shell">
@@ -42,22 +41,19 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell tech-units-clean-page">
-          <section class="tech-units-clean-page-heading">
+          <section class="tech-units-clean-page-heading tech-units-clean-page-heading--save-status">
             <h1><%= isQcUnitBrowserUser ? 'QC Unit Browser' : 'Tech Units Browser' %></h1>
 
-            <div class="tech-units-clean-heading-actions">
-              <% if (canExportTechUnits) { %>
-                <button
-                  type="button"
-                  class="secondary-button"
-                  hx-get="<%= exportPreviewUrl %>"
-                  hx-target="#modal-root"
-                  hx-swap="innerHTML"
-                >
-                  Export Preview
-                </button>
-              <% } %>
+            <div
+              id="tech-unit-save-notification"
+              class="message success tech-unit-save-notification"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+              hidden
+            ></div>
 
+            <div class="tech-units-clean-heading-actions">
               <% if (canCreateTechUnits) { %>
                 <a class="primary-button tech-units-clean-create-button" href="/tech/units/new" hx-get="/tech/units/new/modal" hx-target="#modal-root" hx-swap="innerHTML">
                   Create Unit
@@ -246,7 +242,7 @@
                         <span class="tech-unit-state-toggle-label">Show Parked Units</span>
                       </label>
                     <% } else { %>
-                      <span aria-hidden="true"></span>
+                      <span class="tech-filter-actions-spacer" aria-hidden="true"></span>
                     <% } %>
 
                     <span class="tech-filter-action-buttons">

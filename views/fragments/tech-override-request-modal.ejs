@@ -12,17 +12,20 @@
   const isMoveOnlyRequest = isDuplicateIntakeRequest
     && typeof duplicateIntakeActionKind !== 'undefined'
     && duplicateIntakeActionKind === 'move';
+  const isParkedTakeover = typeof isParkedTakeoverRequest !== 'undefined' && Boolean(isParkedTakeoverRequest);
   const duplicateRequestTitle = isMoveOnlyRequest ? 'Request Lot Move' : 'Request Move / Takeover Existing Unit';
   const duplicateRequestReasonLabel = isMoveOnlyRequest ? 'Reason for Lot Move' : 'Reason for Move / Takeover';
   const duplicateRequestButtonLabel = isMoveOnlyRequest ? 'Send Lot Move Request' : 'Send Move / Takeover Request';
+  const modalEyebrow = isDuplicateIntakeRequest ? 'Existing Unit Request' : (isParkedTakeover ? 'Parked Unit Request' : 'Override Request');
+  const modalTitle = isDuplicateIntakeRequest ? duplicateRequestTitle : (isParkedTakeover ? 'Request Parked Unit Takeover' : 'Request Management Override');
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
   <section class="modal-panel tech-override-modal" role="dialog" aria-modal="true" aria-labelledby="tech-override-title">
     <div class="modal-header">
       <div>
-        <p class="eyebrow"><%= isDuplicateIntakeRequest ? 'Existing Unit Request' : 'Override Request' %></p>
-        <h2 id="tech-override-title"><%= isDuplicateIntakeRequest ? duplicateRequestTitle : 'Request Management Override' %></h2>
+        <p class="eyebrow"><%= modalEyebrow %></p>
+        <h2 id="tech-override-title"><%= modalTitle %></h2>
       </div>
 
       <button type="button" class="modal-close" data-modal-close aria-label="Close modal">×</button>
@@ -107,6 +110,13 @@
             <button type="button" class="secondary-button" data-modal-close>Close</button>
           </div>
         <% } else if (supported) { %>
+          <% if (isParkedTakeover) { %>
+            <div class="message info">
+              <p>
+                This Unit is Parked and has no active Lot or assignment. Approval will return the existing Unit to Active in the selected destination Lot and assign it to you. No new Asset Tag will be created.
+              </p>
+            </div>
+          <% } %>
           <% if (isDuplicateIntakeRequest) { %>
             <div class="message info">
               <p>
@@ -142,20 +152,22 @@
                 <% }) %>
               </select>
               <small class="field-hint">
-                <%= isMoveOnlyRequest
-                  ? 'Choose the different Lot this already-assigned Unit should enter after approval.'
-                  : 'Select the current Lot for an assignment-only takeover, or another Lot when Tech Lead+ should move the existing Unit after approval.' %>
+                <%= isParkedTakeover
+                  ? 'Choose the open Lot where this Parked Unit should return to Active after approval.'
+                  : isMoveOnlyRequest
+                    ? 'Choose the different Lot this already-assigned Unit should enter after approval.'
+                    : 'Select the current Lot for an assignment-only takeover, or another Lot when Tech Lead+ should move the existing Unit after approval.' %>
               </small>
             </label>
 
             <label class="form-field">
-              <span><%= isDuplicateIntakeRequest ? duplicateRequestReasonLabel : 'Reason for Override' %></span>
+              <span><%= isDuplicateIntakeRequest ? duplicateRequestReasonLabel : (isParkedTakeover ? 'Reason for Takeover' : 'Reason for Override') %></span>
               <textarea
                 name="reason"
                 rows="5"
                 maxlength="1000"
                 required
-                placeholder="<%= isDuplicateIntakeRequest ? (isMoveOnlyRequest ? 'Explain why your existing Unit should move to the selected Lot.' : 'Explain why the existing Unit should be moved, reassigned, or reworked.') : 'Explain why this Unit should be reassigned or moved after Tech Lead+ review.' %>"
+                placeholder="<%= isDuplicateIntakeRequest ? (isMoveOnlyRequest ? 'Explain why your existing Unit should move to the selected Lot.' : 'Explain why the existing Unit should be moved, reassigned, or reworked.') : (isParkedTakeover ? 'Explain why this Parked Unit should be returned to Active and assigned to you.' : 'Explain why this Unit should be reassigned or moved after Tech Lead+ review.') %>"
               ><%= formData.reason %></textarea>
               <small class="field-hint">
                 Minimum 10 characters. This request remains Pending until Tech Lead+ approves or denies it.
@@ -163,7 +175,7 @@
             </label>
 
             <div class="form-actions">
-              <button class="primary-button" type="submit"><%= isDuplicateIntakeRequest ? duplicateRequestButtonLabel : 'Send Override Request' %></button>
+              <button class="primary-button" type="submit"><%= isDuplicateIntakeRequest ? duplicateRequestButtonLabel : (isParkedTakeover ? 'Send Takeover Request' : 'Send Override Request') %></button>
               <button type="button" class="secondary-button" data-modal-close>Cancel</button>
             </div>
           </form>

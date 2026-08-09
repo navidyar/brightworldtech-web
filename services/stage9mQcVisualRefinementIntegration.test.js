@@ -79,7 +79,7 @@ test('Stage 9M cache-busts common and Unit Browser assets', () => {
   const techUnitsPage = read('views/pages/tech-units.ejs');
   const detailPage = read('views/pages/tech-unit-detail.ejs');
 
-  assert.match(head, /app\.css\?v=20260731-stage10c-hardware-matrix/);
+  assert.match(head, /app\.css\?v=20260804-stage10w-ranking-administration/);
   [techUnitsPage, detailPage].forEach((markup) => {
     assert.match(markup, /tech-units-clean\.css\?v=20260730-stage10a-unit-export/);
     assert.match(markup, /tech-units\.js\?v=20260731-stage10b-column-selection/);

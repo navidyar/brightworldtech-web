@@ -33,6 +33,12 @@
   --ui-shadow: 0 8px 24px rgba(29, 44, 69, 0.08);
   --ui-shadow-compact: 0 4px 14px rgba(29, 44, 69, 0.06);
 
+  --ui-scrollbar-track: #e8eef5;
+  --ui-scrollbar-thumb: #6f88a5;
+  --ui-scrollbar-thumb-hover: #526f8f;
+  --ui-scrollbar-size: 12px;
+  --ui-scrollbar-thumb-border: 2px;
+
   /* Compatibility aliases used by the existing application stylesheets. */
   --page-bg: var(--ui-page);
   --surface: var(--ui-surface);

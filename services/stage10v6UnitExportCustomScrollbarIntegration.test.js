@@ -53,10 +53,13 @@ test('custom scrollbar supports keyboard navigation', () => {
   assert.match(client, /event\.key === 'End'/);
 });
 
-test('the native bottom scrollbar remains available and uses the approved colors', () => {
+test('the native bottom scrollbar remains available and uses the shared approved colors', () => {
+  const theme = read('public/css/theme.css');
   const css = read('public/css/app.css');
 
   assert.match(css, /\.unit-export-preview-table-scroll\s*\{[\s\S]*?overflow-x:\s*auto;/);
-  assert.match(css, /\.unit-export-preview-table-scroll::-webkit-scrollbar-track[\s\S]*?background:\s*#e8eef5;/);
-  assert.match(css, /\.unit-export-preview-table-scroll::-webkit-scrollbar-thumb[\s\S]*?background:\s*#6f88a5;/);
+  assert.match(theme, /--ui-scrollbar-track:\s*#e8eef5;/);
+  assert.match(theme, /--ui-scrollbar-thumb:\s*#6f88a5;/);
+  assert.match(css, /\*::-webkit-scrollbar-track[\s\S]*?background:\s*var\(--ui-scrollbar-track\);/);
+  assert.match(css, /\*::-webkit-scrollbar-thumb[\s\S]*?background:\s*var\(--ui-scrollbar-thumb\);/);
 });

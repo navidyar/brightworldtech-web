@@ -41,6 +41,7 @@ test('a Tech cannot request a takeover of a Unit already assigned to them in the
   assert.equal(result.requiresOverride, false);
   assert.equal(result.actionKind, 'none');
   assert.equal(result.code, 'BWT_DUPLICATE_ASSUMPTION_ALREADY_ASSIGNED_IN_DESTINATION');
+  assert.match(result.message, /Intentional Duplicate request/);
 });
 
 test('a Unit already assigned to the Tech can move directly to a different assumption-enabled Lot', () => {

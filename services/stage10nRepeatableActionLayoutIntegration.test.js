@@ -31,11 +31,13 @@ test('Memory and Storage Remove controls align with the 39px form controls', () 
 });
 
 test('Stage 10N assets are cache-busted on modal and full-page entry points', () => {
-  for (const relativePath of [
-    'views/pages/tech-unit-detail.ejs',
-    'views/pages/tech-unit-form.ejs',
-    'views/pages/tech-units.ejs'
-  ]) {
-    assert.match(read(relativePath), /stage10q-hardware-none/);
-  }
+  const detailPage = read('views/pages/tech-unit-detail.ejs');
+  const formPage = read('views/pages/tech-unit-form.ejs');
+  const browserPage = read('views/pages/tech-units.ejs');
+
+  assert.match(detailPage, /tech-units-clean\.css\?v=/);
+  assert.match(formPage, /tech-units-clean\.css\?v=/);
+  assert.match(browserPage, /tech-units-clean\.css\?v=/);
+  assert.match(formPage, /tech-unit-form\.js\?v=[^"']+/);
+  assert.match(browserPage, /tech-unit-form\.js\?v=[^"']+/);
 });

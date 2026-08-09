@@ -123,7 +123,7 @@ test('Stage 9K cache-busts the common modal manager and QC Unit Browser assets',
     assert.match(markup, /tech-units\.js\?v=20260731-stage10b-column-selection/);
   });
 
-  assert.match(head, /app\.css\?v=20260731-stage10c-hardware-matrix/);
+  assert.match(head, /app\.css\?v=20260804-stage10w-ranking-administration/);
 });
 
 test('Stage 9K provides a dedicated validation command without adding a migration', () => {

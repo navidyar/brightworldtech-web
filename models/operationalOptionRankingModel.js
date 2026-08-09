@@ -2,6 +2,11 @@ const { pool } = require('./db');
 const {
   createRankingSnapshot
 } = require('../services/operationalOptionRanking');
+const {
+  ALLOWED_REFRESH_INTERVAL_MINUTES,
+  normalizeRefreshIntervalMinutes,
+  parseAllowedRefreshIntervalMinutes
+} = require('../services/operationalOptionRankingAdministration');
 
 const RANKING_TABLE = 'operational_option_usage_rankings';
 const REFRESH_STATE_TABLE = 'operational_option_usage_refresh_state';
@@ -9,6 +14,7 @@ const REFRESH_LOCK_NAME = 'bwtdallas_operational_option_usage_refresh';
 const DEFAULT_REFRESH_MINUTES = 120;
 const MIN_REFRESH_MINUTES = 15;
 const MAX_REFRESH_MINUTES = 1440;
+const SCHEDULER_POLL_MINUTES = 15;
 const SNAPSHOT_MEMORY_TTL_MS = 5 * 60 * 1000;
 
 let snapshotCache = null;
@@ -63,6 +69,119 @@ async function getTableColumns(connection, tableName) {
 
 function pickColumn(columns, candidates) {
   return candidates.find((candidate) => columns.has(candidate)) || null;
+}
+
+async function getConfiguredRefreshMinutes(existingConnection = null) {
+  const connection = existingConnection || await pool.getConnection();
+
+  try {
+    const columns = await getTableColumns(connection, REFRESH_STATE_TABLE);
+
+    if (!columns.has('refresh_interval_minutes')) {
+      return normalizeRefreshIntervalMinutes(process.env.CONFIG_USAGE_RANKING_REFRESH_MINUTES);
+    }
+
+    const [rows] = await connection.query(
+      `
+        SELECT refresh_interval_minutes
+        FROM ${escapeIdentifier(REFRESH_STATE_TABLE)}
+        WHERE refresh_key = 'operational_options'
+        LIMIT 1
+      `
+    );
+
+    return normalizeRefreshIntervalMinutes(
+      rows[0]?.refresh_interval_minutes,
+      process.env.CONFIG_USAGE_RANKING_REFRESH_MINUTES
+    );
+  } finally {
+    if (!existingConnection) {
+      connection.release();
+    }
+  }
+}
+
+async function setConfiguredRefreshMinutes(value) {
+  const refreshMinutes = parseAllowedRefreshIntervalMinutes(value);
+
+  if (!refreshMinutes) {
+    const error = new Error(`Refresh interval must be one of: ${ALLOWED_REFRESH_INTERVAL_MINUTES.join(', ')} minutes.`);
+    error.statusCode = 400;
+    error.code = 'OPERATIONAL_RANKING_INTERVAL_INVALID';
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    const columns = await getTableColumns(connection, REFRESH_STATE_TABLE);
+
+    if (!columns.has('refresh_interval_minutes')) {
+      const error = new Error('Stage 10W ranking administration storage is not ready.');
+      error.statusCode = 409;
+      error.code = 'OPERATIONAL_RANKING_ADMIN_NOT_READY';
+      throw error;
+    }
+
+    await connection.query(
+      `
+        UPDATE ${escapeIdentifier(REFRESH_STATE_TABLE)}
+        SET refresh_interval_minutes = ?,
+            updated_at = NOW(6)
+        WHERE refresh_key = 'operational_options'
+        LIMIT 1
+      `,
+      [refreshMinutes]
+    );
+
+    const [stateRows] = await connection.query(
+      `
+        SELECT refresh_key
+        FROM ${escapeIdentifier(REFRESH_STATE_TABLE)}
+        WHERE refresh_key = 'operational_options'
+        LIMIT 1
+      `
+    );
+
+    if (stateRows.length !== 1) {
+      const error = new Error('The operational ranking refresh state row could not be found.');
+      error.statusCode = 409;
+      error.code = 'OPERATIONAL_RANKING_STATE_MISSING';
+      throw error;
+    }
+
+    return refreshMinutes;
+  } finally {
+    connection.release();
+  }
+}
+
+async function listRankingScopeSummaries() {
+  const connection = await pool.getConnection();
+
+  try {
+    if (!await tableExists(connection, RANKING_TABLE)) {
+      return [];
+    }
+
+    const [rows] = await connection.query(
+      `
+        SELECT
+          option_scope,
+          context_scope,
+          COUNT(*) AS ranking_row_count,
+          COUNT(DISTINCT option_key) AS cached_value_count,
+          COUNT(DISTINCT context_key) AS context_count
+        FROM ${escapeIdentifier(RANKING_TABLE)}
+        GROUP BY option_scope, context_scope
+        ORDER BY option_scope, context_scope
+      `
+    );
+
+    return rows;
+  } finally {
+    connection.release();
+  }
 }
 
 function invalidateRankingSnapshot() {
@@ -501,9 +620,18 @@ async function setRefreshState(connection, values = {}) {
       ON DUPLICATE KEY UPDATE
         status = VALUES(status),
         started_at = VALUES(started_at),
-        completed_at = VALUES(completed_at),
-        duration_ms = VALUES(duration_ms),
-        ranking_row_count = VALUES(ranking_row_count),
+        completed_at = CASE
+          WHEN VALUES(status) = 'complete' THEN VALUES(completed_at)
+          ELSE completed_at
+        END,
+        duration_ms = CASE
+          WHEN VALUES(status) = 'complete' THEN VALUES(duration_ms)
+          ELSE duration_ms
+        END,
+        ranking_row_count = CASE
+          WHEN VALUES(status) = 'complete' THEN VALUES(ranking_row_count)
+          ELSE ranking_row_count
+        END,
         last_error = VALUES(last_error),
         updated_at = NOW(6)
     `,
@@ -651,14 +779,20 @@ async function getRefreshState() {
   const connection = await pool.getConnection();
 
   try {
-    if (!await tableExists(connection, REFRESH_STATE_TABLE)) {
+    const columns = await getTableColumns(connection, REFRESH_STATE_TABLE);
+
+    if (columns.size === 0) {
       return null;
     }
 
+    const refreshIntervalExpression = columns.has('refresh_interval_minutes')
+      ? 'refresh_interval_minutes'
+      : `${normalizeRefreshIntervalMinutes(process.env.CONFIG_USAGE_RANKING_REFRESH_MINUTES)} AS refresh_interval_minutes`;
     const [rows] = await connection.query(
       `
         SELECT
           refresh_key,
+          ${refreshIntervalExpression},
           status,
           started_at,
           completed_at,
@@ -679,7 +813,10 @@ async function getRefreshState() {
 }
 
 async function refreshOperationalOptionUsageRankingsIfStale(options = {}) {
-  const refreshMinutes = normalizeRefreshMinutes(options.refreshMinutes);
+  const requestedRefreshMinutes = options.refreshMinutes === undefined
+    ? await getConfiguredRefreshMinutes()
+    : normalizeRefreshIntervalMinutes(options.refreshMinutes);
+  const refreshMinutes = normalizeRefreshIntervalMinutes(requestedRefreshMinutes);
   const state = await getRefreshState();
   const completedAt = state?.completed_at ? new Date(state.completed_at) : null;
   const staleBefore = Date.now() - (refreshMinutes * 60 * 1000);
@@ -698,12 +835,11 @@ async function refreshOperationalOptionUsageRankingsIfStale(options = {}) {
 }
 
 function scheduleOperationalOptionUsageRankingRefresh() {
-  const refreshMinutes = normalizeRefreshMinutes();
-  const refreshIntervalMs = refreshMinutes * 60 * 1000;
+  const pollIntervalMs = SCHEDULER_POLL_MINUTES * 60 * 1000;
 
   const runRefresh = async () => {
     try {
-      const result = await refreshOperationalOptionUsageRankingsIfStale({ refreshMinutes });
+      const result = await refreshOperationalOptionUsageRankingsIfStale();
 
       if (!result.supported) {
         console.warn('Operational option ranking refresh skipped because Stage 10M storage is not ready.');
@@ -725,11 +861,11 @@ function scheduleOperationalOptionUsageRankingRefresh() {
 
   const intervalTimer = setInterval(() => {
     void runRefresh();
-  }, refreshIntervalMs);
+  }, pollIntervalMs);
   intervalTimer.unref();
 
   return {
-    refreshMinutes,
+    pollMinutes: SCHEDULER_POLL_MINUTES,
     startupTimer,
     intervalTimer
   };
@@ -737,11 +873,15 @@ function scheduleOperationalOptionUsageRankingRefresh() {
 
 module.exports = {
   DEFAULT_REFRESH_MINUTES,
+  SCHEDULER_POLL_MINUTES,
+  getConfiguredRefreshMinutes,
   getRefreshState,
   invalidateRankingSnapshot,
+  listRankingScopeSummaries,
   loadRankingSnapshot,
   normalizeRefreshMinutes,
   refreshOperationalOptionUsageRankings,
   refreshOperationalOptionUsageRankingsIfStale,
-  scheduleOperationalOptionUsageRankingRefresh
+  scheduleOperationalOptionUsageRankingRefresh,
+  setConfiguredRefreshMinutes
 };

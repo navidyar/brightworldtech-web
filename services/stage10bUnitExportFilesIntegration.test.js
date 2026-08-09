@@ -28,17 +28,17 @@ test('both file formats reuse the exact filtered all-row dataset and set downloa
   assert.match(controller, /Cache-Control'[\s\S]*?no-store/);
 });
 
-test('Export Preview exposes CSV and XLSX actions while retaining the complete preview table', () => {
-  const controller = read('controllers/techController.js');
+test('Lot Export Preview exposes CSV and XLSX actions while retaining the complete preview table', () => {
+  const controller = read('controllers/lotController.js');
   const modal = read('views/fragments/tech-unit-export-preview-modal.ejs');
-  const page = read('views/pages/tech-units.ejs');
+  const page = read('views/pages/management-lot-detail.ejs');
 
-  assert.match(controller, /csvDownloadUrl: buildTechUnitsExportDownloadUrl\('csv', dataset\.filters\)/);
-  assert.match(controller, /xlsxDownloadUrl: buildTechUnitsExportDownloadUrl\('xlsx', dataset\.filters\)/);
+  assert.match(controller, /csvDownloadUrl: buildLotExportDownloadUrl\(lotId, 'csv'\)/);
+  assert.match(controller, /xlsxDownloadUrl: buildLotExportDownloadUrl\(lotId, 'xlsx'\)/);
   assert.match(modal, /Download CSV/);
   assert.match(modal, /Download XLSX/);
   assert.match(modal, /safePreviewRows\.forEach/);
-  assert.match(page, /Export Preview/);
+  assert.match(page, /Export Units/);
 });
 
 test('XLSX is generated without adding a heavyweight spreadsheet dependency', () => {

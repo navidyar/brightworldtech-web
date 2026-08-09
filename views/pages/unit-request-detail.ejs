@@ -117,6 +117,7 @@
                   <h3><%= request.catalogContext.requestedProcessorName %></h3>
                   <dl class="unit-request-detail-list">
                     <div><dt>Processor Type</dt><dd><%= request.catalogContext.requestedProcessorType %></dd></div>
+                    <div><dt>Processor Speed</dt><dd><%= request.catalogContext.requestedProcessorSpeedGhz ? `${request.catalogContext.requestedProcessorSpeedGhz} GHz` : 'Not provided' %></dd></div>
                     <div><dt>Manufacturer</dt><dd><%= request.catalogContext.manufacturerName %></dd></div>
                     <div><dt>Unit Model</dt><dd><%= request.catalogContext.unitModelName %></dd></div>
                     <div><dt>Unit Category</dt><dd><%= request.catalogContext.unitCategoryLabel %></dd></div>
@@ -127,6 +128,7 @@
                   <h3><%= request.catalogContext.approvedProcessorModelLabel || 'Pending Review' %></h3>
                   <dl class="unit-request-detail-list">
                     <div><dt>Processor Type</dt><dd><%= request.catalogContext.approvedProcessorBrandName || 'Not selected yet' %></dd></div>
+                    <div><dt>Processor Speed</dt><dd><%= request.catalogContext.approvedProcessorBaseSpeedGhz ? `${request.catalogContext.approvedProcessorBaseSpeedGhz} GHz` : 'Not confirmed yet' %></dd></div>
                     <div><dt>Compatibility</dt><dd><%= request.status === 'approved' ? `Mapped to ${request.catalogContext.unitModelName}` : 'No catalog change yet' %></dd></div>
                   </dl>
                 </section>
@@ -199,11 +201,12 @@
                       <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
                       <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
                       <div class="form-grid">
-                        <label class="form-field"><span>Canonical Processor Type</span><select name="approvedProcessorBrandId" required><option value="">Select Processor Type</option><% processorBrands.forEach((processorBrand) => { %><option value="<%= processorBrand.id %>"><%= processorBrand.label %></option><% }) %></select></label>
+                        <label class="form-field"><span>Existing Processor Type <small>(optional)</small></span><select name="approvedProcessorBrandId"><option value="">Create or reuse the typed Processor Type below</option><% processorBrands.forEach((processorBrand) => { %><option value="<%= processorBrand.id %>"><%= processorBrand.label %></option><% }) %></select></label>
+                        <label class="form-field"><span>Canonical Processor Type Name</span><input type="text" name="approvedProcessorBrandName" value="<%= request.catalogContext.requestedProcessorType %>" minlength="2" maxlength="100" required /><small class="field-hint">Choose an existing type above, or leave that selection blank to create/reactivate this canonical name.</small></label>
                         <label class="form-field"><span>Canonical Processor</span><input type="text" name="approvedProcessorModelCode" value="<%= request.catalogContext.requestedProcessorName %>" minlength="2" maxlength="100" required /></label>
                         <label class="form-field"><span>Processor Family <small>(optional)</small></span><input type="text" name="approvedProcessorFamily" maxlength="100" placeholder="Example: Core i5" /></label>
                         <label class="form-field"><span>Generation <small>(optional)</small></span><input type="text" name="approvedProcessorGeneration" maxlength="50" placeholder="Example: 10th Gen" /></label>
-                        <label class="form-field"><span>Base Speed GHz <small>(optional)</small></span><input type="number" name="approvedProcessorBaseSpeedGhz" min="0" max="99.99" step="0.01" placeholder="Example: 1.60" /></label>
+                        <label class="form-field"><span>Base Speed GHz</span><input type="number" name="approvedProcessorBaseSpeedGhz" value="<%= request.catalogContext.requestedProcessorSpeedGhz || '' %>" min="0.01" max="99.99" step="0.01" required placeholder="Example: 1.60" /></label>
                       </div>
                       <label class="form-field"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional compatibility or normalization note"></textarea></label>
                       <button class="primary-button" type="submit">Approve Processor Request</button>

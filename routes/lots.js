@@ -113,6 +113,13 @@ router.get(
   lotController.renderLotRequirementsModal
 );
 
+router.post(
+  '/management/lots/:lotId/requirements/:requirementId/customize',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.customizeInheritedLotRequirementField
+);
+
 router.get(
   '/management/lots/:lotId/requirements/new/modal',
   requireAuth,
@@ -188,6 +195,27 @@ router.post(
   requireAuth,
   requireRole(lotManagementRoles),
   lotController.revokeLotUnitValidationOverride
+);
+
+router.get(
+  '/management/lots/:lotId/export/preview',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotUnitExportPreview
+);
+
+router.get(
+  '/management/lots/:lotId/export/csv',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.downloadLotUnitsCsv
+);
+
+router.get(
+  '/management/lots/:lotId/export/xlsx',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.downloadLotUnitsXlsx
 );
 
 router.get(

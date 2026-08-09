@@ -45,11 +45,13 @@ test('the heading and status message retain a compact two-line treatment', () =>
 });
 
 test('Stage 10O assets are cache-busted on modal and full-page entry points', () => {
-  for (const relativePath of [
-    'views/pages/tech-unit-detail.ejs',
-    'views/pages/tech-unit-form.ejs',
-    'views/pages/tech-units.ejs'
-  ]) {
-    assert.match(read(relativePath), /stage10q-hardware-none/);
-  }
+  const detailPage = read('views/pages/tech-unit-detail.ejs');
+  const formPage = read('views/pages/tech-unit-form.ejs');
+  const browserPage = read('views/pages/tech-units.ejs');
+
+  assert.match(detailPage, /tech-units-clean\.css\?v=/);
+  assert.match(formPage, /tech-units-clean\.css\?v=/);
+  assert.match(browserPage, /tech-units-clean\.css\?v=/);
+  assert.match(formPage, /tech-unit-form\.js\?v=20260804-stage10w2-refinements/);
+  assert.match(browserPage, /tech-unit-form\.js\?v=20260804-stage10w2-refinements/);
 });

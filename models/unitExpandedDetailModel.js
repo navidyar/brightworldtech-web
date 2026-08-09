@@ -1,6 +1,7 @@
 const { pool } = require('./db');
 const unitOutcomeModel = require('./unitOutcomeModel');
 const { buildHardwareComponentComparisons } = require('../services/hardwareComponentComparison');
+const { getCanonicalCosmeticGrade, isNotYetGradedToken } = require('../services/cosmeticGradeNormalization');
 const EXPANDED_TABLES = [
   'unit_identifiers',
   'unit_specifications',
@@ -121,9 +122,13 @@ function labelOrDash(value) {
 
 function getOverallGradeLabel(value) {
   const rawValue = String(value || '').trim();
-  const normalizedValue = rawValue.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const canonicalGrade = getCanonicalCosmeticGrade(rawValue);
 
-  if (['n_a', 'na', 'not_applicable', 'not_yet_graded'].includes(normalizedValue)) {
+  if (canonicalGrade) {
+    return canonicalGrade;
+  }
+
+  if (isNotYetGradedToken(rawValue)) {
     return 'Not Yet Graded';
   }
 

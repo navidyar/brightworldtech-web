@@ -16,6 +16,20 @@ router.get(
   configController.renderConfigPage
 );
 
+router.post(
+  '/management/config/operational-rankings/refresh',
+  requireAuth,
+  requireRole(configRoles),
+  configController.refreshOperationalOptionRankings
+);
+
+router.post(
+  '/management/config/operational-rankings/interval',
+  requireAuth,
+  requireRole(configRoles),
+  configController.updateOperationalOptionRankingInterval
+);
+
 
 router.get(
   '/management/config/processor-families',

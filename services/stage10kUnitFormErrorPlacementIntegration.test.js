@@ -57,7 +57,9 @@ test('only invalid controls receive the red field treatment and Stage 10K assets
   assert.match(css, /\[aria-invalid="true"\]\s*\{/);
   assert.doesNotMatch(css, /\.has-unit-form-validation-error :is\(/);
   assert.match(css, /\.tech-unit-form-validation-summary/);
-  assert.match(detailPage, /stage10q-hardware-none/);
-  assert.match(formPage, /stage10q-hardware-none/);
-  assert.match(browserPage, /stage10q-hardware-none/);
+  assert.match(detailPage, /tech-units-clean\.css\?v=/);
+  assert.match(formPage, /tech-units-clean\.css\?v=/);
+  assert.match(browserPage, /tech-units-clean\.css\?v=/);
+  assert.match(formPage, /tech-unit-form\.js\?v=20260804-stage10w2-refinements/);
+  assert.match(browserPage, /tech-unit-form\.js\?v=20260804-stage10w2-refinements/);
 });

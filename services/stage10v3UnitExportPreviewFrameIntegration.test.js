@@ -27,7 +27,7 @@ test('Export Preview scrollbar is a flush row below the headers rather than a de
   const css = read('public/css/app.css');
 
   assert.match(css, /\.unit-export-preview-table-frame\s*\{[\s\S]*?overflow:\s*hidden;[\s\S]*?border:\s*1px solid var\(--ui-line\);[\s\S]*?border-radius:\s*8px;/);
-  assert.match(css, /\.unit-export-preview-scroll-row > td\s*\{[\s\S]*?padding:\s*0 !important;[\s\S]*?border-bottom:\s*1px solid #d7e0ea;[\s\S]*?background:\s*#e8eef5;/);
+  assert.match(css, /\.unit-export-preview-scroll-row > td\s*\{[\s\S]*?padding:\s*0 !important;[\s\S]*?border-bottom:\s*1px solid #d7e0ea;[\s\S]*?background:\s*var\(--ui-scrollbar-track\);/);
   assert.match(css, /\.unit-export-preview-top-scroll\s*\{[\s\S]*?position:\s*sticky;[\s\S]*?left:\s*0;[\s\S]*?margin:\s*0;[\s\S]*?border:\s*0;/);
   assert.match(css, /\.unit-export-preview-table-frame \.unit-export-preview-table\s*\{[\s\S]*?border:\s*0;[\s\S]*?box-shadow:\s*none;/);
 });
@@ -42,7 +42,7 @@ test('Export Preview no longer renders aggregate Previous and Current capacity t
 });
 
 test('Stage 10V.6 cache-busts the integrated Export Preview frame styles', () => {
-  assert.match(read('views/partials/head.ejs'), /app\.css\?v=20260804-stage10v6-custom-header-scrollbar/);
+  assert.match(read('views/partials/head.ejs'), /app\.css\?v=20260804-stage10w-ranking-administration/);
 
   for (const relativePath of [
     'views/pages/tech-units.ejs',

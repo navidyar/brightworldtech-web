@@ -14,7 +14,7 @@ const {
 } = require('../config/unitFormFieldRegistry');
 
 test('authoritative registry contains every Stage 1A audited control', () => {
-  assert.equal(UNIT_FORM_FIELD_REGISTRY.length, 57);
+  assert.equal(UNIT_FORM_FIELD_REGISTRY.length, 53);
   assert.equal(assertValidUnitFormFieldRegistry(), true);
 });
 
@@ -36,7 +36,7 @@ test('protected routing and system fields cannot be changed by lot rules', () =>
   }
 });
 
-test('previous memory and storage are visibility-only Lot fields', () => {
+test('previous memory and storage can be hidden, optional, or required by Lot configuration', () => {
   for (const [fieldKey, sourceKey] of [
     ['previous_memory_size', 'memory_modules'],
     ['previous_storage_size', 'storage_devices']
@@ -45,7 +45,7 @@ test('previous memory and storage are visibility-only Lot fields', () => {
 
     assert.ok(field);
     assert.equal(field.visibilityConfigurable, true);
-    assert.equal(field.requirementConfigurable, false);
+    assert.equal(field.requirementConfigurable, true);
     assert.equal(field.enabledForLotRules, true);
     assert.equal(field.inheritVisibilityFromFieldKey, sourceKey);
   }
@@ -72,7 +72,7 @@ test('linked visibility defaults reference one direct registered source', () => 
   );
 });
 
-test('repeatable sections are configurable while their child controls are not independently configurable', () => {
+test('compound repeatable rows stay section-controlled so their conditional child semantics remain intact', () => {
   for (const sectionKey of ['memory_modules', 'storage_devices', 'cosmetic_issues', 'hardware_issues']) {
     const section = getUnitFormFieldDefinition(sectionKey);
 
@@ -132,4 +132,45 @@ test('validator rejects duplicate keys and unknown dependency targets', () => {
     ]),
     /unknown forceVisible field/
   );
+});
+
+test('Configure Unit Form exposes every independently configurable live Add/Edit field', () => {
+  const configurableKeys = listLotConfigurableUnitFormFields().map((field) => field.key);
+
+  assert.deepEqual(configurableKeys, [
+    'unit_serial_number',
+    'bios_serial_number',
+    'manufacturer',
+    'unit_model',
+    'processor_model',
+    'processor_speed_ghz',
+    'memory_modules',
+    'previous_memory_size',
+    'storage_devices',
+    'previous_storage_size',
+    'operating_system',
+    'os_build',
+    'bios_version',
+    'battery_health',
+    'absolute_status',
+    'physical_camera_status',
+    'touchscreen_status',
+    'keyboard_language',
+    'complete_diagnostics',
+    'virus_check',
+    'driver_check',
+    'skinned_status',
+    'cosmetic_issues',
+    'hardware_issues',
+    'overall_grade',
+    'unit_outcome',
+    'overall_grade_notes',
+    'outcome_notes',
+    'general_comment'
+  ]);
+
+  for (const field of listLotConfigurableUnitFormFields()) {
+    assert.equal(field.visibilityConfigurable, true, `${field.key} should support visibility.`);
+    assert.equal(field.requirementConfigurable, true, `${field.key} should support required/optional.`);
+  }
 });

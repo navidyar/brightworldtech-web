@@ -129,5 +129,5 @@ test('Stage 10V assets are cache-busted on Unit Browser and single-Unit entry po
     assert.match(read(relativePath), /stage10v6-custom-header-scrollbar/);
   }
 
-  assert.match(read('views/partials/head.ejs'), /stage10v6-custom-header-scrollbar/);
+  assert.match(read('views/partials/head.ejs'), /app\.css\?v=20260804-stage10w-ranking-administration/);
 });

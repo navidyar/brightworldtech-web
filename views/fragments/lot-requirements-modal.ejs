@@ -2,6 +2,7 @@
   const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
   const safeRequirements = Array.isArray(requirements) ? requirements : [];
   const safeLot = lot || null;
+  const safeSuccessMessage = typeof successMessage === 'string' ? successMessage : '';
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
@@ -21,6 +22,16 @@
             <p><%= errorMessage %></p>
           <% }) %>
         </div>
+      <% } %>
+
+      <% if (safeSuccessMessage) { %>
+        <div class="message success"><p><%= safeSuccessMessage %></p></div>
+      <% } %>
+
+      <% if (safeLot && Number(safeLot.parent_lot_id) > 0) { %>
+        <p class="lot-requirements-inheritance-note">
+          Requirements inherit from the direct parent only. Add a direct rule for a field, or customize an inherited field, to replace the parent's rules for that field. Delete every direct rule for that field to inherit it again.
+        </p>
       <% } %>
 
       <% if (safeLot) { %>
@@ -53,13 +64,20 @@
           <tbody>
             <% if (safeRequirements.length === 0) { %>
               <tr>
-                <td colspan="6">No requirements have been added to this lot yet.</td>
+                <td colspan="6">No direct or inherited requirements apply to this lot yet.</td>
               </tr>
             <% } %>
 
             <% safeRequirements.forEach((requirement) => { %>
               <tr>
-                <td><%= requirement.requirement_label || requirement.requirement_key || '—' %></td>
+                <td>
+                  <strong><%= requirement.requirement_label || requirement.requirement_key || '—' %></strong>
+                  <% if (Number(requirement.is_inherited) === 1) { %>
+                    <small>Inherited from <%= requirement.source_lot_name || `Lot ${requirement.source_lot_id}` %></small>
+                  <% } else { %>
+                    <small>This Lot</small>
+                  <% } %>
+                </td>
                 <td><%= requirement.operator_label || requirement.operator_code || 'Equals' %></td>
                 <td><%= requirement.required_value || '—' %></td>
                 <td>
@@ -71,10 +89,23 @@
                 </td>
                 <td><%= requirement.notes || '—' %></td>
                 <td>
-                  <% if (safeLot) { %>
+                  <% if (safeLot && Number(requirement.is_inherited) !== 1) { %>
                     <div class="lot-requirement-row-actions">
                       <a class="secondary-button" href="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-get="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
                       <a class="secondary-button danger-button" href="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/delete/modal" hx-get="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete</a>
+                    </div>
+                  <% } else if (safeLot && Number(requirement.is_inherited) === 1) { %>
+                    <div class="lot-requirement-row-actions">
+                      <form
+                        method="post"
+                        action="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/customize"
+                        hx-post="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/customize"
+                        hx-target="#modal-root"
+                        hx-swap="innerHTML"
+                      >
+                        <button type="submit" class="secondary-button">Customize</button>
+                      </form>
+                      <a class="secondary-button" href="/management/lots/<%= requirement.source_lot_id %>">View Parent</a>
                     </div>
                   <% } else { %>
                     —

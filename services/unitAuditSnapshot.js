@@ -73,7 +73,7 @@ function optionLabel(options, id) {
   });
 
   if (!match) return token;
-  return normalizeText(match.shortLabel || match.label || match.name || match.code || match.value || token);
+  return normalizeText(match.shortLabel || match.label || match.name || match.lot_name || match.code || match.value || token);
 }
 
 function optionLabelByCollection(formOptions, collectionName, id) {

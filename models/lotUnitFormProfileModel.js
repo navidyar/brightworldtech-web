@@ -299,7 +299,7 @@ async function getRequirementAwareUnitFormProfileForLot(lotId) {
   const [lineage, lot, requirements] = await Promise.all([
     getLotLineage(normalizedLotId),
     lotModel.getLotById(normalizedLotId),
-    lotModel.listLotRequirements(normalizedLotId)
+    lotModel.listEffectiveLotRequirements(normalizedLotId)
   ]);
 
   if (!lot) {

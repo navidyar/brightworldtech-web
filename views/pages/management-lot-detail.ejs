@@ -3,14 +3,15 @@
   <%- include('../partials/head', {
     pageTitle,
     stylesheets: [
-      '/css/lots.css',
+      '/css/lots.css?v=20260807-stage10w20-lot-hierarchy-integrity',
       '/css/modal.css'
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   <script defer src="/js/lot-form.js"></script>
-  <script defer src="/js/lot-requirements.js?v=20260731-stage10a-battery-decimal"></script>
+  <script defer src="/js/lot-requirements.js?v=20260807-stage10w17-expanded-requirements"></script>
   <script defer src="/js/lot-unit-form-rules.js"></script>
+  <script defer src="/js/unit-export.js?v=20260807-stage10w19-lot-scoped-export"></script>
 
   <body class="lots-lookup-typography-preview lots-lookup-ui-preview">
     <div class="app-shell">
@@ -42,6 +43,7 @@
             <div class="lot-detail-action-bar site-clean-actions">
               <a class="secondary-button" href="/management/lots<%= Number(lot.is_active) === 1 ? '' : '?showHidden=1' %>">Back to Lots</a>
               <a class="secondary-button" href="/tech/units?lotId=<%= lot.lot_id %>&amp;perPage=all">Open All Units</a>
+              <button type="button" class="secondary-button" hx-get="/management/lots/<%= lot.lot_id %>/export/preview" hx-target="#modal-root" hx-swap="innerHTML">Export Units</button>
               <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-target="#modal-root" hx-swap="innerHTML">Requirements</a>
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-get="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Unit Form</a>
@@ -190,6 +192,11 @@
                 <div>
                   <dt>Sibling Lots</dt>
                   <dd><%= formatNumber(lotRelationships.siblingLots.length) %></dd>
+                </div>
+
+                <div>
+                  <dt>Moved-In Production</dt>
+                  <dd><%= Number(lot.start_new_production_cycle_on_move || 0) === 1 ? 'Start new cycle' : 'Continue existing cycle' %></dd>
                 </div>
               </dl>
             </aside>

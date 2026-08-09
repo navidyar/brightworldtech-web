@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { pool } = require('./db');
 const productionWeightModel = require('./productionWeightModel');
+const productionWeightSyncModel = require('./productionWeightSyncModel');
 const { getNewLotInitialActiveValue } = require('../services/lotCreationPolicy');
 const {
   buildRequirementPolicyOptions
@@ -14,6 +15,14 @@ const {
   buildRequirementValuePayload,
   getRequirementValueToken
 } = require('../services/lotRequirementPersistence');
+const { buildEffectiveLotRequirements } = require('../services/lotRequirementInheritance');
+const { normalizeCosmeticGradeOptions } = require('../services/cosmeticGradeNormalization');
+const { buildLotExportScope } = require('../services/lotExportScope');
+const {
+  collectDescendantLotIds,
+  assertValidLotParentAssignment,
+  auditLotHierarchy
+} = require('../services/lotHierarchyIntegrity');
 
 const INSPECTABLE_TABLES = [
   'lots',
@@ -238,6 +247,39 @@ async function getDefaultLotStatusConfigValueId() {
   );
 }
 
+async function listLotHierarchyRows(queryable = pool, options = {}) {
+  const lotColumns = await getColumnSet('lots');
+
+  if (!hasColumn(lotColumns, 'lot_id') || !hasColumn(lotColumns, 'parent_lot_id')) {
+    return [];
+  }
+
+  const lotNameSelect = selectExpression(
+    'l',
+    lotColumns,
+    ['lot_name', 'name', 'title'],
+    'lot_name',
+    'Unnamed Lot'
+  );
+  const lockClause = options.forUpdate === true ? ' FOR UPDATE' : '';
+  const [rows] = await queryable.query(
+    `SELECT l.lot_id, l.parent_lot_id, ${lotNameSelect}
+     FROM lots l
+     ORDER BY l.lot_id${lockClause}`
+  );
+
+  return rows;
+}
+
+async function listDescendantLotIds(lotId) {
+  const hierarchyRows = await listLotHierarchyRows();
+  return collectDescendantLotIds(hierarchyRows, lotId);
+}
+
+async function getLotHierarchyAudit() {
+  return auditLotHierarchy(await listLotHierarchyRows());
+}
+
 async function listParentLotOptions(options = {}) {
   const lotColumns = await getColumnSet('lots');
   const includeLotIds = Array.isArray(options.includeLotIds)
@@ -245,7 +287,11 @@ async function listParentLotOptions(options = {}) {
         .map((lotId) => Number(lotId))
         .filter((lotId) => Number.isInteger(lotId) && lotId > 0)
     : [];
-
+  const excludeLotIds = Array.isArray(options.excludeLotIds)
+    ? Array.from(new Set(options.excludeLotIds
+        .map((lotId) => Number(lotId))
+        .filter((lotId) => Number.isInteger(lotId) && lotId > 0)))
+    : [];
 
   const lotNameSelect = selectExpression(
     'l',
@@ -294,10 +340,14 @@ async function listParentLotOptions(options = {}) {
   const operationalWhere = operationalWhereParts.length > 0
     ? operationalWhereParts.join(' AND ')
     : '1 = 1';
-  const isActiveWhere = includeLotIds.length > 0
-    ? `WHERE (${operationalWhere}) OR l.lot_id IN (${includeLotIds.map(() => '?').join(', ')})`
-    : `WHERE ${operationalWhere}`;
-  const queryParams = includeLotIds.length > 0 ? includeLotIds : [];
+  const operationalSelection = includeLotIds.length > 0
+    ? `((${operationalWhere}) OR l.lot_id IN (${includeLotIds.map(() => '?').join(', ')}))`
+    : `(${operationalWhere})`;
+  const exclusionWhere = excludeLotIds.length > 0
+    ? ` AND l.lot_id NOT IN (${excludeLotIds.map(() => '?').join(', ')})`
+    : '';
+  const isActiveWhere = `WHERE ${operationalSelection}${exclusionWhere}`;
+  const queryParams = [...includeLotIds, ...excludeLotIds];
 
   const orderExpression = pickColumn(lotColumns, ['lot_name', 'name', 'title'])
     ? 'lot_name, l.lot_id'
@@ -337,13 +387,18 @@ async function getLotSchemaCapabilities() {
     hasNotes: Boolean(pickColumn(lotColumns, ['notes', 'note'])),
     hasLabelFormat: hasColumn(lotColumns, 'label_format'),
     hasClosedState: hasColumn(lotColumns, 'is_closed'),
-    hasDuplicateUnitAssumption: hasColumn(lotColumns, 'allow_duplicate_unit_assumption')
+    hasDuplicateUnitAssumption: hasColumn(lotColumns, 'allow_duplicate_unit_assumption'),
+    hasStartNewProductionCycleOnMove: hasColumn(lotColumns, 'start_new_production_cycle_on_move')
   };
 }
 
 async function getLotFormOptions(options = {}) {
   const includeParentLotIds = Array.isArray(options.includeParentLotIds)
     ? options.includeParentLotIds
+    : [];
+  const currentLotId = Number(options.currentLotId);
+  const excludedParentLotIds = Number.isInteger(currentLotId) && currentLotId > 0
+    ? [currentLotId, ...await listDescendantLotIds(currentLotId)]
     : [];
 
   const [
@@ -362,9 +417,9 @@ async function getLotFormOptions(options = {}) {
       'lot_requirement_policies',
       'lot_requirement_policy'
     ]),
-    listConfigValuesForFirstExistingCategory(['unit_grades', 'unit_grade', 'grades']),
+    listConfigValuesForFirstExistingCategory(['cosmetic_grades', 'overall_unit_grades', 'unit_grades', 'unit_grade', 'grades']),
     productionWeightModel.listProductionWeightOptions(),
-    listParentLotOptions({ includeLotIds: includeParentLotIds })
+    listParentLotOptions({ includeLotIds: includeParentLotIds, excludeLotIds: excludedParentLotIds })
   ]);
 
   return {
@@ -373,10 +428,13 @@ async function getLotFormOptions(options = {}) {
     lotTypeCategory: lotTypeResult.category,
     requirementPolicies: buildRequirementPolicyOptions(requirementPolicyResult.values),
     requirementPolicyCategory: requirementPolicyResult.category,
-    grades: gradeResult.values,
+    grades: normalizeCosmeticGradeOptions(
+      gradeResult.values.map((grade) => ({ ...grade, categoryCode: gradeResult.category?.code || '' }))
+    ),
     gradeCategory: gradeResult.category,
     productionWeightOptions,
-    parentLots
+    parentLots,
+    excludedParentLotIds
   };
 }
 
@@ -494,6 +552,14 @@ async function listLots(options = {}) {
     '0'
   );
 
+  const startNewProductionCycleOnMoveSelect = selectExpression(
+    'l',
+    lotColumns,
+    ['start_new_production_cycle_on_move'],
+    'start_new_production_cycle_on_move',
+    '0'
+  );
+
   const createdAtSelect = selectExpression(
     'l',
     lotColumns,
@@ -608,11 +674,11 @@ async function listLots(options = {}) {
     : 'NULL AS default_production_weight';
 
   const resolvedDefaultProductionWeightSelect = hasDefaultProductionWeight && hasDefaultProductionWeightConfigValueId
-    ? 'COALESCE(l.default_production_weight, CAST(default_production_weight_value.value AS DECIMAL(8,2))) AS resolved_default_production_weight'
+    ? 'COALESCE(l.default_production_weight, CAST(default_production_weight_value.value AS DECIMAL(20,2))) AS resolved_default_production_weight'
     : hasDefaultProductionWeight
       ? 'l.default_production_weight AS resolved_default_production_weight'
       : hasDefaultProductionWeightConfigValueId
-        ? 'CAST(default_production_weight_value.value AS DECIMAL(8,2)) AS resolved_default_production_weight'
+        ? 'CAST(default_production_weight_value.value AS DECIMAL(20,2)) AS resolved_default_production_weight'
         : 'NULL AS resolved_default_production_weight';
 
   const lotTypeConfigValueIdSelect = hasLotType
@@ -667,6 +733,7 @@ async function listLots(options = {}) {
       ${isActiveSelect},
       ${isClosedSelect},
       ${allowDuplicateUnitAssumptionSelect},
+      ${startNewProductionCycleOnMoveSelect},
       ${createdAtSelect},
       ${updatedAtSelect},
       ${unitCountSelect},
@@ -692,6 +759,41 @@ async function listLots(options = {}) {
       ...progress
     };
   });
+}
+
+
+async function getLotExportScope(lotId) {
+  const normalizedLotId = Number(lotId);
+
+  if (!Number.isSafeInteger(normalizedLotId) || normalizedLotId <= 0) {
+    return null;
+  }
+
+  const lotColumns = await getColumnSet('lots');
+
+  if (!hasColumn(lotColumns, 'lot_id') || !hasColumn(lotColumns, 'parent_lot_id')) {
+    return null;
+  }
+
+  const lotNameSelect = selectExpression(
+    'l',
+    lotColumns,
+    ['lot_name', 'name', 'title'],
+    'lot_name',
+    "CONCAT('Lot ', l.lot_id)"
+  );
+  const isActiveSelect = selectExpression('l', lotColumns, ['is_active'], 'is_active', '1');
+  const [rows] = await pool.query(`
+    SELECT
+      l.lot_id,
+      l.parent_lot_id,
+      ${lotNameSelect},
+      ${isActiveSelect}
+    FROM lots l
+    ORDER BY l.lot_id
+  `);
+
+  return buildLotExportScope(normalizedLotId, rows);
 }
 
 async function getLotById(lotId) {
@@ -769,6 +871,7 @@ async function createLot(formData, currentUserId) {
   const notes = String(formData.notes || '').trim() || null;
   const labelFormat = String(formData.labelFormat || '').trim() || null;
   const allowDuplicateUnitAssumption = formData.allowDuplicateUnitAssumption === '1' ? 1 : 0;
+  const startNewProductionCycleOnMove = formData.startNewProductionCycleOnMove === '1' ? 1 : 0;
 
   if (hasColumn(lotColumns, 'lot_number')) {
     const nextLotNumber = await generateNextLotNumber();
@@ -809,6 +912,7 @@ async function createLot(formData, currentUserId) {
   addFirstAvailableColumn(['notes', 'note'], notes);
   addColumn('label_format', labelFormat);
   addColumn('allow_duplicate_unit_assumption', allowDuplicateUnitAssumption);
+  addColumn('start_new_production_cycle_on_move', startNewProductionCycleOnMove);
 
   if (!hasColumn(lotColumns, 'is_active')) {
     throw new Error(
@@ -881,6 +985,7 @@ async function updateLot(lotId, formData, currentUserId) {
   const notes = String(formData.notes || '').trim() || null;
   const labelFormat = String(formData.labelFormat || '').trim() || null;
   const allowDuplicateUnitAssumption = formData.allowDuplicateUnitAssumption === '1' ? 1 : 0;
+  const startNewProductionCycleOnMove = formData.startNewProductionCycleOnMove === '1' ? 1 : 0;
 
   addFirstAvailableColumn(['lot_name', 'name', 'title'], lotName);
   addColumn('parent_lot_id', parentLotId);
@@ -894,6 +999,7 @@ async function updateLot(lotId, formData, currentUserId) {
   addFirstAvailableColumn(['notes', 'note'], notes);
   addColumn('label_format', labelFormat);
   addColumn('allow_duplicate_unit_assumption', allowDuplicateUnitAssumption);
+  addColumn('start_new_production_cycle_on_move', startNewProductionCycleOnMove);
   addColumn('updated_by_user_id', currentUserId || null);
 
   if (hasColumn(lotColumns, 'requirement_policy_config_value_id')) {
@@ -910,17 +1016,42 @@ async function updateLot(lotId, formData, currentUserId) {
 
   values.push(Number(lotId));
 
-  const [result] = await pool.query(
-    `
-      UPDATE lots
-      SET ${assignments.join(', ')}
-      WHERE lot_id = ?
-      LIMIT 1
-    `,
-    values
-  );
+  const connection = await pool.getConnection();
 
-  return result.affectedRows > 0;
+  try {
+    await connection.beginTransaction();
+
+    if (hasColumn(lotColumns, 'parent_lot_id') && parentLotId) {
+      const hierarchyRows = await listLotHierarchyRows(connection, { forUpdate: true });
+      assertValidLotParentAssignment(hierarchyRows, Number(lotId), parentLotId);
+    }
+
+    const [result] = await connection.query(
+      `
+        UPDATE lots
+        SET ${assignments.join(', ')}
+        WHERE lot_id = ?
+        LIMIT 1
+      `,
+      values
+    );
+
+    if (Number(result.affectedRows || 0) > 0) {
+      await productionWeightSyncModel.syncEffectiveManualCompletionWeights({
+        connection,
+        lotId: Number(lotId),
+        apply: true
+      });
+    }
+
+    await connection.commit();
+    return result.affectedRows > 0;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 
@@ -1252,6 +1383,169 @@ async function listLotRequirements(lotId) {
   }));
 }
 
+async function listEffectiveLotRequirements(lotId) {
+  const normalizedLotId = Number(lotId);
+
+  if (!Number.isSafeInteger(normalizedLotId) || normalizedLotId <= 0) {
+    return [];
+  }
+
+  const selectedLot = await getLotById(normalizedLotId);
+
+  if (!selectedLot) {
+    return [];
+  }
+
+  const lineage = [];
+  const requirementGroups = [];
+  const parentLotId = Number(selectedLot.parent_lot_id);
+
+  // Requirement inheritance is deliberately direct-parent only. Unit Form
+  // configuration keeps its existing full-lineage behavior, but Requirements
+  // do not cascade from a grandparent through a parent.
+  if (Number.isSafeInteger(parentLotId) && parentLotId > 0) {
+    const parentLot = await getLotById(parentLotId);
+
+    if (parentLot) {
+      lineage.push({ lotId: Number(parentLot.lot_id), name: parentLot.lot_name });
+      requirementGroups.push(await listLotRequirements(parentLotId));
+    }
+  }
+
+  lineage.push({ lotId: normalizedLotId, name: selectedLot.lot_name });
+  requirementGroups.push(await listLotRequirements(normalizedLotId));
+
+  return buildEffectiveLotRequirements({
+    lineage,
+    requirementGroups,
+    selectedLotId: normalizedLotId
+  });
+}
+
+
+async function customizeInheritedRequirementField(lotId, sourceRequirementId, currentUserId) {
+  const normalizedLotId = Number(lotId);
+  const normalizedSourceRequirementId = Number(sourceRequirementId);
+
+  if (!Number.isSafeInteger(normalizedLotId) || normalizedLotId <= 0
+    || !Number.isSafeInteger(normalizedSourceRequirementId) || normalizedSourceRequirementId <= 0) {
+    throw new Error('A valid child Lot and inherited requirement are required.');
+  }
+
+  const requirementColumns = await getColumnSet('lot_requirements');
+  const requirementIdColumn = getRequirementIdColumn(requirementColumns);
+
+  if (!requirementIdColumn || !hasColumn(requirementColumns, 'lot_id')
+    || !hasColumn(requirementColumns, 'requirement_type_config_value_id')) {
+    throw new Error('The lot_requirements table is missing the columns required for inheritance customization.');
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [lotRows] = await connection.query(
+      'SELECT lot_id, parent_lot_id FROM lots WHERE lot_id = ? LIMIT 1 FOR UPDATE',
+      [normalizedLotId]
+    );
+    const selectedLot = lotRows[0];
+    const parentLotId = Number(selectedLot?.parent_lot_id);
+
+    if (!selectedLot || !Number.isSafeInteger(parentLotId) || parentLotId <= 0) {
+      throw new Error('This Lot does not have a direct parent requirement to customize.');
+    }
+
+    const [sourceRows] = await connection.query(
+      `
+        SELECT requirement_type_config_value_id
+        FROM lot_requirements
+        WHERE lot_id = ?
+          AND \`${requirementIdColumn}\` = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [parentLotId, normalizedSourceRequirementId]
+    );
+    const requirementTypeConfigValueId = Number(sourceRows[0]?.requirement_type_config_value_id);
+
+    if (!Number.isSafeInteger(requirementTypeConfigValueId) || requirementTypeConfigValueId <= 0) {
+      throw new Error("The inherited requirement no longer belongs to this Lot's direct parent.");
+    }
+
+    const [existingRows] = await connection.query(
+      `
+        SELECT COUNT(*) AS direct_count
+        FROM lot_requirements
+        WHERE lot_id = ?
+          AND requirement_type_config_value_id = ?
+      `,
+      [normalizedLotId, requirementTypeConfigValueId]
+    );
+    const existingDirectCount = Number(existingRows[0]?.direct_count || 0);
+
+    if (existingDirectCount > 0) {
+      await connection.commit();
+      return { copiedCount: 0, alreadyCustomized: true };
+    }
+
+    const cloneableColumns = [
+      'lot_id',
+      'requirement_type_config_value_id',
+      'comparison_operator_config_value_id',
+      ...VALUE_COLUMN_NAMES,
+      'is_required',
+      'notes',
+      'created_by_user_id',
+      'updated_by_user_id'
+    ].filter((columnName) => hasColumn(requirementColumns, columnName));
+    const selectExpressions = [];
+    const values = [];
+
+    cloneableColumns.forEach((columnName) => {
+      if (columnName === 'lot_id') {
+        selectExpressions.push('?');
+        values.push(normalizedLotId);
+        return;
+      }
+
+      if (columnName === 'created_by_user_id' || columnName === 'updated_by_user_id') {
+        selectExpressions.push('?');
+        values.push(currentUserId || null);
+        return;
+      }
+
+      selectExpressions.push(`source.\`${columnName}\``);
+    });
+
+    values.push(parentLotId, requirementTypeConfigValueId);
+
+    const [result] = await connection.query(
+      `
+        INSERT INTO lot_requirements (${cloneableColumns.map((columnName) => `\`${columnName}\``).join(', ')})
+        SELECT ${selectExpressions.join(', ')}
+        FROM lot_requirements source
+        WHERE source.lot_id = ?
+          AND source.requirement_type_config_value_id = ?
+        ORDER BY source.\`${requirementIdColumn}\`
+      `,
+      values
+    );
+
+    await connection.commit();
+
+    return {
+      copiedCount: Number(result.affectedRows || 0),
+      alreadyCustomized: false
+    };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function createLotRequirement(lotId, formData, currentUserId) {
   const requirementColumns = await getColumnSet('lot_requirements');
   const requirementKey = normalizeRequirementKey(formData.requirementKey);
@@ -1425,6 +1719,9 @@ async function deleteLotRequirement(lotId, requirementId) {
 module.exports = {
   listLots,
   getLotById,
+  listDescendantLotIds,
+  getLotHierarchyAudit,
+  getLotExportScope,
   getLotSummary,
   getLotFormOptions,
   getLotVisibilitySummary,
@@ -1437,6 +1734,8 @@ module.exports = {
   getLotDeleteSummary,
   deleteLotIfEmpty,
   listLotRequirements,
+  listEffectiveLotRequirements,
+  customizeInheritedRequirementField,
   getLotRequirementById,
   createLotRequirement,
   updateLotRequirement,

@@ -53,7 +53,7 @@ test('Previous totals synchronize from Previous rows without entering Current re
 
   assert.match(markup, /data-previous-memory-total-input/);
   assert.match(markup, /data-previous-storage-total-input/);
-  assert.match(markup, /data-unit-form-follows-key="previous_memory_size"/);
+  assert.match(markup, /data-unit-form-field-key="previous_memory_size"/);
   assert.match(markup, /data-unit-form-field-key="memory_modules" data-unit-form-repeatable-type="memory"/);
   assert.match(markup, /data-unit-form-field-key="storage_devices" data-unit-form-repeatable-type="storage"/);
   assert.match(script, /previousMemoryTotal/);

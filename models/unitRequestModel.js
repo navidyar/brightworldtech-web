@@ -213,6 +213,12 @@ function buildCatalogContext(row) {
     const categoryLabel = row.processor_request_category_label || 'Category not available';
     const requestedProcessorType = row.requested_processor_type || 'Processor Type not provided';
     const requestedProcessorName = row.requested_processor_name || 'Processor not provided';
+    const requestedProcessorSpeedGhz = row.requested_processor_speed_ghz !== null && row.requested_processor_speed_ghz !== undefined
+      ? Number(row.requested_processor_speed_ghz).toFixed(2)
+      : '';
+    const approvedProcessorBaseSpeedGhz = row.approved_processor_base_speed_ghz !== null && row.approved_processor_base_speed_ghz !== undefined
+      ? Number(row.approved_processor_base_speed_ghz).toFixed(2)
+      : '';
 
     return {
       kind: 'processor',
@@ -222,12 +228,14 @@ function buildCatalogContext(row) {
       unitCategoryLabel: categoryLabel,
       requestedProcessorType,
       requestedProcessorName,
+      requestedProcessorSpeedGhz,
       approvedProcessorBrandId: row.approved_processor_brand_id ? Number(row.approved_processor_brand_id) : null,
       approvedProcessorBrandName: row.approved_processor_brand_name || '',
       approvedProcessorModelId: row.approved_processor_model_id ? Number(row.approved_processor_model_id) : null,
       approvedProcessorModelLabel: row.approved_processor_model_label || '',
+      approvedProcessorBaseSpeedGhz,
       summary: `${manufacturerName} · ${unitModelName}`,
-      detailLabel: `${requestedProcessorType} · ${requestedProcessorName}`
+      detailLabel: `${requestedProcessorType} · ${requestedProcessorName}${requestedProcessorSpeedGhz ? ` @ ${requestedProcessorSpeedGhz} GHz` : ''}`
     };
   }
 
@@ -358,7 +366,8 @@ function getBaseRequestWhere({
         'processor_request_model.model_name LIKE ?',
         'processor_request_manufacturer.name LIKE ?',
         'upcr.requested_processor_type LIKE ?',
-        'upcr.requested_processor_name LIKE ?'
+        'upcr.requested_processor_name LIKE ?',
+        'CAST(upcr.requested_processor_speed_ghz AS CHAR) LIKE ?'
       ];
 
       searchConditions.push(...catalogSearchConditions);
@@ -417,6 +426,7 @@ function getRequestSelectSql({ includeCatalogTables }) {
           upcr.unit_model_id AS processor_request_unit_model_id,
           upcr.requested_processor_type,
           upcr.requested_processor_name,
+          upcr.requested_processor_speed_ghz,
           upcr.approved_processor_brand_id,
           upcr.approved_processor_model_id,
           processor_request_manufacturer.name AS processor_request_manufacturer_name,
@@ -424,6 +434,7 @@ function getRequestSelectSql({ includeCatalogTables }) {
           COALESCE(processor_request_category.label, processor_request_category.code) AS processor_request_category_label,
           approved_processor_brand.name AS approved_processor_brand_name,
           approved_processor_model.model_code AS approved_processor_model_label,
+          approved_processor_model.base_speed_ghz AS approved_processor_base_speed_ghz,
       `
     : '';
 
@@ -971,6 +982,7 @@ async function createProcessorCatalogRequest({
   unitModelId,
   requestedProcessorType,
   requestedProcessorName,
+  requestedProcessorSpeedGhz,
   requesterNote
 }) {
   if (!await requestTablesSupported() || !await catalogRequestTablesSupported()) {
@@ -982,10 +994,11 @@ async function createProcessorCatalogRequest({
   const safeRequesterUserId = normalizePositiveInteger(requestedByUserId);
   const safeRequestedProcessorType = normalizeText(requestedProcessorType, 100);
   const safeRequestedProcessorName = normalizeText(requestedProcessorName, 150);
+  const safeRequestedProcessorSpeedGhz = normalizeOptionalDecimal(requestedProcessorSpeedGhz);
   const safeRequesterNote = assertRequesterNote(requesterNote);
 
-  if (!safeRequesterUserId || safeRequestedProcessorType.length < 2 || safeRequestedProcessorName.length < 2) {
-    const error = new Error('Enter both the observed Processor Type and exact Processor value before submitting this request.');
+  if (!safeRequesterUserId || safeRequestedProcessorType.length < 2 || safeRequestedProcessorName.length < 2 || safeRequestedProcessorSpeedGhz === null || safeRequestedProcessorSpeedGhz < 0.01) {
+    const error = new Error('Enter the observed Processor Type, exact Processor value, and Processor Speed before submitting this request.');
     error.code = 'BWT_CATALOG_REQUEST_INPUT_INVALID';
     throw error;
   }
@@ -1033,10 +1046,11 @@ async function createProcessorCatalogRequest({
           unit_request_id,
           unit_model_id,
           requested_processor_type,
-          requested_processor_name
-        ) VALUES (?, ?, ?, ?)
+          requested_processor_name,
+          requested_processor_speed_ghz
+        ) VALUES (?, ?, ?, ?, ?)
       `,
-      [unitRequestId, safeUnitModelId, safeRequestedProcessorType, safeRequestedProcessorName]
+      [unitRequestId, safeUnitModelId, safeRequestedProcessorType, safeRequestedProcessorName, safeRequestedProcessorSpeedGhz]
     );
 
     await recordRequestEvent(connection, {
@@ -1047,7 +1061,8 @@ async function createProcessorCatalogRequest({
       eventDetails: {
         unitModelId: safeUnitModelId,
         requestedProcessorType: safeRequestedProcessorType,
-        requestedProcessorName: safeRequestedProcessorName
+        requestedProcessorName: safeRequestedProcessorName,
+        requestedProcessorSpeedGhz: safeRequestedProcessorSpeedGhz
       }
     });
 
@@ -1426,10 +1441,22 @@ async function approveModelCatalogRequest({ unitRequestId, reviewedByUserId, rev
   }
 }
 
+function normalizeProcessorBrandCode(value) {
+  const normalized = String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 65);
+
+  return normalized || 'processor-type';
+}
+
 async function assertActiveProcessorBrand(connection, processorBrandId) {
   const safeBrandId = normalizePositiveInteger(processorBrandId);
   if (!safeBrandId) {
-    const error = new Error('Select the canonical Processor Type before approving this request.');
+    const error = new Error('Select an existing canonical Processor Type or enter a new Processor Type name.');
     error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
     throw error;
   }
@@ -1445,7 +1472,68 @@ async function assertActiveProcessorBrand(connection, processorBrandId) {
     throw error;
   }
 
-  return { id: Number(rows[0].processor_brand_id), name: rows[0].name };
+  return { id: Number(rows[0].processor_brand_id), name: rows[0].name, action: 'Existing processor type selected' };
+}
+
+async function resolveProcessorBrandForApproval(connection, { processorBrandId, processorBrandName }) {
+  const safeBrandId = normalizePositiveInteger(processorBrandId);
+  if (safeBrandId) return assertActiveProcessorBrand(connection, safeBrandId);
+
+  const safeBrandName = normalizeText(processorBrandName, 100);
+  if (safeBrandName.length < 2) {
+    const error = new Error('Select an existing canonical Processor Type or enter a new Processor Type name.');
+    error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
+    throw error;
+  }
+
+  const [matchingRows] = await connection.query(
+    `SELECT processor_brand_id, name, is_active
+       FROM processor_brands
+      WHERE LOWER(TRIM(name)) = LOWER(TRIM(?))
+      ORDER BY processor_brand_id ASC
+      LIMIT 1
+      FOR UPDATE`,
+    [safeBrandName]
+  );
+
+  if (matchingRows[0]) {
+    const processorBrandIdValue = Number(matchingRows[0].processor_brand_id);
+    await connection.query(
+      'UPDATE processor_brands SET is_active = 1 WHERE processor_brand_id = ? LIMIT 1',
+      [processorBrandIdValue]
+    );
+    return {
+      id: processorBrandIdValue,
+      name: matchingRows[0].name,
+      action: Number(matchingRows[0].is_active) === 1 ? 'Existing processor type reused' : 'Inactive processor type reactivated'
+    };
+  }
+
+  const baseCode = normalizeProcessorBrandCode(safeBrandName);
+  let candidateCode = baseCode;
+  let suffix = 2;
+
+  while (true) {
+    const [codeRows] = await connection.query(
+      'SELECT processor_brand_id FROM processor_brands WHERE code = ? LIMIT 1 FOR UPDATE',
+      [candidateCode]
+    );
+    if (!codeRows[0]) break;
+    const suffixText = `-${suffix}`;
+    candidateCode = `${baseCode.slice(0, Math.max(1, 75 - suffixText.length))}${suffixText}`;
+    suffix += 1;
+  }
+
+  const [insertResult] = await connection.query(
+    'INSERT INTO processor_brands (code, name, is_active) VALUES (?, ?, 1)',
+    [candidateCode, safeBrandName]
+  );
+
+  return {
+    id: Number(insertResult.insertId),
+    name: safeBrandName,
+    action: 'New processor type added'
+  };
 }
 
 async function approveProcessorCatalogRequest({
@@ -1453,34 +1541,38 @@ async function approveProcessorCatalogRequest({
   reviewedByUserId,
   reviewerNote = '',
   approvedProcessorBrandId,
+  approvedProcessorBrandName = '',
   approvedProcessorModelCode,
   approvedProcessorFamily = '',
   approvedProcessorGeneration = '',
-  approvedProcessorBaseSpeedGhz = ''
+  approvedProcessorBaseSpeedGhz = '',
+  connection: providedConnection = null
 }) {
   const safeRequestId = normalizePositiveInteger(unitRequestId);
   const safeReviewerUserId = normalizePositiveInteger(reviewedByUserId);
   const safeModelCode = normalizeText(approvedProcessorModelCode, 100);
   const safeFamily = normalizeText(approvedProcessorFamily, 100);
   const safeGeneration = normalizeText(approvedProcessorGeneration, 50);
-  const safeBaseSpeed = normalizeOptionalDecimal(approvedProcessorBaseSpeedGhz);
+  const requestedBrandName = normalizeText(approvedProcessorBrandName, 100);
 
-  if (!safeRequestId || !safeReviewerUserId || safeModelCode.length < 2) {
-    const error = new Error('Select a canonical Processor Type and enter a canonical Processor value before approving this request.');
+  if (!safeRequestId || !safeReviewerUserId || safeModelCode.length < 2 || (!normalizePositiveInteger(approvedProcessorBrandId) && requestedBrandName.length < 2)) {
+    const error = new Error('Select or enter a canonical Processor Type and enter a canonical Processor value before approving this request.');
     error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
     throw error;
   }
 
-  if (!await catalogRequestTablesSupported()) {
+  const queryTarget = providedConnection || pool;
+  if (!await catalogRequestTablesSupported(queryTarget)) {
     const error = new Error('Catalog requests are not ready. Run the Step 7f database migration first.');
     error.code = 'BWT_CATALOG_REQUEST_SCHEMA_REQUIRED';
     throw error;
   }
 
-  const connection = await pool.getConnection();
+  const connection = providedConnection || await pool.getConnection();
+  const ownsConnection = !providedConnection;
 
   try {
-    await connection.beginTransaction();
+    if (ownsConnection) await connection.beginTransaction();
     const [rows] = await connection.query(
       `
         SELECT
@@ -1488,7 +1580,8 @@ async function approveProcessorCatalogRequest({
           ur.request_type,
           ur.status,
           ur.requested_by_user_id,
-          upcr.unit_model_id
+          upcr.unit_model_id,
+          upcr.requested_processor_speed_ghz
         FROM unit_requests ur
         INNER JOIN unit_processor_catalog_requests upcr
           ON upcr.unit_request_id = ur.unit_request_id
@@ -1506,7 +1599,10 @@ async function approveProcessorCatalogRequest({
       throw error;
     }
 
-    if (request.status !== 'pending') return { approved: false, unitRequestId: safeRequestId };
+    if (request.status !== 'pending') {
+      if (ownsConnection) await connection.rollback();
+      return { approved: false, unitRequestId: safeRequestId };
+    }
 
     if (Number(request.requested_by_user_id) === safeReviewerUserId) {
       const error = new Error('A requester cannot approve their own Unit Request.');
@@ -1515,7 +1611,19 @@ async function approveProcessorCatalogRequest({
     }
 
     const safeUnitModelId = await assertActiveUnitModel(connection, request.unit_model_id);
-    const processorBrand = await assertActiveProcessorBrand(connection, approvedProcessorBrandId);
+    const processorBrand = await resolveProcessorBrandForApproval(connection, {
+      processorBrandId: approvedProcessorBrandId,
+      processorBrandName: requestedBrandName
+    });
+    const submittedSpeed = normalizeOptionalDecimal(request.requested_processor_speed_ghz);
+    const reviewerSpeed = normalizeOptionalDecimal(approvedProcessorBaseSpeedGhz);
+    const safeBaseSpeed = reviewerSpeed !== null ? reviewerSpeed : submittedSpeed;
+
+    if (safeBaseSpeed === null || safeBaseSpeed < 0.01) {
+      const error = new Error('Confirm a Processor Base Speed from 0.01 through 99.99 GHz before approving this request.');
+      error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
+      throw error;
+    }
 
     const [processorRows] = await connection.query(
       `
@@ -1542,11 +1650,11 @@ async function approveProcessorCatalogRequest({
           SET is_active = 1,
               processor_family = CASE WHEN ? <> '' THEN ? ELSE processor_family END,
               generation = CASE WHEN ? <> '' THEN ? ELSE generation END,
-              base_speed_ghz = CASE WHEN ? IS NOT NULL THEN ? ELSE base_speed_ghz END
+              base_speed_ghz = ?
           WHERE processor_model_id = ?
           LIMIT 1
         `,
-        [safeFamily, safeFamily, safeGeneration, safeGeneration, safeBaseSpeed, safeBaseSpeed, approvedProcessorModelId]
+        [safeFamily, safeFamily, safeGeneration, safeGeneration, safeBaseSpeed, approvedProcessorModelId]
       );
       actionLabel = Number(existingProcessor.is_active) === 1 ? 'Existing processor mapped' : 'Inactive processor reactivated and mapped';
     } else {
@@ -1618,23 +1726,30 @@ async function approveProcessorCatalogRequest({
         approvedProcessorBrandName: processorBrand.name,
         approvedProcessorModelId,
         approvedProcessorModelCode: safeModelCode,
+        approvedProcessorBaseSpeedGhz: safeBaseSpeed,
+        processorBrandAction: processorBrand.action,
         assignedProcessorFamilyCodes: assignedProcessorFamilies.map((family) => family.code),
         action: actionLabel
       }
     });
 
-    await connection.commit();
+    if (ownsConnection) await connection.commit();
     return {
       approved: true,
       unitRequestId: safeRequestId,
       resultLabel: `${processorBrand.name} ${safeModelCode}`,
-      catalogAction: actionLabel
+      catalogAction: actionLabel,
+      processorBrandAction: processorBrand.action,
+      approvedProcessorBrandId: processorBrand.id,
+      approvedProcessorModelId,
+      approvedProcessorBaseSpeedGhz: safeBaseSpeed,
+      unitModelId: safeUnitModelId
     };
   } catch (error) {
-    await connection.rollback();
+    if (ownsConnection) await connection.rollback();
     throw error;
   } finally {
-    connection.release();
+    if (ownsConnection) connection.release();
   }
 }
 

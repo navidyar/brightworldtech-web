@@ -205,7 +205,7 @@ router.post(
 /*
   Tech catalog exception request routes
 
-  These routes render controlled request modals from Create Unit. They must remain
+  These routes render controlled request modals from Add/Edit Unit. They must remain
   before the /tech/units/:unitId parameterized routes below.
 */
 

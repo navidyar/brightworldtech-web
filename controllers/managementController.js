@@ -2,6 +2,8 @@ const crypto = require('crypto');
 const authModel = require('../models/authModel');
 const managementModel = require('../models/managementModel');
 const accessPolicy = require('../config/accessPolicy');
+const managementUserRoleEditPolicy = require('../services/managementUserRoleEditPolicy');
+const { buildUsernameStem } = require('../services/userUsernamePolicy');
 const { APP_DISPLAY_TIME_ZONE, formatDateKey, getDayRangeUtc } = require('../utils/timeZone');
 
 function hashToken(rawToken) {
@@ -308,6 +310,15 @@ async function createUser(req, res, next) {
       email,
       roleCodes: validRoleCodes
     });
+
+    if (firstName.length >= 2 && lastName.length >= 2) {
+      try {
+        buildUsernameStem(firstName, lastName);
+      } catch (error) {
+        errorMessages.push(error.message);
+      }
+    }
+
     addAdminRoleAssignmentErrors(errorMessages, roleCodes, req);
 
     if (errorMessages.length > 0) {
@@ -385,11 +396,20 @@ async function renderEditUserModal(req, res, next) {
       });
     }
 
-    const roles = getAssignableRolesForCurrentUser(await managementModel.listAssignableAccountRoles(), req);
+    const roleEditingLockCode = managementUserRoleEditPolicy.getSelfRoleLockCode({
+      actorUser: req.currentUser,
+      targetUserId: userId
+    });
+    const roleEditingLocked = Boolean(roleEditingLockCode);
+    const roles = roleEditingLocked
+      ? []
+      : getAssignableRolesForCurrentUser(await managementModel.listAssignableAccountRoles(), req);
 
     return res.render('fragments/management-user-edit-modal', {
       user,
       roles,
+      roleEditingLocked,
+      roleEditingLockCode,
       returnPath,
       errorMessages: [],
       formData: {
@@ -432,13 +452,23 @@ async function updateUserModal(req, res, next) {
     const lastName = String(req.body.lastName || '').trim();
     const email = authModel.normalizeEmail(req.body.email);
     const roleCodes = normalizeRoleCodes(req.body.roleCodes);
+    const existingRoleCodes = normalizeRoleCodes(user.roles || []);
+    const roleEditingLockCode = managementUserRoleEditPolicy.getSelfRoleLockCode({
+      actorUser: req.currentUser,
+      targetUserId: userId
+    });
+    const roleEditingLocked = Boolean(roleEditingLockCode);
 
-    const roles = getAssignableRolesForCurrentUser(await managementModel.listAssignableAccountRoles(), req);
+    const roles = roleEditingLocked
+      ? []
+      : getAssignableRolesForCurrentUser(await managementModel.listAssignableAccountRoles(), req);
     const allowedRoleCodes = new Set(roles.map((role) => role.code));
-    const validRoleCodes = filterAssignableRoleCodes(
-      roleCodes.filter((roleCode) => allowedRoleCodes.has(roleCode) || roleCode === 'admin'),
-      req
-    );
+    const validRoleCodes = roleEditingLocked
+      ? existingRoleCodes
+      : filterAssignableRoleCodes(
+        roleCodes.filter((roleCode) => allowedRoleCodes.has(roleCode) || roleCode === 'admin'),
+        req
+      );
 
     const errorMessages = validateUserForm({
       firstName,
@@ -446,12 +476,25 @@ async function updateUserModal(req, res, next) {
       email,
       roleCodes: validRoleCodes
     });
-    addAdminRoleAssignmentErrors(errorMessages, roleCodes, req);
+
+    if (roleEditingLocked) {
+      if (managementUserRoleEditPolicy.isSubmittedRoleChange({
+        submittedRoleCodes: roleCodes,
+        currentRoleCodes: existingRoleCodes
+      })) {
+        const lockedRoleLabel = roleEditingLockCode === 'admin' ? 'Admin' : 'Management';
+        errorMessages.push(`${lockedRoleLabel} users cannot change their own access role. Another authorized user must make that change.`);
+      }
+    } else {
+      addAdminRoleAssignmentErrors(errorMessages, roleCodes, req);
+    }
 
     if (errorMessages.length > 0) {
       return res.render('fragments/management-user-edit-modal', {
         user,
         roles,
+        roleEditingLocked,
+        roleEditingLockCode,
         returnPath,
         errorMessages,
         formData: {
@@ -464,18 +507,29 @@ async function updateUserModal(req, res, next) {
     }
 
     try {
-      await managementModel.updateUserWithRoles({
-        userId,
-        firstName,
-        lastName,
-        email,
-        roleCodes: validRoleCodes
-      });
+      if (roleEditingLocked) {
+        await managementModel.updateUserProfile({
+          userId,
+          firstName,
+          lastName,
+          email
+        });
+      } else {
+        await managementModel.updateUserWithRoles({
+          userId,
+          firstName,
+          lastName,
+          email,
+          roleCodes: validRoleCodes
+        });
+      }
     } catch (error) {
       if (error && error.code === 'ER_DUP_ENTRY') {
         return res.render('fragments/management-user-edit-modal', {
           user,
           roles,
+          roleEditingLocked,
+          roleEditingLockCode,
           returnPath,
           errorMessages: ['That email address is already assigned to another user.'],
           formData: {

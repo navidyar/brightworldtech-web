@@ -15,8 +15,8 @@ test('the Export Preview custom scrollbar fills the header-adjacent row without 
   assert.match(modal, /data-unit-export-top-scroll-track/);
   assert.match(modal, /data-unit-export-top-scroll-thumb/);
   assert.doesNotMatch(modal, /data-unit-export-top-scroll-spacer/);
-  assert.match(css, /\.unit-export-preview-scroll-row > td\s*\{[\s\S]*?height:\s*12px;[\s\S]*?background:\s*#e8eef5;[\s\S]*?line-height:\s*0;[\s\S]*?vertical-align:\s*top;/);
-  assert.match(css, /\.unit-export-preview-top-scroll\s*\{[\s\S]*?height:\s*12px;[\s\S]*?padding:\s*2px;[\s\S]*?background:\s*#e8eef5;/);
+  assert.match(css, /\.unit-export-preview-scroll-row > td\s*\{[\s\S]*?height:\s*var\(--ui-scrollbar-size\);[\s\S]*?background:\s*var\(--ui-scrollbar-track\);[\s\S]*?line-height:\s*0;[\s\S]*?vertical-align:\s*top;/);
+  assert.match(css, /\.unit-export-preview-top-scroll\s*\{[\s\S]*?height:\s*var\(--ui-scrollbar-size\);[\s\S]*?padding:\s*2px;[\s\S]*?background:\s*var\(--ui-scrollbar-track\);/);
 });
 
 test('the top control does not depend on a native horizontal scrollbar being rendered', () => {
@@ -24,11 +24,11 @@ test('the top control does not depend on a native horizontal scrollbar being ren
 
   assert.doesNotMatch(css, /\.unit-export-preview-top-scroll\s*\{[\s\S]*?overflow-x:\s*auto;/);
   assert.doesNotMatch(css, /\.unit-export-preview-top-scroll::-webkit-scrollbar/);
-  assert.match(css, /\.unit-export-preview-top-scroll-thumb\s*\{[\s\S]*?height:\s*8px;[\s\S]*?background:\s*#6f88a5;/);
+  assert.match(css, /\.unit-export-preview-top-scroll-thumb\s*\{[\s\S]*?height:\s*calc\(var\(--ui-scrollbar-size\) - 4px\);[\s\S]*?background:\s*var\(--ui-scrollbar-thumb\);/);
 });
 
 test('Stage 10V.6 cache-busts the adjusted Export Preview CSS and script', () => {
-  assert.match(read('views/partials/head.ejs'), /app\.css\?v=20260804-stage10v6-custom-header-scrollbar/);
+  assert.match(read('views/partials/head.ejs'), /app\.css\?v=20260804-stage10w-ranking-administration/);
 
   for (const relativePath of [
     'views/pages/tech-units.ejs',

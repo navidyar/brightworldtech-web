@@ -1,8 +1,9 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const SHARED_APP_HREF = '/css/app.css?v=20260731-stage10c-hardware-matrix';
-const SHARED_FEATURE_HREF = '/css/features.css?v=20260723-shared-ui-foundation';
+const SHARED_THEME_PATH = '/css/theme.css';
+const SHARED_APP_PATH = '/css/app.css';
+const SHARED_FEATURE_PATH = '/css/features.css';
 
 function findIndexOrFail(content, value, label, errors) {
   const index = content.indexOf(value);
@@ -20,8 +21,13 @@ function validateHeadTemplate(content) {
     'page stylesheet loop',
     errors
   );
-  const appIndex = findIndexOrFail(content, SHARED_APP_HREF, 'shared app stylesheet', errors);
-  const featuresIndex = findIndexOrFail(content, SHARED_FEATURE_HREF, 'shared feature stylesheet', errors);
+  const themeIndex = findIndexOrFail(content, SHARED_THEME_PATH, 'shared theme stylesheet', errors);
+  const appIndex = findIndexOrFail(content, SHARED_APP_PATH, 'shared app stylesheet', errors);
+  const featuresIndex = findIndexOrFail(content, SHARED_FEATURE_PATH, 'shared feature stylesheet', errors);
+
+  if (themeIndex !== -1 && appIndex !== -1 && appIndex < themeIndex) {
+    errors.push('app.css must load after theme.css.');
+  }
 
   if (pageStylesIndex !== -1 && appIndex !== -1 && appIndex < pageStylesIndex) {
     errors.push('app.css must load after legacy/page stylesheets.');
@@ -57,7 +63,9 @@ function validateSharedVisualCss(content) {
     '.danger-button',
     '.modal-panel',
     '.table-card',
-    '.form-section'
+    '.form-section',
+    '::-webkit-scrollbar',
+    '--ui-scrollbar-thumb'
   ];
 
   requiredTokens.forEach((token) => {
@@ -120,8 +128,9 @@ function validateSharedCssFoundation(projectRoot) {
 }
 
 module.exports = {
-  SHARED_APP_HREF,
-  SHARED_FEATURE_HREF,
+  SHARED_THEME_PATH,
+  SHARED_APP_PATH,
+  SHARED_FEATURE_PATH,
   validateHeadTemplate,
   validateSharedVisualCss,
   validateFeatureSafetyCss,

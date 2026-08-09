@@ -30,6 +30,107 @@
     storage_gb: 'storage_devices',
     storage_type: 'storage_devices'
   });
+  const UNIT_FORM_SEQUENTIAL_FOCUS_SELECTOR = [
+    'a[href]',
+    'button',
+    'input:not([type="hidden"])',
+    'select',
+    'textarea',
+    '[tabindex]'
+  ].join(',');
+
+  function removeRepeatableActionsFromTabOrder(form) {
+    if (!form) {
+      return;
+    }
+
+    form.querySelectorAll('[data-add-module-row], [data-remove-module-row]').forEach((button) => {
+      button.setAttribute('tabindex', '-1');
+    });
+  }
+
+  function isUnitFormSequentialFocusTarget(control) {
+    if (!control || control.disabled || control.hidden) {
+      return false;
+    }
+
+    if (control.matches('[data-add-module-row], [data-remove-module-row]')) {
+      return false;
+    }
+
+    const explicitTabIndex = control.getAttribute('tabindex');
+
+    if (explicitTabIndex !== null && Number(explicitTabIndex) < 0) {
+      return false;
+    }
+
+    if (control.closest('[hidden], [aria-hidden="true"]')) {
+      return false;
+    }
+
+    if (typeof control.getClientRects === 'function' && control.getClientRects().length === 0) {
+      return false;
+    }
+
+    return true;
+  }
+
+  function getUnitFormSequentialFocusTargets(form) {
+    if (!form) {
+      return [];
+    }
+
+    return Array.from(form.querySelectorAll(UNIT_FORM_SEQUENTIAL_FOCUS_SELECTOR))
+      .filter(isUnitFormSequentialFocusTarget);
+  }
+
+  function handleOutcomeSequentialTab(event) {
+    if (
+      event.key !== 'Tab'
+      || event.defaultPrevented
+      || event.altKey
+      || event.ctrlKey
+      || event.metaKey
+    ) {
+      return;
+    }
+
+    const form = getFormFromElement(event.target);
+
+    if (!form) {
+      return;
+    }
+
+    const outcomeRadios = Array.from(form.querySelectorAll('[data-outcome-tab-stop]'))
+      .filter(isUnitFormSequentialFocusTarget);
+
+    if (outcomeRadios.length < 2) {
+      return;
+    }
+
+    const focusTargets = getUnitFormSequentialFocusTargets(form);
+    const currentIndex = focusTargets.indexOf(event.target);
+
+    if (currentIndex < 0) {
+      return;
+    }
+
+    const nextTarget = focusTargets[currentIndex + (event.shiftKey ? -1 : 1)];
+
+    if (!nextTarget) {
+      return;
+    }
+
+    const currentIsOutcome = outcomeRadios.includes(event.target);
+    const nextIsOutcome = outcomeRadios.includes(nextTarget);
+
+    if (!currentIsOutcome && !nextIsOutcome) {
+      return;
+    }
+
+    event.preventDefault();
+    nextTarget.focus();
+  }
 
   function getLotUnitFormProfileStatus(form) {
     return form ? form.querySelector('[data-lot-unit-form-profile-status]') : null;
@@ -1487,6 +1588,46 @@
     return normalizedValue.trim();
   }
 
+  function handleSerialScannerEnter(event) {
+    if (!event || event.key !== 'Enter' || event.isComposing) {
+      return false;
+    }
+
+    const serialInput = event.target && typeof event.target.closest === 'function'
+      ? event.target.closest('[data-serial-enter-no-submit]')
+      : null;
+
+    if (!serialInput || serialInput.disabled) {
+      return false;
+    }
+
+    const form = getFormFromElement(serialInput);
+
+    if (!form) {
+      return false;
+    }
+
+    event.preventDefault();
+    normalizeSerialInput(serialInput);
+
+    const biosSerialInput = serialInput.name === 'unitSerialNumber'
+      ? form.querySelector('[name="biosSerialNumber"][data-serial-enter-no-submit]')
+      : null;
+    const canFocusBiosSerial = Boolean(
+      biosSerialInput
+      && !biosSerialInput.disabled
+      && !biosSerialInput.closest('[hidden]')
+    );
+
+    if (canFocusBiosSerial) {
+      biosSerialInput.focus();
+    } else if (typeof serialInput.blur === 'function') {
+      serialInput.blur();
+    }
+
+    return true;
+  }
+
   function clearDuplicateCheck(form) {
     const region = form ? form.querySelector('[data-duplicate-check-region]') : null;
 
@@ -1762,27 +1903,13 @@
 
   function getIntentionalDuplicateRequestReadiness(form) {
     const lotSelect = form ? form.querySelector('[data-lot-select]') : null;
-    const categorySelect = form ? form.querySelector('[data-unit-category-select]') : null;
-    const unitStatusInput = form ? form.querySelector('[name="currentUnitStatusConfigValueId"]') : null;
-    const missingLabels = [];
-
-    if (!lotSelect || !String(lotSelect.value || '').trim()) {
-      missingLabels.push('an Assignable Lot');
-    }
-
-    if (!categorySelect || !String(categorySelect.value || '').trim()) {
-      missingLabels.push('a Unit Category');
-    }
-
-    if (!unitStatusInput || !String(unitStatusInput.value || '').trim()) {
-      missingLabels.push('a Unit Status');
-    }
+    const hasAssignableLot = Boolean(lotSelect && String(lotSelect.value || '').trim());
 
     return {
-      ready: missingLabels.length === 0,
-      message: missingLabels.length === 0
+      ready: hasAssignableLot,
+      message: hasAssignableLot
         ? ''
-        : `Select ${missingLabels.join(' and ')} before requesting an intentional duplicate.`
+        : 'Select an Assignable Lot before requesting an intentional duplicate.'
     };
   }
 
@@ -1804,7 +1931,7 @@
 
       if (hint) {
         hint.textContent = readiness.ready
-          ? 'Complete the reviewer reason in the next step. A new Unit and Asset Tag are created only after approval.'
+          ? 'Use this only for a different physical unit that reuses the serial. The complete Create Unit form is verified before the request can be submitted.'
           : readiness.message;
         hint.hidden = false;
       }
@@ -2113,13 +2240,43 @@
 
     const processorButton = form.querySelector('[data-catalog-request-button="processor"]');
     const processorHint = form.querySelector('[data-catalog-request-processor-hint]');
+    const processorEmptyMessage = form.querySelector('[data-processor-catalog-empty-message]');
+    const processorRequestFields = form.querySelector('[data-processor-catalog-request-fields]');
+    const processorRequestSpeedInput = form.querySelector('[data-processor-request-speed-input]');
+    const unitProcessorSpeedInput = form.querySelector('[data-processor-speed-input]');
     const canRequestProcessor = Boolean(modelSelectionInput && modelSelectionInput.value);
+    const compatibleProcessorCount = canRequestProcessor
+      ? getVisibleProcessorOptions(form, true, true).length
+      : 0;
+    const needsProcessorRequestEntry = canRequestProcessor && compatibleProcessorCount === 0;
     setCatalogRequestButtonState(processorButton, canRequestProcessor);
 
+    if (processorEmptyMessage) {
+      processorEmptyMessage.hidden = !needsProcessorRequestEntry;
+    }
+
+    if (processorRequestFields) {
+      processorRequestFields.hidden = !needsProcessorRequestEntry;
+    }
+
+    if (
+      needsProcessorRequestEntry
+      && processorRequestSpeedInput
+      && !processorRequestSpeedInput.value
+      && unitProcessorSpeedInput
+      && unitProcessorSpeedInput.value
+    ) {
+      processorRequestSpeedInput.value = unitProcessorSpeedInput.value;
+    }
+
     if (processorHint) {
-      processorHint.textContent = canRequestProcessor
-        ? 'Use this only when the observed Processor Type or Processor is unavailable for the selected Unit Model.'
-        : 'Select a Unit Model first. Processor requests are always tied to one managed Unit Model.';
+      if (!canRequestProcessor) {
+        processorHint.textContent = 'Select a Unit Model first. Processor requests are always tied to one managed Unit Model.';
+      } else if (compatibleProcessorCount === 0) {
+        processorHint.textContent = 'Enter the observed Processor Type, Processor, and Processor Speed above, then send the catalog request.';
+      } else {
+        processorHint.textContent = 'Use this when the observed Processor Type, Processor, or Processor Speed is unavailable for the selected Unit Model.';
+      }
     }
   }
 
@@ -2290,6 +2447,7 @@
     comboboxInput.value = getUnitModelOptionLabel(option);
     setUnitModelInputValidity(form, '');
     applySelectedModelMetadata(form);
+    updateCatalogRequestControls(form);
     closeUnitModelOptions(form);
     scheduleLotRequirementWorkflowRefresh(form);
   }
@@ -3224,12 +3382,7 @@
         'slotLabel',
         'sizeGb',
         'ramTypeConfigValueId',
-        'memoryInstallTypeCode',
-        'speedMhz',
-        'manufacturerName',
-        'partNumber',
-        'serialNumber',
-        'changeNotes'
+        'memoryInstallTypeCode'
       ]
     });
   }
@@ -3241,11 +3394,7 @@
       fields: [
         'slotLabel',
         'sizeGb',
-        'storageTypeConfigValueId',
-        'manufacturerName',
-        'modelNumber',
-        'serialNumber',
-        'firmwareVersion'
+        'storageTypeConfigValueId'
       ]
     });
   }
@@ -3342,8 +3491,10 @@
     region.insertAdjacentHTML('afterbegin', `<div class="message success tech-intentional-duplicate-request-feedback" data-intentional-duplicate-request-feedback><p>Intentional Duplicate request #${requestId || '—'} is pending review. No new Unit or Asset Tag was created. <a href="${requestUrl}">View Unit Request</a></p></div>`);
   }
 
-  function showCatalogRequestOpenError(form, message) {
-    const action = form ? form.querySelector('.tech-catalog-request-action') : null;
+  function showCatalogRequestOpenError(form, message, requestKind = '') {
+    const action = form
+      ? form.querySelector(`[data-catalog-request-action-kind="${requestKind}"]`) || form.querySelector('.tech-catalog-request-action')
+      : null;
 
     if (!action) {
       return;
@@ -3374,10 +3525,24 @@
       const unitModelInput = getUnitModelSelectionInput(form);
       const processorBrandSelect = getProcessorBrandSelect(form);
       const processorInput = getProcessorComboboxInput(form);
+      const processorSpeedInput = form.querySelector('[data-processor-speed-input]');
+      const requestTypeInput = form.querySelector('[data-processor-request-type-input]');
+      const requestNameInput = form.querySelector('[data-processor-request-name-input]');
+      const requestSpeedInput = form.querySelector('[data-processor-request-speed-input]');
       const selectedBrandOption = getSelectedOption(processorBrandSelect);
+      const requestedType = requestTypeInput && requestTypeInput.value.trim()
+        ? requestTypeInput.value.trim()
+        : (selectedBrandOption && selectedBrandOption.value ? selectedBrandOption.textContent.trim() : '');
+      const requestedName = requestNameInput && requestNameInput.value.trim()
+        ? requestNameInput.value.trim()
+        : (processorInput ? processorInput.value.trim() : '');
+      const requestedSpeed = requestSpeedInput && requestSpeedInput.value.trim()
+        ? requestSpeedInput.value.trim()
+        : (processorSpeedInput ? processorSpeedInput.value.trim() : '');
       params.set('unitModelId', unitModelInput ? unitModelInput.value : '');
-      params.set('requestedProcessorType', selectedBrandOption && selectedBrandOption.value ? selectedBrandOption.textContent.trim() : '');
-      params.set('requestedProcessorName', processorInput ? processorInput.value.trim() : '');
+      params.set('requestedProcessorType', requestedType);
+      params.set('requestedProcessorName', requestedName);
+      params.set('requestedProcessorSpeedGhz', requestedSpeed);
     }
 
     button.disabled = true;
@@ -3389,7 +3554,7 @@
 
       renderModalMarkup(await response.text());
     } catch (error) {
-      showCatalogRequestOpenError(form, 'The Catalog Exception request could not be opened. Confirm the selected model details and try again.');
+      showCatalogRequestOpenError(form, 'The Catalog Exception request could not be opened. Confirm the selected model details and try again.', requestKind);
     } finally {
       updateCatalogRequestControls(form);
     }
@@ -3580,6 +3745,7 @@
     }
 
     form.setAttribute('data-tech-unit-form-initialized', 'true');
+    removeRepeatableActionsFromTabOrder(form);
     setAssignableLotComboboxLayer(form, false);
     synchronizeAssignableLotCombobox(form);
     setUnitModelComboboxLayer(form, false);
@@ -4015,6 +4181,9 @@
     }
   });
 
+  document.addEventListener('keydown', handleSerialScannerEnter, true);
+  document.addEventListener('keydown', handleOutcomeSequentialTab, true);
+
   document.addEventListener('keydown', (event) => {
     const assignableLotComboboxInput = event.target.closest('[data-assignable-lot-combobox-input]');
 
@@ -4396,6 +4565,7 @@
       const form = getFormFromElement(addButton);
       const rowType = addButton.getAttribute('data-add-module-row');
       addModuleRow(form, rowType);
+      removeRepeatableActionsFromTabOrder(form);
       if (!String(rowType || '').startsWith('previous')) {
         scheduleLotRequirementWorkflowRefresh(form);
       }

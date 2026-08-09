@@ -61,6 +61,7 @@ async function listUsers(options = {}) {
         u.user_id,
         u.first_name,
         u.last_name,
+        u.username,
         u.email,
         status.code AS account_status_code,
         status.label AS account_status_label,
@@ -91,6 +92,7 @@ async function listUsers(options = {}) {
         u.user_id,
         u.first_name,
         u.last_name,
+        u.username,
         u.email,
         status.code,
         status.label,
@@ -151,6 +153,7 @@ async function getUserById(userId) {
         u.user_id,
         u.first_name,
         u.last_name,
+        u.username,
         u.email,
         status.code AS account_status_code,
         status.label AS account_status_label,
@@ -179,6 +182,7 @@ async function getUserById(userId) {
         u.user_id,
         u.first_name,
         u.last_name,
+        u.username,
         u.email,
         status.code,
         status.label,
@@ -192,6 +196,29 @@ async function getUserById(userId) {
   );
 
   return rows[0] ? mapUserRow(rows[0]) : null;
+}
+
+async function updateUserProfile({ userId, firstName, lastName, email }) {
+  const safeUserId = Number(userId);
+
+  const [result] = await pool.query(
+    `
+      UPDATE users
+      SET
+        first_name = ?,
+        last_name = ?,
+        email = ?,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = ?
+    `,
+    [firstName, lastName, email, safeUserId]
+  );
+
+  if (result.affectedRows === 0) {
+    return null;
+  }
+
+  return getUserById(safeUserId);
 }
 
 async function updateUserWithRoles({ userId, firstName, lastName, email, roleCodes }) {
@@ -409,6 +436,7 @@ async function listLoginActivityForDay({ startAt, endAt }) {
         ula.user_id,
         u.first_name,
         u.last_name,
+        u.username,
         u.email,
         SUBSTRING_INDEX(
           GROUP_CONCAT(
@@ -431,6 +459,7 @@ async function listLoginActivityForDay({ startAt, endAt }) {
         ula.user_id,
         u.first_name,
         u.last_name,
+        u.username,
         u.email
       ORDER BY
         first_login_at ASC,
@@ -453,6 +482,7 @@ module.exports = {
   countUsersByActiveStatus,
   listAssignableAccountRoles,
   getUserById,
+  updateUserProfile,
   updateUserWithRoles,
   deactivateUser,
   reactivateUser,

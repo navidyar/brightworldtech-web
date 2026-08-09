@@ -42,41 +42,41 @@ function renderLogin(req, res) {
     errorMessage: null,
     successMessage: getLoginSuccessMessage(req),
     formData: {
-      email: ''
+      identifier: ''
     }
   });
 }
 
 async function login(req, res, next) {
   try {
-    const email = authModel.normalizeEmail(req.body.email);
+    const identifier = authModel.normalizeLoginIdentifier(req.body.identifier || req.body.email);
     const password = req.body.password || '';
 
-    const genericError = 'Invalid email or password.';
+    const genericError = 'Invalid email, username, or password.';
 
-    const user = await authModel.getUserByEmail(email);
+    const user = await authModel.getUserByLoginIdentifier(identifier);
 
     if (!user || !user.password_hash || !user.is_active || user.account_status_code !== 'active') {
-      await authModel.recordFailedLogin(email);
+      await authModel.recordFailedLogin(identifier);
 
       return res.status(401).render('pages/login', {
         pageTitle: 'Sign In',
         errorMessage: genericError,
         successMessage: null,
-        formData: { email }
+        formData: { identifier }
       });
     }
 
     const passwordIsValid = await argon2.verify(user.password_hash, password);
 
     if (!passwordIsValid) {
-      await authModel.recordFailedLogin(email);
+      await authModel.recordFailedLogin(identifier);
 
       return res.status(401).render('pages/login', {
         pageTitle: 'Sign In',
         errorMessage: genericError,
         successMessage: null,
-        formData: { email }
+        formData: { identifier }
       });
     }
 

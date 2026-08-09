@@ -358,6 +358,7 @@ async function approveUnitRequest(req, res, next) {
         reviewedByUserId: req.currentUser.user_id,
         reviewerNote: req.body.reviewerNote,
         approvedProcessorBrandId: req.body.approvedProcessorBrandId,
+        approvedProcessorBrandName: req.body.approvedProcessorBrandName,
         approvedProcessorModelCode: req.body.approvedProcessorModelCode,
         approvedProcessorFamily: req.body.approvedProcessorFamily,
         approvedProcessorGeneration: req.body.approvedProcessorGeneration,

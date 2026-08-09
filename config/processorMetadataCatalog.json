@@ -1,0 +1,962 @@
+{
+  "AMD PRO A10-8700B": {
+    "brandName": "AMD",
+    "processorFamily": "AMD PRO A-Series",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 1.8
+  },
+  "Celeron N3350": {
+    "brandName": "Intel",
+    "processorFamily": "Celeron",
+    "generation": "Apollo Lake",
+    "baseSpeedGhz": 1.1
+  },
+  "Celeron N4000": {
+    "brandName": "Intel",
+    "processorFamily": "Celeron",
+    "generation": "Gemini Lake",
+    "baseSpeedGhz": 1.1
+  },
+  "Celeron N4020": {
+    "brandName": "Intel",
+    "processorFamily": "Celeron",
+    "generation": "Gemini Lake Refresh",
+    "baseSpeedGhz": 1.1
+  },
+  "Celeron N4500": {
+    "brandName": "Intel",
+    "processorFamily": "Celeron",
+    "generation": "Jasper Lake",
+    "baseSpeedGhz": 1.1
+  },
+  "Celeron N5100": {
+    "brandName": "Intel",
+    "processorFamily": "Celeron",
+    "generation": "Jasper Lake",
+    "baseSpeedGhz": 1.1
+  },
+  "Core m3-8100Y": {
+    "brandName": "Intel",
+    "processorFamily": "Core m",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 1.1
+  },
+  "Core Ultra 5 125U": {
+    "brandName": "Intel",
+    "processorFamily": "Core Ultra",
+    "generation": "Series 1",
+    "baseSpeedGhz": 1.3
+  },
+  "Core Ultra 5 135H": {
+    "brandName": "Intel",
+    "processorFamily": "Core Ultra",
+    "generation": "Series 1",
+    "baseSpeedGhz": 1.7
+  },
+  "Core Ultra 5 135U": {
+    "brandName": "Intel",
+    "processorFamily": "Core Ultra",
+    "generation": "Series 1",
+    "baseSpeedGhz": 1.6
+  },
+  "Core Ultra 5 225U": {
+    "brandName": "Intel",
+    "processorFamily": "Core Ultra",
+    "generation": "Series 2",
+    "baseSpeedGhz": 1.5
+  },
+  "Core Ultra 7 155H": {
+    "brandName": "Intel",
+    "processorFamily": "Core Ultra",
+    "generation": "Series 1",
+    "baseSpeedGhz": 1.4
+  },
+  "Core Ultra 7 165U": {
+    "brandName": "Intel",
+    "processorFamily": "Core Ultra",
+    "generation": "Series 1",
+    "baseSpeedGhz": 1.7
+  },
+  "Core Ultra 7 255U": {
+    "brandName": "Intel",
+    "processorFamily": "Core Ultra",
+    "generation": "Series 2",
+    "baseSpeedGhz": 1.8
+  },
+  "Core Ultra 9 185H": {
+    "brandName": "Intel",
+    "processorFamily": "Core Ultra",
+    "generation": "Series 1",
+    "baseSpeedGhz": 2.3
+  },
+  "i3-10100": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 3.6
+  },
+  "i3-10100T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 3.0
+  },
+  "i3-10100Y": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 1.3
+  },
+  "i3-12100": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 3.3
+  },
+  "i3-12100T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 2.2
+  },
+  "i3-13100": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 3.4
+  },
+  "i3-13100T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 2.5
+  },
+  "i3-14100": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "14th Gen",
+    "baseSpeedGhz": 3.5
+  },
+  "i3-14100T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "14th Gen",
+    "baseSpeedGhz": 2.7
+  },
+  "i3-4130": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "4th Gen",
+    "baseSpeedGhz": 3.4
+  },
+  "i3-4130T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "4th Gen",
+    "baseSpeedGhz": 2.9
+  },
+  "i3-6100": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 3.7
+  },
+  "i3-6100T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 3.2
+  },
+  "i3-7100": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 3.9
+  },
+  "i3-7100T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 3.4
+  },
+  "i3-8100": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 3.6
+  },
+  "i3-8100T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 3.1
+  },
+  "i3-8130U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 2.2
+  },
+  "i3-9100": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 3.6
+  },
+  "i3-9100T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 3.1
+  },
+  "i5-10210U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 1.6
+  },
+  "i5-10300H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 2.5
+  },
+  "i5-10310U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 1.7
+  },
+  "i5-1035G1": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 1.0
+  },
+  "i5-1035G4": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 1.1
+  },
+  "i5-10400H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 2.6
+  },
+  "i5-10500": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 3.1
+  },
+  "i5-10500T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 2.3
+  },
+  "i5-1135G7": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "11th Gen",
+    "baseSpeedGhz": 2.4
+  },
+  "i5-11400H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "11th Gen",
+    "baseSpeedGhz": 2.7
+  },
+  "i5-1145G7": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "11th Gen",
+    "baseSpeedGhz": 2.6
+  },
+  "i5-11500": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "11th Gen",
+    "baseSpeedGhz": 2.7
+  },
+  "i5-11500T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "11th Gen",
+    "baseSpeedGhz": 1.5
+  },
+  "i5-1235U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 1.3
+  },
+  "i5-1245U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 1.6
+  },
+  "i5-12500": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 3.0
+  },
+  "i5-12500H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 2.5
+  },
+  "i5-12500T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 2.0
+  },
+  "i5-1335U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 1.3
+  },
+  "i5-1345U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 1.6
+  },
+  "i5-13500": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 2.5
+  },
+  "i5-13500H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 2.6
+  },
+  "i5-13500T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 1.6
+  },
+  "i5-14500": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "14th Gen",
+    "baseSpeedGhz": 2.6
+  },
+  "i5-14500T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "14th Gen",
+    "baseSpeedGhz": 1.7
+  },
+  "i5-4570": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "4th Gen",
+    "baseSpeedGhz": 3.2
+  },
+  "i5-4570T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "4th Gen",
+    "baseSpeedGhz": 2.9
+  },
+  "i5-6200U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 2.3
+  },
+  "i5-6300HQ": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 2.3
+  },
+  "i5-6300U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 2.4
+  },
+  "i5-6500": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 3.2
+  },
+  "i5-6500T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 2.5
+  },
+  "i5-7200U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 2.5
+  },
+  "i5-7300HQ": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 2.5
+  },
+  "i5-7300U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 2.6
+  },
+  "i5-7500": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 3.4
+  },
+  "i5-7500T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 2.7
+  },
+  "i5-8250U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 1.6
+  },
+  "i5-8265U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th/9th Gen",
+    "baseSpeedGhz": 1.6
+  },
+  "i5-8350U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 1.7
+  },
+  "i5-8365U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th/9th Gen",
+    "baseSpeedGhz": 1.6
+  },
+  "i5-8400H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 2.5
+  },
+  "i5-8500": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 3.0
+  },
+  "i5-8500T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 2.1
+  },
+  "i5-9300H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 2.4
+  },
+  "i5-9500": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 3.0
+  },
+  "i5-9500T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 2.2
+  },
+  "i7-10610U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 1.8
+  },
+  "i7-1065G7": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 1.3
+  },
+  "i7-10700": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 2.9
+  },
+  "i7-10700T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 2.0
+  },
+  "i7-10750H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 2.6
+  },
+  "i7-10850H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 2.7
+  },
+  "i7-11700": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "11th Gen",
+    "baseSpeedGhz": 2.5
+  },
+  "i7-11700T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "11th Gen",
+    "baseSpeedGhz": 1.4
+  },
+  "i7-11800H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "11th Gen",
+    "baseSpeedGhz": 2.3
+  },
+  "i7-1185G7": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "11th Gen",
+    "baseSpeedGhz": 3.0
+  },
+  "i7-1255U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 1.7
+  },
+  "i7-1265U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 1.8
+  },
+  "i7-12700": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 2.1
+  },
+  "i7-12700H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 2.3
+  },
+  "i7-12700T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 1.4
+  },
+  "i7-1365U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 1.8
+  },
+  "i7-13700": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 2.1
+  },
+  "i7-13700H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 2.4
+  },
+  "i7-13700T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 1.4
+  },
+  "i7-14700": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "14th Gen",
+    "baseSpeedGhz": 2.1
+  },
+  "i7-14700T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "14th Gen",
+    "baseSpeedGhz": 1.3
+  },
+  "i7-4770": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "4th Gen",
+    "baseSpeedGhz": 3.4
+  },
+  "i7-4770T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "4th Gen",
+    "baseSpeedGhz": 2.5
+  },
+  "i7-6600U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 2.6
+  },
+  "i7-6700": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 3.4
+  },
+  "i7-6700T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 2.8
+  },
+  "i7-6820HQ": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 2.7
+  },
+  "i7-7600U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 2.8
+  },
+  "i7-7700": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 3.6
+  },
+  "i7-7700T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 2.9
+  },
+  "i7-7820HQ": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 2.9
+  },
+  "i7-8650U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 1.9
+  },
+  "i7-8665U": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th/9th Gen",
+    "baseSpeedGhz": 1.9
+  },
+  "i7-8700": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 3.2
+  },
+  "i7-8700T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 2.4
+  },
+  "i7-8850H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 2.6
+  },
+  "i7-9700": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 3.0
+  },
+  "i7-9700T": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 2.0
+  },
+  "i7-9850H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 2.6
+  },
+  "i9-12900H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "12th Gen",
+    "baseSpeedGhz": 2.5
+  },
+  "i9-13900H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "13th Gen",
+    "baseSpeedGhz": 2.6
+  },
+  "Intel Processor N200": {
+    "brandName": "Intel",
+    "processorFamily": "Intel Processor N-Series",
+    "generation": "Alder Lake-N",
+    "baseSpeedGhz": null
+  },
+  "Kompanio 520": {
+    "brandName": "MediaTek",
+    "processorFamily": "Kompanio / MediaTek",
+    "generation": "Kompanio 500 Series",
+    "baseSpeedGhz": null
+  },
+  "Microsoft SQ1": {
+    "brandName": "Qualcomm",
+    "processorFamily": "Microsoft SQ",
+    "generation": "SQ1",
+    "baseSpeedGhz": null
+  },
+  "Microsoft SQ2": {
+    "brandName": "Qualcomm",
+    "processorFamily": "Microsoft SQ",
+    "generation": "SQ2",
+    "baseSpeedGhz": null
+  },
+  "Microsoft SQ3": {
+    "brandName": "Qualcomm",
+    "processorFamily": "Microsoft SQ",
+    "generation": "SQ3",
+    "baseSpeedGhz": null
+  },
+  "MT8183": {
+    "brandName": "MediaTek",
+    "processorFamily": "Kompanio / MediaTek",
+    "generation": "MT8183",
+    "baseSpeedGhz": null
+  },
+  "Pentium Gold 4425Y": {
+    "brandName": "Intel",
+    "processorFamily": "Pentium Gold",
+    "generation": "Amber Lake-Y",
+    "baseSpeedGhz": 1.7
+  },
+  "Pentium Gold 6500Y": {
+    "brandName": "Intel",
+    "processorFamily": "Pentium Gold",
+    "generation": "Amber Lake-Y",
+    "baseSpeedGhz": 1.1
+  },
+  "Pentium Silver N5000": {
+    "brandName": "Intel",
+    "processorFamily": "Pentium Silver",
+    "generation": "Gemini Lake",
+    "baseSpeedGhz": 1.1
+  },
+  "Ryzen 3 3250U": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "3000 Series",
+    "baseSpeedGhz": 2.6
+  },
+  "Ryzen 5 3500U": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "3000 Series",
+    "baseSpeedGhz": 2.1
+  },
+  "Ryzen 5 4600H": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "4000 Series",
+    "baseSpeedGhz": 3.0
+  },
+  "Ryzen 5 4680U": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "4000 Series",
+    "baseSpeedGhz": 2.2
+  },
+  "Ryzen 5 5600H": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "5000 Series",
+    "baseSpeedGhz": 3.3
+  },
+  "Ryzen 5 PRO 3500U": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "3000 Series",
+    "baseSpeedGhz": 2.1
+  },
+  "Ryzen 5 PRO 4650GE": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "4000 Series",
+    "baseSpeedGhz": 3.3
+  },
+  "Ryzen 7 4800H": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "4000 Series",
+    "baseSpeedGhz": 2.9
+  },
+  "Ryzen 7 4980U": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "4000 Series",
+    "baseSpeedGhz": 2.0
+  },
+  "Ryzen 7 5800H": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "5000 Series",
+    "baseSpeedGhz": 3.2
+  },
+  "Ryzen 7 6800HS": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "6000 Series",
+    "baseSpeedGhz": 3.2
+  },
+  "Ryzen 7 7735HS": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "7000 Series",
+    "baseSpeedGhz": 3.2
+  },
+  "Ryzen 7 8845HS": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "8000 Series",
+    "baseSpeedGhz": 3.8
+  },
+  "Ryzen 7 PRO 3700U": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "3000 Series",
+    "baseSpeedGhz": 2.3
+  },
+  "Ryzen 7 PRO 4750GE": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "4000 Series",
+    "baseSpeedGhz": 3.1
+  },
+  "Ryzen 9 4900HS": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "4000 Series",
+    "baseSpeedGhz": 3.0
+  },
+  "Ryzen 9 5900HS": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "5000 Series",
+    "baseSpeedGhz": 3.0
+  },
+  "Ryzen 9 7940HS": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "7000 Series",
+    "baseSpeedGhz": 4.0
+  },
+  "Ryzen 9 8945HS": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "8000 Series",
+    "baseSpeedGhz": 4.0
+  },
+  "Snapdragon 7c Gen 2": {
+    "brandName": "Qualcomm",
+    "processorFamily": "Snapdragon",
+    "generation": "Gen 2",
+    "baseSpeedGhz": null
+  },
+  "Snapdragon X Elite": {
+    "brandName": "Qualcomm",
+    "processorFamily": "Snapdragon",
+    "generation": "X Series",
+    "baseSpeedGhz": null
+  },
+  "Snapdragon X Plus": {
+    "brandName": "Qualcomm",
+    "processorFamily": "Snapdragon",
+    "generation": "X Series",
+    "baseSpeedGhz": null
+  },
+  "Xeon E-2176M": {
+    "brandName": "Intel",
+    "processorFamily": "Xeon",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 2.7
+  },
+  "Xeon E-2276M": {
+    "brandName": "Intel",
+    "processorFamily": "Xeon",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 2.8
+  },
+  "Xeon E3-1505M v5": {
+    "brandName": "Intel",
+    "processorFamily": "Xeon",
+    "generation": "6th Gen",
+    "baseSpeedGhz": 2.8
+  },
+  "Xeon E3-1505M v6": {
+    "brandName": "Intel",
+    "processorFamily": "Xeon",
+    "generation": "7th Gen",
+    "baseSpeedGhz": 3.0
+  },
+  "Xeon W-10855M": {
+    "brandName": "Intel",
+    "processorFamily": "Xeon",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 2.8
+  },
+  "Xeon W-11955M": {
+    "brandName": "Intel",
+    "processorFamily": "Xeon",
+    "generation": "11th Gen",
+    "baseSpeedGhz": 2.6
+  }
+}

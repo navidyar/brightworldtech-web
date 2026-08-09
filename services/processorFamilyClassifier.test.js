@@ -12,11 +12,15 @@ test('classifies Intel Core tier and generation families from common model names
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Intel', modelCode: 'Intel Core i5-1255U' }), ['intel-i5-12th-gen']);
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Intel', modelCode: 'i5-1260P' }), ['intel-i5-12th-gen']);
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Intel', modelCode: 'i7-8650U' }), ['intel-i7-8th-gen']);
+  assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Intel', modelCode: 'i5-1035G1' }), ['intel-i5-10th-gen']);
+  assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Intel', modelCode: 'Core Ultra 7 155H' }), ['intel-core-ultra-7-series-1']);
+  assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Intel', modelCode: 'Intel Processor N200' }), ['intel-processor-n-series']);
 });
 
 test('classifies AMD Ryzen tier and series without separating PRO variants', () => {
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'AMD', modelCode: 'Ryzen 5 PRO 7540U' }), ['amd-ryzen-5-7000-series']);
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'AMD', modelCode: 'Ryzen 7 8840U' }), ['amd-ryzen-7-8000-series']);
+  assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'AMD', modelCode: 'AMD PRO A10-8700B' }), ['amd-pro-a10-6th-gen']);
 });
 
 test('classifies Apple, Qualcomm, MediaTek, and Rockchip families', () => {

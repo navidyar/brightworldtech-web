@@ -1,5 +1,7 @@
 const { pool } = require('./db');
 const lotModel = require('./lotModel');
+const productionWeightSyncModel = require('./productionWeightSyncModel');
+const productionCycleModel = require('./productionCycleModel');
 const unitWorkflowAudit = require('../services/unitWorkflowAudit');
 
 const OVERRIDE_TABLE = 'unit_override_requests';
@@ -287,6 +289,8 @@ function mapOverrideRequest(row, lotMap) {
     row.requested_destination_lot_id || requestDetails.requested_destination_lot_id
   );
   const isDuplicateIntakeMoveRequest = requestDetails.source === 'duplicate_intake_existing_unit_request';
+  const isParkedTakeoverRequest = requestDetails.source === 'tech_units_parked_takeover_request'
+    || (requestDetails.source_unit_state === 'parked' && requestDetails.action_kind === 'takeover');
   const duplicateIntakeActionKind = isDuplicateIntakeMoveRequest && requestDetails.action_kind === 'move'
     ? 'move'
     : isDuplicateIntakeMoveRequest
@@ -297,7 +301,11 @@ function mapOverrideRequest(row, lotMap) {
     unitOverrideRequestId: Number(row.unit_override_request_id),
     unitId: row.unit_id ? Number(row.unit_id) : null,
     lotId: row.lot_id ? Number(row.lot_id) : null,
-    lotName: row.lot_id ? lotMap.get(Number(row.lot_id)) || 'Lot name not available' : 'No lot selected',
+    lotName: isParkedTakeoverRequest
+      ? 'Parked · No active lot'
+      : row.lot_id
+        ? lotMap.get(Number(row.lot_id)) || 'Lot name not available'
+        : 'No lot selected',
     requestedDestinationLotId,
     requestedDestinationLotName: requestedDestinationLotId
       ? lotMap.get(requestedDestinationLotId) || 'Lot name not available'
@@ -305,7 +313,7 @@ function mapOverrideRequest(row, lotMap) {
     unitAssetTag,
     unitLabel: unitAssetTag || 'No asset tag',
     requestType: row.request_type || 'lot_requirement_override',
-    requestTypeLabel: getRequestTypeLabel(row.request_type),
+    requestTypeLabel: isParkedTakeoverRequest ? 'Parked Unit Takeover' : getRequestTypeLabel(row.request_type),
     requestStatus: normalizedRequestStatus,
     validationStatus: row.validation_status || null,
     enforcementDecision: row.enforcement_decision || null,
@@ -313,6 +321,7 @@ function mapOverrideRequest(row, lotMap) {
     requesterNote,
     requestDetails,
     isDuplicateIntakeMoveRequest,
+    isParkedTakeoverRequest,
     isDuplicateIntakeLotMoveRequest: isDuplicateIntakeMoveRequest && duplicateIntakeActionKind === 'move',
     duplicateIntakeActionKind,
     duplicateIntakeRequestLabel: duplicateIntakeActionKind === 'move' ? 'Lot Move' : 'Move / Takeover Existing Unit',
@@ -1001,7 +1010,8 @@ async function approveOverrideRequest({
   reviewNotes,
   priorTechCreditGranted = false,
   priorTechCreditWeight = null,
-  destinationLotId = null
+  destinationLotId = null,
+  connection: providedConnection = null
 }) {
   const requestId = normalizeOptionalInteger(overrideRequestId);
   const reviewerId = normalizeOptionalInteger(reviewedByUserId);
@@ -1010,10 +1020,13 @@ async function approveOverrideRequest({
     return false;
   }
 
-  const connection = await pool.getConnection();
+  const ownsConnection = !providedConnection;
+  const connection = providedConnection || await pool.getConnection();
 
   try {
-    await connection.beginTransaction();
+    if (ownsConnection) {
+      await connection.beginTransaction();
+    }
 
     const [requestRows] = await connection.query(
       `
@@ -1040,7 +1053,9 @@ async function approveOverrideRequest({
     const request = requestRows[0];
 
     if (!request || String(request.request_status || '').toLowerCase() !== 'pending') {
-      await connection.rollback();
+      if (ownsConnection) {
+        await connection.rollback();
+      }
       return false;
     }
 
@@ -1050,15 +1065,17 @@ async function approveOverrideRequest({
       throw error;
     }
 
-    if (Number(request.is_parked || 0) === 1) {
-      const error = new Error('This unit is parked. Return it to Active before approving an override request.');
+    const isOutcomeConfirmation = request.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE;
+    const isManualTechOverride = request.request_type === MANUAL_TECH_OVERRIDE_REQUEST_TYPE;
+    const wasParked = Number(request.is_parked || 0) === 1;
+
+    if (wasParked && !isManualTechOverride) {
+      const error = new Error('This unit is parked. Return it to Active before approving this request type.');
       error.code = 'BWT_UNIT_PARKED';
       throw error;
     }
 
-    const isOutcomeConfirmation = request.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE;
-    const isManualTechOverride = request.request_type === MANUAL_TECH_OVERRIDE_REQUEST_TYPE;
-    const canGrantPriorTechCredit = !isOutcomeConfirmation && isManualTechOverride;
+    const canGrantPriorTechCredit = !isOutcomeConfirmation && isManualTechOverride && !wasParked;
     const creditGranted = canGrantPriorTechCredit && priorTechCreditGranted === true;
     const creditWeight = creditGranted ? normalizeCreditWeight(priorTechCreditWeight) : null;
 
@@ -1069,7 +1086,9 @@ async function approveOverrideRequest({
     }
 
     const requestedByUserId = normalizeOptionalInteger(request.requested_by_user_id);
-    const previousAssignedUserId = normalizeOptionalInteger(request.assigned_to_user_id) || normalizeOptionalInteger(request.created_by_user_id);
+    const previousAssignedUserId = wasParked
+      ? null
+      : normalizeOptionalInteger(request.assigned_to_user_id) || normalizeOptionalInteger(request.created_by_user_id);
     const currentLotId = normalizeOptionalInteger(request.current_lot_id);
     const completionTableReady = await tableExists('unit_work_completions');
     let hasRecordedWork = false;
@@ -1130,11 +1149,13 @@ async function approveOverrideRequest({
     const lotChanged = Boolean(
       isManualTechOverride
       && approvedDestinationLotId
-      && approvedDestinationLotId !== currentLotId
+      && (wasParked || approvedDestinationLotId !== currentLotId)
     );
     const normalizedReviewNotes = normalizeText(reviewNotes);
     const destinationNote = lotChanged && destinationLot
-      ? `Destination lot selected: ${destinationLot.lotName}.`
+      ? wasParked
+        ? `Parked Unit returned to Active in destination lot: ${destinationLot.lotName}.`
+        : `Destination lot selected: ${destinationLot.lotName}.`
       : '';
     const validationWarningNote = destinationValidation && destinationValidation.warningMessages.length > 0
       ? destinationValidation.warningMessages.join(' ')
@@ -1172,7 +1193,9 @@ async function approveOverrideRequest({
     );
 
     if (Number(result.affectedRows) === 0) {
-      await connection.rollback();
+      if (ownsConnection) {
+        await connection.rollback();
+      }
       return false;
     }
 
@@ -1235,6 +1258,15 @@ async function approveOverrideRequest({
         unitValues.push(approvedDestinationLotId);
       }
 
+      if (wasParked) {
+        if (await columnExists('units', 'is_parked')) unitUpdates.push('is_parked = 0');
+        if (await columnExists('units', 'parked_at')) unitUpdates.push('parked_at = NULL');
+        if (await columnExists('units', 'parked_by_user_id')) unitUpdates.push('parked_by_user_id = NULL');
+        if (await columnExists('units', 'is_archived')) unitUpdates.push('is_archived = 0');
+        if (await columnExists('units', 'archived_at')) unitUpdates.push('archived_at = NULL');
+        if (await columnExists('units', 'archived_by_user_id')) unitUpdates.push('archived_by_user_id = NULL');
+      }
+
       await connection.query(
         `
           UPDATE units
@@ -1244,6 +1276,27 @@ async function approveOverrideRequest({
         `,
         [...unitValues, request.unit_id]
       );
+
+      if (lotChanged) {
+        await productionCycleModel.recordLotMove({
+          unitId: request.unit_id,
+          fromLotId: wasParked ? null : currentLotId,
+          toLotId: approvedDestinationLotId,
+          movedByUserId: reviewerId,
+          notes: wasParked
+            ? 'Parked Unit returned to Active during approved takeover request.'
+            : 'Unit lot moved during approved override request.',
+          allowNewProductionCycle: !wasParked
+        }, connection);
+      }
+
+      if (lotChanged || wasParked) {
+        await productionWeightSyncModel.syncEffectiveManualCompletionWeights({
+          connection,
+          unitIds: [request.unit_id],
+          apply: true
+        });
+      }
 
       if (await tableExists('unit_assignment_history') && previousAssignedUserId !== requestedByUserId) {
         await connection.query(
@@ -1265,31 +1318,11 @@ async function approveOverrideRequest({
             requestedByUserId,
             reviewerId,
             requestId,
-            lotChanged
-              ? 'Assignment transferred and lot moved by approved override request.'
-              : 'Assignment transferred by approved override request.'
-          ]
-        );
-      }
-
-      if (lotChanged && await tableExists('unit_lot_history')) {
-        await connection.query(
-          `
-            INSERT INTO unit_lot_history (
-              unit_id,
-              from_lot_id,
-              to_lot_id,
-              moved_by_user_id,
-              notes
-            )
-            VALUES (?, ?, ?, ?, ?)
-          `,
-          [
-            request.unit_id,
-            currentLotId,
-            approvedDestinationLotId,
-            reviewerId,
-            'Unit lot moved during approved override request.'
+            wasParked
+              ? 'Parked Unit returned to Active and assigned by approved takeover request.'
+              : lotChanged
+                ? 'Assignment transferred and lot moved by approved override request.'
+                : 'Assignment transferred by approved override request.'
           ]
         );
       }
@@ -1297,6 +1330,31 @@ async function approveOverrideRequest({
       if (lotChanged && currentLotId) {
         const lotValidationOverrideModel = require('./lotValidationOverrideModel');
         await lotValidationOverrideModel.expireMovedUnitOverrides(currentLotId, connection);
+      }
+
+      if (wasParked && await tableExists('unit_park_history')) {
+        await connection.query(
+          `
+            INSERT INTO unit_park_history (
+              unit_id,
+              event_type,
+              from_lot_id,
+              to_lot_id,
+              from_assigned_to_user_id,
+              to_assigned_to_user_id,
+              changed_by_user_id,
+              notes
+            )
+            VALUES (?, 'returned_to_active', NULL, ?, NULL, ?, ?, ?)
+          `,
+          [
+            request.unit_id,
+            approvedDestinationLotId,
+            requestedByUserId,
+            reviewerId,
+            'Parked Unit returned to Active and assigned through an approved takeover request.'
+          ]
+        );
       }
 
       await unitWorkflowAudit.recordOverrideApproved(connection, {
@@ -1339,13 +1397,19 @@ async function approveOverrideRequest({
       );
     }
 
-    await connection.commit();
+    if (ownsConnection) {
+      await connection.commit();
+    }
     return true;
   } catch (error) {
-    await connection.rollback();
+    if (ownsConnection) {
+      await connection.rollback();
+    }
     throw error;
   } finally {
-    connection.release();
+    if (ownsConnection) {
+      connection.release();
+    }
   }
 }
 

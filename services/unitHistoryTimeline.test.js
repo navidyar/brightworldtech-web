@@ -230,3 +230,42 @@ test('structured Memory and Storage audit changes expand into readable per-slot 
   assert.equal(event.changes[1].text, '8GB · DDR4 · Removable Module → 0GB · Empty slot');
   assert.equal(event.changes[2].text, 'Added 512GB · NVMe SSD · Wipe: Passed');
 });
+
+
+test('older Lot audit changes that stored numeric IDs are rendered with Lot names from operational history', () => {
+  const timeline = buildUnitHistoryTimeline({
+    auditEvents: [{
+      eventId: 301,
+      actorName: 'David Qian',
+      eventType: 'unit_updated',
+      eventSummary: 'Updated unit BWT988351158232707',
+      occurredAt: '2026-08-07T15:16:00Z',
+      changes: [{
+        fieldKey: 'assignable_lot',
+        fieldLabel: 'Lot',
+        changeType: 'changed',
+        oldValueText: '9',
+        newValueText: '40',
+        oldValue: '9',
+        newValue: '40'
+      }]
+    }],
+    operationalHistory: {
+      lotMoves: [{
+        fromLotId: 9,
+        fromLotName: 'Parent Lot 9',
+        toLotId: 40,
+        toLotName: 'Child Lot 40',
+        movedByName: 'David Qian',
+        movedAt: '2026-08-07T15:16:01Z',
+        notes: ''
+      }]
+    }
+  });
+
+  assert.equal(timeline.events.length, 1);
+  assert.equal(timeline.events[0].source, 'audit');
+  assert.equal(timeline.events[0].changes[0].text, 'Parent Lot 9 → Child Lot 40');
+  assert.equal(timeline.events[0].changes[0].oldValueText, 'Parent Lot 9');
+  assert.equal(timeline.events[0].changes[0].newValueText, 'Child Lot 40');
+});

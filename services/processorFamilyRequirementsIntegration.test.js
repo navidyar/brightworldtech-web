@@ -38,7 +38,7 @@ test('Processor Families are Admin-managed configuration and selectable from Lot
   assert.match(familyModal, /Included Processors/);
   assert.match(familyModal, /name="memberProcessorModelIds"|processor-family-member-options/);
   assert.doesNotMatch(lotModal, /Manage Processor Families/);
-  assert.match(registry, /key: 'processor_family'/);
+  assert.match(registry, /catalogField\('processor_family', 'Processor Family'/);
 });
 
 test('future approved Processor Catalog values receive safe automatic family membership', () => {

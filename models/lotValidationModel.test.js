@@ -19,7 +19,10 @@ require.cache[lotModelPath] = {
   id: lotModelPath,
   filename: lotModelPath,
   loaded: true,
-  exports: { listLotRequirements: async () => storedRequirements }
+  exports: {
+    listLotRequirements: async () => storedRequirements,
+    listEffectiveLotRequirements: async () => storedRequirements
+  }
 };
 delete require.cache[validationModelPath];
 

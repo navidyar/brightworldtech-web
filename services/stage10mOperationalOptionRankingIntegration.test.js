@@ -82,15 +82,13 @@ test('Unit Model and Processor lists carry contextual cache scores into the exis
   assert.match(browser, /compareOperationalOptions/);
   assert.match(browser, /filters\.manufacturerId/);
   assert.match(browser, /modelSelectionInput\.value/);
-  assert.match(read('views/pages/tech-unit-form.ejs'), /stage10q-hardware-none/);
-  assert.match(read('views/pages/tech-units.ejs'), /stage10q-hardware-none/);
+  assert.match(read('views/pages/tech-unit-form.ejs'), /stage10t-stabilization/);
+  assert.match(read('views/pages/tech-units.ejs'), /stage10t-stabilization/);
 });
 
 test('configuration administration order is not rewritten by the ranking service', () => {
-  const configRoutes = read('routes/config.js');
   const rankingModel = read('models/operationalOptionRankingModel.js');
 
-  assert.doesNotMatch(configRoutes, /operationalOptionRanking/);
   assert.doesNotMatch(rankingModel, /UPDATE\s+config_values/i);
   assert.doesNotMatch(rankingModel, /UPDATE\s+unit_models/i);
 });

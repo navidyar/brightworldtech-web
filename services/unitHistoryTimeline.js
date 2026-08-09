@@ -38,6 +38,60 @@ function valueOrFallback(value, fallback = 'Not provided') {
   return normalized || fallback;
 }
 
+function normalizePositiveId(value) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+}
+
+function buildLotNameById(operationalHistory = {}) {
+  const names = new Map();
+  const add = (id, name) => {
+    const lotId = normalizePositiveId(id);
+    const lotName = normalizeText(name);
+    if (lotId && lotName && lotName !== 'No active lot') {
+      names.set(lotId, lotName);
+    }
+  };
+
+  (operationalHistory.lotMoves || []).forEach((row) => {
+    add(row.fromLotId, row.fromLotName);
+    add(row.toLotId, row.toLotName);
+  });
+
+  (operationalHistory.lifecycleEvents || []).forEach((row) => {
+    add(row.fromLotId, row.fromLotName);
+    add(row.toLotId, row.toLotName);
+  });
+
+  return names;
+}
+
+function resolveLotAuditValueText(valueText, rawValue, lotNameById) {
+  const currentText = normalizeText(valueText);
+  const parsedRawValue = parseJson(rawValue);
+  const rawId = normalizePositiveId(parsedRawValue);
+  const textId = normalizePositiveId(currentText);
+  const lotId = rawId || textId;
+
+  if (!lotId || !(lotNameById instanceof Map)) {
+    return currentText;
+  }
+
+  return lotNameById.get(lotId) || currentText;
+}
+
+function resolveAuditChangeDisplay(change = {}, lotNameById = new Map()) {
+  if (normalizeText(change.fieldKey) !== 'assignable_lot') {
+    return change;
+  }
+
+  return {
+    ...change,
+    oldValueText: resolveLotAuditValueText(change.oldValueText, change.oldValue, lotNameById),
+    newValueText: resolveLotAuditValueText(change.newValueText, change.newValue, lotNameById)
+  };
+}
+
 function auditChangeText(change = {}) {
   const changeType = normalizeText(change.changeType).toLowerCase();
   const oldValue = normalizeText(change.oldValueText);
@@ -134,7 +188,7 @@ function expandComponentAuditChange(change = {}) {
   }));
 }
 
-function normalizeAuditEvent(event = {}) {
+function normalizeAuditEvent(event = {}, { lotNameById = new Map() } = {}) {
   const metadata = parseJson(event.metadata) || {};
   const isCreation = event.eventType === 'unit_created';
 
@@ -150,18 +204,19 @@ function normalizeAuditEvent(event = {}) {
     isLegacy: false,
     metadata,
     changes: (Array.isArray(event.changes) ? event.changes : []).flatMap((change) => {
-      const expandedChanges = expandComponentAuditChange(change);
+      const displayChange = resolveAuditChangeDisplay(change, lotNameById);
+      const expandedChanges = expandComponentAuditChange(displayChange);
 
       if (expandedChanges) {
         return expandedChanges;
       }
 
       return [{
-        label: normalizeText(change.fieldLabel) || normalizeText(change.fieldKey) || 'Change',
-        text: auditChangeText(change),
-        oldValueText: normalizeText(change.oldValueText),
-        newValueText: normalizeText(change.newValueText),
-        changeType: normalizeText(change.changeType) || 'changed'
+        label: normalizeText(displayChange.fieldLabel) || normalizeText(displayChange.fieldKey) || 'Change',
+        text: auditChangeText(displayChange),
+        oldValueText: normalizeText(displayChange.oldValueText),
+        newValueText: normalizeText(displayChange.newValueText),
+        changeType: normalizeText(displayChange.changeType) || 'changed'
       }];
     }),
     notes: []
@@ -533,7 +588,9 @@ function buildUnitHistoryTimeline({
   acceptanceHistory = [],
   creationContext = null
 } = {}) {
-  const normalizedAuditEvents = (Array.isArray(auditEvents) ? auditEvents : []).map(normalizeAuditEvent);
+  const lotNameById = buildLotNameById(operationalHistory);
+  const normalizedAuditEvents = (Array.isArray(auditEvents) ? auditEvents : [])
+    .map((event) => normalizeAuditEvent(event, { lotNameById }));
   const legacyEvents = groupLegacyEvents(buildLegacyEvents({
     historyDetails,
     overrideHistory,
@@ -566,7 +623,9 @@ module.exports = {
   AUDIT_DUPLICATE_WINDOW_MS,
   LEGACY_GROUP_WINDOW_MS,
   auditChangeText,
+  buildLotNameById,
   buildUnitHistoryTimeline,
   groupLegacyEvents,
-  normalizeAuditEvent
+  normalizeAuditEvent,
+  resolveAuditChangeDisplay
 };

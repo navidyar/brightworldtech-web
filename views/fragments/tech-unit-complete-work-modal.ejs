@@ -3,6 +3,7 @@
   const safeErrorMessages = Array.isArray(errorMessages) ? errorMessages.filter(Boolean) : [];
   const canSubmit = Boolean(safePreview.ready) && !successMessage && safeErrorMessages.length === 0;
   const showProductionWeight = Boolean(canViewProductionWeight);
+  const grantsProductionCredit = safePreview.grantsProductionCredit !== false;
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
@@ -33,9 +34,21 @@
               <dd><%= safePreview.lotName || '—' %></dd>
             </div>
             <div>
-              <dt><%= showProductionWeight ? 'Credit' : 'Completed By' %></dt>
-              <dd><% if (showProductionWeight) { %><%= safePreview.formattedProductionWeight || '—' %> to <% } %><%= creditedToName %></dd>
+              <dt>Completed By</dt>
+              <dd><%= creditedToName %></dd>
             </div>
+            <% if (showProductionWeight) { %>
+              <div>
+                <dt>Production Credit</dt>
+                <dd>
+                  <% if (grantsProductionCredit) { %>
+                    <%= safePreview.formattedProductionWeight || '—' %> new credit
+                  <% } else { %>
+                    Existing cycle retained · no additional credit
+                  <% } %>
+                </dd>
+              </div>
+            <% } %>
           </dl>
         </div>
 
@@ -62,20 +75,32 @@
               <dd><%= safePreview.lotName || '—' %></dd>
             </div>
             <div>
-              <dt>Credit To</dt>
+              <dt>Completed By</dt>
               <dd><%= creditedToName %></dd>
             </div>
             <% if (showProductionWeight) { %>
               <div>
-                <dt>Current Lot Weight</dt>
-                <dd><%= safePreview.formattedProductionWeight || '—' %></dd>
+                <dt><%= grantsProductionCredit ? 'New Production Credit' : 'Production Credit' %></dt>
+                <dd>
+                  <% if (grantsProductionCredit) { %>
+                    <%= safePreview.formattedProductionWeight || '—' %>
+                  <% } else { %>
+                    Existing cycle retained · no additional unit or weight
+                  <% } %>
+                </dd>
               </div>
             <% } %>
           </dl>
         </div>
 
         <p class="field-hint">
-          This records the unit as completed for the current lot. It does not change the unit’s assignment, lot, grade, or Pass/Fail status.
+          This records the Unit as completed for the current Lot.
+          <% if (grantsProductionCredit) { %>
+            This production cycle will earn one Unit of production credit at the current effective weight.
+          <% } else { %>
+            This is a continuation of an existing production cycle, so completing this Lot workflow will not add another completed Unit or another production weight.
+          <% } %>
+          It does not change the Unit’s assignment, Lot, grade, or Pass/Fail status.
         </p>
 
         <% if (canSubmit) { %>

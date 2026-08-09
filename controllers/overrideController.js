@@ -97,6 +97,10 @@ function getDuplicateIntakeActionKind(req, unit, modalContext = {}) {
     return 'override';
   }
 
+  if (techUnitModel.isUnitParked(unit)) {
+    return 'takeover';
+  }
+
   const currentUserId = normalizePositiveInteger(req && req.currentUser ? req.currentUser.user_id : null);
   return currentUserId && getEffectiveAssignedUserId(unit) === currentUserId ? 'move' : 'takeover';
 }
@@ -116,13 +120,7 @@ function getTechOverrideRequestEligibility(req, unit, {
     };
   }
 
-  if (techUnitModel.isUnitParked(unit)) {
-    return {
-      allowed: false,
-      message: 'This unit is parked. A Tech Lead, Management user, or Admin must return it to Active before an override can be requested.'
-    };
-  }
-
+  const isParkedTakeoverRequest = techUnitModel.isUnitParked(unit);
   const currentUserId = normalizePositiveInteger(req && req.currentUser ? req.currentUser.user_id : null);
 
   if (!currentUserId) {
@@ -132,7 +130,7 @@ function getTechOverrideRequestEligibility(req, unit, {
     };
   }
 
-  const isAssignedToCurrentUser = getEffectiveAssignedUserId(unit) === currentUserId;
+  const isAssignedToCurrentUser = !isParkedTakeoverRequest && getEffectiveAssignedUserId(unit) === currentUserId;
 
   if (!fromDuplicateIntake && isAssignedToCurrentUser) {
     return {
@@ -257,6 +255,14 @@ async function getLotLabel(lotId) {
   const lot = await lotModel.getLotById(lotId);
 
   return lot ? lot.lot_name : 'Lot name not available';
+}
+
+async function getUnitCurrentLotLabel(unit) {
+  if (techUnitModel.isUnitParked(unit)) {
+    return 'Parked · No active lot';
+  }
+
+  return getLotLabel(unit && unit.lot_id);
 }
 
 async function approveOverrideRequest(req, res, next) {
@@ -404,6 +410,7 @@ async function renderTechOverrideRequestModal(req, res, next) {
 
     if (unit) {
       modalContext.duplicateIntakeActionKind = getDuplicateIntakeActionKind(req, unit, modalContext);
+      modalContext.isParkedTakeoverRequest = techUnitModel.isUnitParked(unit);
     }
 
     if (!unit) {
@@ -427,7 +434,7 @@ async function renderTechOverrideRequestModal(req, res, next) {
         ...modalContext,
         unit,
         unitLabel: buildUnitLabel(unit),
-        lotLabel: await getLotLabel(unit.lot_id),
+        lotLabel: await getUnitCurrentLotLabel(unit),
         existingPendingRequest: null,
         supported: false,
         successMessage: null,
@@ -447,7 +454,7 @@ async function renderTechOverrideRequestModal(req, res, next) {
         ...modalContext,
         unit,
         unitLabel: buildUnitLabel(unit),
-        lotLabel: await getLotLabel(unit.lot_id),
+        lotLabel: await getUnitCurrentLotLabel(unit),
         existingPendingRequest: null,
         supported: false,
         successMessage: null,
@@ -477,7 +484,7 @@ async function renderTechOverrideRequestModal(req, res, next) {
       ...modalContext,
       unit,
       unitLabel: buildUnitLabel(unit),
-      lotLabel: await getLotLabel(unit.lot_id),
+      lotLabel: await getUnitCurrentLotLabel(unit),
       assignableLots,
       requestedDestinationLotId,
       existingPendingRequest,
@@ -520,6 +527,7 @@ async function createTechOverrideRequest(req, res, next) {
 
     if (unit) {
       modalContext.duplicateIntakeActionKind = getDuplicateIntakeActionKind(req, unit, modalContext);
+      modalContext.isParkedTakeoverRequest = techUnitModel.isUnitParked(unit);
     }
 
     if (!unit) {
@@ -543,7 +551,7 @@ async function createTechOverrideRequest(req, res, next) {
         ...modalContext,
         unit,
         unitLabel: buildUnitLabel(unit),
-        lotLabel: await getLotLabel(unit.lot_id),
+        lotLabel: await getUnitCurrentLotLabel(unit),
         existingPendingRequest: null,
         supported: false,
         successMessage: null,
@@ -563,7 +571,7 @@ async function createTechOverrideRequest(req, res, next) {
         ...modalContext,
         unit,
         unitLabel: buildUnitLabel(unit),
-        lotLabel: await getLotLabel(unit.lot_id),
+        lotLabel: await getUnitCurrentLotLabel(unit),
         existingPendingRequest: null,
         supported: false,
         successMessage: null,
@@ -592,7 +600,7 @@ async function createTechOverrideRequest(req, res, next) {
         ...modalContext,
         unit,
         unitLabel: buildUnitLabel(unit),
-        lotLabel: await getLotLabel(unit.lot_id),
+        lotLabel: await getUnitCurrentLotLabel(unit),
         assignableLots,
         requestedDestinationLotId: existingPendingRequest.requestedDestinationLotId,
         existingPendingRequest,
@@ -628,7 +636,7 @@ async function createTechOverrideRequest(req, res, next) {
         ...modalContext,
         unit,
         unitLabel: buildUnitLabel(unit),
-        lotLabel: await getLotLabel(unit.lot_id),
+        lotLabel: await getUnitCurrentLotLabel(unit),
         assignableLots,
         requestedDestinationLotId,
         existingPendingRequest: null,
@@ -655,13 +663,20 @@ async function createTechOverrideRequest(req, res, next) {
         requestDetails: {
           source: modalContext.requestContext === 'duplicate_intake'
             ? 'duplicate_intake_existing_unit_request'
-            : 'tech_units_manual_request',
+            : modalContext.isParkedTakeoverRequest
+              ? 'tech_units_parked_takeover_request'
+              : 'tech_units_manual_request',
           action_kind: modalContext.requestContext === 'duplicate_intake'
             ? modalContext.duplicateIntakeActionKind
-            : 'override',
+            : modalContext.isParkedTakeoverRequest
+              ? 'takeover'
+              : 'override',
+          source_unit_state: modalContext.isParkedTakeoverRequest ? 'parked' : 'active',
           message: modalContext.requestContext === 'duplicate_intake'
             ? `${requestWording.requestName} request created from duplicate intake.`
-            : 'Manual override request created from Tech Units.',
+            : modalContext.isParkedTakeoverRequest
+              ? 'Parked Unit takeover request created from Search Units.'
+              : 'Manual override request created from Tech Units.',
           unit_id: unit.unit_id,
           lot_id: unit.lot_id,
           requested_destination_lot_id: requestedDestinationLotId,
@@ -682,7 +697,7 @@ async function createTechOverrideRequest(req, res, next) {
           ...modalContext,
           unit,
           unitLabel: buildUnitLabel(unit),
-          lotLabel: await getLotLabel(unit.lot_id),
+          lotLabel: await getUnitCurrentLotLabel(unit),
           assignableLots,
           requestedDestinationLotId: pendingRequest ? pendingRequest.requestedDestinationLotId : requestedDestinationLotId,
           existingPendingRequest: pendingRequest,
@@ -714,7 +729,7 @@ async function createTechOverrideRequest(req, res, next) {
       ...modalContext,
       unit,
       unitLabel: buildUnitLabel(unit),
-      lotLabel: await getLotLabel(unit.lot_id),
+      lotLabel: await getUnitCurrentLotLabel(unit),
       assignableLots,
       requestedDestinationLotId,
       existingPendingRequest: pendingRequest || {
@@ -725,7 +740,9 @@ async function createTechOverrideRequest(req, res, next) {
       supported: true,
       successMessage: modalContext.requestContext === 'duplicate_intake'
         ? `${requestWording.successName} #${overrideRequestId} is pending Tech Lead+ review.`
-        : `Override request #${overrideRequestId} is pending Tech Lead+ review.`,
+        : modalContext.isParkedTakeoverRequest
+          ? `Parked Unit takeover request #${overrideRequestId} is pending Tech Lead+ review.`
+          : `Override request #${overrideRequestId} is pending Tech Lead+ review.`,
       errorMessages: [],
       formData: {
         reason: ''

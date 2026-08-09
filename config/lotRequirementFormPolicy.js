@@ -19,16 +19,34 @@ const POLICY_ALIASES = Object.freeze({
 });
 
 const REQUIREMENT_FIELD_BINDINGS = Object.freeze({
+  unit_serial_number: 'unit_serial_number',
+  bios_serial_number: 'bios_serial_number',
   unit_type: 'unit_category',
   manufacturer: 'manufacturer',
   model: 'unit_model',
   processor: 'processor_model',
   processor_family: 'processor_model',
+  processor_speed_ghz: 'processor_speed_ghz',
   ram_gb: 'memory_modules',
   ram_type: 'memory_modules',
+  memory_install_type: 'memory_modules',
   storage_gb: 'storage_devices',
   storage_type: 'storage_devices',
-  battery_health: 'battery_health'
+  storage_wipe_status: 'storage_devices',
+  operating_system: 'operating_system',
+  os_build: 'os_build',
+  bios_version: 'bios_version',
+  battery_health: 'battery_health',
+  absolute_status: 'absolute_status',
+  physical_camera_status: 'physical_camera_status',
+  touchscreen_status: 'touchscreen_status',
+  keyboard_language: 'keyboard_language',
+  complete_diagnostics: 'complete_diagnostics',
+  virus_check: 'virus_check',
+  driver_check: 'driver_check',
+  skinned_status: 'skinned_status',
+  overall_grade: 'overall_grade',
+  unit_outcome: 'unit_outcome'
 });
 
 function normalizeRequirementPolicyCode(value) {
@@ -70,11 +88,14 @@ function buildLotRequirementFormConstraints(requirements = [], policyCode = 'str
     const sourceKey = Number.isSafeInteger(requirementId) && requirementId > 0
       ? `lot_requirement:${requirementId}`
       : `lot_requirement:${requirementKey}`;
-    const sourceLabel = String(
+    const baseSourceLabel = String(
       requirement.requirement_label
       || requirement.requirement_key
       || requirementKey
     ).trim();
+    const sourceLabel = Number(requirement.is_inherited) === 1
+      ? `${baseSourceLabel} (inherited from ${requirement.source_lot_name || `Lot ${requirement.source_lot_id}`})`
+      : baseSourceLabel;
 
     if (!constraint.sources.some((source) => source.key === sourceKey)) {
       constraint.sources.push({ key: sourceKey, label: sourceLabel });

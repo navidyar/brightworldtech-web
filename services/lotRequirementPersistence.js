@@ -49,6 +49,17 @@ function buildRequirementValuePayload(requirementKey, requiredValue) {
     return payload;
   }
 
+  if (field.storageKind === 'text' || field.storageKind === 'text_option') {
+    const maximumLength = Number(field.maximumLength || 120);
+
+    if (normalizedValue.length > maximumLength) {
+      throw new Error(`${field.label} must be ${maximumLength} characters or fewer.`);
+    }
+
+    payload.requirement_text = normalizedValue;
+    return payload;
+  }
+
   const prefixByStorageKind = {
     config_value: 'config_value',
     manufacturer: 'manufacturer',

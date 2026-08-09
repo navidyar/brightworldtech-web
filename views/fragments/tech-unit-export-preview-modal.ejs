@@ -8,6 +8,13 @@
   const safeCsvDownloadUrl = typeof csvDownloadUrl === 'string' ? csvDownloadUrl : '';
   const safeXlsxDownloadUrl = typeof xlsxDownloadUrl === 'string' ? xlsxDownloadUrl : '';
   const selectedColumnKeys = new Set(safeDataset ? safeDataset.columns.map((column) => column.key) : []);
+  const safeExportPresentation = typeof exportPresentation !== 'undefined' && exportPresentation && typeof exportPresentation === 'object'
+    ? exportPresentation
+    : {};
+  const exportEyebrow = String(safeExportPresentation.eyebrow || 'Filtered Unit Export');
+  const exportTitle = String(safeExportPresentation.title || 'Export Data Preview');
+  const exportDescription = String(safeExportPresentation.description || 'Select the columns to include, review every Unit matching the current Unit Browser scope, and download the same authorized dataset as CSV or XLSX.');
+  const exportSummaryText = String(safeExportPresentation.summaryText || 'The selected columns will be applied to every matching Unit, regardless of browser pagination.');
 %>
 <div class="modal-backdrop" data-modal-backdrop>
   <section
@@ -21,11 +28,9 @@
   >
     <header class="modal-header">
       <div>
-        <p class="eyebrow">Filtered Unit Export</p>
-        <h2 id="unit-export-preview-title">Export Data Preview</h2>
-        <p id="unit-export-preview-description" class="modal-description">
-          Select the columns to include, review every Unit matching the current Unit Browser scope, and download the same authorized dataset as CSV or XLSX.
-        </p>
+        <p class="eyebrow"><%= exportEyebrow %></p>
+        <h2 id="unit-export-preview-title"><%= exportTitle %></h2>
+        <p id="unit-export-preview-description" class="modal-description"><%= exportDescription %></p>
       </div>
       <button type="button" class="modal-close-button" data-modal-close data-modal-initial-focus aria-label="Close export preview">
         <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5.5 5.5 14.5 14.5M14.5 5.5 5.5 14.5" /></svg>
@@ -45,7 +50,7 @@
             <span>Matching Units</span>
             <strong><%= formatNumber(safeDataset.totalRows) %></strong>
           </div>
-          <p>The selected columns will be applied to every matching Unit, regardless of browser pagination.</p>
+          <p><%= exportSummaryText %></p>
         </div>
 
         <div class="unit-export-action-toolbar" data-unit-export-action-toolbar>

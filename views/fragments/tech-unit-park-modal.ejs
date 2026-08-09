@@ -4,7 +4,7 @@
   const isReturn = mode === 'return';
   const safeOptions = formOptions || {};
   const lots = Array.isArray(safeOptions.lots) ? safeOptions.lots : [];
-  const technicians = Array.isArray(safeOptions.technicians) ? safeOptions.technicians : [];
+  const assignees = Array.isArray(safeOptions.assignees) ? safeOptions.assignees : [];
   const safeFormData = formData || {};
 %>
 
@@ -101,11 +101,11 @@
             </label>
 
             <label class="form-field">
-              <span>Assign to Tech <small>(optional)</small></span>
+              <span>Assign to User <small>(optional)</small></span>
               <select name="assignedToUserId">
                 <option value="">Leave unassigned</option>
-                <% technicians.forEach((technician) => { %>
-                  <option value="<%= technician.id %>" <%= String(safeFormData.assignedToUserId) === String(technician.id) ? 'selected' : '' %>><%= technician.label %></option>
+                <% assignees.forEach((assignee) => { %>
+                  <option value="<%= assignee.id %>" <%= String(safeFormData.assignedToUserId) === String(assignee.id) ? 'selected' : '' %>><%= assignee.label %></option>
                 <% }) %>
               </select>
             </label>

@@ -1,9 +1,61 @@
 (function () {
   const TECH_UNIT_REFRESH_INTERVAL_MS = 30000;
+  const UNIT_SAVE_CONFIRMATION_TIMEOUT_MS = 30000;
+  let techUnitSaveConfirmationTimer = null;
   let techUnitRefreshInFlight = false;
   let techUnitRefreshQueued = false;
   let techUnitRefreshQueueTimer = null;
   let techUnitEventSource = null;
+
+  function normalizeUnitSaveConfirmationValue(value) {
+    return String(value || '').trim();
+  }
+
+  function buildUnitSaveConfirmationMessage(detail) {
+    if (!detail || detail.source !== 'tech-unit-form' || !['create', 'edit'].includes(detail.operation)) {
+      return '';
+    }
+
+    const identifiers = [
+      ['Asset Tag', normalizeUnitSaveConfirmationValue(detail.assetTag)],
+      ['Unit Serial', normalizeUnitSaveConfirmationValue(detail.unitSerialNumber)],
+      ['BIOS Serial', normalizeUnitSaveConfirmationValue(detail.biosSerialNumber)]
+    ]
+      .filter(([, value]) => Boolean(value))
+      .map(([label, value]) => `${label}: ${value}`);
+    const actionLabel = detail.operation === 'edit' ? 'updated' : 'created';
+    const identifierSummary = identifiers.length > 0 ? ` — ${identifiers.join(' · ')}` : '';
+
+    return `Unit ${actionLabel} successfully${identifierSummary}.`;
+  }
+
+  function hideUnitSaveConfirmation() {
+    const notification = document.getElementById('tech-unit-save-notification');
+
+    if (!notification) {
+      return;
+    }
+
+    notification.hidden = true;
+    notification.textContent = '';
+  }
+
+  function showUnitSaveConfirmation(detail) {
+    const notification = document.getElementById('tech-unit-save-notification');
+    const message = buildUnitSaveConfirmationMessage(detail);
+
+    if (!notification || !message) {
+      return;
+    }
+
+    window.clearTimeout(techUnitSaveConfirmationTimer);
+    notification.textContent = message;
+    notification.hidden = false;
+    techUnitSaveConfirmationTimer = window.setTimeout(() => {
+      hideUnitSaveConfirmation();
+      techUnitSaveConfirmationTimer = null;
+    }, UNIT_SAVE_CONFIRMATION_TIMEOUT_MS);
+  }
 
   function normalizePanelName(panelName) {
     return ['history', 'my-weight'].includes(panelName) ? panelName : 'details';
@@ -1179,6 +1231,10 @@
     }
 
     submitAutoFilterControl(autoFilterControl);
+  });
+
+  document.body.addEventListener('unit-saved', (event) => {
+    showUnitSaveConfirmation(event.detail || null);
   });
 
   [

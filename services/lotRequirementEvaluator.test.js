@@ -221,6 +221,22 @@ test('catalog requirements compare by stored IDs rather than display text', () =
   assert.equal(check.status, 'accepted');
 });
 
+test('Cosmetic Grade requirements treat equivalent legacy grade IDs as the same grade', () => {
+  const snapshot = buildSampleSnapshot({
+    overall_grade_config_value_id: 220,
+    overall_grade_label: 'A'
+  });
+  const check = evaluateRequirement(snapshot, requirement({
+    requirement_key: 'overall_grade',
+    requirement_label: 'Cosmetic Grade',
+    manufacturer_id: null,
+    requirement_config_value_id: 110,
+    required_value: 'Grade A'
+  }));
+
+  assert.equal(check.status, 'accepted');
+});
+
 test('missing catalog values reject the unit instead of becoming an unsupported review', () => {
   const check = evaluateRequirement(
     buildSampleSnapshot({ manufacturer_id: null, manufacturer_name: null }),
@@ -469,4 +485,125 @@ test('Processor Family requirements reject processors outside the configured fam
 
   assert.equal(evaluated.status, 'rejected');
   assert.match(evaluated.failedChecks[0].message, /Intel i5-12th Gen/);
+});
+
+test('text requirements evaluate serial, OS build, and outcome values case-insensitively', () => {
+  const [snapshot] = buildUnitSnapshots({
+    baseRows: [{
+      unit_id: 10,
+      asset_number: 1234,
+      os_build: '23H2 / 22631',
+      outcome_code: 'pass',
+      outcome_label: 'Pass'
+    }],
+    identifierRows: [
+      { unit_id: 10, identifier_type_code: 'unit_serial_number', identifier_value: 'ABC-123' },
+      { unit_id: 10, identifier_type_code: 'bios_serial_number', identifier_value: 'BIOS-XYZ' }
+    ]
+  });
+
+  for (const row of [
+    requirement({
+      requirement_key: 'unit_serial_number',
+      requirement_label: 'Unit Serial Number',
+      manufacturer_id: null,
+      requirement_text: 'abc-123',
+      required_value: 'abc-123'
+    }),
+    requirement({
+      lot_requirement_id: 2,
+      requirement_key: 'os_build',
+      requirement_label: 'OS Build',
+      manufacturer_id: null,
+      requirement_text: '23h2 / 22631',
+      required_value: '23h2 / 22631'
+    }),
+    requirement({
+      lot_requirement_id: 3,
+      requirement_key: 'unit_outcome',
+      requirement_label: 'Unit Outcome',
+      manufacturer_id: null,
+      requirement_text: 'PASS',
+      required_value: 'Pass'
+    })
+  ]) {
+    assert.equal(evaluateRequirement(snapshot, row).status, 'accepted');
+  }
+});
+
+test('processor speed supports independent minimum and maximum enforcement', () => {
+  const snapshot = buildSampleSnapshot({ processor_speed_ghz: 2.6 });
+  const minimum = evaluateRequirement(snapshot, requirement({
+    requirement_key: 'processor_speed_ghz',
+    requirement_label: 'Processor Speed',
+    operator_code: 'greater_equal',
+    operator_label: 'Minimum',
+    manufacturer_id: null,
+    requirement_number: 2.4,
+    required_value: '2.4'
+  }));
+  const maximum = evaluateRequirement(snapshot, requirement({
+    lot_requirement_id: 2,
+    requirement_key: 'processor_speed_ghz',
+    requirement_label: 'Processor Speed',
+    operator_code: 'less_equal',
+    operator_label: 'Maximum',
+    manufacturer_id: null,
+    requirement_number: 2.5,
+    required_value: '2.5'
+  }));
+
+  assert.equal(minimum.status, 'accepted');
+  assert.equal(maximum.status, 'rejected');
+});
+
+test('current component attributes expose memory install type and storage wipe status', () => {
+  const [snapshot] = buildUnitSnapshots({
+    baseRows: [{ unit_id: 1, asset_number: 5 }],
+    memoryRows: [{
+      unit_id: 1,
+      size_gb: 16,
+      memory_install_type_code: 'integrated_soldered',
+      memory_install_type_label: 'Integrated / Soldered'
+    }],
+    storageRows: [{
+      unit_id: 1,
+      size_gb: 512,
+      wipe_status_config_value_id: 91,
+      wipe_status_label: 'Wiped'
+    }]
+  });
+
+  const installCheck = evaluateRequirement(snapshot, requirement({
+    requirement_key: 'memory_install_type',
+    requirement_label: 'Memory Install Type',
+    manufacturer_id: null,
+    requirement_text: 'integrated_soldered',
+    required_value: 'Integrated / Soldered'
+  }));
+  const wipeCheck = evaluateRequirement(snapshot, requirement({
+    lot_requirement_id: 2,
+    requirement_key: 'storage_wipe_status',
+    requirement_label: 'Storage Wipe Status',
+    manufacturer_id: null,
+    requirement_config_value_id: 91,
+    required_value: 'Wiped'
+  }));
+
+  assert.equal(installCheck.status, 'accepted');
+  assert.equal(wipeCheck.status, 'accepted');
+});
+
+test('zero is retained as a numeric requirement display value', () => {
+  const snapshot = buildSampleSnapshot({ ram_gb: 0 });
+  const check = evaluateRequirement(snapshot, requirement({
+    requirement_key: 'ram_gb',
+    requirement_label: 'Current Memory Size',
+    manufacturer_id: null,
+    requirement_number: 0,
+    required_value: 0
+  }));
+
+  assert.equal(check.requiredValue, '0');
+  assert.equal(check.status, 'accepted');
 });

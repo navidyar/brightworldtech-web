@@ -1,4 +1,5 @@
 const { pool } = require('./db');
+const { getCanonicalCosmeticGrade, isNotYetGradedToken } = require('../services/cosmeticGradeNormalization');
 
 const schemaTableCache = new Map();
 const schemaColumnCache = new Map();
@@ -323,9 +324,14 @@ function buildCompletedUnitWindowWhere(window, gradeAlias = 'uga') {
   };
 }
 
-function buildWorkCompletionWindowWhere(window, alias = 'uwc') {
+async function buildWorkCompletionWindowWhere(window, alias = 'uwc') {
+  const completionColumns = await getColumnSet('unit_work_completions');
   const whereParts = [`${alias}.reversed_at IS NULL`];
   const params = [];
+
+  if (completionColumns.has('grants_production_credit')) {
+    whereParts.push(`${alias}.grants_production_credit = 1`);
+  }
 
   if (window && window.startSql) {
     whereParts.push(`${alias}.completed_at >= ?`);
@@ -411,7 +417,7 @@ function buildDashboardReportingWindows(filters = {}) {
 
 async function getCompletionSummaryForWindow(window) {
   if (await tableExists('unit_work_completions')) {
-    const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
+    const completedFilter = await buildWorkCompletionWindowWhere(window, 'uwc');
     const [rows] = await pool.query(
       `
         SELECT
@@ -458,7 +464,7 @@ async function getCompletionSummaryForWindow(window) {
 
 async function getCompletionCategoryBreakdown(window) {
   if (await tableExists('unit_work_completions') && await tableExists('units')) {
-    const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
+    const completedFilter = await buildWorkCompletionWindowWhere(window, 'uwc');
     const [rows] = await pool.query(
       `
         SELECT
@@ -502,7 +508,7 @@ async function getCompletionLotBreakdown(window) {
   const lotNameExpression = selectExpression(
     'l', lotColumns, ['name', 'lot_name', 'title', 'lot_number'], 'lot_name', "CONCAT('Lot #', l.lot_id)"
   );
-  const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
+  const completedFilter = await buildWorkCompletionWindowWhere(window, 'uwc');
   const [rows] = await pool.query(
     `
       SELECT
@@ -574,6 +580,10 @@ function getCurrentUserIdFromContext(context = {}) {
 
 async function getTechDashboardUserOptions() {
   if (await tableExists('unit_work_completions')) {
+    const completionColumns = await getColumnSet('unit_work_completions');
+    const productionCreditFilter = completionColumns.has('grants_production_credit')
+      ? 'AND uwc.grants_production_credit = 1'
+      : '';
     const [rows] = await pool.query(
       `
         SELECT
@@ -586,6 +596,7 @@ async function getTechDashboardUserOptions() {
         INNER JOIN users
           ON users.user_id = uwc.completed_by_user_id
         WHERE uwc.reversed_at IS NULL
+          ${productionCreditFilter}
           AND users.is_active = 1
         GROUP BY users.user_id, users.first_name, users.last_name, users.email
         ORDER BY users.first_name, users.last_name, users.email
@@ -607,7 +618,7 @@ async function getProductivitySummaryForUser(window, userId = null) {
     return { completed: 0, weighted: 0 };
   }
 
-  const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
+  const completedFilter = await buildWorkCompletionWindowWhere(window, 'uwc');
   const params = [...completedFilter.params];
   const userFilter = userId ? `${completedFilter.whereSql ? 'AND' : 'WHERE'} uwc.completed_by_user_id = ?` : '';
 
@@ -638,7 +649,7 @@ async function getProductivityCategoryBreakdownForUser(window, userId = null) {
     return [];
   }
 
-  const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
+  const completedFilter = await buildWorkCompletionWindowWhere(window, 'uwc');
   const params = [...completedFilter.params];
   const userFilter = userId ? `${completedFilter.whereSql ? 'AND' : 'WHERE'} uwc.completed_by_user_id = ?` : '';
 
@@ -686,7 +697,7 @@ async function getProductivityLotBreakdownForUser(window, userId = null) {
   const lotNameExpression = selectExpression(
     'l', lotColumns, ['name', 'lot_name', 'title', 'lot_number'], 'lot_name', "CONCAT('Lot #', l.lot_id)"
   );
-  const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
+  const completedFilter = await buildWorkCompletionWindowWhere(window, 'uwc');
   const params = [...completedFilter.params];
   const userFilter = userId ? `${completedFilter.whereSql ? 'AND' : 'WHERE'} uwc.completed_by_user_id = ?` : '';
 
@@ -726,7 +737,7 @@ async function getAllTechSummaryRows(window, techUsers) {
     return techUsers.map((tech) => ({ ...tech, completed: 0, weighted: 0 }));
   }
 
-  const completedFilter = buildWorkCompletionWindowWhere(window, 'uwc');
+  const completedFilter = await buildWorkCompletionWindowWhere(window, 'uwc');
   const [rows] = await pool.query(
     `
       SELECT
@@ -1196,9 +1207,13 @@ async function getOverrideStats() {
 
 function normalizeGradeLabel(label, code) {
   const rawValue = String(label || code || '').trim();
-  const normalizedValue = rawValue.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  const canonicalGrade = getCanonicalCosmeticGrade(rawValue);
 
-  if (['n_a', 'na', 'not_applicable', 'not_yet_graded'].includes(normalizedValue)) {
+  if (canonicalGrade) {
+    return canonicalGrade;
+  }
+
+  if (isNotYetGradedToken(rawValue)) {
     return 'Not Yet Graded';
   }
 
@@ -1230,9 +1245,10 @@ async function getGradeBreakdown(filters = {}) {
       ORDER BY
         CASE grade.code
           WHEN 'a' THEN 10
-          WHEN 'b' THEN 20
-          WHEN 'c' THEN 30
-          WHEN 'd' THEN 40
+          WHEN 'ab' THEN 20
+          WHEN 'b' THEN 30
+          WHEN 'c' THEN 40
+          WHEN 'd' THEN 50
           WHEN 'n_a' THEN 90
           ELSE 999
         END,
