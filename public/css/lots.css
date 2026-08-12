@@ -1956,6 +1956,15 @@ table tr.lot-hidden-row td {
   margin: 0;
 }
 
+.lot-requirement-suppressed-row td {
+  color: var(--muted);
+  background: #f8fafc;
+}
+
+.lot-requirement-suppressed-row td strong {
+  color: var(--text);
+}
+
 .lot-requirements-inheritance-note {
   margin: 0 0 10px;
   color: var(--muted);
@@ -2449,25 +2458,42 @@ table tr.lot-hidden-row td {
   }
 }
 
-/* Lots-controlled Unit form — Stage 3 configuration modal. */
-.lot-unit-form-rules-modal {
+/* Lots-controlled Unit form — Stage 3 configuration modal.
+   Stage 10W36 keeps the modal shell fixed inside the viewport and assigns the
+   only vertical scrollbar to the full modal body. This avoids both the tiny
+   field-list viewport and the backdrop/panel competing for vertical scroll. */
+body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-backdrop.modal-backdrop {
+  align-items: center;
+  padding: 12px 18px;
+  overflow: hidden;
+}
+
+body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-modal.modal-panel.site-clean-modal {
   display: flex;
-  width: min(1180px, calc(100vw - 28px));
-  max-height: calc(100dvh - 36px);
+  width: min(1180px, calc(100vw - 36px));
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
   flex-direction: column;
   overflow: hidden;
+  border-radius: 10px;
 }
 
-.lot-unit-form-rules-modal .modal-header {
+body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-modal.modal-panel.site-clean-modal > .modal-header {
   position: static;
   flex: 0 0 auto;
+  border-radius: 10px 10px 0 0;
 }
 
-.lot-unit-form-rules-modal .modal-body {
-  display: flex;
+body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-modal.modal-panel.site-clean-modal > .modal-body {
+  display: block;
   min-height: 0;
   flex: 1 1 auto;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  -webkit-overflow-scrolling: touch;
+  border-radius: 0 0 10px 10px;
 }
 
 .lot-unit-form-rules-subtitle {
@@ -2478,11 +2504,8 @@ table tr.lot-hidden-row td {
 }
 
 .lot-unit-form-rules-form {
-  display: flex;
+  display: grid;
   width: 100%;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
   gap: 12px;
 }
 
@@ -2551,12 +2574,10 @@ table tr.lot-hidden-row td {
   line-height: 1.4;
 }
 
-.lot-unit-form-rules-scroll {
+body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-scroll {
   min-height: 0;
-  flex: 1 1 auto;
-  padding-right: 3px;
-  overflow-x: hidden;
-  overflow-y: auto;
+  padding-right: 0;
+  overflow: visible;
 }
 
 .lot-unit-form-rule-section + .lot-unit-form-rule-section {
@@ -2583,9 +2604,10 @@ table tr.lot-hidden-row td {
   font-weight: 700;
 }
 
-.lot-unit-form-rule-table-card {
+body.lots-lookup-ui-preview #modal-root .lot-unit-form-rule-table-card {
   margin: 0;
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .lot-unit-form-rule-table-card table {
@@ -2664,7 +2686,6 @@ table tr.lot-hidden-row td {
 }
 
 .lot-unit-form-rules-actions {
-  flex: 0 0 auto;
   justify-content: flex-end;
   margin: 0;
   padding-top: 12px;
@@ -2714,9 +2735,14 @@ table tr.lot-hidden-row td {
 }
 
 @media (max-width: 700px) {
-  .lot-unit-form-rules-modal {
-    width: min(100%, calc(100vw - 20px));
-    max-height: calc(100dvh - 24px);
+  body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-backdrop.modal-backdrop {
+    padding: 8px;
+  }
+
+  body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-modal.modal-panel.site-clean-modal {
+    width: 100%;
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
   }
 
   .lot-unit-form-rules-toolbar {
@@ -2749,6 +2775,17 @@ table tr.lot-hidden-row td {
   .lot-unit-form-rules-actions .primary-button,
   .lot-unit-form-rules-actions .secondary-button {
     width: 100%;
+  }
+}
+
+@media (max-height: 620px) {
+  body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-backdrop.modal-backdrop {
+    padding-block: 8px;
+  }
+
+  body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-modal.modal-panel.site-clean-modal {
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
   }
 }
 
@@ -4002,11 +4039,17 @@ body.lots-lookup-ui-preview #modal-root .lot-delete-summary {
   box-shadow: none;
 }
 
-body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-intro,
-body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-summary {
+body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-intro {
   border: 1px solid #d3dfec;
   border-radius: 8px;
   background: #fbfdff;
+  box-shadow: none;
+}
+
+body.lots-lookup-ui-preview #modal-root .lot-unit-form-rules-summary {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   box-shadow: none;
 }
 

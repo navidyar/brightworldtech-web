@@ -49,11 +49,13 @@
 
     <label class="form-field">
       <span>Lot</span>
-      <select name="lotId">
+      <select name="lotId" data-hierarchical-lot-select>
         <option value="">All Lots</option>
-        <% lots.forEach((lot) => { %>
-          <option value="<%= lot.value %>" <%= Number(safeFilters.lotId || 0) === Number(lot.value) ? 'selected' : '' %>><%= lot.label %> (<%= formatNumber(lot.count) %>)</option>
-        <% }) %>
+        <%- include('../partials/hierarchical-lot-options', {
+          lotOptions: lots,
+          selectedLotId: safeFilters.lotId,
+          includeCounts: true
+        }) %>
       </select>
     </label>
 

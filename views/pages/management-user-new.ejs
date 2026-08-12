@@ -66,6 +66,21 @@
                 />
               </label>
 
+              <label class="form-field">
+                <span>Setup Link Expiration (hours)</span>
+                <input
+                  type="number"
+                  name="setupLinkExpiryHours"
+                  value="<%= formData.setupLinkExpiryHours || passwordLinkExpiryPolicy.defaultHours %>"
+                  min="<%= passwordLinkExpiryPolicy.minHours %>"
+                  max="<%= passwordLinkExpiryPolicy.maxHours %>"
+                  step="1"
+                  inputmode="numeric"
+                  required
+                />
+                <small class="field-hint">Choose 1–8 hours before the initial setup link is generated. Default: 1 hour.</small>
+              </label>
+
               <div>
                 <p class="eyebrow" style="margin-top: 8px;">Primary Access Role</p>
                 <p class="management-user-role-help">Choose one primary account access role. QC grants read-only cross-technician Unit access; production work, packing, and task activity remain separate operational records.</p>

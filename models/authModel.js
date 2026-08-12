@@ -1,26 +1,14 @@
 const { pool } = require('./db');
 const { buildUsernameStem, nextAvailableUsername, normalizeUsername } = require('../services/userUsernamePolicy');
+const {
+  DEFAULT_PASSWORD_LINK_EXPIRY_HOURS,
+  MIN_PASSWORD_LINK_EXPIRY_HOURS,
+  MAX_PASSWORD_LINK_EXPIRY_HOURS,
+  normalizePasswordLinkExpiryHours
+} = require('../services/passwordLinkExpiryPolicy');
 
 const PASSWORD_LINK_EXPIRY_CATEGORY_CODE = 'security_settings';
 const PASSWORD_LINK_EXPIRY_VALUE_CODE = 'password_link_expiry_hours';
-const DEFAULT_PASSWORD_LINK_EXPIRY_HOURS = 1;
-const MIN_PASSWORD_LINK_EXPIRY_HOURS = 1;
-const MAX_PASSWORD_LINK_EXPIRY_HOURS = 24;
-
-function normalizePasswordLinkExpiryHours(value) {
-  const rawValue = String(value ?? '').trim();
-  const hours = Number.parseInt(rawValue, 10);
-
-  if (!/^\d+$/.test(rawValue) || !Number.isInteger(hours)) {
-    return DEFAULT_PASSWORD_LINK_EXPIRY_HOURS;
-  }
-
-  if (hours < MIN_PASSWORD_LINK_EXPIRY_HOURS || hours > MAX_PASSWORD_LINK_EXPIRY_HOURS) {
-    return DEFAULT_PASSWORD_LINK_EXPIRY_HOURS;
-  }
-
-  return hours;
-}
 
 async function getPasswordLinkExpiryHours() {
   const [rows] = await pool.query(

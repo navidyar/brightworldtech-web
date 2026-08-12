@@ -30,6 +30,8 @@
   const visibleValueCount = categorySections.reduce((sectionTotal, section) => (
     sectionTotal + section.categories.reduce((categoryTotal, category) => categoryTotal + category.values.length, 0)
   ), 0);
+  const processorTypeRows = Array.isArray(locals.processorTypes) ? locals.processorTypes : [];
+  let processorTypesRendered = false;
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -284,9 +286,28 @@
                         </div>
                       </details>
                     <% }) %>
+
+                    <% if (section.key === 'unit-workflow') { %>
+                      <%- include('../fragments/processor-types-config-category', { processorTypeRows, includeInactiveValues, formatNumber }) %>
+                      <% processorTypesRendered = true; %>
+                    <% } %>
                   </div>
                 </section>
               <% }) %>
+
+              <% if (!processorTypesRendered) { %>
+                <section class="configuration-group" data-configuration-group>
+                  <header class="configuration-group-heading">
+                    <div>
+                      <h2>Other Configuration</h2>
+                      <p>Additional app configuration values that do not fit the primary groups above.</p>
+                    </div>
+                  </header>
+                  <div class="configuration-category-list">
+                    <%- include('../fragments/processor-types-config-category', { processorTypeRows, includeInactiveValues, formatNumber }) %>
+                  </div>
+                </section>
+              <% } %>
             </div>
           </section>
         </main>

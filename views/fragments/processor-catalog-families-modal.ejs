@@ -1,0 +1,53 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeFamilies = Array.isArray(families) ? families : [];
+  const returnParams = new URLSearchParams();
+  if (returnTo) returnParams.set('returnTo', returnTo);
+  if (filters?.processorBrandId) returnParams.set('processorBrandId', String(filters.processorBrandId));
+  if (filters?.includeInactive) returnParams.set('includeInactive', '1');
+  if (filters?.needsReview) returnParams.set('needsReview', '1');
+  if (filters?.search) returnParams.set('search', filters.search);
+  const formAction = `/management/config/processors/${processor.id}/families${returnParams.toString() ? `?${returnParams.toString()}` : ''}`;
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal processor-catalog-modal" role="dialog" aria-modal="true" aria-labelledby="processor-families-modal-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="processor-families-modal-title">Manage Processor Families</h2>
+        <p><strong><%= processor.brandName %> <%= processor.modelCode %></strong></p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length) { %>
+        <div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <form class="app-form app-form-clean" method="post" action="<%= formAction %>" data-processor-catalog-form>
+        <p class="field-hint">Check the Processor Families this processor should belong to. To move it, uncheck the incorrect family and check the correct one, then save.</p>
+
+        <div class="processor-family-member-list">
+          <% if (!safeFamilies.length) { %>
+            <p class="empty-state">No Processor Families exist for this Processor Type.</p>
+          <% } %>
+
+          <% safeFamilies.forEach((family) => { %>
+            <label class="processor-family-member-row">
+              <input type="checkbox" name="processorFamilyIds" value="<%= family.id %>" <%= family.isMember ? 'checked' : '' %> />
+              <span>
+                <strong><%= family.name %></strong>
+                <small><%= [family.code, family.isActive ? '' : 'Inactive', family.assignmentSource ? `${family.assignmentSource} membership` : ''].filter(Boolean).join(' · ') %></small>
+              </span>
+            </label>
+          <% }) %>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="primary-button">Save Family Memberships</button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

@@ -1,5 +1,11 @@
 const configModel = require('../models/configModel');
 const operationalOptionRankingModel = require('../models/operationalOptionRankingModel');
+const { isValidConfigValueCode } = require('../services/configValueCodePolicy');
+const {
+  MIN_PASSWORD_LINK_EXPIRY_HOURS,
+  MAX_PASSWORD_LINK_EXPIRY_HOURS,
+  parsePasswordLinkExpiryHours
+} = require('../services/passwordLinkExpiryPolicy');
 const {
   buildOperationalOptionRankingAdministration,
   formatRefreshIntervalLabel,
@@ -8,8 +14,6 @@ const {
 
 const PASSWORD_LINK_EXPIRY_CATEGORY_CODE = 'security_settings';
 const PASSWORD_LINK_EXPIRY_VALUE_CODE = 'password_link_expiry_hours';
-const MIN_PASSWORD_LINK_EXPIRY_HOURS = 1;
-const MAX_PASSWORD_LINK_EXPIRY_HOURS = 24;
 const CANONICAL_COSMETIC_GRADE_CATEGORY_CODE = 'cosmetic_grades';
 
 function isCanonicalCosmeticGradeCategory(category) {
@@ -31,20 +35,6 @@ function isPasswordLinkExpirySetting(configValue) {
   );
 }
 
-function parsePasswordLinkExpiryHours(value) {
-  const rawValue = String(value ?? '').trim();
-  const hours = Number.parseInt(rawValue, 10);
-
-  if (!/^\d+$/.test(rawValue) || !Number.isInteger(hours)) {
-    return null;
-  }
-
-  if (hours < MIN_PASSWORD_LINK_EXPIRY_HOURS || hours > MAX_PASSWORD_LINK_EXPIRY_HOURS) {
-    return null;
-  }
-
-  return hours;
-}
 
 function parseIncludeInactiveFlag(value) {
   return value === '1' || value === 'true' || value === 'yes' || value === 'on';
@@ -150,6 +140,41 @@ function normalizeCode(value) {
     .replace(/^_+|_+$/g, '');
 }
 
+function normalizeProcessorTypeCode(value) {
+  return normalizeCode(value).slice(0, 75);
+}
+
+function getProcessorTypeFormData(req, processorType = null) {
+  const name = String(req?.body?.name ?? processorType?.name ?? '').trim().replace(/\s+/g, ' ').slice(0, 100);
+  const typedCode = String(req?.body?.code ?? processorType?.code ?? '').trim();
+  return {
+    name,
+    code: normalizeProcessorTypeCode(typedCode || name),
+    isActive: req?.body ? req.body.isActive === '1' : Boolean(processorType?.isActive ?? true),
+    includeInactive: parseIncludeInactiveFlag(req?.body?.includeInactive ?? req?.query?.includeInactive) ? '1' : '0'
+  };
+}
+
+async function validateProcessorTypeForm(formData, processorBrandId = null) {
+  const errors = [];
+  if (!formData.name) errors.push('Enter a Processor Type name.');
+  if (formData.name.length > 100) errors.push('Processor Type name must be 100 characters or less.');
+  if (!formData.code || !/^[a-z0-9_-]{1,75}$/.test(formData.code)) {
+    errors.push('Processor Type code must be 1 to 75 characters using lowercase letters, numbers, underscores, or hyphens.');
+  }
+  if (errors.length === 0) {
+    const conflict = await configModel.processorTypeIdentityExists({
+      code: formData.code,
+      name: formData.name,
+      exceptProcessorBrandId: processorBrandId
+    });
+    if (conflict) {
+      errors.push(`Processor Type ${conflict.name} already uses that name or code.`);
+    }
+  }
+  return errors;
+}
+
 function getConfigValueFormDataFromRequest(req) {
   return {
     configCategoryId: String(req.body.configCategoryId || '').trim(),
@@ -194,11 +219,13 @@ async function validateConfigValueForm(formData, options = {}) {
   const configCategoryId = parsePositiveInteger(formData.configCategoryId);
   const configValueId = options.configValueId ? Number(options.configValueId) : null;
   const protectedSecuritySetting = isPasswordLinkExpirySetting(options.configValue);
+  let selectedCategory = null;
 
   if (!configCategoryId) {
     errorMessages.push('Choose a configuration category.');
   } else {
     const category = await configModel.getConfigCategoryById(configCategoryId);
+    selectedCategory = category;
 
     if (!category) {
       errorMessages.push('The selected configuration category could not be found.');
@@ -209,8 +236,14 @@ async function validateConfigValueForm(formData, options = {}) {
 
   if (!formData.code) {
     errorMessages.push('Enter a stable code for this value.');
-  } else if (!/^[a-z0-9][a-z0-9_-]{1,118}[a-z0-9]$/.test(formData.code)) {
-    errorMessages.push('Code must be 3 to 120 characters and use lowercase letters, numbers, underscores, or hyphens.');
+  } else if (!isValidConfigValueCode(formData.code, {
+    allowShort: String(selectedCategory?.code || '').trim().toLowerCase() === 'lot_types'
+  })) {
+    errorMessages.push(
+      String(selectedCategory?.code || '').trim().toLowerCase() === 'lot_types'
+        ? 'Lot Type code must be 1 to 120 characters and use lowercase letters, numbers, underscores, or hyphens.'
+        : 'Code must be 3 to 120 characters and use lowercase letters, numbers, underscores, or hyphens.'
+    );
   } else {
     const codeExists = await configModel.configValueCodeExists(formData.code, configValueId);
 
@@ -278,9 +311,10 @@ async function renderConfigPage(req, res, next) {
     const includeInactiveValues = parseIncludeInactiveFlag(req.query.includeInactive);
     const categories = await configModel.listConfigCategoriesWithValues({ includeInactiveValues });
     const categorySections = configModel.groupConfigCategories(categories);
-    const [summary, rankingAdministration] = await Promise.all([
+    const [summary, rankingAdministration, processorTypes] = await Promise.all([
       configModel.getConfigSummary(),
-      loadOperationalRankingAdministration(categories)
+      loadOperationalRankingAdministration(categories),
+      configModel.listProcessorTypes({ includeInactive: includeInactiveValues })
     ]);
 
     res.render('pages/management-config', {
@@ -290,6 +324,7 @@ async function renderConfigPage(req, res, next) {
       categorySections,
       summary,
       rankingAdministration,
+      processorTypes,
       includeInactiveValues
     });
   } catch (error) {
@@ -681,6 +716,138 @@ async function updateConfigValueStatus(req, res, next) {
   }
 }
 
+async function renderNewProcessorTypeModal(req, res, next) {
+  try {
+    const includeInactiveValues = parseIncludeInactiveFlag(req.query.includeInactive);
+    return res.render('fragments/processor-type-form-modal', {
+      mode: 'create',
+      processorType: null,
+      formData: { name: '', code: '', isActive: true, includeInactive: includeInactiveValues ? '1' : '0' },
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function createProcessorType(req, res, next) {
+  try {
+    const formData = getProcessorTypeFormData(req);
+    const errorMessages = await validateProcessorTypeForm(formData);
+    if (errorMessages.length > 0) {
+      return res.status(400).render('fragments/processor-type-form-modal', {
+        mode: 'create',
+        processorType: null,
+        formData,
+        errorMessages
+      });
+    }
+
+    await configModel.createProcessorType({
+      code: formData.code,
+      name: formData.name,
+      isActive: formData.isActive
+    });
+    return sendHtmxRedirect(req, res, addCacheBuster(getConfigReturnUrl(formData.includeInactive === '1', 'processorTypeCreated=1')));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderEditProcessorTypeModal(req, res, next) {
+  try {
+    const processorBrandId = parsePositiveInteger(req.params.processorBrandId);
+    const processorType = processorBrandId ? await configModel.getProcessorTypeById(processorBrandId) : null;
+    const includeInactiveValues = parseIncludeInactiveFlag(req.query.includeInactive);
+    if (!processorType) {
+      return res.status(404).render('fragments/processor-type-status-modal', {
+        actionType: 'error', processorType: null, includeInactiveValues, errorMessages: ['The selected Processor Type could not be found.']
+      });
+    }
+
+    return res.render('fragments/processor-type-form-modal', {
+      mode: 'edit',
+      processorType,
+      formData: { ...processorType, includeInactive: includeInactiveValues ? '1' : '0' },
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateProcessorType(req, res, next) {
+  try {
+    const processorBrandId = parsePositiveInteger(req.params.processorBrandId);
+    const processorType = processorBrandId ? await configModel.getProcessorTypeById(processorBrandId) : null;
+    if (!processorType) {
+      return sendHtmxRedirect(req, res, getConfigReturnUrl(parseIncludeInactiveFlag(req.body.includeInactive), 'error=processor_type_not_found'));
+    }
+
+    const formData = getProcessorTypeFormData(req, processorType);
+    const errorMessages = await validateProcessorTypeForm(formData, processorBrandId);
+    if (errorMessages.length > 0) {
+      return res.status(400).render('fragments/processor-type-form-modal', { mode: 'edit', processorType, formData, errorMessages });
+    }
+
+    await configModel.updateProcessorType({ processorBrandId, code: formData.code, name: formData.name, isActive: formData.isActive });
+    return sendHtmxRedirect(req, res, addCacheBuster(getConfigReturnUrl(formData.includeInactive === '1', 'processorTypeUpdated=1')));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderProcessorTypeStatusModal(req, res, next) {
+  try {
+    const processorBrandId = parsePositiveInteger(req.params.processorBrandId);
+    const actionType = String(req.params.actionType || '').toLowerCase();
+    const includeInactiveValues = parseIncludeInactiveFlag(req.query.includeInactive);
+    const processorType = processorBrandId ? await configModel.getProcessorTypeById(processorBrandId) : null;
+    if (!processorType || !['activate', 'deactivate', 'delete'].includes(actionType)) {
+      return res.status(404).render('fragments/processor-type-status-modal', {
+        actionType: 'error', processorType: null, includeInactiveValues, errorMessages: ['The selected Processor Type action could not be loaded.']
+      });
+    }
+    return res.render('fragments/processor-type-status-modal', { actionType, processorType, includeInactiveValues, errorMessages: [] });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateProcessorTypeStatus(req, res, next) {
+  try {
+    const processorBrandId = parsePositiveInteger(req.params.processorBrandId);
+    const actionType = String(req.params.actionType || '').toLowerCase();
+    const includeInactiveValues = parseIncludeInactiveFlag(req.body.includeInactive);
+    const processorType = processorBrandId ? await configModel.getProcessorTypeById(processorBrandId) : null;
+    if (!processorType || !['activate', 'deactivate', 'delete'].includes(actionType)) {
+      return sendHtmxRedirect(req, res, getConfigReturnUrl(includeInactiveValues, 'error=processor_type_not_found'));
+    }
+
+    if (actionType === 'delete') {
+      const result = await configModel.deleteProcessorTypeIfUnused(processorBrandId);
+      if (!result.deleted) {
+        const currentType = await configModel.getProcessorTypeById(processorBrandId);
+        return res.status(409).render('fragments/processor-type-status-modal', {
+          actionType: 'delete',
+          processorType: currentType || processorType,
+          includeInactiveValues,
+          errorMessages: result.inUse
+            ? ['This Processor Type is still referenced by Processors or Processor Families. Reassign those records first, or deactivate it to remove it from normal selection without damaging history.']
+            : ['The Processor Type could not be deleted.']
+        });
+      }
+      return sendHtmxRedirect(req, res, addCacheBuster(getConfigReturnUrl(includeInactiveValues, 'processorTypeDeleted=1')));
+    }
+
+    const shouldActivate = actionType === 'activate';
+    await configModel.setProcessorTypeActive(processorBrandId, shouldActivate);
+    return sendHtmxRedirect(req, res, addCacheBuster(getConfigReturnUrl(shouldActivate ? includeInactiveValues : true, shouldActivate ? 'processorTypeActivated=1' : 'processorTypeDeactivated=1')));
+  } catch (error) {
+    next(error);
+  }
+}
+
 module.exports = {
   renderConfigPage,
   refreshOperationalOptionRankings,
@@ -691,5 +858,11 @@ module.exports = {
   updateConfigValue,
   reorderConfigValues,
   renderConfigValueStatusModal,
-  updateConfigValueStatus
+  updateConfigValueStatus,
+  renderNewProcessorTypeModal,
+  createProcessorType,
+  renderEditProcessorTypeModal,
+  updateProcessorType,
+  renderProcessorTypeStatusModal,
+  updateProcessorTypeStatus
 };

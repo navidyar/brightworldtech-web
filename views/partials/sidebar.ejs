@@ -14,12 +14,14 @@
   const adminConfigurationNavKeys = [
     'admin-config-values',
     'admin-config-processor-families',
+    'admin-config-processors',
     'admin-config-models',
     'admin-config-database'
   ];
   const adminSectionActive = adminConfigurationNavKeys.includes(currentNav);
   const managementSectionActive =
-    ['management', 'management-login-activity', 'management-lots', 'management-qc-reporting'].includes(currentNav);
+    ['management', 'management-login-activity', 'management-lots', 'management-qc-reporting'].includes(currentNav)
+      || (!canAccessMenuArea('admin') && currentNav === 'admin-config-processors');
   const techSectionActive = currentNav === 'tech-units' || currentNav === 'unit-requests';
 %>
 
@@ -95,6 +97,12 @@
           <a href="/management/qc-reporting" class="sidebar-sublink <%= currentNav === 'management-qc-reporting' ? 'active' : '' %>" <%= currentNav === 'management-qc-reporting' ? 'aria-current="page"' : '' %>>
             <span>QC Reporting</span>
           </a>
+
+          <% if (!canAccessMenuArea('admin')) { %>
+            <a href="/management/config/processors" class="sidebar-sublink <%= currentNav === 'admin-config-processors' ? 'active' : '' %>" <%= currentNav === 'admin-config-processors' ? 'aria-current="page"' : '' %>>
+              <span>Processor Catalog</span>
+            </a>
+          <% } %>
 
         </div>
       </section>

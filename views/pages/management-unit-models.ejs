@@ -5,6 +5,7 @@
     updated: 'Unit model updated.',
     activated: 'Unit model activated.',
     deactivated: 'Unit model deactivated.',
+    'processors-updated': 'Exact Processor associations updated.',
     'not-found': 'The selected model was not found.'
   };
   const activeModelCount = models.filter((model) => model.isActive).length;
@@ -20,7 +21,7 @@
 %>
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=stage8-config-consistency'] }) %>
+  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=stage8-config-consistency', '/css/processor-catalog-associations.css?v=20260810-stage10w30-processor-catalog-integrity'] }) %>
 
   <body class="configuration-clean-page">
     <div class="app-shell">
@@ -35,7 +36,7 @@
           <section class="page-heading configuration-page-heading">
             <div>
               <h1>Unit Model Catalog</h1>
-              <p>Maintain the manufacturer and category-specific models available during Unit intake. Inactive models remain attached to historical Units but are hidden from new selection.</p>
+              <p>Maintain exact Unit Models and the canonical processors offered for each model during Unit intake. Inactive models remain attached to historical Units but are hidden from new selection.</p>
             </div>
 
             <div class="site-clean-actions">
@@ -155,6 +156,7 @@
                         <td>
                           <div class="model-catalog-row-actions">
                             <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                            <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/processors/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/processors/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Processors</a>
                             <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML"><%= model.isActive ? 'Deactivate' : 'Activate' %></a>
                           </div>
                         </td>
@@ -171,5 +173,6 @@
 
     <div id="modal-root"></div>
     <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+    <script defer src="/js/catalog-association-filter.js?v=20260810-stage10w30-processor-catalog-integrity"></script>
   </body>
 </html>

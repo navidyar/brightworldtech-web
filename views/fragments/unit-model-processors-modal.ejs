@@ -1,0 +1,58 @@
+<%
+  const query = new URLSearchParams();
+  if (filters.manufacturerId) query.set('manufacturerId', String(filters.manufacturerId));
+  if (filters.unitCategoryConfigValueId) query.set('unitCategoryConfigValueId', String(filters.unitCategoryConfigValueId));
+  if (filters.includeInactive) query.set('includeInactive', '1');
+  if (filters.search) query.set('search', filters.search);
+  const queryString = query.toString();
+  const formAction = `/management/config/models/${unitModel.id}/processors${queryString ? `?${queryString}` : ''}`;
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal processor-association-modal" role="dialog" aria-modal="true" aria-labelledby="unit-model-processor-association-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="unit-model-processor-association-title">Processors for Unit Model</h2>
+        <p><strong><%= unitModel.manufacturerName %> · <%= unitModel.modelName %></strong></p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (errorMessages.length) { %>
+        <div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <p class="field-hint">Checked processors are the canonical processors presented when this exact Unit Model is selected. Associate an existing processor here instead of creating a manufacturer-specific duplicate.</p>
+
+      <div class="catalog-association-filters catalog-association-filters--processors" data-catalog-association-filters>
+        <label class="form-field"><span>Processor Type</span><select data-association-filter="brand"><option value="">All Processor Types</option><% processorBrands.forEach((brand) => { %><option value="<%= brand.id %>"><%= brand.label %></option><% }) %></select></label>
+        <label class="form-field catalog-association-search"><span>Processor Search</span><input type="search" autocomplete="off" placeholder="Search i5-9500T, Ryzen 5, etc." data-association-filter="search" /></label>
+      </div>
+
+      <form class="app-form app-form-clean" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML">
+        <div class="catalog-association-table-wrap">
+          <table class="catalog-association-table">
+            <thead><tr><th class="catalog-association-check-column">Use</th><th>Processor</th><th>Type</th><th>Metadata</th><th>Status</th></tr></thead>
+            <tbody>
+              <% processors.forEach((processor) => { %>
+                <tr data-association-row data-brand-id="<%= processor.processorBrandId %>" data-search-text="<%= `${processor.brandName} ${processor.modelCode} ${processor.legacyFamily} ${processor.generation} ${processor.baseSpeedGhz || ''}`.toLowerCase() %>">
+                  <td><input type="checkbox" name="processorModelIds" value="<%= processor.id %>" <%= processor.isMapped ? 'checked' : '' %> aria-label="Associate <%= processor.modelCode %>" /></td>
+                  <td><strong><%= processor.modelCode %></strong><br /><span class="table-muted-line">#<%= processor.id %></span></td>
+                  <td><%= processor.brandName %></td>
+                  <td><%= [processor.legacyFamily, processor.generation, processor.baseSpeedGhz ? `${Number(processor.baseSpeedGhz).toFixed(2)} GHz` : ''].filter(Boolean).join(' · ') || '—' %></td>
+                  <td><span class="pill <%= processor.isActive ? 'good' : 'neutral' %>"><%= processor.isActive ? 'Active' : 'Inactive' %></span></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+          <p class="catalog-association-empty" data-association-empty hidden>No Processors match the current filters.</p>
+        </div>
+
+        <div class="form-actions">
+          <button class="primary-button" type="submit">Save Processor Associations</button>
+          <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

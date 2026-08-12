@@ -1,5 +1,6 @@
 const unitRequestModel = require('../models/unitRequestModel');
 const unitModelCatalogModel = require('../models/unitModelCatalogModel');
+const processorCatalogModel = require('../models/processorCatalogModel');
 const catalogRequestAccessPolicy = require('../services/catalogRequestAccessPolicy');
 
 function normalizeId(value) {
@@ -102,10 +103,26 @@ async function getProcessorRequestContext(source = {}) {
   const requestedProcessorSpeedGhz = normalizeProcessorSpeed(source.requestedProcessorSpeedGhz);
   const unitModel = unitModelId ? await unitModelCatalogModel.getUnitModelById(unitModelId) : null;
   const errors = [];
+  let globalProcessorMatches = [];
 
   if (!unitModel || !unitModel.isActive) {
     errors.push('Select an active managed Unit Model before requesting processor compatibility.');
   }
+
+  if (requestedProcessorType.length >= 2 && requestedProcessorName.length >= 2) {
+    globalProcessorMatches = await processorCatalogModel.findLikelyProcessorMatches({
+      brandName: requestedProcessorType,
+      modelCode: requestedProcessorName,
+      includeInactive: true,
+      limit: 5
+    });
+    const alreadyMapped = globalProcessorMatches.find((processor) => processor.identityMatch && processor.isActive && processor.unitModelIds.includes(unitModelId));
+    if (alreadyMapped) {
+      errors.push(`${alreadyMapped.displayLabel} is already associated with this Unit Model. Close this request, refresh Add/Edit Unit, and select the existing processor.`);
+    }
+  }
+
+  const existingGlobalMatch = globalProcessorMatches.find((processor) => processor.identityMatch) || null;
 
   return {
     unitModelId,
@@ -115,6 +132,8 @@ async function getProcessorRequestContext(source = {}) {
     requestedProcessorType,
     requestedProcessorName,
     requestedProcessorSpeedGhz,
+    globalProcessorMatches,
+    existingGlobalMatch,
     errors
   };
 }

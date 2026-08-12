@@ -1,0 +1,72 @@
+<%
+  const safeProcessorType = processorType || null;
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeActionType = ['activate', 'deactivate', 'delete', 'error'].includes(actionType) ? actionType : 'error';
+  const safeIncludeInactive = includeInactiveValues ? '1' : '0';
+  const isDelete = safeActionType === 'delete';
+  const isActivate = safeActionType === 'activate';
+  const liveCatalogUsageCount = safeProcessorType
+    ? Number(safeProcessorType.processorCount || 0) + Number(safeProcessorType.familyCount || 0)
+    : 0;
+  const canDelete = isDelete && safeProcessorType && liveCatalogUsageCount === 0;
+  const title = safeActionType === 'error'
+    ? 'Processor Type Not Found'
+    : isDelete
+      ? 'Delete Processor Type'
+      : `${isActivate ? 'Activate' : 'Deactivate'} Processor Type`;
+  const actionPath = safeProcessorType && safeActionType !== 'error'
+    ? `/management/config/processor-types/${safeProcessorType.id}/${safeActionType}`
+    : '';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal configuration-value-modal configuration-value-status-modal" role="dialog" aria-modal="true" aria-labelledby="processor-type-status-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Admin Configuration</p>
+        <h2 id="processor-type-status-title"><%= title %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error"><% safeErrors.forEach((errorMessage) => { %><p><%= errorMessage %></p><% }) %></div>
+      <% } %>
+
+      <% if (safeProcessorType) { %>
+        <dl class="configuration-value-summary">
+          <div><dt>Processor Type</dt><dd><strong><%= safeProcessorType.name %></strong></dd></div>
+          <div><dt>Code</dt><dd><code><%= safeProcessorType.code %></code></dd></div>
+          <div><dt>Processors</dt><dd><%= safeProcessorType.processorCount %></dd></div>
+          <div><dt>Processor Families</dt><dd><%= safeProcessorType.familyCount %></dd></div>
+          <div><dt>Approved Requests</dt><dd><%= safeProcessorType.approvedRequestCount %></dd></div>
+        </dl>
+
+        <% if (isDelete) { %>
+          <% if (canDelete) { %>
+            <p class="configuration-confirm-copy">This Processor Type has no Processor or Processor Family dependencies and can be permanently removed.<% if (safeProcessorType.approvedRequestCount > 0) { %> Approved request history will remain, but its obsolete Processor Type catalog link will be cleared.<% } %></p>
+          <% } else { %>
+            <p class="configuration-confirm-copy">This Processor Type cannot be permanently deleted while Processors or Processor Families still reference it. Reassign those records to the correct Processor Type first, or deactivate this entry to remove it from normal selection.</p>
+          <% } %>
+        <% } else { %>
+          <p class="configuration-confirm-copy"><%= isActivate ? 'Activating this Processor Type makes it available again in normal Processor Type selectors.' : 'Deactivating this Processor Type removes it from normal selection without changing processors or historical records already associated with it.' %></p>
+        <% } %>
+
+        <% if (!isDelete || canDelete) { %>
+          <form method="post" action="<%= actionPath %>" hx-post="<%= actionPath %>" hx-target="#modal-root" hx-swap="innerHTML">
+            <input type="hidden" name="includeInactive" value="<%= safeIncludeInactive %>" />
+            <div class="form-actions">
+              <button type="submit" class="<%= isActivate ? 'primary-button' : 'danger-button' %>"><%= isDelete ? 'Delete Processor Type' : (isActivate ? 'Activate Processor Type' : 'Deactivate Processor Type') %></button>
+              <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            </div>
+          </form>
+        <% } else { %>
+          <div class="form-actions"><button type="button" class="secondary-button" data-modal-close>Close</button></div>
+        <% } %>
+      <% } else { %>
+        <div class="form-actions"><button type="button" class="secondary-button" data-modal-close>Close</button></div>
+      <% } %>
+    </div>
+  </section>
+</div>

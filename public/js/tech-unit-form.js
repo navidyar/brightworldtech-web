@@ -1800,6 +1800,15 @@
     }
   }
 
+  function isSelectableAssignableLotOption(option) {
+    return Boolean(
+      option
+      && option.value
+      && option.getAttribute('data-lot-selectable') !== '0'
+      && !option.disabled
+    );
+  }
+
   function getAssignableLotOptionById(form, lotId) {
     const catalog = getAssignableLotCatalog(form);
 
@@ -1807,11 +1816,36 @@
       return null;
     }
 
-    return Array.from(catalog.options).find((option) => option.value === String(lotId)) || null;
+    return Array.from(catalog.options).find(
+      (option) => isSelectableAssignableLotOption(option) && option.value === String(lotId)
+    ) || null;
   }
 
   function getAssignableLotOptionLabel(option) {
-    return option ? String(option.textContent || '').trim() : '';
+    if (!option) return '';
+    return String(option.getAttribute('data-lot-compact-label') || option.textContent || '').trim();
+  }
+
+  function getAssignableLotOptionName(option) {
+    if (!option) return '';
+    return String(option.getAttribute('data-lot-name') || option.textContent || '').trim();
+  }
+
+  function getAssignableLotOptionFullPath(option) {
+    if (!option) return '';
+    return String(option.getAttribute('data-lot-full-path') || getAssignableLotOptionName(option)).trim();
+  }
+
+  function getAssignableLotOptionSearchText(option) {
+    if (!option) return '';
+    return String(option.getAttribute('data-lot-search-text') || getAssignableLotOptionFullPath(option)).trim();
+  }
+
+  function getAssignableLotOptionPathIds(option) {
+    return String(option && option.getAttribute('data-lot-path-ids') || '')
+      .split(',')
+      .map((value) => String(value || '').trim())
+      .filter(Boolean);
   }
 
   function getAssignableLotFilterState(form) {
@@ -1834,17 +1868,22 @@
       return [];
     }
 
-    return Array.from(catalog.options).filter((option) => {
-      if (!option.value) {
-        return false;
-      }
+    const catalogOptions = Array.from(catalog.options).filter((option) => option.value);
+    if (!filters.search) return catalogOptions;
 
+    const matchingSelectableOptions = catalogOptions.filter((option) => {
+      if (!isSelectableAssignableLotOption(option)) return false;
       const isSelected = includeSelectedOption && option.value === catalog.value;
-      const label = normalizeModelSearch(getAssignableLotOptionLabel(option));
-      const matchesSearch = !filters.search || label.includes(filters.search);
-
-      return matchesSearch || isSelected;
+      const searchable = normalizeModelSearch(getAssignableLotOptionSearchText(option));
+      return searchable.includes(filters.search) || isSelected;
     });
+    const relevantIds = new Set();
+    matchingSelectableOptions.forEach((option) => {
+      getAssignableLotOptionPathIds(option).forEach((id) => relevantIds.add(id));
+      relevantIds.add(option.value);
+    });
+
+    return catalogOptions.filter((option) => relevantIds.has(option.value));
   }
 
   function closeAssignableLotOptions(form) {
@@ -1879,15 +1918,29 @@
     }
 
     setAssignableLotInputValidity(form, '');
+    updateAssignableLotHierarchyBreadcrumb(form);
     updateAssignableLotAssumptionStatus(form);
     updateIntentionalDuplicateRequestControls(form);
     resetLotUnitFormProfile(form);
   }
 
+  function updateAssignableLotHierarchyBreadcrumb(form) {
+    const container = form ? form.querySelector('[data-assignable-lot-hierarchy]') : null;
+    const path = container ? container.querySelector('[data-assignable-lot-hierarchy-path]') : null;
+    const catalog = getAssignableLotCatalog(form);
+    const option = getAssignableLotOptionById(form, catalog ? catalog.value : '');
+
+    if (!container || !path) return;
+    const fullPath = getAssignableLotOptionFullPath(option);
+    path.textContent = fullPath;
+    container.hidden = !fullPath;
+  }
+
   function updateAssignableLotHint(form) {
     const hint = form ? form.querySelector('[data-assignable-lot-hint]') : null;
     const catalog = getAssignableLotCatalog(form);
-    const visibleCount = getVisibleAssignableLotOptions(form, true, true).length;
+    const visibleCount = getVisibleAssignableLotOptions(form, true, true)
+      .filter(isSelectableAssignableLotOption).length;
 
     if (!hint || !catalog) {
       return;
@@ -1994,22 +2047,35 @@
       return;
     }
 
-    const visibleOptions = getVisibleAssignableLotOptions(form, true, ignoreSearch).slice(0, 75);
+    const visibleOptions = getVisibleAssignableLotOptions(form, true, ignoreSearch).slice(0, 120);
+    const visibleSelectableCount = visibleOptions.filter(isSelectableAssignableLotOption).length;
 
-    if (visibleOptions.length === 0) {
+    if (visibleSelectableCount === 0) {
       const emptyState = document.createElement('p');
       emptyState.className = 'tech-assignable-lot-options-empty';
       emptyState.textContent = 'No matching assignable lots.';
       optionsContainer.appendChild(emptyState);
     } else {
       visibleOptions.forEach((option) => {
+        const depth = Math.max(Number(option.getAttribute('data-lot-depth') || 0), 0);
+        if (!isSelectableAssignableLotOption(option)) {
+          const heading = document.createElement('div');
+          heading.className = 'tech-assignable-lot-option tech-assignable-lot-option--ancestor';
+          heading.setAttribute('aria-hidden', 'true');
+          heading.style.setProperty('--lot-depth', String(depth));
+          heading.textContent = getAssignableLotOptionName(option);
+          optionsContainer.appendChild(heading);
+          return;
+        }
+
         const optionButton = document.createElement('button');
         optionButton.type = 'button';
-        optionButton.className = 'tech-assignable-lot-option';
+        optionButton.className = 'tech-assignable-lot-option tech-assignable-lot-option--selectable';
         optionButton.setAttribute('role', 'option');
         optionButton.setAttribute('data-assignable-lot-option', option.value);
         optionButton.setAttribute('aria-selected', option.value === catalog.value ? 'true' : 'false');
-        optionButton.textContent = getAssignableLotOptionLabel(option);
+        optionButton.style.setProperty('--lot-depth', String(depth));
+        optionButton.textContent = getAssignableLotOptionName(option);
         optionsContainer.appendChild(optionButton);
       });
     }
@@ -2041,6 +2107,7 @@
     comboboxInput.value = getAssignableLotOptionLabel(option);
     setAssignableLotInputValidity(form, '');
     closeAssignableLotOptions(form);
+    updateAssignableLotHierarchyBreadcrumb(form);
     updateAssignableLotAssumptionStatus(form);
     updateIntentionalDuplicateRequestControls(form);
     updateProductionWeightPreview(form);
@@ -2060,9 +2127,14 @@
     }
 
     const normalizedValue = normalizeModelSearch(comboboxInput.value);
-    const matchingOption = Array.from(catalog.options).find(
-      (option) => option.value && normalizeModelSearch(getAssignableLotOptionLabel(option)) === normalizedValue
-    );
+    const matchingOption = Array.from(catalog.options).find((option) => {
+      if (!isSelectableAssignableLotOption(option)) return false;
+      return [
+        getAssignableLotOptionLabel(option),
+        getAssignableLotOptionName(option),
+        getAssignableLotOptionFullPath(option)
+      ].some((value) => normalizeModelSearch(value) === normalizedValue);
+    });
 
     if (!matchingOption) {
       return false;
@@ -2086,6 +2158,7 @@
     }
 
     updateAssignableLotHint(form);
+    updateAssignableLotHierarchyBreadcrumb(form);
     updateAssignableLotAssumptionStatus(form);
   }
 
@@ -2156,10 +2229,12 @@
 
   function getModelFilterState(form) {
     const manufacturerSelect = form.querySelector('[data-manufacturer-select]');
+    const categorySelect = form.querySelector('[data-unit-category-select]');
     const comboboxInput = getUnitModelComboboxInput(form);
 
     return {
       manufacturerId: manufacturerSelect ? manufacturerSelect.value : '',
+      categoryId: categorySelect ? categorySelect.value : '',
       search: normalizeModelSearch(comboboxInput ? comboboxInput.value : '')
     };
   }
@@ -2170,11 +2245,13 @@
     }
 
     const optionManufacturerId = option.getAttribute('data-manufacturer-id') || '';
+    const optionCategoryId = option.getAttribute('data-category-id') || '';
     const label = normalizeModelSearch(getUnitModelOptionLabel(option));
     const manufacturerMatches = optionManufacturerId === filters.manufacturerId;
+    const categoryMatches = !filters.categoryId || optionCategoryId === filters.categoryId;
     const searchMatches = !filters.search || label.includes(filters.search);
 
-    return manufacturerMatches && searchMatches;
+    return manufacturerMatches && categoryMatches && searchMatches;
   }
 
   function closeUnitModelOptions(form) {
@@ -2390,9 +2467,13 @@
 
     const filters = getModelFilterState(form);
     const hasManufacturer = Boolean(filters.manufacturerId);
+    const hasCategory = Boolean(filters.categoryId);
     const selectedOption = getUnitModelOptionById(form, selectionInput.value);
     const selectedMatchesManufacturer = selectedOption
       && (selectedOption.getAttribute('data-manufacturer-id') || '') === filters.manufacturerId;
+    const selectedMatchesCategory = selectedOption
+      && (!hasCategory || (selectedOption.getAttribute('data-category-id') || '') === filters.categoryId);
+    const selectedMatchesContext = selectedMatchesManufacturer && selectedMatchesCategory;
 
     if (!hasManufacturer) {
       if (!preserveSelection) {
@@ -2410,7 +2491,7 @@
       return;
     }
 
-    if (!preserveSelection && selectedOption && !selectedMatchesManufacturer) {
+    if (!preserveSelection && selectedOption && !selectedMatchesContext) {
       clearUnitModelSelection(form);
     }
 
@@ -2427,9 +2508,13 @@
 
     if (hint) {
       if (visibleCount === 0) {
-        hint.textContent = 'No active models match this manufacturer. An Admin can add one in Model Catalog.';
+        hint.textContent = hasCategory
+          ? 'No active models match this manufacturer and Unit Category. An Admin can add one in Model Catalog.'
+          : 'No active models match this manufacturer. An Admin can add one in Model Catalog.';
+      } else if (hasCategory) {
+        hint.textContent = `${visibleCount} catalog model${visibleCount === 1 ? '' : 's'} match the selected manufacturer and Unit Category.`;
       } else {
-        hint.textContent = `${visibleCount} catalog model${visibleCount === 1 ? '' : 's'} match the selected manufacturer. Choosing one applies its Unit Category.`;
+        hint.textContent = `${visibleCount} catalog model${visibleCount === 1 ? '' : 's'} match the selected manufacturer. Select a Unit Category to refine the list.`;
       }
     }
   }

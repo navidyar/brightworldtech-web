@@ -566,3 +566,18 @@
     min-width: 0;
   }
 }
+
+/* Stage 10W32 — setup/reset link expiry status in User Management. */
+.management-user-link-status {
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.management-user-link-status.is-active {
+  color: var(--blue-dark);
+}
+
+.management-user-link-status.is-expired {
+  color: var(--red);
+}

@@ -35,6 +35,7 @@ const { analyzeRequirementNumber } = require('../services/lotRequirementNumberPo
 const unitExportService = require('../services/unitExportService');
 const unitExportFileService = require('../services/unitExportFileService');
 const { UNIT_EXPORT_COLUMNS } = require('../config/unitExportContract');
+const { MIN_LOT_PRODUCTION_WEIGHT, parseRequiredLotProductionWeight } = require('../services/lotProductionWeightPolicy');
 
 const requirementFieldOptions = listLotRequirementFields().map((field) => ({
   value: field.key,
@@ -270,12 +271,14 @@ function validateLotForm(formData, formOptions, currentLotId = null) {
     errors.push('Default production weight must be valid.');
   }
 
-  if (formData.defaultProductionWeight) {
-    const defaultProductionWeight = Number(formData.defaultProductionWeight);
+  if (formOptions.capabilities.hasDefaultProductionWeight) {
+    const defaultProductionWeight = parseRequiredLotProductionWeight(formData.defaultProductionWeight);
 
-    if (!Number.isFinite(defaultProductionWeight) || defaultProductionWeight < 0) {
-      errors.push('Custom lot production weight must be a valid number of 0 or higher.');
+    if (defaultProductionWeight === null) {
+      errors.push(`Lot production weight is required and must be at least ${MIN_LOT_PRODUCTION_WEIGHT.toFixed(2)}.`);
     }
+  } else if (formOptions.capabilities.hasDefaultProductionWeightConfigValueId && !formData.defaultProductionWeightConfigValueId) {
+    errors.push('Default production weight is required.');
   }
 
   if (formData.hasUnlimitedGoal !== '1') {
@@ -481,16 +484,28 @@ async function getLotDetailViewData(lotId) {
   }
 
   const lots = await lotModel.listLots({ includeHidden: true });
-  const requirements = await lotModel.listEffectiveLotRequirements(lotId);
+  const [requirements, requirementInheritanceSuppressions] = await Promise.all([
+    lotModel.listEffectiveLotRequirements(lotId),
+    lotModel.listLotRequirementInheritanceSuppressions(lotId)
+  ]);
   const validationReport = await lotValidationModel.buildLotValidationReport(lotId);
   const enforcementSummary = lotEnforcementModel.buildLotEnforcementSummary(validationReport);
   const requirementValueOptionsByKey = await getRequirementValueOptionsByKey();
   const lotRelationships = buildLotRelationshipData(lot, lots);
   const requirementValidationSummary = buildRequirementValidationSummary(requirements, validationReport);
+  const directRequirementKeys = new Set(
+    requirements
+      .filter((requirement) => Number(requirement.is_inherited) !== 1)
+      .map((requirement) => normalizeRequirementKey(requirement.requirement_key))
+  );
+  const visibleRequirementInheritanceSuppressions = requirementInheritanceSuppressions.filter((suppression) => (
+    !directRequirementKeys.has(normalizeRequirementKey(suppression.requirement_key))
+  ));
 
   return {
     lot,
     requirements,
+    requirementInheritanceSuppressions: visibleRequirementInheritanceSuppressions,
     validationReport,
     enforcementSummary,
     requirementValueOptionsByKey,
@@ -1471,6 +1486,7 @@ async function renderLotRequirementsModal(req, res, next) {
     return res.render('fragments/lot-requirements-modal', {
       lot: lotDetailViewData.lot,
       requirements: lotDetailViewData.requirements,
+      requirementInheritanceSuppressions: lotDetailViewData.requirementInheritanceSuppressions,
       successMessage: '',
       errorMessages: []
     });
@@ -1516,6 +1532,7 @@ async function customizeInheritedLotRequirementField(req, res, next) {
       return res.status(409).render('fragments/lot-requirements-modal', {
         lot: lotDetailViewData.lot,
         requirements: lotDetailViewData.requirements,
+        requirementInheritanceSuppressions: lotDetailViewData.requirementInheritanceSuppressions,
         successMessage: '',
         errorMessages: [
           'That requirement is no longer inherited from this Lot\'s direct parent. Refresh the Requirements list and try again.'
@@ -1537,7 +1554,134 @@ async function customizeInheritedLotRequirementField(req, res, next) {
     return res.render('fragments/lot-requirements-modal', {
       lot: refreshedViewData.lot,
       requirements: refreshedViewData.requirements,
+      requirementInheritanceSuppressions: refreshedViewData.requirementInheritanceSuppressions,
       successMessage,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+
+async function suppressInheritedLotRequirementField(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const requirementId = Number(req.params.requirementId);
+
+    if (!Number.isSafeInteger(lotId) || lotId <= 0
+      || !Number.isSafeInteger(requirementId) || requirementId <= 0) {
+      return res.status(404).render('fragments/lot-requirements-modal', {
+        lot: null,
+        requirements: [],
+        requirementInheritanceSuppressions: [],
+        successMessage: '',
+        errorMessages: ['The selected inherited requirement could not be found.']
+      });
+    }
+
+    const lotDetailViewData = await getLotDetailViewData(lotId);
+
+    if (!lotDetailViewData) {
+      return res.status(404).render('fragments/lot-requirements-modal', {
+        lot: null,
+        requirements: [],
+        requirementInheritanceSuppressions: [],
+        successMessage: '',
+        errorMessages: ['The selected Lot could not be found.']
+      });
+    }
+
+    const inheritedRequirement = lotDetailViewData.requirements.find((requirement) => (
+      Number(requirement.lot_requirement_id) === requirementId
+      && Number(requirement.is_inherited) === 1
+      && Number(requirement.source_lot_id) === Number(lotDetailViewData.lot.parent_lot_id)
+    ));
+
+    if (!inheritedRequirement) {
+      return res.status(409).render('fragments/lot-requirements-modal', {
+        lot: lotDetailViewData.lot,
+        requirements: lotDetailViewData.requirements,
+        requirementInheritanceSuppressions: lotDetailViewData.requirementInheritanceSuppressions,
+        successMessage: '',
+        errorMessages: [
+          'That requirement is no longer inherited from this Lot\'s direct parent. Refresh the Requirements list and try again.'
+        ]
+      });
+    }
+
+    await lotModel.suppressInheritedRequirementField(
+      lotId,
+      requirementId,
+      req.currentUser.user_id
+    );
+
+    const refreshedViewData = await getLotDetailViewData(lotId);
+    const fieldLabel = inheritedRequirement.requirement_label || inheritedRequirement.requirement_key || 'Requirement';
+
+    return res.render('fragments/lot-requirements-modal', {
+      lot: refreshedViewData.lot,
+      requirements: refreshedViewData.requirements,
+      requirementInheritanceSuppressions: refreshedViewData.requirementInheritanceSuppressions,
+      successMessage: `${fieldLabel} is no longer inherited by this Lot. You can restore the parent requirement at any time.`,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function restoreInheritedLotRequirementField(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const requirementTypeConfigValueId = Number(req.params.requirementTypeConfigValueId);
+
+    if (!Number.isSafeInteger(lotId) || lotId <= 0
+      || !Number.isSafeInteger(requirementTypeConfigValueId) || requirementTypeConfigValueId <= 0) {
+      return res.status(404).render('fragments/lot-requirements-modal', {
+        lot: null,
+        requirements: [],
+        requirementInheritanceSuppressions: [],
+        successMessage: '',
+        errorMessages: ['The selected requirement inheritance setting could not be found.']
+      });
+    }
+
+    const lotDetailViewData = await getLotDetailViewData(lotId);
+
+    if (!lotDetailViewData) {
+      return res.status(404).render('fragments/lot-requirements-modal', {
+        lot: null,
+        requirements: [],
+        requirementInheritanceSuppressions: [],
+        successMessage: '',
+        errorMessages: ['The selected Lot could not be found.']
+      });
+    }
+
+    const suppression = lotDetailViewData.requirementInheritanceSuppressions.find((entry) => (
+      Number(entry.requirement_type_config_value_id) === requirementTypeConfigValueId
+    ));
+
+    if (!suppression) {
+      return res.status(409).render('fragments/lot-requirements-modal', {
+        lot: lotDetailViewData.lot,
+        requirements: lotDetailViewData.requirements,
+        requirementInheritanceSuppressions: lotDetailViewData.requirementInheritanceSuppressions,
+        successMessage: '',
+        errorMessages: ['That parent requirement is already being inherited.']
+      });
+    }
+
+    await lotModel.restoreInheritedRequirementField(lotId, requirementTypeConfigValueId);
+    const refreshedViewData = await getLotDetailViewData(lotId);
+    const fieldLabel = suppression.requirement_label || suppression.requirement_key || 'Requirement';
+
+    return res.render('fragments/lot-requirements-modal', {
+      lot: refreshedViewData.lot,
+      requirements: refreshedViewData.requirements,
+      requirementInheritanceSuppressions: refreshedViewData.requirementInheritanceSuppressions,
+      successMessage: `${fieldLabel} now inherits the direct parent requirement again.`,
       errorMessages: []
     });
   } catch (error) {
@@ -1976,6 +2120,8 @@ module.exports = {
   renderLotDetailPage,
   renderLotRequirementsModal,
   customizeInheritedLotRequirementField,
+  suppressInheritedLotRequirementField,
+  restoreInheritedLotRequirementField,
   renderLotUnitFormRulesModalPage,
   renderLotUnitValidationModal,
   acceptLotUnitValidationOverride,

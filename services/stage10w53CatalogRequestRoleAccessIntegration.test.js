@@ -10,8 +10,12 @@ const catalogRequestAccessPolicy = require('./catalogRequestAccessPolicy');
 
 const unitModelCatalogModel = {};
 const unitRequestModel = {};
+const processorCatalogModel = {
+  findLikelyProcessorMatches: async () => []
+};
 const unitModelCatalogModelPath = require.resolve('../models/unitModelCatalogModel');
 const unitRequestModelPath = require.resolve('../models/unitRequestModel');
+const processorCatalogModelPath = require.resolve('../models/processorCatalogModel');
 require.cache[unitModelCatalogModelPath] = {
   id: unitModelCatalogModelPath,
   filename: unitModelCatalogModelPath,
@@ -23,6 +27,12 @@ require.cache[unitRequestModelPath] = {
   filename: unitRequestModelPath,
   loaded: true,
   exports: unitRequestModel
+};
+require.cache[processorCatalogModelPath] = {
+  id: processorCatalogModelPath,
+  filename: processorCatalogModelPath,
+  loaded: true,
+  exports: processorCatalogModel
 };
 const catalogRequestController = require('../controllers/catalogRequestController');
 

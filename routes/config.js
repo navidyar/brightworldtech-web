@@ -2,12 +2,14 @@ const express = require('express');
 const configController = require('../controllers/configController');
 const unitModelCatalogController = require('../controllers/unitModelCatalogController');
 const processorFamilyController = require('../controllers/processorFamilyController');
+const processorCatalogController = require('../controllers/processorCatalogController');
 const systemController = require('../controllers/systemController');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
 const configRoles = ['admin'];
+const processorCatalogRoles = ['admin', 'management'];
 
 router.get(
   '/management/config',
@@ -30,6 +32,84 @@ router.post(
   configController.updateOperationalOptionRankingInterval
 );
 
+
+
+router.get(
+  '/management/config/processors',
+  requireAuth,
+  requireRole(processorCatalogRoles),
+  processorCatalogController.renderProcessorCatalogPage
+);
+
+router.get(
+  '/management/config/processors/:processorModelId/edit/modal',
+  requireAuth,
+  requireRole(processorCatalogRoles),
+  processorCatalogController.renderEditProcessorModal
+);
+
+router.post(
+  '/management/config/processors/:processorModelId/edit/modal',
+  requireAuth,
+  requireRole(processorCatalogRoles),
+  processorCatalogController.updateProcessor
+);
+
+router.get(
+  '/management/config/processors/:processorModelId/families/modal',
+  requireAuth,
+  requireRole(processorCatalogRoles),
+  processorCatalogController.renderProcessorFamiliesModal
+);
+
+router.post(
+  '/management/config/processors/:processorModelId/families',
+  requireAuth,
+  requireRole(processorCatalogRoles),
+  processorCatalogController.updateProcessorFamilies
+);
+
+router.get(
+  '/management/config/processors/:processorModelId/models/modal',
+  requireAuth,
+  requireRole(configRoles),
+  processorCatalogController.renderProcessorModelsModal
+);
+
+router.post(
+  '/management/config/processors/:processorModelId/models',
+  requireAuth,
+  requireRole(configRoles),
+  processorCatalogController.updateProcessorModels
+);
+
+router.get(
+  '/management/config/processors/:processorModelId/merge/modal',
+  requireAuth,
+  requireRole(configRoles),
+  processorCatalogController.renderMergeProcessorModal
+);
+
+router.post(
+  '/management/config/processors/:processorModelId/merge',
+  requireAuth,
+  requireRole(configRoles),
+  processorCatalogController.mergeProcessor
+);
+
+router.get(
+  '/management/config/processors/:processorModelId/delete/modal',
+  requireAuth,
+  requireRole(processorCatalogRoles),
+  processorCatalogController.renderDeleteProcessorModal
+);
+
+router.post(
+  '/management/config/processors/:processorModelId/delete',
+  requireAuth,
+  requireRole(processorCatalogRoles),
+  processorCatalogController.deleteProcessor
+);
 
 router.get(
   '/management/config/processor-families',
@@ -116,6 +196,20 @@ router.post(
 );
 
 router.get(
+  '/management/config/models/:unitModelId/processors/modal',
+  requireAuth,
+  requireRole(configRoles),
+  unitModelCatalogController.renderUnitModelProcessorsModal
+);
+
+router.post(
+  '/management/config/models/:unitModelId/processors',
+  requireAuth,
+  requireRole(configRoles),
+  unitModelCatalogController.updateUnitModelProcessors
+);
+
+router.get(
   '/management/config/models/:unitModelId/:actionType/modal',
   requireAuth,
   requireRole(configRoles),
@@ -127,6 +221,48 @@ router.post(
   requireAuth,
   requireRole(configRoles),
   unitModelCatalogController.updateUnitModelStatus
+);
+
+router.get(
+  '/management/config/processor-types/new/modal',
+  requireAuth,
+  requireRole(configRoles),
+  configController.renderNewProcessorTypeModal
+);
+
+router.post(
+  '/management/config/processor-types',
+  requireAuth,
+  requireRole(configRoles),
+  configController.createProcessorType
+);
+
+router.get(
+  '/management/config/processor-types/:processorBrandId/edit/modal',
+  requireAuth,
+  requireRole(configRoles),
+  configController.renderEditProcessorTypeModal
+);
+
+router.post(
+  '/management/config/processor-types/:processorBrandId/edit/modal',
+  requireAuth,
+  requireRole(configRoles),
+  configController.updateProcessorType
+);
+
+router.get(
+  '/management/config/processor-types/:processorBrandId/:actionType/modal',
+  requireAuth,
+  requireRole(configRoles),
+  configController.renderProcessorTypeStatusModal
+);
+
+router.post(
+  '/management/config/processor-types/:processorBrandId/:actionType',
+  requireAuth,
+  requireRole(configRoles),
+  configController.updateProcessorTypeStatus
 );
 
 router.get(

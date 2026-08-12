@@ -5,6 +5,12 @@ const accessPolicy = require('../config/accessPolicy');
 const managementUserRoleEditPolicy = require('../services/managementUserRoleEditPolicy');
 const { buildUsernameStem } = require('../services/userUsernamePolicy');
 const { APP_DISPLAY_TIME_ZONE, formatDateKey, getDayRangeUtc } = require('../utils/timeZone');
+const {
+  DEFAULT_PASSWORD_LINK_EXPIRY_HOURS,
+  MIN_PASSWORD_LINK_EXPIRY_HOURS,
+  MAX_PASSWORD_LINK_EXPIRY_HOURS,
+  parsePasswordLinkExpiryHours
+} = require('../services/passwordLinkExpiryPolicy');
 
 function hashToken(rawToken) {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -172,10 +178,15 @@ function getSafeUserId(req) {
   return Number.isInteger(userId) && userId > 0 ? userId : null;
 }
 
-async function createSetupLinkForUser(user, createdByUserId = null) {
+async function createSetupLinkForUser(user, createdByUserId = null, requestedExpiryHours = DEFAULT_PASSWORD_LINK_EXPIRY_HOURS) {
+  const expiresInHours = parsePasswordLinkExpiryHours(requestedExpiryHours);
+
+  if (expiresInHours === null) {
+    throw new Error(`Password setup/reset link expiration must be a whole number from ${MIN_PASSWORD_LINK_EXPIRY_HOURS} through ${MAX_PASSWORD_LINK_EXPIRY_HOURS} hours.`);
+  }
+
   const token = crypto.randomBytes(32).toString('hex');
   const tokenHash = hashToken(token);
-  const expiresInHours = await authModel.getPasswordLinkExpiryHours();
   const expiresAt = addHours(new Date(), expiresInHours);
 
   const hasExistingPassword = user.has_password === true || Number(user.has_password) === 1;
@@ -282,7 +293,13 @@ async function renderNewUserPage(req, res, next) {
         firstName: '',
         lastName: '',
         email: '',
-        roleCodes: []
+        roleCodes: [],
+        setupLinkExpiryHours: String(DEFAULT_PASSWORD_LINK_EXPIRY_HOURS)
+      },
+      passwordLinkExpiryPolicy: {
+        minHours: MIN_PASSWORD_LINK_EXPIRY_HOURS,
+        maxHours: MAX_PASSWORD_LINK_EXPIRY_HOURS,
+        defaultHours: DEFAULT_PASSWORD_LINK_EXPIRY_HOURS
       }
     });
   } catch (error) {
@@ -296,6 +313,8 @@ async function createUser(req, res, next) {
     const lastName = String(req.body.lastName || '').trim();
     const email = authModel.normalizeEmail(req.body.email);
     const roleCodes = normalizeRoleCodes(req.body.roleCodes);
+    const setupLinkExpiryHoursRaw = String(req.body.setupLinkExpiryHours || '').trim();
+    const setupLinkExpiryHours = parsePasswordLinkExpiryHours(setupLinkExpiryHoursRaw);
 
     const roles = getAssignableRolesForCurrentUser(await managementModel.listAssignableAccountRoles(), req);
     const allowedRoleCodes = new Set(roles.map((role) => role.code));
@@ -310,6 +329,10 @@ async function createUser(req, res, next) {
       email,
       roleCodes: validRoleCodes
     });
+
+    if (setupLinkExpiryHours === null) {
+      errorMessages.push(`Setup link expiration must be a whole number from ${MIN_PASSWORD_LINK_EXPIRY_HOURS} through ${MAX_PASSWORD_LINK_EXPIRY_HOURS} hours.`);
+    }
 
     if (firstName.length >= 2 && lastName.length >= 2) {
       try {
@@ -331,7 +354,13 @@ async function createUser(req, res, next) {
           firstName,
           lastName,
           email,
-          roleCodes: validRoleCodes
+          roleCodes: validRoleCodes,
+          setupLinkExpiryHours: setupLinkExpiryHoursRaw || String(DEFAULT_PASSWORD_LINK_EXPIRY_HOURS)
+        },
+        passwordLinkExpiryPolicy: {
+          minHours: MIN_PASSWORD_LINK_EXPIRY_HOURS,
+          maxHours: MAX_PASSWORD_LINK_EXPIRY_HOURS,
+          defaultHours: DEFAULT_PASSWORD_LINK_EXPIRY_HOURS
         }
       });
     }
@@ -348,7 +377,8 @@ async function createUser(req, res, next) {
         ...user,
         has_password: false
       },
-      req.currentUser.user_id
+      req.currentUser.user_id,
+      setupLinkExpiryHours
     );
 
     return res.render('pages/management-setup-link', {
@@ -550,6 +580,71 @@ async function updateUserModal(req, res, next) {
   }
 }
 
+async function renderSetupLinkModal(req, res, next) {
+  try {
+    const userId = getSafeUserId(req);
+    const returnPath = normalizeReturnPath(req.query.returnPath);
+
+    if (!userId) {
+      return res.status(400).render('fragments/management-user-setup-link-modal', {
+        user: null,
+        returnPath,
+        expiryHours: String(DEFAULT_PASSWORD_LINK_EXPIRY_HOURS),
+        passwordLinkExpiryPolicy: {
+          minHours: MIN_PASSWORD_LINK_EXPIRY_HOURS,
+          maxHours: MAX_PASSWORD_LINK_EXPIRY_HOURS,
+          defaultHours: DEFAULT_PASSWORD_LINK_EXPIRY_HOURS
+        },
+        errorMessages: ['The selected user ID is invalid.']
+      });
+    }
+
+    const user = await managementModel.getUserById(userId);
+
+    if (!user) {
+      return res.status(404).render('fragments/management-user-setup-link-modal', {
+        user: null,
+        returnPath,
+        expiryHours: String(DEFAULT_PASSWORD_LINK_EXPIRY_HOURS),
+        passwordLinkExpiryPolicy: {
+          minHours: MIN_PASSWORD_LINK_EXPIRY_HOURS,
+          maxHours: MAX_PASSWORD_LINK_EXPIRY_HOURS,
+          defaultHours: DEFAULT_PASSWORD_LINK_EXPIRY_HOURS
+        },
+        errorMessages: ['The selected user could not be found.']
+      });
+    }
+
+    if (!user.is_active) {
+      return res.status(400).render('fragments/management-user-setup-link-modal', {
+        user,
+        returnPath,
+        expiryHours: String(DEFAULT_PASSWORD_LINK_EXPIRY_HOURS),
+        passwordLinkExpiryPolicy: {
+          minHours: MIN_PASSWORD_LINK_EXPIRY_HOURS,
+          maxHours: MAX_PASSWORD_LINK_EXPIRY_HOURS,
+          defaultHours: DEFAULT_PASSWORD_LINK_EXPIRY_HOURS
+        },
+        errorMessages: ['Inactive users cannot receive setup or reset links. Reactivate the user first.']
+      });
+    }
+
+    return res.render('fragments/management-user-setup-link-modal', {
+      user,
+      returnPath,
+      expiryHours: String(DEFAULT_PASSWORD_LINK_EXPIRY_HOURS),
+      passwordLinkExpiryPolicy: {
+        minHours: MIN_PASSWORD_LINK_EXPIRY_HOURS,
+        maxHours: MAX_PASSWORD_LINK_EXPIRY_HOURS,
+        defaultHours: DEFAULT_PASSWORD_LINK_EXPIRY_HOURS
+      },
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function createSetupLinkForExistingUser(req, res, next) {
   try {
     const userId = getSafeUserId(req);
@@ -576,7 +671,24 @@ async function createSetupLinkForExistingUser(req, res, next) {
       return res.redirect('/management/users/inactive?error=inactive_setup_link');
     }
 
-    const setupLink = await createSetupLinkForUser(user, req.currentUser.user_id);
+    const expiryHoursRaw = String(req.body.expiryHours || '').trim();
+    const expiryHours = parsePasswordLinkExpiryHours(expiryHoursRaw);
+
+    if (expiryHours === null) {
+      return res.status(400).render('fragments/management-user-setup-link-modal', {
+        user,
+        returnPath: normalizeReturnPath(req.body.returnPath),
+        expiryHours: expiryHoursRaw || String(DEFAULT_PASSWORD_LINK_EXPIRY_HOURS),
+        passwordLinkExpiryPolicy: {
+          minHours: MIN_PASSWORD_LINK_EXPIRY_HOURS,
+          maxHours: MAX_PASSWORD_LINK_EXPIRY_HOURS,
+          defaultHours: DEFAULT_PASSWORD_LINK_EXPIRY_HOURS
+        },
+        errorMessages: [`Link expiration must be a whole number from ${MIN_PASSWORD_LINK_EXPIRY_HOURS} through ${MAX_PASSWORD_LINK_EXPIRY_HOURS} hours.`]
+      });
+    }
+
+    const setupLink = await createSetupLinkForUser(user, req.currentUser.user_id, expiryHours);
 
     return res.render('pages/management-setup-link', {
       pageTitle: setupLink.linkLabel,
@@ -810,6 +922,7 @@ module.exports = {
   createUser,
   renderEditUserModal,
   updateUserModal,
+  renderSetupLinkModal,
   createSetupLinkForExistingUser,
   renderDeactivateUserModal,
   renderReactivateUserModal,

@@ -1,5 +1,6 @@
 const { pool } = require('./db');
 const { getCanonicalCosmeticGrade, isNotYetGradedToken } = require('../services/cosmeticGradeNormalization');
+const { buildLotHierarchyOptions } = require('../services/lotHierarchyPresentation');
 
 const schemaTableCache = new Map();
 const schemaColumnCache = new Map();
@@ -1426,25 +1427,37 @@ async function getLotFilterOptions() {
     'lot_name',
     "CONCAT('Lot #', l.lot_id)"
   );
+  const parentLotIdExpression = hasColumn(lotColumns, 'parent_lot_id') ? 'l.parent_lot_id' : 'NULL';
+  const activeExpression = hasColumn(lotColumns, 'is_active') ? 'l.is_active' : '1';
 
   const [rows] = await pool.query(
     `
       SELECT
-        l.lot_id AS value,
+        l.lot_id,
+        ${parentLotIdExpression} AS parent_lot_id,
+        ${activeExpression} AS is_active,
         ${lotNameExpression},
         COUNT(u.unit_id) AS unit_count
       FROM lots l
-      INNER JOIN units u
+      LEFT JOIN units u
         ON u.lot_id = l.lot_id
-      GROUP BY l.lot_id, lot_name
+      GROUP BY l.lot_id, parent_lot_id, is_active, lot_name
       ORDER BY lot_name
     `
   );
 
-  return rows.map((row) => ({
-    value: Number(row.value),
-    label: row.lot_name || `Lot #${row.value}`,
-    count: Number(row.unit_count || 0)
+  const parentLotIds = new Set(rows
+    .map((row) => Number(row.parent_lot_id || 0))
+    .filter((lotId) => Number.isSafeInteger(lotId) && lotId > 0));
+  const selectableRows = rows.filter((row) => Number(row.unit_count || 0) > 0 && !parentLotIds.has(Number(row.lot_id)));
+  return buildLotHierarchyOptions(rows, selectableRows).map((entry) => ({
+    value: entry.lotId,
+    label: entry.lotName,
+    count: Number(entry.sourceLot && entry.sourceLot.unit_count || 0),
+    selectable: entry.selectable,
+    depth: entry.depth,
+    fullPath: entry.fullPath,
+    compactLabel: entry.compactLabel
   }));
 }
 

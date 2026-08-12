@@ -8,6 +8,7 @@
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+  <script defer src="/js/password-link-status.js?v=20260811-stage10w32"></script>
 
   <body>
     <div class="app-shell">
@@ -155,6 +156,25 @@
                           <% if (!user.has_password) { %>
                             <small>Pending setup</small>
                           <% } %>
+                          <% if (user.latest_password_link_expires_at) { %>
+                            <small
+                              class="management-user-link-status <%= user.latest_password_link_status === 'expired' ? 'is-expired' : (user.latest_password_link_status === 'active' ? 'is-active' : '') %>"
+                              data-password-link-expires-at="<%= new Date(user.latest_password_link_expires_at).toISOString() %>"
+                              data-password-link-status="<%= user.latest_password_link_status || '' %>"
+                              data-password-link-type="<%= user.latest_password_link_type_code || '' %>"
+                              data-password-link-expiry-display="<%= formatDateTime(user.latest_password_link_expires_at) %>"
+                            >
+                              <% if (user.latest_password_link_status === 'expired') { %>
+                                <%= user.latest_password_link_type_code === 'password_reset' ? 'Reset link' : 'Setup link' %> expired <%= formatDateTime(user.latest_password_link_expires_at) %>
+                              <% } else if (user.latest_password_link_status === 'used') { %>
+                                <%= user.latest_password_link_type_code === 'password_reset' ? 'Reset link' : 'Setup link' %> used
+                              <% } else if (user.latest_password_link_status === 'revoked') { %>
+                                <%= user.latest_password_link_type_code === 'password_reset' ? 'Reset link' : 'Setup link' %> revoked
+                              <% } else { %>
+                                <%= user.latest_password_link_type_code === 'password_reset' ? 'Reset link' : 'Setup link' %> expires <%= formatDateTime(user.latest_password_link_expires_at) %>
+                              <% } %>
+                            </small>
+                          <% } %>
                         </div>
                       </td>
                       <td><%= formatDateTime(user.last_login_at) %></td>
@@ -169,11 +189,15 @@
                               <a class="secondary-button danger-button" href="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=inactive" hx-get="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=inactive" hx-target="#modal-root" hx-swap="innerHTML">Delete Pending User</a>
                             <% } %>
                           <% } else { %>
-                            <form method="post" action="/management/users/<%= user.user_id %>/setup-link">
-                              <button type="submit" class="secondary-button">
-                                <%= user.has_password ? 'Generate Reset Link' : 'Generate Setup Link' %>
-                              </button>
-                            </form>
+                            <a
+                              class="secondary-button"
+                              href="/management/users/<%= user.user_id %>/setup-link/modal?returnPath=active"
+                              hx-get="/management/users/<%= user.user_id %>/setup-link/modal?returnPath=active"
+                              hx-target="#modal-root"
+                              hx-swap="innerHTML"
+                            >
+                              <%= user.has_password ? 'Generate Reset Link' : 'Generate Setup Link' %>
+                            </a>
 
                             <% if (Number(user.user_id) !== Number(currentUserId)) { %>
                               <% if (user.can_delete_pending_setup) { %>

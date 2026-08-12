@@ -357,7 +357,7 @@
               <span class="tech-unit-summary-spec">
                 <strong><%= unit.specSummary %></strong>
                 <small>
-                  <span class="tech-unit-summary-lot"><span class="tech-unit-summary-lot-label">Lot:</span> <strong><%= unit.lotName || '—' %></strong></span>
+                  <span class="tech-unit-summary-lot"><span class="tech-unit-summary-lot-label">Lot:</span> <strong class="tech-unit-summary-lot-help" role="button" tabindex="0" data-no-row-toggle data-lot-hierarchy-help data-lot-hierarchy-path="<%= unit.lotFullPath || unit.lotName || '' %>" aria-label="Show full Lot hierarchy for <%= unit.lotName || 'this Unit' %>"><%= unit.lotName || '—' %></strong></span>
                   <% if (unit.isLotClosed) { %>
                     <span aria-hidden="true">·</span>
                     <span>Closed lot</span>
@@ -779,6 +779,13 @@
                           <% } %>
                         </dd>
                       </div>
+
+                      <% if (unit.lotFullPath) { %>
+                        <div class="tech-detail-list--wide-value">
+                          <dt>Lot Hierarchy</dt>
+                          <dd class="tech-lot-hierarchy-text"><%= unit.lotFullPath %></dd>
+                        </div>
+                      <% } %>
 
                       <div>
                         <dt>Assigned Tech</dt>

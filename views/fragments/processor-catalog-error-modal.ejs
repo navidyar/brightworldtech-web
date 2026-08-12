@@ -1,0 +1,12 @@
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal" role="dialog" aria-modal="true" aria-labelledby="processor-catalog-error-title">
+    <header class="modal-header">
+      <div><h2 id="processor-catalog-error-title"><%= title %></h2></div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <div class="form-actions"><button class="secondary-button" type="button" data-modal-close>Close</button></div>
+    </div>
+  </section>
+</div>

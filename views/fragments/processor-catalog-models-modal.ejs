@@ -1,0 +1,61 @@
+<%
+  const query = new URLSearchParams();
+  if (filters.processorBrandId) query.set('processorBrandId', String(filters.processorBrandId));
+  if (filters.includeInactive) query.set('includeInactive', '1');
+  if (filters.needsReview) query.set('needsReview', '1');
+  if (filters.search) query.set('search', filters.search);
+  if (returnTo === 'processor-families') query.set('returnTo', 'processor-families');
+  const queryString = query.toString();
+  const formAction = `/management/config/processors/${processor.id}/models${queryString ? `?${queryString}` : ''}`;
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal processor-association-modal" role="dialog" aria-modal="true" aria-labelledby="processor-model-association-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="processor-model-association-title">Unit Models for Processor</h2>
+        <p><strong><%= processor.brandName %> · <%= processor.modelCode %></strong> · Processor #<%= processor.id %></p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (errorMessages.length) { %>
+        <div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <p class="field-hint">Checked models are the exact Unit Models where this processor is offered in Add/Edit Unit. One canonical processor can be associated with Dell, HP, Lenovo, or any other compatible model without creating duplicate processor records.</p>
+
+      <div class="catalog-association-filters" data-catalog-association-filters>
+        <label class="form-field"><span>Manufacturer</span><select data-association-filter="manufacturer"><option value="">All Manufacturers</option><% manufacturers.forEach((manufacturer) => { %><option value="<%= manufacturer.id %>"><%= manufacturer.label %></option><% }) %></select></label>
+        <label class="form-field"><span>Unit Category</span><select data-association-filter="category"><option value="">All Categories</option><% unitCategories.forEach((category) => { %><option value="<%= category.id %>"><%= category.label %></option><% }) %></select></label>
+        <label class="form-field catalog-association-search"><span>Model Search</span><input type="search" autocomplete="off" placeholder="Search exact model" data-association-filter="search" /></label>
+      </div>
+
+      <form class="app-form app-form-clean" method="post" action="<%= formAction %>" data-processor-catalog-form>
+        <input type="hidden" name="returnTo" value="<%= returnTo %>" />
+        <div class="catalog-association-table-wrap">
+          <table class="catalog-association-table">
+            <thead><tr><th class="catalog-association-check-column">Use</th><th>Manufacturer</th><th>Category</th><th>Unit Model</th><th>Status</th></tr></thead>
+            <tbody>
+              <% models.forEach((model) => { %>
+                <tr data-association-row data-manufacturer-id="<%= model.manufacturerId %>" data-category-id="<%= model.unitCategoryConfigValueId || '' %>" data-search-text="<%= `${model.manufacturerName} ${model.unitCategoryLabel} ${model.modelName}`.toLowerCase() %>">
+                  <td><input type="checkbox" name="unitModelIds" value="<%= model.id %>" <%= model.isMapped ? 'checked' : '' %> aria-label="Associate <%= model.modelName %>" /></td>
+                  <td><%= model.manufacturerName %></td>
+                  <td><%= model.unitCategoryLabel %></td>
+                  <td><strong><%= model.modelName %></strong></td>
+                  <td><span class="pill <%= model.isActive ? 'good' : 'neutral' %>"><%= model.isActive ? 'Active' : 'Inactive' %></span></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+          <p class="catalog-association-empty" data-association-empty hidden>No Unit Models match the current filters.</p>
+        </div>
+
+        <div class="form-actions">
+          <button class="primary-button" type="submit">Save Model Associations</button>
+          <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

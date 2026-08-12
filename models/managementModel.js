@@ -1,6 +1,28 @@
 const { pool } = require('./db');
 const accessPolicy = require('../config/accessPolicy');
 
+function getPasswordLinkStatus(row) {
+  if (!row || !row.latest_password_link_expires_at) {
+    return null;
+  }
+
+  if (row.latest_password_link_used_at) {
+    return 'used';
+  }
+
+  if (row.latest_password_link_revoked_at) {
+    return 'revoked';
+  }
+
+  const expiresAt = new Date(row.latest_password_link_expires_at);
+
+  if (!Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() <= Date.now()) {
+    return 'expired';
+  }
+
+  return 'active';
+}
+
 function mapUserRow(row) {
   const roles = row.role_codes ? row.role_codes.split(',') : [];
   const roleNames = row.role_names ? row.role_names.split(', ') : [];
@@ -16,7 +38,8 @@ function mapUserRow(row) {
     role_count: Number(row.role_count || roles.length || 0),
     is_active: Number(row.is_active) === 1,
     has_password: Number(row.has_password || 0) === 1,
-    can_delete_pending_setup: Number(row.can_delete_pending_setup || 0) === 1
+    can_delete_pending_setup: Number(row.can_delete_pending_setup || 0) === 1,
+    latest_password_link_status: getPasswordLinkStatus(row)
   };
 }
 
@@ -68,6 +91,10 @@ async function listUsers(options = {}) {
         u.password_hash IS NOT NULL AS has_password,
         u.is_active,
         u.last_login_at,
+        latest_upl.expires_at AS latest_password_link_expires_at,
+        latest_upl.used_at AS latest_password_link_used_at,
+        latest_upl.revoked_at AS latest_password_link_revoked_at,
+        latest_link_type.code AS latest_password_link_type_code,
         CASE
           WHEN status.code = 'pending_setup'
             AND u.password_hash IS NULL
@@ -87,6 +114,14 @@ async function listUsers(options = {}) {
         ON ur.user_id = u.user_id
       LEFT JOIN roles r
         ON r.role_id = ur.role_id
+      LEFT JOIN user_password_links latest_upl
+        ON latest_upl.user_password_link_id = (
+          SELECT MAX(upl_lookup.user_password_link_id)
+          FROM user_password_links upl_lookup
+          WHERE upl_lookup.user_id = u.user_id
+        )
+      LEFT JOIN config_values latest_link_type
+        ON latest_link_type.config_value_id = latest_upl.link_type_config_value_id
       WHERE u.is_active = ?
       GROUP BY
         u.user_id,
@@ -99,6 +134,10 @@ async function listUsers(options = {}) {
         u.password_hash,
         u.is_active,
         u.last_login_at,
+        latest_upl.expires_at,
+        latest_upl.used_at,
+        latest_upl.revoked_at,
+        latest_link_type.code,
         can_delete_pending_setup,
         u.created_at,
         u.updated_at
@@ -160,6 +199,10 @@ async function getUserById(userId) {
         u.password_hash IS NOT NULL AS has_password,
         u.is_active,
         u.last_login_at,
+        latest_upl.expires_at AS latest_password_link_expires_at,
+        latest_upl.used_at AS latest_password_link_used_at,
+        latest_upl.revoked_at AS latest_password_link_revoked_at,
+        latest_link_type.code AS latest_password_link_type_code,
         CASE
           WHEN status.code = 'pending_setup'
             AND u.password_hash IS NULL
@@ -177,6 +220,14 @@ async function getUserById(userId) {
         ON ur.user_id = u.user_id
       LEFT JOIN roles r
         ON r.role_id = ur.role_id
+      LEFT JOIN user_password_links latest_upl
+        ON latest_upl.user_password_link_id = (
+          SELECT MAX(upl_lookup.user_password_link_id)
+          FROM user_password_links upl_lookup
+          WHERE upl_lookup.user_id = u.user_id
+        )
+      LEFT JOIN config_values latest_link_type
+        ON latest_link_type.config_value_id = latest_upl.link_type_config_value_id
       WHERE u.user_id = ?
       GROUP BY
         u.user_id,
@@ -189,6 +240,10 @@ async function getUserById(userId) {
         u.password_hash,
         u.is_active,
         u.last_login_at,
+        latest_upl.expires_at,
+        latest_upl.used_at,
+        latest_upl.revoked_at,
+        latest_link_type.code,
         can_delete_pending_setup
       LIMIT 1
     `,

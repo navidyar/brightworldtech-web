@@ -423,17 +423,9 @@ function applyUnitFormSubmissionPolicy({
     hiddenFieldKeys.push(registryField.key);
 
     if (normalizedMode === 'create') {
-      if (hasMeaningfulFieldValue(formData, registryField.key)) {
-        const message = `${registryField.label} is hidden by the selected Lot. Its submitted value was removed; review the form and save again.`;
-        errors.push(message);
-        fieldErrors.push(Object.freeze({
-          fieldKey: registryField.key,
-          label: registryField.label,
-          code: 'hidden_create_value',
-          message
-        }));
-      }
-
+      // Hidden fields are not part of the selected Lot's form contract. Ignore any
+      // stale/derived browser value and remove it before persistence instead of
+      // blocking an otherwise valid Create submission.
       clearFieldProperties(formData, registryField.key);
       return;
     }

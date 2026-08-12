@@ -108,7 +108,7 @@ test('required repeatable sections require one complete meaningful row', () => {
   assert.equal(complete.errors.length, 0);
 });
 
-test('hidden Create values are rejected and removed before persistence', () => {
+test('hidden Create values are ignored and removed before persistence', () => {
   const profile = buildProfile([
     { fieldKey: 'bios_serial_number', visibilityMode: 'hidden', requirementMode: 'optional' }
   ]);
@@ -119,8 +119,29 @@ test('hidden Create values are rejected and removed before persistence', () => {
   });
 
   assert.equal(result.formData.biosSerialNumber, '');
-  assert.equal(result.fieldErrors[0].code, 'hidden_create_value');
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.fieldErrors.length, 0);
   assert.equal(isUnitFormFieldManaged(result.formData, 'bios_serial_number'), false);
+});
+
+test('hidden optional Processor Speed ignores a catalog-derived speed during Create', () => {
+  const profile = buildProfile([
+    { fieldKey: 'processor_speed_ghz', visibilityMode: 'hidden', requirementMode: 'optional' }
+  ]);
+  const result = applyUnitFormSubmissionPolicy({
+    mode: 'create',
+    submittedFormData: buildFormData({
+      processorModelId: '77',
+      processorSpeedGhz: '2.20'
+    }),
+    profile
+  });
+
+  assert.equal(result.formData.processorModelId, '77');
+  assert.equal(result.formData.processorSpeedGhz, '');
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.fieldErrors.length, 0);
+  assert.equal(isUnitFormFieldManaged(result.formData, 'processor_speed_ghz'), false);
 });
 
 test('default blank rows do not count as hidden Create values', () => {
@@ -200,7 +221,7 @@ test('a default General Comment type does not count as a hidden Create value wit
   assert.equal(isUnitFormFieldManaged(result.formData, 'general_comment'), false);
 });
 
-test('hidden General Comment text is still rejected during Create', () => {
+test('hidden General Comment text is ignored and removed during Create', () => {
   const profile = buildProfile([
     { fieldKey: 'general_comment', visibilityMode: 'hidden', requirementMode: 'optional' }
   ]);
@@ -213,8 +234,8 @@ test('hidden General Comment text is still rejected during Create', () => {
     profile
   });
 
-  assert.equal(result.fieldErrors[0].fieldKey, 'general_comment');
-  assert.equal(result.fieldErrors[0].code, 'hidden_create_value');
+  assert.equal(result.errors.length, 0);
+  assert.equal(result.fieldErrors.length, 0);
   assert.equal(result.formData.generalCommentText, '');
   assert.equal(result.formData.generalCommentTypeConfigValueId, '');
 });

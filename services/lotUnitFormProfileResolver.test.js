@@ -72,6 +72,23 @@ test('applies parent rules first and lets descendants override each mode indepen
   assert.equal(field.requirementSource.lotId, 10);
 });
 
+test('a child keeps an inherited hidden Processor Speed optional when the parent requirement is optional', () => {
+  const profile = resolveLotUnitFormProfile({
+    lineage: threeLevels.slice(0, 2),
+    rules: [
+      { lotId: 10, fieldKey: 'processor_speed_ghz', visibilityMode: 'hidden', requirementMode: 'optional' }
+    ]
+  });
+
+  const field = getResolvedUnitFormField(profile, 'processor_speed_ghz');
+
+  assert.equal(field.visible, false);
+  assert.equal(field.required, false);
+  assert.equal(field.resolvedRequirementMode, 'optional');
+  assert.equal(field.visibilitySource.lotId, 10);
+  assert.equal(field.requirementSource.lotId, 10);
+});
+
 test('suppresses an inherited requirement while its field is hidden without deleting that inheritance', () => {
   const childProfile = resolveLotUnitFormProfile({
     lineage: threeLevels.slice(0, 2),

@@ -1,0 +1,80 @@
+<%
+  const activeProcessorTypeCount = processorTypeRows.filter((processorType) => processorType.isActive).length;
+  const inactiveProcessorTypeCount = processorTypeRows.length - activeProcessorTypeCount;
+  const processorTypeSearchText = 'unit workflow configuration processor types processor type processor brands cpu brands'.toLowerCase();
+%>
+<details class="configuration-category" data-configuration-category data-search-text="<%= processorTypeSearchText %>">
+  <summary class="configuration-category-summary">
+    <span class="configuration-category-summary-title">
+      <strong>Processor Types</strong>
+      <code>processor_types</code>
+    </span>
+    <span class="configuration-category-summary-meta">
+      <span><%= formatNumber(processorTypeRows.length) %> shown</span>
+      <span><%= formatNumber(activeProcessorTypeCount) %> active</span>
+      <% if (inactiveProcessorTypeCount > 0) { %><span><%= formatNumber(inactiveProcessorTypeCount) %> inactive</span><% } %>
+      <span class="pill neutral">System-used</span>
+    </span>
+  </summary>
+
+  <div class="configuration-category-body">
+    <div class="configuration-category-toolbar">
+      <div class="configuration-category-toolbar-copy">
+        <p>Global Processor Type values used by processor catalog, request, and Unit workflows.</p>
+      </div>
+      <a class="secondary-button button-small" href="/management/config/processor-types/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/processor-types/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Add Processor Type</a>
+    </div>
+
+    <div class="table-card configuration-values-table">
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr>
+              <th>Processor Type</th>
+              <th>Code</th>
+              <th>Status</th>
+              <th>Processors</th>
+              <th>Families</th>
+              <th>Approved Requests</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% if (processorTypeRows.length === 0) { %>
+              <tr data-configuration-value-row data-search-text="processor types"><td colspan="7">No Processor Types are available for the current filter.</td></tr>
+            <% } %>
+            <% processorTypeRows.forEach((processorType) => { %>
+              <%
+                const rowSearchText = [
+                  'processor types',
+                  processorType.name,
+                  processorType.code,
+                  processorType.isActive ? 'active' : 'inactive'
+                ].filter(Boolean).join(' ').toLowerCase();
+              %>
+              <tr class="<%= processorType.isActive ? '' : 'configuration-value-row--inactive' %>" data-configuration-value-row data-search-text="<%= rowSearchText %>">
+                <td><strong><%= processorType.name %></strong></td>
+                <td><code><%= processorType.code %></code></td>
+                <td><span class="pill <%= processorType.isActive ? 'good' : 'neutral' %>"><%= processorType.isActive ? 'Active' : 'Inactive' %></span></td>
+                <td><%= formatNumber(processorType.processorCount) %></td>
+                <td><%= formatNumber(processorType.familyCount) %></td>
+                <td><%= formatNumber(processorType.approvedRequestCount) %></td>
+                <td>
+                  <div class="configuration-value-actions">
+                    <a class="secondary-button button-small" href="/management/config/processor-types/<%= processorType.id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/processor-types/<%= processorType.id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                    <% if (processorType.isActive) { %>
+                      <a class="danger-button button-small" href="/management/config/processor-types/<%= processorType.id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/processor-types/<%= processorType.id %>/deactivate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Deactivate</a>
+                    <% } else { %>
+                      <a class="secondary-button button-small" href="/management/config/processor-types/<%= processorType.id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/processor-types/<%= processorType.id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Activate</a>
+                    <% } %>
+                    <a class="danger-button button-small" href="/management/config/processor-types/<%= processorType.id %>/delete/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/processor-types/<%= processorType.id %>/delete/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Delete</a>
+                  </div>
+                </td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</details>

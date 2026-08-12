@@ -4667,3 +4667,103 @@
   background: #edf5ff;
 }
 
+
+/* Stage 10W31: hierarchical Lot context without widening operational selectors. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option {
+  padding-left: calc(11px + (var(--lot-depth, 0) * 15px));
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--ancestor {
+  color: #7b8796;
+  background: #f8fafc;
+  cursor: default;
+  font-size: 0.8rem;
+  font-weight: 620;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--ancestor:hover {
+  background: #f8fafc;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--selectable {
+  color: #26384e;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-lot-hierarchy-breadcrumb {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 7px;
+  margin: 6px 0 0;
+  color: #6f7e90;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-lot-hierarchy-breadcrumb > span {
+  font-weight: 650;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-lot-hierarchy-breadcrumb > strong {
+  color: #455a72;
+  font-weight: 590;
+  overflow-wrap: anywhere;
+}
+
+.tech-units-clean-page .tech-unit-summary-lot-help {
+  border-bottom: 1px dotted currentColor;
+  cursor: help;
+}
+
+.tech-units-clean-page .tech-unit-summary-lot-help:focus-visible {
+  border-radius: 3px;
+  outline: 2px solid #87aee0;
+  outline-offset: 2px;
+}
+
+.tech-lot-hierarchy-help-popup {
+  position: fixed;
+  z-index: 2000;
+  width: min(430px, calc(100vw - 20px));
+  padding: 10px 12px;
+  border: 1px solid #b9c8d8;
+  border-radius: 7px;
+  color: #334a65;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgba(28, 48, 72, 0.18);
+  font-family: inherit;
+}
+
+.tech-lot-hierarchy-help-popup strong {
+  display: block;
+  margin-bottom: 4px;
+  color: #42566e;
+  font-size: 0.78rem;
+}
+
+.tech-lot-hierarchy-help-popup p {
+  margin: 0;
+  color: #283e58;
+  font-size: 0.82rem;
+  font-weight: 580;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.tech-lot-hierarchy-help-popup small {
+  display: block;
+  margin-top: 6px;
+  color: #738196;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.tech-units-clean-page .tech-detail-list .tech-detail-list--wide-value {
+  grid-column: 1 / -1;
+}
+
+.tech-units-clean-page .tech-lot-hierarchy-text {
+  color: #4f6177;
+  overflow-wrap: anywhere;
+}

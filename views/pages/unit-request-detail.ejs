@@ -4,7 +4,7 @@
     pageTitle,
     stylesheets: [
       '/css/tech.css',
-      '/css/unit-requests.css'
+      '/css/unit-requests.css?v=20260810-stage10w30-processor-catalog-integrity'
     ]
   }) %>
 
@@ -195,21 +195,109 @@
                     </form>
                   </div>
                 <% } else if (request.catalogContext && request.catalogContext.kind === 'processor') { %>
-                  <div class="unit-request-review-actions">
-                    <form method="post" action="/unit-requests/<%= request.unitRequestId %>/approve">
+                  <div class="unit-request-review-actions processor-request-review-actions">
+                    <form class="processor-request-approval-form" method="post" action="/unit-requests/<%= request.unitRequestId %>/approve" data-processor-request-approval-form data-reviewer-is-admin="<%= isAdminCatalogReviewer ? '1' : '0' %>">
                       <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
                       <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
                       <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
-                      <div class="form-grid">
-                        <label class="form-field"><span>Existing Processor Type <small>(optional)</small></span><select name="approvedProcessorBrandId"><option value="">Create or reuse the typed Processor Type below</option><% processorBrands.forEach((processorBrand) => { %><option value="<%= processorBrand.id %>"><%= processorBrand.label %></option><% }) %></select></label>
-                        <label class="form-field"><span>Canonical Processor Type Name</span><input type="text" name="approvedProcessorBrandName" value="<%= request.catalogContext.requestedProcessorType %>" minlength="2" maxlength="100" required /><small class="field-hint">Choose an existing type above, or leave that selection blank to create/reactivate this canonical name.</small></label>
-                        <label class="form-field"><span>Canonical Processor</span><input type="text" name="approvedProcessorModelCode" value="<%= request.catalogContext.requestedProcessorName %>" minlength="2" maxlength="100" required /></label>
-                        <label class="form-field"><span>Processor Family <small>(optional)</small></span><input type="text" name="approvedProcessorFamily" maxlength="100" placeholder="Example: Core i5" /></label>
-                        <label class="form-field"><span>Generation <small>(optional)</small></span><input type="text" name="approvedProcessorGeneration" maxlength="50" placeholder="Example: 10th Gen" /></label>
-                        <label class="form-field"><span>Base Speed GHz</span><input type="number" name="approvedProcessorBaseSpeedGhz" value="<%= request.catalogContext.requestedProcessorSpeedGhz || '' %>" min="0.01" max="99.99" step="0.01" required placeholder="Example: 1.60" /></label>
+                      <input type="hidden" name="approvedExistingProcessorModelId" value="" data-existing-processor-id />
+
+                      <div class="processor-request-mode-section processor-request-mode-section--existing">
+                        <div class="processor-request-mode-heading">
+                          <strong>1. Reuse an Existing Processor whenever possible</strong>
+                          <span>This adds the canonical Processor to <%= request.catalogContext.manufacturerName %> <%= request.catalogContext.unitModelName %>; it does not create a duplicate Processor record.</span>
+                        </div>
+
+                        <% if (processorCatalogMatches.length > 0) { %>
+                          <div class="processor-request-catalog-matches">
+                            <strong>Global Processor Catalog matches for this request</strong>
+                            <% processorCatalogMatches.forEach((match) => { %>
+                              <div class="processor-request-catalog-match <%= match.identityMatch ? 'processor-request-catalog-match--strong' : '' %>">
+                                <span><strong>#<%= match.id %> · <%= match.displayLabel %></strong> <span class="pill <%= match.isActive ? 'good' : 'neutral' %>"><%= match.isActive ? 'Active' : 'Inactive' %></span></span>
+                                <small><%= match.unitModelLabels.length ? `Currently associated with ${match.unitModelLabels.slice(0, 4).join(', ')}${match.unitModelLabels.length > 4 ? ` +${match.unitModelLabels.length - 4} more` : ''}.` : 'Not currently associated with any Unit Models.' %></small>
+                                <% if (match.isActive) { %><button type="button" class="secondary-button button-small" data-use-existing-processor-value="#<%= match.id %> · <%= match.displayLabel %>">Use Existing</button><% } else { %><small>Reactivate this Processor in Processor Catalog before using it.</small><% } %>
+                              </div>
+                            <% }) %>
+                          </div>
+                        <% } %>
+
+                        <label class="form-field processor-request-existing-field">
+                          <span>Existing Canonical Processor</span>
+                          <input type="search" list="processor-catalog-options" autocomplete="off" placeholder="Search the global catalog, for example i5-9500T" data-existing-processor-search />
+                          <datalist id="processor-catalog-options">
+                            <% processorCatalogOptions.forEach((processor) => { %>
+                              <option value="#<%= processor.id %> · <%= processor.displayLabel %>" data-processor-id="<%= processor.id %>" data-model-code="<%= processor.modelCode %>" data-brand-name="<%= processor.brandName %>" data-model-labels="<%= processor.unitModelLabels.join(' | ') %>"></option>
+                            <% }) %>
+                          </datalist>
+                          <small class="field-hint" data-existing-processor-hint>Searches the entire Processor Catalog, not only processors already associated with this Unit Model.</small>
+                        </label>
                       </div>
-                      <label class="form-field"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional compatibility or normalization note"></textarea></label>
-                      <button class="primary-button" type="submit">Approve Processor Request</button>
+
+                      <div class="processor-request-mode-divider"><span>OR</span></div>
+
+                      <div class="processor-request-mode-section" data-new-processor-section>
+                        <div class="processor-request-mode-heading">
+                          <strong>2. Create a New Canonical Processor only when none exists</strong>
+                          <span>Keep the Processor name concise. Store family, generation, and GHz in their separate fields.</span>
+                        </div>
+
+                        <div class="message" data-processor-similarity-warning hidden>
+                          <p><strong>Possible existing processor:</strong> <span data-processor-similarity-text></span></p>
+                          <p>Select the existing canonical Processor above rather than creating a duplicate.</p>
+                        </div>
+                        <div class="message error" data-processor-format-warning hidden>
+                          <p><strong>Canonical Processor name needs correction:</strong> <span data-processor-format-text></span></p>
+                        </div>
+
+                        <div class="processor-request-approval-grid">
+                          <label class="form-field">
+                            <span>Processor Type</span>
+                            <select name="approvedProcessorBrandId" data-processor-brand-select data-new-processor-field>
+                              <option value="">Create/reactivate the Processor Type named beside this field</option>
+                              <% processorBrands.forEach((processorBrand) => { %><option value="<%= processorBrand.id %>"><%= processorBrand.label %></option><% }) %>
+                            </select>
+                          </label>
+                          <label class="form-field">
+                            <span>Canonical Processor Type Name</span>
+                            <input type="text" name="approvedProcessorBrandName" value="<%= request.catalogContext.requestedProcessorType %>" minlength="2" maxlength="100" required data-canonical-processor-brand data-new-processor-field />
+                          </label>
+                          <label class="form-field">
+                            <span>Canonical Processor</span>
+                            <input type="text" name="approvedProcessorModelCode" value="<%= request.catalogContext.requestedProcessorName %>" minlength="2" maxlength="150" required data-canonical-processor-model data-new-processor-field />
+                          </label>
+                          <label class="form-field">
+                            <span>Processor Family <small>(optional)</small></span>
+                            <input type="text" name="approvedProcessorFamily" maxlength="100" placeholder="Example: Core" data-new-processor-field />
+                          </label>
+                          <label class="form-field">
+                            <span>Generation <small>(optional)</small></span>
+                            <input type="text" name="approvedProcessorGeneration" maxlength="80" placeholder="Example: 9th Gen" data-new-processor-field />
+                          </label>
+                          <label class="form-field">
+                            <span>Base Speed GHz</span>
+                            <input type="number" name="approvedProcessorBaseSpeedGhz" value="<%= request.catalogContext.requestedProcessorSpeedGhz || '' %>" min="0.01" max="99.99" step="0.01" required placeholder="Example: 2.20" data-canonical-processor-speed data-new-processor-field />
+                          </label>
+                        </div>
+
+                        <p class="field-hint processor-request-canonical-hint">Example canonical record: <strong>Intel</strong> · <strong>i5-9500T</strong> · Family <strong>Core</strong> · Generation <strong>9th Gen</strong> · Base Speed <strong>2.20 GHz</strong>. Do not put “Intel Core”, “@ 2.20 GHz”, or generation text into the Processor field.</p>
+
+                        <div class="message info processor-request-admin-confirmation-note">
+                          <p><strong>New Processor Naming:</strong> Before creating a new Processor Catalog entry, confirm the proposed Processor name and metadata with an Admin. Reuse an existing Processor whenever one already exists.</p>
+                        </div>
+
+                        <% if (!isAdminCatalogReviewer) { %>
+                          <label class="unit-request-inline-check processor-request-admin-confirmation">
+                            <input type="checkbox" name="confirmedProcessorNamingWithAdmin" value="1" data-admin-confirmation data-new-processor-field />
+                            <span>I confirmed this new Processor name and metadata with an Admin.</span>
+                          </label>
+                        <% } %>
+                      </div>
+
+                      <label class="form-field processor-request-approval-note"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional compatibility or normalization note"></textarea></label>
+                      <div class="form-actions">
+                        <button class="primary-button" type="submit" data-processor-approve-button>Approve Processor Request</button>
+                        <a class="secondary-button" href="/management/config/processors?search=<%= encodeURIComponent(request.catalogContext.requestedProcessorName || '') %>">Open Processor Catalog</a>
+                      </div>
                     </form>
                     <form method="post" action="/unit-requests/<%= request.unitRequestId %>/reject">
                       <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
@@ -262,5 +350,6 @@
         </main>
       </div>
     </div>
+    <script defer src="/js/processor-request-review.js?v=20260810-stage10w30-processor-catalog-integrity"></script>
   </body>
 </html>

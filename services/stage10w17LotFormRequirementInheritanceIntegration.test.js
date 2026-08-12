@@ -127,7 +127,7 @@ test('Requirements modal distinguishes inherited rows and lets child Lots custom
   assert.match(modal, /Number\(requirement\.is_inherited\) !== 1/);
   assert.match(modal, />Customize</);
   assert.match(modal, />View Parent</);
-  assert.match(controller, /const requirements = await lotModel\.listEffectiveLotRequirements\(lotId\)/);
+  assert.match(controller, /lotModel\.listEffectiveLotRequirements\(lotId\)/);
 });
 
 test('registry-backed migration can audit before applying new requirement types', () => {

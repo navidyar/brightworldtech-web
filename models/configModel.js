@@ -649,6 +649,170 @@ async function setConfigValueActive(configValueId, isActive) {
   );
 }
 
+
+async function listProcessorTypes({ includeInactive = false } = {}) {
+  const [rows] = await pool.query(
+    `
+      SELECT
+        pb.processor_brand_id,
+        pb.code,
+        pb.name,
+        pb.is_active,
+        (SELECT COUNT(*) FROM processor_models pm WHERE pm.processor_brand_id = pb.processor_brand_id) AS processor_count,
+        (SELECT COUNT(*) FROM processor_families pf WHERE pf.processor_brand_id = pb.processor_brand_id) AS family_count,
+        (
+          SELECT COUNT(*)
+          FROM unit_processor_catalog_requests upcr
+          WHERE upcr.approved_processor_brand_id = pb.processor_brand_id
+        ) AS approved_request_count
+      FROM processor_brands pb
+      WHERE (? = 1 OR pb.is_active = 1)
+      ORDER BY pb.is_active DESC, pb.name, pb.code, pb.processor_brand_id
+    `,
+    [includeInactive ? 1 : 0]
+  );
+
+  return rows.map((row) => ({
+    id: Number(row.processor_brand_id),
+    code: row.code,
+    name: row.name,
+    isActive: Number(row.is_active) === 1,
+    processorCount: Number(row.processor_count || 0),
+    familyCount: Number(row.family_count || 0),
+    approvedRequestCount: Number(row.approved_request_count || 0)
+  }));
+}
+
+async function getProcessorTypeById(processorBrandId) {
+  const [rows] = await pool.query(
+    `
+      SELECT
+        pb.processor_brand_id,
+        pb.code,
+        pb.name,
+        pb.is_active,
+        (SELECT COUNT(*) FROM processor_models pm WHERE pm.processor_brand_id = pb.processor_brand_id) AS processor_count,
+        (SELECT COUNT(*) FROM processor_families pf WHERE pf.processor_brand_id = pb.processor_brand_id) AS family_count,
+        (
+          SELECT COUNT(*)
+          FROM unit_processor_catalog_requests upcr
+          WHERE upcr.approved_processor_brand_id = pb.processor_brand_id
+        ) AS approved_request_count
+      FROM processor_brands pb
+      WHERE pb.processor_brand_id = ?
+      LIMIT 1
+    `,
+    [processorBrandId]
+  );
+
+  if (!rows[0]) return null;
+  const row = rows[0];
+  return {
+    id: Number(row.processor_brand_id),
+    code: row.code,
+    name: row.name,
+    isActive: Number(row.is_active) === 1,
+    processorCount: Number(row.processor_count || 0),
+    familyCount: Number(row.family_count || 0),
+    approvedRequestCount: Number(row.approved_request_count || 0)
+  };
+}
+
+async function processorTypeIdentityExists({ code, name, exceptProcessorBrandId = null }) {
+  const params = [String(code || '').trim(), String(name || '').trim()];
+  let exceptClause = '';
+  if (exceptProcessorBrandId) {
+    exceptClause = 'AND processor_brand_id <> ?';
+    params.push(exceptProcessorBrandId);
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT processor_brand_id, code, name
+      FROM processor_brands
+      WHERE (LOWER(TRIM(code)) = LOWER(TRIM(?)) OR LOWER(TRIM(name)) = LOWER(TRIM(?)))
+        ${exceptClause}
+      LIMIT 1
+    `,
+    params
+  );
+  return rows[0] || null;
+}
+
+async function createProcessorType({ code, name, isActive = true }) {
+  const [result] = await pool.query(
+    'INSERT INTO processor_brands (code, name, is_active) VALUES (?, ?, ?)',
+    [code, name, isActive ? 1 : 0]
+  );
+  return Number(result.insertId);
+}
+
+async function updateProcessorType({ processorBrandId, code, name, isActive = true }) {
+  await pool.query(
+    `
+      UPDATE processor_brands
+      SET code = ?, name = ?, is_active = ?
+      WHERE processor_brand_id = ?
+      LIMIT 1
+    `,
+    [code, name, isActive ? 1 : 0, processorBrandId]
+  );
+}
+
+async function setProcessorTypeActive(processorBrandId, isActive) {
+  await pool.query(
+    'UPDATE processor_brands SET is_active = ? WHERE processor_brand_id = ? LIMIT 1',
+    [isActive ? 1 : 0, processorBrandId]
+  );
+}
+
+async function deleteProcessorTypeIfUnused(processorBrandId) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [brandRows] = await connection.query(
+      'SELECT processor_brand_id, code, name, is_active FROM processor_brands WHERE processor_brand_id = ? LIMIT 1 FOR UPDATE',
+      [processorBrandId]
+    );
+    if (!brandRows[0]) {
+      await connection.rollback();
+      return { deleted: false, notFound: true };
+    }
+
+    const [[processorUsage], [familyUsage], [requestUsage]] = await Promise.all([
+      connection.query('SELECT COUNT(*) AS count FROM processor_models WHERE processor_brand_id = ?', [processorBrandId]),
+      connection.query('SELECT COUNT(*) AS count FROM processor_families WHERE processor_brand_id = ?', [processorBrandId]),
+      connection.query('SELECT COUNT(*) AS count FROM unit_processor_catalog_requests WHERE approved_processor_brand_id = ?', [processorBrandId])
+    ]);
+    const usage = {
+      processorCount: Number(processorUsage[0]?.count || 0),
+      familyCount: Number(familyUsage[0]?.count || 0),
+      approvedRequestCount: Number(requestUsage[0]?.count || 0)
+    };
+
+    if (usage.processorCount || usage.familyCount) {
+      await connection.rollback();
+      return { deleted: false, inUse: true, usage };
+    }
+
+    if (usage.approvedRequestCount) {
+      await connection.query(
+        'UPDATE unit_processor_catalog_requests SET approved_processor_brand_id = NULL WHERE approved_processor_brand_id = ?',
+        [processorBrandId]
+      );
+    }
+
+    await connection.query('DELETE FROM processor_brands WHERE processor_brand_id = ? LIMIT 1', [processorBrandId]);
+    await connection.commit();
+    return { deleted: true, usage };
+  } catch (error) {
+    try { await connection.rollback(); } catch (rollbackError) { /* preserve original error */ }
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function getConfigSummary() {
   const valueColumns = await getColumnSet('config_values');
   const valueActiveExpression = pickColumnExpression('cv', valueColumns, ['is_active'], '1');
@@ -681,6 +845,13 @@ module.exports = {
   updateConfigValue,
   reorderConfigValues,
   setConfigValueActive,
+  listProcessorTypes,
+  getProcessorTypeById,
+  processorTypeIdentityExists,
+  createProcessorType,
+  updateProcessorType,
+  setProcessorTypeActive,
+  deleteProcessorTypeIfUnused,
   getConfigSummary,
   groupConfigCategories
 };

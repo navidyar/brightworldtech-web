@@ -22,6 +22,6 @@ test('operational Lot history exposes IDs alongside names for legacy audit repai
 test('history timeline resolves numeric assignable_lot audit values through Lot history names', () => {
   const source = read('services/unitHistoryTimeline.js');
   assert.match(source, /function buildLotNameById\(/);
-  assert.match(source, /normalizeText\(change\.fieldKey\) !== 'assignable_lot'/);
-  assert.match(source, /normalizeAuditEvent\(event, \{ lotNameById \}\)/);
+  assert.match(source, /\['assignable_lot', 'completion_lot'\]\.includes\(fieldKey\)/);
+  assert.match(source, /normalizeAuditEvent\(event, \{ lotNameById, lotPathById \}\)/);
 });

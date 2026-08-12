@@ -138,7 +138,19 @@ async function renderProcessorFamiliesPage(req, res, next) {
         ? 'Processor family created.'
         : req.query.updated === '1'
           ? 'Processor family updated.'
-          : ''
+          : req.query.notice === 'updated'
+            ? 'Processor updated.'
+            : req.query.notice === 'merged'
+              ? 'Duplicate processor merged into its canonical processor and permanently removed.'
+              : req.query.notice === 'families-updated'
+                ? 'Processor Family memberships updated.'
+                : req.query.notice === 'models-updated'
+                  ? 'Exact Unit Model associations updated.'
+                : req.query.notice === 'deleted'
+                  ? 'Processor permanently deleted.'
+                  : req.query.notice === 'retired'
+                    ? 'Processor removed from the active catalog. Existing historical references were preserved.'
+                    : ''
     });
   } catch (error) {
     next(error);

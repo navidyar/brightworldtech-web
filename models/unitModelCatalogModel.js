@@ -1,4 +1,5 @@
 const { pool } = require('./db');
+const processorCatalogModel = require('./processorCatalogModel');
 
 const MAX_MODEL_NAME_LENGTH = 150;
 
@@ -271,6 +272,92 @@ async function setUnitModelActive(unitModelId, isActive) {
   await pool.execute('UPDATE unit_models SET is_active = ? WHERE unit_model_id = ?', [isActive ? 1 : 0, safeId]);
 }
 
+async function listUnitModelProcessorAssociations(unitModelId) {
+  const unitModel = await getUnitModelById(unitModelId);
+  if (!unitModel) return null;
+
+  const [processors, mappingRows] = await Promise.all([
+    processorCatalogModel.listProcessorCatalogOptions({ includeInactive: false }),
+    pool.query(
+      `
+        SELECT processor_model_id, is_active
+        FROM unit_model_processor_options
+        WHERE unit_model_id = ?
+      `,
+      [unitModel.id]
+    ).then(([rows]) => rows)
+  ]);
+  const mappedIds = new Set(mappingRows.filter((row) => Number(row.is_active) === 1).map((row) => Number(row.processor_model_id)));
+
+  return {
+    unitModel,
+    processors: processors.map((processor) => ({ ...processor, isMapped: mappedIds.has(processor.id) })),
+    processorBrands: [...new Map(processors.map((processor) => [processor.processorBrandId, { id: processor.processorBrandId, label: processor.brandName }])).values()]
+  };
+}
+
+async function replaceUnitModelProcessorAssociations({ unitModelId, processorModelIds = [] }) {
+  const safeUnitModelId = normalizePositiveInteger(unitModelId);
+  const selectedProcessorIds = [...new Set((Array.isArray(processorModelIds) ? processorModelIds : [processorModelIds])
+    .map(normalizePositiveInteger)
+    .filter(Boolean))];
+  if (!safeUnitModelId) {
+    const error = new Error('The selected Unit Model could not be found.');
+    error.code = 'BWT_UNIT_MODEL_PROCESSOR_ASSOCIATION_INPUT_INVALID';
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [modelRows] = await connection.query(
+      'SELECT unit_model_id FROM unit_models WHERE unit_model_id = ? LIMIT 1 FOR UPDATE',
+      [safeUnitModelId]
+    );
+    if (!modelRows[0]) {
+      const error = new Error('The selected Unit Model could not be found.');
+      error.code = 'BWT_UNIT_MODEL_PROCESSOR_ASSOCIATION_NOT_FOUND';
+      throw error;
+    }
+
+    if (selectedProcessorIds.length > 0) {
+      const placeholders = selectedProcessorIds.map(() => '?').join(', ');
+      const [processorRows] = await connection.query(
+        `SELECT processor_model_id FROM processor_models WHERE processor_model_id IN (${placeholders})`,
+        selectedProcessorIds
+      );
+      if (processorRows.length !== selectedProcessorIds.length) {
+        const error = new Error('One or more selected Processors no longer exist. Refresh the page and try again.');
+        error.code = 'BWT_UNIT_MODEL_PROCESSOR_ASSOCIATION_INVALID_PROCESSOR';
+        throw error;
+      }
+    }
+
+    await connection.query(
+      'UPDATE unit_model_processor_options SET is_active = 0 WHERE unit_model_id = ?',
+      [safeUnitModelId]
+    );
+    for (const processorModelId of selectedProcessorIds) {
+      await connection.query(
+        `
+          INSERT INTO unit_model_processor_options (unit_model_id, processor_model_id, is_active)
+          VALUES (?, ?, 1)
+          ON DUPLICATE KEY UPDATE is_active = 1
+        `,
+        [safeUnitModelId, processorModelId]
+      );
+    }
+
+    await connection.commit();
+    return { unitModelId: safeUnitModelId, processorCount: selectedProcessorIds.length };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   MAX_MODEL_NAME_LENGTH,
   normalizePositiveInteger,
@@ -280,8 +367,10 @@ module.exports = {
   listUnitCategories,
   listUnitModels,
   getUnitModelById,
+  listUnitModelProcessorAssociations,
   modelExists,
   createUnitModel,
   updateUnitModel,
+  replaceUnitModelProcessorAssociations,
   setUnitModelActive
 };

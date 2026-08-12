@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const techUnitModel = require('../models/techUnitModel');
+const lotModel = require('../models/lotModel');
 const overrideRequestModel = require('../models/overrideRequestModel');
 const unitRequestModel = require('../models/unitRequestModel');
 const unitExpandedDetailModel = require('../models/unitExpandedDetailModel');
@@ -37,6 +38,11 @@ const {
   applyUnitFormSubmissionPolicy,
   buildManagedValidationFormData
 } = require('../services/unitFormSubmissionPolicy');
+const {
+  canChooseCompletionAttribution,
+  getAllowedCompletionUserIds,
+  resolveCompletionUserId
+} = require('../services/completionAttributionPolicy');
 
 const VALID_MEMORY_INSTALL_TYPE_CODES = new Set([
   'removable_module',
@@ -230,18 +236,52 @@ function getCurrentUserDisplayName(req) {
   return fullName || currentUser.email || 'Current user';
 }
 
-function buildCompleteWorkModalView({ preview = null, req = null, successMessage = null, errorMessages = [] } = {}) {
+function buildCompleteWorkModalView({
+  preview = null,
+  req = null,
+  selectedCompletedByUserId = null,
+  successMessage = null,
+  errorMessages = []
+} = {}) {
+  const safePreview = preview || {
+    ready: false,
+    unitId: null,
+    unitLabel: 'Unit not found',
+    lotName: 'Unknown lot',
+    productionWeight: null,
+    formattedProductionWeight: '—',
+    errorMessage: ''
+  };
+  const currentUserId = normalizePositiveInteger(req && req.currentUser ? req.currentUser.user_id : null);
+  const currentUserName = getCurrentUserDisplayName(req);
+  const assignedUserId = normalizePositiveInteger(safePreview.assignedToUserId);
+  const assignedUserName = String(safePreview.assignedToName || '').trim();
+  const roleCodes = getCurrentRoleCodes(req);
+  const allowedUserIds = getAllowedCompletionUserIds({
+    currentUserId,
+    assignedUserId,
+    roleCodes
+  });
+  const defaultCompletedByUserId = allowedUserIds[0] || currentUserId;
+  const normalizedSelectedUserId = normalizePositiveInteger(selectedCompletedByUserId);
+  const effectiveCompletedByUserId = normalizedSelectedUserId && allowedUserIds.includes(normalizedSelectedUserId)
+    ? normalizedSelectedUserId
+    : defaultCompletedByUserId;
+  const completionAttributionOptions = allowedUserIds.map((userId) => ({
+    userId,
+    name: userId === assignedUserId && assignedUserName ? assignedUserName : currentUserName,
+    isAssignedUser: userId === assignedUserId,
+    isCurrentUser: userId === currentUserId
+  }));
+  const selectedOption = completionAttributionOptions.find((option) => option.userId === effectiveCompletedByUserId) || null;
+
   return {
-    preview: preview || {
-      ready: false,
-      unitId: null,
-      unitLabel: 'Unit not found',
-      lotName: 'Unknown lot',
-      productionWeight: null,
-      formattedProductionWeight: '—',
-      errorMessage: ''
-    },
-    creditedToName: getCurrentUserDisplayName(req),
+    preview: safePreview,
+    creditedToName: selectedOption ? selectedOption.name : currentUserName,
+    currentUserName,
+    completionAttributionOptions,
+    canChooseCompletionAttribution: canChooseCompletionAttribution(roleCodes) && completionAttributionOptions.length > 1,
+    selectedCompletedByUserId: effectiveCompletedByUserId,
     canViewProductionWeight: userCanViewProductionWeight(req),
     successMessage,
     errorMessages: Array.isArray(errorMessages) ? errorMessages : []
@@ -2860,7 +2900,8 @@ async function renderTechUnitHistoryPanel(req, res, next) {
       operationalHistory,
       lotValidationAcceptanceHistory,
       auditEvents,
-      creationContext
+      creationContext,
+      lotCatalog
     ] = await Promise.all([
       unitExpandedDetailModel.getHistoryDetailsForUnit(unitId),
       overrideRequestModel.listOverrideRequestsForUnit(unitId, 25),
@@ -2869,7 +2910,8 @@ async function renderTechUnitHistoryPanel(req, res, next) {
       unitAuditEventModel.listUnitAuditEvents(unitId, { limit: 500 }),
       unitAuditEventModel.getUnitCreationContext(unitId, {
         assetTagPrefix: techUnitModel.getAssetTagPrefix()
-      })
+      }),
+      lotModel.listLots({ includeHidden: true })
     ]);
     const rawTimeline = buildUnitHistoryTimeline({
       auditEvents,
@@ -2877,7 +2919,8 @@ async function renderTechUnitHistoryPanel(req, res, next) {
       overrideHistory,
       operationalHistory,
       acceptanceHistory: lotValidationAcceptanceHistory,
-      creationContext
+      creationContext,
+      lotCatalog
     });
     const timeline = userCanViewProductionWeight(req)
       ? rawTimeline
@@ -2962,12 +3005,21 @@ async function completeTechUnitWork(req, res, next) {
       );
     }
 
+    const selectedCompletedByUserId = resolveCompletionUserId({
+      currentUserId: req.currentUser ? req.currentUser.user_id : null,
+      assignedUserId: preview.assignedToUserId,
+      roleCodes: getCurrentRoleCodes(req),
+      requestedUserId: req.body ? req.body.completedByUserId : null
+    });
+
     const completionResult = await techUnitModel.recordUnitWorkCompletion({
       unitId: preview.unitId,
-      completedByUserId: req.currentUser.user_id,
+      completedByUserId: selectedCompletedByUserId,
       recordedByUserId: req.currentUser.user_id,
       creditSource: 'manual_completion',
-      notes: 'Unit completion recorded from the Tech Unit Browser.',
+      notes: selectedCompletedByUserId === Number(req.currentUser.user_id)
+        ? 'Unit completion recorded from the Tech Unit Browser.'
+        : 'Unit completion recorded by Tech Lead+ for the technician assigned to the Unit.',
       actorRoleCodes: getCurrentRoleCodes(req),
       actorUserId: req.currentUser ? req.currentUser.user_id : null
     });
@@ -2985,6 +3037,7 @@ async function completeTechUnitWork(req, res, next) {
             grantsProductionCredit: completionResult.grantsProductionCredit
           },
           req,
+          selectedCompletedByUserId,
           successMessage: completionResult.grantsProductionCredit
             ? 'Unit completion and production credit were recorded successfully.'
             : 'Unit completion was recorded. The existing production cycle was retained, so no additional unit or weight credit was added.'
@@ -3000,6 +3053,7 @@ async function completeTechUnitWork(req, res, next) {
         buildCompleteWorkModalView({
           preview,
           req,
+          selectedCompletedByUserId: req.body ? req.body.completedByUserId : null,
           errorMessages: [error.message || 'Unit completion could not be recorded.']
         })
       );
@@ -3104,6 +3158,7 @@ function buildUnitParkModalView({ mode = 'park', unit = null, formOptions = {}, 
     unit,
     formOptions: {
       lots: Array.isArray(formOptions.lots) ? formOptions.lots : [],
+      lotHierarchyOptions: Array.isArray(formOptions.lotHierarchyOptions) ? formOptions.lotHierarchyOptions : [],
       assignees: Array.isArray(formOptions.assignees) ? formOptions.assignees : []
     },
     formData: {
@@ -3231,7 +3286,7 @@ async function renderReturnTechUnitToActiveModal(req, res, next) {
 
 async function returnTechUnitToActive(req, res, next) {
   let unit = null;
-  let formOptions = { lots: [], assignees: [] };
+  let formOptions = { lots: [], lotHierarchyOptions: [], assignees: [] };
   const formData = getLifecycleFormData(req);
 
   try {

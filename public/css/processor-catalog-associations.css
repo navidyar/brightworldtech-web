@@ -1,0 +1,99 @@
+/* Stage 10W30: exact Processor <-> Unit Model association management */
+.processor-association-modal {
+  width: min(980px, 94vw);
+  max-width: 980px;
+}
+
+.catalog-association-filters {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.7fr) minmax(150px, 0.7fr) minmax(220px, 1.2fr);
+  gap: 8px 10px;
+  margin: 10px 0;
+}
+
+.catalog-association-filters--processors {
+  grid-template-columns: minmax(170px, 0.65fr) minmax(260px, 1.35fr);
+}
+
+.catalog-association-filters .form-field {
+  margin: 0;
+  gap: 4px;
+}
+
+.catalog-association-filters .form-field > span:first-child {
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.catalog-association-filters :is(input, select) {
+  min-height: 34px;
+  height: 34px;
+  font-size: 0.84rem;
+}
+
+.catalog-association-table-wrap {
+  max-height: 52vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid var(--work-area-border);
+  border-radius: 8px;
+}
+
+.catalog-association-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.catalog-association-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface);
+}
+
+.catalog-association-table th,
+.catalog-association-table td {
+  padding: 7px 8px;
+  vertical-align: middle;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.catalog-association-check-column {
+  width: 48px;
+  text-align: center;
+}
+
+.catalog-association-table td:first-child {
+  text-align: center;
+}
+
+.catalog-association-table input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.catalog-association-empty {
+  margin: 0;
+  padding: 14px;
+  color: var(--muted);
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .catalog-association-filters,
+  .catalog-association-filters--processors {
+    grid-template-columns: 1fr;
+  }
+
+  .processor-association-modal {
+    width: min(96vw, 980px);
+  }
+
+  .catalog-association-table th,
+  .catalog-association-table td {
+    padding: 6px;
+    font-size: 0.78rem;
+  }
+}

@@ -3,10 +3,13 @@
   const safeContext = context || {};
   const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
   const isModelRequest = safeKind === 'model';
-  const title = isModelRequest ? 'Request Model Addition' : 'Request Processor Addition';
+  const hasExistingGlobalProcessor = !isModelRequest && Boolean(safeContext.existingGlobalMatch);
+  const title = isModelRequest ? 'Request Model Addition' : (hasExistingGlobalProcessor ? 'Request Processor Association' : 'Request Processor Addition');
   const description = isModelRequest
     ? 'This creates a review request only. It does not add a model or create a Unit until Management or Admin approves it.'
-    : 'This creates a review request only. It does not change the current Unit. After Management or Admin approval, the processor becomes selectable for this Unit Model.';
+    : hasExistingGlobalProcessor
+      ? 'This processor already exists in the global Processor Catalog but is not associated with this exact Unit Model. Approval should reuse the existing Processor record and add only the missing model association.'
+      : 'This creates a review request only. It does not change the current Unit. After Management or Admin approval, the processor becomes selectable for this Unit Model.';
 %>
 
 <div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close data-modal-escape-close>
@@ -76,6 +79,14 @@
             </dl>
           </div>
 
+          <% if (safeContext.existingGlobalMatch) { %>
+            <div class="message info">
+              <p><strong>Existing global Processor found:</strong> #<%= safeContext.existingGlobalMatch.id %> · <%= safeContext.existingGlobalMatch.displayLabel %> (<%= safeContext.existingGlobalMatch.isActive ? 'Active' : 'Inactive' %>).</p>
+              <p><%= safeContext.existingGlobalMatch.unitModelLabels.length ? `It is already associated with ${safeContext.existingGlobalMatch.unitModelLabels.slice(0, 4).join(', ')}${safeContext.existingGlobalMatch.unitModelLabels.length > 4 ? ` +${safeContext.existingGlobalMatch.unitModelLabels.length - 4} more` : ''}.` : 'It currently has no active Unit Model associations.' %></p>
+              <p>Management should reuse this canonical Processor and associate it with <strong><%= safeContext.unitModelName %></strong> rather than create a duplicate.</p>
+            </div>
+          <% } %>
+
           <form class="app-form unit-request-form" method="post" action="/tech/unit-catalog-requests/processor" hx-post="/tech/unit-catalog-requests/processor" hx-target="#modal-root" hx-swap="innerHTML">
             <input type="hidden" name="unitModelId" value="<%= safeContext.unitModelId %>" />
 
@@ -102,7 +113,7 @@
             </label>
 
             <div class="form-actions">
-              <button class="primary-button" type="submit">Send Processor Request</button>
+              <button class="primary-button" type="submit"><%= safeContext.existingGlobalMatch ? 'Send Association Request' : 'Send Processor Request' %></button>
               <button type="button" class="secondary-button" data-modal-close>Cancel</button>
             </div>
           </form>

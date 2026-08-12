@@ -36,7 +36,47 @@ function getOptionById(options, value) {
 
 function optionLabel(options, value) {
   const option = getOptionById(options, value);
-  return option ? String(option.shortLabel || option.label || option.code || '').trim() : '';
+  return option ? String(option.shortLabel || option.label || option.name || option.modelName || option.code || '').trim() : '';
+}
+
+function getOptionByCode(options, value) {
+  const normalizedValue = String(value || '').trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  return (Array.isArray(options) ? options : [])
+    .find((option) => String(option.code || option.value || '').trim() === normalizedValue) || null;
+}
+
+function optionLabelByCode(options, value) {
+  const option = getOptionByCode(options, value);
+  return option ? String(option.shortLabel || option.label || option.name || option.code || option.value || '').trim() : String(value || '').trim();
+}
+
+function normalizeComparableText(value) {
+  return String(value || '').trim().toLocaleLowerCase().replace(/\s+/g, ' ');
+}
+
+function createTextActual({ values = [], labels = [], sourceLabel }) {
+  const rawValues = Array.isArray(values) ? values : [values];
+  const normalizedValues = [...new Set(rawValues.map(normalizeComparableText).filter(Boolean))];
+  const normalizedLabels = [...new Set((Array.isArray(labels) ? labels : [labels])
+    .map((label) => String(label || '').trim())
+    .filter(Boolean))];
+
+  return {
+    kind: 'text',
+    isSupported: true,
+    ids: [],
+    numberValue: null,
+    textValues: normalizedValues,
+    displayValue: normalizedLabels.length > 0
+      ? normalizedLabels.join(', ')
+      : rawValues.map((value) => String(value || '').trim()).filter(Boolean).join(', '),
+    sourceLabel: sourceLabel || 'Current Unit form'
+  };
 }
 
 function createCatalogActual({ ids = [], labels = [], sourceLabel }) {
@@ -48,6 +88,7 @@ function createCatalogActual({ ids = [], labels = [], sourceLabel }) {
     isSupported: true,
     ids: normalizedIds,
     numberValue: null,
+    textValues: [],
     displayValue: normalizedLabels.join(', '),
     sourceLabel: sourceLabel || 'Current Unit form'
   };
@@ -61,6 +102,7 @@ function createNumberActual({ value, sourceLabel, suffix = '', formatter = null 
     isSupported: true,
     ids: [],
     numberValue: numericValue,
+    textValues: [],
     displayValue: numericValue === null ? '' : (formatter ? formatter(numericValue) : `${numericValue}${suffix}`),
     sourceLabel: sourceLabel || 'Current Unit form'
   };
@@ -87,6 +129,11 @@ function buildMemoryActual(formData, formOptions) {
         ids: populatedRows.map((row) => row.ramTypeConfigValueId),
         labels: populatedRows.map((row) => optionLabel(formOptions.ramTypes, row.ramTypeConfigValueId)),
         sourceLabel: 'Current memory rows'
+      }),
+      installType: createTextActual({
+        values: rows.map((row) => row.memoryInstallTypeCode),
+        labels: rows.map((row) => optionLabelByCode(formOptions.memoryInstallTypes, row.memoryInstallTypeCode)),
+        sourceLabel: 'Current memory rows'
       })
     };
   }
@@ -101,7 +148,8 @@ function buildMemoryActual(formData, formOptions) {
       ids: [formData.ramTypeConfigValueId],
       labels: [optionLabel(formOptions.ramTypes, formData.ramTypeConfigValueId)],
       sourceLabel: 'Current memory type'
-    })
+    }),
+    installType: createTextActual({ values: [], labels: [], sourceLabel: 'Current memory rows' })
   };
 }
 
@@ -122,6 +170,11 @@ function buildStorageActual(formData, formOptions) {
         ids: populatedRows.map((row) => row.storageTypeConfigValueId),
         labels: populatedRows.map((row) => optionLabel(formOptions.storageTypes, row.storageTypeConfigValueId)),
         sourceLabel: 'Current storage rows'
+      }),
+      wipeStatus: createCatalogActual({
+        ids: rows.map((row) => row.wipeStatusConfigValueId),
+        labels: rows.map((row) => optionLabel(formOptions.storageWipeStatuses, row.wipeStatusConfigValueId)),
+        sourceLabel: 'Current storage rows'
       })
     };
   }
@@ -136,7 +189,8 @@ function buildStorageActual(formData, formOptions) {
       ids: [formData.storageTypeConfigValueId],
       labels: [optionLabel(formOptions.storageTypes, formData.storageTypeConfigValueId)],
       sourceLabel: 'Current storage type'
-    })
+    }),
+    wipeStatus: createCatalogActual({ ids: [], labels: [], sourceLabel: 'Current storage rows' })
   };
 }
 
@@ -178,15 +232,94 @@ function buildSubmittedUnitSnapshot({ formData = {}, formOptions = {}, unitId = 
         labels: [optionLabel(formOptions.processorModels, formData.processorModelId)],
         sourceLabel: 'Processor field'
       }),
+      unit_serial_number: createTextActual({
+        values: [formData.unitSerialNumber],
+        labels: [formData.unitSerialNumber],
+        sourceLabel: 'Unit Serial Number field'
+      }),
+      bios_serial_number: createTextActual({
+        values: [formData.biosSerialNumber],
+        labels: [formData.biosSerialNumber],
+        sourceLabel: 'BIOS Serial Number field'
+      }),
       processor_family: createCatalogActual({
         ids: selectedProcessor?.processorFamilyIds || [],
         labels: selectedProcessor?.processorFamilyLabels || [],
         sourceLabel: 'Processor family membership'
       }),
+      processor_speed_ghz: createNumberActual({
+        value: formData.processorSpeedGhz,
+        sourceLabel: 'Processor Speed field',
+        suffix: ' GHz'
+      }),
       ram_gb: memory.total,
       ram_type: memory.type,
+      memory_install_type: memory.installType,
       storage_gb: storage.total,
-      storage_type: storage.type
+      storage_type: storage.type,
+      storage_wipe_status: storage.wipeStatus,
+      operating_system: createCatalogActual({
+        ids: [formData.operatingSystemConfigValueId],
+        labels: [optionLabel(formOptions.operatingSystems, formData.operatingSystemConfigValueId)],
+        sourceLabel: 'Operating System field'
+      }),
+      os_build: createTextActual({ values: [formData.osBuild], labels: [formData.osBuild], sourceLabel: 'OS Build field' }),
+      bios_version: createTextActual({ values: [formData.biosVersion], labels: [formData.biosVersion], sourceLabel: 'BIOS Version field' }),
+      battery_health: createNumberActual({
+        value: formData.batteryHealthPercent,
+        sourceLabel: 'Battery Health field',
+        suffix: '%'
+      }),
+      absolute_status: createCatalogActual({
+        ids: [formData.absoluteStatusConfigValueId],
+        labels: [optionLabel(formOptions.absoluteStatusOptions, formData.absoluteStatusConfigValueId)],
+        sourceLabel: 'Absolute Status field'
+      }),
+      physical_camera_status: createCatalogActual({
+        ids: [formData.physicalCameraStatusConfigValueId],
+        labels: [optionLabel(formOptions.physicalCameraStatusOptions, formData.physicalCameraStatusConfigValueId)],
+        sourceLabel: 'Physical Camera field'
+      }),
+      touchscreen_status: createCatalogActual({
+        ids: [formData.touchscreenStatusConfigValueId],
+        labels: [optionLabel(formOptions.touchscreenStatusOptions, formData.touchscreenStatusConfigValueId)],
+        sourceLabel: 'Touchscreen field'
+      }),
+      keyboard_language: createCatalogActual({
+        ids: [formData.keyboardLanguageConfigValueId],
+        labels: [optionLabel(formOptions.keyboardLanguageOptions, formData.keyboardLanguageConfigValueId)],
+        sourceLabel: 'Keyboard Language field'
+      }),
+      complete_diagnostics: createCatalogActual({
+        ids: [formData.completeDiagnosticsStatusConfigValueId],
+        labels: [optionLabel(formOptions.diagnosticsStatusOptions, formData.completeDiagnosticsStatusConfigValueId)],
+        sourceLabel: 'Complete Diagnostics field'
+      }),
+      virus_check: createCatalogActual({
+        ids: [formData.virusCheckStatusConfigValueId],
+        labels: [optionLabel(formOptions.virusCheckStatusOptions, formData.virusCheckStatusConfigValueId)],
+        sourceLabel: 'Virus Check field'
+      }),
+      driver_check: createCatalogActual({
+        ids: [formData.driverCheckStatusConfigValueId],
+        labels: [optionLabel(formOptions.driverCheckStatusOptions, formData.driverCheckStatusConfigValueId)],
+        sourceLabel: 'Driver Check field'
+      }),
+      skinned_status: createCatalogActual({
+        ids: [formData.skinnedStatusConfigValueId],
+        labels: [optionLabel(formOptions.skinnedStatusOptions, formData.skinnedStatusConfigValueId)],
+        sourceLabel: 'Skinned field'
+      }),
+      overall_grade: createCatalogActual({
+        ids: [formData.overallGradeConfigValueId],
+        labels: [optionLabel(formOptions.overallGradeOptions, formData.overallGradeConfigValueId)],
+        sourceLabel: 'Cosmetic Grade field'
+      }),
+      unit_outcome: createTextActual({
+        values: [formData.outcomeCode],
+        labels: [optionLabelByCode(formOptions.outcomeOptions, formData.outcomeCode)],
+        sourceLabel: 'Unit Outcome field'
+      })
     }
   };
 }

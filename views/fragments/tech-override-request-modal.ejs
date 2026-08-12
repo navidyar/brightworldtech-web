@@ -145,11 +145,12 @@
             <% } %>
             <label class="form-field">
               <span>Requested Destination Lot</span>
-              <select name="requestedDestinationLotId" required>
+              <select name="requestedDestinationLotId" required data-hierarchical-lot-select>
                 <option value="">Select destination Lot</option>
-                <% safeAssignableLots.forEach((lot) => { %>
-                  <option value="<%= lot.lotId %>" <%= Number(lot.lotId) === selectedDestinationLotId ? 'selected' : '' %>><%= lot.lotName %></option>
-                <% }) %>
+                <%- include('../partials/hierarchical-lot-options', {
+                  lotOptions: typeof assignableLotHierarchyOptions !== 'undefined' && Array.isArray(assignableLotHierarchyOptions) && assignableLotHierarchyOptions.length > 0 ? assignableLotHierarchyOptions : safeAssignableLots,
+                  selectedLotId: selectedDestinationLotId
+                }) %>
               </select>
               <small class="field-hint">
                 <%= isParkedTakeover

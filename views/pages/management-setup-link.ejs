@@ -4,7 +4,7 @@
     pageTitle,
     stylesheets: ['/css/copy-link.css']
   }) %>
-  <script defer src="/js/copy-link.js"></script>
+  <script defer src="/js/copy-link.js?v=20260811-stage10w32"></script>
 
   <body>
     <div class="app-shell">
@@ -23,9 +23,9 @@
               </p>
             </div>
 
-            <div class="hero-badge">
-              <span>Expires</span>
-              <strong><%= formatDateTime(setupLink.expiresAt) %></strong>
+            <div class="hero-badge" data-generated-link-expiry data-expires-at="<%= new Date(setupLink.expiresAt).toISOString() %>" data-expiry-display="<%= formatDateTime(setupLink.expiresAt) %>">
+              <span data-generated-link-expiry-label>Expires</span>
+              <strong data-generated-link-expiry-time><%= formatDateTime(setupLink.expiresAt) %></strong>
             </div>
           </section>
 
@@ -104,8 +104,8 @@
                 </div>
               </label>
 
-              <p class="copy-url-note">
-                This link expires in approximately <%= setupLink.expiresInHours %> hour<%= Number(setupLink.expiresInHours) === 1 ? '' : 's' %>.
+              <p class="copy-url-note" data-generated-link-expiry-note>
+                This link expires at <strong><%= formatDateTime(setupLink.expiresAt) %></strong> (<%= setupLink.expiresInHours %> hour<%= Number(setupLink.expiresInHours) === 1 ? '' : 's' %> after generation).
                 Generating another link for this same user revokes the previous unused link of the same type.
               </p>
             </div>

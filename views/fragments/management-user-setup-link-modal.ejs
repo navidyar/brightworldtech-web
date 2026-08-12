@@ -1,0 +1,67 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeUser = user || null;
+  const safeReturnPath = returnPath === 'inactive' ? 'inactive' : 'active';
+  const safePolicy = passwordLinkExpiryPolicy || { minHours: 1, maxHours: 8, defaultHours: 1 };
+  const hasPassword = Boolean(safeUser && (safeUser.has_password === true || Number(safeUser.has_password) === 1));
+  const linkLabel = hasPassword ? 'Password Reset Link' : 'Initial Setup Link';
+  const generateLabel = hasPassword ? 'Generate Reset Link' : 'Generate Setup Link';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel management-user-modal management-user-confirm-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-setup-link-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">User Access</p>
+        <h2 id="management-user-setup-link-title"><%= linkLabel %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeUser) { %>
+        <div class="management-user-modal-summary">
+          <strong><%= safeUser.first_name %> <%= safeUser.last_name %></strong>
+          <span><%= safeUser.username || safeUser.email %></span>
+        </div>
+
+        <form class="app-form" method="post" action="/management/users/<%= safeUser.user_id %>/setup-link" autocomplete="off">
+          <input type="hidden" name="returnPath" value="<%= safeReturnPath %>" />
+
+          <label class="form-field">
+            <span>Link Expiration (hours)</span>
+            <input
+              type="number"
+              name="expiryHours"
+              value="<%= expiryHours || safePolicy.defaultHours %>"
+              min="<%= safePolicy.minHours %>"
+              max="<%= safePolicy.maxHours %>"
+              step="1"
+              inputmode="numeric"
+              required
+              autofocus
+            />
+            <small class="field-hint">Choose a whole number from <%= safePolicy.minHours %> through <%= safePolicy.maxHours %> hours. The default is <%= safePolicy.defaultHours %> hour.</small>
+          </label>
+
+          <div class="message notice">
+            <p>The expiration is locked when the link is generated. Generating a new unused link of the same type revokes the previous one.</p>
+          </div>
+
+          <div class="form-actions">
+            <button type="submit" class="primary-button"><%= generateLabel %></button>
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          </div>
+        </form>
+      <% } %>
+    </div>
+  </section>
+</div>

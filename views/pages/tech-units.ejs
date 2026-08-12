@@ -25,13 +25,13 @@
     pageTitle,
     stylesheets: [
       '/css/modal.css',
-      '/css/tech-units-clean.css?v=20260806-stage10w162-matched-weight-pill-styles'
+      '/css/tech-units-clean.css?v=20260811-stage10w31-lot-hierarchy-context'
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
-  <script defer src="/js/tech-units.js?v=20260806-stage10w151-unit-save-confirmation-placement"></script>
+  <script defer src="/js/tech-units.js?v=20260811-stage10w31-lot-hierarchy-context"></script>
   <script defer src="/js/tech-units-date-picker.js"></script>
-  <script defer src="/js/tech-unit-form.js?v=20260806-stage10w12-unit-form-tab-order"></script>
+  <script defer src="/js/tech-unit-form.js?v=20260811-stage10w31-lot-hierarchy-context"></script>
 
   <body>
     <div class="app-shell">
@@ -133,11 +133,12 @@
                   <div class="tech-filter-grid <%= isRegularTechBrowserUser ? 'tech-filter-grid--regular-tech' : 'tech-filter-grid--tech-lead-plus' %>" aria-label="Unit filters">
                     <label class="form-field">
                       <span>Assignable Lot</span>
-                      <select name="lotId" data-tech-filter-auto-submit>
+                      <select name="lotId" data-tech-filter-auto-submit data-hierarchical-lot-select>
                         <option value="">All visible lots</option>
-                        <% result.lots.forEach((lot) => { %>
-                          <option value="<%= lot.lot_id %>" <%= String(filters.lotId) === String(lot.lot_id) ? 'selected' : '' %>><%= lot.lot_name %></option>
-                        <% }) %>
+                        <%- include('../partials/hierarchical-lot-options', {
+                          lotOptions: Array.isArray(result.lotHierarchyOptions) && result.lotHierarchyOptions.length > 0 ? result.lotHierarchyOptions : result.lots,
+                          selectedLotId: filters.lotId
+                        }) %>
                       </select>
                     </label>
 

@@ -1,6 +1,7 @@
 <%
   const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
   const safeRequirements = Array.isArray(requirements) ? requirements : [];
+  const safeSuppressions = typeof requirementInheritanceSuppressions !== 'undefined' && Array.isArray(requirementInheritanceSuppressions) ? requirementInheritanceSuppressions : [];
   const safeLot = lot || null;
   const safeSuccessMessage = typeof successMessage === 'string' ? successMessage : '';
 %>
@@ -30,7 +31,7 @@
 
       <% if (safeLot && Number(safeLot.parent_lot_id) > 0) { %>
         <p class="lot-requirements-inheritance-note">
-          Requirements inherit from the direct parent only. Add a direct rule for a field, or customize an inherited field, to replace the parent's rules for that field. Delete every direct rule for that field to inherit it again.
+          Requirements inherit from the direct parent only. Customize an inherited field to replace the parent's rules for that field, or stop inheriting it when this child Lot should have no requirement for that field. Deleting every direct child rule for a field restores parent inheritance unless inheritance has been explicitly stopped.
         </p>
       <% } %>
 
@@ -62,7 +63,7 @@
           </thead>
 
           <tbody>
-            <% if (safeRequirements.length === 0) { %>
+            <% if (safeRequirements.length === 0 && safeSuppressions.length === 0) { %>
               <tr>
                 <td colspan="6">No direct or inherited requirements apply to this lot yet.</td>
               </tr>
@@ -105,11 +106,55 @@
                       >
                         <button type="submit" class="secondary-button">Customize</button>
                       </form>
+                      <form
+                        method="post"
+                        action="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/stop-inheriting"
+                        hx-post="/management/lots/<%= safeLot.lot_id %>/requirements/<%= requirement.lot_requirement_id %>/stop-inheriting"
+                        hx-target="#modal-root"
+                        hx-swap="innerHTML"
+                      >
+                        <button type="submit" class="secondary-button danger-button">Stop Inheriting</button>
+                      </form>
                       <a class="secondary-button" href="/management/lots/<%= requirement.source_lot_id %>">View Parent</a>
                     </div>
                   <% } else { %>
                     —
                   <% } %>
+                </td>
+              </tr>
+            <% }) %>
+
+            <% safeSuppressions.forEach((suppression) => { %>
+              <tr class="lot-requirement-suppressed-row">
+                <td>
+                  <strong><%= suppression.requirement_label || suppression.requirement_key || 'Requirement' %></strong>
+                  <small>Parent inheritance stopped for this Lot</small>
+                </td>
+                <td>—</td>
+                <td>—</td>
+                <td><span class="pill muted">Not inherited</span></td>
+                <td>
+                  <% if (Number(suppression.source_lot_id) > 0) { %>
+                    Parent: <%= suppression.source_lot_name || `Lot ${suppression.source_lot_id}` %>
+                  <% } else { %>
+                    Parent requirement suppression retained
+                  <% } %>
+                </td>
+                <td>
+                  <div class="lot-requirement-row-actions">
+                    <form
+                      method="post"
+                      action="/management/lots/<%= safeLot.lot_id %>/requirements/inheritance/<%= suppression.requirement_type_config_value_id %>/restore"
+                      hx-post="/management/lots/<%= safeLot.lot_id %>/requirements/inheritance/<%= suppression.requirement_type_config_value_id %>/restore"
+                      hx-target="#modal-root"
+                      hx-swap="innerHTML"
+                    >
+                      <button type="submit" class="secondary-button">Restore Inheritance</button>
+                    </form>
+                    <% if (Number(suppression.source_lot_id) > 0) { %>
+                      <a class="secondary-button" href="/management/lots/<%= suppression.source_lot_id %>">View Parent</a>
+                    <% } %>
+                  </div>
                 </td>
               </tr>
             <% }) %>

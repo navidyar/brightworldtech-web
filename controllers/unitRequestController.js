@@ -1,6 +1,7 @@
 const unitRequestModel = require('../models/unitRequestModel');
 const overrideRequestModel = require('../models/overrideRequestModel');
 const unifiedRequestQueue = require('../services/unifiedRequestQueue');
+const processorCatalogModel = require('../models/processorCatalogModel');
 
 const REVIEW_ROLE_CODES = new Set(['admin', 'management', 'tech_lead']);
 const CATALOG_MANAGER_ROLE_CODES = new Set(['admin', 'management']);
@@ -18,6 +19,10 @@ function isUnitRequestReviewer(req) {
 
 function canManageCatalogRequests(req) {
   return getCurrentRoleCodes(req).some((roleCode) => CATALOG_MANAGER_ROLE_CODES.has(roleCode));
+}
+
+function isAdminCatalogReviewer(req) {
+  return getCurrentRoleCodes(req).includes('admin');
 }
 
 function isRegularTechRequester(req) {
@@ -121,6 +126,15 @@ function getErrorMessages(query) {
   if (query.error === 'not-owner') return ['You can withdraw only your own pending requests.'];
   if (query.error === 'catalog-permission') return ['Only Management and Admin can approve or reject Catalog Exception requests.'];
   if (query.error === 'catalog-input') return ['Complete the canonical catalog values before approving this request.'];
+  if (query.error === 'processor-duplicate') {
+    const detail = String(query.detail || '').trim().slice(0, 1000);
+    return [detail || 'A matching processor already exists globally. Select the existing canonical Processor instead of creating a duplicate.'];
+  }
+  if (query.error === 'processor-admin-confirmation') return ['Before creating a new canonical Processor, Management must confirm the proposed name and metadata with an Admin and check the confirmation box.'];
+  if (query.error === 'processor-format') {
+    const detail = String(query.detail || '').trim().slice(0, 1000);
+    return [detail || 'Correct the canonical Processor name. Keep Processor Type, generation, and GHz in their separate fields.'];
+  }
   if (query.skipped === 'invalid-prior-credit') return ['Enter a prior-technician credit weight from 0.10 through 10.00.'];
   if (query.skipped === 'destination-lot-required') return ['Select an open destination Lot before approving this request.'];
   if (query.skipped === 'unit-parked') return ['Return the Unit to Active before approving this request.'];
@@ -211,11 +225,25 @@ async function renderUnitRequestDetail(req, res, next) {
 
     const queueFilters = getQueueFilters(req);
     const catalogManager = canManageCatalogRequests(req);
+    const isOwnRequest = Number(request.requestedByUserId) === Number(req.currentUser.user_id);
+    const canSelfReviewProcessorRequest = catalogManager
+      && request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE;
     const canReviewThisRequest = isUnitRequestReviewer(req)
-      && Number(request.requestedByUserId) !== Number(req.currentUser.user_id)
+      && (!isOwnRequest || canSelfReviewProcessorRequest)
       && (!isCatalogRequest(request) || catalogManager);
     const processorBrands = request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE && catalogManager
       ? await unitRequestModel.listActiveProcessorBrands()
+      : [];
+    const processorCatalogOptions = request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE && catalogManager
+      ? await processorCatalogModel.listProcessorCatalogOptions()
+      : [];
+    const processorCatalogMatches = request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE && catalogManager
+      ? await processorCatalogModel.findLikelyProcessorMatches({
+        brandName: request.catalogContext?.requestedProcessorType || '',
+        modelCode: request.catalogContext?.requestedProcessorName || '',
+        includeInactive: true,
+        limit: 5
+      })
       : [];
 
     return res.render('pages/unit-request-detail', {
@@ -228,9 +256,12 @@ async function renderUnitRequestDetail(req, res, next) {
       unitRequestQueueUrl: getReturnUrl(null, queueFilters),
       canReviewRequests: isUnitRequestReviewer(req),
       canManageCatalogRequests: catalogManager,
+      isAdminCatalogReviewer: isAdminCatalogReviewer(req),
       canReviewThisRequest,
       canWithdrawRequest: request.isPending && Number(request.requestedByUserId) === Number(req.currentUser.user_id),
       processorBrands,
+      processorCatalogOptions,
+      processorCatalogMatches,
       successMessage: getSuccessMessage(req.query),
       errorMessages: getErrorMessages(req.query)
     });
@@ -279,12 +310,15 @@ async function renderOverrideRequestDetail(req, res, next) {
     };
 
     const queueFilters = getQueueFilters(req);
-    const assignableLots = await overrideRequestModel.listAssignableLots();
+    const assignableLotOptions = await overrideRequestModel.getAssignableLotOptions();
+    const assignableLots = assignableLotOptions.lots;
+    const assignableLotHierarchyOptions = assignableLotOptions.hierarchyOptions;
     return res.render('pages/override-request-detail', {
       pageTitle: `Request #${overrideRequestId}`,
       currentNav: 'unit-requests',
       request,
       assignableLots,
+      assignableLotHierarchyOptions,
       statusFilter: queueFilters.statusFilter,
       requestTypeFilter: queueFilters.requestTypeFilter,
       searchTerm: queueFilters.searchTerm,
@@ -357,12 +391,16 @@ async function approveUnitRequest(req, res, next) {
         unitRequestId,
         reviewedByUserId: req.currentUser.user_id,
         reviewerNote: req.body.reviewerNote,
+        approvedExistingProcessorModelId: req.body.approvedExistingProcessorModelId,
         approvedProcessorBrandId: req.body.approvedProcessorBrandId,
         approvedProcessorBrandName: req.body.approvedProcessorBrandName,
         approvedProcessorModelCode: req.body.approvedProcessorModelCode,
         approvedProcessorFamily: req.body.approvedProcessorFamily,
         approvedProcessorGeneration: req.body.approvedProcessorGeneration,
-        approvedProcessorBaseSpeedGhz: req.body.approvedProcessorBaseSpeedGhz
+        approvedProcessorBaseSpeedGhz: req.body.approvedProcessorBaseSpeedGhz,
+        confirmedProcessorNamingWithAdmin: req.body.confirmedProcessorNamingWithAdmin,
+        reviewerIsAdmin: isAdminCatalogReviewer(req),
+        allowSelfReview: canManageCatalogRequests(req)
       });
     } else {
       result = await unitRequestModel.approveIntentionalDuplicateRequest({
@@ -383,6 +421,9 @@ async function approveUnitRequest(req, res, next) {
     const queueFilters = getQueueFilters(req);
     if (error?.code === 'BWT_UNIT_REQUEST_DESTINATION_INVALID') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'destination-invalid' }));
     if (error?.code === 'BWT_UNIT_REQUEST_SELF_REVIEW') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'self-review' }));
+    if (error?.code === 'BWT_CATALOG_PROCESSOR_DUPLICATE') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'processor-duplicate', detail: String(error.message || '').slice(0, 1000) }));
+    if (error?.code === 'BWT_CATALOG_PROCESSOR_ADMIN_CONFIRMATION_REQUIRED') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'processor-admin-confirmation' }));
+    if (error?.code === 'BWT_CATALOG_PROCESSOR_CANONICAL_FORMAT') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'processor-format', detail: String(error.message || '').slice(0, 1000) }));
     if (error?.code === 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'catalog-input' }));
     if (error?.code === 'BWT_INTENTIONAL_DUPLICATE_IDENTIFIER_STORAGE_BLOCKED') {
       return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'duplicate-identifier-storage' }));

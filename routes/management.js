@@ -104,6 +104,13 @@ router.get(
   managementController.renderDeletePendingUserModal
 );
 
+router.get(
+  '/management/users/:userId/setup-link/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  managementController.renderSetupLinkModal
+);
+
 router.post(
   '/management/users/:userId/setup-link',
   requireAuth,

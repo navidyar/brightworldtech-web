@@ -180,6 +180,45 @@
     );
   }
 
+  function closeLotHierarchyHelp() {
+    document.querySelectorAll('[data-lot-hierarchy-help-popup]').forEach((popup) => popup.remove());
+  }
+
+  function openLotHierarchyHelp(trigger) {
+    const fullPath = String(trigger && trigger.getAttribute('data-lot-hierarchy-path') || '').trim();
+    if (!fullPath) return;
+
+    closeLotHierarchyHelp();
+    const popup = document.createElement('div');
+    popup.className = 'tech-lot-hierarchy-help-popup';
+    popup.setAttribute('data-lot-hierarchy-help-popup', '');
+    popup.setAttribute('role', 'dialog');
+    popup.setAttribute('aria-label', 'Lot Hierarchy');
+
+    const heading = document.createElement('strong');
+    heading.textContent = 'Lot Hierarchy';
+    const path = document.createElement('p');
+    path.textContent = fullPath;
+    const note = document.createElement('small');
+    note.textContent = 'This shows where the selected lot sits within the Lot hierarchy.';
+    popup.append(heading, path, note);
+    document.body.appendChild(popup);
+
+    const rect = trigger.getBoundingClientRect();
+    const popupRect = popup.getBoundingClientRect();
+    const viewportPadding = 10;
+    const left = Math.min(
+      Math.max(rect.left, viewportPadding),
+      Math.max(window.innerWidth - popupRect.width - viewportPadding, viewportPadding)
+    );
+    const preferredTop = rect.bottom + 6;
+    const top = preferredTop + popupRect.height <= window.innerHeight - viewportPadding
+      ? preferredTop
+      : Math.max(rect.top - popupRect.height - 6, viewportPadding);
+    popup.style.left = `${Math.round(left)}px`;
+    popup.style.top = `${Math.round(top)}px`;
+  }
+
   function closeModalRoot() {
     const modalRoot = document.getElementById('modal-root');
 
@@ -762,7 +801,32 @@
     submitButton.disabled = confirmationInput.value.trim() !== 'DELETE';
   });
 
+  document.addEventListener('keydown', (event) => {
+    const lotHierarchyHelp = event.target.closest('[data-lot-hierarchy-help]');
+    if (lotHierarchyHelp && ['Enter', ' '].includes(event.key)) {
+      event.preventDefault();
+      event.stopPropagation();
+      openLotHierarchyHelp(lotHierarchyHelp);
+      return;
+    }
+
+    if (event.key === 'Escape') closeLotHierarchyHelp();
+  });
+
   document.addEventListener('click', (event) => {
+    const lotHierarchyHelp = event.target.closest('[data-lot-hierarchy-help]');
+
+    if (lotHierarchyHelp) {
+      event.preventDefault();
+      event.stopPropagation();
+      openLotHierarchyHelp(lotHierarchyHelp);
+      return;
+    }
+
+    if (!event.target.closest('[data-lot-hierarchy-help-popup]')) {
+      closeLotHierarchyHelp();
+    }
+
     const selectAllExportColumns = event.target.closest('[data-unit-export-select-all]');
 
     if (selectAllExportColumns) {

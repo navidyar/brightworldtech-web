@@ -1,0 +1,72 @@
+<%
+  const selected = (actual, expected) => String(actual || '') === String(expected || '') ? 'selected' : '';
+  const query = new URLSearchParams();
+  if (filters.processorBrandId) query.set('processorBrandId', String(filters.processorBrandId));
+  if (filters.includeInactive) query.set('includeInactive', '1');
+  if (filters.needsReview) query.set('needsReview', '1');
+  if (filters.search) query.set('search', filters.search);
+  if (returnTo === 'processor-families') query.set('returnTo', 'processor-families');
+  const queryString = query.toString();
+  const formAction = `/management/config/processors/${processor.id}/edit/modal${queryString ? `?${queryString}` : ''}`;
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal" role="dialog" aria-modal="true" aria-labelledby="processor-catalog-edit-title">
+    <header class="modal-header">
+      <div><h2 id="processor-catalog-edit-title">Edit Processor</h2></div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (errorMessages.length > 0) { %>
+        <div class="message error"><ul><% errorMessages.forEach((message) => { %><li><%= message %></li><% }) %></ul></div>
+      <% } %>
+
+      <form class="app-form app-form-clean" method="post" action="<%= formAction %>" data-processor-catalog-form>
+        <input type="hidden" name="returnTo" value="<%= returnTo %>" />
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Processor Type</span>
+            <select name="processorBrandId" required>
+              <option value="">Select Processor Type</option>
+              <% brands.filter((brand) => brand.isActive || String(brand.id) === String(formData.processorBrandId)).forEach((brand) => { %>
+                <option value="<%= brand.id %>" <%= selected(formData.processorBrandId, brand.id) %>><%= brand.label %><%= brand.isActive ? '' : ' (Inactive)' %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <label class="form-field">
+            <span>Processor</span>
+            <input type="text" name="modelCode" value="<%= formData.modelCode || '' %>" minlength="2" maxlength="150" required />
+          </label>
+
+          <label class="form-field">
+            <span>Family Metadata <small>(optional)</small></span>
+            <input type="text" name="legacyFamily" value="<%= formData.legacyFamily || '' %>" maxlength="100" placeholder="Example: Core" />
+          </label>
+
+          <label class="form-field">
+            <span>Generation <small>(optional)</small></span>
+            <input type="text" name="generation" value="<%= formData.generation || '' %>" maxlength="80" placeholder="Example: 9th Gen" />
+          </label>
+
+          <label class="form-field">
+            <span>Base Speed GHz <small>(optional)</small></span>
+            <input type="number" name="baseSpeedGhz" value="<%= formData.baseSpeedGhz ?? '' %>" min="0.01" max="99.99" step="0.01" placeholder="Example: 2.20" />
+          </label>
+
+          <label class="configuration-inline-checkbox">
+            <input type="checkbox" name="isActive" value="1" <%= formData.isActive === '1' ? 'checked' : '' %> />
+            <span><strong>Active</strong><small>Available for Unit intake and new compatibility mappings.</small></span>
+          </label>
+        </div>
+
+        <p class="field-hint">For Intel Core processors, keep the canonical Processor concise (for example, <strong>i5-9500T</strong>). Store Core, 9th Gen, and 2.20 GHz in their separate metadata fields. If another record already represents the same physical processor, ask an Admin to use Resolve Duplicate instead of renaming into a duplicate.</p>
+
+        <div class="form-actions">
+          <button class="primary-button" type="submit">Save Processor</button>
+          <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

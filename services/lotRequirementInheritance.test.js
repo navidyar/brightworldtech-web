@@ -90,3 +90,26 @@ test('inheritance rejects a mismatched lineage/group shape', () => {
     /groups must match/i
   );
 });
+
+test('a child can explicitly suppress a direct-parent requirement field without creating a fake child requirement', () => {
+  const requirements = buildEffectiveLotRequirements({
+    lineage: [
+      { lotId: 10, name: 'Parent' },
+      { lotId: 20, name: 'Child' }
+    ],
+    requirementGroups: [
+      [
+        { lot_requirement_id: 1, requirement_key: 'battery_health' },
+        { lot_requirement_id: 2, requirement_key: 'storage_wipe_status' }
+      ],
+      []
+    ],
+    selectedLotId: 20,
+    suppressedFieldKeys: ['battery_health']
+  });
+
+  assert.deepEqual(
+    requirements.map((row) => row.requirement_key),
+    ['storage_wipe_status']
+  );
+});

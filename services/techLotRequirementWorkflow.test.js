@@ -14,7 +14,20 @@ const formOptions = {
   unitModels: [{ id: 3, label: 'Latitude 5400' }],
   processorModels: [{ id: 4, label: 'Intel Core i5', processorFamilyIds: [18], processorFamilyLabels: ['Intel i5-8th Gen'] }],
   ramTypes: [{ id: 5, label: 'DDR4' }],
-  storageTypes: [{ id: 6, label: 'NVMe' }]
+  memoryInstallTypes: [{ code: 'removable_module', label: 'Removable Module' }],
+  storageTypes: [{ id: 6, label: 'NVMe' }],
+  storageWipeStatuses: [{ id: 7, label: 'Wiped' }],
+  operatingSystems: [{ id: 8, label: 'Windows 11' }],
+  absoluteStatusOptions: [{ id: 9, label: 'Disabled' }],
+  physicalCameraStatusOptions: [{ id: 10, label: 'Pass' }],
+  touchscreenStatusOptions: [{ id: 11, label: 'Pass' }],
+  keyboardLanguageOptions: [{ id: 12, label: 'English' }],
+  diagnosticsStatusOptions: [{ id: 13, label: 'Pass' }],
+  virusCheckStatusOptions: [{ id: 14, label: 'Pass' }],
+  driverCheckStatusOptions: [{ id: 15, label: 'Pass' }],
+  skinnedStatusOptions: [{ id: 16, label: 'Yes' }],
+  overallGradeOptions: [{ id: 17, label: 'A' }],
+  outcomeOptions: [{ code: 'pass', label: 'Pass' }]
 };
 
 const formData = {
@@ -23,12 +36,30 @@ const formData = {
   manufacturerId: '2',
   unitModelId: '3',
   processorModelId: '4',
+  processorSpeedGhz: '2.40',
   ramGb: '16',
   ramTypeConfigValueId: '5',
   storageGb: '256',
   storageTypeConfigValueId: '6',
-  memoryModules: [{ sizeGb: '8', ramTypeConfigValueId: '5' }, { sizeGb: '8', ramTypeConfigValueId: '5' }],
-  storageDevices: [{ sizeGb: '256', storageTypeConfigValueId: '6' }]
+  operatingSystemConfigValueId: '8',
+  batteryHealthPercent: '90',
+  biosVersion: '1.2.3',
+  osBuild: '26100',
+  absoluteStatusConfigValueId: '9',
+  physicalCameraStatusConfigValueId: '10',
+  touchscreenStatusConfigValueId: '11',
+  keyboardLanguageConfigValueId: '12',
+  completeDiagnosticsStatusConfigValueId: '13',
+  virusCheckStatusConfigValueId: '14',
+  driverCheckStatusConfigValueId: '15',
+  skinnedStatusConfigValueId: '16',
+  overallGradeConfigValueId: '17',
+  outcomeCode: 'pass',
+  memoryModules: [
+    { sizeGb: '8', ramTypeConfigValueId: '5', memoryInstallTypeCode: 'removable_module' },
+    { sizeGb: '8', ramTypeConfigValueId: '5', memoryInstallTypeCode: 'removable_module' }
+  ],
+  storageDevices: [{ sizeGb: '256', storageTypeConfigValueId: '6', wipeStatusConfigValueId: '7' }]
 };
 
 function requirement(overrides = {}) {
@@ -52,6 +83,51 @@ test('submitted snapshots use current repeatable rows for totals and types', () 
   assert.deepEqual(snapshot.valuesByKey.ram_type.ids, [5]);
   assert.equal(snapshot.valuesByKey.storage_gb.numberValue, 256);
   assert.deepEqual(snapshot.valuesByKey.storage_type.ids, [6]);
+});
+
+test('submitted snapshots expose current battery health and storage wipe status values', () => {
+  const snapshot = buildSubmittedUnitSnapshot({ formData, formOptions, lotId: 10 });
+
+  assert.equal(snapshot.valuesByKey.battery_health.numberValue, 90);
+  assert.equal(snapshot.valuesByKey.battery_health.displayValue, '90%');
+  assert.deepEqual(snapshot.valuesByKey.storage_wipe_status.ids, [7]);
+  assert.equal(snapshot.valuesByKey.storage_wipe_status.displayValue, 'Wiped');
+});
+
+test('Strict Lot accepts submitted battery minimum and current storage wipe requirements', () => {
+  const workflow = buildTechLotRequirementWorkflow({
+    lot: { lot_id: 10, lot_name: 'Battery and Wipe Lot', requirement_policy_code: 'strict' },
+    requirements: [
+      requirement({
+        lot_requirement_id: 21,
+        requirement_key: 'battery_health',
+        requirement_label: 'Battery Health',
+        operator_code: 'greater_equal',
+        operator_label: 'Minimum',
+        manufacturer_id: null,
+        requirement_number: 80,
+        required_value: '80'
+      }),
+      requirement({
+        lot_requirement_id: 22,
+        requirement_key: 'storage_wipe_status',
+        requirement_label: 'Storage Wipe Status',
+        operator_code: 'equals',
+        operator_label: 'Must equal',
+        manufacturer_id: null,
+        requirement_config_value_id: 7,
+        required_value: 'Wiped'
+      })
+    ],
+    formData,
+    formOptions
+  });
+
+  assert.equal(workflow.status, 'accepted');
+  assert.equal(workflow.saveAllowed, true);
+  assert.equal(workflow.issueCount, 0);
+  assert.equal(workflow.checks.find((check) => check.requirementKey === 'battery_health').actualValue, '90%');
+  assert.equal(workflow.checks.find((check) => check.requirementKey === 'storage_wipe_status').actualValue, 'Wiped');
 });
 
 test('submitted zero-size rows produce zero totals without component types', () => {

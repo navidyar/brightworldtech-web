@@ -2,6 +2,8 @@
 
 const crypto = require('node:crypto');
 const { pool } = require('./db');
+const lotModel = require('./lotModel');
+const { snapshotLotPath } = require('../services/lotHierarchyPresentation');
 
 function normalizePositiveInteger(value, fieldName) {
   const parsed = Number(value);
@@ -66,8 +68,41 @@ function normalizeEvent(event) {
   };
 }
 
+const LOT_HIERARCHY_AUDIT_FIELDS = new Set(['assignable_lot', 'completion_lot']);
+
+async function enrichLotHierarchyMetadata(connection, normalizedEvent) {
+  const lotChanges = normalizedEvent.changes.filter((change) => LOT_HIERARCHY_AUDIT_FIELDS.has(change.fieldKey));
+  if (lotChanges.length === 0) return normalizedEvent;
+
+  let rows = [];
+  try {
+    rows = await lotModel.listLotHierarchyRows(connection);
+  } catch (_error) {
+    return normalizedEvent;
+  }
+
+  const lotHierarchyPaths = {};
+  lotChanges.forEach((change) => {
+    const oldId = normalizeNullablePositiveInteger(change.oldValue);
+    const newId = normalizeNullablePositiveInteger(change.newValue);
+    lotHierarchyPaths[change.fieldKey] = {
+      old: oldId ? snapshotLotPath(rows, oldId) : null,
+      new: newId ? snapshotLotPath(rows, newId) : null
+    };
+  });
+
+  return {
+    ...normalizedEvent,
+    metadata: {
+      ...(normalizedEvent.metadata || {}),
+      lotHierarchyPaths
+    }
+  };
+}
+
 async function insertEventWithConnection(connection, event) {
-  const normalized = normalizeEvent(event);
+  const baseNormalized = normalizeEvent(event);
+  const normalized = await enrichLotHierarchyMetadata(connection, baseNormalized);
   const [result] = await connection.query(
     `
       INSERT INTO unit_audit_events (
@@ -268,6 +303,7 @@ async function listUnitAuditEvents(unitId, { limit = 250, connection = pool } = 
 
 module.exports = {
   createUnitAuditEvent,
+  enrichLotHierarchyMetadata,
   getUnitCreationContext,
   insertEventWithConnection,
   listUnitAuditEvents,

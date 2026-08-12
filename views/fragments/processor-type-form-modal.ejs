@@ -1,0 +1,65 @@
+<%
+  const safeMode = mode === 'edit' ? 'edit' : 'create';
+  const safeProcessorType = processorType || null;
+  const safeFormData = formData || {};
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const title = safeMode === 'edit' ? 'Edit Processor Type' : 'Add Processor Type';
+  const formAction = safeMode === 'edit' && safeProcessorType
+    ? `/management/config/processor-types/${safeProcessorType.id}/edit/modal`
+    : '/management/config/processor-types';
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal configuration-value-modal" role="dialog" aria-modal="true" aria-labelledby="processor-type-form-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Admin Configuration</p>
+        <h2 id="processor-type-form-title"><%= title %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %><p><%= errorMessage %></p><% }) %>
+        </div>
+      <% } %>
+
+      <p class="configuration-form-note">
+        Processor Types are the global brands/types shown before the Processor list, such as Intel, AMD, Apple, Qualcomm, MediaTek, and Rockchip. Processor model names do not belong here.
+      </p>
+
+      <form class="app-form configuration-value-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML" autocomplete="off">
+        <input type="hidden" name="includeInactive" value="<%= safeFormData.includeInactive || '0' %>" />
+
+        <div class="configuration-value-form-grid">
+          <label class="form-field">
+            <span>Processor Type Name</span>
+            <input type="text" name="name" value="<%= safeFormData.name || '' %>" maxlength="100" placeholder="Example: AMD" required autofocus />
+            <small class="field-hint">This is the text users see in Processor Type dropdowns.</small>
+          </label>
+
+          <label class="form-field">
+            <span>Stable Code</span>
+            <input type="text" name="code" value="<%= safeFormData.code || '' %>" maxlength="75" placeholder="Example: amd" <%= safeMode === 'edit' ? 'required' : '' %> />
+            <small class="field-hint"><%= safeMode === 'create' ? 'Optional when creating; if blank, a lowercase code is generated from the name.' : 'Lowercase letters, numbers, underscores, or hyphens.' %></small>
+          </label>
+
+          <label class="configuration-inline-checkbox" for="processorTypeIsActive">
+            <input id="processorTypeIsActive" type="checkbox" name="isActive" value="1" <%= safeFormData.isActive === true || String(safeFormData.isActive) === '1' ? 'checked' : '' %> />
+            <span>
+              <strong>Active</strong>
+              <small>Available in normal Processor Type selectors.</small>
+            </span>
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="primary-button"><%= safeMode === 'edit' ? 'Save Processor Type' : 'Add Processor Type' %></button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

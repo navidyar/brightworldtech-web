@@ -86,11 +86,12 @@
                     <% if (request.requestType === 'manual_tech_override_request') { %>
                       <label class="form-field">
                         <span>Approved Destination Lot</span>
-                        <select name="destinationLotId" required>
+                        <select name="destinationLotId" required data-hierarchical-lot-select>
                           <option value="">Select open destination Lot</option>
-                          <% assignableLots.forEach((lot) => { %>
-                            <option value="<%= lot.lotId %>" <%= Number(request.requestedDestinationLotId || request.lotId) === Number(lot.lotId) ? 'selected' : '' %>><%= lot.lotName %></option>
-                          <% }) %>
+                          <%- include('../partials/hierarchical-lot-options', {
+                            lotOptions: Array.isArray(assignableLotHierarchyOptions) && assignableLotHierarchyOptions.length > 0 ? assignableLotHierarchyOptions : assignableLots,
+                            selectedLotId: request.requestedDestinationLotId || request.lotId
+                          }) %>
                         </select>
                       </label>
                       <% if (!request.isParkedTakeoverRequest) { %>

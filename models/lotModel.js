@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const { pool } = require('./db');
 const productionWeightModel = require('./productionWeightModel');
 const productionWeightSyncModel = require('./productionWeightSyncModel');
+const { parseRequiredLotProductionWeight } = require('../services/lotProductionWeightPolicy');
 const { getNewLotInitialActiveValue } = require('../services/lotCreationPolicy');
 const {
   buildRequirementPolicyOptions
@@ -438,6 +439,28 @@ async function getLotFormOptions(options = {}) {
   };
 }
 
+async function listLotHierarchyRows(connection = pool) {
+  const lotColumns = await getColumnSet('lots');
+  const lotNameColumn = pickColumn(lotColumns, ['lot_name', 'name', 'title', 'lot_number']);
+  const parentLotIdColumn = pickColumn(lotColumns, ['parent_lot_id']);
+  const activeColumn = pickColumn(lotColumns, ['is_active']);
+  const lotNameSql = lotNameColumn ? `l.\`${lotNameColumn}\`` : "CONCAT('Lot #', l.lot_id)";
+  const parentLotIdSql = parentLotIdColumn ? `l.\`${parentLotIdColumn}\`` : 'NULL';
+  const activeSql = activeColumn ? `l.\`${activeColumn}\`` : '1';
+  const [rows] = await connection.query(
+    `
+      SELECT
+        l.lot_id,
+        ${parentLotIdSql} AS parent_lot_id,
+        ${lotNameSql} AS lot_name,
+        ${activeSql} AS is_active
+      FROM lots l
+    `
+  );
+
+  return Array.isArray(rows) ? rows : [];
+}
+
 async function listLots(options = {}) {
   const includeHidden = options.includeHidden === true;
   const lotColumns = await getColumnSet('lots');
@@ -860,10 +883,13 @@ async function createLot(formData, currentUserId) {
     ? Number(formData.requirementPolicyConfigValueId)
     : null;
   const defaultGradeConfigValueId = formData.defaultGradeConfigValueId ? Number(formData.defaultGradeConfigValueId) : null;
-  const customDefaultProductionWeight = productionWeightModel.normalizeWeightValue(formData.defaultProductionWeight);
+  const customDefaultProductionWeight = parseRequiredLotProductionWeight(formData.defaultProductionWeight);
   const defaultProductionWeightPayload = formData.defaultProductionWeightConfigValueId
     ? await productionWeightModel.getProductionWeightPayloadFromConfigValueId(formData.defaultProductionWeightConfigValueId)
     : { configValueId: null, weightValue: customDefaultProductionWeight };
+  if (hasColumn(lotColumns, 'default_production_weight') && defaultProductionWeightPayload.weightValue === null) {
+    throw new Error('Lot production weight is required and must be at least 0.10.');
+  }
   const hasUnlimitedGoal = formData.hasUnlimitedGoal === '1';
   const unitAmountGoal = hasUnlimitedGoal ? null : Number(formData.unitAmountGoal || 0);
   const deadline = formData.deadline ? String(formData.deadline).trim() : null;
@@ -974,10 +1000,13 @@ async function updateLot(lotId, formData, currentUserId) {
     ? Number(formData.requirementPolicyConfigValueId)
     : null;
   const defaultGradeConfigValueId = formData.defaultGradeConfigValueId ? Number(formData.defaultGradeConfigValueId) : null;
-  const customDefaultProductionWeight = productionWeightModel.normalizeWeightValue(formData.defaultProductionWeight);
+  const customDefaultProductionWeight = parseRequiredLotProductionWeight(formData.defaultProductionWeight);
   const defaultProductionWeightPayload = formData.defaultProductionWeightConfigValueId
     ? await productionWeightModel.getProductionWeightPayloadFromConfigValueId(formData.defaultProductionWeightConfigValueId)
     : { configValueId: null, weightValue: customDefaultProductionWeight };
+  if (hasColumn(lotColumns, 'default_production_weight') && defaultProductionWeightPayload.weightValue === null) {
+    throw new Error('Lot production weight is required and must be at least 0.10.');
+  }
   const hasUnlimitedGoal = formData.hasUnlimitedGoal === '1';
   const unitAmountGoal = hasUnlimitedGoal ? null : Number(formData.unitAmountGoal || 0);
   const deadline = formData.deadline ? String(formData.deadline).trim() : null;
@@ -1383,6 +1412,161 @@ async function listLotRequirements(lotId) {
   }));
 }
 
+async function listLotRequirementInheritanceSuppressions(lotId) {
+  const normalizedLotId = Number(lotId);
+
+  if (!Number.isSafeInteger(normalizedLotId) || normalizedLotId <= 0) {
+    return [];
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        suppression.lot_requirement_inheritance_suppression_id,
+        suppression.lot_id,
+        suppression.requirement_type_config_value_id,
+        requirement_type.code AS requirement_key,
+        requirement_type.label AS requirement_label,
+        child.parent_lot_id AS source_lot_id,
+        parent.name AS source_lot_name,
+        suppression.created_by_user_id,
+        suppression.updated_by_user_id,
+        suppression.created_at,
+        suppression.updated_at
+      FROM lot_requirement_inheritance_suppressions suppression
+      JOIN config_values requirement_type
+        ON requirement_type.config_value_id = suppression.requirement_type_config_value_id
+      JOIN lots child
+        ON child.lot_id = suppression.lot_id
+      LEFT JOIN lots parent
+        ON parent.lot_id = child.parent_lot_id
+      WHERE suppression.lot_id = ?
+      ORDER BY requirement_type.label, requirement_type.code
+    `,
+    [normalizedLotId]
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    requirement_key: normalizeRequirementKey(row.requirement_key)
+  }));
+}
+
+async function clearLotRequirementInheritanceSuppression(lotId, requirementTypeConfigValueId, connection = null) {
+  const normalizedLotId = Number(lotId);
+  const normalizedRequirementTypeConfigValueId = Number(requirementTypeConfigValueId);
+
+  if (!Number.isSafeInteger(normalizedLotId) || normalizedLotId <= 0
+    || !Number.isSafeInteger(normalizedRequirementTypeConfigValueId) || normalizedRequirementTypeConfigValueId <= 0) {
+    return false;
+  }
+
+  const db = connection || pool;
+  const [result] = await db.query(
+    `
+      DELETE FROM lot_requirement_inheritance_suppressions
+      WHERE lot_id = ?
+        AND requirement_type_config_value_id = ?
+    `,
+    [normalizedLotId, normalizedRequirementTypeConfigValueId]
+  );
+
+  return result.affectedRows > 0;
+}
+
+async function suppressInheritedRequirementField(lotId, sourceRequirementId, currentUserId) {
+  const normalizedLotId = Number(lotId);
+  const normalizedSourceRequirementId = Number(sourceRequirementId);
+
+  if (!Number.isSafeInteger(normalizedLotId) || normalizedLotId <= 0
+    || !Number.isSafeInteger(normalizedSourceRequirementId) || normalizedSourceRequirementId <= 0) {
+    throw new Error('A valid child Lot and inherited requirement are required.');
+  }
+
+  const requirementColumns = await getColumnSet('lot_requirements');
+  const requirementIdColumn = getRequirementIdColumn(requirementColumns);
+
+  if (!requirementIdColumn) {
+    throw new Error('The lot_requirements table does not have a compatible requirement ID column.');
+  }
+
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+
+    const [lotRows] = await connection.query(
+      'SELECT lot_id, parent_lot_id FROM lots WHERE lot_id = ? LIMIT 1 FOR UPDATE',
+      [normalizedLotId]
+    );
+    const selectedLot = lotRows[0];
+    const parentLotId = Number(selectedLot?.parent_lot_id);
+
+    if (!selectedLot || !Number.isSafeInteger(parentLotId) || parentLotId <= 0) {
+      throw new Error('This Lot does not have a direct parent requirement to stop inheriting.');
+    }
+
+    const [sourceRows] = await connection.query(
+      `
+        SELECT requirement_type_config_value_id
+        FROM lot_requirements
+        WHERE lot_id = ?
+          AND \`${requirementIdColumn}\` = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [parentLotId, normalizedSourceRequirementId]
+    );
+    const requirementTypeConfigValueId = Number(sourceRows[0]?.requirement_type_config_value_id);
+
+    if (!Number.isSafeInteger(requirementTypeConfigValueId) || requirementTypeConfigValueId <= 0) {
+      throw new Error("The inherited requirement no longer belongs to this Lot's direct parent.");
+    }
+
+    const [directRows] = await connection.query(
+      `
+        SELECT COUNT(*) AS direct_count
+        FROM lot_requirements
+        WHERE lot_id = ?
+          AND requirement_type_config_value_id = ?
+      `,
+      [normalizedLotId, requirementTypeConfigValueId]
+    );
+
+    if (Number(directRows[0]?.direct_count || 0) > 0) {
+      throw new Error('This field already has child-specific requirements. Delete those direct rules before stopping inheritance.');
+    }
+
+    await connection.query(
+      `
+        INSERT INTO lot_requirement_inheritance_suppressions (
+          lot_id,
+          requirement_type_config_value_id,
+          created_by_user_id,
+          updated_by_user_id
+        )
+        VALUES (?, ?, ?, ?)
+        ON DUPLICATE KEY UPDATE
+          updated_by_user_id = VALUES(updated_by_user_id),
+          updated_at = CURRENT_TIMESTAMP
+      `,
+      [normalizedLotId, requirementTypeConfigValueId, currentUserId || null, currentUserId || null]
+    );
+
+    await connection.commit();
+    return { requirementTypeConfigValueId };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function restoreInheritedRequirementField(lotId, requirementTypeConfigValueId) {
+  return clearLotRequirementInheritanceSuppression(lotId, requirementTypeConfigValueId);
+}
+
 async function listEffectiveLotRequirements(lotId) {
   const normalizedLotId = Number(lotId);
 
@@ -1415,10 +1599,13 @@ async function listEffectiveLotRequirements(lotId) {
   lineage.push({ lotId: normalizedLotId, name: selectedLot.lot_name });
   requirementGroups.push(await listLotRequirements(normalizedLotId));
 
+  const suppressions = await listLotRequirementInheritanceSuppressions(normalizedLotId);
+
   return buildEffectiveLotRequirements({
     lineage,
     requirementGroups,
-    selectedLotId: normalizedLotId
+    selectedLotId: normalizedLotId,
+    suppressedFieldKeys: suppressions.map((suppression) => suppression.requirement_key)
   });
 }
 
@@ -1718,6 +1905,7 @@ async function deleteLotRequirement(lotId, requirementId) {
 
 module.exports = {
   listLots,
+  listLotHierarchyRows,
   getLotById,
   listDescendantLotIds,
   getLotHierarchyAudit,
@@ -1735,6 +1923,9 @@ module.exports = {
   deleteLotIfEmpty,
   listLotRequirements,
   listEffectiveLotRequirements,
+  listLotRequirementInheritanceSuppressions,
+  suppressInheritedRequirementField,
+  restoreInheritedRequirementField,
   customizeInheritedRequirementField,
   getLotRequirementById,
   createLotRequirement,

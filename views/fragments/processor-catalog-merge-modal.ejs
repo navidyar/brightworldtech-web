@@ -1,0 +1,64 @@
+<%
+  const query = new URLSearchParams();
+  if (filters.processorBrandId) query.set('processorBrandId', String(filters.processorBrandId));
+  if (filters.includeInactive) query.set('includeInactive', '1');
+  if (filters.needsReview) query.set('needsReview', '1');
+  if (filters.search) query.set('search', filters.search);
+  if (returnTo === 'processor-families') query.set('returnTo', 'processor-families');
+  const queryString = query.toString();
+  const formAction = `/management/config/processors/${processor.id}/merge${queryString ? `?${queryString}` : ''}`;
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal" role="dialog" aria-modal="true" aria-labelledby="processor-catalog-merge-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="processor-catalog-merge-title">Resolve Duplicate Processor</h2>
+        <p>Admin-only catalog repair</p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (errorMessages.length > 0) { %>
+        <div class="message error"><ul><% errorMessages.forEach((message) => { %><li><%= message %></li><% }) %></ul></div>
+      <% } %>
+
+      <div class="message info">
+        <p><strong>Merge direction:</strong> the processor below is the duplicate being removed. Every Unit and catalog reference that points to it will be changed to the canonical processor you select.</p>
+      </div>
+
+      <dl class="site-detail-list">
+        <div><dt>Duplicate being removed</dt><dd><strong>#<%= processor.id %> · <%= processor.brandName %> · <%= processor.modelCode %></strong></dd></div>
+        <div><dt>Current Units that will move</dt><dd><%= formatNumber(processor.unitCount) %></dd></div>
+        <div><dt>Compatible Model mappings that will move</dt><dd><%= formatNumber(processor.unitModelCount) %></dd></div>
+        <div><dt>Processor Family memberships that will move</dt><dd><%= processor.processorFamilyLabels.length ? processor.processorFamilyLabels.join(', ') : 'None' %></dd></div>
+        <div><dt>Approved Request references that will move</dt><dd><%= formatNumber(processor.requestCount) %></dd></div>
+      </dl>
+
+      <% if (mergeTargets.length > 0) { %>
+        <form class="app-form app-form-clean" method="post" action="<%= formAction %>" data-processor-catalog-form data-processor-catalog-confirm="Merge Processor #<%= processor.id %> INTO the selected canonical Processor? All Units and known catalog references will be reassigned, then Processor #<%= processor.id %> will be permanently deleted. This cannot be undone.">
+          <input type="hidden" name="returnTo" value="<%= returnTo %>" />
+          <label class="form-field">
+            <span>Canonical Processor that remains</span>
+            <select name="targetProcessorModelId" required>
+              <option value="">Choose the processor that should survive</option>
+              <% mergeTargets.forEach((target) => { %>
+                <option value="<%= target.id %>" <%= String(selectedTargetId || '') === String(target.id) ? 'selected' : '' %>>#<%= target.id %> · <%= target.displayLabel %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <p class="field-hint"><strong>Result:</strong> Units using Processor #<%= processor.id %> will receive the selected canonical processor ID. Unit Model compatibility, Processor Family memberships, approved Processor requests, and direct processor Lot requirements are transferred and duplicate relationship rows are collapsed. Processor #<%= processor.id %> is then permanently removed.</p>
+
+          <div class="form-actions">
+            <button class="danger-button" type="submit">Merge #<%= processor.id %> INTO Canonical Processor</button>
+            <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+          </div>
+        </form>
+      <% } else { %>
+        <div class="message"><p>No other active <%= processor.brandName %> processor is available as a canonical target. Correct or create the canonical record first.</p></div>
+        <div class="form-actions"><button class="secondary-button" type="button" data-modal-close>Close</button></div>
+      <% } %>
+    </div>
+  </section>
+</div>

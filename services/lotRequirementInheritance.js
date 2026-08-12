@@ -37,7 +37,8 @@ function annotateRequirement(requirement, sourceLot, selectedLotId, inheritanceD
 function buildEffectiveLotRequirements({
   lineage = [],
   requirementGroups = [],
-  selectedLotId = null
+  selectedLotId = null,
+  suppressedFieldKeys = []
 } = {}) {
   if (!Array.isArray(lineage) || !Array.isArray(requirementGroups)) {
     throw new Error('Lot requirement inheritance needs lineage and requirement groups.');
@@ -62,6 +63,11 @@ function buildEffectiveLotRequirements({
   const selectedRequirements = Array.isArray(requirementGroups[selectedIndex])
     ? requirementGroups[selectedIndex]
     : [];
+  const normalizedSuppressedFieldKeys = new Set(
+    (Array.isArray(suppressedFieldKeys) ? suppressedFieldKeys : [])
+      .map((fieldKey) => String(fieldKey || '').trim().toLowerCase())
+      .filter(Boolean)
+  );
   const selectedFieldKeys = new Set(
     selectedRequirements
       .map(normalizeRequirementFieldKey)
@@ -85,7 +91,7 @@ function buildEffectiveLotRequirements({
       // Any direct rule for the same field converts that field to a child-specific
       // configuration. Parent rules for that field stop applying until all child
       // rules for the field are removed.
-      if (fieldKey && selectedFieldKeys.has(fieldKey)) {
+      if (fieldKey && (selectedFieldKeys.has(fieldKey) || normalizedSuppressedFieldKeys.has(fieldKey))) {
         return;
       }
 

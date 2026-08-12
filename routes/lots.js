@@ -120,6 +120,20 @@ router.post(
   lotController.customizeInheritedLotRequirementField
 );
 
+router.post(
+  '/management/lots/:lotId/requirements/:requirementId/stop-inheriting',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.suppressInheritedLotRequirementField
+);
+
+router.post(
+  '/management/lots/:lotId/requirements/inheritance/:requirementTypeConfigValueId/restore',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.restoreInheritedLotRequirementField
+);
+
 router.get(
   '/management/lots/:lotId/requirements/new/modal',
   requireAuth,

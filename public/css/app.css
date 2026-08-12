@@ -977,9 +977,17 @@ body :is(input[type="checkbox"], input[type="radio"]) {
 .configuration-browser-heading-actions,
 .configuration-value-actions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
+}
+
+.configuration-browser-heading-actions {
+  flex-wrap: wrap;
+}
+
+.configuration-value-actions {
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .configuration-browser-toolbar {
@@ -1345,6 +1353,21 @@ body :is(input[type="checkbox"], input[type="radio"]) {
   }
 }
 
+@media (max-width: 860px) {
+  .configuration-value-actions,
+  .model-catalog-row-actions {
+    min-width: 0;
+    flex-direction: column;
+    align-items: stretch;
+    white-space: normal;
+  }
+
+  .configuration-value-actions > *,
+  .model-catalog-row-actions > * {
+    width: 100%;
+  }
+}
+
 @media (max-width: 620px) {
   .site-summary-panel {
     gap: 14px;
@@ -1377,13 +1400,18 @@ body :is(input[type="checkbox"], input[type="radio"]) {
 .model-catalog-filter-actions,
 .model-catalog-row-actions {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   gap: 6px;
 }
 
 .model-catalog-filter-actions {
+  flex-wrap: wrap;
   grid-column: 1 / -1;
+}
+
+.model-catalog-row-actions {
+  flex-wrap: nowrap;
+  white-space: nowrap;
 }
 
 .model-catalog-table,
@@ -1539,8 +1567,7 @@ body :is(input[type="checkbox"], input[type="radio"]) {
     grid-template-columns: 1fr;
   }
 
-  .model-catalog-filter-actions > *,
-  .model-catalog-row-actions > * {
+  .model-catalog-filter-actions > * {
     width: 100%;
   }
 
@@ -3436,4 +3463,10 @@ html.configuration-pointer-dragging * {
     border-top: 1px solid var(--ui-line);
     border-left: 0;
   }
+}
+
+/* Stage 10W31: muted structural Lot rows in native hierarchy selectors. */
+select[data-hierarchical-lot-select] option:disabled {
+  color: #8a96a6;
+  background: #f7f9fb;
 }

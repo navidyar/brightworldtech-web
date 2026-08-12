@@ -34,7 +34,8 @@ test('inherited Requirement fields can be copied to the child and then edited in
   assert.match(controller, /async function customizeInheritedLotRequirementField\(/);
   assert.match(routes, /requirements\/:requirementId\/customize/);
   assert.match(modal, />Customize</);
-  assert.match(modal, /Delete every direct rule for that field to inherit it again/);
+  assert.match(modal, /Deleting every direct child rule for a field restores parent inheritance/);
+  assert.match(modal, /Stop Inheriting/);
 });
 
 test('Add/Edit Unit enforcement consumes effective inherited Requirements rather than direct-only rows', async (t) => {

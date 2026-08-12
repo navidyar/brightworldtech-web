@@ -254,11 +254,24 @@
 
     <div class="form-grid tech-lot-assignment-grid">
       <%
+        const assignableLotHierarchyOptions = Array.isArray(formOptions.lotHierarchyOptions) && formOptions.lotHierarchyOptions.length > 0
+          ? formOptions.lotHierarchyOptions
+          : formOptions.lots.map((lot) => ({
+              lotId: Number(lot.lot_id),
+              lotName: lot.lot_name,
+              compactLabel: lot.lot_name,
+              fullPath: lot.lot_name,
+              searchText: lot.lot_name,
+              depth: 0,
+              selectable: true,
+              sourceLot: lot
+            }));
         const selectedAssignableLot = formOptions.lots.find((lot) => String(lot.lot_id) === String(formData.lotId || ''));
+        const selectedAssignableLotHierarchy = assignableLotHierarchyOptions.find((lot) => String(lot.lotId) === String(formData.lotId || ''));
         const selectedAssignableLotLabel = selectedAssignableLot
           ? (selectedAssignableLot.isCurrentLotClosed
-            ? `${selectedAssignableLot.lot_name} (Closed — current lot)`
-            : selectedAssignableLot.lot_name)
+            ? `${selectedAssignableLotHierarchy?.compactLabel || selectedAssignableLot.lot_name} (Closed — current lot)`
+            : (selectedAssignableLotHierarchy?.compactLabel || selectedAssignableLot.lot_name))
           : '';
         const selectedAssignableLotAllowsAssumption = Boolean(
           selectedAssignableLot
@@ -282,22 +295,30 @@
           />
           <select name="lotId" data-lot-select data-assignable-lot-catalog hidden aria-hidden="true" tabindex="-1">
             <option value="">Select assignable lot</option>
-            <% formOptions.lots.forEach((lot) => { %>
+            <% assignableLotHierarchyOptions.forEach((hierarchyLot) => { %>
               <%
+                const lot = hierarchyLot.sourceLot || {};
                 const lotProductionWeightNumber = Number(lot.resolved_default_production_weight);
                 const lotProductionWeightValue = Number.isFinite(lotProductionWeightNumber) ? lotProductionWeightNumber.toFixed(2) : '';
-                const lotOptionLabel = lot.isCurrentLotClosed
-                  ? `${lot.lot_name} (Closed — current lot)`
-                  : lot.lot_name;
+                const lotOptionName = hierarchyLot.lotName || lot.lot_name || `Lot #${hierarchyLot.lotId}`;
+                const lotOptionCompactLabel = lot.isCurrentLotClosed
+                  ? `${hierarchyLot.compactLabel || lotOptionName} (Closed — current lot)`
+                  : (hierarchyLot.compactLabel || lotOptionName);
               %>
               <option
-                value="<%= lot.lot_id %>"
-                data-production-weight="<%= canViewProductionWeight ? lotProductionWeightValue : '' %>"
-                data-allow-duplicate-unit-assumption="<%= Number(lot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0' %>"
-                <%= selected(formData.lotId, lot.lot_id) %>
-              >
-                <%= lotOptionLabel %>
-              </option>
+                value="<%= hierarchyLot.lotId %>"
+                data-lot-selectable="<%= hierarchyLot.selectable ? '1' : '0' %>"
+                data-lot-depth="<%= Number(hierarchyLot.depth || 0) %>"
+                data-lot-name="<%= lotOptionName %>"
+                data-lot-compact-label="<%= lotOptionCompactLabel %>"
+                data-lot-full-path="<%= hierarchyLot.fullPath || lotOptionName %>"
+                data-lot-path-ids="<%= Array.isArray(hierarchyLot.pathIds) ? hierarchyLot.pathIds.join(',') : '' %>"
+                data-lot-search-text="<%= hierarchyLot.searchText || hierarchyLot.fullPath || lotOptionName %>"
+                data-production-weight="<%= hierarchyLot.selectable && canViewProductionWeight ? lotProductionWeightValue : '' %>"
+                data-allow-duplicate-unit-assumption="<%= hierarchyLot.selectable && Number(lot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0' %>"
+                <%= hierarchyLot.selectable ? '' : 'disabled' %>
+                <%= hierarchyLot.selectable ? selected(formData.lotId, hierarchyLot.lotId) : '' %>
+              ><%= lotOptionName %></option>
             <% }) %>
           </select>
           <div class="tech-assignable-lot-options" data-assignable-lot-options role="listbox" hidden></div>
@@ -308,6 +329,10 @@
             This unit remains in its current closed lot unless you select an open destination lot.
           <% } %>
         </small>
+        <p class="tech-lot-hierarchy-breadcrumb" data-assignable-lot-hierarchy <%= selectedAssignableLotHierarchy ? '' : 'hidden' %>>
+          <span>Lot Hierarchy</span>
+          <strong data-assignable-lot-hierarchy-path><%= selectedAssignableLotHierarchy?.fullPath || '' %></strong>
+        </p>
       </label>
 
       <p class="field-hint tech-lot-form-profile-status" data-lot-unit-form-profile-status data-status="idle" aria-live="polite">
@@ -449,7 +474,7 @@
           <% }) %>
         </select>
         <small class="field-hint">
-          Selecting a manufacturer loads only that manufacturer's model catalog.
+          Selecting a manufacturer loads that manufacturer's model catalog. Unit Category further refines the list.
         </small>
       </label>
 
@@ -485,7 +510,7 @@
           </select>
         </div>
         <small class="field-hint" data-unit-model-hint>
-          Select a manufacturer to load its model catalog. Choosing a model sets the matching Unit Category.
+          Select a manufacturer to load its model catalog. Selecting a Unit Category narrows the list to matching models.
         </small>
       </label>
 

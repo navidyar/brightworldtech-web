@@ -132,9 +132,9 @@
 
             <% if (safeFormOptions.capabilities.hasDefaultProductionWeight) { %>
               <label class="form-field">
-                <span>Custom Lot Default Weight</span>
-                <input type="number" name="defaultProductionWeight" value="<%= safeFormData.defaultProductionWeight || '' %>" min="0" step="0.01" placeholder="Example: 1.25" list="production-weight-examples" />
-                <small class="field-hint">Saving a new Lot weight immediately becomes the effective weight for every Unit currently in this Lot unless that Unit has an individual override. There is no application maximum.</small>
+                <span>Lot Production Weight</span>
+                <input type="number" name="defaultProductionWeight" value="<%= safeFormData.defaultProductionWeight || '' %>" min="0.10" step="0.01" placeholder="Example: 1.25" list="production-weight-examples" required />
+                <small class="field-hint">Required. Minimum 0.10 with no application maximum. Saving a Lot weight immediately becomes the effective weight for every Unit currently in this Lot unless that Unit has an individual override.</small>
                 <datalist id="production-weight-examples">
                   <% safeFormOptions.productionWeightOptions.forEach((weightOption) => { %>
                     <% if (weightOption.formattedWeightValue && weightOption.formattedWeightValue !== '—') { %>
@@ -146,8 +146,8 @@
             <% } else if (safeFormOptions.capabilities.hasDefaultProductionWeightConfigValueId) { %>
               <label class="form-field">
                 <span>Default Production Weight</span>
-                <select name="defaultProductionWeightConfigValueId">
-                  <option value="">Use unit category default</option>
+                <select name="defaultProductionWeightConfigValueId" required>
+                  <option value="">Select default production weight</option>
                   <% safeFormOptions.productionWeightOptions.forEach((weightOption) => { %>
                     <option value="<%= weightOption.configValueId %>" <%= String(safeFormData.defaultProductionWeightConfigValueId || '') === String(weightOption.configValueId) ? 'selected' : '' %>>
                       <%= weightOption.label %> — <%= weightOption.formattedWeightValue %>

@@ -222,6 +222,58 @@ async function updateUnitModel(req, res, next) {
   }
 }
 
+async function renderUnitModelProcessorsModal(req, res, next) {
+  try {
+    const unitModelId = parsePositiveInteger(req.params.unitModelId);
+    const filters = getFilters(req);
+    const associations = await unitModelCatalogModel.listUnitModelProcessorAssociations(unitModelId);
+    if (!associations) {
+      return res.status(404).render('fragments/unit-model-status-modal', {
+        actionType: 'error', unitModel: null, filters, errorMessages: ['The selected model could not be found.']
+      });
+    }
+    return res.render('fragments/unit-model-processors-modal', {
+      ...associations,
+      filters,
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateUnitModelProcessors(req, res, next) {
+  try {
+    const unitModelId = parsePositiveInteger(req.params.unitModelId);
+    const filters = getFilters(req);
+    const selectedIds = Array.isArray(req.body.processorModelIds)
+      ? req.body.processorModelIds
+      : req.body.processorModelIds ? [req.body.processorModelIds] : [];
+    await unitModelCatalogModel.replaceUnitModelProcessorAssociations({
+      unitModelId,
+      processorModelIds: selectedIds
+    });
+    return sendRedirect(req, res, buildReturnUrl(filters, 'processors-updated'));
+  } catch (error) {
+    if (String(error?.code || '').startsWith('BWT_UNIT_MODEL_PROCESSOR_ASSOCIATION_')) {
+      const unitModelId = parsePositiveInteger(req.params.unitModelId);
+      const filters = getFilters(req);
+      const associations = await unitModelCatalogModel.listUnitModelProcessorAssociations(unitModelId);
+      if (!associations) return sendRedirect(req, res, buildReturnUrl(filters, 'not-found'));
+      const selectedIds = new Set((Array.isArray(req.body.processorModelIds)
+        ? req.body.processorModelIds
+        : req.body.processorModelIds ? [req.body.processorModelIds] : []).map(String));
+      return res.status(400).render('fragments/unit-model-processors-modal', {
+        ...associations,
+        processors: associations.processors.map((processor) => ({ ...processor, isMapped: selectedIds.has(String(processor.id)) })),
+        filters,
+        errorMessages: [error.message]
+      });
+    }
+    next(error);
+  }
+}
+
 async function renderUnitModelStatusModal(req, res, next) {
   try {
     const unitModelId = parsePositiveInteger(req.params.unitModelId);
@@ -262,6 +314,8 @@ module.exports = {
   createUnitModel,
   renderEditUnitModelModal,
   updateUnitModel,
+  renderUnitModelProcessorsModal,
+  updateUnitModelProcessors,
   renderUnitModelStatusModal,
   updateUnitModelStatus
 };

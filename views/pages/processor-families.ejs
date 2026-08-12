@@ -5,10 +5,12 @@
 <html lang="en">
   <%- include('../partials/head', {
     pageTitle,
-    stylesheets: ['/css/modal.css?v=stage8-config-consistency']
+    stylesheets: ['/css/modal.css?v=stage8-config-consistency', '/css/processor-catalog-associations.css?v=20260810-stage10w30-processor-catalog-integrity']
   }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   <script defer src="/js/processor-families.js?v=stage8-config-consistency"></script>
+  <script defer src="/js/processor-catalog-actions.js?v=20260810-stage10w30-processor-catalog-integrity"></script>
+  <script defer src="/js/catalog-association-filter.js?v=20260810-stage10w30-processor-catalog-integrity"></script>
 
   <body class="configuration-clean-page">
     <div class="app-shell">
@@ -127,11 +129,12 @@
                       <th>Brand</th>
                       <th>Existing Family</th>
                       <th>Generation</th>
+                      <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     <% if (!unmappedProcessors.length) { %>
-                      <tr><td colspan="4">All active processors belong to at least one Processor Family.</td></tr>
+                      <tr><td colspan="5">All active processors belong to at least one Processor Family.</td></tr>
                     <% } %>
 
                     <% unmappedProcessors.forEach((processor) => { %>
@@ -140,6 +143,15 @@
                         <td><%= processor.brandName %></td>
                         <td><%= processor.legacyFamily || '—' %></td>
                         <td><%= processor.generation || '—' %></td>
+                        <td>
+                          <div class="model-catalog-row-actions">
+                            <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/edit/modal?returnTo=processor-families" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/edit/modal?returnTo=processor-families">Edit</a>
+                            <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/families/modal?returnTo=processor-families" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/families/modal?returnTo=processor-families">Assign Family</a>
+                            <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/models/modal?returnTo=processor-families" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/models/modal?returnTo=processor-families">Models</a>
+                            <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/merge/modal?returnTo=processor-families" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/merge/modal?returnTo=processor-families">Resolve Duplicate</a>
+                            <a class="danger-button button-small" href="/management/config/processors/<%= processor.id %>/delete/modal?returnTo=processor-families" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/delete/modal?returnTo=processor-families">Delete</a>
+                          </div>
+                        </td>
                       </tr>
                     <% }) %>
                   </tbody>

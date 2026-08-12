@@ -5,6 +5,7 @@ const unitIssueEntryModel = require('./unitIssueEntryModel');
 const unitExpandedFormModel = require('./unitExpandedFormModel');
 const unitLotDestinationValidationModel = require('./unitLotDestinationValidationModel');
 const processorFamilyModel = require('./processorFamilyModel');
+const processorCatalogModel = require('./processorCatalogModel');
 
 const UNIT_REQUESTS_TABLE = 'unit_requests';
 const UNIT_DUPLICATE_REQUESTS_TABLE = 'unit_duplicate_requests';
@@ -1540,23 +1541,28 @@ async function approveProcessorCatalogRequest({
   unitRequestId,
   reviewedByUserId,
   reviewerNote = '',
+  approvedExistingProcessorModelId = null,
   approvedProcessorBrandId,
   approvedProcessorBrandName = '',
   approvedProcessorModelCode,
   approvedProcessorFamily = '',
   approvedProcessorGeneration = '',
   approvedProcessorBaseSpeedGhz = '',
+  confirmedProcessorNamingWithAdmin = '',
+  reviewerIsAdmin = false,
+  allowSelfReview = false,
   connection: providedConnection = null
 }) {
   const safeRequestId = normalizePositiveInteger(unitRequestId);
   const safeReviewerUserId = normalizePositiveInteger(reviewedByUserId);
-  const safeModelCode = normalizeText(approvedProcessorModelCode, 100);
+  const safeExistingProcessorModelId = normalizePositiveInteger(approvedExistingProcessorModelId);
+  const requestedModelCode = normalizeText(approvedProcessorModelCode, 150);
   const safeFamily = normalizeText(approvedProcessorFamily, 100);
-  const safeGeneration = normalizeText(approvedProcessorGeneration, 50);
+  const safeGeneration = normalizeText(approvedProcessorGeneration, 80);
   const requestedBrandName = normalizeText(approvedProcessorBrandName, 100);
 
-  if (!safeRequestId || !safeReviewerUserId || safeModelCode.length < 2 || (!normalizePositiveInteger(approvedProcessorBrandId) && requestedBrandName.length < 2)) {
-    const error = new Error('Select or enter a canonical Processor Type and enter a canonical Processor value before approving this request.');
+  if (!safeRequestId || !safeReviewerUserId || (!safeExistingProcessorModelId && (requestedModelCode.length < 2 || (!normalizePositiveInteger(approvedProcessorBrandId) && requestedBrandName.length < 2)))) {
+    const error = new Error('Choose an existing Processor or complete the canonical Processor Type and Processor values before approving this request.');
     error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
     throw error;
   }
@@ -1604,60 +1610,125 @@ async function approveProcessorCatalogRequest({
       return { approved: false, unitRequestId: safeRequestId };
     }
 
-    if (Number(request.requested_by_user_id) === safeReviewerUserId) {
+    const isSelfReview = Number(request.requested_by_user_id) === safeReviewerUserId;
+    if (isSelfReview && !allowSelfReview) {
       const error = new Error('A requester cannot approve their own Unit Request.');
       error.code = 'BWT_UNIT_REQUEST_SELF_REVIEW';
       throw error;
     }
 
     const safeUnitModelId = await assertActiveUnitModel(connection, request.unit_model_id);
-    const processorBrand = await resolveProcessorBrandForApproval(connection, {
-      processorBrandId: approvedProcessorBrandId,
-      processorBrandName: requestedBrandName
-    });
-    const submittedSpeed = normalizeOptionalDecimal(request.requested_processor_speed_ghz);
-    const reviewerSpeed = normalizeOptionalDecimal(approvedProcessorBaseSpeedGhz);
-    const safeBaseSpeed = reviewerSpeed !== null ? reviewerSpeed : submittedSpeed;
-
-    if (safeBaseSpeed === null || safeBaseSpeed < 0.01) {
-      const error = new Error('Confirm a Processor Base Speed from 0.01 through 99.99 GHz before approving this request.');
-      error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
-      throw error;
-    }
-
-    const [processorRows] = await connection.query(
-      `
-        SELECT processor_model_id, is_active
-        FROM processor_models
-        WHERE processor_brand_id = ?
-          AND LOWER(TRIM(model_code)) = LOWER(TRIM(?))
-        ORDER BY processor_model_id ASC
-        LIMIT 1
-        FOR UPDATE
-      `,
-      [processorBrand.id, safeModelCode]
-    );
-
-    const existingProcessor = processorRows[0] || null;
+    let processorBrand;
     let approvedProcessorModelId;
+    let canonicalModelCode;
+    let safeBaseSpeed;
     let actionLabel;
 
-    if (existingProcessor) {
-      approvedProcessorModelId = Number(existingProcessor.processor_model_id);
-      await connection.query(
+    if (safeExistingProcessorModelId) {
+      const [existingRows] = await connection.query(
         `
-          UPDATE processor_models
-          SET is_active = 1,
-              processor_family = CASE WHEN ? <> '' THEN ? ELSE processor_family END,
-              generation = CASE WHEN ? <> '' THEN ? ELSE generation END,
-              base_speed_ghz = ?
-          WHERE processor_model_id = ?
+          SELECT
+            pm.processor_model_id,
+            pm.processor_brand_id,
+            pm.model_code,
+            pm.base_speed_ghz,
+            pm.is_active,
+            pb.name AS brand_name,
+            pb.is_active AS brand_is_active
+          FROM processor_models pm
+          INNER JOIN processor_brands pb
+            ON pb.processor_brand_id = pm.processor_brand_id
+          WHERE pm.processor_model_id = ?
           LIMIT 1
+          FOR UPDATE
         `,
-        [safeFamily, safeFamily, safeGeneration, safeGeneration, safeBaseSpeed, approvedProcessorModelId]
+        [safeExistingProcessorModelId]
       );
-      actionLabel = Number(existingProcessor.is_active) === 1 ? 'Existing processor mapped' : 'Inactive processor reactivated and mapped';
+      const existingProcessor = existingRows[0] || null;
+      if (!existingProcessor || Number(existingProcessor.is_active) !== 1 || Number(existingProcessor.brand_is_active) !== 1) {
+        const error = new Error('The selected existing Processor is no longer active. Choose another existing Processor or approve canonical values instead.');
+        error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
+        throw error;
+      }
+
+      approvedProcessorModelId = Number(existingProcessor.processor_model_id);
+      canonicalModelCode = existingProcessor.model_code;
+      safeBaseSpeed = normalizeOptionalDecimal(existingProcessor.base_speed_ghz);
+      processorBrand = {
+        id: Number(existingProcessor.processor_brand_id),
+        name: existingProcessor.brand_name,
+        action: 'Existing processor type reused'
+      };
+      actionLabel = 'Existing processor mapped';
     } else {
+      processorBrand = await resolveProcessorBrandForApproval(connection, {
+        processorBrandId: approvedProcessorBrandId,
+        processorBrandName: requestedBrandName
+      });
+      const submittedSpeed = normalizeOptionalDecimal(request.requested_processor_speed_ghz);
+      const reviewerSpeed = normalizeOptionalDecimal(approvedProcessorBaseSpeedGhz);
+      safeBaseSpeed = reviewerSpeed !== null ? reviewerSpeed : submittedSpeed;
+
+      if (safeBaseSpeed === null || safeBaseSpeed < 0.01 || safeBaseSpeed > 99.99) {
+        const error = new Error('Confirm a Processor Base Speed from 0.01 through 99.99 GHz before approving a new canonical Processor.');
+        error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
+        throw error;
+      }
+
+      canonicalModelCode = requestedModelCode;
+      const canonicalNameErrors = processorCatalogModel.getCanonicalProcessorNameErrors({
+        brandName: processorBrand.name,
+        modelCode: canonicalModelCode
+      });
+      if (canonicalNameErrors.length > 0) {
+        const error = new Error(canonicalNameErrors.join(' '));
+        error.code = 'BWT_CATALOG_PROCESSOR_CANONICAL_FORMAT';
+        throw error;
+      }
+
+      const likelyMatches = await processorCatalogModel.findLikelyProcessorMatches({
+        processorBrandId: processorBrand.id,
+        brandName: processorBrand.name,
+        modelCode: canonicalModelCode,
+        includeInactive: true,
+        limit: 8
+      }, connection);
+      const duplicateMatch = likelyMatches.find((processor) => processor.identityMatch) || null;
+      if (duplicateMatch) {
+        const state = duplicateMatch.isActive ? 'active' : 'inactive';
+        const error = new Error(`${duplicateMatch.displayLabel} already exists globally as Processor #${duplicateMatch.id} (${state}). Use that canonical Processor and associate it with this Unit Model instead of creating another processor record.`);
+        error.code = 'BWT_CATALOG_PROCESSOR_DUPLICATE';
+        error.processorModelId = duplicateMatch.id;
+        throw error;
+      }
+
+      if (!reviewerIsAdmin && String(confirmedProcessorNamingWithAdmin || '') !== '1') {
+        const error = new Error('Management must confirm a new canonical Processor name and metadata with an Admin before creating it.');
+        error.code = 'BWT_CATALOG_PROCESSOR_ADMIN_CONFIRMATION_REQUIRED';
+        throw error;
+      }
+
+      // Re-check the exact canonical name under row-level locking to protect against
+      // two reviewers creating the same Processor at nearly the same time.
+      const [processorRows] = await connection.query(
+        `
+          SELECT processor_model_id, is_active
+          FROM processor_models
+          WHERE processor_brand_id = ?
+            AND LOWER(TRIM(model_code)) = LOWER(TRIM(?))
+          ORDER BY processor_model_id ASC
+          LIMIT 1
+          FOR UPDATE
+        `,
+        [processorBrand.id, canonicalModelCode]
+      );
+      if (processorRows[0]) {
+        const error = new Error(`Processor #${Number(processorRows[0].processor_model_id)} already exists with this canonical Processor Type and Processor name. Select the existing Processor instead.`);
+        error.code = 'BWT_CATALOG_PROCESSOR_DUPLICATE';
+        error.processorModelId = Number(processorRows[0].processor_model_id);
+        throw error;
+      }
+
       const [insertResult] = await connection.query(
         `
           INSERT INTO processor_models (
@@ -1669,7 +1740,7 @@ async function approveProcessorCatalogRequest({
             is_active
           ) VALUES (?, ?, ?, ?, ?, 1)
         `,
-        [processorBrand.id, safeFamily || null, safeModelCode, safeBaseSpeed, safeGeneration || null]
+        [processorBrand.id, safeFamily || null, canonicalModelCode, safeBaseSpeed, safeGeneration || null]
       );
       approvedProcessorModelId = Number(insertResult.insertId);
       actionLabel = 'New processor added and mapped';
@@ -1678,7 +1749,7 @@ async function approveProcessorCatalogRequest({
     const assignedProcessorFamilies = await processorFamilyModel.autoAssignProcessorFamilyMembershipWithConnection(connection, {
       processorModelId: approvedProcessorModelId,
       processorBrandName: processorBrand.name,
-      modelCode: safeModelCode,
+      modelCode: canonicalModelCode,
       currentUserId: safeReviewerUserId
     });
 
@@ -1725,8 +1796,12 @@ async function approveProcessorCatalogRequest({
         approvedProcessorBrandId: processorBrand.id,
         approvedProcessorBrandName: processorBrand.name,
         approvedProcessorModelId,
-        approvedProcessorModelCode: safeModelCode,
+        approvedProcessorModelCode: canonicalModelCode,
         approvedProcessorBaseSpeedGhz: safeBaseSpeed,
+        reusedExistingProcessor: Boolean(safeExistingProcessorModelId),
+        selfReviewedByCatalogManager: isSelfReview && Boolean(allowSelfReview),
+        newProcessorAdminConfirmationRequired: !safeExistingProcessorModelId && !reviewerIsAdmin,
+        newProcessorAdminConfirmationRecorded: !safeExistingProcessorModelId ? (reviewerIsAdmin || String(confirmedProcessorNamingWithAdmin || '') === '1') : false,
         processorBrandAction: processorBrand.action,
         assignedProcessorFamilyCodes: assignedProcessorFamilies.map((family) => family.code),
         action: actionLabel
@@ -1737,7 +1812,7 @@ async function approveProcessorCatalogRequest({
     return {
       approved: true,
       unitRequestId: safeRequestId,
-      resultLabel: `${processorBrand.name} ${safeModelCode}`,
+      resultLabel: `${processorBrand.name} ${canonicalModelCode}`,
       catalogAction: actionLabel,
       processorBrandAction: processorBrand.action,
       approvedProcessorBrandId: processorBrand.id,

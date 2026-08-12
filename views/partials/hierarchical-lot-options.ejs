@@ -1,0 +1,25 @@
+<%
+  const safeLotOptions = Array.isArray(lotOptions) ? lotOptions : [];
+  const selectedId = String(typeof selectedLotId !== 'undefined' && selectedLotId != null ? selectedLotId : '');
+  const showCounts = typeof includeCounts !== 'undefined' && Boolean(includeCounts);
+%>
+<% safeLotOptions.forEach((lotOption) => { %>
+  <%
+    const optionId = Number(lotOption.lotId || lotOption.lot_id || lotOption.value || 0);
+    const optionName = String(lotOption.lotName || lotOption.lot_name || lotOption.label || lotOption.name || `Lot #${optionId}`).trim();
+    const optionDepth = Math.max(Number(lotOption.depth || 0), 0);
+    const isSelectable = lotOption.selectable !== false;
+    const indentation = '\u00A0\u00A0'.repeat(optionDepth);
+    const hierarchyPrefix = optionDepth > 0 ? '› ' : '';
+    const optionDisplayName = isSelectable && lotOption.compactLabel ? String(lotOption.compactLabel) : optionName;
+    const countText = showCounts && isSelectable ? ` (${formatNumber(Number(lotOption.count || 0))})` : '';
+  %>
+  <option
+    value="<%= isSelectable ? optionId : '' %>"
+    <%= isSelectable && selectedId === String(optionId) ? 'selected' : '' %>
+    <%= isSelectable ? '' : 'disabled' %>
+    data-lot-id="<%= optionId %>"
+    data-lot-depth="<%= optionDepth %>"
+    data-lot-full-path="<%= lotOption.fullPath || optionName %>"
+  ><%= indentation %><%= hierarchyPrefix %><%= optionDisplayName %><%= countText %></option>
+<% }) %>

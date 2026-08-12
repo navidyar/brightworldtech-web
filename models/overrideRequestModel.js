@@ -3,6 +3,7 @@ const lotModel = require('./lotModel');
 const productionWeightSyncModel = require('./productionWeightSyncModel');
 const productionCycleModel = require('./productionCycleModel');
 const unitWorkflowAudit = require('../services/unitWorkflowAudit');
+const { buildLotHierarchyOptions } = require('../services/lotHierarchyPresentation');
 
 const OVERRIDE_TABLE = 'unit_override_requests';
 const MANUAL_TECH_OVERRIDE_REQUEST_TYPE = 'manual_tech_override_request';
@@ -152,7 +153,7 @@ async function getLotNameMap() {
 }
 
 
-async function listAssignableLots() {
+async function getAssignableLotOptions() {
   const lots = await lotModel.listLots({ includeHidden: true });
   const activeLots = lots.filter((lot) => Number(lot.is_active) === 1 && Number(lot.is_closed || 0) !== 1);
   const parentLotIdsWithChildren = new Set(
@@ -160,13 +161,26 @@ async function listAssignableLots() {
       .filter((lot) => lot.parent_lot_id)
       .map((lot) => String(lot.parent_lot_id))
   );
+  const assignableLotRows = activeLots.filter((lot) => !parentLotIdsWithChildren.has(String(lot.lot_id)));
+  const assignableLots = assignableLotRows.map((lot) => ({
+    lotId: Number(lot.lot_id),
+    lotName: lot.lot_name || lot.name || 'Lot name not available'
+  }));
 
-  return activeLots
-    .filter((lot) => !parentLotIdsWithChildren.has(String(lot.lot_id)))
-    .map((lot) => ({
-      lotId: Number(lot.lot_id),
-      lotName: lot.lot_name || lot.name || 'Lot name not available'
-    }));
+  return {
+    lots: assignableLots,
+    hierarchyOptions: buildLotHierarchyOptions(lots, assignableLotRows)
+  };
+}
+
+async function listAssignableLots() {
+  const result = await getAssignableLotOptions();
+  return result.lots;
+}
+
+async function listAssignableLotHierarchyOptions() {
+  const result = await getAssignableLotOptions();
+  return result.hierarchyOptions;
 }
 
 function createOverrideDestinationLotError(code, message) {
@@ -1590,7 +1604,9 @@ async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, review
 
 module.exports = {
   overrideTableExists,
+  getAssignableLotOptions,
   listAssignableLots,
+  listAssignableLotHierarchyOptions,
   listOverrideRequests,
   getLatestOverrideRequestMapForUnits,
   listOverrideRequestsForUnit,

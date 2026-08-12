@@ -34,7 +34,7 @@
 
       <p class="configuration-form-note">
         <% if (isPasswordLinkExpirySetting) { %>
-          This security setting controls how long newly generated setup and reset links remain valid.
+          This security setting supplies the default for non-interactive setup/reset link generation. User Management chooses a 1–8 hour lifetime before each link is generated.
         <% } else { %>
           Labels are user-facing. Codes are stable system keys and should rarely change after a value is in use.
         <% } %>
@@ -53,8 +53,8 @@
 
           <label class="form-field">
             <span>Password setup/reset link expiration</span>
-            <input type="number" name="value" value="<%= safeFormData.value || '1' %>" min="1" max="24" step="1" inputmode="numeric" required autofocus />
-            <small class="field-hint">Whole hours from 1 through 24. Existing links keep the expiration they were issued with.</small>
+            <input type="number" name="value" value="<%= safeFormData.value || '1' %>" min="1" max="8" step="1" inputmode="numeric" required autofocus />
+            <small class="field-hint">Whole hours from 1 through 8. Existing links keep the expiration they were issued with. Management can choose a specific 1–8 hour lifetime when generating a user link.</small>
           </label>
         <% } else { %>
           <div class="configuration-value-form-grid">
@@ -87,7 +87,7 @@
             <label class="form-field">
               <span>Code</span>
               <input type="text" name="code" value="<%= safeFormData.code || '' %>" maxlength="120" placeholder="example_config_value" required />
-              <small class="field-hint">Stable lowercase key. Use letters, numbers, underscores, or hyphens.</small>
+              <small class="field-hint">Stable lowercase key. Use letters, numbers, underscores, or hyphens. Lot Types may use short 1–2 character codes.</small>
             </label>
 
             <label class="form-field">

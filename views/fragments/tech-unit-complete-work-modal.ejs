@@ -75,8 +75,8 @@
               <dd><%= safePreview.lotName || '—' %></dd>
             </div>
             <div>
-              <dt>Completed By</dt>
-              <dd><%= creditedToName %></dd>
+              <dt><%= canChooseCompletionAttribution ? 'Currently Assigned To' : 'Completed By' %></dt>
+              <dd><%= canChooseCompletionAttribution ? (safePreview.assignedToName || '—') : creditedToName %></dd>
             </div>
             <% if (showProductionWeight) { %>
               <div>
@@ -100,7 +100,7 @@
           <% } else { %>
             This is a continuation of an existing production cycle, so completing this Lot workflow will not add another completed Unit or another production weight.
           <% } %>
-          It does not change the Unit’s assignment, Lot, grade, or Pass/Fail status.
+          It does not change the Unit’s assignment, Lot, grade, or Pass/Fail status. Tech Lead+ completion attribution changes only who receives the completion/production credit.
         </p>
 
         <% if (canSubmit) { %>
@@ -112,6 +112,40 @@
             hx-target="#modal-root"
             hx-swap="innerHTML"
           >
+            <% if (canChooseCompletionAttribution) { %>
+              <div class="form-section">
+                <div class="form-section-header">
+                  <div>
+                    <h3>Record Completion For</h3>
+                    <p class="field-hint">Tech Lead+ may record the completion for the technician currently assigned to this Unit or for themselves.</p>
+                  </div>
+                </div>
+                <div class="form-grid single-column">
+                  <% completionAttributionOptions.forEach((option) => { %>
+                    <label class="checkbox-card">
+                      <input
+                        type="radio"
+                        name="completedByUserId"
+                        value="<%= option.userId %>"
+                        <%= Number(selectedCompletedByUserId) === Number(option.userId) ? 'checked' : '' %>
+                        required
+                      />
+                      <span>
+                        <strong><%= option.name %></strong>
+                        <small>
+                          <% if (option.isAssignedUser) { %>
+                            Currently assigned technician — preserve their completion and production credit.
+                          <% } else { %>
+                            Current user — record the completion and production credit under your own account.
+                          <% } %>
+                        </small>
+                      </span>
+                    </label>
+                  <% }) %>
+                </div>
+              </div>
+            <% } %>
+
             <div class="form-actions">
               <button class="primary-button" type="submit">Confirm Unit Complete</button>
               <button type="button" class="secondary-button" data-modal-close>Cancel</button>

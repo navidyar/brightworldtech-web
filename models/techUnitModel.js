@@ -35,6 +35,10 @@ const {
   mergePreservedMemoryDetails,
   mergePreservedStorageDetails
 } = require('../services/componentDetailPreservation');
+const {
+  buildLotHierarchyLookup,
+  buildLotHierarchyOptions
+} = require('../services/lotHierarchyPresentation');
 
 const DEFAULT_UNIT_PAGE_SIZE = 50;
 const UNIT_PAGE_SIZE_OPTIONS = [50, 100, 250, 500];
@@ -1080,7 +1084,7 @@ async function getTechUnitFormOptions(options = {}) {
   const includeCurrentLotId = normalizeOptionalInteger(options.includeCurrentLotId);
   const includeCurrentUnitModelId = normalizeOptionalInteger(options.includeCurrentUnitModelId);
   const includeCurrentProcessorModelId = normalizeOptionalInteger(options.includeCurrentProcessorModelId);
-  const { assignableLots, lotMap } = await getLotMap();
+  const { lots: allLots, assignableLots, lotMap } = await getLotMap();
   const currentLot = includeCurrentLotId ? lotMap.get(includeCurrentLotId) || null : null;
   const currentLotIsSelectable = currentLot
     ? assignableLots.some((lot) => Number(lot.lot_id) === includeCurrentLotId)
@@ -1095,6 +1099,7 @@ async function getTechUnitFormOptions(options = {}) {
       }
     ])
     : assignableLots;
+  const lotHierarchyOptions = buildLotHierarchyOptions(allLots, lots);
 
   const [
     unitCategories,
@@ -1216,6 +1221,7 @@ async function getTechUnitFormOptions(options = {}) {
     assetTagPrefix: getAssetTagPrefix(),
     state,
     lots,
+    lotHierarchyOptions,
     currentLotIsClosed: Boolean(currentLot && Number(currentLot.is_closed || 0) === 1),
     unitCategories: unitCategoriesWithProductionWeights,
     unitStatuses,
@@ -2160,7 +2166,7 @@ async function listTechUnits(filters = {}) {
     };
   }
 
-  const { filterLots, lotMap } = await getLotMap();
+  const { lots: allLots, filterLots, lotMap } = await getLotMap();
   const requestedLotId = normalizePositiveFilterId(filters.lotId);
   const requestedLotIds = normalizePositiveFilterIds(filters.lotIds);
   const requestedLot = requestedLotId ? lotMap.get(requestedLotId) : null;
@@ -2170,6 +2176,8 @@ async function listTechUnits(filters = {}) {
       ? sortLotsByName([...filterLots, requestedLot])
       : filterLots;
   const filterLotIds = new Set(availableFilterLots.map((lot) => String(lot.lot_id)));
+  const lotHierarchyOptions = buildLotHierarchyOptions(allLots, availableFilterLots);
+  const lotHierarchyLookup = buildLotHierarchyLookup(allLots);
 
   const [
     unitCategories,
@@ -2611,6 +2619,9 @@ async function listTechUnits(filters = {}) {
       label: assetTag || 'No asset tag',
       lotId: row.lot_id,
       lotName: lot ? lot.lot_name : (isUnitParked(row) ? 'No active lot' : 'Lot name not available'),
+      lotFullPath: lotHierarchyLookup.get(Number(row.lot_id))?.fullPath || (lot ? lot.lot_name : ''),
+      lotCompactLabel: lotHierarchyLookup.get(Number(row.lot_id))?.compactLabel || (lot ? lot.lot_name : ''),
+      lotPathIds: lotHierarchyLookup.get(Number(row.lot_id))?.pathIds || [],
       statusLabel: configLabelById(unitStatusMap, row.current_unit_status_config_value_id, 'Unknown'),
       categoryLabel: configLabelById(unitCategoryMap, row.unit_category_config_value_id, 'Unknown'),
       productionWeight: productionWeightDetails.effectiveWeight,
@@ -2690,6 +2701,7 @@ async function listTechUnits(filters = {}) {
     searchIncludesParkedUnits,
     canViewParkedUnits,
     lots: availableFilterLots,
+    lotHierarchyOptions,
     unitCategories: rankedBrowserUnitCategories,
     overallGradeOptions,
     gradeFilterOptions,
@@ -5013,13 +5025,14 @@ function assertUnitIsNotParked(unit) {
 }
 
 async function getReturnToActiveOptions() {
-  const [{ assignableLots }, assignees] = await Promise.all([
+  const [lotState, assignees] = await Promise.all([
     getLotMap(),
     listActiveReturnToActiveAssignees()
   ]);
 
   return {
-    lots: assignableLots,
+    lots: lotState.assignableLots,
+    lotHierarchyOptions: buildLotHierarchyOptions(lotState.lots, lotState.assignableLots),
     assignees
   };
 }
@@ -5405,6 +5418,31 @@ async function assignTechUnit({ unitId, toUserId = null, changedByUserId = null,
   } finally {
     connection.release();
   }
+}
+
+async function getAssignedUserSummaryForCompletion(unit) {
+  const assignedToUserId = normalizeOptionalInteger(unit && unit.assigned_to_user_id);
+
+  if (!assignedToUserId) {
+    return { assignedToUserId: null, assignedToName: '' };
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT first_name, last_name, email
+      FROM users
+      WHERE user_id = ?
+      LIMIT 1
+    `,
+    [assignedToUserId]
+  );
+  const row = rows[0] || {};
+  const assignedToName = [row.first_name, row.last_name]
+    .filter(Boolean)
+    .join(' ')
+    .trim() || row.email || `User #${assignedToUserId}`;
+
+  return { assignedToUserId, assignedToName };
 }
 
 async function getResolvedProductionWeightForUnit(unit) {
@@ -6224,7 +6262,10 @@ async function getUnitWorkCompletionPreview(unitId) {
     };
   }
 
-  const productionWeight = await getResolvedProductionWeightForUnit(unit);
+  const [productionWeight, assignedUserSummary] = await Promise.all([
+    getResolvedProductionWeightForUnit(unit),
+    getAssignedUserSummaryForCompletion(unit)
+  ]);
 
   if (productionWeight === null || productionWeight < 0.10) {
     return {
@@ -6232,9 +6273,10 @@ async function getUnitWorkCompletionPreview(unitId) {
       unit,
       unitId: safeUnitId,
       unitLabel: getDisplayAssetTag(unit.asset_number) || `Unit #${safeUnitId}`,
-      lotName: lot.name || 'Current lot',
+      lotName: lot.lot_name || lot.name || 'Current lot',
       productionWeight: null,
       formattedProductionWeight: '—',
+      ...assignedUserSummary,
       errorMessage: 'This unit needs a production weight of at least 0.10 before lot work can be completed.'
     };
   }
@@ -6247,9 +6289,10 @@ async function getUnitWorkCompletionPreview(unitId) {
       unit,
       unitId: safeUnitId,
       unitLabel: getDisplayAssetTag(unit.asset_number) || `Unit #${safeUnitId}`,
-      lotName: lot.name || 'Current lot',
+      lotName: lot.lot_name || lot.name || 'Current lot',
       productionWeight,
       formattedProductionWeight: Number(productionWeight).toFixed(2),
+      ...assignedUserSummary,
       errorMessage: 'Lot work is already marked complete for this unit’s current lot stay.'
     };
   }
@@ -6260,9 +6303,10 @@ async function getUnitWorkCompletionPreview(unitId) {
     unitId: safeUnitId,
     unitLabel: getDisplayAssetTag(unit.asset_number) || `Unit #${safeUnitId}`,
     lotId,
-    lotName: lot.name || 'Current lot',
+    lotName: lot.lot_name || lot.name || 'Current lot',
     productionWeight,
     formattedProductionWeight: Number(productionWeight).toFixed(2),
+    ...assignedUserSummary,
     productionCycleKey: productionCycleState.productionCycleKey || null,
     grantsProductionCredit: productionCycleState.grantsProductionCredit !== false,
     productionCycleSchemaReady: productionCycleState.schemaReady === true,

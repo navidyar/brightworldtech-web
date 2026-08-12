@@ -113,3 +113,20 @@
     width: 100%;
   }
 }
+
+/* Stage 10W32 — live generated-link expiry state. */
+.hero-badge.is-expired {
+  border-color: rgba(185, 28, 28, 0.26);
+  background: var(--red-bg);
+}
+
+.hero-badge.is-expired span,
+.hero-badge.is-expired strong {
+  color: var(--red);
+}
+
+.copy-url-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}

@@ -5,6 +5,7 @@ const {
   buildHardwareComponentComparisons,
   componentText
 } = require('./hardwareComponentComparison');
+const { buildLotHierarchyLookup, resolveSnapshotPath } = require('./lotHierarchyPresentation');
 
 const LEGACY_GROUP_WINDOW_MS = 60 * 1000;
 const AUDIT_DUPLICATE_WINDOW_MS = 5 * 1000;
@@ -43,7 +44,7 @@ function normalizePositiveId(value) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function buildLotNameById(operationalHistory = {}) {
+function buildLotNameById(operationalHistory = {}, lotCatalog = []) {
   const names = new Map();
   const add = (id, name) => {
     const lotId = normalizePositiveId(id);
@@ -52,6 +53,10 @@ function buildLotNameById(operationalHistory = {}) {
       names.set(lotId, lotName);
     }
   };
+
+  (Array.isArray(lotCatalog) ? lotCatalog : []).forEach((lot) => {
+    add(lot && (lot.lot_id ?? lot.lotId ?? lot.value), lot && (lot.lot_name ?? lot.lotName ?? lot.label ?? lot.name));
+  });
 
   (operationalHistory.lotMoves || []).forEach((row) => {
     add(row.fromLotId, row.fromLotName);
@@ -64,6 +69,15 @@ function buildLotNameById(operationalHistory = {}) {
   });
 
   return names;
+}
+
+function buildLotPathById(lotCatalog = []) {
+  const lookup = buildLotHierarchyLookup(Array.isArray(lotCatalog) ? lotCatalog : [], { includeInactiveAncestors: true });
+  const paths = new Map();
+  lookup.forEach((presentation, id) => {
+    if (presentation && presentation.fullPath) paths.set(Number(id), presentation.fullPath);
+  });
+  return paths;
 }
 
 function resolveLotAuditValueText(valueText, rawValue, lotNameById) {
@@ -80,15 +94,30 @@ function resolveLotAuditValueText(valueText, rawValue, lotNameById) {
   return lotNameById.get(lotId) || currentText;
 }
 
-function resolveAuditChangeDisplay(change = {}, lotNameById = new Map()) {
-  if (normalizeText(change.fieldKey) !== 'assignable_lot') {
+function resolveAuditChangeDisplay(change = {}, lotNameById = new Map(), lotPathById = new Map(), metadata = {}) {
+  const fieldKey = normalizeText(change.fieldKey);
+  if (!['assignable_lot', 'completion_lot'].includes(fieldKey)) {
     return change;
   }
 
+  const oldValueText = resolveLotAuditValueText(change.oldValueText, change.oldValue, lotNameById);
+  const newValueText = resolveLotAuditValueText(change.newValueText, change.newValue, lotNameById);
+  const hierarchyMetadata = metadata && metadata.lotHierarchyPaths && metadata.lotHierarchyPaths[fieldKey]
+    ? metadata.lotHierarchyPaths[fieldKey]
+    : null;
+  const parsedOldValue = normalizePositiveId(parseJson(change.oldValue));
+  const parsedNewValue = normalizePositiveId(parseJson(change.newValue));
+  const oldHierarchyText = hierarchyMetadata && hierarchyMetadata.old
+    ? resolveSnapshotPath(hierarchyMetadata.old, lotNameById)
+    : (parsedOldValue && lotPathById instanceof Map ? lotPathById.get(parsedOldValue) || '' : '');
+  const newHierarchyText = hierarchyMetadata && hierarchyMetadata.new
+    ? resolveSnapshotPath(hierarchyMetadata.new, lotNameById)
+    : (parsedNewValue && lotPathById instanceof Map ? lotPathById.get(parsedNewValue) || '' : '');
+
   return {
     ...change,
-    oldValueText: resolveLotAuditValueText(change.oldValueText, change.oldValue, lotNameById),
-    newValueText: resolveLotAuditValueText(change.newValueText, change.newValue, lotNameById)
+    oldValueText: oldHierarchyText || oldValueText,
+    newValueText: newHierarchyText || newValueText
   };
 }
 
@@ -188,7 +217,7 @@ function expandComponentAuditChange(change = {}) {
   }));
 }
 
-function normalizeAuditEvent(event = {}, { lotNameById = new Map() } = {}) {
+function normalizeAuditEvent(event = {}, { lotNameById = new Map(), lotPathById = new Map() } = {}) {
   const metadata = parseJson(event.metadata) || {};
   const isCreation = event.eventType === 'unit_created';
 
@@ -204,7 +233,7 @@ function normalizeAuditEvent(event = {}, { lotNameById = new Map() } = {}) {
     isLegacy: false,
     metadata,
     changes: (Array.isArray(event.changes) ? event.changes : []).flatMap((change) => {
-      const displayChange = resolveAuditChangeDisplay(change, lotNameById);
+      const displayChange = resolveAuditChangeDisplay(change, lotNameById, lotPathById, metadata);
       const expandedChanges = expandComponentAuditChange(displayChange);
 
       if (expandedChanges) {
@@ -586,11 +615,13 @@ function buildUnitHistoryTimeline({
   overrideHistory = {},
   operationalHistory = {},
   acceptanceHistory = [],
-  creationContext = null
+  creationContext = null,
+  lotCatalog = []
 } = {}) {
-  const lotNameById = buildLotNameById(operationalHistory);
+  const lotNameById = buildLotNameById(operationalHistory, lotCatalog);
+  const lotPathById = buildLotPathById(lotCatalog);
   const normalizedAuditEvents = (Array.isArray(auditEvents) ? auditEvents : [])
-    .map((event) => normalizeAuditEvent(event, { lotNameById }));
+    .map((event) => normalizeAuditEvent(event, { lotNameById, lotPathById }));
   const legacyEvents = groupLegacyEvents(buildLegacyEvents({
     historyDetails,
     overrideHistory,
@@ -624,6 +655,7 @@ module.exports = {
   LEGACY_GROUP_WINDOW_MS,
   auditChangeText,
   buildLotNameById,
+  buildLotPathById,
   buildUnitHistoryTimeline,
   groupLegacyEvents,
   normalizeAuditEvent,

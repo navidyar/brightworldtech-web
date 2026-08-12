@@ -91,11 +91,12 @@
           >
             <label class="form-field">
               <span>Open Destination Lot</span>
-              <select name="destinationLotId" required>
+              <select name="destinationLotId" required data-hierarchical-lot-select>
                 <option value="">Choose an open, assignable lot</option>
-                <% lots.forEach((lot) => { %>
-                  <option value="<%= lot.lot_id %>" <%= String(safeFormData.destinationLotId) === String(lot.lot_id) ? 'selected' : '' %>><%= lot.lot_name %></option>
-                <% }) %>
+                <%- include('../partials/hierarchical-lot-options', {
+                  lotOptions: Array.isArray(formOptions.lotHierarchyOptions) && formOptions.lotHierarchyOptions.length > 0 ? formOptions.lotHierarchyOptions : lots,
+                  selectedLotId: safeFormData.destinationLotId
+                }) %>
               </select>
               <small class="field-hint">Closed, hidden, and parent/container lots cannot receive a returned unit.</small>
             </label>

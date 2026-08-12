@@ -207,8 +207,8 @@ test('the outcome Tab handler runs in capture phase before native radio-group sk
   assert.match(script, /const nextIsOutcome = outcomeRadios\.includes\(nextTarget\);/);
 });
 
-test('all Add/Edit Unit entry points use the tab-order asset version', () => {
-  const expected = '/js/tech-unit-form.js?v=20260806-stage10w12-unit-form-tab-order';
+test('all Add/Edit Unit entry points use the current Unit form asset version', () => {
+  const expected = '/js/tech-unit-form.js?v=20260811-stage10w31-lot-hierarchy-context';
 
   for (const relativePath of [
     'views/pages/tech-units.ejs',

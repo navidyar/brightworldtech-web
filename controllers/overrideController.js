@@ -465,13 +465,15 @@ async function renderTechOverrideRequestModal(req, res, next) {
       });
     }
 
-    const [existingPendingRequest, assignableLots] = await Promise.all([
+    const [existingPendingRequest, assignableLotOptions] = await Promise.all([
       overrideRequestModel.getPendingOverrideRequestForUnit({
         unitId: unit.unit_id,
         requestType: 'manual_tech_override_request'
       }),
-      overrideRequestModel.listAssignableLots()
+      overrideRequestModel.getAssignableLotOptions()
     ]);
+    const assignableLots = assignableLotOptions.lots;
+    const assignableLotHierarchyOptions = assignableLotOptions.hierarchyOptions;
     const requestedDestinationLotId = existingPendingRequest
       ? existingPendingRequest.requestedDestinationLotId
       : resolveRequestedDestinationLotId({
@@ -486,6 +488,7 @@ async function renderTechOverrideRequestModal(req, res, next) {
       unitLabel: buildUnitLabel(unit),
       lotLabel: await getUnitCurrentLotLabel(unit),
       assignableLots,
+      assignableLotHierarchyOptions,
       requestedDestinationLotId,
       existingPendingRequest,
       supported: true,
@@ -582,13 +585,15 @@ async function createTechOverrideRequest(req, res, next) {
       });
     }
 
-    const [existingPendingRequest, assignableLots] = await Promise.all([
+    const [existingPendingRequest, assignableLotOptions] = await Promise.all([
       overrideRequestModel.getPendingOverrideRequestForUnit({
         unitId: unit.unit_id,
         requestType: 'manual_tech_override_request'
       }),
-      overrideRequestModel.listAssignableLots()
+      overrideRequestModel.getAssignableLotOptions()
     ]);
+    const assignableLots = assignableLotOptions.lots;
+    const assignableLotHierarchyOptions = assignableLotOptions.hierarchyOptions;
     const requestedDestinationLotId = resolveRequestedDestinationLotId({
       requestedDestinationLotId: getRequestedDestinationLotId(req),
       unit,
@@ -602,6 +607,7 @@ async function createTechOverrideRequest(req, res, next) {
         unitLabel: buildUnitLabel(unit),
         lotLabel: await getUnitCurrentLotLabel(unit),
         assignableLots,
+        assignableLotHierarchyOptions,
         requestedDestinationLotId: existingPendingRequest.requestedDestinationLotId,
         existingPendingRequest,
         supported: true,
@@ -638,6 +644,7 @@ async function createTechOverrideRequest(req, res, next) {
         unitLabel: buildUnitLabel(unit),
         lotLabel: await getUnitCurrentLotLabel(unit),
         assignableLots,
+        assignableLotHierarchyOptions,
         requestedDestinationLotId,
         existingPendingRequest: null,
         supported: true,
@@ -699,6 +706,7 @@ async function createTechOverrideRequest(req, res, next) {
           unitLabel: buildUnitLabel(unit),
           lotLabel: await getUnitCurrentLotLabel(unit),
           assignableLots,
+          assignableLotHierarchyOptions,
           requestedDestinationLotId: pendingRequest ? pendingRequest.requestedDestinationLotId : requestedDestinationLotId,
           existingPendingRequest: pendingRequest,
           supported: true,
@@ -731,6 +739,7 @@ async function createTechOverrideRequest(req, res, next) {
       unitLabel: buildUnitLabel(unit),
       lotLabel: await getUnitCurrentLotLabel(unit),
       assignableLots,
+      assignableLotHierarchyOptions,
       requestedDestinationLotId,
       existingPendingRequest: pendingRequest || {
         unitOverrideRequestId: overrideRequestId,

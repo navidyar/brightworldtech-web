@@ -1,0 +1,194 @@
+<%
+  const selected = (actual, expected) => String(actual || '') === String(expected || '') ? 'selected' : '';
+  const noticeMessages = {
+    updated: 'Processor updated.',
+    merged: 'Duplicate processor merged into the selected canonical processor. The duplicate record was permanently removed.',
+    'families-updated': 'Processor Family memberships updated.',
+    'models-updated': 'Exact Unit Model associations updated.',
+    deleted: 'Processor permanently deleted.',
+    retired: 'Processor removed from the active catalog. Existing historical references were preserved.',
+    'not-found': 'The selected processor was not found.'
+  };
+  const activeCount = processors.filter((processor) => processor.isActive).length;
+  const inactiveCount = processors.length - activeCount;
+  const needsReviewCount = processors.filter((processor) => processor.processorFamilyCount === 0 && processor.isActive).length;
+  const visibleBrandCount = new Set(processors.map((processor) => processor.processorBrandId)).size;
+  const query = new URLSearchParams();
+  if (filters.processorBrandId) query.set('processorBrandId', String(filters.processorBrandId));
+  if (filters.includeInactive) query.set('includeInactive', '1');
+  if (filters.needsReview) query.set('needsReview', '1');
+  if (filters.search) query.set('search', filters.search);
+  const queryString = query.toString();
+%>
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=stage8-config-consistency', '/css/processor-catalog-associations.css?v=20260810-stage10w30-processor-catalog-integrity'] }) %>
+
+  <body class="configuration-clean-page">
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell configuration-page processor-catalog-page">
+          <%- include('../partials/configuration-nav', { currentNav }) %>
+
+          <section class="page-heading configuration-page-heading">
+            <div>
+              <h1>Processor Catalog</h1>
+              <p>Correct processor metadata and model compatibility. Admins can permanently resolve true duplicate processor records while preserving all Unit and catalog references.</p>
+            </div>
+          </section>
+
+          <% if (notice && noticeMessages[notice]) { %>
+            <div class="message <%= notice === 'not-found' ? 'error' : 'success' %>"><p><%= noticeMessages[notice] %></p></div>
+          <% } %>
+
+          <section class="site-summary-panel processor-catalog-summary-panel" aria-label="Visible processor totals">
+            <div class="site-summary-primary">
+              <span>Visible processors</span>
+              <strong><%= formatNumber(processors.length) %></strong>
+              <small><%= filters.includeInactive ? 'Active and inactive processor records are included.' : 'Only active processor records are shown.' %></small>
+            </div>
+
+            <div class="site-summary-stats">
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">P</span>
+                <span><small>Processor Types</small><strong><%= formatNumber(visibleBrandCount) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">!</span>
+                <span><small>Needs review</small><strong><%= formatNumber(needsReviewCount) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">◌</span>
+                <span><small>Inactive shown</small><strong><%= formatNumber(inactiveCount) %></strong></span>
+              </article>
+            </div>
+          </section>
+
+          <section class="site-clean-section site-clean-surface processor-catalog-filter-section">
+            <div class="site-clean-section-heading">
+              <div>
+                <h2>Catalog Filters</h2>
+                <p>Search by processor name, Processor Type, generation, family, GHz, or managed Processor Family.</p>
+              </div>
+            </div>
+
+            <form class="app-form model-catalog-filter-form" method="get" action="/management/config/processors">
+              <label class="form-field">
+                <span>Processor Type</span>
+                <select name="processorBrandId">
+                  <option value="">All Processor Types</option>
+                  <% brands.filter((brand) => brand.isActive).forEach((brand) => { %>
+                    <option value="<%= brand.id %>" <%= selected(filters.processorBrandId, brand.id) %>><%= brand.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Review State</span>
+                <select name="needsReview">
+                  <option value="0" <%= !filters.needsReview ? 'selected' : '' %>>All processors</option>
+                  <option value="1" <%= filters.needsReview ? 'selected' : '' %>>Processors needing review</option>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Search</span>
+                <input type="search" name="search" value="<%= filters.search || '' %>" placeholder="Example: i5-9500T" />
+              </label>
+
+              <label class="form-field">
+                <span>Status</span>
+                <select name="includeInactive">
+                  <option value="0" <%= !filters.includeInactive ? 'selected' : '' %>>Active only</option>
+                  <option value="1" <%= filters.includeInactive ? 'selected' : '' %>>Active and inactive</option>
+                </select>
+              </label>
+
+              <div class="model-catalog-filter-actions">
+                <button class="primary-button" type="submit">Apply Filters</button>
+                <a class="secondary-button" href="/management/config/processors">Reset</a>
+              </div>
+            </form>
+          </section>
+
+          <section class="site-clean-section site-clean-surface processor-catalog-results-section">
+            <div class="site-clean-section-heading">
+              <div>
+                <h2>Processor Catalog</h2>
+                <p><%= formatNumber(processors.length) %> processor<%= processors.length === 1 ? '' : 's' %> match the current filters. Model associations control which processors appear for each exact Unit Model. Admin duplicate resolution moves all references into one canonical record and permanently removes the duplicate.</p>
+              </div>
+            </div>
+
+            <div class="table-card model-catalog-table processor-catalog-table">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Processor</th>
+                      <th>Type</th>
+                      <th>Metadata</th>
+                      <th>Processor Families</th>
+                      <th>Models</th>
+                      <th>Units</th>
+                      <th>Requests</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% if (processors.length === 0) { %>
+                      <tr><td colspan="9">No processors match the current filters.</td></tr>
+                    <% } %>
+
+                    <% processors.forEach((processor) => { %>
+                      <tr class="<%= processor.isActive ? '' : 'configuration-value-row--inactive' %>">
+                        <td><strong><%= processor.modelCode %></strong></td>
+                        <td><%= processor.brandName %></td>
+                        <td>
+                          <%= processor.legacyFamily || '—' %>
+                          <% if (processor.generation) { %><br /><span class="table-muted-line"><%= processor.generation %></span><% } %>
+                          <% if (processor.baseSpeedGhz) { %><br /><span class="table-muted-line"><%= Number(processor.baseSpeedGhz).toFixed(2) %> GHz</span><% } %>
+                        </td>
+                        <td>
+                          <% if (processor.processorFamilyLabels.length) { %>
+                            <%= processor.processorFamilyLabels.join(', ') %>
+                          <% } else { %>
+                            <span class="pill neutral">Needs review</span>
+                          <% } %>
+                        </td>
+                        <td><%= formatNumber(processor.unitModelCount) %></td>
+                        <td><%= formatNumber(processor.unitCount) %></td>
+                        <td><%= formatNumber(processor.requestCount) %></td>
+                        <td><span class="pill <%= processor.isActive ? 'good' : 'neutral' %>"><%= processor.isActive ? 'Active' : 'Inactive' %></span></td>
+                        <td>
+                          <div class="model-catalog-row-actions">
+                            <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>">Edit</a>
+                            <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/families/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/families/modal<%= queryString ? `?${queryString}` : '' %>">Families</a>
+                            <% if (isAdmin) { %>
+                              <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/models/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/models/modal<%= queryString ? `?${queryString}` : '' %>">Models</a>
+                              <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/merge/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/merge/modal<%= queryString ? `?${queryString}` : '' %>">Resolve Duplicate</a>
+                            <% } %>
+                            <a class="danger-button button-small" href="/management/config/processors/<%= processor.id %>/delete/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/delete/modal<%= queryString ? `?${queryString}` : '' %>">Delete</a>
+                          </div>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div id="modal-root"></div>
+    <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+    <script defer src="/js/processor-catalog-actions.js?v=20260810-stage10w30-processor-catalog-integrity"></script>
+    <script defer src="/js/catalog-association-filter.js?v=20260810-stage10w30-processor-catalog-integrity"></script>
+  </body>
+</html>
