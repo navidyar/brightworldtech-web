@@ -36,7 +36,7 @@
 
   <link rel="stylesheet" href="/css/style.css?v=20260812-stage10w47-form-value-consistency" />
   <link rel="stylesheet" href="/css/theme.css?v=20260812-stage10w47-form-value-consistency" />
-  <link rel="stylesheet" href="/css/work-area.css?v=20260812-stage10w48-cross-browser-period-picker" />
+  <link rel="stylesheet" href="/css/work-area.css?v=20260812-stage10w47-form-value-consistency" />
 
   <% if (typeof stylesheets !== 'undefined' && Array.isArray(stylesheets)) { %>
     <% stylesheets.forEach((stylesheetHref) => { %>
@@ -51,7 +51,7 @@
 
   <script defer src="/js/theme.js"></script>
   <script defer src="/js/sidebar.js"></script>
-  <script defer src="/js/date-picker-only.js?v=20260812-stage10w48-cross-browser-period-picker"></script>
+  <script defer src="/js/date-picker-only.js?v=20260812-stage10w46-month-year-picker"></script>
   <script defer src="/js/management-reporting-controls.js?v=20260729-stage9i-qc-reporting-clarity"></script>
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" crossorigin="anonymous"></script>
 </head>

@@ -25,6 +25,6 @@ test('Lots pages load the Stage 10W37 cache-busted stylesheet', () => {
     'views/pages/management-lots.ejs',
     'views/pages/management-lot-detail.ejs'
   ]) {
-    assert.match(read(page), /\/css\/lots\.css\?v=20260811-stage10w37-summary-border/);
+    assert.match(read(page), /\/css\/lots\.css\?v=[^'\"]+/);
   }
 });

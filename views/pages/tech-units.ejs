@@ -25,13 +25,13 @@
     pageTitle,
     stylesheets: [
       '/css/modal.css',
-      '/css/tech-units-clean.css?v=20260811-stage10w31-lot-hierarchy-context'
+      '/css/tech-units-clean.css?v=20260812-stage10w47-form-value-consistency'
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   <script defer src="/js/tech-units.js?v=20260811-stage10w31-lot-hierarchy-context"></script>
-  <script defer src="/js/tech-units-date-picker.js"></script>
-  <script defer src="/js/tech-unit-form.js?v=20260811-stage10w31-lot-hierarchy-context"></script>
+  <script defer src="/js/tech-units-date-picker.js?v=20260812-stage10w46-month-year-picker"></script>
+  <script defer src="/js/tech-unit-form.js?v=20260813-stage10w51-processor-request-state"></script>
 
   <body>
     <div class="app-shell">
@@ -187,7 +187,10 @@
                           <div id="tech-created-start-date-calendar" class="tech-created-date-calendar" data-tech-created-date-picker-popover role="dialog" aria-label="Choose From date" hidden>
                             <div class="tech-created-date-calendar-heading">
                               <button type="button" class="tech-created-date-calendar-nav" data-tech-created-date-picker-previous aria-label="Previous month">‹</button>
-                              <strong data-tech-created-date-picker-month-label></strong>
+                              <div class="date-picker-calendar-period" aria-label="Calendar month and year">
+                                <select data-tech-created-date-picker-month aria-label="Month"></select>
+                                <select data-tech-created-date-picker-year aria-label="Year"></select>
+                              </div>
                               <button type="button" class="tech-created-date-calendar-nav" data-tech-created-date-picker-next aria-label="Next month">›</button>
                             </div>
                             <div class="tech-created-date-calendar-weekdays" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>
@@ -206,7 +209,10 @@
                           <div id="tech-created-end-date-calendar" class="tech-created-date-calendar" data-tech-created-date-picker-popover role="dialog" aria-label="Choose Through date" hidden>
                             <div class="tech-created-date-calendar-heading">
                               <button type="button" class="tech-created-date-calendar-nav" data-tech-created-date-picker-previous aria-label="Previous month">‹</button>
-                              <strong data-tech-created-date-picker-month-label></strong>
+                              <div class="date-picker-calendar-period" aria-label="Calendar month and year">
+                                <select data-tech-created-date-picker-month aria-label="Month"></select>
+                                <select data-tech-created-date-picker-year aria-label="Year"></select>
+                              </div>
                               <button type="button" class="tech-created-date-calendar-nav" data-tech-created-date-picker-next aria-label="Next month">›</button>
                             </div>
                             <div class="tech-created-date-calendar-weekdays" aria-hidden="true"><span>Sun</span><span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span></div>

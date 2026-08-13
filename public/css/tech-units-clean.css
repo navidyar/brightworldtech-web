@@ -583,13 +583,6 @@
   margin-bottom: 12px;
 }
 
-.tech-units-clean-page .tech-created-date-calendar-heading strong {
-  color: #263d5a;
-  font-size: 0.93rem;
-  font-weight: 720;
-  text-align: center;
-}
-
 .tech-units-clean-page .tech-created-date-calendar-nav {
   display: grid;
   width: 34px;
@@ -2307,23 +2300,10 @@
   }
 }
 
-/* Reset Design Stage F.3 — Exact Metrics controls and panel depth.
-   Keep the operational control surface intentionally singular: the same Metrics
-   text contract and thin blue chevron apply to regular fields and the custom
-   date triggers, so no field looks heavier or more bespoke than its neighbor. */
+/* Reset Design Stage F.3 — Exact Metrics controls and panel depth. */
 .tech-units-clean-page .tech-units-clean-filter-workspace,
 .tech-units-clean-page .tech-units-clean-results-panel {
   box-shadow: 0 8px 24px rgba(29, 44, 69, 0.08);
-}
-
-.tech-units-clean-page .tech-filter-search-field textarea,
-.tech-units-clean-page .tech-filter-grid select:not([multiple]),
-.tech-units-clean-page .tech-created-date-picker-trigger {
-  color: #26384e;
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-  font-size: 0.86rem !important;
-  font-weight: 600 !important;
-  line-height: 1.25 !important;
 }
 
 .tech-units-clean-page .tech-filter-grid select:not([multiple]) {
@@ -2335,13 +2315,6 @@
   background-size: 16px 16px;
 }
 
-.tech-units-clean-page .tech-created-date-picker-trigger > [data-tech-created-date-picker-label] {
-  color: inherit;
-  font-family: inherit;
-  font-size: inherit;
-  font-weight: inherit !important;
-  line-height: inherit;
-}
 
 /* Reset Design Stage F.4 — form label rhythm and Add/Edit modal simplification.
    The modal itself is the main visual container. Section headings sit outside their
@@ -2472,42 +2445,6 @@
   font-weight: 650;
   letter-spacing: -0.012em;
   line-height: 1.25;
-}
-
-#modal-root .tech-unit-modal .modal-close-button {
-  display: inline-flex;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 1px solid #c9d6e4;
-  border-radius: 7px;
-  color: #5e6f85;
-  background: #ffffff;
-  cursor: pointer;
-  font-size: 0;
-  line-height: 0;
-}
-
-#modal-root .tech-unit-modal .modal-close-button:hover {
-  color: #31445e;
-  background: #f2f7ff;
-  transform: none;
-}
-
-#modal-root .tech-unit-modal .tech-unit-modal-close-icon {
-  display: block;
-  width: 14px;
-  height: 14px;
-  overflow: visible;
-  pointer-events: none;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
 }
 
 :is(#modal-root, .tech-unit-form-clean-page) .tech-form-section--cosmetic-issues [data-cosmetic-detail-field][data-no-issue-disabled="true"],
@@ -3052,16 +2989,14 @@
   box-sizing: border-box;
 }
 
-#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button),
-#modal-root .tech-unit-modal .modal-close-button {
+#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button) {
   border-color: #315e9d;
   color: #ffffff;
   background: #315e9d;
   box-shadow: none;
 }
 
-#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button):hover,
-#modal-root .tech-unit-modal .modal-close-button:hover {
+#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button):hover {
   border-color: #274f84;
   color: #ffffff;
   background: #274f84;
@@ -3069,8 +3004,7 @@
   transform: none;
 }
 
-#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button):focus-visible,
-#modal-root .tech-unit-modal .modal-close-button:focus-visible {
+#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button):focus-visible {
   outline: 3px solid rgba(49, 94, 157, 0.22);
   outline-offset: 2px;
 }
@@ -3111,13 +3045,11 @@
   color: #3f4e63;
 }
 
-#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button),
-#modal-root .tech-unit-modal .modal-close-button {
+#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button) {
   border-color: transparent;
 }
 
-#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button):hover,
-#modal-root .tech-unit-modal .modal-close-button:hover {
+#modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button):hover {
   border-color: transparent;
 }
 
@@ -3262,7 +3194,7 @@
   text-transform: none;
 }
 
-:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="week"], input[type="month"], input[type="datetime-local"], input[type="tel"], input[type="url"], textarea, select:not([multiple]), .site-date-picker-trigger) {
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form :is(input:not([type]), input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="number"], input[type="date"], input[type="time"], input[type="week"], input[type="month"], input[type="datetime-local"], input[type="tel"], input[type="url"], textarea) {
   color: var(--form-field-value-ink, #26384e) !important;
   font-family: var(--form-field-value-font-family, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif) !important;
   font-size: var(--form-field-value-font-size, 0.86rem) !important;

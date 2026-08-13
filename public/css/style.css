@@ -851,12 +851,6 @@ code {
   margin-top: 24px;
 }
 
-.form-field span {
-  color: #334155;
-  font-size: 0.82rem;
-  font-weight: 850;
-}
-
 .form-field input,
 .form-field select,
 .form-field textarea {

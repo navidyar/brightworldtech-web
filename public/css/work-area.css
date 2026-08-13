@@ -130,28 +130,6 @@ body label:has(input[type="radio"]:is(:focus, :focus-visible)) {
   line-height: 1.25;
 }
 
-.modal-panel.site-clean-modal .modal-close-button {
-  display: inline-grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  padding: 0;
-  border: 1px solid #c9d6e4;
-  border-radius: 7px;
-  color: #5e6f85;
-  background: #ffffff;
-  cursor: pointer;
-  font-size: 1.2rem;
-  line-height: 1;
-  transform: none;
-}
-
-.modal-panel.site-clean-modal .modal-close-button:hover {
-  color: #31445e;
-  background: #f2f7ff;
-  transform: none;
-}
-
 .modal-panel.site-clean-modal .modal-body {
   padding: 16px 18px 20px;
   background: #f5f7fa;
@@ -423,16 +401,14 @@ body label:has(input[type="radio"]:is(:focus, :focus-visible)) {
   border-top: 1px solid #dce7f2;
 }
 
-.modal-panel.site-clean-modal .form-actions :is(.primary-button, .secondary-button):not(.danger-button),
-.modal-panel.site-clean-modal .modal-close-button {
+.modal-panel.site-clean-modal .form-actions :is(.primary-button, .secondary-button):not(.danger-button) {
   border-color: transparent;
   color: #ffffff;
   background: var(--site-action-blue);
   box-shadow: none;
 }
 
-.modal-panel.site-clean-modal .form-actions :is(.primary-button, .secondary-button):not(.danger-button):hover,
-.modal-panel.site-clean-modal .modal-close-button:hover {
+.modal-panel.site-clean-modal .form-actions :is(.primary-button, .secondary-button):not(.danger-button):hover {
   border-color: transparent;
   color: #ffffff;
   background: var(--site-action-blue-hover);
@@ -452,7 +428,6 @@ body label:has(input[type="radio"]:is(:focus, :focus-visible)) {
   background: #991b1b;
 }
 
-.modal-panel.site-clean-modal .modal-close-button:focus-visible,
 .site-clean-actions :is(.primary-button, .secondary-button, .danger-button):focus-visible,
 .modal-panel.site-clean-modal .form-actions :is(.primary-button, .secondary-button, .danger-button):focus-visible {
   outline: 3px solid rgba(49, 94, 157, 0.22);
@@ -504,13 +479,13 @@ body label:has(input[type="radio"]:is(:focus, :focus-visible)) {
   padding: 8px 11px 8px 12px;
   border: 1px solid var(--work-area-border-strong, #c9d6e4);
   border-radius: 7px;
-  color: var(--form-field-value-ink, #26384e);
+  color: var(--form-select-value-ink, #40566e);
   background: var(--surface, #ffffff);
   box-shadow: inset 0 1px 1px rgba(29, 44, 69, 0.025);
   cursor: pointer;
   font-family: var(--form-field-value-font-family, Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
   font-size: var(--form-field-value-font-size, 0.86rem);
-  font-weight: var(--form-field-value-font-weight, 600);
+  font-weight: var(--form-select-value-font-weight, 400);
   letter-spacing: 0;
   line-height: var(--form-field-value-line-height, 1.25);
   text-align: left;
@@ -564,13 +539,6 @@ body label:has(input[type="radio"]:is(:focus, :focus-visible)) {
   justify-content: space-between;
   gap: 12px;
   margin: 0 0 12px;
-}
-
-.site-date-picker-calendar-heading strong {
-  color: #26384e;
-  font-size: 0.95rem;
-  font-weight: 700;
-  letter-spacing: -0.015em;
 }
 
 .site-date-picker-calendar-nav {
@@ -959,4 +927,124 @@ body label:has(input[type="radio"]:is(:focus, :focus-visible)) {
 .table-sort-group__separator {
   color: #8190a3;
   font-weight: 650;
+}
+
+/* Stage 10W48 — shared cross-browser period picker surfaces. Week and month
+   inputs use the same custom control as date inputs so the entire field is
+   clickable and browser-native picker differences do not leak into the UI. */
+.date-picker-calendar-period--year {
+  grid-template-columns: minmax(92px, 112px);
+  justify-content: center;
+}
+
+.site-date-picker-calendar--week {
+  width: min(390px, calc(100vw - 34px));
+}
+
+.site-date-picker-week-list {
+  display: grid;
+  gap: 8px;
+}
+
+.site-date-picker-period-option {
+  min-width: 0;
+  border: 1px solid #d3dfec;
+  border-radius: 9px;
+  color: #31475f;
+  background: #fbfdff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-align: left;
+}
+
+.site-date-picker-period-option:hover {
+  border-color: #9fb8d6;
+  background: #f2f7fd;
+}
+
+.site-date-picker-period-option.is-current {
+  border-color: #a9bfd8;
+  background: #f6faff;
+}
+
+.site-date-picker-period-option.is-selected,
+.site-date-picker-period-option.is-selected:hover {
+  border-color: #5f83ad;
+  color: #244f7f;
+  background: #eaf3fd;
+  box-shadow: 0 0 0 1px rgba(49, 94, 157, 0.08);
+}
+
+.site-date-picker-period-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
+}
+
+.site-date-picker-week-option {
+  display: grid;
+  grid-template-columns: minmax(104px, 0.9fr) minmax(0, 1.6fr);
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+}
+
+.site-date-picker-week-option > span:first-child {
+  display: grid;
+  gap: 2px;
+}
+
+.site-date-picker-week-option strong {
+  color: #2d435c;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.site-date-picker-week-option small {
+  color: #61758d;
+  font-size: 0.7rem;
+  line-height: 1.25;
+}
+
+.site-date-picker-week-days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.site-date-picker-week-days span {
+  display: grid;
+  gap: 1px;
+  justify-items: center;
+  padding: 4px 1px;
+  border-radius: 6px;
+  color: #415972;
+  background: rgba(235, 242, 250, 0.72);
+  font-size: 0.67rem;
+  line-height: 1.05;
+}
+
+.site-date-picker-week-days b {
+  color: #71849a;
+  font-size: 0.58rem;
+  font-weight: 600;
+}
+
+.site-date-picker-month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.site-date-picker-month-option {
+  min-height: 38px;
+  padding: 7px 8px;
+  text-align: center;
+}
+
+@media (max-width: 440px) {
+  .site-date-picker-week-option {
+    grid-template-columns: 1fr;
+  }
 }

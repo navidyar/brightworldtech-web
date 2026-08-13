@@ -1,0 +1,46 @@
+<div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close data-modal-escape-close>
+  <section class="modal-panel management-user-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-created-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">User Access</p>
+        <h2 id="management-user-created-title"><%= setupLink.linkLabel %> Created</h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <div class="message success">
+        <p><strong><%= user.first_name %> <%= user.last_name %></strong> was created as <strong><%= user.username %></strong>.</p>
+      </div>
+
+      <div class="management-user-modal-summary" data-generated-link-expiry data-expires-at="<%= new Date(setupLink.expiresAt).toISOString() %>" data-expiry-display="<%= formatDateTime(setupLink.expiresAt) %>">
+        <div>
+          <p class="eyebrow">Expires</p>
+          <strong data-generated-link-expiry-time><%= formatDateTime(setupLink.expiresAt) %></strong>
+        </div>
+        <span class="pill good" data-generated-link-expiry-label>Active Link</span>
+      </div>
+
+      <div class="copy-url-panel">
+        <label class="form-field">
+          <span><%= setupLink.linkLabel %></span>
+          <div class="copy-url-row">
+            <input class="copy-url-input" type="text" value="<%= setupLink.setupUrl %>" readonly autocomplete="off" spellcheck="false" data-copy-url-input />
+            <button type="button" class="copy-url-button" data-copy-button data-copy-text="<%= setupLink.setupUrl %>">
+              <span aria-hidden="true">⧉</span>
+              <span data-copy-button-label>Copy</span>
+            </button>
+          </div>
+        </label>
+        <p class="copy-url-note" data-generated-link-expiry-note>
+          This link expires at <strong><%= formatDateTime(setupLink.expiresAt) %></strong> (<%= setupLink.expiresInHours %> hour<%= Number(setupLink.expiresInHours) === 1 ? '' : 's' %> after generation). Copy it before closing this modal.
+        </p>
+      </div>
+
+      <div class="action-row">
+        <a class="primary-button" href="/management/users">Back to Users</a>
+        <button type="button" class="secondary-button" data-modal-close>Close</button>
+      </div>
+    </div>
+  </section>
+</div>

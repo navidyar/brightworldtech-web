@@ -15,6 +15,11 @@
   --form-field-value-font-size: 0.9rem;
   --form-field-value-font-weight: 600;
   --form-field-value-line-height: 1.25;
+  --form-select-value-ink: #40566e;
+  --form-select-value-font-family: var(--ui-font-family);
+  --form-select-value-font-size: 0.86rem;
+  --form-select-value-font-weight: 400;
+  --form-select-value-line-height: 1.25;
   --form-field-focus-border: var(--ui-blue);
   --form-field-focus-ring: var(--ui-focus-ring);
   --site-action-blue: var(--ui-blue);
@@ -361,10 +366,22 @@ body :is(
 body select:not([multiple]):not([hidden]) {
   appearance: none;
   padding-right: 38px;
+  color: var(--form-select-value-ink) !important;
+  font-family: var(--form-select-value-font-family) !important;
+  font-size: var(--form-select-value-font-size) !important;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4.5 6 3.5 3.5L11.5 6' stroke='%23476c9a' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 12px center;
   background-size: 16px 16px;
+  font-weight: var(--form-select-value-font-weight) !important;
+  line-height: var(--form-select-value-line-height) !important;
+}
+
+body select:not([multiple]) option {
+  color: var(--form-select-value-ink);
+  font-family: var(--form-select-value-font-family);
+  font-size: var(--form-select-value-font-size);
+  font-weight: var(--form-select-value-font-weight);
 }
 
 body textarea {
@@ -388,8 +405,74 @@ body :is(input, select, textarea):disabled {
   opacity: 0.62;
 }
 
+/* Date controls intentionally use the same lighter value typography as selects. */
+body :is(.site-date-picker-trigger, .tech-created-date-picker-trigger) {
+  color: var(--form-select-value-ink) !important;
+  font-family: var(--form-select-value-font-family) !important;
+  font-size: var(--form-select-value-font-size) !important;
+  font-weight: var(--form-select-value-font-weight) !important;
+  line-height: var(--form-select-value-line-height) !important;
+}
+
+body :is(.site-date-picker-trigger, .tech-created-date-picker-trigger) > :is(
+  [data-site-date-picker-label],
+  [data-tech-created-date-picker-label]
+) {
+  color: inherit !important;
+  font: inherit !important;
+  font-weight: inherit !important;
+}
+
+.date-picker-calendar-period {
+  display: grid;
+  grid-template-columns: minmax(112px, 1fr) minmax(78px, 0.72fr);
+  gap: 6px;
+  min-width: 0;
+}
+
+body .date-picker-calendar-period select:not([multiple]) {
+  min-height: 31px;
+  padding: 4px 28px 4px 8px;
+  border: 1px solid #cfdae7;
+  border-radius: 7px;
+  color: #40566e !important;
+  background-color: #fff;
+  background-position: right 7px center;
+  background-size: 13px 13px;
+  font-size: 0.8rem;
+  font-weight: var(--form-select-value-font-weight) !important;
+  line-height: 1.2;
+}
+
+:is(.site-date-picker-calendar, .tech-created-date-calendar) :is(
+  .site-date-picker-calendar-weekdays,
+  .tech-created-date-calendar-weekdays
+) {
+  font-weight: 600;
+}
+
+:is(.site-date-picker-calendar-day, .tech-created-date-calendar-day) {
+  font-weight: 500 !important;
+}
+
+:is(.site-date-picker-calendar-day.is-today, .tech-created-date-calendar-day.is-today,
+    .site-date-picker-calendar-day.is-selected, .tech-created-date-calendar-day.is-selected) {
+  font-weight: 600 !important;
+}
+
 body :is(input[type="checkbox"], input[type="radio"]) {
   accent-color: var(--ui-blue);
+}
+
+.plain-checkbox-row {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.plain-checkbox-row:hover {
+  border-color: transparent !important;
+  background: transparent !important;
 }
 
 .form-field {
@@ -591,45 +674,6 @@ body :is(input[type="checkbox"], input[type="radio"]) {
   color: var(--ui-muted);
   font-size: 0.8rem;
   line-height: 1.4;
-}
-
-.modal-close-button {
-  width: 34px;
-  height: 34px;
-  min-height: 34px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: #54677e;
-  box-shadow: none;
-  font-size: 1.2rem;
-  font-weight: 500;
-  line-height: 1;
-}
-
-.modal-close-button:hover {
-  border-color: #c9d8e8;
-  background: #f2f7fd;
-  color: #2f609e;
-}
-
-.modal-close-button:focus-visible {
-  outline: 3px solid var(--ui-focus-ring);
-  outline-offset: 2px;
-}
-
-.modal-close-button svg {
-  width: 18px;
-  height: 18px;
-  pointer-events: none;
-}
-
-.modal-close-button svg path {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
 }
 
 .modal-body {
@@ -1106,8 +1150,16 @@ body :is(input[type="checkbox"], input[type="radio"]) {
   transform: rotate(90deg);
 }
 
-.configuration-category-summary:hover {
-  background: #f9fbfd;
+.configuration-category:nth-child(even) > .configuration-category-summary {
+  background: #f8fbfe;
+}
+
+.configuration-category[open] > .configuration-category-summary {
+  background: #f1f6fc;
+}
+
+.configuration-category > .configuration-category-summary:hover {
+  background: #edf4fb;
 }
 
 .configuration-category-summary:focus-visible {
@@ -1173,6 +1225,14 @@ body :is(input[type="checkbox"], input[type="radio"]) {
 .configuration-values-table {
   margin: 0;
   box-shadow: none;
+}
+
+.configuration-values-table tbody tr:nth-child(even):not(.configuration-value-row--inactive) td {
+  background: #f7fafd;
+}
+
+.configuration-values-table tbody tr:not(.configuration-value-row--inactive):hover td {
+  background: #eef5fc;
 }
 
 .configuration-values-table td:first-child strong {
@@ -2195,16 +2255,6 @@ body :is(input[type="checkbox"], input[type="radio"]) {
   .tech-qc-modal-actions > :is(button, a) {
     width: 100%;
     justify-content: center;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .modal-close-button {
-    transition: none;
-  }
-
-  .modal-close-button:hover {
-    transform: none;
   }
 }
 
@@ -3469,4 +3519,448 @@ html.configuration-pointer-dragging * {
 select[data-hierarchical-lot-select] option:disabled {
   color: #8a96a6;
   background: #f7f9fb;
+}
+
+/* Stage 10W45 — application-wide visual consistency consolidation.
+   This final shared layer intentionally normalizes presentation only. Feature
+   mechanics, Lot hierarchy behavior, Unit Browser layout, and Unit-form
+   workflow rules remain owned by their existing feature stylesheets. */
+:root {
+  --ui-modal-radius: 12px;
+  --ui-font-weight-control: 500;
+  --ui-font-weight-medium: 600;
+  --ui-font-weight-strong: 650;
+
+  /* Keep dashboard charts distinct while bringing the legacy palette closer
+     to the restrained shared application colors. */
+  --chart-orange: #9a7248;
+  --chart-blue: #567da8;
+  --chart-purple: #71658f;
+  --chart-red: #9a5f68;
+  --chart-teal: #578581;
+  --chart-slate: #718096;
+  --chart-green: #64866c;
+  --chart-brown: #8b6d55;
+  --chart-empty: #e5eaf0;
+}
+
+/* Typography: older feature CSS frequently used 800/900 weights. Keep the
+   shared application hierarchy strong without the heavy-bold legacy look. */
+body :is(.primary-button, .secondary-button, .danger-button, .auth-submit, .button),
+body :is(.button-small, .management-tab, .copy-url-button),
+body :is(.hero-badge span, .card-label, .status-label, .dashboard-plan-pill),
+body :is(.management-user-self-note, .management-user-identity em) {
+  font-weight: var(--ui-font-weight-strong);
+}
+
+body :is(
+  input:not([type]),
+  input[type='text'],
+  input[type='search'],
+  input[type='password'],
+  input[type='email'],
+  input[type='number'],
+  input[type='date'],
+  input[type='tel'],
+  input[type='url'],
+  input[type='time'],
+  input[type='week'],
+  input[type='month'],
+  input[type='datetime-local'],
+  textarea
+) {
+  font-size: 0.84rem;
+  font-weight: var(--ui-font-weight-control);
+  line-height: 1.3;
+}
+
+body :is(.form-field > span:first-child, .form-field > label:first-child, .stack-form > label, .textarea-label) {
+  font-weight: var(--ui-font-weight-medium);
+}
+
+/* Modal visual contract. Do not set modal overflow here: individual feature
+   modals retain ownership of scrolling and dropdown overflow behavior. */
+.modal-panel {
+  border: 1px solid #b9cde5;
+  border-radius: var(--ui-modal-radius);
+  background: var(--ui-surface);
+  background-clip: padding-box;
+  box-shadow: 0 22px 60px rgba(16, 36, 62, 0.24);
+}
+
+.modal-panel > :first-child {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+}
+
+.modal-panel > :last-child {
+  border-bottom-right-radius: inherit;
+  border-bottom-left-radius: inherit;
+}
+
+.modal-panel > .modal-header {
+  border-color: #dbe5f0;
+  background: #fbfdff;
+}
+
+.modal-panel > .modal-body {
+  background: #fff;
+}
+
+.modal-panel :is(.modal-header h2, .modal-section-title) {
+  color: var(--ui-heading);
+  font-family: var(--ui-font-family);
+  font-size: 1.06rem;
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: -0.012em;
+  line-height: 1.22;
+}
+
+.modal-panel :is(h3, h4, strong, dt) {
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.modal-panel :is(p, dd, li, label, small, .field-hint, .table-muted-line) {
+  font-family: var(--ui-font-family);
+}
+
+/* One close-button contract for every modal. The centered X is drawn by CSS so
+   legacy text glyphs and one-off SVGs cannot shift it off center. */
+.modal-panel :is(.modal-close-button, .modal-close) {
+  position: relative;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  flex: 0 0 34px;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: #fff;
+  background: var(--ui-blue);
+  box-shadow: none;
+  cursor: pointer;
+  font-size: 0;
+  line-height: 0;
+  transform: none;
+}
+
+.modal-panel :is(.modal-close-button, .modal-close) > * {
+  display: none;
+}
+
+.modal-panel :is(.modal-close-button, .modal-close)::before,
+.modal-panel :is(.modal-close-button, .modal-close)::after {
+  content: '';
+  position: absolute;
+  width: 13px;
+  height: 1.8px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.modal-panel :is(.modal-close-button, .modal-close)::before {
+  transform: rotate(45deg);
+}
+
+.modal-panel :is(.modal-close-button, .modal-close)::after {
+  transform: rotate(-45deg);
+}
+
+.modal-panel :is(.modal-close-button, .modal-close):hover {
+  border-color: transparent;
+  color: #fff;
+  background: var(--ui-blue-dark);
+  transform: none;
+}
+
+.modal-panel :is(.modal-close-button, .modal-close):focus-visible {
+  outline: 3px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}
+
+/* Ensure common modal surface variants do not visually square off a corner
+   when they paint their own header/body/footer background. */
+.modal-panel > :is(.modal-body, .tech-qc-status-modal__body):last-child,
+.modal-panel > :is(.tech-qc-modal-footer, .form-actions, footer):last-child {
+  border-bottom-right-radius: inherit;
+  border-bottom-left-radius: inherit;
+}
+
+/* Dashboard and role surfaces: preserve useful data distinctions while
+   replacing the old saturated, heavy-card presentation with the shared
+   Lookup-derived surface language. */
+.dashboard-hero {
+  padding: 16px 18px;
+  border: 1px solid #c8d8ea;
+  border-radius: var(--ui-radius-panel);
+  background: linear-gradient(104deg, #f8fbff 0%, #f3f8fd 58%, #fbfdff 100%) !important;
+  box-shadow: var(--ui-shadow-compact);
+}
+
+.dashboard-hero p {
+  color: var(--ui-muted);
+  font-size: 0.86rem;
+  line-height: 1.48;
+}
+
+.hero-badge {
+  min-width: 136px;
+  padding: 9px 11px;
+  border: 1px solid #c8d8ea;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.hero-badge span {
+  color: #65768a;
+  font-size: 0.68rem;
+  letter-spacing: 0.045em;
+}
+
+.hero-badge strong {
+  margin-top: 3px;
+  color: var(--ui-heading);
+  font-size: 0.9rem;
+  font-weight: var(--ui-font-weight-strong);
+}
+
+:is(
+  .dashboard-metric-card,
+  .dashboard-pie-panel,
+  .tech-team-average-panel,
+  .management-user-summary-card,
+  .management-login-summary-card,
+  .dashboard-chart-placeholder,
+  .all-tech-metric-row
+) {
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-panel);
+  background: #fff;
+  box-shadow: var(--ui-shadow-compact);
+}
+
+.dashboard-metric-card {
+  padding: 14px 15px;
+  border-top-width: 1px;
+  border-left: 3px solid color-mix(in srgb, var(--metric-accent, var(--ui-blue)) 58%, #d7e1ec 42%);
+}
+
+.dashboard-metric-card h3,
+.dashboard-pie-side h3,
+.tech-team-average-panel h3 {
+  color: var(--ui-heading);
+  font-weight: var(--ui-font-weight-strong);
+  letter-spacing: -0.035em;
+}
+
+.dashboard-metric-card .card-label,
+.role-dashboard-card p,
+.dashboard-chart-placeholder span,
+.dashboard-pie-side > span {
+  font-weight: var(--ui-font-weight-medium);
+  letter-spacing: 0.045em;
+}
+
+.dashboard-breakdown-row span,
+.dashboard-chart-row > span,
+.dashboard-selected-period-note,
+.tech-team-average-panel span,
+.all-tech-metric-row {
+  font-weight: var(--ui-font-weight-control);
+}
+
+.dashboard-chart-placeholder p,
+.dashboard-chart-placeholder span,
+.dashboard-empty-state--strong strong,
+.dashboard-pie-legend-row strong,
+.all-tech-metric-row strong {
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.role-dashboard-card {
+  min-height: 118px;
+  padding: 15px;
+  border: 1px solid var(--ui-line);
+  border-left: 3px solid color-mix(in srgb, var(--accent-color, var(--ui-blue)) 60%, #d6e0eb 40%);
+  border-radius: var(--ui-radius-panel);
+  background: color-mix(in srgb, #fff 94%, var(--accent-bg, var(--ui-blue-soft)) 6%);
+  box-shadow: var(--ui-shadow-compact);
+}
+
+.role-dashboard-card:hover {
+  border-color: #bfd0e3;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(29, 44, 69, 0.08);
+  transform: translateY(-1px);
+}
+
+.role-dashboard-card p {
+  margin-bottom: 5px;
+  color: color-mix(in srgb, var(--accent-color, var(--ui-blue)) 78%, #43566d 22%);
+}
+
+.role-dashboard-card h3 {
+  color: var(--ui-heading);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.role-dashboard-card span {
+  margin-top: 6px;
+  color: var(--ui-muted);
+  font-size: 0.84rem;
+  line-height: 1.42;
+}
+
+.dashboard-role-metrics,
+.dashboard-period-form,
+.dashboard-selected-period-note,
+.dashboard-period-field--no-picker {
+  border-color: var(--ui-line);
+  background: #fbfdff;
+}
+
+.dashboard-role-metrics {
+  background: #fff;
+}
+
+/* Dashboard forms previously accumulated multiple one-off alignment patches.
+   This final rule gives visible controls and their action a single alignment
+   contract while preserving the existing dynamic period-field mechanics. */
+.dashboard-filter-form,
+.dashboard-period-form {
+  gap: 10px 12px;
+  align-items: end !important;
+}
+
+.dashboard-period-form {
+  padding: 12px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-panel);
+  background: #fbfdff;
+}
+
+.dashboard-filter-form .form-field,
+.dashboard-period-form .form-field,
+.dashboard-period-field .form-field {
+  gap: 6px;
+}
+
+.dashboard-filter-form :is(input, select),
+.dashboard-period-form :is(input, select),
+.management-login-filter-form :is(input, select) {
+  min-height: 39px;
+  color: var(--ui-field-ink);
+  font-family: var(--ui-font-family);
+  font-size: 0.84rem;
+  font-weight: var(--ui-font-weight-control);
+}
+
+.dashboard-filter-actions {
+  align-items: end;
+}
+
+.dashboard-filter-actions :is(.primary-button, .secondary-button),
+.dashboard-period-form > :is(.primary-button, button.primary-button),
+.dashboard-role-metrics .dashboard-period-form > :is(.primary-button, button.primary-button) {
+  width: auto !important;
+  height: 39px !important;
+  min-height: 39px !important;
+  max-height: 39px !important;
+  margin-top: 0 !important;
+  padding: 0 13px !important;
+  border-radius: var(--ui-radius-button) !important;
+  align-self: end !important;
+  justify-self: start !important;
+  font-weight: var(--ui-font-weight-strong) !important;
+}
+
+.dashboard-selected-period-note {
+  padding: 9px 11px;
+  border: 1px solid var(--ui-line);
+  border-radius: 8px;
+  color: var(--ui-muted);
+  background: #fbfdff;
+  font-size: 0.8rem;
+}
+
+.dashboard-pie-panel,
+.tech-team-average-panel {
+  padding: 14px;
+}
+
+.dashboard-pie {
+  box-shadow: inset 0 0 0 1px rgba(29, 44, 69, 0.06), 0 8px 18px rgba(29, 44, 69, 0.06);
+}
+
+.dashboard-chart-bar,
+.dashboard-meter {
+  background: #e9eef4;
+}
+
+.dashboard-meter span {
+  background: var(--ui-blue);
+}
+
+/* Management and supporting pages that still carry older high-weight rules. */
+.management-tab {
+  border-radius: var(--ui-radius-button);
+  color: #56697e;
+  background: #fff;
+}
+
+.management-user-summary-card,
+.management-login-summary-card {
+  padding: 14px;
+}
+
+.management-user-summary-card strong,
+.management-login-summary-card strong,
+.management-login-user strong,
+.management-user-identity strong {
+  color: var(--ui-heading);
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.management-users-table-card .management-user-row-actions :is(.secondary-button, .danger-button),
+.management-users-table-card .management-user-row-actions button:is(.secondary-button, .danger-button) {
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.copy-link-user-card span,
+.error-page-kicker,
+.error-page-details summary {
+  font-weight: var(--ui-font-weight-strong);
+}
+
+.error-page-panel {
+  border-color: var(--ui-line);
+  border-radius: var(--ui-radius-panel);
+  box-shadow: var(--ui-shadow);
+}
+
+@media (max-width: 1180px) {
+  .dashboard-period-form > :is(.primary-button, button.primary-button),
+  .dashboard-role-metrics .dashboard-period-form > :is(.primary-button, button.primary-button) {
+    width: 100% !important;
+    justify-self: stretch !important;
+  }
+}
+
+@media (max-width: 760px) {
+  .dashboard-hero {
+    padding: 14px;
+  }
+
+  .hero-badge {
+    min-width: 0;
+  }
+
+  .dashboard-filter-actions,
+  .dashboard-filter-actions > :is(.primary-button, .secondary-button) {
+    width: 100%;
+  }
 }

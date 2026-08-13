@@ -350,10 +350,6 @@ html[data-theme="hybrid"] code {
 
 /* Hybrid forms */
 
-html[data-theme="hybrid"] .form-field span {
-  color: #334155;
-}
-
 html[data-theme="hybrid"] .form-field input,
 html[data-theme="hybrid"] .form-field select,
 html[data-theme="hybrid"] .form-field textarea {

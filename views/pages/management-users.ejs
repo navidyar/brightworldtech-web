@@ -4,11 +4,13 @@
     pageTitle,
     stylesheets: [
       '/css/modal.css?v=step5c-ui-hotfix',
-      '/css/management.css?v=step5c-ui-hotfix'
+      '/css/management.css?v=step5c-ui-hotfix',
+      '/css/copy-link.css?v=20260811-stage10w32'
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   <script defer src="/js/password-link-status.js?v=20260811-stage10w32"></script>
+  <script defer src="/js/copy-link.js?v=20260811-stage10w32"></script>
 
   <body>
     <div class="app-shell">
@@ -67,7 +69,7 @@
                   <a class="secondary-button" href="/management/users">Active Users (<%= userCounts.activeCount %>)</a>
                 <% } else { %>
                   <a class="secondary-button" href="/management/users/inactive">List Inactive Users (<%= userCounts.inactiveCount %>)</a>
-                  <a class="primary-button" href="/management/users/new">Create User</a>
+                  <a class="primary-button" href="/management/users/new" hx-get="/management/users/new" hx-target="#modal-root" hx-swap="innerHTML">Create User</a>
                 <% } %>
               </div>
             </div>

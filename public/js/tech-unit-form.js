@@ -2317,16 +2317,29 @@
 
     const processorButton = form.querySelector('[data-catalog-request-button="processor"]');
     const processorHint = form.querySelector('[data-catalog-request-processor-hint]');
+    const processorAction = processorButton ? processorButton.closest('[data-catalog-request-action-kind="processor"]') : null;
     const processorEmptyMessage = form.querySelector('[data-processor-catalog-empty-message]');
     const processorRequestFields = form.querySelector('[data-processor-catalog-request-fields]');
     const processorRequestSpeedInput = form.querySelector('[data-processor-request-speed-input]');
     const unitProcessorSpeedInput = form.querySelector('[data-processor-speed-input]');
-    const canRequestProcessor = Boolean(modelSelectionInput && modelSelectionInput.value);
-    const compatibleProcessorCount = canRequestProcessor
+    const processorSelectionInput = getProcessorSelectionInput(form);
+    const selectedProcessorOption = getProcessorOptionById(form, processorSelectionInput ? processorSelectionInput.value : '');
+    const hasSelectedUnitModel = Boolean(modelSelectionInput && modelSelectionInput.value);
+    const hasSelectedCompatibleProcessor = Boolean(
+      hasSelectedUnitModel
+      && selectedProcessorOption
+      && processorOptionSupportsUnitModel(selectedProcessorOption, modelSelectionInput.value)
+    );
+    const canRequestProcessor = hasSelectedUnitModel && !hasSelectedCompatibleProcessor;
+    const compatibleProcessorCount = hasSelectedUnitModel
       ? getVisibleProcessorOptions(form, true, true).length
       : 0;
     const needsProcessorRequestEntry = canRequestProcessor && compatibleProcessorCount === 0;
     setCatalogRequestButtonState(processorButton, canRequestProcessor);
+
+    if (processorAction) {
+      processorAction.hidden = hasSelectedCompatibleProcessor;
+    }
 
     if (processorEmptyMessage) {
       processorEmptyMessage.hidden = !needsProcessorRequestEntry;
@@ -2347,12 +2360,14 @@
     }
 
     if (processorHint) {
-      if (!canRequestProcessor) {
+      if (!hasSelectedUnitModel) {
         processorHint.textContent = 'Select a Unit Model first. Processor requests are always tied to one managed Unit Model.';
+      } else if (hasSelectedCompatibleProcessor) {
+        processorHint.textContent = 'The selected Processor is already available for this Unit Model.';
       } else if (compatibleProcessorCount === 0) {
         processorHint.textContent = 'Enter the observed Processor Type, Processor, and Processor Speed above, then send the catalog request.';
       } else {
-        processorHint.textContent = 'Use this when the observed Processor Type, Processor, or Processor Speed is unavailable for the selected Unit Model.';
+        processorHint.textContent = 'Use this only when the observed Processor is not available for the selected Unit Model.';
       }
     }
   }
@@ -2917,6 +2932,7 @@
     setProcessorInputValidity(form, '');
     applySelectedProcessorMetadata(form, false);
     closeProcessorOptions(form);
+    updateCatalogRequestControls(form);
     scheduleLotRequirementWorkflowRefresh(form);
   }
 
@@ -3830,6 +3846,13 @@
     }
 
     form.setAttribute('data-tech-unit-form-initialized', 'true');
+
+    // Lot-controlled visibility and requirements are verified asynchronously just
+    // before save. Disable the browser's pre-submit validation gate only while
+    // this JavaScript controller is active so the authoritative Lot profile can
+    // settle first; the final submit pass runs checkValidity() explicitly.
+    form.noValidate = true;
+
     removeRepeatableActionsFromTabOrder(form);
     setAssignableLotComboboxLayer(form, false);
     synchronizeAssignableLotCombobox(form);
@@ -3948,6 +3971,12 @@
     // establish their validity state. This makes repeat submission attempts
     // consistently return to the first unresolved field.
     window.setTimeout(() => {
+      // Do not focus stale required fields while the one-click save preflight
+      // is still loading the selected Lot's authoritative form profile.
+      if (form.dataset.techUnitSubmitPreflightPending === 'true') {
+        return;
+      }
+
       const invalidControl = findFirstInvalidControl(form);
 
       if (invalidControl) {
@@ -4354,231 +4383,88 @@
     if (resolveExactProcessorMatch(form)) event.preventDefault();
   });
 
-  document.addEventListener('submit', (event) => {
-    const form = event.target.closest('[data-tech-unit-form]');
+  function ensureAssignableLotSelectionForSubmit(form, reportValidity) {
+    const comboboxInput = getAssignableLotComboboxInput(form);
+    const catalog = getAssignableLotCatalog(form);
 
-    if (!form) {
-      return;
+    if (!comboboxInput || !catalog) {
+      return true;
     }
 
-    if (!validateAllCapacityInputs(form, true) || !validateHardwareRowSelections(form, true)) {
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      return;
+    let selectedOption = getAssignableLotOptionById(form, catalog.value);
+
+    // A valid hidden Lot ID is the authoritative selection. The visible
+    // combobox is presentation/search text and can be restored or normalized
+    // by the browser independently. Never discard a valid Lot ID merely
+    // because that display text drifted from the compact label.
+    if (selectedOption) {
+      comboboxInput.value = getAssignableLotOptionLabel(selectedOption);
+      setAssignableLotInputValidity(form, '');
+      updateAssignableLotHierarchyBreadcrumb(form);
+      updateAssignableLotAssumptionStatus(form);
+      return true;
     }
 
-    // Recalculate hidden capacity summaries at the final possible moment.
-    // This covers browser-restored values and changes made immediately before
-    // pressing Create/Update, before profile or requirement fingerprints run.
-    updateModuleTotals(form);
-
-    const lotSelect = getAssignableLotCatalog(form);
-
-    if (!lotSelect || !lotSelect.value) {
-      return;
+    if (comboboxInput.value.trim() && resolveExactAssignableLotMatch(form)) {
+      selectedOption = getAssignableLotOptionById(form, catalog.value);
     }
 
-    const selectedLotId = String(lotSelect.value);
+    if (selectedOption) {
+      setAssignableLotInputValidity(form, '');
+      return true;
+    }
+
+    setAssignableLotInputValidity(form, 'Choose an assignable lot from the list.');
+
+    if (reportValidity) {
+      comboboxInput.reportValidity();
+    }
+
+    return false;
+  }
+
+  function hasCurrentLotProfileSubmitVerification(form, selectedLotId) {
     const verifiedAt = Number(form.dataset.lotProfileSubmitVerifiedAt || 0);
     const verifiedLotId = String(form.dataset.lotProfileSubmitVerifiedLotId || '');
-    const verificationIsCurrent = verifiedLotId === selectedLotId
+
+    return verifiedLotId === selectedLotId
       && verifiedAt > 0
       && (Date.now() - verifiedAt) <= LOT_UNIT_FORM_PROFILE_SUBMIT_VERIFICATION_MAX_AGE_MS;
+  }
 
-    if (verificationIsCurrent) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-
-    if (form.dataset.lotProfileSubmitRefreshPending === 'true') {
-      return;
-    }
-
-    form.dataset.lotProfileSubmitRefreshPending = 'true';
-    const submitter = event.submitter || null;
-
-    refreshLotUnitFormProfile(form, { background: true, force: true }).then((result) => {
-      delete form.dataset.lotProfileSubmitRefreshPending;
-
-      if (!result || !result.ok) {
-        const statusElement = getLotUnitFormProfileStatus(form);
-
-        if (statusElement) {
-          statusElement.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
-        }
-        return;
-      }
-
-      form.dataset.lotProfileSubmitVerifiedAt = String(Date.now());
-      form.dataset.lotProfileSubmitVerifiedLotId = selectedLotId;
-
-      if (typeof form.requestSubmit === 'function') {
-        try {
-          form.requestSubmit(submitter || undefined);
-        } catch (error) {
-          form.requestSubmit();
-        }
-      } else {
-        form.submit();
-      }
-    });
-  }, true);
-
-  document.addEventListener('submit', (event) => {
-    const form = event.target.closest('[data-tech-unit-form]');
-
-    if (!form) {
-      return;
-    }
-
-    const lotSelect = getAssignableLotCatalog(form);
-
-    if (!lotSelect || !lotSelect.value) {
-      return;
-    }
-
-    const selectedLotId = String(lotSelect.value);
+  function hasCurrentLotRequirementSubmitVerification(form, selectedLotId) {
     const currentFingerprint = getLotRequirementFormFingerprint(form);
     const verifiedAt = Number(form.dataset.lotRequirementWorkflowVerifiedAt || 0);
     const verifiedLotId = String(form.dataset.lotRequirementWorkflowVerifiedLotId || '');
     const verifiedFingerprint = String(form.dataset.lotRequirementWorkflowVerifiedFingerprint || '');
-    const verificationIsCurrent = verifiedLotId === selectedLotId
+
+    return verifiedLotId === selectedLotId
       && verifiedFingerprint === currentFingerprint
       && verifiedAt > 0
       && (Date.now() - verifiedAt) <= LOT_REQUIREMENT_WORKFLOW_SUBMIT_VERIFICATION_MAX_AGE_MS;
+  }
 
-    if (verificationIsCurrent) {
-      const workflow = getLotRequirementWorkflowElement(form);
+  function revealDuplicateCheckIssue(form) {
+    const region = form ? form.querySelector('[data-duplicate-check-region]') : null;
 
-      if (workflow && workflow.getAttribute('data-save-allowed') === '0') {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        revealLotRequirementWorkflowIssue(form);
-      }
-      return;
+    if (region) {
+      region.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+
+  function validateTechUnitFormForSubmission(form) {
+    if (!validateAllCapacityInputs(form, true) || !validateHardwareRowSelections(form, true)) {
+      return false;
     }
 
-    event.preventDefault();
-    event.stopImmediatePropagation();
-
-    if (form.dataset.lotRequirementWorkflowSubmitPending === 'true') {
-      return;
-    }
-
-    form.dataset.lotRequirementWorkflowSubmitPending = 'true';
-    const submitter = event.submitter || null;
-
-    refreshLotRequirementWorkflow(form, { background: true }).then((result) => {
-      delete form.dataset.lotRequirementWorkflowSubmitPending;
-
-      if (!result || !result.ok || !result.saveAllowed) {
-        revealLotRequirementWorkflowIssue(form);
-        return;
-      }
-
-      form.dataset.lotRequirementWorkflowVerifiedAt = String(Date.now());
-      form.dataset.lotRequirementWorkflowVerifiedLotId = selectedLotId;
-      form.dataset.lotRequirementWorkflowVerifiedFingerprint = getLotRequirementFormFingerprint(form);
-
-      if (typeof form.requestSubmit === 'function') {
-        try {
-          form.requestSubmit(submitter || undefined);
-        } catch (error) {
-          form.requestSubmit();
-        }
-      } else {
-        form.submit();
-      }
-    });
-  }, true);
-
-  document.addEventListener('submit', (event) => {
-    const form = event.target.closest('[data-tech-unit-form]');
-
-    if (!form || !form.querySelector('[data-duplicate-assumption-nonce]')) {
-      return;
-    }
-
-    const assignableLotInput = getAssignableLotComboboxInput(form);
-    const assignableLotCatalog = getAssignableLotCatalog(form);
-
-    if (
-      assignableLotInput
-      && assignableLotCatalog
-      && (!assignableLotCatalog.value || !resolveExactAssignableLotMatch(form))
-    ) {
-      setAssignableLotInputValidity(form, 'Choose an assignable lot from the list.');
-      assignableLotInput.reportValidity();
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      return;
-    }
-
-    if (form.dataset.duplicateSubmitReplay === 'true') {
-      delete form.dataset.duplicateSubmitReplay;
-      return;
-    }
-
-    const hasSerialSearch = Array.from(form.querySelectorAll('[data-duplicate-check-serial]'))
-      .some((input) => normalizeSerialInput(input));
-
-    if (!hasSerialSearch || form.dataset.duplicateSubmitCheckPending === 'true') {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    form.dataset.duplicateSubmitCheckPending = 'true';
-
-    refreshDuplicateCheck(form).then((result) => {
-      delete form.dataset.duplicateSubmitCheckPending;
-
-      if (!result || result.matchCount !== 0) {
-        const region = form.querySelector('[data-duplicate-check-region]');
-
-        if (region) {
-          region.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-        }
-
-        return;
-      }
-
-      form.dataset.duplicateSubmitReplay = 'true';
-
-      if (typeof form.requestSubmit === 'function') {
-        form.requestSubmit();
-      } else {
-        form.submit();
-      }
-    });
-  }, true);
-
-  document.addEventListener('submit', (event) => {
-    const form = event.target.closest('[data-tech-unit-form]');
-
-    if (!form) {
-      return;
-    }
+    updateModuleTotals(form);
 
     if (!validateAllRequiredRepeatableSections(form, true)) {
-      event.preventDefault();
-      return;
+      return false;
     }
 
-    const assignableLotInput = getAssignableLotComboboxInput(form);
-    const assignableLotCatalog = getAssignableLotCatalog(form);
-
-    if (
-      assignableLotInput
-      && assignableLotCatalog
-      && (!assignableLotCatalog.value || !resolveExactAssignableLotMatch(form))
-    ) {
-      setAssignableLotInputValidity(form, 'Choose an assignable lot from the list.');
-      assignableLotInput.reportValidity();
-      event.preventDefault();
-      return;
+    if (!ensureAssignableLotSelectionForSubmit(form, true)) {
+      return false;
     }
 
     const comboboxInput = getUnitModelComboboxInput(form);
@@ -4587,8 +4473,7 @@
     if (comboboxInput && selectionInput && comboboxInput.value.trim() && !selectionInput.value && !resolveExactUnitModelMatch(form)) {
       setUnitModelInputValidity(form, 'Choose a Unit Model from the catalog.');
       comboboxInput.reportValidity();
-      event.preventDefault();
-      return;
+      return false;
     }
 
     const processorInput = getProcessorComboboxInput(form);
@@ -4597,9 +4482,161 @@
     if (processorInput && processorSelection && processorInput.value.trim() && !processorSelection.value && !resolveExactProcessorMatch(form)) {
       setProcessorInputValidity(form, 'Choose a compatible processor from the catalog.');
       processorInput.reportValidity();
-      event.preventDefault();
+      return false;
     }
-  });
+
+    if (!form.checkValidity()) {
+      const invalidControl = findFirstInvalidControl(form);
+
+      if (invalidControl) {
+        showValidationError(invalidControl);
+        scheduleInvalidControlFocus(form, invalidControl);
+      }
+      return false;
+    }
+
+    return true;
+  }
+
+  async function runTechUnitSubmitPreflight(form, selectedLotId) {
+    if (!hasCurrentLotProfileSubmitVerification(form, selectedLotId)) {
+      const profileResult = await refreshLotUnitFormProfile(form, { background: true, force: true });
+      const currentLotId = String(getAssignableLotCatalog(form)?.value || '').trim();
+
+      if (!profileResult || !profileResult.ok || currentLotId !== selectedLotId) {
+        const statusElement = getLotUnitFormProfileStatus(form);
+
+        if (statusElement) {
+          statusElement.scrollIntoView({ behavior: 'auto', block: 'center', inline: 'nearest' });
+        }
+        return false;
+      }
+
+      form.dataset.lotProfileSubmitVerifiedAt = String(Date.now());
+      form.dataset.lotProfileSubmitVerifiedLotId = selectedLotId;
+    }
+
+    // Validate profile-controlled hardware only after the selected Lot's latest
+    // visibility/requirement contract has been applied. This prevents the first
+    // click from being rejected by stale required/visible states.
+    if (!validateAllCapacityInputs(form, true) || !validateHardwareRowSelections(form, true)) {
+      return false;
+    }
+    updateModuleTotals(form);
+
+    if (!hasCurrentLotRequirementSubmitVerification(form, selectedLotId)) {
+      const requirementResult = await refreshLotRequirementWorkflow(form, { background: true });
+      const currentLotId = String(getAssignableLotCatalog(form)?.value || '').trim();
+
+      if (!requirementResult || !requirementResult.ok || !requirementResult.saveAllowed || currentLotId !== selectedLotId) {
+        revealLotRequirementWorkflowIssue(form);
+        return false;
+      }
+
+      form.dataset.lotRequirementWorkflowVerifiedAt = String(Date.now());
+      form.dataset.lotRequirementWorkflowVerifiedLotId = selectedLotId;
+      form.dataset.lotRequirementWorkflowVerifiedFingerprint = getLotRequirementFormFingerprint(form);
+    } else {
+      const workflow = getLotRequirementWorkflowElement(form);
+
+      if (workflow && workflow.getAttribute('data-save-allowed') === '0') {
+        revealLotRequirementWorkflowIssue(form);
+        return false;
+      }
+    }
+
+    if (form.querySelector('[data-duplicate-assumption-nonce]')) {
+      const hasSerialSearch = Array.from(form.querySelectorAll('[data-duplicate-check-serial]'))
+        .some((input) => normalizeSerialInput(input));
+
+      if (hasSerialSearch) {
+        const duplicateResult = await refreshDuplicateCheck(form);
+
+        if (!duplicateResult || duplicateResult.matchCount !== 0) {
+          revealDuplicateCheckIssue(form);
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
+  function replayTechUnitFormSubmit(form, submitter) {
+    form.dataset.techUnitSubmitPreflightReplay = 'true';
+
+    if (typeof form.requestSubmit === 'function') {
+      try {
+        form.requestSubmit(submitter || undefined);
+      } catch (error) {
+        form.requestSubmit();
+      }
+      return;
+    }
+
+    // Legacy fallback. The normal supported browsers use requestSubmit(),
+    // which preserves the form's HTMX submission path and submitter.
+    form.noValidate = false;
+    form.submit();
+  }
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target.closest('[data-tech-unit-form]');
+
+    if (!form) {
+      return;
+    }
+
+    if (form.dataset.techUnitSubmitPreflightReplay === 'true') {
+      delete form.dataset.techUnitSubmitPreflightReplay;
+      return;
+    }
+
+    if (!ensureAssignableLotSelectionForSubmit(form, true)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
+    const lotSelect = getAssignableLotCatalog(form);
+    const selectedLotId = String(lotSelect?.value || '').trim();
+
+    if (!selectedLotId) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+
+    if (form.dataset.techUnitSubmitPreflightPending === 'true') {
+      return;
+    }
+
+    form.dataset.techUnitSubmitPreflightPending = 'true';
+    const submitter = event.submitter || null;
+
+    runTechUnitSubmitPreflight(form, selectedLotId).then((readyToSubmit) => {
+      if (!readyToSubmit) {
+        return;
+      }
+
+      // The selected Lot may have changed while an async preflight was
+      // running. Never replay a save against a different destination.
+      if (String(getAssignableLotCatalog(form)?.value || '').trim() !== selectedLotId) {
+        return;
+      }
+
+      if (!validateTechUnitFormForSubmission(form)) {
+        return;
+      }
+
+      replayTechUnitFormSubmit(form, submitter);
+    }).finally(() => {
+      delete form.dataset.techUnitSubmitPreflightPending;
+    });
+  }, true);
 
   document.addEventListener('click', (event) => {
     const assignableLotOptionButton = event.target.closest('[data-assignable-lot-option]');

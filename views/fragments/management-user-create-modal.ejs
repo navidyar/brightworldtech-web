@@ -1,0 +1,93 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeRoles = Array.isArray(roles) ? roles : [];
+  const safeFormData = formData || {};
+  const selectedRoles = Array.isArray(safeFormData.roleCodes) ? safeFormData.roleCodes : [];
+  const safePolicy = passwordLinkExpiryPolicy || { minHours: 1, maxHours: 8, defaultHours: 1 };
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel management-user-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-create-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Management</p>
+        <h2 id="management-user-create-title">Create User</h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <form
+        class="auth-form management-user-edit-form"
+        method="post"
+        action="/management/users"
+        hx-post="/management/users"
+        hx-target="#modal-root"
+        hx-swap="innerHTML"
+        autocomplete="off"
+      >
+        <label class="form-field">
+          <span>First Name</span>
+          <input type="text" name="firstName" value="<%= safeFormData.firstName || '' %>" autocomplete="off" required autofocus />
+        </label>
+
+        <label class="form-field">
+          <span>Last Name</span>
+          <input type="text" name="lastName" value="<%= safeFormData.lastName || '' %>" autocomplete="off" required />
+        </label>
+
+        <p class="management-user-role-help">A BWT username is generated from the first two letters of the first and last name. For example, Natalie Garcia becomes NAGA; a duplicate becomes NAGA2. The username remains stable after account creation.</p>
+
+        <label class="form-field">
+          <span>Email Address</span>
+          <input type="email" name="email" value="<%= safeFormData.email || '' %>" autocomplete="off" inputmode="email" spellcheck="false" required />
+        </label>
+
+        <label class="form-field">
+          <span>Setup Link Expiration (hours)</span>
+          <input
+            type="number"
+            name="setupLinkExpiryHours"
+            value="<%= safeFormData.setupLinkExpiryHours || safePolicy.defaultHours %>"
+            min="<%= safePolicy.minHours %>"
+            max="<%= safePolicy.maxHours %>"
+            step="1"
+            inputmode="numeric"
+            required
+          />
+          <small class="field-hint">Choose <%= safePolicy.minHours %>–<%= safePolicy.maxHours %> hours before the initial setup link is generated. Default: <%= safePolicy.defaultHours %> hour.</small>
+        </label>
+
+        <div>
+          <p class="eyebrow management-user-modal-roles-label">Primary Access Role</p>
+          <p class="management-user-role-help">Choose one primary account access role. QC grants read-only cross-technician Unit access; production work, packing, and task activity remain separate operational records.</p>
+
+          <div class="workflow-list management-user-modal-roles">
+            <% safeRoles.forEach((role) => { %>
+              <label class="workflow-item <%= selectedRoles.includes(role.code) ? 'active' : '' %>">
+                <input type="radio" name="roleCodes" value="<%= role.code %>" <%= selectedRoles.includes(role.code) ? 'checked' : '' %> />
+                <div>
+                  <strong><%= role.name %></strong>
+                  <p><%= role.description || role.code %></p>
+                </div>
+              </label>
+            <% }) %>
+          </div>
+        </div>
+
+        <div class="action-row">
+          <button type="submit" class="primary-button">Create User &amp; Generate Setup Link</button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

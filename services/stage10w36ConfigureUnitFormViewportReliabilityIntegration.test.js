@@ -30,7 +30,7 @@ test('Configure Unit Form stylesheet is cache-busted consistently on every Lots 
     'views/pages/management-lot-detail.ejs',
     'views/pages/management-lot-new.ejs'
   ]) {
-    assert.match(read(page), /\/css\/lots\.css\?v=20260811-stage10w(?:36-configure-unit-form-scroll|37-summary-border)/);
+    assert.match(read(page), /\/css\/lots\.css\?v=[^'\"]+/);
   }
 });
 

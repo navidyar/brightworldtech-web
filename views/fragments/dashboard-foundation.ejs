@@ -161,57 +161,59 @@
   </section>
 <% } %>
 
-<section class="dashboard-metric-grid" aria-label="Dashboard metrics">
-  <a class="dashboard-metric-card dashboard-metric-card--blue dashboard-drilldown-card" href="<%= buildTechUnitsHref() %>">
-    <p class="card-label">Units Loaded</p>
-    <h3><%= statValue(unitStats.totalUnits) %></h3>
-    <p>Total unit records currently in the system.</p>
-  </a>
+<% if (dashboardKey !== 'admin') { %>
+  <section class="dashboard-metric-grid" aria-label="Dashboard metrics">
+    <a class="dashboard-metric-card dashboard-metric-card--blue dashboard-drilldown-card" href="<%= buildTechUnitsHref() %>">
+      <p class="card-label">Units Loaded</p>
+      <h3><%= statValue(unitStats.totalUnits) %></h3>
+      <p>Total unit records currently in the system.</p>
+    </a>
 
-  <a class="dashboard-metric-card dashboard-metric-card--green dashboard-drilldown-card" href="<%= buildTechUnitsHref({ createdWindow: '24h', createdStartDate: '', createdEndDate: '' }) %>">
-    <p class="card-label">Added Last 24 Hours</p>
-    <h3><%= statValue(unitStats.unitsAddedLast24Hours) %></h3>
-    <p>New unit records created during the last rolling day.</p>
-  </a>
+    <a class="dashboard-metric-card dashboard-metric-card--green dashboard-drilldown-card" href="<%= buildTechUnitsHref({ createdWindow: '24h', createdStartDate: '', createdEndDate: '' }) %>">
+      <p class="card-label">Added Last 24 Hours</p>
+      <h3><%= statValue(unitStats.unitsAddedLast24Hours) %></h3>
+      <p>New unit records created during the last rolling day.</p>
+    </a>
 
-  <a class="dashboard-metric-card dashboard-metric-card--purple dashboard-drilldown-card" href="<%= buildTechUnitsHref({ gradeFilter: 'current' }) %>">
-    <p class="card-label">Current Grades</p>
-    <h3><%= statValue(unitStats.unitsWithCurrentGrade) %></h3>
-    <p>Units with a current overall grade recorded.</p>
-  </a>
+    <a class="dashboard-metric-card dashboard-metric-card--purple dashboard-drilldown-card" href="<%= buildTechUnitsHref({ gradeFilter: 'current' }) %>">
+      <p class="card-label">Current Grades</p>
+      <h3><%= statValue(unitStats.unitsWithCurrentGrade) %></h3>
+      <p>Units with a current overall grade recorded.</p>
+    </a>
 
-  <a class="dashboard-metric-card dashboard-metric-card--orange dashboard-drilldown-card" href="<%= buildTechUnitsHref({ gradeFilter: 'needs' }) %>">
-    <p class="card-label">Needs Grade</p>
-    <h3><%= statValue(unitStats.unitsWithoutCurrentGrade) %></h3>
-    <p>Units without a current overall grade record.</p>
-  </a>
-</section>
+    <a class="dashboard-metric-card dashboard-metric-card--orange dashboard-drilldown-card" href="<%= buildTechUnitsHref({ gradeFilter: 'needs' }) %>">
+      <p class="card-label">Needs Grade</p>
+      <h3><%= statValue(unitStats.unitsWithoutCurrentGrade) %></h3>
+      <p>Units without a current overall grade record.</p>
+    </a>
+  </section>
 
-<section class="dashboard-metric-grid dashboard-metric-grid--secondary" aria-label="Operational metrics">
-  <a class="dashboard-metric-card dashboard-metric-card--slate dashboard-drilldown-card" href="/management/lots">
-    <p class="card-label">Active Lots</p>
-    <h3><%= statValue(lotStats.activeLots) %></h3>
-    <p>Open lots that are not abandoned or closed.</p>
-  </a>
+  <section class="dashboard-metric-grid dashboard-metric-grid--secondary" aria-label="Operational metrics">
+    <a class="dashboard-metric-card dashboard-metric-card--slate dashboard-drilldown-card" href="/management/lots">
+      <p class="card-label">Active Lots</p>
+      <h3><%= statValue(lotStats.activeLots) %></h3>
+      <p>Open lots that are not abandoned or closed.</p>
+    </a>
 
-  <a class="dashboard-metric-card dashboard-metric-card--blue dashboard-drilldown-card" href="/management/users">
-    <p class="card-label">Active Users</p>
-    <h3><%= statValue(userStats.activeUsers) %></h3>
-    <p>Employees currently active in the application.</p>
-  </a>
+    <a class="dashboard-metric-card dashboard-metric-card--blue dashboard-drilldown-card" href="/management/users">
+      <p class="card-label">Active Users</p>
+      <h3><%= statValue(userStats.activeUsers) %></h3>
+      <p>Employees currently active in the application.</p>
+    </a>
 
-  <a class="dashboard-metric-card dashboard-metric-card--slate dashboard-drilldown-card" href="/management/users">
-    <p class="card-label">Pending Setup</p>
-    <h3><%= statValue(userStats.pendingSetupUsers) %></h3>
-    <p>Users created but not fully set up yet.</p>
-  </a>
+    <a class="dashboard-metric-card dashboard-metric-card--slate dashboard-drilldown-card" href="/management/users">
+      <p class="card-label">Pending Setup</p>
+      <h3><%= statValue(userStats.pendingSetupUsers) %></h3>
+      <p>Users created but not fully set up yet.</p>
+    </a>
 
-  <a class="dashboard-metric-card dashboard-metric-card--red dashboard-drilldown-card" href="/unit-requests?status=pending&requestType=existing_unit_override">
-    <p class="card-label">Pending Overrides</p>
-    <h3><%= statValue(overrideStats.pendingOverrides) %></h3>
-    <p>Existing Unit override requests waiting on review.</p>
-  </a>
-</section>
+    <a class="dashboard-metric-card dashboard-metric-card--red dashboard-drilldown-card" href="/unit-requests?status=pending&requestType=existing_unit_override">
+      <p class="card-label">Pending Overrides</p>
+      <h3><%= statValue(overrideStats.pendingOverrides) %></h3>
+      <p>Existing Unit override requests waiting on review.</p>
+    </a>
+  </section>
+<% } %>
 
 <section class="dashboard-chart-grid" aria-label="Dashboard charts">
   <article class="content-card dashboard-chart-card">

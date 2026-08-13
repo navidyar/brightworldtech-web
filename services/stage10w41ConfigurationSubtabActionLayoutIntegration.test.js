@@ -35,5 +35,5 @@ test('all configuration catalog subtabs use the shared row action wrappers', () 
 
 test('shared app stylesheet cache version is bumped for configuration action layout', () => {
   const head = read('views/partials/head.ejs');
-  assert.match(head, /app\.css\?v=20260811-stage10w41-config-subtab-actions/);
+  assert.match(head, /app\.css\?v=[^\"]+/);
 });

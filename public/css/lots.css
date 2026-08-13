@@ -3971,31 +3971,6 @@ body.lots-lookup-ui-preview #modal-root .modal-header p {
   line-height: 1.4;
 }
 
-body.lots-lookup-ui-preview #modal-root .modal-close-button {
-  display: inline-grid;
-  place-items: center;
-  flex: 0 0 auto;
-  width: 34px;
-  height: 34px;
-  min-height: 34px;
-  margin: -4px -5px 0 0;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: #54677e;
-  box-shadow: none;
-  font-size: 1.2rem;
-  font-weight: 500;
-  line-height: 1;
-}
-
-body.lots-lookup-ui-preview #modal-root .modal-close-button:hover {
-  border-color: #c9d8e8;
-  background: #f2f7fd;
-  color: #2f609e;
-}
-
 body.lots-lookup-ui-preview #modal-root .modal-body {
   padding: 16px 20px 20px;
   background: #fff;

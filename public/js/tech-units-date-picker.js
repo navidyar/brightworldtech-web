@@ -1,4 +1,9 @@
 (function () {
+  const MONTH_NAMES = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
   function getChicagoDateOnly() {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: 'America/Chicago',
@@ -44,6 +49,10 @@
     return `${String(year).padStart(4, '0')}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   }
 
+  function monthKey(year, month) {
+    return (year * 12) + month;
+  }
+
   function initializeTechUnitsDatePickers() {
     const pickers = [...document.querySelectorAll('[data-tech-created-date-picker]')];
     if (!pickers.length) return;
@@ -74,20 +83,39 @@
       const label = picker.querySelector('[data-tech-created-date-picker-label]');
       const popover = picker.querySelector('[data-tech-created-date-picker-popover]');
       const grid = picker.querySelector('[data-tech-created-date-picker-grid]');
-      const monthLabel = picker.querySelector('[data-tech-created-date-picker-month-label]');
+      const monthSelect = picker.querySelector('[data-tech-created-date-picker-month]');
+      const yearSelect = picker.querySelector('[data-tech-created-date-picker-year]');
       const previous = picker.querySelector('[data-tech-created-date-picker-previous]');
       const next = picker.querySelector('[data-tech-created-date-picker-next]');
       const todayButton = picker.querySelector('[data-tech-created-date-picker-today]');
       const clearButton = picker.querySelector('[data-tech-created-date-picker-clear]');
 
-      if (!input || !trigger || !label || !popover || !grid || !monthLabel || !previous || !next || !todayButton || !clearButton) {
+      if (!input || !trigger || !label || !popover || !grid || !monthSelect || !yearSelect || !previous || !next || !todayButton || !clearButton) {
         return;
       }
 
       const selected = parseDate(input.value);
       const initial = selected || parseDate(getChicagoDateOnly());
+      const startYear = initial.year - 25;
+      const endYear = initial.year + 25;
+      const minimumMonth = monthKey(startYear, 0);
+      const maximumMonth = monthKey(endYear, 11);
       let displayedYear = initial.year;
       let displayedMonth = initial.month;
+
+      MONTH_NAMES.forEach((monthName, monthIndex) => {
+        const option = document.createElement('option');
+        option.value = String(monthIndex);
+        option.textContent = monthName;
+        monthSelect.append(option);
+      });
+
+      for (let year = startYear; year <= endYear; year += 1) {
+        const option = document.createElement('option');
+        option.value = String(year);
+        option.textContent = String(year);
+        yearSelect.append(option);
+      }
 
       const render = () => {
         const selectedDate = parseDate(input.value);
@@ -95,11 +123,12 @@
         const firstWeekday = new Date(Date.UTC(displayedYear, displayedMonth, 1)).getUTCDay();
         const daysInMonth = new Date(Date.UTC(displayedYear, displayedMonth + 1, 0)).getUTCDate();
 
-        monthLabel.textContent = new Intl.DateTimeFormat('en-US', {
-          month: 'long',
-          year: 'numeric',
-          timeZone: 'UTC'
-        }).format(new Date(Date.UTC(displayedYear, displayedMonth, 1)));
+        monthSelect.value = String(displayedMonth);
+        yearSelect.value = String(displayedYear);
+
+        const currentMonth = monthKey(displayedYear, displayedMonth);
+        previous.disabled = currentMonth <= minimumMonth;
+        next.disabled = currentMonth >= maximumMonth;
 
         grid.innerHTML = '';
 
@@ -151,8 +180,12 @@
 
       const moveMonth = (delta) => {
         const date = new Date(Date.UTC(displayedYear, displayedMonth + delta, 1));
-        displayedYear = date.getUTCFullYear();
-        displayedMonth = date.getUTCMonth();
+        const targetYear = date.getUTCFullYear();
+        const targetMonth = date.getUTCMonth();
+        const targetKey = monthKey(targetYear, targetMonth);
+        if (targetKey < minimumMonth || targetKey > maximumMonth) return;
+        displayedYear = targetYear;
+        displayedMonth = targetMonth;
         render();
       };
 
@@ -176,6 +209,14 @@
       });
       previous.addEventListener('click', () => moveMonth(-1));
       next.addEventListener('click', () => moveMonth(1));
+      monthSelect.addEventListener('change', () => {
+        displayedMonth = Number(monthSelect.value);
+        render();
+      });
+      yearSelect.addEventListener('change', () => {
+        displayedYear = Number(yearSelect.value);
+        render();
+      });
       todayButton.addEventListener('click', () => {
         const today = getChicagoDateOnly();
         input.value = today;
@@ -205,8 +246,12 @@
 
         event.preventDefault();
         const nextDate = new Date(Date.UTC(current.year, current.month, current.day + offsets[event.key]));
-        displayedYear = nextDate.getUTCFullYear();
-        displayedMonth = nextDate.getUTCMonth();
+        const nextYear = nextDate.getUTCFullYear();
+        const nextMonth = nextDate.getUTCMonth();
+        const nextMonthKey = monthKey(nextYear, nextMonth);
+        if (nextMonthKey < minimumMonth || nextMonthKey > maximumMonth) return;
+        displayedYear = nextYear;
+        displayedMonth = nextMonth;
         render();
 
         const nextIso = toIso(displayedYear, displayedMonth, nextDate.getUTCDate());

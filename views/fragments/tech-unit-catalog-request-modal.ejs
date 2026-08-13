@@ -3,8 +3,13 @@
   const safeContext = context || {};
   const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
   const isModelRequest = safeKind === 'model';
+  const hasAlreadyMappedProcessor = !isModelRequest && Boolean(safeContext.alreadyMappedProcessor);
   const hasExistingGlobalProcessor = !isModelRequest && Boolean(safeContext.existingGlobalMatch);
-  const title = isModelRequest ? 'Request Model Addition' : (hasExistingGlobalProcessor ? 'Request Processor Association' : 'Request Processor Addition');
+  const title = isModelRequest
+    ? 'Request Model Addition'
+    : hasAlreadyMappedProcessor
+      ? 'Processor Already Available'
+      : (hasExistingGlobalProcessor ? 'Request Processor Association' : 'Request Processor Addition');
   const description = isModelRequest
     ? 'This creates a review request only. It does not add a model or create a Unit until Management or Admin approves it.'
     : hasExistingGlobalProcessor
@@ -38,7 +43,7 @@
           </div>
         <% } %>
 
-        <% if (safeContext.manufacturerName || safeContext.unitModelName) { %>
+        <% if (safeErrors.length === 0 && (safeContext.manufacturerName || safeContext.unitModelName)) { %>
           <div class="message info">
             <p><%= description %></p>
           </div>

@@ -208,7 +208,7 @@ test('the outcome Tab handler runs in capture phase before native radio-group sk
 });
 
 test('all Add/Edit Unit entry points use the current Unit form asset version', () => {
-  const expected = '/js/tech-unit-form.js?v=20260811-stage10w31-lot-hierarchy-context';
+  const expected = '/js/tech-unit-form.js?v=20260813-stage10w50-unit-save-preflight';
 
   for (const relativePath of [
     'views/pages/tech-units.ejs',

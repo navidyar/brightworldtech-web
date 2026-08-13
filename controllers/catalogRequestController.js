@@ -116,13 +116,17 @@ async function getProcessorRequestContext(source = {}) {
       includeInactive: true,
       limit: 5
     });
-    const alreadyMapped = globalProcessorMatches.find((processor) => processor.identityMatch && processor.isActive && processor.unitModelIds.includes(unitModelId));
+    const alreadyMapped = globalProcessorMatches.find((processor) => processor.identityMatch && processor.isActive && processor.unitModelIds.includes(unitModelId)) || null;
     if (alreadyMapped) {
-      errors.push(`${alreadyMapped.displayLabel} is already associated with this Unit Model. Close this request, refresh Add/Edit Unit, and select the existing processor.`);
+      errors.push(`${alreadyMapped.displayLabel} is already associated with this Unit Model. Close this request and select the existing processor.`);
     }
+
   }
 
-  const existingGlobalMatch = globalProcessorMatches.find((processor) => processor.identityMatch) || null;
+  const alreadyMappedProcessor = globalProcessorMatches.find((processor) => processor.identityMatch && processor.isActive && processor.unitModelIds.includes(unitModelId)) || null;
+  const existingGlobalMatch = alreadyMappedProcessor
+    ? null
+    : (globalProcessorMatches.find((processor) => processor.identityMatch) || null);
 
   return {
     unitModelId,
@@ -134,6 +138,7 @@ async function getProcessorRequestContext(source = {}) {
     requestedProcessorSpeedGhz,
     globalProcessorMatches,
     existingGlobalMatch,
+    alreadyMappedProcessor,
     errors
   };
 }

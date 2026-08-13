@@ -284,7 +284,7 @@ async function renderNewUserPage(req, res, next) {
   try {
     const roles = getAssignableRolesForCurrentUser(await managementModel.listAssignableAccountRoles(), req);
 
-    res.render('pages/management-user-new', {
+    res.render(isHtmxRequest(req) ? 'fragments/management-user-create-modal' : 'pages/management-user-new', {
       pageTitle: 'Create User',
       currentNav: 'management',
       roles,
@@ -345,7 +345,7 @@ async function createUser(req, res, next) {
     addAdminRoleAssignmentErrors(errorMessages, roleCodes, req);
 
     if (errorMessages.length > 0) {
-      return res.status(400).render('pages/management-user-new', {
+      return res.status(isHtmxRequest(req) ? 200 : 400).render(isHtmxRequest(req) ? 'fragments/management-user-create-modal' : 'pages/management-user-new', {
         pageTitle: 'Create User',
         currentNav: 'management',
         roles,
@@ -380,6 +380,10 @@ async function createUser(req, res, next) {
       req.currentUser.user_id,
       setupLinkExpiryHours
     );
+
+    if (isHtmxRequest(req)) {
+      return res.render('fragments/management-user-created-modal', { user, setupLink });
+    }
 
     return res.render('pages/management-setup-link', {
       pageTitle: setupLink.linkLabel,

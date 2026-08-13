@@ -10,7 +10,7 @@
       <%- include('./tech-dashboard-productivity', { dashboardData, dashboardFilters, dashboardFilterConfig }) %>
     <% } else { %>
       <%- include('./dashboard-filters', { dashboardFilters, dashboardFilterOptions, dashboardFilterConfig }) %>
-      <%- include('./dashboard-foundation', { dashboardData }) %>
+      <%- include('./dashboard-foundation', { dashboardData, dashboardKey }) %>
     <% } %>
   <% } %>
 </div>

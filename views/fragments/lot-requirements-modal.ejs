@@ -75,8 +75,6 @@
                   <strong><%= requirement.requirement_label || requirement.requirement_key || '—' %></strong>
                   <% if (Number(requirement.is_inherited) === 1) { %>
                     <small>Inherited from <%= requirement.source_lot_name || `Lot ${requirement.source_lot_id}` %></small>
-                  <% } else { %>
-                    <small>This Lot</small>
                   <% } %>
                 </td>
                 <td><%= requirement.operator_label || requirement.operator_code || 'Equals' %></td>

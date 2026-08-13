@@ -117,7 +117,7 @@
   margin: 0;
 }
 
-.unit-request-queue-filters .form-field span {
+.unit-request-queue-filters .form-field > span:first-child {
   color: var(--muted);
   font-size: 0.78rem;
   font-weight: 750;
@@ -837,7 +837,7 @@
   color: #274d81;
 }
 
-.unit-request-queue-filters .form-field span {
+.unit-request-queue-filters .form-field > span:first-child {
   color: #3e4f66;
   font-size: 0.81rem;
   font-weight: 620;
