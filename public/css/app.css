@@ -2668,29 +2668,32 @@ body :is(input[type="checkbox"], input[type="radio"]) {
 
 .unit-export-preview-summary {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.unit-export-preview-summary > div {
-  display: grid;
-  gap: 2px;
-  min-width: 130px;
-}
-
-.unit-export-preview-summary span,
-.unit-export-preview-summary p {
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 10px 2px 0;
   color: var(--ui-muted);
+  font-size: 0.82rem;
 }
 
 .unit-export-preview-summary strong {
-  font-size: 1.25rem;
+  color: var(--ui-text);
+  font-size: 0.9rem;
 }
 
 .unit-export-preview-summary p {
   margin: 0;
-  font-size: 0.82rem;
+}
+
+.unit-export-preview-table-section {
+  min-width: 0;
+  margin-top: 16px;
+}
+
+.unit-export-preview-table-title {
+  margin: 0 0 8px 2px;
+  color: var(--ui-text);
+  font-size: 0.95rem;
 }
 
 .unit-export-action-toolbar {

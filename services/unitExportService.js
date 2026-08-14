@@ -339,14 +339,20 @@ function buildLotUnitExportScope(lotScope = {}) {
     .map((lot) => normalizeText(lot && (lot.lot_name || lot.name)))
     .filter(Boolean);
   const isDescendantScope = lotScope.mode === 'descendants';
+  const selectedScopeNames = Array.isArray(lotScope.selectedScopeLots)
+    ? lotScope.selectedScopeLots
+        .map((lot) => normalizeText(lot && (lot.lot_name || lot.name)))
+        .filter(Boolean)
+    : [];
+  const lotScopeLabel = lotScope.mode === 'selected' && selectedScopeNames.length > 0
+    ? selectedScopeNames.join(' + ')
+    : (isDescendantScope ? `${selectedLotName} + descendants` : selectedLotName);
 
   return [
     { label: 'Unit State', value: 'Active Units' },
     {
       label: 'Lot Scope',
-      value: isDescendantScope
-        ? `${selectedLotName} — descendant Lots`
-        : selectedLotName
+      value: lotScopeLabel
     },
     {
       label: 'Included Lots',

@@ -1,0 +1,100 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safePreview = preview || null;
+  const sourceLot = safePreview ? safePreview.sourceLot : null;
+  const safeOptions = formOptions || { parentLots: [], capabilities: {} };
+  const safeFormData = formData || {};
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal lot-modal" role="dialog" aria-modal="true" aria-labelledby="lot-duplicate-modal-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="lot-duplicate-modal-title">Duplicate Lot</h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %>
+        </div>
+      <% } %>
+
+      <% if (sourceLot) { %>
+        <form class="app-form app-form-clean lot-form-modal-form" method="post" action="/management/lots/<%= sourceLot.lot_id %>/duplicate" hx-post="/management/lots/<%= sourceLot.lot_id %>/duplicate" hx-target="#modal-root" hx-swap="innerHTML" data-lot-duplicate-form>
+          <div class="form-section">
+            <div class="form-section-header">
+              <div><h3>New Lot</h3></div>
+              <p>Configuration is copied from <strong><%= sourceLot.lot_name %></strong>. Units, child Lots, history, validation decisions, and production records are not copied. The new Lot starts hidden.</p>
+            </div>
+
+            <div class="form-grid lot-form-grid">
+              <label class="form-field form-field-wide">
+                <span>New Lot Name</span>
+                <input type="text" name="newLotName" value="<%= safeFormData.newLotName || '' %>" maxlength="120" required />
+              </label>
+
+              <fieldset class="form-field form-field-wide lot-choice-fieldset">
+                <legend>Placement</legend>
+                <div class="form-grid single-column lot-choice-list">
+                  <label class="checkbox-card" for="duplicatePlacementTopLevel">
+                    <input id="duplicatePlacementTopLevel" type="radio" name="placementMode" value="top_level" <%= safeFormData.placementMode !== 'child' ? 'checked' : '' %> />
+                    <span>
+                      <strong>Top-Level Lot</strong>
+                      <small>Create the duplicate without a Parent Lot.</small>
+                    </span>
+                  </label>
+                  <label class="checkbox-card" for="duplicatePlacementChild">
+                    <input id="duplicatePlacementChild" type="radio" name="placementMode" value="child" <%= safeFormData.placementMode === 'child' ? 'checked' : '' %> />
+                    <span>
+                      <strong>Child of selected Lot</strong>
+                      <small>Place the duplicate beneath another Lot in the hierarchy.</small>
+                    </span>
+                  </label>
+                </div>
+              </fieldset>
+
+              <label class="form-field form-field-wide" data-lot-duplicate-parent-field <%= safeFormData.placementMode === 'child' ? '' : 'hidden' %>>
+                <span>Parent Lot</span>
+                <select name="parentLotId" data-lot-duplicate-parent-select <%= safeFormData.placementMode === 'child' ? '' : 'disabled' %>>
+                  <option value="">Select Parent Lot</option>
+                  <% (safeOptions.parentLots || []).forEach((parentLot) => { %>
+                    <option value="<%= parentLot.lot_id %>" <%= String(safeFormData.parentLotId || '') === String(parentLot.lot_id) ? 'selected' : '' %>><%= parentLot.lot_name %></option>
+                  <% }) %>
+                </select>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-section">
+            <div class="form-section-header"><div><h3>Inheritance</h3></div></div>
+            <div class="form-grid single-column">
+              <label class="checkbox-card" for="duplicateInheritancePreserve">
+                <input id="duplicateInheritancePreserve" type="radio" name="inheritanceMode" value="preserve_source" <%= safeFormData.inheritanceMode !== 'new_parent' ? 'checked' : '' %> data-lot-duplicate-preserve-inheritance />
+                <span>
+                  <strong>Preserve Source Lot Behavior</strong>
+                  <small>Copies the source Lot's effective Requirements and Unit Form behavior so a different parent does not change the duplicate unexpectedly.</small>
+                </span>
+              </label>
+              <label class="checkbox-card" for="duplicateInheritanceParent">
+                <input id="duplicateInheritanceParent" type="radio" name="inheritanceMode" value="new_parent" <%= safeFormData.inheritanceMode === 'new_parent' ? 'checked' : '' %> data-lot-duplicate-parent-inheritance />
+                <span>
+                  <strong>Use New Parent Inheritance</strong>
+                  <small>Copies the source Lot's direct configuration, then allows inherited configuration from the new Parent Lot to apply normally.</small>
+                </span>
+              </label>
+            </div>
+          </div>
+
+
+          <div class="modal-actions">
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            <button type="submit" class="primary-button">Duplicate Lot</button>
+          </div>
+        </form>
+      <% } %>
+    </div>
+  </section>
+</div>

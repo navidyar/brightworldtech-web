@@ -33,12 +33,14 @@ test('Lot Export Preview exposes CSV and XLSX actions while retaining the comple
   const modal = read('views/fragments/tech-unit-export-preview-modal.ejs');
   const page = read('views/pages/management-lot-detail.ejs');
 
-  assert.match(controller, /csvDownloadUrl: buildLotExportDownloadUrl\(lotId, 'csv'\)/);
-  assert.match(controller, /xlsxDownloadUrl: buildLotExportDownloadUrl\(lotId, 'xlsx'\)/);
+  assert.match(controller, /csvDownloadUrl: buildLotExportUrl\(lotId, 'csv', exportContext\.selection\)/);
+  assert.match(controller, /xlsxDownloadUrl: buildLotExportUrl\(lotId, 'xlsx', exportContext\.selection\)/);
   assert.match(modal, /Download CSV/);
   assert.match(modal, /Download XLSX/);
   assert.match(modal, /safePreviewRows\.forEach/);
-  assert.match(page, /Export Units/);
+  assert.match(page, />Export Units<\/button>/);
+  assert.doesNotMatch(page, />Export Direct Units<\/button>/);
+  assert.doesNotMatch(page, />Export Lot \+ Descendants<\/button>/);
 });
 
 test('XLSX is generated without adding a heavyweight spreadsheet dependency', () => {

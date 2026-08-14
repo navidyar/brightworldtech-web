@@ -48,7 +48,9 @@ test('Lot Unit export is exposed only on Management Lot Details while legacy end
   assert.match(managementRoutes, /'\/tech\/units\/export\/preview'[\s\S]*?requireRole\(managementRoles\)/);
   assert.match(lotRoutes, /'\/management\/lots\/:lotId\/export\/preview'[\s\S]*?requireRole\(lotManagementRoles\)/);
   assert.doesNotMatch(techPage, /Export Preview/);
-  assert.match(lotPage, /Export Units/);
+  assert.match(lotPage, />Export Units<\/button>/);
+  assert.doesNotMatch(lotPage, />Export Direct Units<\/button>/);
+  assert.doesNotMatch(lotPage, />Export Lot \+ Descendants<\/button>/);
 });
 
 test('Export preview provides an explicit horizontally scrollable table region', () => {
@@ -79,7 +81,8 @@ test('Export preview renders every matching Unit instead of only the first five'
 
   assert.match(controller, /previewRows: dataset\.rows,/);
   assert.doesNotMatch(controller, /dataset\.rows\.slice\(0,\s*5\)/);
-  assert.match(modal, /All <%= formatNumber\(safeDataset\.totalRows\) %> Matching Units/);
+  assert.match(modal, /<%= formatNumber\(safeDataset\.totalRows\) %> matching/);
+  assert.match(modal, /class="unit-export-preview-table-title">Preview<\/h3>/);
   assert.doesNotMatch(modal, /First <%= Math\.min\(5,/);
 });
 

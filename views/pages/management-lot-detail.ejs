@@ -3,15 +3,15 @@
   <%- include('../partials/head', {
     pageTitle,
     stylesheets: [
-      '/css/lots.css?v=20260812-stage10w46-ui-refinement',
+      '/css/lots.css?v=20260813-stage10w61-lot-ui-export',
       '/css/modal.css'
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
-  <script defer src="/js/lot-form.js"></script>
+  <script defer src="/js/lot-form.js?v=20260813-stage10w61-lot-ui-export"></script>
   <script defer src="/js/lot-requirements.js?v=20260807-stage10w17-expanded-requirements"></script>
   <script defer src="/js/lot-unit-form-rules.js"></script>
-  <script defer src="/js/unit-export.js?v=20260807-stage10w19-lot-scoped-export"></script>
+  <script defer src="/js/unit-export.js?v=20260813-stage10w63-multi-lot-export-scope"></script>
 
   <body class="lots-lookup-typography-preview lots-lookup-ui-preview">
     <div class="app-shell">
@@ -42,9 +42,13 @@
 
             <div class="lot-detail-action-bar site-clean-actions">
               <a class="secondary-button" href="/management/lots<%= Number(lot.is_active) === 1 ? '' : '?showHidden=1' %>">Back to Lots</a>
-              <a class="secondary-button" href="/tech/units?lotId=<%= lot.lot_id %>&amp;perPage=all">Open All Units</a>
-              <button type="button" class="secondary-button" hx-get="/management/lots/<%= lot.lot_id %>/export/preview" hx-target="#modal-root" hx-swap="innerHTML">Export Units</button>
+              <a class="secondary-button" href="/tech/units?lotId=<%= lot.lot_id %>&amp;lotScope=direct&amp;perPage=all">Open Direct Units</a>
+              <% if (lotRelationships.directChildLots.length > 0) { %>
+                <a class="secondary-button" href="/tech/units?lotId=<%= lot.lot_id %>&amp;lotScope=descendants&amp;perPage=all">Open Lot + Descendants</a>
+              <% } %>
+              <button type="button" class="secondary-button" hx-get="/management/lots/<%= lot.lot_id %>/export/preview?scope=direct" hx-target="#modal-root" hx-swap="innerHTML">Export Units</button>
               <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
+              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/duplicate/modal" hx-get="/management/lots/<%= lot.lot_id %>/duplicate/modal" hx-target="#modal-root" hx-swap="innerHTML">Duplicate Lot</a>
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-target="#modal-root" hx-swap="innerHTML">Requirements</a>
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-get="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Unit Form</a>
               <% if (Number(lot.is_closed) === 1) { %>
@@ -72,6 +76,12 @@
           <% if (Number(lot.is_active) !== 1) { %>
             <div class="message warning">
               This lot is hidden from technicians and assignment dropdowns. Configure its Unit form, requirements, and other settings, then use Unhide Lot when it is ready.
+            </div>
+          <% } %>
+
+          <% if (lot.is_assignable !== null && lot.is_assignable !== undefined && Number(lot.is_assignable) !== 1) { %>
+            <div class="message warning">
+              This Lot is Structural. It can organize child Lots but cannot receive new or moved Units directly until direct Unit assignment is enabled in Edit Lot. Existing direct Units remain available for review.
             </div>
           <% } %>
 
@@ -111,8 +121,15 @@
 
                   <article>
                     <span class="lot-summary-icon" aria-hidden="true">#</span>
-                    <span><small>Units</small><strong><%= formatNumber(lot.unitCount) %></strong></span>
+                    <span><small>Direct Units</small><strong><%= formatNumber(lot.directUnitCount) %></strong></span>
                   </article>
+
+                  <% if (lotRelationships.directChildLots.length > 0) { %>
+                    <article>
+                      <span class="lot-summary-icon" aria-hidden="true">Σ</span>
+                      <span><small>Incl. Descendants</small><strong><%= formatNumber(lot.descendantUnitCount) %></strong></span>
+                    </article>
+                  <% } %>
 
                   <article>
                     <span class="lot-summary-icon" aria-hidden="true">%</span>
@@ -192,6 +209,11 @@
                 <div>
                   <dt>Sibling Lots</dt>
                   <dd><%= formatNumber(lotRelationships.siblingLots.length) %></dd>
+                </div>
+
+                <div>
+                  <dt>Unit Assignments</dt>
+                  <dd><%= lot.is_assignable === null || lot.is_assignable === undefined ? 'Legacy hierarchy rule' : (Number(lot.is_assignable) === 1 ? 'Assignable' : 'Structural') %></dd>
                 </div>
 
                 <div>

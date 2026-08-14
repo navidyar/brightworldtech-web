@@ -22,6 +22,20 @@ router.get(
 );
 
 router.get(
+  '/management/lots/:lotId/duplicate/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotDuplicateModalPage
+);
+
+router.post(
+  '/management/lots/:lotId/duplicate',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.duplicateLot
+);
+
+router.get(
   '/management/lots/:lotId/edit/modal',
   requireAuth,
   requireRole(lotManagementRoles),

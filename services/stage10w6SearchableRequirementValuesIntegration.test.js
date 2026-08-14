@@ -52,8 +52,8 @@ test('the Requirement modal lets the searchable results list extend beyond the r
 });
 
 test('Lots pages load the current requirement assets while preserving searchable requirement support', () => {
-  assert.match(read('views/pages/management-lot-new.ejs'), /20260807-stage10w20-lot-hierarchy-integrity/);
-  assert.match(read('views/pages/management-lots.ejs'), /20260807-stage10w20-lot-hierarchy-integrity/);
-  assert.match(read('views/pages/management-lot-detail.ejs'), /20260807-stage10w20-lot-hierarchy-integrity/);
+  assert.match(read('views/pages/management-lot-new.ejs'), /20260813-stage10w61-lot-ui-export/);
+  assert.match(read('views/pages/management-lots.ejs'), /20260813-stage10w61-lot-ui-export/);
+  assert.match(read('views/pages/management-lot-detail.ejs'), /20260813-stage10w61-lot-ui-export/);
   assert.match(read('views/pages/management-lot-detail.ejs'), /lot-requirements\.js\?v=20260807-stage10w17-expanded-requirements/);
 });

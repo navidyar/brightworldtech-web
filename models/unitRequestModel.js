@@ -1149,8 +1149,11 @@ async function assertRequestedDestinationLotIsAssignable(destinationLotId) {
   const lot = lots.find((candidate) => Number(candidate.lot_id) === safeDestinationLotId) || null;
   const activeLots = lots.filter((candidate) => Number(candidate.is_active) === 1);
   const hasActiveChild = activeLots.some((candidate) => Number(candidate.parent_lot_id) === safeDestinationLotId);
+  const isAssignable = lot && lot.is_assignable !== null && lot.is_assignable !== undefined
+    ? Number(lot.is_assignable) === 1
+    : !hasActiveChild;
 
-  if (!lot || Number(lot.is_active) !== 1 || Number(lot.is_closed) === 1 || hasActiveChild) {
+  if (!lot || Number(lot.is_active) !== 1 || Number(lot.is_closed) === 1 || !isAssignable) {
     const error = new Error('The originally requested destination lot is no longer open, visible, and assignable. Choose a valid lot through a new request instead of changing this request during review.');
     error.code = 'BWT_UNIT_REQUEST_DESTINATION_INVALID';
     throw error;

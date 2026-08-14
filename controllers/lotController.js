@@ -33,6 +33,7 @@ const {
 } = require('../config/lotRequirementRegistry');
 const { analyzeRequirementNumber } = require('../services/lotRequirementNumberPolicy');
 const unitExportService = require('../services/unitExportService');
+const { buildSelectedLotExportScope } = require('../services/lotExportScope');
 const unitExportFileService = require('../services/unitExportFileService');
 const { UNIT_EXPORT_COLUMNS } = require('../config/unitExportContract');
 const { MIN_LOT_PRODUCTION_WEIGHT, parseRequiredLotProductionWeight } = require('../services/lotProductionWeightPolicy');
@@ -71,7 +72,9 @@ function getBlankLotFormData(formOptions = {}) {
     labelFormat: '',
     objectives: '',
     notes: '',
-    startNewProductionCycleOnMove: '0'
+    allowDuplicateUnitAssumption: '0',
+    startNewProductionCycleOnMove: '0',
+    isAssignable: '1'
   };
 }
 
@@ -87,6 +90,7 @@ function getLotFormDataFromRequest(req) {
     hasUnlimitedGoal: req.body.hasUnlimitedGoal === '1' ? '1' : '0',
     allowDuplicateUnitAssumption: req.body.allowDuplicateUnitAssumption === '1' ? '1' : '0',
     startNewProductionCycleOnMove: req.body.startNewProductionCycleOnMove === '1' ? '1' : '0',
+    isAssignable: req.body.isAssignable === '1' ? '1' : '0',
     unitAmountGoal: String(req.body.unitAmountGoal || '').trim(),
     deadline: String(req.body.deadline || '').trim(),
     labelFormat: String(req.body.labelFormat || '').trim(),
@@ -172,6 +176,7 @@ function getLotFormDataFromLot(lot) {
     hasUnlimitedGoal: lot.isUnlimited ? '1' : '0',
     allowDuplicateUnitAssumption: Number(lot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0',
     startNewProductionCycleOnMove: Number(lot.start_new_production_cycle_on_move || 0) === 1 ? '1' : '0',
+    isAssignable: Number(lot.is_assignable || 0) === 1 ? '1' : '0',
     unitAmountGoal: lot.isUnlimited ? '' : String(lot.unitGoal || lot.unit_amount_goal || ''),
     deadline: formatDateForInput(lot.deadline),
     labelFormat: lot.label_format || '',
@@ -741,6 +746,20 @@ async function updateLotUnitFormRules(req, res, next) {
   }
 }
 
+function getLotDetailSuccessMessage(query) {
+  if (query.duplicated === '1') return 'Lot duplicated successfully. The new Lot remains hidden until you manually unhide it.';
+  if (query.requirementCreated === '1') return 'Requirement added successfully.';
+  if (query.updated === '1') return 'Lot updated successfully.';
+  if (query.requirementUpdated === '1') return 'Requirement updated successfully.';
+  if (query.requirementDeleted === '1') return 'Requirement deleted successfully.';
+  if (query.closed === '1') return 'Lot closed successfully.';
+  if (query.reopened === '1') return 'Lot reopened successfully.';
+  if (query.unitFormRulesUpdated === '1') return 'Unit form configuration updated successfully.';
+  if (query.validationOverrideAccepted === '1') return 'Unit accepted by Management for this Lot.';
+  if (query.validationOverrideRevoked === '1') return 'Management acceptance revoked.';
+  return null;
+}
+
 function getLotSuccessMessage(query) {
   if (query.created === '1') {
     return 'Lot created successfully. It remains hidden until you manually unhide it.';
@@ -853,6 +872,163 @@ async function createLot(req, res, next) {
 }
 
 
+
+function getLotDuplicationFormDataFromRequest(req) {
+  const placementMode = String(req?.body?.placementMode || '').trim() === 'child' ? 'child' : 'top_level';
+  const requestedInheritanceMode = String(req?.body?.inheritanceMode || '').trim();
+
+  return {
+    newLotName: String(req?.body?.newLotName || '').trim(),
+    placementMode,
+    parentLotId: placementMode === 'child' ? String(req?.body?.parentLotId || '').trim() : '',
+    inheritanceMode: placementMode === 'child' && requestedInheritanceMode === 'new_parent'
+      ? 'new_parent'
+      : 'preserve_source'
+  };
+}
+
+function getBlankLotDuplicationFormData(sourceLot) {
+  return {
+    newLotName: `${String(sourceLot?.lot_name || '').trim()} Copy`.trim(),
+    placementMode: 'top_level',
+    parentLotId: '',
+    inheritanceMode: 'preserve_source'
+  };
+}
+
+function validateLotDuplicationForm(formData, formOptions) {
+  const errors = [];
+
+  if (!formData.newLotName || formData.newLotName.length < 2) {
+    errors.push('New Lot name is required.');
+  } else if (formData.newLotName.length > 120) {
+    errors.push('New Lot name must be 120 characters or fewer.');
+  }
+
+  if (formData.placementMode === 'child') {
+    const parentLotId = Number(formData.parentLotId);
+    const parentAllowed = Number.isSafeInteger(parentLotId) && parentLotId > 0
+      && (formOptions.parentLots || []).some((lot) => Number(lot.lot_id) === parentLotId);
+
+    if (!parentAllowed) {
+      errors.push('Choose an open, visible Parent Lot for the duplicate.');
+    }
+  }
+
+  return errors;
+}
+
+function renderLotDuplicateModal(res, { preview, formOptions, formData, errorMessages = [], statusCode = 200 }) {
+  return res.status(statusCode).render('fragments/lot-duplicate-modal', {
+    preview,
+    formOptions,
+    formData,
+    errorMessages
+  });
+}
+
+async function renderLotDuplicateModalPage(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const [preview, formOptions] = await Promise.all([
+      lotModel.getLotDuplicationPreview(lotId),
+      lotModel.getLotFormOptions()
+    ]);
+
+    if (!preview) {
+      return renderLotDuplicateModal(res, {
+        preview: null,
+        formOptions,
+        formData: getBlankLotDuplicationFormData(null),
+        errorMessages: ['The source Lot could not be found.'],
+        statusCode: 404
+      });
+    }
+
+    if (!formOptions.capabilities.hasAssignableState) {
+      return renderLotDuplicateModal(res, {
+        preview,
+        formOptions,
+        formData: getBlankLotDuplicationFormData(preview.sourceLot),
+        errorMessages: ['Lot duplication requires the Lot assignability migration before it can be used.'],
+        statusCode: 409
+      });
+    }
+
+    return renderLotDuplicateModal(res, {
+      preview,
+      formOptions,
+      formData: getBlankLotDuplicationFormData(preview.sourceLot)
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function duplicateLot(req, res, next) {
+  const lotId = Number(req.params.lotId);
+
+  try {
+    const [preview, formOptions] = await Promise.all([
+      lotModel.getLotDuplicationPreview(lotId),
+      lotModel.getLotFormOptions()
+    ]);
+    const formData = getLotDuplicationFormDataFromRequest(req);
+
+    if (!preview) {
+      return renderLotDuplicateModal(res, {
+        preview: null,
+        formOptions,
+        formData,
+        errorMessages: ['The source Lot could not be found.'],
+        statusCode: 404
+      });
+    }
+
+    const errorMessages = validateLotDuplicationForm(formData, formOptions);
+
+    if (errorMessages.length > 0) {
+      return renderLotDuplicateModal(res, {
+        preview,
+        formOptions,
+        formData,
+        errorMessages,
+        statusCode: 400
+      });
+    }
+
+    const result = await lotModel.duplicateLot(lotId, {
+      newLotName: formData.newLotName,
+      parentLotId: formData.placementMode === 'child' ? formData.parentLotId : null,
+      inheritanceMode: formData.inheritanceMode
+    }, req.currentUser.user_id);
+
+    return sendHtmxRedirect(
+      req,
+      res,
+      addCacheBuster(`/management/lots/${result.lotId}?duplicated=1`)
+    );
+  } catch (error) {
+    try {
+      const [preview, formOptions] = await Promise.all([
+        lotModel.getLotDuplicationPreview(lotId),
+        lotModel.getLotFormOptions()
+      ]);
+
+      return renderLotDuplicateModal(res, {
+        preview,
+        formOptions,
+        formData: getLotDuplicationFormDataFromRequest(req),
+        errorMessages: [error.message || 'The Lot could not be duplicated.'],
+        statusCode: 400
+      });
+    } catch (renderError) {
+      return next(renderError);
+    }
+  }
+}
+
+
 function getLotExportColumnSelection(req) {
   const query = req && req.query ? req.query : {};
 
@@ -862,24 +1038,136 @@ function getLotExportColumnSelection(req) {
   };
 }
 
-function buildLotExportDownloadUrl(lotId, format) {
-  return `/management/lots/${Number(lotId)}/export/${format}`;
+function normalizeLotExportSelectionIds(value) {
+  const values = Array.isArray(value) ? value : [value];
+  const selectedLotIds = [];
+  const seen = new Set();
+
+  values.forEach((entry) => {
+    String(entry ?? '')
+      .split(',')
+      .map((lotId) => Number(lotId))
+      .filter((lotId) => Number.isSafeInteger(lotId) && lotId > 0)
+      .forEach((lotId) => {
+        if (!seen.has(lotId)) {
+          seen.add(lotId);
+          selectedLotIds.push(lotId);
+        }
+      });
+  });
+
+  return selectedLotIds;
 }
 
-function buildLotExportPresentation(lotScope) {
-  const selectedLotName = String(lotScope?.selectedLot?.lot_name || 'Selected Lot').trim();
-  const includedCount = Array.isArray(lotScope?.includedLots) ? lotScope.includedLots.length : 0;
-  const isDescendantScope = lotScope?.mode === 'descendants';
+function getLotExportSelection(req, rootScope) {
+  const query = req && req.query ? req.query : {};
+  const rootLotId = Number(rootScope?.selectedLot?.lot_id);
+  const directChildLots = (rootScope?.descendantLots || [])
+    .filter((lot) => Number(lot.parent_lot_id) === rootLotId)
+    .sort(sortLotsByName);
+  const hasSelectedLotIds = Object.prototype.hasOwnProperty.call(query, 'lotIds');
+
+  if (hasSelectedLotIds) {
+    return {
+      selectedLotIds: normalizeLotExportSelectionIds(query.lotIds)
+    };
+  }
+
+  // Keep older direct/descendant/branch URLs working while the UI moves to
+  // composable Lot checkboxes.
+  const requestedScope = String(query.scope || '').trim();
+
+  if (requestedScope === 'descendants') {
+    return {
+      selectedLotIds: [rootLotId, ...directChildLots.map((lot) => Number(lot.lot_id))]
+    };
+  }
+
+  if (requestedScope === 'branch') {
+    const branchLotId = Number(query.branchLotId);
+    return {
+      selectedLotIds: Number.isSafeInteger(branchLotId) && branchLotId > 0 ? [branchLotId] : [rootLotId]
+    };
+  }
+
+  return { selectedLotIds: [rootLotId] };
+}
+
+function buildLotExportUrl(lotId, endpoint, selection = {}) {
+  const params = new URLSearchParams();
+  const selectedLotIds = normalizeLotExportSelectionIds(selection.selectedLotIds);
+
+  selectedLotIds.forEach((selectedLotId) => params.append('lotIds', String(selectedLotId)));
+
+  const query = params.toString();
+  return `/management/lots/${Number(lotId)}/export/${endpoint}${query ? `?${query}` : ''}`;
+}
+
+async function resolveLotExportContext(lotId, req) {
+  const rootScope = await lotModel.getLotExportScope(lotId, 'descendants');
+
+  if (!rootScope) {
+    return null;
+  }
+
+  const selection = getLotExportSelection(req, rootScope);
+  const dataScope = buildSelectedLotExportScope(rootScope, selection.selectedLotIds);
+
+  return {
+    rootScope,
+    dataScope,
+    directChildLots: dataScope.directChildLots || [],
+    selection: {
+      selectedLotIds: dataScope.selectedScopeLotIds || []
+    }
+  };
+}
+
+function buildLotExportScopeOptions(exportContext) {
+  const { rootScope, directChildLots, selection } = exportContext;
+  const selectedLotIds = new Set(normalizeLotExportSelectionIds(selection.selectedLotIds));
+  const rootLotId = Number(rootScope.selectedLot.lot_id);
+  const options = [
+    {
+      lotId: rootLotId,
+      label: 'This Lot',
+      description: `Only Units assigned directly to ${rootScope.selectedLot.lot_name}.`,
+      checked: selectedLotIds.has(rootLotId)
+    }
+  ];
+
+  directChildLots.forEach((childLot) => {
+    options.push({
+      lotId: Number(childLot.lot_id),
+      label: childLot.lot_name,
+      description: `Includes ${childLot.lot_name} and anything below that child Lot.`,
+      checked: selectedLotIds.has(Number(childLot.lot_id))
+    });
+  });
+
+  return options;
+}
+
+function buildLotExportPresentation(exportContext) {
+  const { rootScope, dataScope, selection } = exportContext;
+  const selectedLotName = String(rootScope?.selectedLot?.lot_name || 'Selected Lot').trim();
+  const includedCount = Array.isArray(dataScope?.includedLots) ? dataScope.includedLots.length : 0;
+  const selectedScopeCount = normalizeLotExportSelectionIds(selection.selectedLotIds).length;
+  const selectedNames = Array.isArray(dataScope?.selectedScopeLots)
+    ? dataScope.selectedScopeLots.map((lot) => String(lot.lot_name || '').trim()).filter(Boolean)
+    : [];
+  const description = `Select one or more Lot areas and the columns to include in the export for ${selectedLotName}.`;
+  const summaryText = selectedScopeCount === 1 && selectedNames[0] === selectedLotName
+    ? `Only Units currently assigned directly to ${selectedLotName} are included.`
+    : `${includedCount} Lot${includedCount === 1 ? '' : 's'} included from ${selectedScopeCount} selected area${selectedScopeCount === 1 ? '' : 's'}.`;
 
   return {
     eyebrow: 'Lot Unit Export',
     title: `Export ${selectedLotName}`,
-    description: isDescendantScope
-      ? `Select the columns to include and export active Units assigned to all descendant Lots under ${selectedLotName}.`
-      : `Select the columns to include and export active Units assigned directly to ${selectedLotName}.`,
-    summaryText: isDescendantScope
-      ? `${includedCount} descendant Lot${includedCount === 1 ? '' : 's'} included. Units assigned directly to ${selectedLotName} are not included in this parent-Lot export.`
-      : `Only Units currently assigned directly to ${selectedLotName} are included.`
+    description,
+    summaryText,
+    scopePreviewUrl: `/management/lots/${Number(rootScope.selectedLot.lot_id)}/export/preview`,
+    scopeOptions: buildLotExportScopeOptions(exportContext)
   };
 }
 
@@ -887,9 +1175,9 @@ async function renderLotUnitExportPreview(req, res) {
   const lotId = Number(req.params.lotId);
 
   try {
-    const lotScope = await lotModel.getLotExportScope(lotId);
+    const exportContext = await resolveLotExportContext(lotId, req);
 
-    if (!lotScope) {
+    if (!exportContext) {
       return res.status(404).render('fragments/tech-unit-export-preview-modal', {
         dataset: null,
         availableColumns: UNIT_EXPORT_COLUMNS,
@@ -900,33 +1188,34 @@ async function renderLotUnitExportPreview(req, res) {
           eyebrow: 'Lot Unit Export',
           title: 'Export unavailable',
           description: 'The selected Lot could not be found.',
-          summaryText: ''
+          summaryText: '',
+          scopeOptions: []
         },
         errorMessages: ['The selected Lot could not be found.']
       });
     }
 
-    const fullDataset = await unitExportService.buildLotScopedUnitExportDataset(lotScope);
+    const fullDataset = await unitExportService.buildLotScopedUnitExportDataset(exportContext.dataScope);
     const columnSelection = getLotExportColumnSelection(req);
     const dataset = unitExportService.applyUnitExportColumnSelection(
       fullDataset,
       columnSelection.value,
       columnSelection
     );
-    const exportPresentation = buildLotExportPresentation(lotScope);
+    const exportPresentation = buildLotExportPresentation(exportContext);
 
     return res.render('fragments/tech-unit-export-preview-modal', {
       dataset,
       availableColumns: UNIT_EXPORT_COLUMNS,
       previewRows: dataset.rows,
-      csvDownloadUrl: buildLotExportDownloadUrl(lotId, 'csv'),
-      xlsxDownloadUrl: buildLotExportDownloadUrl(lotId, 'xlsx'),
+      csvDownloadUrl: buildLotExportUrl(lotId, 'csv', exportContext.selection),
+      xlsxDownloadUrl: buildLotExportUrl(lotId, 'xlsx', exportContext.selection),
       exportPresentation,
       errorMessages: []
     });
   } catch (error) {
     console.error('Lot Unit export preview could not be prepared:', error);
-    return res.render('fragments/tech-unit-export-preview-modal', {
+    return res.status(error?.code === 'BWT_LOT_EXPORT_SELECTION_INVALID' ? 400 : 200).render('fragments/tech-unit-export-preview-modal', {
       dataset: null,
       availableColumns: UNIT_EXPORT_COLUMNS,
       previewRows: [],
@@ -936,7 +1225,8 @@ async function renderLotUnitExportPreview(req, res) {
         eyebrow: 'Lot Unit Export',
         title: 'Export unavailable',
         description: 'The Lot Unit export could not be prepared.',
-        summaryText: ''
+        summaryText: '',
+        scopeOptions: []
       },
       errorMessages: [error && error.message
         ? error.message
@@ -949,13 +1239,13 @@ async function downloadLotUnitExport(req, res, next, format) {
   const lotId = Number(req.params.lotId);
 
   try {
-    const lotScope = await lotModel.getLotExportScope(lotId);
+    const exportContext = await resolveLotExportContext(lotId, req);
 
-    if (!lotScope) {
+    if (!exportContext) {
       return res.status(404).type('text/plain').send('The selected Lot could not be found.');
     }
 
-    const fullDataset = await unitExportService.buildLotScopedUnitExportDataset(lotScope);
+    const fullDataset = await unitExportService.buildLotScopedUnitExportDataset(exportContext.dataScope);
     const columnSelection = getLotExportColumnSelection(req);
     const dataset = unitExportService.applyUnitExportColumnSelection(
       fullDataset,
@@ -983,7 +1273,7 @@ async function downloadLotUnitExport(req, res, next, format) {
 
     return res.send(fileBuffer);
   } catch (error) {
-    if (error && error.code === 'BWT_UNIT_EXPORT_COLUMNS_REQUIRED') {
+    if (error && ['BWT_UNIT_EXPORT_COLUMNS_REQUIRED', 'BWT_LOT_EXPORT_SELECTION_INVALID'].includes(error.code)) {
       return res.status(400).type('text/plain').send(error.message);
     }
 
@@ -1027,25 +1317,7 @@ async function renderLotDetailPage(req, res, next) {
       operatorOptions,
       requirementFormData: getBlankRequirementFormData(),
       errorMessages: [],
-      successMessage: req.query.requirementCreated === '1'
-        ? 'Requirement added successfully.'
-        : (req.query.updated === '1'
-          ? 'Lot updated successfully.'
-          : (req.query.requirementUpdated === '1'
-            ? 'Requirement updated successfully.'
-            : (req.query.requirementDeleted === '1'
-              ? 'Requirement deleted successfully.'
-              : (req.query.closed === '1'
-                ? 'Lot closed successfully.'
-              : (req.query.reopened === '1'
-                ? 'Lot reopened successfully.'
-                : (req.query.unitFormRulesUpdated === '1'
-                  ? 'Unit form configuration updated successfully.'
-                  : (req.query.validationOverrideAccepted === '1'
-                    ? 'Unit accepted by Management for this Lot.'
-                    : (req.query.validationOverrideRevoked === '1'
-                      ? 'Management acceptance revoked.'
-                      : null))))))))
+      successMessage: getLotDetailSuccessMessage(req.query)
     });
   } catch (error) {
     next(error);
@@ -2109,6 +2381,8 @@ module.exports = {
   renderNewLotPage,
   renderNewLotModal,
   createLot,
+  renderLotDuplicateModalPage,
+  duplicateLot,
   renderEditLotModal,
   updateLotModal,
   renderLotVisibilityModal,

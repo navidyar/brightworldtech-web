@@ -132,13 +132,21 @@
 
                   <div class="tech-filter-grid <%= isRegularTechBrowserUser ? 'tech-filter-grid--regular-tech' : 'tech-filter-grid--tech-lead-plus' %>" aria-label="Unit filters">
                     <label class="form-field">
-                      <span>Assignable Lot</span>
+                      <span>Lot</span>
                       <select name="lotId" data-tech-filter-auto-submit data-hierarchical-lot-select>
                         <option value="">All visible lots</option>
                         <%- include('../partials/hierarchical-lot-options', {
                           lotOptions: Array.isArray(result.lotHierarchyOptions) && result.lotHierarchyOptions.length > 0 ? result.lotHierarchyOptions : result.lots,
                           selectedLotId: filters.lotId
                         }) %>
+                      </select>
+                    </label>
+
+                    <label class="form-field">
+                      <span>Lot Scope</span>
+                      <select name="lotScope" data-tech-filter-auto-submit>
+                        <option value="direct" <%= filters.lotScope !== 'descendants' ? 'selected' : '' %>>This Lot only</option>
+                        <option value="descendants" <%= filters.lotScope === 'descendants' ? 'selected' : '' %>>This Lot + descendants</option>
                       </select>
                     </label>
 

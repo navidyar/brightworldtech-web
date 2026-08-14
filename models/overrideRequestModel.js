@@ -161,7 +161,13 @@ async function getAssignableLotOptions() {
       .filter((lot) => lot.parent_lot_id)
       .map((lot) => String(lot.parent_lot_id))
   );
-  const assignableLotRows = activeLots.filter((lot) => !parentLotIdsWithChildren.has(String(lot.lot_id)));
+  const assignableLotRows = activeLots.filter((lot) => {
+    if (lot.is_assignable !== null && lot.is_assignable !== undefined) {
+      return Number(lot.is_assignable) === 1;
+    }
+
+    return !parentLotIdsWithChildren.has(String(lot.lot_id));
+  });
   const assignableLots = assignableLotRows.map((lot) => ({
     lotId: Number(lot.lot_id),
     lotName: lot.lot_name || lot.name || 'Lot name not available'

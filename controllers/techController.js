@@ -90,6 +90,7 @@ function buildTechUnitsTableUrl(filters) {
   const passthroughKeys = [
     'search',
     'lotId',
+    'lotScope',
     'categoryId',
     'gradeFilter',
     'qcReviewFilter',
@@ -117,6 +118,7 @@ function buildTechUnitsTableUrl(filters) {
 const TECH_UNIT_EXPORT_FILTER_KEYS = Object.freeze([
   'search',
   'lotId',
+  'lotScope',
   'categoryId',
   'gradeFilter',
   'qcReviewFilter',
@@ -351,6 +353,7 @@ function getFiltersFromRequest(req) {
   return {
     search: String(req.query.search || '').trim(),
     lotId: String(req.query.lotId || '').trim(),
+    lotScope: String(req.query.lotScope || '').trim() === 'descendants' ? 'descendants' : 'direct',
     categoryId: String(req.query.categoryId || '').trim(),
     gradeFilter: String(req.query.gradeFilter || '').trim(),
     qcReviewFilter: String(req.query.qcReviewFilter || '').trim(),
@@ -1153,7 +1156,7 @@ async function validateUnitForm(formData, formOptions, mode) {
   if (!validationFormData.lotId || !isPositiveInteger(validationFormData.lotId)) {
     errors.push('A valid assignable lot is required.');
   } else if (!isAssignableLotId(validationFormData.lotId, formOptions)) {
-    errors.push('Units can only be assigned to lots that do not have child lots. Choose a more specific child lot, or choose a standalone lot with no children.');
+    errors.push('The selected Lot is not open, visible, and assignable. Choose a Lot that currently accepts Unit assignments.');
   }
 
   if (!validationFormData.unitCategoryConfigValueId || !isPositiveInteger(validationFormData.unitCategoryConfigValueId)) {

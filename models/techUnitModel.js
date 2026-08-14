@@ -662,24 +662,25 @@ function isOperationalLot(lot) {
     && Number(lot.is_closed || 0) !== 1;
 }
 
-function isBrowsableLot(lot, parentLotIdsWithChildren) {
-  if (!lot || Number(lot.is_active) !== 1) {
-    return false;
-  }
-
-  return !parentLotIdsWithChildren.has(String(lot.lot_id));
+function isBrowsableLot(lot) {
+  return Boolean(lot) && Number(lot.is_active) === 1;
 }
 
 function isAssignableLot(lot, parentLotIdsWithChildren) {
-  return isOperationalLot(lot)
-    && !parentLotIdsWithChildren.has(String(lot.lot_id));
+  if (!isOperationalLot(lot)) {
+    return false;
+  }
+
+  if (lot.is_assignable !== null && lot.is_assignable !== undefined) {
+    return Number(lot.is_assignable) === 1;
+  }
+
+  // Safe fallback while the explicit assignability migration is pending.
+  return !parentLotIdsWithChildren.has(String(lot.lot_id));
 }
 
 function getBrowsableLots(lots) {
-  const visibleLots = lots.filter((lot) => Number(lot.is_active) === 1);
-  const parentLotIdsWithChildren = getParentLotIdsWithChildren(visibleLots);
-
-  return visibleLots.filter((lot) => isBrowsableLot(lot, parentLotIdsWithChildren));
+  return lots.filter((lot) => isBrowsableLot(lot));
 }
 
 function getAssignableLots(lots) {
@@ -2294,8 +2295,17 @@ async function listTechUnits(filters = {}) {
     const lotId = Number(filters.lotId);
 
     if (Number.isInteger(lotId) && lotId > 0 && filterLotIds.has(String(lotId))) {
-      where.push('u.lot_id = ?');
-      params.push(lotId);
+      const lotScope = String(filters.lotScope || '').trim() === 'descendants' ? 'descendants' : 'direct';
+
+      if (lotScope === 'descendants') {
+        const descendantLotIds = await lotModel.listDescendantLotIds(lotId);
+        const scopedLotIds = [lotId, ...descendantLotIds];
+        where.push(`u.lot_id IN (${scopedLotIds.map(() => '?').join(', ')})`);
+        params.push(...scopedLotIds);
+      } else {
+        where.push('u.lot_id = ?');
+        params.push(lotId);
+      }
     }
   }
 
@@ -2684,6 +2694,7 @@ async function listTechUnits(filters = {}) {
       ...filters,
       search: filters.search,
       lotId: isParkedUnitState ? '' : filters.lotId,
+      lotScope: isParkedUnitState ? 'direct' : (String(filters.lotScope || '').trim() === 'descendants' ? 'descendants' : 'direct'),
       categoryId: isParkedUnitState ? '' : filters.categoryId,
       gradeFilter: isParkedUnitState ? '' : filters.gradeFilter,
       qcReviewFilter: isParkedUnitState ? '' : qcReviewFilter,

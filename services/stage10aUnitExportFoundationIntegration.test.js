@@ -60,8 +60,10 @@ test('Lot Details owns the current export entry point and remains limited to Adm
   const techPage = read('views/pages/tech-units.ejs');
 
   assert.match(routes, /'\/management\/lots\/:lotId\/export\/preview'[\s\S]*?requireRole\(lotManagementRoles\)[\s\S]*?renderLotUnitExportPreview/);
-  assert.match(controller, /buildLotScopedUnitExportDataset\(lotScope\)/);
-  assert.match(page, /Export Units/);
+  assert.match(controller, /buildLotScopedUnitExportDataset\(exportContext\.dataScope\)/);
+  assert.match(page, />Export Units<\/button>/);
+  assert.doesNotMatch(page, />Export Direct Units<\/button>/);
+  assert.doesNotMatch(page, />Export Lot \+ Descendants<\/button>/);
   assert.doesNotMatch(techPage, /Export Preview/);
 });
 

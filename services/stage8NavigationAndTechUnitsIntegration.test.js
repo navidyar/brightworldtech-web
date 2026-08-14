@@ -56,13 +56,15 @@ test('Lot requirements select existing Processor Families without managing share
   assert.match(processorFamilyModal, /\/management\/config\/processor-families/);
 });
 
-test('Lot Details can open the complete Lot in the Tech Units Browser', () => {
+test('Lot Details can open direct or descendant-inclusive Lot scope in the Tech Units Browser', () => {
   const lotDetail = read('views/pages/management-lot-detail.ejs');
   const techController = read('controllers/techController.js');
   const techUnitModel = read('models/techUnitModel.js');
 
-  assert.match(lotDetail, /Open All Units/);
-  assert.match(lotDetail, /\/tech\/units\?lotId=<%= lot\.lot_id %>&amp;perPage=all/);
+  assert.match(lotDetail, /Open Direct Units/);
+  assert.match(lotDetail, /Open Lot \+ Descendants/);
+  assert.match(lotDetail, /\/tech\/units\?lotId=<%= lot\.lot_id %>&amp;lotScope=direct&amp;perPage=all/);
+  assert.match(lotDetail, /\/tech\/units\?lotId=<%= lot\.lot_id %>&amp;lotScope=descendants&amp;perPage=all/);
   assert.match(techController, /allowAnyLotFilter: canViewAnyLotFilter\(req\)/);
   assert.match(techController, /\['admin', 'management'\]/);
   assert.match(techUnitModel, /availableFilterLots/);

@@ -106,7 +106,7 @@ test('child Lot validation and requirement-aware form profiles consume direct-pa
   const inheritance = read('services/lotRequirementInheritance.js');
   const policy = read('config/lotRequirementFormPolicy.js');
 
-  assert.match(lotModel, /async function listEffectiveLotRequirements\(lotId\)/);
+  assert.match(lotModel, /async function listEffectiveLotRequirements\(lotId, connection = null\)/);
   assert.match(lotModel, /const parentLotId = Number\(selectedLot\.parent_lot_id\)/);
   assert.match(lotModel, /buildEffectiveLotRequirements\(/);
   assert.match(inheritance, /source_lot_id/);

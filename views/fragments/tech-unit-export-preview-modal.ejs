@@ -15,6 +15,10 @@
   const exportTitle = String(safeExportPresentation.title || 'Export Data Preview');
   const exportDescription = String(safeExportPresentation.description || 'Select the columns to include, review every Unit matching the current Unit Browser scope, and download the same authorized dataset as CSV or XLSX.');
   const exportSummaryText = String(safeExportPresentation.summaryText || 'The selected columns will be applied to every matching Unit, regardless of browser pagination.');
+  const safeExportScopeOptions = Array.isArray(safeExportPresentation.scopeOptions)
+    ? safeExportPresentation.scopeOptions
+    : [];
+  const exportScopePreviewUrl = String(safeExportPresentation.scopePreviewUrl || '');
 %>
 <div class="modal-backdrop" data-modal-backdrop>
   <section
@@ -45,11 +49,44 @@
       <% } %>
 
       <% if (safeDataset) { %>
-        <div class="site-summary-panel unit-export-preview-summary">
-          <div>
-            <span>Matching Units</span>
-            <strong><%= formatNumber(safeDataset.totalRows) %></strong>
-          </div>
+        <% if (safeExportScopeOptions.length > 0) { %>
+          <section class="site-clean-section unit-export-scope-selection" aria-labelledby="unit-export-scope-title">
+            <div class="site-clean-section-heading">
+              <div>
+                <h3 id="unit-export-scope-title">Export Scope</h3>
+                <p>Select one or more areas. This Lot includes direct Units only; each child option includes that full branch.</p>
+              </div>
+            </div>
+            <fieldset
+              class="unit-export-scope-options"
+              data-lot-export-scope-options
+              data-preview-url="<%= exportScopePreviewUrl %>"
+            >
+              <legend class="visually-hidden">Choose one or more Lot areas to export</legend>
+              <% safeExportScopeOptions.forEach((scopeOption, index) => { %>
+                <label class="checkbox-card unit-export-scope-option" for="unitExportScope-<%= index %>">
+                  <input
+                    id="unitExportScope-<%= index %>"
+                    type="checkbox"
+                    name="lotIds"
+                    value="<%= scopeOption.lotId %>"
+                    data-lot-export-scope-option
+                    <%= scopeOption.checked ? 'checked' : '' %>
+                  />
+                  <span>
+                    <strong><%= scopeOption.label %></strong>
+                    <% if (scopeOption.description) { %><small><%= scopeOption.description %></small><% } %>
+                  </span>
+                </label>
+              <% }) %>
+            </fieldset>
+            <p class="field-hint unit-export-scope-message" data-lot-export-scope-message aria-live="polite"></p>
+          </section>
+        <% } %>
+
+        <div class="unit-export-preview-summary" aria-label="Export match summary">
+          <strong><%= formatNumber(safeDataset.totalRows) %> matching <%= Number(safeDataset.totalRows) === 1 ? 'Unit' : 'Units' %></strong>
+          <span aria-hidden="true">·</span>
           <p><%= exportSummaryText %></p>
         </div>
 
@@ -108,10 +145,8 @@
           </fieldset>
         </section>
 
-        <section class="site-clean-section" aria-labelledby="unit-export-preview-table-title">
-          <div class="site-clean-section-heading">
-            <h3 id="unit-export-preview-table-title">All <%= formatNumber(safeDataset.totalRows) %> Matching Units</h3>
-          </div>
+        <div class="unit-export-preview-table-section" aria-labelledby="unit-export-preview-table-title">
+          <h3 id="unit-export-preview-table-title" class="unit-export-preview-table-title">Preview</h3>
           <% if (safePreviewRows.length > 0) { %>
             <div class="unit-export-preview-table-frame">
               <div
@@ -156,7 +191,7 @@
           <% } else { %>
             <p class="empty-state">No Units match the current filters.</p>
           <% } %>
-        </section>
+        </div>
       <% } %>
     </div>
 

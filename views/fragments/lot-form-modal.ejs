@@ -51,6 +51,21 @@
           </div>
 
           <div class="form-grid lot-form-grid">
+            <% if (safeFormOptions.capabilities.hasAssignableState) { %>
+              <label class="lot-inline-option plain-checkbox-row form-field-wide" for="isAssignableModal">
+                <input
+                  id="isAssignableModal"
+                  type="checkbox"
+                  name="isAssignable"
+                  value="1"
+                  <%= safeFormData.isAssignable === '1' ? 'checked' : '' %>
+                />
+                <span>
+                  <strong>Allow Units to be assigned directly to this Lot</strong>
+                  <small>Hierarchy and assignability are separate. This Lot may still have child Lots whether this setting is on or off.</small>
+                </span>
+              </label>
+            <% } %>
             <% if (safeFormOptions.capabilities.hasDuplicateUnitAssumption) { %>
               <label class="lot-inline-option plain-checkbox-row form-field-wide" for="allowDuplicateUnitAssumptionModal">
                 <input

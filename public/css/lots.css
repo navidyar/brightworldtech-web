@@ -3728,9 +3728,11 @@ body.lots-lookup-ui-preview .lot-inline-option:hover {
   background: #fbfdff;
 }
 
-body.lots-lookup-ui-preview :is(.checkbox-card, .lot-inline-option) input[type="checkbox"] {
+body.lots-lookup-ui-preview :is(.checkbox-card, .lot-inline-option) :is(input[type="checkbox"], input[type="radio"]) {
   width: 16px;
   height: 16px;
+  min-height: 0;
+  padding: 0;
   accent-color: var(--lots-ui-blue);
 }
 
@@ -3744,6 +3746,57 @@ body.lots-lookup-ui-preview :is(.checkbox-card, .lot-inline-option) small {
   color: var(--lots-ui-muted);
   font-size: 0.76rem;
   font-weight: 400;
+}
+
+body.lots-lookup-ui-preview .lot-choice-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+body.lots-lookup-ui-preview .lot-choice-fieldset > legend {
+  margin-bottom: 7px;
+  padding: 0;
+  color: #5e7086;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+body.lots-lookup-ui-preview .lot-choice-list {
+  gap: 8px;
+}
+
+body.lots-lookup-ui-preview .unit-export-scope-selection {
+  margin-bottom: 14px;
+}
+
+body.lots-lookup-ui-preview .unit-export-scope-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+body.lots-lookup-ui-preview .unit-export-scope-option {
+  min-width: 0;
+}
+
+body.lots-lookup-ui-preview .unit-export-scope-option:has(input:checked) {
+  border-color: #b9cde5;
+  background: #f7fbff;
+}
+
+@media (max-width: 720px) {
+  body.lots-lookup-ui-preview .unit-export-scope-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+body.lots-lookup-ui-preview .checkbox-card input:disabled + span {
+  opacity: 0.58;
 }
 
 body.lots-lookup-ui-preview .form-actions,

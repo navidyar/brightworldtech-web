@@ -2,7 +2,7 @@
 <html lang="en">
   <%- include('../partials/head', {
     pageTitle,
-    stylesheets: ['/css/lots.css?v=20260812-stage10w46-ui-refinement']
+    stylesheets: ['/css/lots.css?v=20260813-stage10w61-lot-ui-export']
   }) %>
 
   <body class="lots-lookup-typography-preview lots-lookup-ui-preview">
@@ -75,6 +75,22 @@
                 </div>
 
                 <div class="form-grid">
+                  <% if (formOptions.capabilities.hasAssignableState) { %>
+                    <label class="checkbox-card plain-checkbox-row form-field-wide" for="isAssignable">
+                      <input
+                        id="isAssignable"
+                        type="checkbox"
+                        name="isAssignable"
+                        value="1"
+                        <%= formData.isAssignable === '1' ? 'checked' : '' %>
+                      />
+                      <span>
+                        <strong>Allow Units to be assigned directly to this Lot</strong>
+                        <small>Child Lots do not affect whether this Lot can directly receive Units.</small>
+                      </span>
+                    </label>
+                  <% } %>
+
                   <label class="form-field">
                     <span>Lot Name</span>
                     <input
@@ -308,6 +324,6 @@
       </div>
     </div>
 
-    <script src="/js/lot-form.js"></script>
+    <script src="/js/lot-form.js?v=20260813-stage10w61-lot-ui-export"></script>
   </body>
 </html>
