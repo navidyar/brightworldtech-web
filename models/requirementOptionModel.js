@@ -1,24 +1,26 @@
 'use strict';
 
 const { pool } = require('./db');
+const { listConfigValuesBySystemCategoryIds } = require('./configLookupModel');
+const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
 const { getLotRequirementField } = require('../config/lotRequirementRegistry');
 const { normalizeCosmeticGradeRequirementOptions } = require('../services/cosmeticGradeNormalization');
 
-const CONFIG_CATEGORY_CODES_BY_SOURCE = Object.freeze({
-  unit_type: ['unit_categories', 'unit_category'],
-  ram_type: ['ram_types', 'ram_type'],
-  storage_type: ['storage_types', 'storage_type', 'ssd_types', 'ssd_type'],
-  storage_wipe_status: ['storage_wipe_statuses', 'storage_wipe_status', 'wipe_statuses', 'wipe_status'],
-  operating_system: ['operating_systems', 'operating_system'],
-  absolute_status: ['absolute_statuses', 'absolute_status'],
-  physical_camera_status: ['physical_camera_statuses', 'camera_statuses', 'physical_camera_status'],
-  touchscreen_status: ['touchscreen_statuses', 'touchscreen_status'],
-  keyboard_language: ['keyboard_languages', 'keyboard_language'],
-  complete_diagnostics: ['diagnostics_statuses', 'complete_diagnostics_statuses', 'diagnostics_status'],
-  virus_check: ['virus_check_statuses', 'virus_check_status'],
-  driver_check: ['driver_check_statuses', 'driver_check_status'],
-  skinned_status: ['skinned_statuses', 'skinned_status'],
-  overall_grade: ['cosmetic_grades', 'overall_unit_grades', 'unit_grades', 'unit_grade']
+const CONFIG_CATEGORY_IDS_BY_SOURCE = Object.freeze({
+  unit_type: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_CATEGORIES,
+  ram_type: SYSTEM_CONFIG_CATEGORY_IDS.RAM_TYPES,
+  storage_type: SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_TYPES,
+  storage_wipe_status: SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_WIPE_STATUSES,
+  operating_system: SYSTEM_CONFIG_CATEGORY_IDS.OPERATING_SYSTEMS,
+  absolute_status: SYSTEM_CONFIG_CATEGORY_IDS.ABSOLUTE_STATUSES,
+  physical_camera_status: SYSTEM_CONFIG_CATEGORY_IDS.CAMERA_STATUSES,
+  touchscreen_status: SYSTEM_CONFIG_CATEGORY_IDS.TOUCHSCREEN_STATUSES,
+  keyboard_language: SYSTEM_CONFIG_CATEGORY_IDS.KEYBOARD_LANGUAGES,
+  complete_diagnostics: SYSTEM_CONFIG_CATEGORY_IDS.DIAGNOSTICS_STATUSES,
+  virus_check: SYSTEM_CONFIG_CATEGORY_IDS.VIRUS_CHECK_STATUSES,
+  driver_check: SYSTEM_CONFIG_CATEGORY_IDS.DRIVER_CHECK_STATUSES,
+  skinned_status: SYSTEM_CONFIG_CATEGORY_IDS.SKINNED_STATUSES,
+  overall_grade: SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES
 });
 
 const STATIC_OPTIONS_BY_SOURCE = Object.freeze({
@@ -33,35 +35,15 @@ const STATIC_OPTIONS_BY_SOURCE = Object.freeze({
   ])
 });
 
-async function listConfigValueOptions(categoryCodes) {
-  const placeholders = categoryCodes.map(() => '?').join(', ');
-  const orderPlaceholders = categoryCodes.map(() => '?').join(', ');
-  const [rows] = await pool.query(
-    `
-      SELECT
-        cv.config_value_id,
-        cv.code,
-        cv.label,
-        cc.code AS category_code
-      FROM config_values cv
-      JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code IN (${placeholders})
-        AND cv.is_active = 1
-      ORDER BY
-        FIELD(cc.code, ${orderPlaceholders}),
-        cv.sort_order,
-        cv.label,
-        cv.code
-    `,
-    [...categoryCodes, ...categoryCodes]
-  );
-
+async function listConfigValueOptions(systemCategoryId) {
+  const rows = await listConfigValuesBySystemCategoryIds(systemCategoryId);
   return rows.map((row) => ({
-    value: `config_value:${row.config_value_id}`,
-    label: row.label || row.code,
-    code: row.code,
-    source: row.category_code
+    value: `config_value:${row.configValueId}`,
+    label: row.label,
+    configValueId: row.configValueId,
+    systemConfigValueId: row.systemConfigValueId,
+    systemConfigCategoryId: row.systemConfigCategoryId,
+    source: row.systemConfigCategoryId
   }));
 }
 
@@ -191,8 +173,8 @@ async function listOptionsForSource(optionSource) {
     return [];
   }
 
-  if (CONFIG_CATEGORY_CODES_BY_SOURCE[optionSource]) {
-    const options = await listConfigValueOptions(CONFIG_CATEGORY_CODES_BY_SOURCE[optionSource]);
+  if (CONFIG_CATEGORY_IDS_BY_SOURCE[optionSource]) {
+    const options = await listConfigValueOptions(CONFIG_CATEGORY_IDS_BY_SOURCE[optionSource]);
 
     return optionSource === 'overall_grade'
       ? normalizeCosmeticGradeRequirementOptions(options)

@@ -24,11 +24,11 @@ test('manual ordering policy excludes popularity lists and requires three active
   const model = read('models/configModel.js');
 
   assert.match(policy, /MINIMUM_DRAG_ORDER_VALUES = 3/);
-  assert.match(policy, /'unit_categories'/);
-  assert.match(policy, /'cosmetic_issue_types'/);
-  assert.match(policy, /'hardware_issue_types'/);
-  assert.match(policy, /'issue_locations'/);
-  assert.match(model, /getConfigCategoryOrderingPolicy\(category\.code, activeValues\.length\)/);
+  assert.match(policy, /SYSTEM_CONFIG_CATEGORY_IDS\.UNIT_CATEGORIES/);
+  assert.match(policy, /SYSTEM_CONFIG_CATEGORY_IDS\.COSMETIC_ISSUE_TYPES/);
+  assert.match(policy, /SYSTEM_CONFIG_CATEGORY_IDS\.HARDWARE_ISSUE_TYPES/);
+  assert.match(policy, /SYSTEM_CONFIG_CATEGORY_IDS\.ISSUE_LOCATIONS/);
+  assert.match(model, /getConfigCategoryOrderingPolicy\(category\.system_config_category_id, activeValues\.length\)/);
   assert.match(model, /usesPopularitySorting/);
   assert.match(model, /supportsDragOrdering/);
 });
@@ -39,7 +39,7 @@ test('server-side reorder validates the exact list and saves one transactional n
   assert.match(model, /async function reorderConfigValues/);
   assert.match(model, /beginTransaction\(\)/);
   assert.match(model, /FOR UPDATE/);
-  assert.match(model, /isPopularitySortedConfigCategory\(category\.code\)/);
+  assert.match(model, /isPopularitySortedConfigCategory\(category\.system_config_category_id\)/);
   assert.match(model, /reorderableRows\.length < 3/);
   assert.match(model, /hasExactValueSet/);
   assert.match(model, /CONFIG_ORDER_STALE/);

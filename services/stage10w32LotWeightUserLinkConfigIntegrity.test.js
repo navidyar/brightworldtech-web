@@ -10,7 +10,6 @@ const {
   parsePasswordLinkExpiryHours,
   normalizePasswordLinkExpiryHours
 } = require('./passwordLinkExpiryPolicy');
-const { isValidConfigValueCode } = require('./configValueCodePolicy');
 const { MIN_LOT_PRODUCTION_WEIGHT, parseRequiredLotProductionWeight } = require('./lotProductionWeightPolicy');
 
 function read(relativePath) {
@@ -27,20 +26,6 @@ test('password setup/reset link policy defaults to one hour and caps requests at
   assert.equal(parsePasswordLinkExpiryHours('9'), null);
   assert.equal(parsePasswordLinkExpiryHours('1.5'), null);
   assert.equal(normalizePasswordLinkExpiryHours('24'), 1);
-});
-
-test('Lot Type codes can be short without relaxing code length across unrelated configuration categories', () => {
-  assert.equal(isValidConfigValueCode('a', { allowShort: true }), true);
-  assert.equal(isValidConfigValueCode('ai', { allowShort: true }), true);
-  assert.equal(isValidConfigValueCode('as_is', { allowShort: true }), true);
-  assert.equal(isValidConfigValueCode('a-1', { allowShort: true }), true);
-  assert.equal(isValidConfigValueCode('a_', { allowShort: true }), false);
-  assert.equal(isValidConfigValueCode('-a', { allowShort: true }), false);
-  assert.equal(isValidConfigValueCode('A', { allowShort: true }), false);
-  assert.equal(isValidConfigValueCode('a b', { allowShort: true }), false);
-  assert.equal(isValidConfigValueCode('a'), false);
-  assert.equal(isValidConfigValueCode('ai'), false);
-  assert.equal(isValidConfigValueCode('abc'), true);
 });
 
 test('Lot production weight is required at 0.10 or higher with no application maximum', () => {
@@ -88,14 +73,15 @@ test('User Management configures setup/reset link expiration before generation a
   assert.match(managementModel, /latest_password_link_expires_at/);
 });
 
-test('security setting and generic config validation share the new eight-hour cap and short-code policy', () => {
+test('security setting keeps the eight-hour cap while generic Config Values use stable database IDs instead of editable codes', () => {
   const configController = read('controllers/configController.js');
   const authModel = read('models/authModel.js');
   const configModal = read('views/fragments/config-value-form-modal.ejs');
 
-  assert.match(configController, /allowShort:[\s\S]*?'lot_types'/);
-  assert.match(configController, /Lot Type code must be 1 to 120 characters/);
-  assert.match(configController, /Code must be 3 to 120 characters/);
+  assert.match(configController, /validateConfigValueForm/);
+  assert.match(configController, /Label must be 120 characters or less/);
+  assert.doesNotMatch(configModal, /name="code"/);
+  assert.match(configModal, /database ID is the stable identity used by the application/);
   assert.match(authModel, /passwordLinkExpiryPolicy/);
   assert.ok(configModal.includes('name="value"') && configModal.includes('min="1" max="8"'));
 });

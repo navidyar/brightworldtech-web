@@ -811,7 +811,7 @@ async function listProcessorUnitModelAssociations(processorModelId, connection =
         um.manufacturer_id,
         m.name AS manufacturer_name,
         um.unit_category_config_value_id,
-        COALESCE(cv.label, cv.code, 'Uncategorized') AS unit_category_label,
+        COALESCE(cv.label, cv.value, CONCAT('Value #', cv.config_value_id), 'Uncategorized') AS unit_category_label,
         um.model_name,
         um.is_active,
         CASE WHEN umpo.unit_model_processor_option_id IS NOT NULL AND umpo.is_active = 1 THEN 1 ELSE 0 END AS is_mapped

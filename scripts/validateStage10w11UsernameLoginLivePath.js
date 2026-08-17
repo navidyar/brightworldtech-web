@@ -3,6 +3,7 @@
 require('dotenv').config();
 
 const { pool } = require('../models/db');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 const authModel = require('../models/authModel');
 const { buildUsernameStem, isValidUsername } = require('../services/userUsernamePolicy');
 
@@ -100,11 +101,10 @@ async function getPendingStatusId(connection) {
   const [rows] = await connection.query(
     `
       SELECT cv.config_value_id
-      FROM config_values cv
-      INNER JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code = 'account_statuses'
-        AND cv.code = 'pending_setup'
+      FROM system_config_values scv
+      INNER JOIN config_values cv
+        ON cv.config_value_id = scv.config_value_id
+      WHERE scv.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_PENDING_SETUP}
       LIMIT 1
     `
   );

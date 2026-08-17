@@ -108,6 +108,7 @@ function buildPlan(state) {
       curatedCodes = getCuratedProcessorCodes({
         manufacturerName: model.manufacturer_name,
         categoryCode: model.category_code,
+        categorySystemConfigValueId: model.category_system_config_value_id,
         modelName: model.model_name
       });
 
@@ -173,6 +174,7 @@ function buildPlan(state) {
       unitModelId,
       manufacturerName: model.manufacturer_name,
       categoryCode: model.category_code,
+      categorySystemConfigValueId: Number(model.category_system_config_value_id || 0) || null,
       modelName: model.model_name,
       unitCount: Number(model.unit_count || 0),
       activeOptionsBefore: activeProcessorIds.size - historicalPlanned,

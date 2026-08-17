@@ -1,6 +1,7 @@
 const { pool } = require('./db');
 const { getCanonicalCosmeticGrade, isNotYetGradedToken } = require('../services/cosmeticGradeNormalization');
 const { buildLotHierarchyOptions } = require('../services/lotHierarchyPresentation');
+const { COSMETIC_GRADE_BY_SYSTEM_VALUE_ID, SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 
 const schemaTableCache = new Map();
 const schemaColumnCache = new Map();
@@ -208,53 +209,33 @@ function getIsoWeekdayWorkWindow(weekKey) {
   };
 }
 
-function getDefaultProductivityWeight(categoryCode, categoryLabel) {
-  const normalized = `${categoryCode || ''} ${categoryLabel || ''}`.toLowerCase();
+function getDefaultProductivityWeight(systemConfigValueId, categoryLabel) {
+  const configuredWeights = {
+    [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_CONFIGURATION_TASK]: 0.33,
+    [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_WINDOWS_SURFACE]: 2.0,
+    [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_MACBOOK]: 3.0,
+    [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_DESKTOP]: 0.5,
+    [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_ELS]: 0.33,
+    [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_LAPTOP]: 1.0
+  };
+  const configuredWeight = configuredWeights[Number(systemConfigValueId)];
+  if (Number.isFinite(configuredWeight)) return configuredWeight;
 
-  if (normalized.includes('configuration task') || normalized.includes('configuration_task')) {
-    return 0.33;
-  }
-
-  if (normalized.includes('windows surface') || normalized.includes('surface')) {
-    return 2.0;
-  }
-
-  if (normalized.includes('mac')) {
-    return 3.0;
-  }
-
-  if (normalized.includes('desktop')) {
-    return 0.5;
-  }
-
-  if (normalized.includes('els')) {
-    return 0.33;
-  }
-
-  if (normalized.includes('laptop')) {
-    return 1.0;
-  }
-
+  // Custom Unit Categories have no built-in productivity weight identity. Keep
+  // the historical fallback of one equivalent Unit until Management assigns a
+  // dedicated production-weight policy.
   return 1.0;
 }
 
-function getProductivityWeightSqlExpression(categoryAlias = 'category') {
+function getProductivityWeightSqlExpression(categorySystemAlias = 'category_system') {
   return `
-    CASE
-      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%configuration task%'
-        OR LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%configuration_task%'
-      THEN 0.33
-      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%windows surface%'
-        OR LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%surface%'
-      THEN 2.00
-      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%mac%'
-      THEN 3.00
-      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%desktop%'
-      THEN 0.50
-      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%els%'
-      THEN 0.33
-      WHEN LOWER(CONCAT(COALESCE(${categoryAlias}.code, ''), ' ', COALESCE(${categoryAlias}.label, ''))) LIKE '%laptop%'
-      THEN 1.00
+    CASE ${categorySystemAlias}.system_config_value_id
+      WHEN ${SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_CONFIGURATION_TASK} THEN 0.33
+      WHEN ${SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_WINDOWS_SURFACE} THEN 2.00
+      WHEN ${SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_MACBOOK} THEN 3.00
+      WHEN ${SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_DESKTOP} THEN 0.50
+      WHEN ${SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_ELS} THEN 0.33
+      WHEN ${SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_LAPTOP} THEN 1.00
       ELSE 1.00
     END
   `;
@@ -440,7 +421,7 @@ async function getCompletionSummaryForWindow(window) {
     return { completed: 0, weighted: 0 };
   }
 
-  const weightExpression = getProductivityWeightSqlExpression('category');
+  const weightExpression = getProductivityWeightSqlExpression('category_system');
   const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
   const [rows] = await pool.query(
     `
@@ -452,6 +433,8 @@ async function getCompletionSummaryForWindow(window) {
         ON u.unit_id = uga.unit_id
       LEFT JOIN config_values category
         ON category.config_value_id = u.unit_category_config_value_id
+      LEFT JOIN system_config_values category_system
+        ON category_system.config_value_id = category.config_value_id
       ${completedFilter.whereSql}
     `,
     completedFilter.params
@@ -470,8 +453,8 @@ async function getCompletionCategoryBreakdown(window) {
       `
         SELECT
           category.config_value_id AS category_id,
-          COALESCE(category.label, category.code, 'Uncategorized') AS category_label,
-          COALESCE(category.code, '') AS category_code,
+          COALESCE(category.label, category.value, 'Uncategorized') AS category_label,
+          category_system.system_config_value_id AS category_system_config_value_id,
           COUNT(*) AS completed_count,
           COALESCE(ROUND(SUM(uwc.production_weight_value), 2), 0) AS weighted_count
         FROM unit_work_completions uwc
@@ -479,8 +462,10 @@ async function getCompletionCategoryBreakdown(window) {
           ON u.unit_id = uwc.unit_id
         LEFT JOIN config_values category
           ON category.config_value_id = u.unit_category_config_value_id
+        LEFT JOIN system_config_values category_system
+          ON category_system.config_value_id = category.config_value_id
         ${completedFilter.whereSql}
-        GROUP BY category.config_value_id, category.label, category.code
+        GROUP BY category.config_value_id, category.label, category.value, category_system.system_config_value_id
         ORDER BY completed_count DESC, category_label
         LIMIT 12
       `,
@@ -490,10 +475,10 @@ async function getCompletionCategoryBreakdown(window) {
     return rows.map((row) => ({
       id: row.category_id ? Number(row.category_id) : null,
       label: row.category_label || 'Uncategorized',
-      code: row.category_code || '',
+      code: '',
       completed: Number(row.completed_count || 0),
       weighted: Number(row.weighted_count || 0),
-      defaultWeight: getDefaultProductivityWeight(row.category_code, row.category_label)
+      defaultWeight: getDefaultProductivityWeight(row.category_system_config_value_id, row.category_label)
     }));
   }
 
@@ -662,8 +647,8 @@ async function getProductivityCategoryBreakdownForUser(window, userId = null) {
     `
       SELECT
         category.config_value_id AS category_id,
-        COALESCE(category.label, category.code, 'Uncategorized') AS category_label,
-        COALESCE(category.code, '') AS category_code,
+        COALESCE(category.label, category.value, 'Uncategorized') AS category_label,
+        category_system.system_config_value_id AS category_system_config_value_id,
         COUNT(*) AS completed_count,
         COALESCE(ROUND(SUM(uwc.production_weight_value), 2), 0) AS weighted_count
       FROM unit_work_completions uwc
@@ -671,9 +656,11 @@ async function getProductivityCategoryBreakdownForUser(window, userId = null) {
         ON u.unit_id = uwc.unit_id
       LEFT JOIN config_values category
         ON category.config_value_id = u.unit_category_config_value_id
+      LEFT JOIN system_config_values category_system
+        ON category_system.config_value_id = category.config_value_id
       ${completedFilter.whereSql}
       ${userFilter}
-      GROUP BY category.config_value_id, category.label, category.code
+      GROUP BY category.config_value_id, category.label, category.value, category_system.system_config_value_id
       ORDER BY completed_count DESC, category_label
       LIMIT 12
     `,
@@ -685,7 +672,7 @@ async function getProductivityCategoryBreakdownForUser(window, userId = null) {
     label: row.category_label || 'Uncategorized',
     completed: Number(row.completed_count || 0),
     weighted: Number(row.weighted_count || 0),
-    defaultWeight: getDefaultProductivityWeight(row.category_code, row.category_label)
+    defaultWeight: getDefaultProductivityWeight(row.category_system_config_value_id, row.category_label)
   }));
 }
 
@@ -1153,8 +1140,8 @@ async function getUserStats() {
   const userColumns = await getColumnSet('users');
   const statusJoin = hasColumn(userColumns, 'account_status_config_value_id')
     ? `
-      LEFT JOIN config_values status
-        ON status.config_value_id = u.account_status_config_value_id
+      LEFT JOIN system_config_values status_system
+        ON status_system.config_value_id = u.account_status_config_value_id
     `
     : '';
 
@@ -1171,7 +1158,7 @@ async function getUserStats() {
       SELECT COUNT(*) AS count_value
       FROM users u
       ${statusJoin}
-      WHERE ${statusJoin ? "status.code = 'pending_setup'" : 'u.password_hash IS NULL'}
+      WHERE ${statusJoin ? `status_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_PENDING_SETUP}` : 'u.password_hash IS NULL'}
     `,
     [],
     ['users']
@@ -1232,25 +1219,26 @@ async function getGradeBreakdown(filters = {}) {
     `
       SELECT
         grade.config_value_id AS grade_id,
-        grade.code AS grade_code,
-        COALESCE(grade.label, grade.code, 'Unknown Grade') AS grade_label,
+        grade_system.system_config_value_id AS grade_system_config_value_id,
+        COALESCE(grade.label, grade.value, 'Unknown Grade') AS grade_label,
         COUNT(*) AS unit_count
       FROM unit_grade_assessments uga
       INNER JOIN units u
         ON u.unit_id = uga.unit_id
       LEFT JOIN config_values grade
         ON grade.config_value_id = uga.overall_grade_config_value_id
+      LEFT JOIN system_config_values grade_system
+        ON grade_system.config_value_id = grade.config_value_id
       WHERE uga.is_current = 1
         ${unitFilter.andSql}
-      GROUP BY grade.config_value_id, grade.code, grade.label
+      GROUP BY grade.config_value_id, grade.label, grade.value, grade_system.system_config_value_id
       ORDER BY
-        CASE grade.code
-          WHEN 'a' THEN 10
-          WHEN 'ab' THEN 20
-          WHEN 'b' THEN 30
-          WHEN 'c' THEN 40
-          WHEN 'd' THEN 50
-          WHEN 'n_a' THEN 90
+        CASE grade_system.system_config_value_id
+          WHEN ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_A} THEN 10
+          WHEN ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_AB} THEN 20
+          WHEN ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_B} THEN 30
+          WHEN ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_C} THEN 40
+          WHEN ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_D} THEN 50
           ELSE 999
         END,
         grade.label
@@ -1260,8 +1248,8 @@ async function getGradeBreakdown(filters = {}) {
 
   return rows.map((row) => ({
     id: row.grade_id ? Number(row.grade_id) : null,
-    code: row.grade_code || '',
-    label: normalizeGradeLabel(row.grade_label, row.grade_code),
+    code: COSMETIC_GRADE_BY_SYSTEM_VALUE_ID[Number(row.grade_system_config_value_id)] || '',
+    label: normalizeGradeLabel(row.grade_label, COSMETIC_GRADE_BY_SYSTEM_VALUE_ID[Number(row.grade_system_config_value_id)]),
     count: Number(row.unit_count || 0)
   }));
 }
@@ -1277,14 +1265,13 @@ async function getCategoryBreakdown(filters = {}) {
     `
       SELECT
         category.config_value_id AS category_id,
-        category.code AS category_code,
-        COALESCE(category.label, category.code, 'Uncategorized') AS category_label,
+        COALESCE(category.label, category.value, 'Uncategorized') AS category_label,
         COUNT(*) AS unit_count
       FROM units u
       LEFT JOIN config_values category
         ON category.config_value_id = u.unit_category_config_value_id
       ${unitFilter.whereSql}
-      GROUP BY category.config_value_id, category.code, category.label
+      GROUP BY category.config_value_id, category.label, category.value
       ORDER BY unit_count DESC, category_label
       LIMIT 8
     `,
@@ -1293,7 +1280,7 @@ async function getCategoryBreakdown(filters = {}) {
 
   return rows.map((row) => ({
     id: row.category_id ? Number(row.category_id) : null,
-    code: row.category_code || '',
+    code: '',
     label: row.category_label || 'Uncategorized',
     count: Number(row.unit_count || 0)
   }));
@@ -1396,13 +1383,13 @@ async function getCategoryFilterOptions() {
     `
       SELECT
         category.config_value_id AS value,
-        COALESCE(category.label, category.code, 'Uncategorized') AS label,
+        COALESCE(category.label, category.value, 'Uncategorized') AS label,
         COUNT(u.unit_id) AS unit_count
       FROM units u
       LEFT JOIN config_values category
         ON category.config_value_id = u.unit_category_config_value_id
       WHERE category.config_value_id IS NOT NULL
-      GROUP BY category.config_value_id, category.label, category.code
+      GROUP BY category.config_value_id, category.label, category.value
       ORDER BY label
     `
   );

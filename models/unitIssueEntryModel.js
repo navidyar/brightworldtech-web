@@ -1,4 +1,6 @@
 const { pool } = require('./db');
+const { getConfigValueIdBySystemId, listConfigValuesBySystemCategoryIds } = require('./configLookupModel');
+const { SYSTEM_CONFIG_CATEGORY_IDS, SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 const operationalOptionRankingModel = require('./operationalOptionRankingModel');
 const { sortOptionsByPopularity } = require('../services/operationalOptionRanking');
 const { isUnitFormFieldManaged } = require('../services/unitFormSubmissionPolicy');
@@ -6,11 +8,12 @@ const { isUnitFormFieldManaged } = require('../services/unitFormSubmissionPolicy
 const ISSUE_TABLE = 'unit_issue_entries';
 const COMMENT_TABLE = 'unit_comments';
 
-const COSMETIC_ISSUE_CATEGORY_CODES = ['cosmetic_issue_types', 'cosmetic_issue_type', 'cosmetic_issues'];
-const HARDWARE_ISSUE_CATEGORY_CODES = ['hardware_issue_types', 'hardware_issue_type', 'hardware_issues'];
-const ISSUE_LOCATION_CATEGORY_CODES = ['issue_locations', 'issue_location', 'unit_issue_locations'];
-const ISSUE_SEVERITY_CATEGORY_CODES = ['issue_severities', 'issue_severity', 'unit_issue_severities'];
-const COMMENT_TYPE_CATEGORY_CODES = ['unit_comment_types', 'comment_types', 'note_types'];
+const COSMETIC_ISSUE_CATEGORY_ID = SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_ISSUE_TYPES;
+const HARDWARE_ISSUE_CATEGORY_ID = SYSTEM_CONFIG_CATEGORY_IDS.HARDWARE_ISSUE_TYPES;
+const ISSUE_LOCATION_CATEGORY_ID = SYSTEM_CONFIG_CATEGORY_IDS.ISSUE_LOCATIONS;
+const ISSUE_SEVERITY_CATEGORY_ID = SYSTEM_CONFIG_CATEGORY_IDS.ISSUE_SEVERITIES;
+const COMMENT_TYPE_CATEGORY_ID = SYSTEM_CONFIG_CATEGORY_IDS.COMMENT_TYPES;
+
 
 async function tableExists(tableName, connection = pool) {
   const [rows] = await connection.query(
@@ -50,41 +53,12 @@ function normalizeOptionalInteger(value) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function normalizeSemanticToken(value) {
-  return normalizeText(value)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-}
-
 function isNoCosmeticIssueOption(option) {
-  const noIssueTokens = new Set([
-    'none',
-    'no_issue',
-    'no_issues',
-    'no_cosmetic_issue',
-    'no_cosmetic_issues'
-  ]);
-
-  return [option?.code, option?.value, option?.label]
-    .map((value) => normalizeSemanticToken(value))
-    .some((value) => noIssueTokens.has(value));
+  return Number(option?.systemConfigValueId) === SYSTEM_CONFIG_VALUE_IDS.COSMETIC_ISSUE_NONE;
 }
 
 function isNoHardwareIssueOption(option) {
-  const noIssueTokens = new Set([
-    'none',
-    'no_issue',
-    'no_issues',
-    'hardware_none',
-    'hardware_issue_none',
-    'no_hardware_issue',
-    'no_hardware_issues'
-  ]);
-
-  return [option?.code, option?.value, option?.label]
-    .map((value) => normalizeSemanticToken(value))
-    .some((value) => noIssueTokens.has(value));
+  return Number(option?.systemConfigValueId) === SYSTEM_CONFIG_VALUE_IDS.HARDWARE_ISSUE_NONE;
 }
 
 function normalizeIssueRows(rows) {
@@ -110,53 +84,14 @@ function issueRowHasAnyValue(row) {
   return Object.values(row || {}).some((value) => normalizeText(value));
 }
 
-async function listConfigValuesByCategoryCodes(categoryCodes, connection = pool) {
-  const safeCategoryCodes = categoryCodes.map((code) => normalizeText(code)).filter(Boolean);
-
-  if (safeCategoryCodes.length === 0) {
-    return [];
-  }
-
-  const categoryPlaceholders = safeCategoryCodes.map(() => '?').join(', ');
-  const categoryOrderPlaceholders = safeCategoryCodes.map(() => '?').join(', ');
-
-  const [rows] = await connection.query(
-    `
-      SELECT
-        cc.code AS category_code,
-        cv.config_value_id,
-        cv.code,
-        COALESCE(cv.label, cv.code) AS label,
-        cv.value,
-        cv.sort_order
-      FROM config_categories cc
-      INNER JOIN config_values cv
-        ON cv.config_category_id = cc.config_category_id
-      WHERE cc.code IN (${categoryPlaceholders})
-        AND COALESCE(cc.is_active, 1) = 1
-        AND COALESCE(cv.is_active, 1) = 1
-      ORDER BY FIELD(cc.code, ${categoryOrderPlaceholders}), cv.sort_order, label, cv.code
-    `,
-    [...safeCategoryCodes, ...safeCategoryCodes]
-  );
-
-  return rows.map((row) => ({
-    id: Number(row.config_value_id),
-    categoryCode: row.category_code,
-    code: row.code,
-    label: row.label,
-    value: row.value || row.code
-  }));
+async function listConfigValuesBySystemCategory(systemCategoryId, connection = pool) {
+  return listConfigValuesBySystemCategoryIds(systemCategoryId, {}, connection);
 }
 
-async function findPreferredConfigValueId(categoryCodes, preferredCodes, connection = pool) {
-  const options = await listConfigValuesByCategoryCodes(categoryCodes, connection);
-  const preferredCodeSet = new Set(preferredCodes.map((code) => normalizeText(code)).filter(Boolean));
-
-  const preferredOption = options.find((option) => preferredCodeSet.has(option.code));
-
-  return preferredOption ? Number(preferredOption.id) : options[0] ? Number(options[0].id) : null;
+async function findGeneralCommentTypeId(connection = pool) {
+  return getConfigValueIdBySystemId(SYSTEM_CONFIG_VALUE_IDS.COMMENT_GENERAL, connection);
 }
+
 
 function getBlankIssueFormData() {
   return {
@@ -190,15 +125,15 @@ async function getIssueFormOptions() {
     commentTypes,
     operationalRankingSnapshot
   ] = await Promise.all([
-    listConfigValuesByCategoryCodes(COSMETIC_ISSUE_CATEGORY_CODES),
-    listConfigValuesByCategoryCodes(HARDWARE_ISSUE_CATEGORY_CODES),
-    listConfigValuesByCategoryCodes(ISSUE_LOCATION_CATEGORY_CODES),
-    listConfigValuesByCategoryCodes(ISSUE_SEVERITY_CATEGORY_CODES),
-    listConfigValuesByCategoryCodes(COMMENT_TYPE_CATEGORY_CODES),
+    listConfigValuesBySystemCategory(COSMETIC_ISSUE_CATEGORY_ID),
+    listConfigValuesBySystemCategory(HARDWARE_ISSUE_CATEGORY_ID),
+    listConfigValuesBySystemCategory(ISSUE_LOCATION_CATEGORY_ID),
+    listConfigValuesBySystemCategory(ISSUE_SEVERITY_CATEGORY_ID),
+    listConfigValuesBySystemCategory(COMMENT_TYPE_CATEGORY_ID),
     operationalOptionRankingModel.loadRankingSnapshot()
   ]);
 
-  const defaultCommentType = commentTypes.find((commentType) => commentType.code === 'general') || commentTypes[0] || null;
+  const defaultCommentType = commentTypes.find((commentType) => Number(commentType.systemConfigValueId) === SYSTEM_CONFIG_VALUE_IDS.COMMENT_GENERAL) || commentTypes[0] || null;
 
   return {
     issueOptionsSupported: await tableExists(ISSUE_TABLE),
@@ -405,7 +340,7 @@ async function appendGeneralComment(connection, unitId, formData, currentUserId)
   }
 
   const requestedCommentTypeId = normalizeOptionalInteger(formData.generalCommentTypeConfigValueId);
-  const commentTypeId = requestedCommentTypeId || await findPreferredConfigValueId(COMMENT_TYPE_CATEGORY_CODES, ['general'], connection);
+  const commentTypeId = requestedCommentTypeId || await findGeneralCommentTypeId(connection);
 
   await connection.query(
     `

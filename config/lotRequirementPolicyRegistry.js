@@ -1,5 +1,7 @@
 'use strict';
 
+const { POLICY_KEY_BY_SYSTEM_VALUE_ID } = require('./configIdentityRegistry');
+
 const POLICY_DEFINITIONS = Object.freeze({
   strict: Object.freeze({
     code: 'strict',
@@ -53,7 +55,7 @@ function buildRequirementPolicyOptions(rows) {
       continue;
     }
 
-    const code = normalizePolicyCode(row.code);
+    const code = POLICY_KEY_BY_SYSTEM_VALUE_ID[Number(row.system_config_value_id || row.systemConfigValueId || 0)] || normalizePolicyCode(row.code);
     const definition = POLICY_DEFINITIONS[code];
     const configValueId = Number(row.config_value_id);
 

@@ -1,4 +1,6 @@
 const { pool } = require('./db');
+const { getConfigValueIdBySystemId, getConfigValueBySystemId } = require('./configLookupModel');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 const { buildUsernameStem, nextAvailableUsername, normalizeUsername } = require('../services/userUsernamePolicy');
 const {
   DEFAULT_PASSWORD_LINK_EXPIRY_HOURS,
@@ -7,46 +9,30 @@ const {
   normalizePasswordLinkExpiryHours
 } = require('../services/passwordLinkExpiryPolicy');
 
-const PASSWORD_LINK_EXPIRY_CATEGORY_CODE = 'security_settings';
-const PASSWORD_LINK_EXPIRY_VALUE_CODE = 'password_link_expiry_hours';
+const ACCOUNT_STATUS_CODE_BY_SYSTEM_ID = Object.freeze({
+  [SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_ACTIVE]: 'active',
+  [SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_PENDING_SETUP]: 'pending_setup'
+});
+const PASSWORD_LINK_CODE_BY_SYSTEM_ID = Object.freeze({
+  [SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_SETUP]: 'password_setup',
+  [SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_RESET]: 'password_reset'
+});
+const PASSWORD_LINK_SYSTEM_ID_BY_CODE = Object.freeze({
+  password_setup: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_SETUP,
+  setup: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_SETUP,
+  password_reset: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_RESET,
+  reset: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_RESET
+});
 
 async function getPasswordLinkExpiryHours() {
-  const [rows] = await pool.query(
-    `
-      SELECT cv.value
-      FROM config_values cv
-      INNER JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code = ?
-        AND cv.code = ?
-        AND cv.is_active = 1
-      LIMIT 1
-    `,
-    [PASSWORD_LINK_EXPIRY_CATEGORY_CODE, PASSWORD_LINK_EXPIRY_VALUE_CODE]
-  );
-
-  return normalizePasswordLinkExpiryHours(rows[0]?.value);
+  const value = await getConfigValueBySystemId(SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_EXPIRY_HOURS);
+  return normalizePasswordLinkExpiryHours(value?.value);
 }
 
-async function getConfigValueId(categoryCode, valueCode, connection = pool) {
-  const [rows] = await connection.query(
-    `
-      SELECT cv.config_value_id
-      FROM config_values cv
-      JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code = ?
-        AND cv.code = ?
-      LIMIT 1
-    `,
-    [categoryCode, valueCode]
-  );
-
-  if (!rows[0]) {
-    throw new Error(`Missing config value: ${categoryCode}.${valueCode}`);
-  }
-
-  return rows[0].config_value_id;
+async function getSystemConfigValueId(systemConfigValueId, connection = pool) {
+  const configValueId = await getConfigValueIdBySystemId(systemConfigValueId, connection);
+  if (!configValueId) throw new Error(`Missing system config value ID ${systemConfigValueId}.`);
+  return configValueId;
 }
 
 async function getRoleId(roleCode, connection = pool) {
@@ -75,6 +61,25 @@ function normalizeLoginIdentifier(identifier) {
   return String(identifier || '').trim();
 }
 
+function normalizeAuthUser(row) {
+  if (!row) return null;
+  const accountStatusSystemId = Number(row.account_status_system_config_value_id || 0);
+  return {
+    ...row,
+    account_status_code: ACCOUNT_STATUS_CODE_BY_SYSTEM_ID[accountStatusSystemId] || ''
+  };
+}
+
+function normalizePasswordLink(row) {
+  if (!row) return null;
+  const normalized = normalizeAuthUser(row);
+  const linkTypeSystemId = Number(row.link_type_system_config_value_id || 0);
+  return {
+    ...normalized,
+    link_type_code: PASSWORD_LINK_CODE_BY_SYSTEM_ID[linkTypeSystemId] || ''
+  };
+}
+
 async function getUserByLoginIdentifier(identifier, connection = pool) {
   const normalizedIdentifier = normalizeLoginIdentifier(identifier);
   const normalizedEmail = normalizeEmail(normalizedIdentifier);
@@ -85,7 +90,7 @@ async function getUserByLoginIdentifier(identifier, connection = pool) {
       SELECT
         u.user_id,
         u.account_status_config_value_id,
-        status.code AS account_status_code,
+        status_system.system_config_value_id AS account_status_system_config_value_id,
         u.first_name,
         u.last_name,
         u.username,
@@ -98,6 +103,8 @@ async function getUserByLoginIdentifier(identifier, connection = pool) {
       FROM users u
       LEFT JOIN config_values status
         ON status.config_value_id = u.account_status_config_value_id
+      LEFT JOIN system_config_values status_system
+        ON status_system.config_value_id = status.config_value_id
       WHERE LOWER(u.email) = ?
         OR u.username = ?
       LIMIT 1
@@ -105,7 +112,7 @@ async function getUserByLoginIdentifier(identifier, connection = pool) {
     [normalizedEmail, normalizedUsername]
   );
 
-  return rows[0] || null;
+  return normalizeAuthUser(rows[0]);
 }
 
 async function getUserByEmail(email, connection = pool) {
@@ -116,7 +123,7 @@ async function getUserByEmail(email, connection = pool) {
       SELECT
         u.user_id,
         u.account_status_config_value_id,
-        status.code AS account_status_code,
+        status_system.system_config_value_id AS account_status_system_config_value_id,
         u.first_name,
         u.last_name,
         u.username,
@@ -129,13 +136,15 @@ async function getUserByEmail(email, connection = pool) {
       FROM users u
       LEFT JOIN config_values status
         ON status.config_value_id = u.account_status_config_value_id
+      LEFT JOIN system_config_values status_system
+        ON status_system.config_value_id = status.config_value_id
       WHERE LOWER(u.email) = ?
       LIMIT 1
     `,
     [normalizedEmail]
   );
 
-  return rows[0] || null;
+  return normalizeAuthUser(rows[0]);
 }
 
 async function getUserByIdWithRoles(userId) {
@@ -148,11 +157,13 @@ async function getUserByIdWithRoles(userId) {
         u.username,
         u.email,
         u.is_active,
-        status.code AS account_status_code,
+        status_system.system_config_value_id AS account_status_system_config_value_id,
         GROUP_CONCAT(r.code ORDER BY r.code SEPARATOR ',') AS role_codes
       FROM users u
       LEFT JOIN config_values status
         ON status.config_value_id = u.account_status_config_value_id
+      LEFT JOIN system_config_values status_system
+        ON status_system.config_value_id = status.config_value_id
       LEFT JOIN user_roles ur
         ON ur.user_id = u.user_id
       LEFT JOIN roles r
@@ -165,13 +176,13 @@ async function getUserByIdWithRoles(userId) {
         u.username,
         u.email,
         u.is_active,
-        status.code
+        status_system.system_config_value_id
       LIMIT 1
     `,
     [userId]
   );
 
-  const user = rows[0] || null;
+  const user = normalizeAuthUser(rows[0]);
 
   if (!user) {
     return null;
@@ -292,7 +303,7 @@ async function createUserWithRoles({ firstName, lastName, email, roleCodes }) {
   try {
     await connection.beginTransaction();
 
-    const pendingStatusId = await getConfigValueId('account_statuses', 'pending_setup', connection);
+    const pendingStatusId = await getSystemConfigValueId(SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_PENDING_SETUP, connection);
     const [existingRows] = await connection.query(
       `
         SELECT user_id, username
@@ -381,7 +392,7 @@ async function createPasswordLink({ userId, linkTypeCode, tokenHash, expiresAt, 
   try {
     await connection.beginTransaction();
 
-    const linkTypeId = await getConfigValueId('password_link_types', linkTypeCode, connection);
+    const linkTypeId = await getSystemConfigValueId(PASSWORD_LINK_SYSTEM_ID_BY_CODE[linkTypeCode], connection);
 
     await connection.query(
       `
@@ -425,20 +436,24 @@ async function getValidPasswordLink(tokenHash) {
         upl.user_password_link_id,
         upl.user_id,
         upl.expires_at,
-        link_type.code AS link_type_code,
+        link_type_system.system_config_value_id AS link_type_system_config_value_id,
         u.first_name,
         u.last_name,
         u.username,
         u.email,
         u.is_active,
-        status.code AS account_status_code
+        status_system.system_config_value_id AS account_status_system_config_value_id
       FROM user_password_links upl
       JOIN users u
         ON u.user_id = upl.user_id
       JOIN config_values link_type
         ON link_type.config_value_id = upl.link_type_config_value_id
+      LEFT JOIN system_config_values link_type_system
+        ON link_type_system.config_value_id = link_type.config_value_id
       LEFT JOIN config_values status
         ON status.config_value_id = u.account_status_config_value_id
+      LEFT JOIN system_config_values status_system
+        ON status_system.config_value_id = status.config_value_id
       WHERE upl.token_hash = ?
         AND upl.used_at IS NULL
         AND upl.revoked_at IS NULL
@@ -449,7 +464,7 @@ async function getValidPasswordLink(tokenHash) {
     [tokenHash]
   );
 
-  return rows[0] || null;
+  return normalizePasswordLink(rows[0]);
 }
 
 async function setPasswordFromLink({ userPasswordLinkId, userId, passwordHash }) {
@@ -458,7 +473,7 @@ async function setPasswordFromLink({ userPasswordLinkId, userId, passwordHash })
   try {
     await connection.beginTransaction();
 
-    const activeStatusId = await getConfigValueId('account_statuses', 'active', connection);
+    const activeStatusId = await getSystemConfigValueId(SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_ACTIVE, connection);
 
     await connection.query(
       `

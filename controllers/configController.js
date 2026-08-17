@@ -1,6 +1,6 @@
 const configModel = require('../models/configModel');
 const operationalOptionRankingModel = require('../models/operationalOptionRankingModel');
-const { isValidConfigValueCode } = require('../services/configValueCodePolicy');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 const {
   MIN_PASSWORD_LINK_EXPIRY_HOURS,
   MAX_PASSWORD_LINK_EXPIRY_HOURS,
@@ -12,27 +12,8 @@ const {
   parseAllowedRefreshIntervalMinutes
 } = require('../services/operationalOptionRankingAdministration');
 
-const PASSWORD_LINK_EXPIRY_CATEGORY_CODE = 'security_settings';
-const PASSWORD_LINK_EXPIRY_VALUE_CODE = 'password_link_expiry_hours';
-const CANONICAL_COSMETIC_GRADE_CATEGORY_CODE = 'cosmetic_grades';
-
-function isCanonicalCosmeticGradeCategory(category) {
-  return String(category && category.code ? category.code : '').trim().toLowerCase()
-    === CANONICAL_COSMETIC_GRADE_CATEGORY_CODE;
-}
-
-function isCanonicalCosmeticGradeValue(configValue) {
-  return String(configValue && configValue.category_code ? configValue.category_code : '').trim().toLowerCase()
-    === CANONICAL_COSMETIC_GRADE_CATEGORY_CODE;
-}
-
-
 function isPasswordLinkExpirySetting(configValue) {
-  return Boolean(
-    configValue
-    && configValue.category_code === PASSWORD_LINK_EXPIRY_CATEGORY_CODE
-    && configValue.code === PASSWORD_LINK_EXPIRY_VALUE_CODE
-  );
+  return Number(configValue?.system_config_value_id || 0) === SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_EXPIRY_HOURS;
 }
 
 
@@ -178,7 +159,6 @@ async function validateProcessorTypeForm(formData, processorBrandId = null) {
 function getConfigValueFormDataFromRequest(req) {
   return {
     configCategoryId: String(req.body.configCategoryId || '').trim(),
-    code: normalizeCode(req.body.code),
     label: String(req.body.label || '').trim(),
     value: String(req.body.value || '').trim(),
     description: String(req.body.description || '').trim(),
@@ -192,7 +172,6 @@ function getInitialConfigValueFormData({ categoryId = '', configValue = null, in
   if (configValue) {
     return {
       configCategoryId: String(configValue.config_category_id || ''),
-      code: configValue.code || '',
       label: configValue.label || '',
       value: configValue.value || '',
       description: configValue.description || '',
@@ -204,7 +183,6 @@ function getInitialConfigValueFormData({ categoryId = '', configValue = null, in
 
   return {
     configCategoryId: categoryId ? String(categoryId) : '',
-    code: '',
     label: '',
     value: '',
     description: '',
@@ -229,27 +207,13 @@ async function validateConfigValueForm(formData, options = {}) {
 
     if (!category) {
       errorMessages.push('The selected configuration category could not be found.');
-    } else if (isCanonicalCosmeticGradeCategory(category)) {
-      errorMessages.push('Cosmetic Grades are system-managed canonical values (A, AB, B, C, D) and cannot be created or edited here.');
     }
   }
 
-  if (!formData.code) {
-    errorMessages.push('Enter a stable code for this value.');
-  } else if (!isValidConfigValueCode(formData.code, {
-    allowShort: String(selectedCategory?.code || '').trim().toLowerCase() === 'lot_types'
-  })) {
-    errorMessages.push(
-      String(selectedCategory?.code || '').trim().toLowerCase() === 'lot_types'
-        ? 'Lot Type code must be 1 to 120 characters and use lowercase letters, numbers, underscores, or hyphens.'
-        : 'Code must be 3 to 120 characters and use lowercase letters, numbers, underscores, or hyphens.'
-    );
-  } else {
-    const codeExists = await configModel.configValueCodeExists(formData.code, configValueId);
-
-    if (codeExists) {
-      errorMessages.push('That config value code is already in use. Codes must stay unique.');
-    }
+  if (options.configValue?.isProtected
+      && configCategoryId
+      && Number(options.configValue.config_category_id) !== Number(configCategoryId)) {
+    errorMessages.push('Protected system values cannot be moved to a different configuration category.');
   }
 
   if (!formData.label) {
@@ -455,7 +419,6 @@ async function createConfigValue(req, res, next) {
 
     await configModel.createConfigValue({
       configCategoryId,
-      code: formData.code,
       label: formData.label,
       value: formData.value,
       description: formData.description,
@@ -488,15 +451,6 @@ async function renderEditConfigValueModal(req, res, next) {
       });
     }
 
-    if (isCanonicalCosmeticGradeValue(configValue)) {
-      return res.status(400).render('fragments/config-value-status-modal', {
-        actionType: 'error',
-        configValue,
-        includeInactiveValues,
-        errorMessages: ['Cosmetic Grades are system-managed canonical values (A, AB, B, C, D). They are view-only in Configuration.']
-      });
-    }
-
     const categories = await configModel.listConfigCategoriesForForm();
 
     return res.render('fragments/config-value-form-modal', {
@@ -523,21 +477,11 @@ async function updateConfigValue(req, res, next) {
       return sendHtmxRedirect(req, res, getConfigReturnUrl(formData.includeInactive === '1', 'error=not_found'));
     }
 
-    if (isCanonicalCosmeticGradeValue(configValue)) {
-      return res.status(400).render('fragments/config-value-status-modal', {
-        actionType: 'error',
-        configValue,
-        includeInactiveValues: formData.includeInactive === '1',
-        errorMessages: ['Cosmetic Grades are system-managed canonical values (A, AB, B, C, D). They are view-only in Configuration.']
-      });
-    }
-
     const protectedSecuritySetting = isPasswordLinkExpirySetting(configValue);
 
     if (protectedSecuritySetting) {
       formData.configCategoryId = String(configValue.config_category_id);
-      formData.code = configValue.code;
-      formData.label = configValue.label || configValue.code;
+      formData.label = configValue.label || `Value #${configValue.config_value_id}`;
       formData.description = configValue.description || '';
       formData.sortOrder = String(configValue.sort_order ?? 0);
       formData.isActive = '1';
@@ -572,7 +516,6 @@ async function updateConfigValue(req, res, next) {
     await configModel.updateConfigValue({
       configValueId,
       configCategoryId,
-      code: formData.code,
       label: formData.label,
       value: formData.value,
       description: formData.description,
@@ -596,14 +539,6 @@ async function reorderConfigValues(req, res, next) {
     const orderedConfigValueIds = parseOrderedConfigValueIds(req.body.orderedConfigValueIds);
     const includeInactiveValues = parseIncludeInactiveFlag(req.body.includeInactive);
     const category = configCategoryId ? await configModel.getConfigCategoryById(configCategoryId) : null;
-
-    if (isCanonicalCosmeticGradeCategory(category)) {
-      return res.status(400).json({
-        ok: false,
-        code: 'CANONICAL_COSMETIC_GRADES_READ_ONLY',
-        error: 'Cosmetic Grades use the fixed order A, AB, B, C, D and cannot be reordered.'
-      });
-    }
 
     const result = await configModel.reorderConfigValues({
       configCategoryId,
@@ -646,15 +581,6 @@ async function renderConfigValueStatusModal(req, res, next) {
       });
     }
 
-    if (isCanonicalCosmeticGradeValue(configValue)) {
-      return res.status(400).render('fragments/config-value-status-modal', {
-        actionType: 'error',
-        configValue,
-        includeInactiveValues,
-        errorMessages: ['Cosmetic Grades are required canonical values and cannot be activated or deactivated individually.']
-      });
-    }
-
     if (actionType === 'deactivate' && isPasswordLinkExpirySetting(configValue)) {
       return res.status(400).render('fragments/config-value-status-modal', {
         actionType: 'error',
@@ -686,15 +612,6 @@ async function updateConfigValueStatus(req, res, next) {
       return sendHtmxRedirect(req, res, getConfigReturnUrl(includeInactiveValues, 'error=not_found'));
     }
 
-    if (isCanonicalCosmeticGradeValue(configValue)) {
-      return res.status(400).render('fragments/config-value-status-modal', {
-        actionType: 'error',
-        configValue,
-        includeInactiveValues,
-        errorMessages: ['Cosmetic Grades are required canonical values and cannot be activated or deactivated individually.']
-      });
-    }
-
     if (!shouldActivate && isPasswordLinkExpirySetting(configValue)) {
       return res.status(400).render('fragments/config-value-status-modal', {
         actionType: 'error',
@@ -702,6 +619,19 @@ async function updateConfigValueStatus(req, res, next) {
         includeInactiveValues,
         errorMessages: ['Password setup/reset link expiration is a required system security setting and cannot be deactivated. Edit its hour value instead.']
       });
+    }
+
+    if (!shouldActivate) {
+      const requirementUsage = await configModel.listActiveLotRequirementsReferencingConfigValue(configValueId);
+      if (requirementUsage.length > 0) {
+        const lotNames = requirementUsage.map((usage) => usage.lotName).join(', ');
+        return res.status(409).render('fragments/config-value-status-modal', {
+          actionType: 'error',
+          configValue,
+          includeInactiveValues,
+          errorMessages: [`This value is required by active Lot Requirement configuration in: ${lotNames}. Change those requirements before deactivating this option.`]
+        });
+      }
     }
 
     await configModel.setConfigValueActive(configValueId, shouldActivate);

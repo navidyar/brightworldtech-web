@@ -3,6 +3,8 @@
 const { pool } = require('./db');
 const unitAuditEventModel = require('./unitAuditEventModel');
 const unitWorkflowAudit = require('../services/unitWorkflowAudit');
+const configLookupModel = require('./configLookupModel');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 const {
   buildLotAssignmentSignature,
   buildRequirementSignature
@@ -21,27 +23,33 @@ async function getLotName(lotId, connection = pool) {
   return String(rows[0]?.name || '').trim() || `Lot #${Number(lotId)}`;
 }
 
+const OVERRIDE_STATUS_SYSTEM_IDS = Object.freeze({
+  approved: SYSTEM_CONFIG_VALUE_IDS.OVERRIDE_APPROVED,
+  cancelled: SYSTEM_CONFIG_VALUE_IDS.OVERRIDE_CANCELLED,
+  expired: SYSTEM_CONFIG_VALUE_IDS.OVERRIDE_EXPIRED
+});
+
+const OVERRIDE_STATUS_CODE_BY_SYSTEM_ID = Object.freeze(Object.fromEntries(
+  Object.entries(OVERRIDE_STATUS_SYSTEM_IDS).map(([code, systemId]) => [systemId, code])
+));
+
 async function getOverrideStatusId(code, connection = pool) {
-  const [rows] = await connection.query(
-    `
-      SELECT cv.config_value_id
-      FROM config_values cv
-      JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code = 'override_statuses'
-        AND cv.code = ?
-      LIMIT 1
-    `,
-    [String(code || '').trim()]
-  );
+  const normalizedCode = String(code || '').trim();
+  const systemId = Number(OVERRIDE_STATUS_SYSTEM_IDS[normalizedCode] || 0);
+  if (!systemId) {
+    throw new Error(`Override status ${normalizedCode || '(blank)'} is not recognized.`);
+  }
 
-  const statusId = Number(rows[0]?.config_value_id || 0);
-
-  if (!Number.isSafeInteger(statusId) || statusId <= 0) {
-    throw new Error(`Override status ${code} is not configured.`);
+  const statusId = await configLookupModel.getConfigValueIdBySystemId(systemId, connection);
+  if (!statusId) {
+    throw new Error(`Override status ${normalizedCode} is not configured.`);
   }
 
   return statusId;
+}
+
+function getOverrideStatusCode(systemConfigValueId) {
+  return OVERRIDE_STATUS_CODE_BY_SYSTEM_ID[Number(systemConfigValueId)] || '';
 }
 
 async function listRawRequirementsForSignature(lotId, connection = pool) {
@@ -113,7 +121,8 @@ function getOverrideStatusLabel(statusCode, configuredLabel) {
 function normalizeOverrideRow(row) {
   if (!row) return null;
 
-  const statusCode = String(row.override_status_code || '').trim();
+  const statusCode = getOverrideStatusCode(row.override_status_system_config_value_id)
+    || String(row.override_status_code || '').trim();
 
   return {
     overrideId: Number(row.unit_lot_validation_override_id),
@@ -150,16 +159,18 @@ async function listApprovedOverridesForLot(lotId, unitIds, connection = pool) {
     `
       SELECT
         override_record.*,
-        status_value.code AS override_status_code,
+        status_system.system_config_value_id AS override_status_system_config_value_id,
         CONCAT_WS(' ', approver.first_name, approver.last_name) AS approved_by_name
       FROM unit_lot_validation_overrides override_record
       JOIN config_values status_value
         ON status_value.config_value_id = override_record.override_status_config_value_id
+      LEFT JOIN system_config_values status_system
+        ON status_system.config_value_id = status_value.config_value_id
       LEFT JOIN users approver
         ON approver.user_id = override_record.approved_by_user_id
       WHERE override_record.lot_id = ?
         AND override_record.unit_id IN (${buildPlaceholders(safeUnitIds)})
-        AND status_value.code = 'approved'
+        AND status_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.OVERRIDE_APPROVED}
       ORDER BY
         override_record.unit_id,
         override_record.approved_at DESC,
@@ -184,7 +195,7 @@ async function listOverrideHistoryForUnit(unitId, limit = 100, connection = pool
     `
       SELECT
         override_record.*,
-        status_value.code AS override_status_code,
+        status_system.system_config_value_id AS override_status_system_config_value_id,
         status_value.label AS override_status_label,
         lot_record.name AS lot_name,
         CONCAT_WS(' ', requester.first_name, requester.last_name) AS requested_by_name,
@@ -193,6 +204,8 @@ async function listOverrideHistoryForUnit(unitId, limit = 100, connection = pool
       FROM unit_lot_validation_overrides override_record
       JOIN config_values status_value
         ON status_value.config_value_id = override_record.override_status_config_value_id
+      LEFT JOIN system_config_values status_system
+        ON status_system.config_value_id = status_value.config_value_id
       LEFT JOIN lots lot_record
         ON lot_record.lot_id = override_record.lot_id
       LEFT JOIN users requester

@@ -1,5 +1,6 @@
 const { pool } = require('./db');
 const accessPolicy = require('../config/accessPolicy');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 
 function getPasswordLinkStatus(row) {
   if (!row || !row.latest_password_link_expires_at) {
@@ -29,16 +30,28 @@ function mapUserRow(row) {
   const primaryRoleCode = accessPolicy.getPrimaryRole(roles);
   const primaryRoleIndex = roles.indexOf(primaryRoleCode);
   const primaryRoleName = primaryRoleIndex >= 0 ? roleNames[primaryRoleIndex] : row.primary_role_name || primaryRoleCode || '';
+  const accountStatusSystemId = Number(row.account_status_system_config_value_id || 0);
+  const linkTypeSystemId = Number(row.latest_password_link_type_system_config_value_id || 0);
+  const accountStatusCode = accountStatusSystemId === SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_ACTIVE
+    ? 'active'
+    : accountStatusSystemId === SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_PENDING_SETUP ? 'pending_setup' : '';
+  const latestPasswordLinkTypeCode = linkTypeSystemId === SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_RESET
+    ? 'password_reset'
+    : linkTypeSystemId === SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_SETUP ? 'password_setup' : '';
 
   return {
     ...row,
     roles,
+    account_status_code: accountStatusCode,
+    latest_password_link_type_code: latestPasswordLinkTypeCode,
     primary_role_code: primaryRoleCode,
     primary_role_name: primaryRoleName,
     role_count: Number(row.role_count || roles.length || 0),
     is_active: Number(row.is_active) === 1,
     has_password: Number(row.has_password || 0) === 1,
-    can_delete_pending_setup: Number(row.can_delete_pending_setup || 0) === 1,
+    can_delete_pending_setup: accountStatusSystemId === SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_PENDING_SETUP
+      && Number(row.has_password || 0) !== 1
+      && !row.last_login_at,
     latest_password_link_status: getPasswordLinkStatus(row)
   };
 }
@@ -86,7 +99,7 @@ async function listUsers(options = {}) {
         u.last_name,
         u.username,
         u.email,
-        status.code AS account_status_code,
+        status_system.system_config_value_id AS account_status_system_config_value_id,
         status.label AS account_status_label,
         u.password_hash IS NOT NULL AS has_password,
         u.is_active,
@@ -94,14 +107,7 @@ async function listUsers(options = {}) {
         latest_upl.expires_at AS latest_password_link_expires_at,
         latest_upl.used_at AS latest_password_link_used_at,
         latest_upl.revoked_at AS latest_password_link_revoked_at,
-        latest_link_type.code AS latest_password_link_type_code,
-        CASE
-          WHEN status.code = 'pending_setup'
-            AND u.password_hash IS NULL
-            AND u.last_login_at IS NULL
-          THEN 1
-          ELSE 0
-        END AS can_delete_pending_setup,
+        latest_link_type_system.system_config_value_id AS latest_password_link_type_system_config_value_id,
         u.created_at,
         u.updated_at,
         GROUP_CONCAT(r.code ORDER BY ${getRoleOrderSql('r')} SEPARATOR ',') AS role_codes,
@@ -110,6 +116,8 @@ async function listUsers(options = {}) {
       FROM users u
       LEFT JOIN config_values status
         ON status.config_value_id = u.account_status_config_value_id
+      LEFT JOIN system_config_values status_system
+        ON status_system.config_value_id = status.config_value_id
       LEFT JOIN user_roles ur
         ON ur.user_id = u.user_id
       LEFT JOIN roles r
@@ -122,6 +130,8 @@ async function listUsers(options = {}) {
         )
       LEFT JOIN config_values latest_link_type
         ON latest_link_type.config_value_id = latest_upl.link_type_config_value_id
+      LEFT JOIN system_config_values latest_link_type_system
+        ON latest_link_type_system.config_value_id = latest_link_type.config_value_id
       WHERE u.is_active = ?
       GROUP BY
         u.user_id,
@@ -129,7 +139,7 @@ async function listUsers(options = {}) {
         u.last_name,
         u.username,
         u.email,
-        status.code,
+        status_system.system_config_value_id,
         status.label,
         u.password_hash,
         u.is_active,
@@ -137,8 +147,7 @@ async function listUsers(options = {}) {
         latest_upl.expires_at,
         latest_upl.used_at,
         latest_upl.revoked_at,
-        latest_link_type.code,
-        can_delete_pending_setup,
+        latest_link_type_system.system_config_value_id,
         u.created_at,
         u.updated_at
       ORDER BY u.last_name, u.first_name, u.email
@@ -194,7 +203,7 @@ async function getUserById(userId) {
         u.last_name,
         u.username,
         u.email,
-        status.code AS account_status_code,
+        status_system.system_config_value_id AS account_status_system_config_value_id,
         status.label AS account_status_label,
         u.password_hash IS NOT NULL AS has_password,
         u.is_active,
@@ -202,20 +211,15 @@ async function getUserById(userId) {
         latest_upl.expires_at AS latest_password_link_expires_at,
         latest_upl.used_at AS latest_password_link_used_at,
         latest_upl.revoked_at AS latest_password_link_revoked_at,
-        latest_link_type.code AS latest_password_link_type_code,
-        CASE
-          WHEN status.code = 'pending_setup'
-            AND u.password_hash IS NULL
-            AND u.last_login_at IS NULL
-          THEN 1
-          ELSE 0
-        END AS can_delete_pending_setup,
+        latest_link_type_system.system_config_value_id AS latest_password_link_type_system_config_value_id,
         GROUP_CONCAT(r.code ORDER BY ${getRoleOrderSql('r')} SEPARATOR ',') AS role_codes,
         GROUP_CONCAT(r.name ORDER BY ${getRoleOrderSql('r')} SEPARATOR ', ') AS role_names,
         COUNT(DISTINCT r.role_id) AS role_count
       FROM users u
       LEFT JOIN config_values status
         ON status.config_value_id = u.account_status_config_value_id
+      LEFT JOIN system_config_values status_system
+        ON status_system.config_value_id = status.config_value_id
       LEFT JOIN user_roles ur
         ON ur.user_id = u.user_id
       LEFT JOIN roles r
@@ -228,6 +232,8 @@ async function getUserById(userId) {
         )
       LEFT JOIN config_values latest_link_type
         ON latest_link_type.config_value_id = latest_upl.link_type_config_value_id
+      LEFT JOIN system_config_values latest_link_type_system
+        ON latest_link_type_system.config_value_id = latest_link_type.config_value_id
       WHERE u.user_id = ?
       GROUP BY
         u.user_id,
@@ -235,7 +241,7 @@ async function getUserById(userId) {
         u.last_name,
         u.username,
         u.email,
-        status.code,
+        status_system.system_config_value_id,
         status.label,
         u.password_hash,
         u.is_active,
@@ -243,7 +249,7 @@ async function getUserById(userId) {
         latest_upl.expires_at,
         latest_upl.used_at,
         latest_upl.revoked_at,
-        latest_link_type.code,
+        latest_link_type_system.system_config_value_id,
         can_delete_pending_setup
       LIMIT 1
     `,
@@ -394,12 +400,14 @@ async function deletePendingSetupUser(userId) {
       `
         SELECT
           u.user_id,
-          status.code AS account_status_code,
+          status_system.system_config_value_id AS account_status_system_config_value_id,
           u.password_hash IS NOT NULL AS has_password,
           u.last_login_at
         FROM users u
         LEFT JOIN config_values status
           ON status.config_value_id = u.account_status_config_value_id
+        LEFT JOIN system_config_values status_system
+          ON status_system.config_value_id = status.config_value_id
         WHERE u.user_id = ?
         LIMIT 1
         FOR UPDATE
@@ -414,7 +422,7 @@ async function deletePendingSetupUser(userId) {
       return { deleted: false, reason: 'not_found' };
     }
 
-    const canDeletePendingSetup = user.account_status_code === 'pending_setup'
+    const canDeletePendingSetup = Number(user.account_status_system_config_value_id) === SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_PENDING_SETUP
       && Number(user.has_password) !== 1
       && !user.last_login_at;
 

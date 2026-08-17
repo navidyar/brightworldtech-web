@@ -2,6 +2,7 @@
 
 require('dotenv').config();
 const { pool } = require('../models/db');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 
 async function main() {
   const [[schema]] = await pool.query(
@@ -20,11 +21,10 @@ async function main() {
   const [[requirementType]] = await pool.query(
     `
       SELECT COUNT(*) AS type_count
-      FROM config_values cv
-      INNER JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code = 'lot_requirement_types'
-        AND cv.code = 'processor_family'
+      FROM system_config_values scv
+      INNER JOIN config_values cv
+        ON cv.config_value_id = scv.config_value_id
+      WHERE scv.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.REQUIREMENT_PROCESSOR_FAMILY}
         AND cv.is_active = 1
     `
   );
@@ -53,11 +53,11 @@ async function main() {
     `
       SELECT COUNT(*) AS invalid_count
       FROM lot_requirements lr
-      INNER JOIN config_values requirement_type
-        ON requirement_type.config_value_id = lr.requirement_type_config_value_id
+      INNER JOIN system_config_values requirement_type_system
+        ON requirement_type_system.config_value_id = lr.requirement_type_config_value_id
       LEFT JOIN processor_families pf
         ON pf.processor_family_id = lr.processor_family_id
-      WHERE requirement_type.code = 'processor_family'
+      WHERE requirement_type_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.REQUIREMENT_PROCESSOR_FAMILY}
         AND pf.processor_family_id IS NULL
     `
   );

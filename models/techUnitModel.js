@@ -1,5 +1,7 @@
 const { pool } = require('./db');
 const lotModel = require('./lotModel');
+const { listConfigValuesBySystemCategoryIds, getConfigValueIdBySystemId } = require('./configLookupModel');
+const { IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID, SYSTEM_CONFIG_CATEGORY_IDS, SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 const productionWeightModel = require('./productionWeightModel');
 const productionWeightSyncModel = require('./productionWeightSyncModel');
 const productionCycleModel = require('./productionCycleModel');
@@ -66,12 +68,6 @@ const MEMORY_INSTALL_TYPE_OPTIONS = [
 
 const DEFAULT_MEMORY_INSTALL_TYPE_CODE = 'removable_module';
 
-const COSMETIC_GRADE_CATEGORY_CODES = [
-  'cosmetic_grades',
-  'overall_unit_grades',
-  'unit_grades',
-  'unit_grade'
-];
 
 const VALID_MEMORY_INSTALL_TYPE_CODES = new Set(MEMORY_INSTALL_TYPE_OPTIONS.map((option) => option.code));
 
@@ -231,57 +227,8 @@ function pickColumn(columns, candidates) {
   return candidates.find((columnName) => hasColumn(columns, columnName)) || null;
 }
 
-async function listConfigValuesByCategoryCodes(categoryCodes) {
-  const categoryColumns = await getTableColumns('config_categories');
-  const valueColumns = await getTableColumns('config_values');
-
-  if (
-    !hasColumn(categoryColumns, 'config_category_id') ||
-    !hasColumn(categoryColumns, 'code') ||
-    !hasColumn(valueColumns, 'config_value_id') ||
-    !hasColumn(valueColumns, 'config_category_id') ||
-    !hasColumn(valueColumns, 'code') ||
-    !hasColumn(valueColumns, 'label')
-  ) {
-    return [];
-  }
-
-  const safeCategoryCodes = categoryCodes.map((code) => String(code).trim()).filter(Boolean);
-
-  if (safeCategoryCodes.length === 0) {
-    return [];
-  }
-
-  const placeholders = safeCategoryCodes.map(() => '?').join(', ');
-  const fieldPlaceholders = safeCategoryCodes.map(() => '?').join(', ');
-
-  const [rows] = await pool.query(
-    `
-      SELECT
-        cc.code AS category_code,
-        cv.config_value_id,
-        cv.code,
-        cv.label,
-        cv.value,
-        cv.sort_order
-      FROM config_categories cc
-      INNER JOIN config_values cv
-        ON cv.config_category_id = cc.config_category_id
-      WHERE cc.code IN (${placeholders})
-        AND cc.is_active = 1
-        AND cv.is_active = 1
-      ORDER BY FIELD(cc.code, ${fieldPlaceholders}), cv.sort_order, cv.label, cv.code
-    `,
-    [...safeCategoryCodes, ...safeCategoryCodes]
-  );
-
-  return rows.map((row) => ({
-    id: Number(row.config_value_id),
-    categoryCode: row.category_code,
-    code: row.code,
-    label: row.label,
-    value: row.value || row.code
-  }));
+async function listConfigValuesBySystemCategory(systemCategoryId) {
+  return listConfigValuesBySystemCategoryIds(systemCategoryId);
 }
 
 async function listManufacturers() {
@@ -1116,12 +1063,12 @@ async function getTechUnitFormOptions(options = {}) {
     productionWeightOptions,
     operationalRankingSnapshot
   ] = await Promise.all([
-    listConfigValuesByCategoryCodes(['unit_categories', 'unit_category', 'unit_types', 'unit_type']),
-    listConfigValuesByCategoryCodes(['unit_statuses', 'unit_status', 'current_unit_statuses', 'current_unit_status']),
-    listConfigValuesByCategoryCodes(['ram_types', 'ram_type']),
-    listConfigValuesByCategoryCodes(['storage_types', 'storage_type', 'ssd_types', 'ssd_type']),
-    listConfigValuesByCategoryCodes(['storage_wipe_statuses', 'storage_wipe_status', 'wipe_statuses', 'wipe_status']),
-    listConfigValuesByCategoryCodes(['operating_systems', 'operating_system']),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.UNIT_CATEGORIES),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.UNIT_STATUSES),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.RAM_TYPES),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_TYPES),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_WIPE_STATUSES),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.OPERATING_SYSTEMS),
     listManufacturers(),
     listUnitModels({ includeUnitModelId: includeCurrentUnitModelId }),
     listProcessorBrands(),
@@ -1201,7 +1148,7 @@ async function getTechUnitFormOptions(options = {}) {
     usageScoresByContextSerialized: serializeUsageScoresByContext(option.usageScoresByContext)
   }));
 
-  const receivedStatus = unitStatuses.find((status) => status.code === 'received') || unitStatuses[0] || null;
+  const receivedStatus = unitStatuses.find((status) => Number(status.systemConfigValueId) === SYSTEM_CONFIG_VALUE_IDS.UNIT_STATUS_RECEIVED) || unitStatuses[0] || null;
   const unitCategoriesWithProductionWeights = rankedUnitCategories.map((category) => {
     const defaultProductionWeight = productionWeightModel.findProductionWeightOptionForCategory(category, productionWeightOptions);
 
@@ -1508,28 +1455,24 @@ async function listPreviousStorageDevicesForUnit(unitId) {
 
 async function getUnitIdentifierValue(unitId, typeCode) {
   const exists = await tableExists('unit_identifiers');
+  if (!exists) return '';
 
-  if (!exists) {
-    return '';
-  }
+  const systemIdByType = {
+    asset_tag: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_ASSET_TAG,
+    unit_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL,
+    bios_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL
+  };
+  const configValueId = await getConfigValueIdBySystemId(systemIdByType[typeCode]);
+  if (!configValueId) return '';
 
   const [rows] = await pool.query(
-    `
-      SELECT ui.identifier_value
-      FROM unit_identifiers ui
-      JOIN config_values cv
-        ON cv.config_value_id = ui.identifier_type_config_value_id
-      JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE ui.unit_id = ?
-        AND cc.code = 'unit_identifier_types'
-        AND cv.code = ?
-      ORDER BY ui.is_primary DESC, ui.unit_identifier_id DESC
-      LIMIT 1
-    `,
-    [unitId, typeCode]
+    `SELECT identifier_value
+     FROM unit_identifiers
+     WHERE unit_id = ? AND identifier_type_config_value_id = ?
+     ORDER BY is_primary DESC, unit_identifier_id DESC
+     LIMIT 1`,
+    [unitId, configValueId]
   );
-
   return rows[0]?.identifier_value || '';
 }
 
@@ -1813,7 +1756,9 @@ function getCurrentGradeJoinSql(gradeAssessmentsTableIsReady) {
       ) current_grade
         ON current_grade.unit_id = u.unit_id
       LEFT JOIN config_values current_grade_value
-        ON current_grade_value.config_value_id = current_grade.overall_grade_config_value_id`;
+        ON current_grade_value.config_value_id = current_grade.overall_grade_config_value_id
+      LEFT JOIN system_config_values current_grade_system
+        ON current_grade_system.config_value_id = current_grade_value.config_value_id`;
 }
 
 function getQcReviewStateJoinSql(
@@ -2012,17 +1957,17 @@ function getCurrentOutcomeJoinSql(outcomesTableIsReady) {
 }
 
 function getGradeSortRankSql() {
-  const gradeValueSql = "LOWER(COALESCE(current_grade_value.label, current_grade_value.code, current_grade_value.value, ''))";
+  const gradeLabelSql = "LOWER(COALESCE(current_grade_value.label, current_grade_value.value, ''))";
 
   return `
         CASE
           WHEN current_grade_value.config_value_id IS NULL THEN 100
-          WHEN ${gradeValueSql} REGEXP 'not[^a-z0-9]*yet[^a-z0-9]*graded|not[^a-z0-9]*graded|ungraded|n/?a' THEN 100
-          WHEN ${gradeValueSql} = 'a' THEN 10
-          WHEN ${gradeValueSql} = 'ab' THEN 20
-          WHEN ${gradeValueSql} = 'b' THEN 30
-          WHEN ${gradeValueSql} = 'c' THEN 40
-          WHEN ${gradeValueSql} = 'd' THEN 50
+          WHEN ${gradeLabelSql} REGEXP 'not[^a-z0-9]*yet[^a-z0-9]*graded|not[^a-z0-9]*graded|ungraded|n/?a' THEN 100
+          WHEN current_grade_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_A} THEN 10
+          WHEN current_grade_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_AB} THEN 20
+          WHEN current_grade_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_B} THEN 30
+          WHEN current_grade_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_C} THEN 40
+          WHEN current_grade_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_D} THEN 50
           ELSE 70
         END`;
 }
@@ -2084,7 +2029,7 @@ function getUnitOrderBySql(
     return `
       ORDER BY
         ${getGradeSortRankSql()} ${gradeDirection},
-        LOWER(COALESCE(current_grade_value.label, current_grade_value.code, current_grade_value.value, '')) ${labelDirection},
+        LOWER(COALESCE(current_grade_value.label, current_grade_value.value, '')) ${labelDirection},
         u.created_at DESC,
         u.unit_id DESC`;
   }
@@ -2195,16 +2140,16 @@ async function listTechUnits(filters = {}) {
     productionWeightOptions,
     browserOperationalRankingSnapshot
   ] = await Promise.all([
-    listConfigValuesByCategoryCodes(['unit_categories', 'unit_category', 'unit_types', 'unit_type']),
-    listConfigValuesByCategoryCodes(['unit_statuses', 'unit_status', 'current_unit_statuses', 'current_unit_status']),
-    listConfigValuesByCategoryCodes(['ram_types', 'ram_type']),
-    listConfigValuesByCategoryCodes(['storage_types', 'storage_type', 'ssd_types', 'ssd_type']),
-    listConfigValuesByCategoryCodes(['operating_systems', 'operating_system']),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.UNIT_CATEGORIES),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.UNIT_STATUSES),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.RAM_TYPES),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_TYPES),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.OPERATING_SYSTEMS),
     listManufacturers(),
     listUnitModels(),
     listProcessorBrands(),
     listProcessorModels(),
-    listConfigValuesByCategoryCodes(COSMETIC_GRADE_CATEGORY_CODES),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES),
     listTechUsersWithUnits(),
     productionWeightModel.listProductionWeightOptions(),
     operationalOptionRankingModel.loadRankingSnapshot()
@@ -2724,43 +2669,21 @@ async function listTechUnits(filters = {}) {
 }
 
 async function getIdentifierTypeId(typeCode, connection = pool) {
-  const [rows] = await connection.query(
-    `
-      SELECT cv.config_value_id
-      FROM config_values cv
-      JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code = 'unit_identifier_types'
-        AND cv.code = ?
-      LIMIT 1
-    `,
-    [typeCode]
-  );
-
-  return rows[0]?.config_value_id || null;
+  const systemIdByType = {
+    asset_tag: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_ASSET_TAG,
+    unit_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL,
+    bios_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL
+  };
+  return getConfigValueIdBySystemId(systemIdByType[typeCode], connection);
 }
 
 async function getIdentifierTypeMap(connection = pool) {
-  const [rows] = await connection.query(
-    `
-      SELECT
-        cv.code,
-        cv.config_value_id
-      FROM config_values cv
-      JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code = 'unit_identifier_types'
-        AND cv.code IN ('asset_tag', 'unit_serial_number', 'bios_serial_number')
-    `
-  );
-
-  const typeMap = new Map();
-
-  rows.forEach((row) => {
-    typeMap.set(row.code, Number(row.config_value_id));
-  });
-
-  return typeMap;
+  const pairs = await Promise.all([
+    ['asset_tag', SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_ASSET_TAG],
+    ['unit_serial_number', SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL],
+    ['bios_serial_number', SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL]
+  ].map(async ([key, systemId]) => [key, await getConfigValueIdBySystemId(systemId, connection)]));
+  return new Map(pairs.filter(([, configValueId]) => configValueId));
 }
 
 function getDuplicateUnitMessage(matches, assetTagPrefix = getAssetTagPrefix()) {
@@ -2803,6 +2726,8 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
   const serialTypeIds = ['unit_serial_number', 'bios_serial_number']
     .map((typeCode) => typeMap.get(typeCode))
     .filter(Boolean);
+  const unitSerialTypeId = Number(typeMap.get('unit_serial_number') || 0);
+  const biosSerialTypeId = Number(typeMap.get('bios_serial_number') || 0);
   const serialTypeCodes = new Set(['unit_serial_number', 'bios_serial_number']);
   const clauses = [];
   const params = [];
@@ -2842,34 +2767,24 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
         ui.unit_id,
         ui.identifier_value,
         ui.normalized_value,
-        cv.code AS identifier_type_code,
-        cv.label AS identifier_type_label,
+        scv.system_config_value_id AS identifier_type_system_config_value_id,
+        COALESCE(cv.label, cv.value, 'Identifier') AS identifier_type_label,
         u.asset_number,
         u.lot_id,
         NULL AS lot_name,
         (
           SELECT ui_unit_serial.identifier_value
           FROM unit_identifiers ui_unit_serial
-          JOIN config_values cv_unit_serial
-            ON cv_unit_serial.config_value_id = ui_unit_serial.identifier_type_config_value_id
-          JOIN config_categories cc_unit_serial
-            ON cc_unit_serial.config_category_id = cv_unit_serial.config_category_id
           WHERE ui_unit_serial.unit_id = u.unit_id
-            AND cc_unit_serial.code = 'unit_identifier_types'
-            AND cv_unit_serial.code = 'unit_serial_number'
+            AND ui_unit_serial.identifier_type_config_value_id = ${unitSerialTypeId}
           ORDER BY ui_unit_serial.unit_identifier_id DESC
           LIMIT 1
         ) AS unit_serial_number,
         (
           SELECT ui_bios_serial.identifier_value
           FROM unit_identifiers ui_bios_serial
-          JOIN config_values cv_bios_serial
-            ON cv_bios_serial.config_value_id = ui_bios_serial.identifier_type_config_value_id
-          JOIN config_categories cc_bios_serial
-            ON cc_bios_serial.config_category_id = cv_bios_serial.config_category_id
           WHERE ui_bios_serial.unit_id = u.unit_id
-            AND cc_bios_serial.code = 'unit_identifier_types'
-            AND cv_bios_serial.code = 'bios_serial_number'
+            AND ui_bios_serial.identifier_type_config_value_id = ${biosSerialTypeId}
           ORDER BY ui_bios_serial.unit_identifier_id DESC
           LIMIT 1
         ) AS bios_serial_number,
@@ -2881,6 +2796,8 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
       FROM unit_identifiers ui
       JOIN config_values cv
         ON cv.config_value_id = ui.identifier_type_config_value_id
+      LEFT JOIN system_config_values scv
+        ON scv.config_value_id = cv.config_value_id
       JOIN units u
         ON u.unit_id = ui.unit_id
       LEFT JOIN lots l
@@ -2896,10 +2813,10 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
       WHERE (${clauses.join(' OR ')})
         ${excludeSql}
       ORDER BY
-        CASE cv.code
-          WHEN 'asset_tag' THEN 10
-          WHEN 'bios_serial_number' THEN 20
-          WHEN 'unit_serial_number' THEN 30
+        CASE scv.system_config_value_id
+          WHEN 201 THEN 10
+          WHEN 203 THEN 20
+          WHEN 202 THEN 30
           ELSE 999
         END,
         ui.unit_identifier_id DESC
@@ -2929,7 +2846,7 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
       unitId: Number(row.unit_id),
       identifierValue: row.identifier_value,
       normalizedValue: row.normalized_value,
-      identifierTypeCode: row.identifier_type_code,
+      identifierTypeCode: IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID[Number(row.identifier_type_system_config_value_id || 0)] || '',
       identifierTypeLabel: row.identifier_type_label,
       assetNumber: row.asset_number ? Number(row.asset_number) : null,
       assetTag: row.asset_number ? getDisplayAssetTag(row.asset_number) : '',
@@ -2966,16 +2883,15 @@ async function getStoredSerialNormalizedValuesForUnit(unitId, connection = pool)
     `
       SELECT ui.normalized_value
       FROM unit_identifiers ui
-      INNER JOIN config_values cv
-        ON cv.config_value_id = ui.identifier_type_config_value_id
-      INNER JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
       WHERE ui.unit_id = ?
-        AND cc.code = 'unit_identifier_types'
-        AND cv.code IN ('unit_serial_number', 'bios_serial_number')
+        AND ui.identifier_type_config_value_id IN (?, ?)
         AND NULLIF(TRIM(ui.normalized_value), '') IS NOT NULL
     `,
-    [safeUnitId]
+    [
+      safeUnitId,
+      await getConfigValueIdBySystemId(SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL, connection),
+      await getConfigValueIdBySystemId(SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL, connection)
+    ]
   );
 
   return new Set(rows.map((row) => normalizeIdentifierComparableValue(row.normalized_value)).filter(Boolean));
@@ -3054,6 +2970,8 @@ async function findSerialDuplicateCandidates({
   const serialTypeIds = ['unit_serial_number', 'bios_serial_number']
     .map((typeCode) => typeMap.get(typeCode))
     .filter(Boolean);
+  const unitSerialTypeId = Number(typeMap.get('unit_serial_number') || 0);
+  const biosSerialTypeId = Number(typeMap.get('bios_serial_number') || 0);
 
   if (serialTypeIds.length === 0) {
     return [];
@@ -3066,8 +2984,8 @@ async function findSerialDuplicateCandidates({
         ui.unit_id,
         ui.identifier_value,
         ui.normalized_value,
-        cv.code AS identifier_type_code,
-        cv.label AS identifier_type_label,
+        scv.system_config_value_id AS identifier_type_system_config_value_id,
+        COALESCE(cv.label, cv.value, 'Identifier') AS identifier_type_label,
         u.asset_number,
         u.lot_id,
         u.assigned_to_user_id,
@@ -3078,26 +2996,16 @@ async function findSerialDuplicateCandidates({
         (
           SELECT ui_unit_serial.identifier_value
           FROM unit_identifiers ui_unit_serial
-          JOIN config_values cv_unit_serial
-            ON cv_unit_serial.config_value_id = ui_unit_serial.identifier_type_config_value_id
-          JOIN config_categories cc_unit_serial
-            ON cc_unit_serial.config_category_id = cv_unit_serial.config_category_id
           WHERE ui_unit_serial.unit_id = u.unit_id
-            AND cc_unit_serial.code = 'unit_identifier_types'
-            AND cv_unit_serial.code = 'unit_serial_number'
+            AND ui_unit_serial.identifier_type_config_value_id = ${unitSerialTypeId}
           ORDER BY ui_unit_serial.unit_identifier_id DESC
           LIMIT 1
         ) AS unit_serial_number,
         (
           SELECT ui_bios_serial.identifier_value
           FROM unit_identifiers ui_bios_serial
-          JOIN config_values cv_bios_serial
-            ON cv_bios_serial.config_value_id = ui_bios_serial.identifier_type_config_value_id
-          JOIN config_categories cc_bios_serial
-            ON cc_bios_serial.config_category_id = cv_bios_serial.config_category_id
           WHERE ui_bios_serial.unit_id = u.unit_id
-            AND cc_bios_serial.code = 'unit_identifier_types'
-            AND cv_bios_serial.code = 'bios_serial_number'
+            AND ui_bios_serial.identifier_type_config_value_id = ${biosSerialTypeId}
           ORDER BY ui_bios_serial.unit_identifier_id DESC
           LIMIT 1
         ) AS bios_serial_number,
@@ -3112,6 +3020,8 @@ async function findSerialDuplicateCandidates({
       FROM unit_identifiers ui
       JOIN config_values cv
         ON cv.config_value_id = ui.identifier_type_config_value_id
+      LEFT JOIN system_config_values scv
+        ON scv.config_value_id = cv.config_value_id
       JOIN units u
         ON u.unit_id = ui.unit_id
       LEFT JOIN lots l
@@ -3153,7 +3063,7 @@ async function findSerialDuplicateCandidates({
       .map((entry) => entry.label);
 
     candidates.get(unitId).matchedIdentifiers.push({
-      identifierTypeCode: row.identifier_type_code || '',
+      identifierTypeCode: IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID[Number(row.identifier_type_system_config_value_id || 0)] || '',
       identifierTypeLabel: row.identifier_type_label || 'Serial identifier',
       identifierValue: normalizeIdentifierText(row.identifier_value) || '',
       matchingInputs
@@ -5464,7 +5374,7 @@ async function getResolvedProductionWeightForUnit(unit) {
   const { lotMap } = await getLotMap();
   const lot = lotMap.get(Number(unit.lot_id)) || null;
   const [unitCategories, productionWeightOptions] = await Promise.all([
-    listConfigValuesByCategoryCodes(['unit_categories', 'unit_category', 'unit_types', 'unit_type']),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.UNIT_CATEGORIES),
     productionWeightModel.listProductionWeightOptions()
   ]);
   const unitCategory = unitCategories.find((category) => Number(category.id) === Number(unit.unit_category_config_value_id)) || null;
@@ -5661,7 +5571,7 @@ async function getResolvedProductionWeightForUnit(unit) {
   const { lotMap } = await getLotMap();
   const lot = lotMap.get(Number(unit.lot_id)) || null;
   const [unitCategories, productionWeightOptions] = await Promise.all([
-    listConfigValuesByCategoryCodes(['unit_categories', 'unit_category', 'unit_types', 'unit_type']),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.UNIT_CATEGORIES),
     productionWeightModel.listProductionWeightOptions()
   ]);
   const unitCategory = unitCategories.find((category) => Number(category.id) === Number(unit.unit_category_config_value_id)) || null;

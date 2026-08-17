@@ -34,9 +34,8 @@
 
       <% if (safeConfigValue) { %>
         <dl class="configuration-value-summary">
-          <div><dt>Category</dt><dd><%= safeConfigValue.category_label || safeConfigValue.category_code || 'Configuration' %></dd></div>
-          <div><dt>Label</dt><dd><strong><%= safeConfigValue.label || safeConfigValue.code %></strong></dd></div>
-          <div><dt>Code</dt><dd><code><%= safeConfigValue.code %></code></dd></div>
+          <div><dt>Category</dt><dd><%= safeConfigValue.category_label || 'Configuration' %></dd></div>
+          <div><dt>Label</dt><dd><strong><%= safeConfigValue.label || `Value #${safeConfigValue.config_value_id}` %></strong></dd></div>
           <% if (safeConfigValue.value) { %><div><dt>Stored Value</dt><dd><%= safeConfigValue.value %></dd></div><% } %>
         </dl>
 

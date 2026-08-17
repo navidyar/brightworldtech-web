@@ -9,12 +9,10 @@ node --test \
 MYSQL_RUNNER="${MYSQL_RUNNER:-scripts/mysql-app.sh}"
 readiness="$(bash "$MYSQL_RUNNER" --batch --skip-column-names <<'SQL' | tr -d '[:space:]'
 SELECT COUNT(*)
-FROM config_values cv
-INNER JOIN config_categories cc
-  ON cc.config_category_id = cv.config_category_id
-WHERE cc.code = 'lot_requirement_types'
-  AND cv.code = 'battery_health'
-  AND cv.value = 'battery_health'
+FROM system_config_values scv
+INNER JOIN config_values cv
+  ON cv.config_value_id = scv.config_value_id
+WHERE scv.system_config_value_id = 318
   AND COALESCE(cv.is_active, 1) = 1;
 SQL
 )"

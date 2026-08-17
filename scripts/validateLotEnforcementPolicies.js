@@ -3,9 +3,9 @@
 const { pool } = require('../models/db');
 const {
   buildRequirementPolicyOptions,
-  normalizePolicyCode,
   validateRequirementPolicyRegistry
 } = require('../config/lotRequirementPolicyRegistry');
+const { POLICY_KEY_BY_SYSTEM_VALUE_ID, SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
 
 async function main() {
   const registryErrors = validateRequirementPolicyRegistry();
@@ -29,26 +29,17 @@ async function main() {
   const [policyRows] = await pool.query(`
     SELECT
       cv.config_value_id,
-      cv.code,
+      scv.system_config_value_id,
       cv.label,
       cv.sort_order,
       cv.is_active
-    FROM config_values cv
-    JOIN config_categories cc
-      ON cc.config_category_id = cv.config_category_id
-    WHERE cc.code IN (
-      'requirement_policies',
-      'requirement_policy',
-      'lot_requirement_policies',
-      'lot_requirement_policy'
-    )
-    ORDER BY FIELD(
-      cc.code,
-      'requirement_policies',
-      'requirement_policy',
-      'lot_requirement_policies',
-      'lot_requirement_policy'
-    ), cv.sort_order, cv.config_value_id
+    FROM system_config_categories scc
+    INNER JOIN config_values cv
+      ON cv.config_category_id = scc.config_category_id
+    LEFT JOIN system_config_values scv
+      ON scv.config_value_id = cv.config_value_id
+    WHERE scc.system_config_category_id = ${SYSTEM_CONFIG_CATEGORY_IDS.LOT_REQUIREMENT_POLICIES}
+    ORDER BY cv.sort_order, cv.config_value_id
   `);
   const options = buildRequirementPolicyOptions(policyRows);
 
@@ -62,13 +53,17 @@ async function main() {
     SELECT
       l.lot_id,
       COALESCE(l.name, CONCAT('Lot ', l.lot_id)) AS lot_name,
-      policy.code AS requirement_policy_code
+      policy_system.system_config_value_id AS requirement_policy_system_config_value_id
     FROM lots l
-    LEFT JOIN config_values policy
-      ON policy.config_value_id = l.requirement_policy_config_value_id
+    LEFT JOIN system_config_values policy_system
+      ON policy_system.config_value_id = l.requirement_policy_config_value_id
     ORDER BY l.lot_id
   `);
-  const invalidLots = lotRows.filter((lot) => !normalizePolicyCode(lot.requirement_policy_code));
+  const normalizedLots = lotRows.map((lot) => ({
+    ...lot,
+    requirementPolicyCode: POLICY_KEY_BY_SYSTEM_VALUE_ID[Number(lot.requirement_policy_system_config_value_id)] || ''
+  }));
+  const invalidLots = normalizedLots.filter((lot) => !lot.requirementPolicyCode);
 
   if (invalidLots.length > 0) {
     throw new Error(
@@ -77,8 +72,8 @@ async function main() {
   }
 
   const counts = { strict: 0, warn_only: 0, open_mixed: 0 };
-  lotRows.forEach((lot) => {
-    counts[normalizePolicyCode(lot.requirement_policy_code)] += 1;
+  normalizedLots.forEach((lot) => {
+    counts[lot.requirementPolicyCode] += 1;
   });
 
   console.log(

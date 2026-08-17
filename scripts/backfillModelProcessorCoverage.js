@@ -31,7 +31,9 @@ async function assertSchema(connection) {
     ['manufacturers', 'manufacturer_id'],
     ['manufacturers', 'name'],
     ['config_values', 'config_value_id'],
-    ['config_values', 'code'],
+    ['config_values', 'label'],
+    ['system_config_values', 'system_config_value_id'],
+    ['system_config_values', 'config_value_id'],
     ['processor_brands', 'processor_brand_id'],
     ['processor_brands', 'code'],
     ['processor_brands', 'name'],
@@ -76,14 +78,16 @@ async function loadState(connection) {
          um.unit_model_id,
          um.model_name,
          m.name AS manufacturer_name,
-         LOWER(COALESCE(cv.code, '')) AS category_code,
+         COALESCE(cv.label, cv.value, '') AS category_code,
+         scv.system_config_value_id AS category_system_config_value_id,
          COUNT(DISTINCT u.unit_id) AS unit_count
        FROM unit_models um
        INNER JOIN manufacturers m ON m.manufacturer_id = um.manufacturer_id
        LEFT JOIN config_values cv ON cv.config_value_id = um.unit_category_config_value_id
+       LEFT JOIN system_config_values scv ON scv.config_value_id = um.unit_category_config_value_id
        LEFT JOIN units u ON u.unit_model_id = um.unit_model_id
        WHERE um.is_active = 1
-       GROUP BY um.unit_model_id, um.model_name, m.name, cv.code
+       GROUP BY um.unit_model_id, um.model_name, m.name, cv.label, cv.value, scv.system_config_value_id
        ORDER BY m.name, category_code, um.model_name`
     ),
     connection.query(
@@ -268,12 +272,14 @@ async function loadRemaining(connection) {
     `SELECT
        um.unit_model_id,
        m.name AS manufacturer_name,
-       COALESCE(cv.code, '') AS category_code,
+       COALESCE(cv.label, cv.value, '') AS category_code,
+       scv.system_config_value_id AS category_system_config_value_id,
        um.model_name,
        COUNT(DISTINCT u.unit_id) AS unit_count
      FROM unit_models um
      INNER JOIN manufacturers m ON m.manufacturer_id = um.manufacturer_id
      LEFT JOIN config_values cv ON cv.config_value_id = um.unit_category_config_value_id
+     LEFT JOIN system_config_values scv ON scv.config_value_id = um.unit_category_config_value_id
      LEFT JOIN units u ON u.unit_model_id = um.unit_model_id
      LEFT JOIN unit_model_processor_options umpo
        ON umpo.unit_model_id = um.unit_model_id
@@ -285,7 +291,7 @@ async function loadRemaining(connection) {
        ON pb.processor_brand_id = pm.processor_brand_id
       AND pb.is_active = 1
      WHERE um.is_active = 1
-     GROUP BY um.unit_model_id, m.name, cv.code, um.model_name
+     GROUP BY um.unit_model_id, m.name, cv.label, cv.value, scv.system_config_value_id, um.model_name
      HAVING COUNT(DISTINCT CASE WHEN pb.processor_brand_id IS NOT NULL THEN pm.processor_model_id END) = 0
      ORDER BY unit_count DESC, m.name, um.model_name`
   );
@@ -293,6 +299,7 @@ async function loadRemaining(connection) {
     unitModelId: Number(row.unit_model_id),
     manufacturerName: row.manufacturer_name,
     categoryCode: row.category_code,
+    categorySystemConfigValueId: Number(row.category_system_config_value_id || 0) || null,
     modelName: row.model_name,
     unitCount: Number(row.unit_count || 0)
   }));

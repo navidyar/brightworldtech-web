@@ -1,53 +1,35 @@
 'use strict';
 
-const MINIMUM_DRAG_ORDER_VALUES = 3;
+const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
 
-const POPULARITY_SORTED_CONFIG_CATEGORY_CODES = new Set([
-  'unit_categories',
-  'unit_category',
-  'unit_types',
-  'unit_type',
-  'ram_types',
-  'ram_type',
-  'storage_types',
-  'storage_type',
-  'ssd_types',
-  'ssd_type',
-  'storage_wipe_statuses',
-  'storage_wipe_status',
-  'wipe_statuses',
-  'wipe_status',
-  'operating_systems',
-  'operating_system',
-  'keyboard_languages',
-  'keyboard_language',
-  'gpu_types',
-  'gpu_type',
-  'graphics_adapter_types',
-  'cosmetic_issue_types',
-  'cosmetic_issue_type',
-  'cosmetic_issues',
-  'hardware_issue_types',
-  'hardware_issue_type',
-  'hardware_issues',
-  'issue_locations',
-  'issue_location',
-  'unit_issue_locations'
+const MINIMUM_DRAG_ORDER_VALUES = 3;
+const POPULARITY_SORTED_SYSTEM_CATEGORY_IDS = new Set([
+  SYSTEM_CONFIG_CATEGORY_IDS.UNIT_CATEGORIES,
+  SYSTEM_CONFIG_CATEGORY_IDS.RAM_TYPES,
+  SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_TYPES,
+  SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_WIPE_STATUSES,
+  SYSTEM_CONFIG_CATEGORY_IDS.OPERATING_SYSTEMS,
+  SYSTEM_CONFIG_CATEGORY_IDS.KEYBOARD_LANGUAGES,
+  SYSTEM_CONFIG_CATEGORY_IDS.GPU_TYPES,
+  SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_ISSUE_TYPES,
+  SYSTEM_CONFIG_CATEGORY_IDS.HARDWARE_ISSUE_TYPES,
+  SYSTEM_CONFIG_CATEGORY_IDS.ISSUE_LOCATIONS
 ]);
 
-function normalizeCategoryCode(value) {
-  return String(value || '').trim().toLowerCase();
+function normalizeSystemCategoryId(value) {
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function isPopularitySortedConfigCategory(categoryCode) {
-  return POPULARITY_SORTED_CONFIG_CATEGORY_CODES.has(normalizeCategoryCode(categoryCode));
+function isPopularitySortedConfigCategory(systemConfigCategoryId) {
+  return POPULARITY_SORTED_SYSTEM_CATEGORY_IDS.has(normalizeSystemCategoryId(systemConfigCategoryId));
 }
 
-function getConfigCategoryOrderingPolicy(categoryCode, valueCount = 0) {
+function getConfigCategoryOrderingPolicy(systemConfigCategoryId, valueCount = 0) {
   const normalizedValueCount = Number.isFinite(Number(valueCount))
     ? Math.max(0, Number(valueCount))
     : 0;
-  const usesPopularitySorting = isPopularitySortedConfigCategory(categoryCode);
+  const usesPopularitySorting = isPopularitySortedConfigCategory(systemConfigCategoryId);
 
   return {
     usesPopularitySorting,
@@ -58,8 +40,8 @@ function getConfigCategoryOrderingPolicy(categoryCode, valueCount = 0) {
 
 module.exports = {
   MINIMUM_DRAG_ORDER_VALUES,
-  POPULARITY_SORTED_CONFIG_CATEGORY_CODES,
+  POPULARITY_SORTED_SYSTEM_CATEGORY_IDS,
   getConfigCategoryOrderingPolicy,
   isPopularitySortedConfigCategory,
-  normalizeCategoryCode
+  normalizeSystemCategoryId
 };

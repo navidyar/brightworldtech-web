@@ -2,6 +2,7 @@
 
 require('dotenv').config();
 const { pool } = require('../models/db');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 
 async function main() {
   const [globalUniqueIndexes] = await pool.query(
@@ -71,11 +72,10 @@ async function main() {
         FROM unit_duplicate_requests udr
         INNER JOIN unit_requests ur
           ON ur.unit_request_id = udr.unit_request_id
-        INNER JOIN config_categories cc
-          ON cc.code = 'unit_identifier_types'
+        INNER JOIN system_config_values identifier_system
+          ON identifier_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL}
         INNER JOIN config_values cv
-          ON cv.config_category_id = cc.config_category_id
-         AND cv.code = 'unit_serial_number'
+          ON cv.config_value_id = identifier_system.config_value_id
         WHERE ur.request_type = 'intentional_duplicate'
           AND ur.status = 'approved'
           AND udr.created_unit_id IS NOT NULL
@@ -95,11 +95,10 @@ async function main() {
         FROM unit_duplicate_requests udr
         INNER JOIN unit_requests ur
           ON ur.unit_request_id = udr.unit_request_id
-        INNER JOIN config_categories cc
-          ON cc.code = 'unit_identifier_types'
+        INNER JOIN system_config_values identifier_system
+          ON identifier_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL}
         INNER JOIN config_values cv
-          ON cv.config_category_id = cc.config_category_id
-         AND cv.code = 'bios_serial_number'
+          ON cv.config_value_id = identifier_system.config_value_id
         WHERE ur.request_type = 'intentional_duplicate'
           AND ur.status = 'approved'
           AND udr.created_unit_id IS NOT NULL
@@ -123,12 +122,12 @@ async function main() {
       FROM (
         SELECT ui.identifier_type_config_value_id, ui.normalized_value
         FROM unit_identifiers ui
-        INNER JOIN config_values cv
-          ON cv.config_value_id = ui.identifier_type_config_value_id
-        INNER JOIN config_categories cc
-          ON cc.config_category_id = cv.config_category_id
-        WHERE cc.code = 'unit_identifier_types'
-          AND cv.code IN ('unit_serial_number', 'bios_serial_number')
+        INNER JOIN system_config_values identifier_system
+          ON identifier_system.config_value_id = ui.identifier_type_config_value_id
+        WHERE identifier_system.system_config_value_id IN (
+          ${SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL},
+          ${SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL}
+        )
         GROUP BY ui.identifier_type_config_value_id, ui.normalized_value
         HAVING COUNT(DISTINCT ui.unit_id) > 1
       ) shared

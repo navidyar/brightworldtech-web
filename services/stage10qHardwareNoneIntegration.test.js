@@ -12,7 +12,7 @@ test('Hardware Issue options identify semantic None values from configuration', 
   const model = read('models/unitIssueEntryModel.js');
 
   assert.match(model, /function isNoHardwareIssueOption\(option\)/);
-  assert.match(model, /'hardware_issue_none'[\s\S]*?'no_hardware_issue'/);
+  assert.match(model, /SYSTEM_CONFIG_VALUE_IDS\.HARDWARE_ISSUE_NONE/);
   assert.match(model, /hardwareIssueTypes\.map\(\(option\) => \(\{[\s\S]*?isNoIssue:\s*isNoHardwareIssueOption\(option\)/);
   assert.match(model, /isNoHardwareIssueOption,/);
 });

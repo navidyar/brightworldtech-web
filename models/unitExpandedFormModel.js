@@ -1,4 +1,6 @@
 const { pool } = require('./db');
+const { listConfigValuesBySystemCategoryIds, getConfigValueBySystemId } = require('./configLookupModel');
+const { SYSTEM_CONFIG_CATEGORY_IDS, SYSTEM_CONFIG_VALUE_IDS, COSMETIC_GRADE_BY_SYSTEM_VALUE_ID } = require('../config/configIdentityRegistry');
 const unitOutcomeModel = require('./unitOutcomeModel');
 const overrideRequestModel = require('./overrideRequestModel');
 const operationalOptionRankingModel = require('./operationalOptionRankingModel');
@@ -140,43 +142,8 @@ async function upsertManualFieldSources(connection, unitId, fieldKeys, currentUs
   }
 }
 
-async function listConfigValuesByCategoryCodes(categoryCodes, connection = pool) {
-  const safeCategoryCodes = categoryCodes.map((code) => normalizeText(code)).filter(Boolean);
-
-  if (safeCategoryCodes.length === 0) {
-    return [];
-  }
-
-  const categoryPlaceholders = safeCategoryCodes.map(() => '?').join(', ');
-  const categoryOrderPlaceholders = safeCategoryCodes.map(() => '?').join(', ');
-
-  const [rows] = await connection.query(
-    `
-      SELECT
-        cc.code AS category_code,
-        cv.config_value_id,
-        cv.code,
-        COALESCE(cv.label, cv.code) AS label,
-        cv.value,
-        cv.sort_order
-      FROM config_categories cc
-      INNER JOIN config_values cv
-        ON cv.config_category_id = cc.config_category_id
-      WHERE cc.code IN (${categoryPlaceholders})
-        AND COALESCE(cc.is_active, 1) = 1
-        AND COALESCE(cv.is_active, 1) = 1
-      ORDER BY FIELD(cc.code, ${categoryOrderPlaceholders}), cv.sort_order, label, cv.code
-    `,
-    [...safeCategoryCodes, ...safeCategoryCodes]
-  );
-
-  return rows.map((row) => ({
-    id: Number(row.config_value_id),
-    categoryCode: row.category_code,
-    code: row.code,
-    label: row.label,
-    value: row.value || row.code
-  }));
+async function listConfigValuesBySystemCategories(systemCategoryIds, connection = pool) {
+  return listConfigValuesBySystemCategoryIds(systemCategoryIds, {}, connection);
 }
 
 
@@ -220,16 +187,16 @@ async function getExpandedFormOptions() {
     gpuTypeOptions,
     operationalRankingSnapshot
   ] = await Promise.all([
-    listConfigValuesByCategoryCodes(['cosmetic_grades', 'overall_unit_grades', 'unit_grades', 'unit_grade']),
-    listConfigValuesByCategoryCodes(['absolute_statuses', 'absolute_status']),
-    listConfigValuesByCategoryCodes(['physical_camera_statuses', 'camera_statuses', 'physical_camera_status']),
-    listConfigValuesByCategoryCodes(['touchscreen_statuses', 'touchscreen_status']),
-    listConfigValuesByCategoryCodes(['keyboard_languages', 'keyboard_language']),
-    listConfigValuesByCategoryCodes(['diagnostics_statuses', 'complete_diagnostics_statuses', 'diagnostics_status']),
-    listConfigValuesByCategoryCodes(['virus_check_statuses', 'virus_check_status']),
-    listConfigValuesByCategoryCodes(['driver_check_statuses', 'driver_check_status']),
-    listConfigValuesByCategoryCodes(['skinned_statuses', 'skinned_status']),
-    listConfigValuesByCategoryCodes(['gpu_types', 'gpu_type', 'graphics_adapter_types']),
+    listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES),
+    listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.ABSOLUTE_STATUSES),
+    listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.CAMERA_STATUSES),
+    listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.TOUCHSCREEN_STATUSES),
+    listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.KEYBOARD_LANGUAGES),
+    listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.DIAGNOSTICS_STATUSES),
+    listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.VIRUS_CHECK_STATUSES),
+    listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.DRIVER_CHECK_STATUSES),
+    listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.SKINNED_STATUSES),
+    listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.GPU_TYPES),
     operationalOptionRankingModel.loadRankingSnapshot()
   ]);
 
@@ -642,44 +609,27 @@ async function resolveCanonicalCosmeticGradeConfigValueId(connection, selectedCo
   }
 
   const [selectedRows] = await connection.query(
-    `
-      SELECT
-        cv.config_value_id,
-        cv.code,
-        cv.label,
-        cv.value,
-        cc.code AS category_code
-      FROM config_values cv
-      JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cv.config_value_id = ?
-      LIMIT 1
-    `,
+    `SELECT cv.config_value_id, scv.system_config_value_id, cv.label, cv.value
+     FROM config_values cv
+     LEFT JOIN system_config_values scv ON scv.config_value_id = cv.config_value_id
+     WHERE cv.config_value_id = ?
+     LIMIT 1`,
     [selectedId]
   );
   const selectedRow = selectedRows[0] || null;
-  const canonicalGrade = getCanonicalCosmeticGradeFromOption(selectedRow || {});
+  const selectedSystemId = Number(selectedRow?.system_config_value_id || 0);
+  const canonicalGrade = COSMETIC_GRADE_BY_SYSTEM_VALUE_ID[selectedSystemId]
+    || getCanonicalCosmeticGradeFromOption(selectedRow || {});
 
   if (!canonicalGrade) {
     return null;
   }
 
-  const [canonicalRows] = await connection.query(
-    `
-      SELECT cv.config_value_id
-      FROM config_values cv
-      JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code = 'cosmetic_grades'
-        AND LOWER(cv.code) = ?
-        AND COALESCE(cv.is_active, 1) = 1
-      ORDER BY cv.config_value_id
-      LIMIT 1
-    `,
-    [canonicalGrade.toLowerCase()]
-  );
-
-  return Number(canonicalRows[0]?.config_value_id || selectedId);
+  const systemId = Object.entries(COSMETIC_GRADE_BY_SYSTEM_VALUE_ID)
+    .find(([, grade]) => grade === canonicalGrade)?.[0];
+  if (!systemId) return selectedId;
+  const canonicalValue = await getConfigValueBySystemId(Number(systemId), connection);
+  return canonicalValue?.isActive ? canonicalValue.configValueId : selectedId;
 }
 
 async function saveOverallGrade(connection, unitId, formData, currentUserId) {

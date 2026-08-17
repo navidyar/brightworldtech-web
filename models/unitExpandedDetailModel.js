@@ -2,6 +2,7 @@ const { pool } = require('./db');
 const unitOutcomeModel = require('./unitOutcomeModel');
 const { buildHardwareComponentComparisons } = require('../services/hardwareComponentComparison');
 const { getCanonicalCosmeticGrade, isNotYetGradedToken } = require('../services/cosmeticGradeNormalization');
+const { COSMETIC_GRADE_BY_SYSTEM_VALUE_ID, IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID } = require('../config/configIdentityRegistry');
 const EXPANDED_TABLES = [
   'unit_identifiers',
   'unit_specifications',
@@ -174,11 +175,13 @@ async function attachIdentifiers(detailsMap, unitIds, existingTables) {
         ui.normalized_value,
         ui.is_primary,
         ui.created_at,
-        identifier_type.code AS identifier_type_code,
-        COALESCE(identifier_type.label, identifier_type.code) AS identifier_type_label
+        identifier_system.system_config_value_id AS identifier_type_system_config_value_id,
+        COALESCE(identifier_type.label, identifier_type.value) AS identifier_type_label
       FROM unit_identifiers ui
       LEFT JOIN config_values identifier_type
         ON identifier_type.config_value_id = ui.identifier_type_config_value_id
+      LEFT JOIN system_config_values identifier_system
+        ON identifier_system.config_value_id = identifier_type.config_value_id
       WHERE ui.unit_id IN (${buildPlaceholders(unitIds)})
       ORDER BY ui.unit_id, ui.is_primary DESC, identifier_type.sort_order, identifier_type.label, ui.identifier_value
     `,
@@ -186,7 +189,7 @@ async function attachIdentifiers(detailsMap, unitIds, existingTables) {
   );
   rows.forEach((row) => {
     addToUnitList(detailsMap, row.unit_id, 'identifiers', {
-      typeCode: row.identifier_type_code || '',
+      typeCode: IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID[Number(row.identifier_type_system_config_value_id)] || '',
       typeLabel: row.identifier_type_label || 'Identifier',
       value: row.identifier_value || '',
       normalizedValue: row.normalized_value || '',
@@ -313,8 +316,8 @@ async function attachCurrentGrades(detailsMap, unitIds, existingTables) {
           uga.source_code,
           uga.assessed_at,
           uga.notes,
-          grade.code AS grade_code,
-          COALESCE(grade.label, grade.code) AS grade_label,
+          grade_system.system_config_value_id AS grade_system_config_value_id,
+          COALESCE(grade.label, grade.value) AS grade_label,
           assessed_by.first_name AS assessed_by_first_name,
           assessed_by.last_name AS assessed_by_last_name,
           assessed_by.email AS assessed_by_email,
@@ -325,6 +328,8 @@ async function attachCurrentGrades(detailsMap, unitIds, existingTables) {
         FROM unit_grade_assessments uga
         LEFT JOIN config_values grade
           ON grade.config_value_id = uga.overall_grade_config_value_id
+        LEFT JOIN system_config_values grade_system
+          ON grade_system.config_value_id = grade.config_value_id
         LEFT JOIN users assessed_by
           ON assessed_by.user_id = uga.assessed_by_user_id
         WHERE uga.unit_id IN (${buildPlaceholders(unitIds)})
@@ -336,7 +341,7 @@ async function attachCurrentGrades(detailsMap, unitIds, existingTables) {
   );
   rows.forEach((row) => {
     setForUnit(detailsMap, row.unit_id, 'currentGrade', {
-      gradeCode: row.grade_code || '',
+      gradeCode: COSMETIC_GRADE_BY_SYSTEM_VALUE_ID[Number(row.grade_system_config_value_id)] || '',
       gradeLabel: getOverallGradeLabel(row.grade_label),
       sourceCode: row.source_code || '',
       assessedByName: getPersonName(row, 'assessed_by'),
@@ -655,8 +660,7 @@ async function attachCellularModules(detailsMap, unitIds, existingTables) {
     `
       SELECT
         ucmb.unit_cellular_module_id,
-        network_type.label AS network_type_label,
-        network_type.code AS network_type_code,
+        COALESCE(network_type.label, network_type.value) AS network_type_label,
         ucmb.band_code,
         ucmb.frequency_label,
         ucmb.region_note,
@@ -675,7 +679,7 @@ async function attachCellularModules(detailsMap, unitIds, existingTables) {
       return;
     }
     module.bands.push({
-      networkTypeLabel: row.network_type_label || row.network_type_code || 'Network',
+      networkTypeLabel: row.network_type_label || 'Network',
       bandCode: row.band_code,
       frequencyLabel: row.frequency_label || '',
       regionNote: row.region_note || '',
@@ -811,8 +815,8 @@ async function attachGradeHistory(detailsMap, unitIds, existingTables) {
           uga.source_code,
           uga.assessed_at,
           uga.notes,
-          grade.code AS grade_code,
-          COALESCE(grade.label, grade.code) AS grade_label,
+          grade_system.system_config_value_id AS grade_system_config_value_id,
+          COALESCE(grade.label, grade.value) AS grade_label,
           assessed_by.first_name AS assessed_by_first_name,
           assessed_by.last_name AS assessed_by_last_name,
           assessed_by.email AS assessed_by_email,
@@ -823,6 +827,8 @@ async function attachGradeHistory(detailsMap, unitIds, existingTables) {
         FROM unit_grade_assessments uga
         LEFT JOIN config_values grade
           ON grade.config_value_id = uga.overall_grade_config_value_id
+        LEFT JOIN system_config_values grade_system
+          ON grade_system.config_value_id = grade.config_value_id
         LEFT JOIN users assessed_by
           ON assessed_by.user_id = uga.assessed_by_user_id
         WHERE uga.unit_id IN (${buildPlaceholders(unitIds)})
@@ -835,7 +841,7 @@ async function attachGradeHistory(detailsMap, unitIds, existingTables) {
 
   rows.forEach((row) => {
     addToUnitList(detailsMap, row.unit_id, 'gradeHistory', {
-      gradeCode: row.grade_code || '',
+      gradeCode: COSMETIC_GRADE_BY_SYSTEM_VALUE_ID[Number(row.grade_system_config_value_id)] || '',
       gradeLabel: getOverallGradeLabel(row.grade_label),
       isCurrent: Number(row.is_current) === 1,
       sourceCode: row.source_code || '',
@@ -1093,8 +1099,7 @@ async function attachComments(detailsMap, unitIds, existingTables) {
         SELECT
           uc.unit_comment_id,
           uc.unit_id,
-          note_type.label AS note_type_label,
-          note_type.code AS note_type_code,
+          COALESCE(note_type.label, note_type.value) AS note_type_label,
           uc.comment_text,
           uc.source_code,
           uc.created_at,
@@ -1119,8 +1124,8 @@ async function attachComments(detailsMap, unitIds, existingTables) {
   );
   rows.forEach((row) => {
     addToUnitList(detailsMap, row.unit_id, 'comments', {
-      noteTypeLabel: row.note_type_label || row.note_type_code || 'Comment',
-      noteTypeCode: row.note_type_code || '',
+      noteTypeLabel: row.note_type_label || 'Comment',
+      noteTypeCode: '',
       commentText: row.comment_text || '',
       sourceCode: row.source_code || '',
       createdByName: getPersonName(row, 'created_by'),

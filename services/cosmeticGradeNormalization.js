@@ -1,5 +1,7 @@
 'use strict';
 
+const { COSMETIC_GRADE_BY_SYSTEM_VALUE_ID } = require('../config/configIdentityRegistry');
+
 const CANONICAL_COSMETIC_GRADES = Object.freeze([
   Object.freeze({ code: 'a', value: 'A', label: 'A', sortOrder: 10 }),
   Object.freeze({ code: 'ab', value: 'AB', label: 'AB', sortOrder: 20 }),
@@ -42,6 +44,11 @@ function getCanonicalCosmeticGrade(value) {
 }
 
 function getCanonicalCosmeticGradeFromOption(option = {}) {
+  const systemId = Number(option.systemConfigValueId || option.system_config_value_id || 0);
+  if (COSMETIC_GRADE_BY_SYSTEM_VALUE_ID[systemId]) {
+    return COSMETIC_GRADE_BY_SYSTEM_VALUE_ID[systemId];
+  }
+
   for (const candidate of [option.code, option.label, option.value]) {
     const grade = getCanonicalCosmeticGrade(candidate);
 
@@ -60,7 +67,7 @@ function getCosmeticGradeOptionPriority(option = {}, canonicalGrade) {
   const value = String(option.rawValue || option.databaseValue || option.value || '').trim().toUpperCase();
   let priority = 0;
 
-  if (source === 'cosmetic_grades') {
+  if (Number(option.systemConfigValueId || option.system_config_value_id || 0) > 0 || source === 'cosmetic_grades') {
     priority += 100;
   }
   if (code === canonicalGrade.toLowerCase()) {

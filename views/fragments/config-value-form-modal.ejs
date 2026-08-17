@@ -10,6 +10,7 @@
   const title = safeMode === 'edit' ? 'Edit Config Value' : 'Create Config Value';
   const submitLabel = safeMode === 'edit' ? 'Save Config Value' : 'Create Config Value';
   const isPasswordLinkExpirySetting = Boolean(locals.isPasswordLinkExpirySetting);
+  const isProtectedValue = Boolean(safeConfigValue && safeConfigValue.isProtected);
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
@@ -35,8 +36,10 @@
       <p class="configuration-form-note">
         <% if (isPasswordLinkExpirySetting) { %>
           This security setting supplies the default for non-interactive setup/reset link generation. User Management chooses a 1–8 hour lifetime before each link is generated.
+        <% } else if (isProtectedValue) { %>
+          This is a protected system value. Its database ID remains unchanged. Renaming it also changes how current and historical records display this value. It may be deactivated, but it cannot be deleted or moved to another category.
         <% } else { %>
-          Labels are user-facing. Codes are stable system keys and should rarely change after a value is in use.
+          Labels are user-facing. The database ID is the stable identity used by the application.
         <% } %>
       </p>
 
@@ -45,7 +48,6 @@
 
         <% if (isPasswordLinkExpirySetting) { %>
           <input type="hidden" name="configCategoryId" value="<%= safeFormData.configCategoryId || '' %>" />
-          <input type="hidden" name="code" value="<%= safeFormData.code || '' %>" />
           <input type="hidden" name="label" value="<%= safeFormData.label || '' %>" />
           <input type="hidden" name="description" value="<%= safeFormData.description || '' %>" />
           <input type="hidden" name="sortOrder" value="<%= safeFormData.sortOrder || '0' %>" />
@@ -60,21 +62,23 @@
           <div class="configuration-value-form-grid">
             <label class="form-field configuration-value-form-category">
               <span>Category</span>
-              <select name="configCategoryId" required>
-                <option value="">Select category</option>
+              <% if (isProtectedValue) { %>
+                <input type="hidden" name="configCategoryId" value="<%= safeFormData.configCategoryId || '' %>" />
+              <% } %>
+              <select name="<%= isProtectedValue ? '' : 'configCategoryId' %>" <%= isProtectedValue ? 'disabled' : 'required' %>>
+                <option value="">Choose an option</option>
                 <% safeCategories.forEach((category) => { %>
                   <option
                     value="<%= category.config_category_id %>"
                     data-drag-order-managed="<%= category.dragOrderingManaged ? '1' : '0' %>"
                     data-popularity-sorted="<%= category.usesPopularitySorting ? '1' : '0' %>"
                     data-active-value-count="<%= category.activeValueCount || 0 %>"
-                    <%= String(category.code || '').toLowerCase() === 'cosmetic_grades' ? 'disabled' : '' %>
                     <%= String(safeFormData.configCategoryId || '') === String(category.config_category_id) ? 'selected' : '' %>>
-                    <%= category.label || category.code %><%= String(category.code || '').toLowerCase() === 'cosmetic_grades' ? ' (System-managed)' : (category.isActive ? '' : ' (Inactive category)') %>
+                    <%= category.label || `Category #${category.config_category_id}` %><%= category.isActive ? '' : ' (Inactive category)' %>
                   </option>
                 <% }) %>
               </select>
-              <small class="field-hint">Choose where this value appears in the application.</small>
+              <small class="field-hint"><%= isProtectedValue ? 'Protected values remain in their current category.' : 'Choose where this value appears in the application.' %></small>
               <small class="field-hint configuration-form-ordering-note" data-configuration-form-ordering-note hidden></small>
             </label>
 
@@ -82,12 +86,6 @@
               <span>Label</span>
               <input type="text" name="label" value="<%= safeFormData.label || '' %>" maxlength="120" placeholder="Example Config Value" required />
               <small class="field-hint">Text shown to users in forms, tables, and dropdowns.</small>
-            </label>
-
-            <label class="form-field">
-              <span>Code</span>
-              <input type="text" name="code" value="<%= safeFormData.code || '' %>" maxlength="120" placeholder="example_config_value" required />
-              <small class="field-hint">Stable lowercase key. Use letters, numbers, underscores, or hyphens. Lot Types may use short 1–2 character codes.</small>
             </label>
 
             <label class="form-field">

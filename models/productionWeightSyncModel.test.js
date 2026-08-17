@@ -15,16 +15,17 @@ const {
   resolveEffectiveWeightForSyncRow,
   buildCompletionWeightSyncPlan
 } = require('./productionWeightSyncModel');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 
 const PRODUCTION_WEIGHT_OPTIONS = [
   {
-    code: 'production_weight_laptop',
+    systemConfigValueId: SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_LAPTOP,
     label: 'Laptop',
     weightValue: 1.25,
     formattedWeightValue: '1.25'
   },
   {
-    code: 'production_weight_desktop',
+    systemConfigValueId: SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_DESKTOP,
     label: 'Desktop',
     weightValue: 1.5,
     formattedWeightValue: '1.50'
@@ -35,7 +36,7 @@ test('an individual Unit override has priority and has no artificial maximum of 
   const details = resolveEffectiveWeightForSyncRow({
     production_weight_override: 125.75,
     resolved_default_production_weight: 2.5,
-    unit_category_code: 'laptop'
+    unit_category_system_config_value_id: SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_LAPTOP
   }, PRODUCTION_WEIGHT_OPTIONS);
 
   assert.equal(details.effectiveWeight, 125.75);
@@ -48,7 +49,7 @@ test('a Unit without an individual override inherits its current Lot weight', ()
     production_weight_override: null,
     resolved_default_production_weight: 7.25,
     default_production_weight_label: 'Current Lot',
-    unit_category_code: 'desktop'
+    unit_category_system_config_value_id: SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_DESKTOP
   }, PRODUCTION_WEIGHT_OPTIONS);
 
   assert.equal(details.effectiveWeight, 7.25);
@@ -59,12 +60,12 @@ test('the current Unit row determines the inherited weight after a Lot move', ()
   const beforeMove = resolveEffectiveWeightForSyncRow({
     production_weight_override: null,
     resolved_default_production_weight: 2,
-    unit_category_code: 'laptop'
+    unit_category_system_config_value_id: SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_LAPTOP
   }, PRODUCTION_WEIGHT_OPTIONS);
   const afterMove = resolveEffectiveWeightForSyncRow({
     production_weight_override: null,
     resolved_default_production_weight: 18.5,
-    unit_category_code: 'laptop'
+    unit_category_system_config_value_id: SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_LAPTOP
   }, PRODUCTION_WEIGHT_OPTIONS);
 
   assert.equal(beforeMove.effectiveWeight, 2);
@@ -75,7 +76,7 @@ test('category weight remains the fallback when neither Unit nor Lot provides a 
   const details = resolveEffectiveWeightForSyncRow({
     production_weight_override: null,
     resolved_default_production_weight: null,
-    unit_category_code: 'laptop'
+    unit_category_system_config_value_id: SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_LAPTOP
   }, PRODUCTION_WEIGHT_OPTIONS);
 
   assert.equal(details.effectiveWeight, 1.25);
@@ -90,14 +91,14 @@ test('sync plan updates stale completed rows and leaves matching rows unchanged'
         lot_id: 20,
         production_weight_override: null,
         resolved_default_production_weight: 14,
-        unit_category_code: 'desktop'
+        unit_category_system_config_value_id: SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_DESKTOP
       },
       {
         unit_id: 11,
         lot_id: 20,
         production_weight_override: 25,
         resolved_default_production_weight: 14,
-        unit_category_code: 'desktop'
+        unit_category_system_config_value_id: SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_DESKTOP
       }
     ],
     completionRows: [
@@ -128,7 +129,7 @@ test('sync plan reports Units whose effective weight is not configured', () => {
         lot_id: 8,
         production_weight_override: null,
         resolved_default_production_weight: null,
-        unit_category_code: 'unknown'
+        unit_category_system_config_value_id: 999999
       }
     ],
     completionRows: [

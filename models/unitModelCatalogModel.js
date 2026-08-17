@@ -1,4 +1,5 @@
 const { pool } = require('./db');
+const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
 const processorCatalogModel = require('./processorCatalogModel');
 
 const MAX_MODEL_NAME_LENGTH = 150;
@@ -68,28 +69,21 @@ async function listUnitCategories() {
   const activeColumn = pickColumn(valueColumns, ['is_active']);
   const sortColumn = pickColumn(valueColumns, ['sort_order']);
 
-  if (!valueColumns.has('config_value_id')) {
-    return [];
-  }
+  if (!valueColumns.has('config_value_id')) return [];
 
+  const labelExpression = labelColumn
+    ? `COALESCE(cv.${quoteIdentifier(labelColumn)}, cv.value, CONCAT('Value #', cv.config_value_id))`
+    : `COALESCE(cv.value, CONCAT('Value #', cv.config_value_id))`;
   const [rows] = await pool.query(`
-    SELECT
-      cv.config_value_id,
-      cv.code,
-      ${labelColumn ? `cv.${quoteIdentifier(labelColumn)}` : 'cv.code'} AS label
-    FROM config_values cv
-    INNER JOIN config_categories cc
-      ON cc.config_category_id = cv.config_category_id
-    WHERE cc.code IN ('unit_categories', 'unit_category', 'unit_types', 'unit_type')
+    SELECT cv.config_value_id, ${labelExpression} AS label
+    FROM system_config_categories scc
+    INNER JOIN config_values cv ON cv.config_category_id = scc.config_category_id
+    WHERE scc.system_config_category_id = ?
       ${activeColumn ? `AND COALESCE(cv.${quoteIdentifier(activeColumn)}, 1) = 1` : ''}
-    ORDER BY ${sortColumn ? `COALESCE(cv.${quoteIdentifier(sortColumn)}, 0),` : ''} label, cv.code
-  `);
+    ORDER BY ${sortColumn ? `COALESCE(cv.${quoteIdentifier(sortColumn)}, 0),` : ''} label, cv.config_value_id
+  `, [SYSTEM_CONFIG_CATEGORY_IDS.UNIT_CATEGORIES]);
 
-  return rows.map((row) => ({
-    id: Number(row.config_value_id),
-    code: row.code,
-    label: row.label
-  }));
+  return rows.map((row) => ({ id: Number(row.config_value_id), label: row.label }));
 }
 
 function getCatalogFilters(filters = {}) {
@@ -131,7 +125,7 @@ async function listUnitModels(filters = {}) {
       um.manufacturer_id,
       m.name AS manufacturer_name,
       um.unit_category_config_value_id,
-      COALESCE(cv.label, cv.code) AS unit_category_label,
+      COALESCE(cv.label, cv.value, CONCAT('Value #', cv.config_value_id)) AS unit_category_label,
       um.model_name,
       um.sort_order,
       um.is_active
@@ -169,7 +163,7 @@ async function getUnitModelById(unitModelId) {
       um.manufacturer_id,
       m.name AS manufacturer_name,
       um.unit_category_config_value_id,
-      COALESCE(cv.label, cv.code) AS unit_category_label,
+      COALESCE(cv.label, cv.value, CONCAT('Value #', cv.config_value_id)) AS unit_category_label,
       um.model_name,
       um.sort_order,
       um.is_active

@@ -3,6 +3,7 @@
 const { pool } = require('./db');
 const lotModel = require('./lotModel');
 const lotValidationOverrideModel = require('./lotValidationOverrideModel');
+const { IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID } = require('../config/configIdentityRegistry');
 const {
   buildUnitSnapshots,
   evaluateUnitSnapshot
@@ -30,8 +31,8 @@ async function listBaseUnitRowsForLot(lotId, connection = pool) {
         assigned_user.last_name AS assigned_last_name,
         assigned_user.email AS assigned_email,
         u.unit_category_config_value_id,
-        unit_category.code AS unit_category_code,
-        COALESCE(unit_category.label, unit_category.code) AS unit_category_label,
+        NULL AS unit_category_code,
+        COALESCE(unit_category.label, unit_category.value) AS unit_category_label,
         u.manufacturer_id,
         manufacturer.name AS manufacturer_name,
         u.unit_model_id,
@@ -72,36 +73,36 @@ async function listBaseUnitRowsForLot(lotId, connection = pool) {
         ) AS processor_family_labels,
         u.ram_gb,
         u.ram_type_config_value_id,
-        ram_type.code AS ram_type_code,
-        COALESCE(ram_type.label, ram_type.code) AS ram_type_label,
+        NULL AS ram_type_code,
+        COALESCE(ram_type.label, ram_type.value) AS ram_type_label,
         u.storage_gb,
         u.storage_type_config_value_id,
-        storage_type.code AS storage_type_code,
-        COALESCE(storage_type.label, storage_type.code) AS storage_type_label,
+        NULL AS storage_type_code,
+        COALESCE(storage_type.label, storage_type.value) AS storage_type_label,
         u.operating_system_config_value_id,
-        operating_system.code AS operating_system_code,
-        COALESCE(operating_system.label, operating_system.code) AS operating_system_label,
+        NULL AS operating_system_code,
+        COALESCE(operating_system.label, operating_system.value) AS operating_system_label,
         u.battery_health_percent,
         unit_specifications.os_build,
         unit_specifications.bios_version,
         unit_specifications.absolute_status_config_value_id,
-        COALESCE(absolute_status.label, absolute_status.code) AS absolute_status_label,
+        COALESCE(absolute_status.label, absolute_status.value) AS absolute_status_label,
         unit_specifications.physical_camera_status_config_value_id,
-        COALESCE(physical_camera_status.label, physical_camera_status.code) AS physical_camera_status_label,
+        COALESCE(physical_camera_status.label, physical_camera_status.value) AS physical_camera_status_label,
         unit_specifications.touchscreen_status_config_value_id,
-        COALESCE(touchscreen_status.label, touchscreen_status.code) AS touchscreen_status_label,
+        COALESCE(touchscreen_status.label, touchscreen_status.value) AS touchscreen_status_label,
         unit_specifications.keyboard_language_config_value_id,
-        COALESCE(keyboard_language.label, keyboard_language.code) AS keyboard_language_label,
+        COALESCE(keyboard_language.label, keyboard_language.value) AS keyboard_language_label,
         unit_specifications.complete_diagnostics_status_config_value_id,
-        COALESCE(complete_diagnostics_status.label, complete_diagnostics_status.code) AS complete_diagnostics_status_label,
+        COALESCE(complete_diagnostics_status.label, complete_diagnostics_status.value) AS complete_diagnostics_status_label,
         unit_specifications.virus_check_status_config_value_id,
-        COALESCE(virus_check_status.label, virus_check_status.code) AS virus_check_status_label,
+        COALESCE(virus_check_status.label, virus_check_status.value) AS virus_check_status_label,
         unit_specifications.driver_check_status_config_value_id,
-        COALESCE(driver_check_status.label, driver_check_status.code) AS driver_check_status_label,
+        COALESCE(driver_check_status.label, driver_check_status.value) AS driver_check_status_label,
         unit_specifications.skinned_status_config_value_id,
-        COALESCE(skinned_status.label, skinned_status.code) AS skinned_status_label,
+        COALESCE(skinned_status.label, skinned_status.value) AS skinned_status_label,
         current_grade.overall_grade_config_value_id,
-        COALESCE(overall_grade.label, overall_grade.code, overall_grade.value) AS overall_grade_label,
+        COALESCE(overall_grade.label, overall_grade.value) AS overall_grade_label,
         current_outcome.outcome_code,
         CASE current_outcome.outcome_code WHEN 'pass' THEN 'Pass' WHEN 'fail' THEN 'Fail' ELSE current_outcome.outcome_code END AS outcome_label,
         u.created_at,
@@ -192,11 +193,14 @@ async function listIdentifierRowsForUnits(unitIds, connection = pool) {
         ui.unit_id,
         ui.identifier_value,
         ui.is_primary,
-        identifier_type.code AS identifier_type_code,
-        COALESCE(identifier_type.label, identifier_type.code) AS identifier_type_label
+        identifier_system.system_config_value_id AS identifier_type_system_config_value_id,
+        NULL AS identifier_type_code,
+        COALESCE(identifier_type.label, identifier_type.value) AS identifier_type_label
       FROM unit_identifiers ui
       JOIN config_values identifier_type
         ON identifier_type.config_value_id = ui.identifier_type_config_value_id
+      LEFT JOIN system_config_values identifier_system
+        ON identifier_system.config_value_id = identifier_type.config_value_id
       WHERE ui.unit_id IN (${buildPlaceholders(unitIds)})
       ORDER BY
         ui.unit_id,
@@ -207,7 +211,10 @@ async function listIdentifierRowsForUnits(unitIds, connection = pool) {
     unitIds
   );
 
-  return rows;
+  return rows.map((row) => ({
+    ...row,
+    identifier_type_code: IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID[Number(row.identifier_type_system_config_value_id)] || ''
+  }));
 }
 
 async function listMemoryRowsForUnits(unitIds, connection = pool) {
@@ -221,8 +228,8 @@ async function listMemoryRowsForUnits(unitIds, connection = pool) {
         memory.unit_id,
         memory.size_gb,
         memory.ram_type_config_value_id,
-        ram_type.code AS ram_type_code,
-        COALESCE(ram_type.label, ram_type.code) AS ram_type_label,
+        NULL AS ram_type_code,
+        COALESCE(ram_type.label, ram_type.value) AS ram_type_label,
         memory.memory_install_type_code,
         CASE memory.memory_install_type_code
           WHEN 'removable_module' THEN 'Removable'
@@ -254,11 +261,11 @@ async function listStorageRowsForUnits(unitIds, connection = pool) {
         storage.unit_id,
         storage.size_gb,
         storage.storage_type_config_value_id,
-        storage_type.code AS storage_type_code,
-        COALESCE(storage_type.label, storage_type.code) AS storage_type_label,
+        NULL AS storage_type_code,
+        COALESCE(storage_type.label, storage_type.value) AS storage_type_label,
         storage.wipe_status_config_value_id,
-        wipe_status.code AS wipe_status_code,
-        COALESCE(wipe_status.label, wipe_status.code) AS wipe_status_label
+        NULL AS wipe_status_code,
+        COALESCE(wipe_status.label, wipe_status.value) AS wipe_status_label
       FROM unit_storage_devices storage
       LEFT JOIN config_values storage_type
         ON storage_type.config_value_id = storage.storage_type_config_value_id

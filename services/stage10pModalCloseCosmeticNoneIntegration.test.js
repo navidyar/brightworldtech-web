@@ -23,7 +23,7 @@ test('cosmetic None options are marked by semantic configuration values', () => 
   const model = read('models/unitIssueEntryModel.js');
 
   assert.match(model, /function isNoCosmeticIssueOption\(option\)/);
-  assert.match(model, /'none'[\s\S]*?'no_cosmetic_issue'/);
+  assert.match(model, /SYSTEM_CONFIG_VALUE_IDS\.COSMETIC_ISSUE_NONE/);
   assert.match(model, /isNoIssue:\s*isNoCosmeticIssueOption\(option\)/);
 });
 

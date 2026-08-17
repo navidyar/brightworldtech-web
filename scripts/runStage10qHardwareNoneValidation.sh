@@ -10,22 +10,11 @@ node --test \
 MYSQL_RUNNER="${MYSQL_RUNNER:-scripts/mysql-app.sh}"
 none_count="$(bash "$MYSQL_RUNNER" --batch --skip-column-names <<'SQL' | tr -d '[:space:]'
 SELECT COUNT(*)
-FROM config_values cv
-INNER JOIN config_categories cc
-  ON cc.config_category_id = cv.config_category_id
-WHERE cc.code IN ('hardware_issue_types', 'hardware_issue_type', 'hardware_issues')
-  AND COALESCE(cv.is_active, 1) = 1
-  AND (
-    LOWER(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(cv.code, '')), ' ', '_'), '-', '_'), '__', '_')) IN (
-      'none', 'no_issue', 'no_issues', 'hardware_none', 'hardware_issue_none', 'no_hardware_issue', 'no_hardware_issues'
-    )
-    OR LOWER(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(cv.label, '')), ' ', '_'), '-', '_'), '__', '_')) IN (
-      'none', 'no_issue', 'no_issues', 'hardware_none', 'hardware_issue_none', 'no_hardware_issue', 'no_hardware_issues'
-    )
-    OR LOWER(REPLACE(REPLACE(REPLACE(TRIM(COALESCE(cv.value, '')), ' ', '_'), '-', '_'), '__', '_')) IN (
-      'none', 'no_issue', 'no_issues', 'hardware_none', 'hardware_issue_none', 'no_hardware_issue', 'no_hardware_issues'
-    )
-  );
+FROM system_config_values scv
+INNER JOIN config_values cv
+  ON cv.config_value_id = scv.config_value_id
+WHERE scv.system_config_value_id = 242
+  AND COALESCE(cv.is_active, 1) = 1;
 SQL
 )"
 

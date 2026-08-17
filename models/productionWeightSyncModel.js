@@ -44,7 +44,7 @@ function resolveEffectiveWeightForSyncRow(row = {}, productionWeightOptions = []
     lotDefaultProductionWeight: row.resolved_default_production_weight,
     lotDefaultProductionWeightLabel: row.default_production_weight_label || '',
     unitCategory: {
-      code: row.unit_category_code || '',
+      systemConfigValueId: Number(row.unit_category_system_config_value_id || 0) || null,
       label: row.unit_category_label || '',
       value: row.unit_category_value || ''
     },
@@ -171,8 +171,8 @@ async function loadCurrentUnitWeightRows(connection, { unitIds = null, lotId = n
         ${hasUnitOverride ? 'u.production_weight_override' : 'NULL'} AS production_weight_override,
         ${hasUnitNotes ? 'u.production_weight_notes' : 'NULL'} AS production_weight_notes,
         ${resolvedLotExpression} AS resolved_default_production_weight,
-        ${hasLotPresetId ? 'COALESCE(lot_weight.label, lot_weight.code)' : 'NULL'} AS default_production_weight_label,
-        unit_category.code AS unit_category_code,
+        ${hasLotPresetId ? 'COALESCE(lot_weight.label, lot_weight.value)' : 'NULL'} AS default_production_weight_label,
+        unit_category_system.system_config_value_id AS unit_category_system_config_value_id,
         unit_category.label AS unit_category_label,
         unit_category.value AS unit_category_value
       FROM units u
@@ -181,6 +181,8 @@ async function loadCurrentUnitWeightRows(connection, { unitIds = null, lotId = n
       ${lotPresetJoin}
       LEFT JOIN config_values unit_category
         ON unit_category.config_value_id = u.unit_category_config_value_id
+      LEFT JOIN system_config_values unit_category_system
+        ON unit_category_system.config_value_id = unit_category.config_value_id
       WHERE ${where.join('\n        AND ')}
       ORDER BY u.unit_id
     `,

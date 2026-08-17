@@ -1,4 +1,6 @@
 const { pool } = require('./db');
+const { getConfigValueBySystemId, listConfigValuesBySystemCategoryIds } = require('./configLookupModel');
+const { SYSTEM_CONFIG_CATEGORY_IDS, SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 
 const PRODUCTION_WEIGHT_CATEGORY_CODES = ['production_weight_types', 'production_weights'];
 
@@ -22,6 +24,24 @@ const PRODUCTION_WEIGHT_CODE_ALIASES = new Map([
   ['els', 'production_weight_els'],
   ['configuration_task', 'production_weight_configuration_task'],
   ['config_task', 'production_weight_configuration_task']
+]);
+
+const UNIT_CATEGORY_TO_WEIGHT_SYSTEM_ID = new Map([
+  [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_LAPTOP, SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_LAPTOP],
+  [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_DESKTOP, SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_DESKTOP],
+  [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_MACBOOK, SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_MAC],
+  [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_WINDOWS_SURFACE, SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_WINDOWS_SURFACE],
+  [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_ELS, SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_ELS],
+  [SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_CONFIGURATION_TASK, SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_CONFIGURATION_TASK]
+]);
+
+const WEIGHT_SYSTEM_ID_BY_DOMAIN_CODE = new Map([
+  ['production_weight_laptop', SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_LAPTOP],
+  ['production_weight_desktop', SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_DESKTOP],
+  ['production_weight_mac', SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_MAC],
+  ['production_weight_windows_surface', SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_WINDOWS_SURFACE],
+  ['production_weight_els', SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_ELS],
+  ['production_weight_configuration_task', SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_CONFIGURATION_TASK]
 ]);
 
 const PRODUCTION_WEIGHT_PRIORITY_PATH = 'Unit override > Lot default > Unit category default';
@@ -73,185 +93,60 @@ function mapUnitCategoryCodeToProductionWeightCode(unitCategoryCode) {
   return PRODUCTION_WEIGHT_CODE_ALIASES.get(normalizedCode) || normalizedCode;
 }
 
-async function listProductionWeightOptions(connection = pool) {
-  const placeholders = PRODUCTION_WEIGHT_CATEGORY_CODES.map(() => '?').join(', ');
-  const orderPlaceholders = PRODUCTION_WEIGHT_CATEGORY_CODES.map(() => '?').join(', ');
-
-  const [rows] = await connection.query(
-    `
-      SELECT
-        cv.config_value_id,
-        cc.code AS category_code,
-        cv.code,
-        cv.label,
-        cv.value,
-        NULL AS description,
-        cv.sort_order,
-        cv.is_active
-      FROM config_values cv
-      INNER JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code IN (${placeholders})
-        AND cc.is_active = 1
-        AND cv.is_active = 1
-      ORDER BY FIELD(cc.code, ${orderPlaceholders}), cv.sort_order, cv.label, cv.code
-    `,
-    [...PRODUCTION_WEIGHT_CATEGORY_CODES, ...PRODUCTION_WEIGHT_CATEGORY_CODES]
-  );
-
-  return rows.map((row) => ({
-    configValueId: Number(row.config_value_id),
-    id: Number(row.config_value_id),
-    categoryCode: row.category_code,
-    code: row.code,
-    label: row.label || row.code,
+function normalizeWeightOption(row) {
+  if (!row) return null;
+  return {
+    configValueId: Number(row.configValueId || row.config_value_id),
+    id: Number(row.configValueId || row.config_value_id),
+    systemConfigValueId: row.systemConfigValueId == null ? null : Number(row.systemConfigValueId),
+    label: row.label || `Value #${row.configValueId || row.config_value_id}`,
     value: row.value,
     weightValue: normalizeWeightValue(row.value),
     formattedWeightValue: formatWeightValue(row.value),
     description: row.description || '',
-    sortOrder: Number(row.sort_order || 0),
-    isActive: Number(row.is_active) === 1
-  }));
+    sortOrder: Number(row.sortOrder || row.sort_order || 0),
+    isActive: row.isActive === undefined ? Number(row.is_active) === 1 : Boolean(row.isActive)
+  };
+}
+
+async function listProductionWeightOptions(connection = pool) {
+  const rows = await listConfigValuesBySystemCategoryIds(
+    SYSTEM_CONFIG_CATEGORY_IDS.PRODUCTION_WEIGHT_TYPES,
+    {},
+    connection
+  );
+  return rows.map(normalizeWeightOption);
 }
 
 async function getProductionWeightOptionById(configValueId) {
   const safeConfigValueId = Number(configValueId);
-
-  if (!Number.isInteger(safeConfigValueId) || safeConfigValueId <= 0) {
-    return null;
-  }
-
-  const placeholders = PRODUCTION_WEIGHT_CATEGORY_CODES.map(() => '?').join(', ');
-
-  const [rows] = await pool.query(
-    `
-      SELECT
-        cv.config_value_id,
-        cc.code AS category_code,
-        cv.code,
-        cv.label,
-        cv.value,
-        NULL AS description,
-        cv.sort_order,
-        cv.is_active
-      FROM config_values cv
-      INNER JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code IN (${placeholders})
-        AND cv.config_value_id = ?
-      LIMIT 1
-    `,
-    [...PRODUCTION_WEIGHT_CATEGORY_CODES, safeConfigValueId]
-  );
-
-  const row = rows[0];
-
-  if (!row) {
-    return null;
-  }
-
-  return {
-    configValueId: Number(row.config_value_id),
-    id: Number(row.config_value_id),
-    categoryCode: row.category_code,
-    code: row.code,
-    label: row.label || row.code,
-    value: row.value,
-    weightValue: normalizeWeightValue(row.value),
-    formattedWeightValue: formatWeightValue(row.value),
-    description: row.description || '',
-    sortOrder: Number(row.sort_order || 0),
-    isActive: Number(row.is_active) === 1
-  };
+  if (!Number.isInteger(safeConfigValueId) || safeConfigValueId <= 0) return null;
+  const options = await listConfigValuesBySystemCategoryIds(SYSTEM_CONFIG_CATEGORY_IDS.PRODUCTION_WEIGHT_TYPES);
+  return normalizeWeightOption(options.find((option) => option.configValueId === safeConfigValueId) || null);
 }
 
 async function getProductionWeightOptionByCode(weightCode) {
   const normalizedWeightCode = normalizeProductionWeightCode(weightCode);
-  const safeWeightCode = PRODUCTION_WEIGHT_CODE_ALIASES.get(normalizedWeightCode) || normalizedWeightCode;
-
-  if (!safeWeightCode) {
-    return null;
-  }
-
-  const placeholders = PRODUCTION_WEIGHT_CATEGORY_CODES.map(() => '?').join(', ');
-  const orderPlaceholders = PRODUCTION_WEIGHT_CATEGORY_CODES.map(() => '?').join(', ');
-
-  const [rows] = await pool.query(
-    `
-      SELECT
-        cv.config_value_id,
-        cc.code AS category_code,
-        cv.code,
-        cv.label,
-        cv.value,
-        NULL AS description,
-        cv.sort_order,
-        cv.is_active
-      FROM config_values cv
-      INNER JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code IN (${placeholders})
-        AND cv.code = ?
-        AND cc.is_active = 1
-        AND cv.is_active = 1
-      ORDER BY FIELD(cc.code, ${orderPlaceholders}), cv.sort_order, cv.config_value_id
-      LIMIT 1
-    `,
-    [...PRODUCTION_WEIGHT_CATEGORY_CODES, safeWeightCode, ...PRODUCTION_WEIGHT_CATEGORY_CODES]
-  );
-
-  const row = rows[0];
-
-  if (!row) {
-    return null;
-  }
-
-  return {
-    configValueId: Number(row.config_value_id),
-    id: Number(row.config_value_id),
-    categoryCode: row.category_code,
-    code: row.code,
-    label: row.label || row.code,
-    value: row.value,
-    weightValue: normalizeWeightValue(row.value),
-    formattedWeightValue: formatWeightValue(row.value),
-    description: row.description || '',
-    sortOrder: Number(row.sort_order || 0),
-    isActive: Number(row.is_active) === 1
-  };
+  const semanticCode = PRODUCTION_WEIGHT_CODE_ALIASES.get(normalizedWeightCode) || normalizedWeightCode;
+  const systemId = WEIGHT_SYSTEM_ID_BY_DOMAIN_CODE.get(semanticCode);
+  if (!systemId) return null;
+  return normalizeWeightOption(await getConfigValueBySystemId(systemId));
 }
 
 async function getDefaultProductionWeightForUnitCategory(unitCategoryConfigValueId) {
   const safeConfigValueId = Number(unitCategoryConfigValueId);
-
-  if (!Number.isInteger(safeConfigValueId) || safeConfigValueId <= 0) {
-    return null;
-  }
+  if (!Number.isInteger(safeConfigValueId) || safeConfigValueId <= 0) return null;
 
   const [rows] = await pool.query(
-    `
-      SELECT
-        cv.code,
-        cv.label,
-        cv.value
-      FROM config_values cv
-      WHERE cv.config_value_id = ?
-      LIMIT 1
-    `,
+    `SELECT scv.system_config_value_id
+     FROM system_config_values scv
+     WHERE scv.config_value_id = ?
+     LIMIT 1`,
     [safeConfigValueId]
   );
-
-  const unitCategory = rows[0];
-
-  if (!unitCategory) {
-    return null;
-  }
-
-  const mappedWeightCode = mapUnitCategoryCodeToProductionWeightCode(
-    unitCategory.code || unitCategory.value || unitCategory.label
-  );
-
-  return getProductionWeightOptionByCode(mappedWeightCode);
+  const categorySystemId = Number(rows[0]?.system_config_value_id || 0);
+  const weightSystemId = UNIT_CATEGORY_TO_WEIGHT_SYSTEM_ID.get(categorySystemId);
+  return weightSystemId ? normalizeWeightOption(await getConfigValueBySystemId(weightSystemId)) : null;
 }
 
 async function getProductionWeightPayloadFromConfigValueId(configValueId) {
@@ -271,14 +166,19 @@ async function getProductionWeightPayloadFromConfigValueId(configValueId) {
 }
 
 function findProductionWeightOptionForCategory(unitCategory = {}, productionWeightOptions = []) {
-  const categoryCode = unitCategory.code || unitCategory.value || unitCategory.label || '';
-  const mappedWeightCode = mapUnitCategoryCodeToProductionWeightCode(categoryCode);
-
-  if (!mappedWeightCode) {
-    return null;
+  const categorySystemId = Number(unitCategory.systemConfigValueId || unitCategory.system_config_value_id || 0);
+  const mappedSystemId = UNIT_CATEGORY_TO_WEIGHT_SYSTEM_ID.get(categorySystemId);
+  if (mappedSystemId) {
+    return productionWeightOptions.find((option) => Number(option.systemConfigValueId) === mappedSystemId) || null;
   }
 
-  return productionWeightOptions.find((option) => option.code === mappedWeightCode) || null;
+  // Compatibility for pure service callers that provide a domain string rather than a database row.
+  const categoryCode = unitCategory.code || unitCategory.value || unitCategory.label || '';
+  const mappedWeightCode = mapUnitCategoryCodeToProductionWeightCode(categoryCode);
+  const fallbackSystemId = WEIGHT_SYSTEM_ID_BY_DOMAIN_CODE.get(mappedWeightCode);
+  return fallbackSystemId
+    ? productionWeightOptions.find((option) => Number(option.systemConfigValueId) === fallbackSystemId) || null
+    : null;
 }
 
 function buildProductionWeightDetails({

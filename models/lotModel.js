@@ -1,6 +1,16 @@
 const crypto = require('crypto');
 const { pool } = require('./db');
 const productionWeightModel = require('./productionWeightModel');
+const { getConfigValueIdBySystemId, listConfigValuesBySystemCategoryIds } = require('./configLookupModel');
+const {
+  POLICY_KEY_BY_SYSTEM_VALUE_ID,
+  OPERATOR_KEY_BY_SYSTEM_VALUE_ID,
+  REQUIREMENT_KEY_BY_SYSTEM_VALUE_ID,
+  SYSTEM_CONFIG_CATEGORY_IDS,
+  SYSTEM_CONFIG_VALUE_IDS,
+  SYSTEM_VALUE_ID_BY_OPERATOR_KEY,
+  SYSTEM_VALUE_ID_BY_REQUIREMENT_KEY
+} = require('../config/configIdentityRegistry');
 const productionWeightSyncModel = require('./productionWeightSyncModel');
 const { parseRequiredLotProductionWeight } = require('../services/lotProductionWeightPolicy');
 const { getNewLotInitialActiveValue } = require('../services/lotCreationPolicy');
@@ -123,131 +133,42 @@ async function generateNextLotNumber(queryable = pool) {
   return String(rows[0]?.next_lot_number || 1001);
 }
 
-async function listConfigValuesForFirstExistingCategory(candidateCategoryCodes) {
-  const categoryColumns = await getColumnSet('config_categories');
-  const valueColumns = await getColumnSet('config_values');
-
-  const categoryLabelExpression = selectExpression('cc', categoryColumns, ['label', 'name'], 'category_label', 'cc.`code`');
-  const valueLabelExpression = selectExpression('cv', valueColumns, ['label', 'name'], 'label', 'cv.`code`');
-  const valueDescriptionExpression = selectExpression('cv', valueColumns, ['description'], 'description', 'NULL');
-  const valueSortExpression = selectExpression('cv', valueColumns, ['sort_order'], 'sort_order', '0');
-  const valueActiveExpression = selectExpression('cv', valueColumns, ['is_active'], 'is_active', '1');
-
-  const placeholders = candidateCategoryCodes.map(() => '?').join(', ');
-  const fieldOrder = candidateCategoryCodes.map(() => '?').join(', ');
-
-  const [categoryRows] = await pool.query(
-    `
-      SELECT
-        cc.config_category_id,
-        cc.code,
-        ${categoryLabelExpression}
-      FROM config_categories cc
-      WHERE cc.code IN (${placeholders})
-      ORDER BY FIELD(cc.code, ${fieldOrder})
-    `,
-    [...candidateCategoryCodes, ...candidateCategoryCodes]
+async function listConfigValuesForSystemCategory(systemConfigCategoryId) {
+  const values = await listConfigValuesBySystemCategoryIds(systemConfigCategoryId, { includeInactive: true });
+  const [rows] = await pool.query(
+    `SELECT cc.config_category_id, scc.system_config_category_id,
+            COALESCE(cc.label, cc.name, CONCAT('Category #', cc.config_category_id)) AS category_label
+     FROM system_config_categories scc
+     INNER JOIN config_categories cc ON cc.config_category_id = scc.config_category_id
+     WHERE scc.system_config_category_id = ?
+     LIMIT 1`,
+    [systemConfigCategoryId]
   );
-
-  for (const category of categoryRows) {
-    const [valueRows] = await pool.query(
-      `
-        SELECT
-          cv.config_value_id,
-          cv.config_category_id,
-          cv.code,
-          ${valueLabelExpression},
-          ${valueDescriptionExpression},
-          ${valueSortExpression},
-          ${valueActiveExpression}
-        FROM config_values cv
-        WHERE cv.config_category_id = ?
-        ORDER BY sort_order, label, code
-      `,
-      [category.config_category_id]
-    );
-
-    if (valueRows.length > 0) {
-      return {
-        category,
-        values: valueRows
-      };
-    }
-  }
-
+  const categoryRow = rows[0] || null;
   return {
-    category: null,
-    values: []
+    category: categoryRow ? {
+      config_category_id: Number(categoryRow.config_category_id),
+      system_config_category_id: Number(categoryRow.system_config_category_id),
+      label: categoryRow.category_label
+    } : null,
+    values: values.map((value) => ({
+      config_value_id: value.configValueId,
+      system_config_value_id: value.systemConfigValueId,
+      label: value.label,
+      value: value.value,
+      sort_order: value.sortOrder,
+      is_active: value.isActive ? 1 : 0,
+      is_protected: value.isProtected ? 1 : 0
+    }))
   };
 }
 
-async function findConfigValueIdByCode(candidateCategoryCodes, valueCode) {
-  const normalizedValueCode = String(valueCode || '').trim();
-
-  if (!normalizedValueCode) {
-    return null;
-  }
-
-  const placeholders = candidateCategoryCodes.map(() => '?').join(', ');
-
-  const [rows] = await pool.query(
-    `
-      SELECT
-        cv.config_value_id
-      FROM config_values cv
-      JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code IN (${placeholders})
-        AND cv.code = ?
-      ORDER BY FIELD(cc.code, ${placeholders})
-      LIMIT 1
-    `,
-    [...candidateCategoryCodes, normalizedValueCode, ...candidateCategoryCodes]
-  );
-
-  return rows[0]?.config_value_id || null;
-}
-
-async function findPreferredConfigValueId(candidateCategoryCodes, preferredValueCodes) {
-  const valueColumns = await getColumnSet('config_values');
-  const categoryPlaceholders = candidateCategoryCodes.map(() => '?').join(', ');
-  const categoryOrderPlaceholders = candidateCategoryCodes.map(() => '?').join(', ');
-  const activeFilter = hasColumn(valueColumns, 'is_active') ? 'AND cv.is_active = 1' : '';
-
-  const preferredCaseLines = preferredValueCodes
-    .map((valueCode, index) => `WHEN cv.code = ? THEN ${index + 1}`)
-    .join('\n          ');
-
-  const [rows] = await pool.query(
-    `
-      SELECT
-        cv.config_value_id,
-        cv.code
-      FROM config_values cv
-      JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code IN (${categoryPlaceholders})
-        ${activeFilter}
-      ORDER BY
-        FIELD(cc.code, ${categoryOrderPlaceholders}),
-        CASE
-          ${preferredCaseLines}
-          ELSE 999
-        END,
-        cv.config_value_id
-      LIMIT 1
-    `,
-    [...candidateCategoryCodes, ...candidateCategoryCodes, ...preferredValueCodes]
-  );
-
-  return rows[0]?.config_value_id || null;
+async function findConfigValueIdBySystemId(systemConfigValueId, connection = pool) {
+  return getConfigValueIdBySystemId(systemConfigValueId, connection);
 }
 
 async function getDefaultLotStatusConfigValueId() {
-  return findPreferredConfigValueId(
-    ['lot_statuses', 'lot_status'],
-    ['active', 'open', 'created', 'new', 'pending']
-  );
+  return findConfigValueIdBySystemId(SYSTEM_CONFIG_VALUE_IDS.LOT_STATUS_DEFAULT);
 }
 
 async function listLotHierarchyRows(queryable = pool, options = {}) {
@@ -415,14 +336,9 @@ async function getLotFormOptions(options = {}) {
     parentLots
   ] = await Promise.all([
     getLotSchemaCapabilities(),
-    listConfigValuesForFirstExistingCategory(['lot_types', 'lot_type']),
-    listConfigValuesForFirstExistingCategory([
-      'requirement_policies',
-      'requirement_policy',
-      'lot_requirement_policies',
-      'lot_requirement_policy'
-    ]),
-    listConfigValuesForFirstExistingCategory(['cosmetic_grades', 'overall_unit_grades', 'unit_grades', 'unit_grade', 'grades']),
+    listConfigValuesForSystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.LOT_TYPES),
+    listConfigValuesForSystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.LOT_REQUIREMENT_POLICIES),
+    listConfigValuesForSystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES),
     productionWeightModel.listProductionWeightOptions(),
     listParentLotOptions({ includeLotIds: includeParentLotIds, excludeLotIds: excludedParentLotIds })
   ]);
@@ -434,7 +350,7 @@ async function getLotFormOptions(options = {}) {
     requirementPolicies: buildRequirementPolicyOptions(requirementPolicyResult.values),
     requirementPolicyCategory: requirementPolicyResult.category,
     grades: normalizeCosmeticGradeOptions(
-      gradeResult.values.map((grade) => ({ ...grade, categoryCode: gradeResult.category?.code || '' }))
+      gradeResult.values
     ),
     gradeCategory: gradeResult.category,
     productionWeightOptions,
@@ -601,6 +517,8 @@ async function listLots(options = {}) {
     ? `
       LEFT JOIN config_values lot_status
         ON lot_status.config_value_id = l.lot_status_config_value_id
+      LEFT JOIN system_config_values lot_status_system
+        ON lot_status_system.config_value_id = lot_status.config_value_id
     `
     : '';
 
@@ -608,6 +526,8 @@ async function listLots(options = {}) {
     ? `
       LEFT JOIN config_values requirement_policy
         ON requirement_policy.config_value_id = l.requirement_policy_config_value_id
+      LEFT JOIN system_config_values requirement_policy_system
+        ON requirement_policy_system.config_value_id = requirement_policy.config_value_id
     `
     : '';
 
@@ -652,31 +572,31 @@ async function listLots(options = {}) {
     : '';
 
   const lotTypeLabelSelect = hasLotType
-    ? 'COALESCE(lot_type.label, lot_type.code) AS lot_type_label'
+    ? "COALESCE(lot_type.label, lot_type.value, CONCAT('Value #', lot_type.config_value_id)) AS lot_type_label"
     : 'NULL AS lot_type_label';
 
   const lotStatusLabelSelect = hasLotStatus
-    ? 'COALESCE(lot_status.label, lot_status.code) AS lot_status_label'
+    ? "COALESCE(lot_status.label, lot_status.value, CONCAT('Value #', lot_status.config_value_id)) AS lot_status_label"
     : 'NULL AS lot_status_label';
 
   const lotStatusCodeSelect = hasLotStatus
-    ? 'lot_status.code AS lot_status_code'
-    : 'NULL AS lot_status_code';
+    ? 'lot_status_system.system_config_value_id AS lot_status_system_config_value_id'
+    : 'NULL AS lot_status_system_config_value_id';
 
   const requirementPolicyLabelSelect = hasRequirementPolicy
-    ? 'COALESCE(requirement_policy.label, requirement_policy.code) AS requirement_policy_label'
+    ? "COALESCE(requirement_policy.label, requirement_policy.value, CONCAT('Value #', requirement_policy.config_value_id)) AS requirement_policy_label"
     : 'NULL AS requirement_policy_label';
 
   const requirementPolicyCodeSelect = hasRequirementPolicy
-    ? 'requirement_policy.code AS requirement_policy_code'
-    : 'NULL AS requirement_policy_code';
+    ? 'requirement_policy_system.system_config_value_id AS requirement_policy_system_config_value_id'
+    : 'NULL AS requirement_policy_system_config_value_id';
 
   const defaultGradeLabelSelect = hasDefaultGrade
-    ? 'COALESCE(default_grade.label, default_grade.code) AS default_grade_label'
+    ? "COALESCE(default_grade.label, default_grade.value, CONCAT('Value #', default_grade.config_value_id)) AS default_grade_label"
     : 'NULL AS default_grade_label';
 
   const defaultProductionWeightLabelSelect = hasDefaultProductionWeightConfigValueId
-    ? 'COALESCE(default_production_weight_value.label, default_production_weight_value.code) AS default_production_weight_label'
+    ? "COALESCE(default_production_weight_value.label, default_production_weight_value.value, CONCAT('Value #', default_production_weight_value.config_value_id)) AS default_production_weight_label"
     : 'NULL AS default_production_weight_label';
 
   const defaultProductionWeightConfigValueIdSelect = hasDefaultProductionWeightConfigValueId
@@ -794,6 +714,8 @@ async function listLots(options = {}) {
 
     return {
       ...row,
+      lot_status_code: null,
+      requirement_policy_code: POLICY_KEY_BY_SYSTEM_VALUE_ID[Number(row.requirement_policy_system_config_value_id || 0)] || '',
       directUnitCount,
       descendantUnitCount,
       ...progress
@@ -1355,10 +1277,10 @@ async function listLotRequirements(lotId, connection = null) {
         lr.lot_requirement_id,
         lr.lot_id,
         lr.requirement_type_config_value_id,
-        requirement_type.code AS requirement_key,
+        requirement_type_system.system_config_value_id AS requirement_type_system_config_value_id,
         requirement_type.label AS requirement_label,
         lr.comparison_operator_config_value_id,
-        COALESCE(comparison_operator.code, 'equals') AS operator_code,
+        comparison_operator_system.system_config_value_id AS comparison_operator_system_config_value_id,
         COALESCE(comparison_operator.label, 'Equals') AS operator_label,
         lr.requirement_config_value_id,
         lr.manufacturer_id,
@@ -1400,8 +1322,12 @@ async function listLotRequirements(lotId, connection = null) {
       FROM lot_requirements lr
       JOIN config_values requirement_type
         ON requirement_type.config_value_id = lr.requirement_type_config_value_id
+      LEFT JOIN system_config_values requirement_type_system
+        ON requirement_type_system.config_value_id = requirement_type.config_value_id
       LEFT JOIN config_values comparison_operator
         ON comparison_operator.config_value_id = lr.comparison_operator_config_value_id
+      LEFT JOIN system_config_values comparison_operator_system
+        ON comparison_operator_system.config_value_id = comparison_operator.config_value_id
       LEFT JOIN config_values requirement_value
         ON requirement_value.config_value_id = lr.requirement_config_value_id
       LEFT JOIN manufacturers manufacturer
@@ -1426,8 +1352,8 @@ async function listLotRequirements(lotId, connection = null) {
 
   return rows.map((row) => ({
     ...row,
-    requirement_key: normalizeRequirementKey(row.requirement_key),
-    operator_code: normalizeOperatorCode(row.operator_code),
+    requirement_key: normalizeRequirementKey(REQUIREMENT_KEY_BY_SYSTEM_VALUE_ID[Number(row.requirement_type_system_config_value_id || 0)] || ''),
+    operator_code: normalizeOperatorCode(OPERATOR_KEY_BY_SYSTEM_VALUE_ID[Number(row.comparison_operator_system_config_value_id || 0)] || 'equals'),
     required_value: row.requirement_number !== null && row.requirement_number !== undefined
       ? String(Number(row.requirement_number))
       : row.required_value,
@@ -1449,7 +1375,7 @@ async function listLotRequirementInheritanceSuppressions(lotId, connection = nul
         suppression.lot_requirement_inheritance_suppression_id,
         suppression.lot_id,
         suppression.requirement_type_config_value_id,
-        requirement_type.code AS requirement_key,
+        requirement_type_system.system_config_value_id AS requirement_type_system_config_value_id,
         requirement_type.label AS requirement_label,
         child.parent_lot_id AS source_lot_id,
         parent.name AS source_lot_name,
@@ -1460,19 +1386,21 @@ async function listLotRequirementInheritanceSuppressions(lotId, connection = nul
       FROM lot_requirement_inheritance_suppressions suppression
       JOIN config_values requirement_type
         ON requirement_type.config_value_id = suppression.requirement_type_config_value_id
+      LEFT JOIN system_config_values requirement_type_system
+        ON requirement_type_system.config_value_id = requirement_type.config_value_id
       JOIN lots child
         ON child.lot_id = suppression.lot_id
       LEFT JOIN lots parent
         ON parent.lot_id = child.parent_lot_id
       WHERE suppression.lot_id = ?
-      ORDER BY requirement_type.label, requirement_type.code
+      ORDER BY requirement_type.label, requirement_type.config_value_id
     `,
     [normalizedLotId]
   );
 
   return rows.map((row) => ({
     ...row,
-    requirement_key: normalizeRequirementKey(row.requirement_key)
+    requirement_key: normalizeRequirementKey(REQUIREMENT_KEY_BY_SYSTEM_VALUE_ID[Number(row.requirement_type_system_config_value_id || 0)] || '')
   }));
 }
 
@@ -1761,14 +1689,8 @@ async function createLotRequirement(lotId, formData, currentUserId) {
   const requirementColumns = await getColumnSet('lot_requirements');
   const requirementKey = normalizeRequirementKey(formData.requirementKey);
   const operatorCode = normalizeOperatorCode(formData.operatorCode);
-  const requirementTypeConfigValueId = await findConfigValueIdByCode(
-    ['lot_requirement_types'],
-    requirementKey
-  );
-  const comparisonOperatorConfigValueId = await findConfigValueIdByCode(
-    ['comparison_operators'],
-    operatorCode
-  );
+  const requirementTypeConfigValueId = await findConfigValueIdBySystemId(SYSTEM_VALUE_ID_BY_REQUIREMENT_KEY[requirementKey]);
+  const comparisonOperatorConfigValueId = await findConfigValueIdBySystemId(SYSTEM_VALUE_ID_BY_OPERATOR_KEY[operatorCode]);
 
   if (!requirementTypeConfigValueId) {
     throw new Error(`No lot requirement type is configured for ${requirementKey}.`);
@@ -1840,14 +1762,8 @@ async function updateLotRequirement(lotId, requirementId, formData, currentUserI
 
   const requirementKey = normalizeRequirementKey(formData.requirementKey);
   const operatorCode = normalizeOperatorCode(formData.operatorCode);
-  const requirementTypeConfigValueId = await findConfigValueIdByCode(
-    ['lot_requirement_types'],
-    requirementKey
-  );
-  const comparisonOperatorConfigValueId = await findConfigValueIdByCode(
-    ['comparison_operators'],
-    operatorCode
-  );
+  const requirementTypeConfigValueId = await findConfigValueIdBySystemId(SYSTEM_VALUE_ID_BY_REQUIREMENT_KEY[requirementKey]);
+  const comparisonOperatorConfigValueId = await findConfigValueIdBySystemId(SYSTEM_VALUE_ID_BY_OPERATOR_KEY[operatorCode]);
 
   if (!requirementTypeConfigValueId) {
     throw new Error(`No lot requirement type is configured for ${requirementKey}.`);

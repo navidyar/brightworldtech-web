@@ -1,6 +1,7 @@
 'use strict';
 
 const { getProcessorMetadata } = require('./processorMetadataCatalog');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 
 const GROUPS = Object.freeze({
   intel4Desktop: ['i3-4130', 'i5-4570', 'i7-4770'],
@@ -332,9 +333,10 @@ function resolveChromebookFallback(manufacturerName) {
   return group('chromebookIntel', 'chromebookArm');
 }
 
-function getCuratedProcessorCodes({ manufacturerName, categoryCode, modelName }) {
+function getCuratedProcessorCodes({ manufacturerName, categoryCode, categorySystemConfigValueId, modelName }) {
   const manufacturer = normalizeText(manufacturerName);
   const category = normalizeText(categoryCode).toLowerCase();
+  const categorySystemId = Number(categorySystemConfigValueId || 0);
   const model = normalizeText(modelName);
 
   let result = [];
@@ -345,7 +347,7 @@ function getCuratedProcessorCodes({ manufacturerName, categoryCode, modelName })
   else if (/^asus$/i.test(manufacturer)) result = resolveAsus(model);
   else if (/^acer$/i.test(manufacturer)) result = resolveAcer(model);
 
-  if (result.length === 0 && category === 'chrome') {
+  if (result.length === 0 && (categorySystemId === SYSTEM_CONFIG_VALUE_IDS.UNIT_CATEGORY_CHROME || category === 'chrome')) {
     result = resolveChromebookFallback(manufacturer);
   }
 

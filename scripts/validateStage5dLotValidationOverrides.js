@@ -2,6 +2,7 @@
 
 require('dotenv').config();
 const { pool } = require('../models/db');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 
 async function main() {
   const requiredColumns = [
@@ -28,18 +29,20 @@ async function main() {
     throw new Error(`Stage 5D migration is missing columns: ${missing.join(', ')}`);
   }
 
+  const requiredStatuses = new Map([
+    [SYSTEM_CONFIG_VALUE_IDS.OVERRIDE_APPROVED, 'approved'],
+    [SYSTEM_CONFIG_VALUE_IDS.OVERRIDE_CANCELLED, 'cancelled'],
+    [SYSTEM_CONFIG_VALUE_IDS.OVERRIDE_EXPIRED, 'expired']
+  ]);
   const [statusRows] = await pool.query(
-    `
-      SELECT cv.code
-      FROM config_values cv
-      JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
-      WHERE cc.code = 'override_statuses'
-        AND cv.code IN ('approved', 'cancelled', 'expired')
-    `
+    `SELECT system_config_value_id
+     FROM system_config_values
+     WHERE system_config_value_id IN (${Array.from(requiredStatuses.keys()).join(', ')})`
   );
-  const statuses = new Set(statusRows.map((row) => row.code));
-  const missingStatuses = ['approved', 'cancelled', 'expired'].filter((code) => !statuses.has(code));
+  const foundStatusIds = new Set(statusRows.map((row) => Number(row.system_config_value_id)));
+  const missingStatuses = Array.from(requiredStatuses.entries())
+    .filter(([systemId]) => !foundStatusIds.has(systemId))
+    .map(([, label]) => label);
 
   if (missingStatuses.length > 0) {
     throw new Error(`Required override statuses are missing: ${missingStatuses.join(', ')}`);

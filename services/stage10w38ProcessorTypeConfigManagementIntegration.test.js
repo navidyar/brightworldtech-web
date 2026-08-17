@@ -82,5 +82,5 @@ test('Processor Type form keeps model names out of the brand/type list and suppo
   assert.match(form, /name="code"/);
   assert.match(form, /name="isActive"/);
   assert.match(controller, /normalizeProcessorTypeCode/);
-  assert.match(controller, /processorTypeIdentityExists/);
+  assert.match(controller, /processorTypeIdentityExists\(\{[\s\S]*?code: formData\.code,[\s\S]*?name: formData\.name/);
 });

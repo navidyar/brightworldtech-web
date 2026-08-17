@@ -1,4 +1,5 @@
 const { pool } = require('./db');
+const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
 const lotModel = require('./lotModel');
 const techUnitModel = require('./techUnitModel');
 const unitIssueEntryModel = require('./unitIssueEntryModel');
@@ -422,7 +423,7 @@ function getRequestSelectSql({ includeCatalogTables }) {
           umcr.approved_model_name,
           umcr.approved_unit_model_id,
           model_request_manufacturer.name AS model_request_manufacturer_name,
-          COALESCE(model_request_category.label, model_request_category.code) AS model_request_category_label,
+          COALESCE(model_request_category.label, model_request_category.value) AS model_request_category_label,
           approved_model.model_name AS approved_unit_model_label,
           upcr.unit_model_id AS processor_request_unit_model_id,
           upcr.requested_processor_type,
@@ -432,7 +433,7 @@ function getRequestSelectSql({ includeCatalogTables }) {
           upcr.approved_processor_model_id,
           processor_request_manufacturer.name AS processor_request_manufacturer_name,
           processor_request_model.model_name AS processor_request_unit_model_name,
-          COALESCE(processor_request_category.label, processor_request_category.code) AS processor_request_category_label,
+          COALESCE(processor_request_category.label, processor_request_category.value) AS processor_request_category_label,
           approved_processor_brand.name AS approved_processor_brand_name,
           approved_processor_model.model_code AS approved_processor_model_label,
           approved_processor_model.base_speed_ghz AS approved_processor_base_speed_ghz,
@@ -814,13 +815,13 @@ async function assertActiveModelRequestContext(connection, manufacturerId, unitC
     connection.query(`
       SELECT cv.config_value_id
       FROM config_values cv
-      INNER JOIN config_categories cc
-        ON cc.config_category_id = cv.config_category_id
+      INNER JOIN system_config_categories scc
+        ON scc.config_category_id = cv.config_category_id
       WHERE cv.config_value_id = ?
-        AND cc.code IN ('unit_categories', 'unit_category', 'unit_types', 'unit_type')
+        AND scc.system_config_category_id = ?
         AND COALESCE(cv.is_active, 1) = 1
       LIMIT 1
-    `, [safeCategoryId])
+    `, [safeCategoryId, SYSTEM_CONFIG_CATEGORY_IDS.UNIT_CATEGORIES])
   ]);
 
   if (!manufacturerRows[0] || !categoryRows[0]) {
