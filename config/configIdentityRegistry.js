@@ -64,7 +64,7 @@ const CATEGORY_BINDINGS = Object.freeze([
   [SYSTEM_CONFIG_CATEGORY_IDS.LOT_STATUSES, 'Lot Statuses', ['lot_statuses', 'lot_status']],
   [SYSTEM_CONFIG_CATEGORY_IDS.LOT_REQUIREMENT_TYPES, 'Lot Requirement Types', ['lot_requirement_types']],
   [SYSTEM_CONFIG_CATEGORY_IDS.COMPARISON_OPERATORS, 'Comparison Operators', ['comparison_operators']],
-  [SYSTEM_CONFIG_CATEGORY_IDS.LOT_REQUIREMENT_POLICIES, 'Lot Requirement Policies', ['lot_requirement_policies', 'lot_requirement_policy']],
+  [SYSTEM_CONFIG_CATEGORY_IDS.LOT_REQUIREMENT_POLICIES, 'Lot Requirement Policies', ['requirement_policies', 'requirement_policy', 'lot_requirement_policies', 'lot_requirement_policy']],
   [SYSTEM_CONFIG_CATEGORY_IDS.PRODUCTION_WEIGHT_TYPES, 'Production Weight Types', ['production_weight_types', 'production_weights']],
   [SYSTEM_CONFIG_CATEGORY_IDS.UNIT_IDENTIFIER_TYPES, 'Unit Identifier Types', ['unit_identifier_types']],
   [SYSTEM_CONFIG_CATEGORY_IDS.OVERRIDE_STATUSES, 'Override Statuses', ['override_statuses']],
@@ -196,7 +196,7 @@ const REQUIREMENT_KEY_BY_SYSTEM_VALUE_ID = Object.freeze(Object.fromEntries(
 const VALUE_BINDINGS = Object.freeze([
   { systemId: SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_ACTIVE, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.ACCOUNT_STATUSES, name: 'Active account', legacyCodes: ['active'], required: true },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_PENDING_SETUP, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.ACCOUNT_STATUSES, name: 'Pending setup account', legacyCodes: ['pending_setup'], required: true },
-  { systemId: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_SETUP, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.PASSWORD_LINK_TYPES, name: 'Password setup link', legacyCodes: ['password_setup', 'setup'], required: true },
+  { systemId: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_SETUP, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.PASSWORD_LINK_TYPES, name: 'Password setup link', legacyCodes: ['initial_password_setup', 'password_setup', 'setup'], required: true },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_RESET, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.PASSWORD_LINK_TYPES, name: 'Password reset link', legacyCodes: ['password_reset', 'reset'], required: true },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_EXPIRY_HOURS, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.SECURITY_SETTINGS, name: 'Password link expiry hours', legacyCodes: ['password_link_expiry_hours'], required: true },
 

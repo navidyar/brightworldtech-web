@@ -135,9 +135,17 @@ async function generateNextLotNumber(queryable = pool) {
 
 async function listConfigValuesForSystemCategory(systemConfigCategoryId) {
   const values = await listConfigValuesBySystemCategoryIds(systemConfigCategoryId, { includeInactive: true });
+  const categoryColumns = await getColumnSet('config_categories');
+  const categoryLabelSelect = selectExpression(
+    'cc',
+    categoryColumns,
+    ['label', 'name'],
+    'category_label',
+    "CONCAT('Category #', cc.config_category_id)"
+  );
   const [rows] = await pool.query(
     `SELECT cc.config_category_id, scc.system_config_category_id,
-            COALESCE(cc.label, cc.name, CONCAT('Category #', cc.config_category_id)) AS category_label
+            ${categoryLabelSelect}
      FROM system_config_categories scc
      INNER JOIN config_categories cc ON cc.config_category_id = scc.config_category_id
      WHERE scc.system_config_category_id = ?

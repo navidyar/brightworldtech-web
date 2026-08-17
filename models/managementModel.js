@@ -249,8 +249,7 @@ async function getUserById(userId) {
         latest_upl.expires_at,
         latest_upl.used_at,
         latest_upl.revoked_at,
-        latest_link_type_system.system_config_value_id,
-        can_delete_pending_setup
+        latest_link_type_system.system_config_value_id
       LIMIT 1
     `,
     [userId]

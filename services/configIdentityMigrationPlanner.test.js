@@ -44,6 +44,20 @@ test('legacy configuration rows resolve deterministically to numeric system bind
   assert.equal(plan.duplicateValueTargets.length, 0);
 });
 
+test('current initial_password_setup password-link value resolves to the setup system identity', () => {
+  const fixture = buildLegacyFixture();
+  const setupBinding = VALUE_BINDINGS.find((binding) => binding.name === 'Password setup link');
+  assert.ok(setupBinding);
+  const setupValue = fixture.values.find((row) => row.id === 5000 + setupBinding.systemId);
+  assert.ok(setupValue);
+  setupValue.code = 'initial_password_setup';
+
+  const plan = planConfigIdentityBindings(fixture);
+
+  assert.equal(plan.resolvedValues.get(setupBinding.systemId), setupValue.id);
+  assert.equal(plan.missingRequiredValues.some((binding) => binding.systemId === setupBinding.systemId), false);
+});
+
 test('persisted numeric bindings remain authoritative after legacy codes are removed', () => {
   const fixture = buildLegacyFixture();
   const initial = planConfigIdentityBindings(fixture);
