@@ -542,6 +542,12 @@ async function getGeneratedColumns(connection, tableName) {
   }));
 }
 
+const APPROVED_LEGACY_CODE_COMPOSITE_INDEXES = Object.freeze({
+  'config_values.code': [
+    { name: 'uq_config_values_category_code', nonUnique: 0, columns: ['config_category_id', 'code'] }
+  ]
+});
+
 async function buildLegacyCodeColumnRemovalPlan(connection, tableName, columnName) {
   const columns = await getColumnSet(connection, tableName);
   if (!columns.has(columnName)) {
@@ -553,6 +559,7 @@ async function buildLegacyCodeColumnRemovalPlan(connection, tableName, columnNam
     foreignKeys: await getForeignKeysUsingColumn(connection, tableName, columnName),
     checkConstraints: await getCheckConstraints(connection, tableName),
     generatedColumns: await getGeneratedColumns(connection, tableName),
+    approvedCompositeIndexes: APPROVED_LEGACY_CODE_COMPOSITE_INDEXES[`${tableName}.${columnName}`] || [],
     columnName
   });
   const blockers = [];

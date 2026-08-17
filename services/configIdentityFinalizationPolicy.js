@@ -41,14 +41,40 @@ function expressionReferencesColumn(expression, columnName = 'code') {
     .test(String(expression || ''));
 }
 
+function normalizeApprovedCompositeIndexes(items = []) {
+  return (Array.isArray(items) ? items : []).map((item) => ({
+    name: normalizeIdentifier(item?.name).toLowerCase(),
+    nonUnique: Number(item?.nonUnique ?? item?.non_unique ?? 1),
+    columns: (Array.isArray(item?.columns) ? item.columns : []).map((column) => normalizeIdentifier(column).toLowerCase())
+  }));
+}
+
+function isApprovedCompositeIndex(index, approved = []) {
+  const expected = normalizeApprovedCompositeIndexes(approved);
+  const actualName = normalizeIdentifier(index?.name).toLowerCase();
+  const actualNonUnique = Number(index?.nonUnique ?? 1);
+  const actualColumns = (Array.isArray(index?.columns) ? index.columns : []).map((column) => normalizeIdentifier(column).toLowerCase());
+
+  return expected.some((item) => item.name === actualName
+    && item.nonUnique === actualNonUnique
+    && item.columns.length === actualColumns.length
+    && item.columns.every((column, indexPosition) => column === actualColumns[indexPosition]));
+}
+
 function buildLegacyCodeRemovalDecision({
   indexRows = [],
   foreignKeys = [],
   checkConstraints = [],
   generatedColumns = [],
+  approvedCompositeIndexes = [],
   columnName = 'code'
 } = {}) {
-  const { droppableIndexes, compositeIndexes } = classifyIndexesUsingColumn(indexRows, columnName);
+  const classified = classifyIndexesUsingColumn(indexRows, columnName);
+  const approvedComposite = classified.compositeIndexes
+    .filter((index) => isApprovedCompositeIndex(index, approvedCompositeIndexes));
+  const compositeIndexes = classified.compositeIndexes
+    .filter((index) => !isApprovedCompositeIndex(index, approvedCompositeIndexes));
+  const droppableIndexes = [...classified.droppableIndexes, ...approvedComposite];
   const blockingChecks = (Array.isArray(checkConstraints) ? checkConstraints : [])
     .filter((constraint) => expressionReferencesColumn(constraint.expression ?? constraint.checkClause ?? constraint.CHECK_CLAUSE, columnName));
   const blockingGeneratedColumns = (Array.isArray(generatedColumns) ? generatedColumns : [])
@@ -70,6 +96,7 @@ function buildLegacyCodeRemovalDecision({
 module.exports = {
   buildLegacyCodeRemovalDecision,
   classifyIndexesUsingColumn,
+  isApprovedCompositeIndex,
   expressionReferencesColumn,
   groupIndexes
 };

@@ -67,3 +67,35 @@ test('check constraints and generated columns that reference code block finaliza
   assert.equal(decision.checkConstraints.length, 1);
   assert.equal(decision.generatedColumns.length, 1);
 });
+
+
+test('known legacy config-value category/code uniqueness index is safe to drop during finalization', () => {
+  const decision = buildLegacyCodeRemovalDecision({
+    indexRows: [
+      { index_name: 'uq_config_values_category_code', column_name: 'config_category_id', seq_in_index: 1, non_unique: 0 },
+      { index_name: 'uq_config_values_category_code', column_name: 'code', seq_in_index: 2, non_unique: 0 }
+    ],
+    approvedCompositeIndexes: [
+      { name: 'uq_config_values_category_code', nonUnique: 0, columns: ['config_category_id', 'code'] }
+    ]
+  });
+
+  assert.equal(decision.safe, true);
+  assert.deepEqual(decision.droppableIndexes.map((index) => index.name), ['uq_config_values_category_code']);
+  assert.deepEqual(decision.compositeIndexes, []);
+});
+
+test('similar but unexpected composite code indexes still block finalization', () => {
+  const decision = buildLegacyCodeRemovalDecision({
+    indexRows: [
+      { index_name: 'uq_config_values_category_code', column_name: 'code', seq_in_index: 1, non_unique: 0 },
+      { index_name: 'uq_config_values_category_code', column_name: 'config_category_id', seq_in_index: 2, non_unique: 0 }
+    ],
+    approvedCompositeIndexes: [
+      { name: 'uq_config_values_category_code', nonUnique: 0, columns: ['config_category_id', 'code'] }
+    ]
+  });
+
+  assert.equal(decision.safe, false);
+  assert.equal(decision.compositeIndexes.length, 1);
+});
