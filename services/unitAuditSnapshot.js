@@ -11,6 +11,8 @@ const FIELD_DEFINITIONS = Object.freeze([
   ['bios_serial_number', 'BIOS Serial Number', 'biosSerialNumber', null],
   ['manufacturer', 'Manufacturer', 'manufacturerId', 'manufacturers'],
   ['unit_model', 'Unit Model', 'unitModelId', 'unitModels'],
+  ['screen_size', 'Screen Size', 'screenSizeConfigValueId', 'screenSizes'],
+  ['model_year', 'Model Year', 'modelYear', null],
   ['processor_model', 'Processor', 'processorModelId', 'processorModels'],
   ['processor_speed_ghz', 'Processor Speed', 'processorSpeedGhz', null, ' GHz'],
   ['previous_memory_size', 'Previous Memory Size', 'previousRamGb', null],
@@ -18,18 +20,34 @@ const FIELD_DEFINITIONS = Object.freeze([
   ['operating_system', 'Operating System', 'operatingSystemConfigValueId', 'operatingSystems'],
   ['production_weight_override', 'Production Weight Override', 'productionWeightOverride', null],
   ['production_weight_notes', 'Production Weight Notes', 'productionWeightNotes', null],
-  ['bios_version', 'BIOS Version', 'biosVersion', null],
+  ['bios_version', 'BIOS / Firmware Version', 'biosVersion', null],
   ['previous_storage_size', 'Previous Storage Size', 'previousStorageGb', null],
   ['current_storage_size', 'Current Storage Size', 'storageGb', null],
-  ['battery_health', 'Battery Health', 'batteryHealthPercent', null, '%'],
   ['os_build', 'OS Build', 'osBuild', null],
   ['absolute_status', 'Absolute Status', 'absoluteStatusConfigValueId', 'absoluteStatusOptions'],
-  ['physical_camera_status', 'Physical Camera', 'physicalCameraStatusConfigValueId', 'physicalCameraStatusOptions'],
-  ['touchscreen_status', 'Touchscreen', 'touchscreenStatusConfigValueId', 'touchscreenStatusOptions'],
+  ['touchscreen_status', 'Touchscreen Test', 'touchscreenStatusConfigValueId', 'touchscreenStatusOptions'],
   ['keyboard_language', 'Keyboard Language', 'keyboardLanguageConfigValueId', 'keyboardLanguageOptions'],
-  ['complete_diagnostics', 'Complete Diagnostics', 'completeDiagnosticsStatusConfigValueId', 'diagnosticsStatusOptions'],
-  ['virus_check', 'Virus Check', 'virusCheckStatusConfigValueId', 'virusCheckStatusOptions'],
+  ['complete_diagnostics', 'Diagnostics Test', 'completeDiagnosticsStatusConfigValueId', 'diagnosticsStatusOptions'],
+  ['virus_check', 'Threat Protection Scan', 'virusCheckStatusConfigValueId', 'virusCheckStatusOptions'],
   ['driver_check', 'Driver Check', 'driverCheckStatusConfigValueId', 'driverCheckStatusOptions'],
+  ['wifi_card_present', 'Wi-Fi Card Present', 'wifiCardPresentConfigValueId', 'yesNoOptions'],
+  ['charger_included', 'Charger Included', 'chargerIncludedConfigValueId', 'yesNoOptions'],
+  ['display_type', 'Display Type', 'displayTypeConfigValueId', 'displayTypeOptions'],
+  ['native_screen_resolution', 'Native Screen Resolution', 'nativeScreenResolutionConfigValueId', 'screenResolutionOptions'],
+  ['refresh_rate', 'Refresh Rate', 'refreshRateConfigValueId', 'refreshRateOptions'],
+  ['color', 'Color', 'colorConfigValueId', 'colorOptions'],
+  ['apple_model_number', 'Apple Model Number', 'appleModelNumber', null],
+  ['keyboard_test', 'Keyboard Test', 'keyboardTestResultConfigValueId', 'testResultOptions'],
+  ['microphone_check', 'Microphone Check', 'microphoneCheckResultConfigValueId', 'testResultOptions'],
+  ['audio_output_check', 'Audio Output Check', 'audioOutputCheckResultConfigValueId', 'testResultOptions'],
+  ['all_screws_present', 'All Screws Present', 'allScrewsPresentConfigValueId', 'yesNoOptions'],
+  ['bios_lock', 'BIOS Lock', 'biosLockConfigValueId', 'lockStatusOptions'],
+  ['efi_lock', 'EFI Lock', 'efiLockConfigValueId', 'lockStatusOptions'],
+  ['mdm_lock', 'MDM Lock', 'mdmLockConfigValueId', 'lockStatusOptions'],
+  ['icloud_activation_lock', 'iCloud Activation Lock', 'icloudActivationLockConfigValueId', 'lockStatusOptions'],
+  ['ce_certification', 'CE Certification', 'ceCertificationConfigValueId', 'yesNoOptions'],
+  ['open_box_status', 'Open-Box Status', 'openBoxStatusConfigValueId', 'yesNoOptions'],
+  ['box_language', 'Box Language', 'boxLanguageConfigValueId', 'boxLanguageOptions'],
   ['skinned_status', 'Skinned Status', 'skinnedStatusConfigValueId', 'skinnedStatusOptions'],
   ['overall_grade', 'Overall Grade', 'overallGradeConfigValueId', 'overallGradeOptions'],
   ['overall_grade_notes', 'Grade Notes', 'overallGradeNotes', null],
@@ -44,6 +62,10 @@ const REPEATABLE_DEFINITIONS = Object.freeze([
   ['memory_modules', 'Current Memory Modules', 'memoryModules', formatMemoryRows],
   ['previous_storage_devices', 'Previous Storage Devices', 'previousStorageDevices', formatStorageRows],
   ['storage_devices', 'Current Storage Devices', 'storageDevices', formatStorageRows],
+  ['cameras', 'Cameras', 'cameras', formatCameraRows],
+  ['batteries', 'Batteries', 'batteries', formatBatteryRows],
+  ['biometrics', 'Biometrics', 'biometrics', formatBiometricRows],
+  ['ports', 'Ports / Expansion', 'ports', formatPortRows],
   ['cosmetic_issues', 'Cosmetic Issues', 'cosmeticIssues', formatCosmeticIssueRows],
   ['hardware_issues', 'Hardware Issues', 'hardwareIssues', formatHardwareIssueRows],
   ['graphics_adapters', 'Graphics Adapters', 'graphicsAdapters', formatGraphicsRows]
@@ -160,6 +182,42 @@ function formatStorageRows(rows, formOptions) {
   };
 }
 
+function formatCameraRows(rows, formOptions) {
+  const values = normalizeRows(rows).filter(rowHasValue).map((row) => compactObject({
+    type: optionLabelByCollection(formOptions, 'cameraTypeOptions', row.cameraTypeConfigValueId),
+    location: optionLabelByCollection(formOptions, 'cameraLocationOptions', row.cameraLocationConfigValueId),
+    test: optionLabelByCollection(formOptions, 'testResultOptions', row.testResultConfigValueId)
+  }));
+  return { value: values, text: values.map((row) => [row.type, row.location, row.test].filter(Boolean).join(' · ')).join('; ') };
+}
+
+function formatBatteryRows(rows) {
+  const values = normalizeRows(rows).filter(rowHasValue).map((row) => compactObject({
+    healthPercent: row.healthPercent,
+    cycleCount: row.cycleCount
+  }));
+  return { value: values, text: values.map((row) => [
+    row.healthPercent !== undefined ? `${row.healthPercent}%` : '',
+    row.cycleCount !== undefined ? `${row.cycleCount} cycles` : ''
+  ].filter(Boolean).join(' · ')).join('; ') };
+}
+
+function formatBiometricRows(rows, formOptions) {
+  const values = normalizeRows(rows).filter(rowHasValue).map((row) => compactObject({
+    hardware: optionLabelByCollection(formOptions, 'biometricHardwareOptions', row.hardwareConfigValueId),
+    test: optionLabelByCollection(formOptions, 'availabilityTestResultOptions', row.testResultConfigValueId)
+  }));
+  return { value: values, text: values.map((row) => [row.hardware, row.test].filter(Boolean).join(' · ')).join('; ') };
+}
+
+function formatPortRows(rows, formOptions) {
+  const values = normalizeRows(rows).filter(rowHasValue).map((row) => compactObject({
+    type: optionLabelByCollection(formOptions, 'portTypeOptions', row.portTypeConfigValueId),
+    count: row.portCount
+  }));
+  return { value: values, text: values.map((row) => [row.type, row.count !== undefined ? `x${row.count}` : ''].filter(Boolean).join(' ')).join('; ') };
+}
+
 function formatCosmeticIssueRows(rows, formOptions) {
   const values = normalizeRows(rows)
     .filter(rowHasValue)
@@ -223,6 +281,12 @@ function buildUnitAuditSnapshot(formData = {}, formOptions = {}) {
       : (text ? `${text}${suffix}` : '');
     snapshot[fieldKey] = makeEntry(label, collectionName ? normalizeText(rawValue) : rawValue, displayText);
   });
+
+  const manufacturerLabel = optionLabelByCollection(formOptions, 'manufacturers', formData.manufacturerId).toLowerCase();
+  if (manufacturerLabel === 'apple') {
+    if (snapshot.os_build) snapshot.os_build.label = 'OS Version';
+    if (snapshot.bios_version) snapshot.bios_version.label = 'Firmware Version';
+  }
 
   REPEATABLE_DEFINITIONS.forEach(([fieldKey, label, property, formatter]) => {
     const formatted = formatter(formData[property], formOptions);

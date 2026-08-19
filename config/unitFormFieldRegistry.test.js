@@ -14,7 +14,7 @@ const {
 } = require('../config/unitFormFieldRegistry');
 
 test('authoritative registry contains every Stage 1A audited control', () => {
-  assert.equal(UNIT_FORM_FIELD_REGISTRY.length, 53);
+  assert.equal(UNIT_FORM_FIELD_REGISTRY.length, 85);
   assert.equal(assertValidUnitFormFieldRegistry(), true);
 });
 
@@ -83,10 +83,16 @@ test('compound repeatable rows stay section-controlled so their conditional chil
   }
 
   for (const field of UNIT_FORM_FIELD_REGISTRY.filter((entry) => entry.ruleType === RULE_TYPE.REPEATABLE_CHILD)) {
-    assert.equal(field.enabledForLotRules, false);
-    assert.equal(field.visibilityConfigurable, false);
-    assert.equal(field.requirementConfigurable, false);
     assert.ok(getUnitFormFieldDefinition(field.parentKey));
+    if (['camera_type', 'camera_location', 'camera_test', 'battery_health', 'battery_cycle_count', 'biometric_hardware', 'biometrics_test', 'port_type', 'port_count'].includes(field.key)) {
+      assert.equal(field.enabledForLotRules, true);
+      assert.equal(field.visibilityConfigurable, true);
+      assert.equal(field.requirementConfigurable, true);
+    } else {
+      assert.equal(field.enabledForLotRules, false);
+      assert.equal(field.visibilityConfigurable, false);
+      assert.equal(field.requirementConfigurable, false);
+    }
   }
 });
 
@@ -110,7 +116,8 @@ test('lot-configurable list excludes permission, workflow, system, legacy, and d
 });
 
 test('section lookup and dependency rules only reference registered fields', () => {
-  assert.ok(listUnitFormFieldsBySection('system').length > 0);
+  assert.ok(listUnitFormFieldsBySection('specifications').length > 0);
+  assert.ok(listUnitFormFieldsBySection('tests').length > 0);
   assert.equal(listUnitFormFieldsBySection('unknown_section').length, 0);
   assert.equal(assertValidUnitFormFieldRegistry(UNIT_FORM_FIELD_REGISTRY, FIELD_DEPENDENCY_RULES), true);
 });
@@ -138,35 +145,17 @@ test('Configure Unit Form exposes every independently configurable live Add/Edit
   const configurableKeys = listLotConfigurableUnitFormFields().map((field) => field.key);
 
   assert.deepEqual(configurableKeys, [
-    'unit_serial_number',
-    'bios_serial_number',
-    'manufacturer',
-    'unit_model',
-    'processor_model',
-    'processor_speed_ghz',
-    'memory_modules',
-    'previous_memory_size',
-    'storage_devices',
-    'previous_storage_size',
-    'operating_system',
-    'os_build',
-    'bios_version',
-    'battery_health',
-    'absolute_status',
-    'physical_camera_status',
-    'touchscreen_status',
-    'keyboard_language',
-    'complete_diagnostics',
-    'virus_check',
-    'driver_check',
-    'skinned_status',
-    'cosmetic_issues',
-    'hardware_issues',
-    'overall_grade',
-    'unit_outcome',
-    'overall_grade_notes',
-    'outcome_notes',
-    'general_comment'
+    'unit_serial_number', 'bios_serial_number', 'manufacturer', 'unit_model', 'screen_size', 'apple_model_number', 'model_year',
+    'processor_model', 'processor_speed_ghz', 'memory_modules', 'previous_memory_size', 'storage_devices',
+    'previous_storage_size', 'operating_system', 'os_build', 'bios_version', 'keyboard_language',
+    'wifi_card_present', 'charger_included', 'display_type', 'native_screen_resolution', 'refresh_rate',
+    'color', 'cameras', 'camera_type', 'camera_location', 'camera_test', 'batteries',
+    'battery_health', 'battery_cycle_count', 'biometrics', 'biometric_hardware', 'biometrics_test', 'ports',
+    'port_type', 'port_count', 'keyboard_test', 'touchscreen_status', 'microphone_check', 'audio_output_check',
+    'all_screws_present', 'complete_diagnostics', 'virus_check', 'driver_check', 'absolute_status', 'bios_lock',
+    'efi_lock', 'mdm_lock', 'icloud_activation_lock', 'ce_certification', 'open_box_status', 'box_language',
+    'skinned_status', 'cosmetic_issues', 'hardware_issues', 'overall_grade', 'unit_outcome',
+    'overall_grade_notes', 'outcome_notes', 'general_comment'
   ]);
 
   for (const field of listLotConfigurableUnitFormFields()) {

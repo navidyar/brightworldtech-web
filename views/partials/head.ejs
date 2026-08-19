@@ -33,8 +33,19 @@
       document.documentElement.style.colorScheme = theme === 'light' ? 'light' : 'light';
     })();
   </script>
+  <script>
+    (function () {
+      try {
+        if (localStorage.getItem('bwtdallas-sidebar-pinned') === 'true') {
+          document.documentElement.setAttribute('data-sidebar-pinned', 'true');
+        }
+      } catch (error) {
+        // localStorage can be unavailable in restricted browser contexts.
+      }
+    })();
+  </script>
 
-  <link rel="stylesheet" href="/css/style.css?v=20260812-stage10w47-form-value-consistency" />
+  <link rel="stylesheet" href="/css/style.css?v=20260818-stage10w67-sidebar-autohide" />
   <link rel="stylesheet" href="/css/theme.css?v=20260812-stage10w47-form-value-consistency" />
   <link rel="stylesheet" href="/css/work-area.css?v=20260812-stage10w48-cross-browser-period-picker" />
 
@@ -50,7 +61,7 @@
   <link rel="stylesheet" href="/css/features.css?v=20260804-stage10t-stabilization" />
 
   <script defer src="/js/theme.js"></script>
-  <script defer src="/js/sidebar.js"></script>
+  <script defer src="/js/sidebar.js?v=20260818-stage10w67-sidebar-autohide"></script>
   <script defer src="/js/date-picker-only.js?v=20260812-stage10w48-cross-browser-period-picker"></script>
   <script defer src="/js/management-reporting-controls.js?v=20260729-stage9i-qc-reporting-clarity"></script>
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" crossorigin="anonymous"></script>

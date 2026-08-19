@@ -4699,3 +4699,180 @@
   color: #4f6177;
   overflow-wrap: anywhere;
 }
+
+/* Stage 10w66: compact Specifications / Tests & Checks additions. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--specifications,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-form-section--tests {
+  --tuf-surface: #ffffff;
+  --tuf-border: #bdd8d2;
+  --tuf-heading: #316d67;
+  --tuf-work-item-border: #d0e4df;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-specs-tests-grid {
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatables {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable {
+  min-width: 0;
+  border-top: 1px solid var(--tuf-work-item-border, #d0e4df);
+  padding-top: 9px;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable[hidden] {
+  display: none;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 3px;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-header strong {
+  color: var(--tuf-heading, #316d67);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-list {
+  display: grid;
+  min-width: 0;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row {
+  display: grid;
+  grid-template-columns: 22px repeat(3, minmax(110px, 1fr)) auto;
+  gap: 7px;
+  align-items: end;
+  min-width: 0;
+  padding: 7px 0;
+  border-top: 1px solid #e5ebf2;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-list > :first-child {
+  border-top: 0;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--battery,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--biometric,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--port {
+  grid-template-columns: 22px repeat(2, minmax(120px, 1fr)) auto;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row .form-field > span {
+  margin: 0 0 2px 2px;
+  font-size: 0.62rem;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row :is(input, select:not([multiple])) {
+  min-height: 32px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+  font-size: 0.76rem;
+}
+
+@media (max-width: 1120px) {
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-specs-tests-grid {
+    grid-template-columns: repeat(2, minmax(160px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-specs-tests-grid,
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row,
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--battery,
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--biometric,
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--port {
+    grid-template-columns: 1fr;
+  }
+
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row > .tech-memory-row-number {
+    display: none;
+  }
+}
+
+/* Stage 10w66b: keep expanded Specs repeatables compact and explicit. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row {
+  justify-content: start;
+  grid-template-columns: 22px minmax(120px, 190px) minmax(110px, 160px) minmax(110px, 150px) max-content;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--battery {
+  grid-template-columns: 22px minmax(100px, 130px) minmax(90px, 120px) max-content;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--biometric {
+  grid-template-columns: 22px minmax(180px, 260px) minmax(130px, 170px) max-content;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--port {
+  grid-template-columns: 22px minmax(180px, 260px) 72px max-content;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row [data-remove-module-row] {
+  width: fit-content;
+  min-width: 0;
+  justify-self: start;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-recorded-state {
+  align-self: center;
+  color: #687b91;
+  font-size: 0.72rem;
+  font-weight: 550;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--battery .tech-spec-recorded-state,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--biometric .tech-spec-recorded-state,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--port .tech-spec-recorded-state {
+  grid-column: 2 / span 2;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--camera .tech-spec-recorded-state {
+  grid-column: 2 / span 3;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--battery [data-remove-module-row],
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--biometric [data-remove-module-row],
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--port [data-remove-module-row] {
+  grid-column: 4;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--camera [data-remove-module-row] {
+  grid-column: 5;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-short-field--apple-model {
+  max-width: 170px;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-short-field--year {
+  max-width: 118px;
+}
+
+@media (max-width: 760px) {
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row [data-remove-module-row],
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row .tech-spec-recorded-state {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 760px) {
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row,
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--battery,
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--biometric,
+  :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--port {
+    grid-template-columns: 1fr;
+  }
+}

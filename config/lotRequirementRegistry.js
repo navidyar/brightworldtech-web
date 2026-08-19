@@ -3,7 +3,7 @@
 const EQUALS = Object.freeze(['equals']);
 const NUMERIC = Object.freeze(['equals', 'greater_equal', 'less_equal']);
 
-function catalogField(key, label, helpText, storageKind, optionSource) {
+function catalogField(key, label, helpText, storageKind, optionSource, extra = {}) {
   return Object.freeze({
     key,
     label,
@@ -11,7 +11,8 @@ function catalogField(key, label, helpText, storageKind, optionSource) {
     storageKind,
     optionSource,
     allowedOperators: EQUALS,
-    selectable: true
+    selectable: true,
+    ...extra
   });
 }
 
@@ -34,7 +35,8 @@ function numericField(key, label, helpText, {
   minimumValue = 0,
   maximumValue = null,
   decimalPlaces = 2,
-  exampleValue = ''
+  exampleValue = '',
+  applicableManufacturers = null
 } = {}) {
   return Object.freeze({
     key,
@@ -47,6 +49,7 @@ function numericField(key, label, helpText, {
     maximumValue,
     decimalPlaces,
     exampleValue,
+    applicableManufacturers,
     allowedOperators: NUMERIC,
     selectable: true
   });
@@ -60,6 +63,14 @@ const LOT_REQUIREMENT_FIELDS = Object.freeze([
   catalogField('unit_type', 'Unit Type', 'Laptop, Desktop, MacBook, or another configured Unit Category.', 'config_value', 'unit_type'),
   catalogField('manufacturer', 'Manufacturer', 'A configured manufacturer such as Dell, HP, Lenovo, or Apple.', 'manufacturer', 'manufacturer'),
   catalogField('model', 'Model', 'A configured Unit Model. The option includes its manufacturer for clarity.', 'unit_model', 'model'),
+  catalogField('screen_size', 'Screen Size', 'A configured physical display size.', 'config_value', 'screen_size'),
+  numericField('model_year', 'Model Year', 'Recorded four-digit model year.', {
+    minimumValue: 1980,
+    maximumValue: 2100,
+    decimalPlaces: 0,
+    exampleValue: '2023',
+    applicableManufacturers: Object.freeze(['Apple'])
+  }),
   catalogField('processor', 'Processor', 'A configured processor model.', 'processor_model', 'processor'),
   catalogField('processor_family', 'Processor Family', 'Any processor explicitly included in a reusable processor family.', 'processor_family', 'processor_family'),
   numericField('processor_speed_ghz', 'Processor Speed', 'Recorded processor speed in GHz.', {
@@ -97,13 +108,13 @@ const LOT_REQUIREMENT_FIELDS = Object.freeze([
     decimalPlaces: 1,
     exampleValue: '87.5'
   }),
-  catalogField('absolute_status', 'Absolute Status', 'A configured Absolute status.', 'config_value', 'absolute_status'),
-  catalogField('physical_camera_status', 'Physical Camera', 'A configured physical camera status.', 'config_value', 'physical_camera_status'),
-  catalogField('touchscreen_status', 'Touchscreen', 'A configured touchscreen status.', 'config_value', 'touchscreen_status'),
+  catalogField('absolute_status', 'Absolute Status', 'A configured Absolute status.', 'config_value', 'absolute_status', { excludedManufacturers: Object.freeze(['Apple']) }),
+  catalogField('physical_camera_status', 'Physical Camera (Legacy)', 'Legacy physical camera status; use repeatable Cameras for new workflows.', 'config_value', 'physical_camera_status', { selectable: false }),
+  catalogField('touchscreen_status', 'Touchscreen Test', 'A configured touchscreen test result.', 'config_value', 'touchscreen_status'),
   catalogField('keyboard_language', 'Keyboard Language', 'A configured keyboard language.', 'config_value', 'keyboard_language'),
-  catalogField('complete_diagnostics', 'Complete Diagnostics', 'A configured diagnostics status.', 'config_value', 'complete_diagnostics'),
-  catalogField('virus_check', 'Virus Check', 'A configured virus-check status.', 'config_value', 'virus_check'),
-  catalogField('driver_check', 'Driver Check', 'A configured driver-check status.', 'config_value', 'driver_check'),
+  catalogField('complete_diagnostics', 'Diagnostics Test', 'A configured diagnostics test result.', 'config_value', 'complete_diagnostics'),
+  catalogField('virus_check', 'Threat Protection Scan', 'A configured threat-protection scan result.', 'config_value', 'virus_check'),
+  catalogField('driver_check', 'Driver Check', 'A configured driver-check status.', 'config_value', 'driver_check', { excludedManufacturers: Object.freeze(['Apple']) }),
   catalogField('skinned_status', 'Skinned', 'A configured skinned status.', 'config_value', 'skinned_status'),
   catalogField('overall_grade', 'Cosmetic Grade', 'A configured current cosmetic grade.', 'config_value', 'overall_grade'),
   catalogField('unit_outcome', 'Unit Outcome', 'The current Pass or Fail outcome.', 'text_option', 'unit_outcome')

@@ -36,6 +36,9 @@ async function listBaseUnitRowsForLot(lotId, connection = pool) {
         u.manufacturer_id,
         manufacturer.name AS manufacturer_name,
         u.unit_model_id,
+        u.screen_size_config_value_id,
+        COALESCE(screen_size.label, screen_size.value) AS screen_size_label,
+        u.model_year,
         unit_model.model_name,
         unit_model.model_number,
         CONCAT_WS(
@@ -124,6 +127,8 @@ async function listBaseUnitRowsForLot(lotId, connection = pool) {
         ON manufacturer.manufacturer_id = u.manufacturer_id
       LEFT JOIN unit_models unit_model
         ON unit_model.unit_model_id = u.unit_model_id
+      LEFT JOIN config_values screen_size
+        ON screen_size.config_value_id = u.screen_size_config_value_id
       LEFT JOIN processor_models processor_model
         ON processor_model.processor_model_id = u.processor_model_id
       LEFT JOIN processor_brands processor_brand

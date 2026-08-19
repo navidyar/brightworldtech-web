@@ -17,12 +17,15 @@ test('Battery Health is registered, validated, stored, audited, and exposed in t
   const audit = read('services/unitAuditSnapshot.js');
   const form = read('views/fragments/tech-unit-form.ejs');
 
-  assert.match(registry, /configurableField\('battery_health', 'Battery Health'[\s\S]*?batteryHealthPercent[\s\S]*?units\.battery_health_percent/);
-  assert.match(bindings, /battery_health:[\s\S]*?batteryHealthPercent/);
+  assert.match(registry, /configurableRepeatableChild\('battery_health', 'Battery Health'[\s\S]*?unit_batteries\.health_percent/);
+  assert.match(read('models/unitSpecsTestsModel.js'), /UPDATE units SET battery_health_percent = \?/);
+  assert.match(bindings, /battery_health:[\s\S]*?repeatableProperty: 'batteries'[\s\S]*?childProperty: 'healthPercent'/);
+  assert.match(controller, /getBatteryHealthSummaryFromRows\(expandedDetails\.batteries\)/);
   assert.match(controller, /isNumberInRangeWithPrecision\(validationFormData\.batteryHealthPercent, 0, 100, 1\)/);
   assert.match(model, /battery_health_percent/);
-  assert.match(audit, /\['battery_health', 'Battery Health', 'batteryHealthPercent'/);
-  assert.match(form, /name="batteryHealthPercent"[\s\S]*?min="0"[\s\S]*?max="100"[\s\S]*?step="0\.1"/);
+  assert.match(audit, /\['batteries', 'Batteries', 'batteries', formatBatteryRows\]/);
+  assert.match(audit, /formatBatteryRows/);
+  assert.match(form, /name="batteries\[<%= index %>\]\[healthPercent\]"[\s\S]*?min="0"[\s\S]*?max="100"[\s\S]*?step="0\.1"/);
 });
 
 test('Battery Health participates in Lot visibility and numeric requirements', () => {

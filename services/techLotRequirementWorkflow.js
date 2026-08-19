@@ -227,6 +227,15 @@ function buildSubmittedUnitSnapshot({ formData = {}, formOptions = {}, unitId = 
         labels: [optionLabel(formOptions.unitModels, formData.unitModelId)],
         sourceLabel: 'Unit Model field'
       }),
+      screen_size: createCatalogActual({
+        ids: [formData.screenSizeConfigValueId],
+        labels: [optionLabel(formOptions.screenSizes, formData.screenSizeConfigValueId)],
+        sourceLabel: 'Screen Size field'
+      }),
+      model_year: createNumberActual({
+        value: formData.modelYear,
+        sourceLabel: 'Model Year field'
+      }),
       processor: createCatalogActual({
         ids: [formData.processorModelId],
         labels: [optionLabel(formOptions.processorModels, formData.processorModelId)],

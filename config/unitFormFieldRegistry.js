@@ -59,7 +59,8 @@ const UNIT_FORM_SECTIONS = Object.freeze([
   Object.freeze({ key: 'processor', label: 'Processor', order: 50 }),
   Object.freeze({ key: 'memory', label: 'Memory', order: 60 }),
   Object.freeze({ key: 'storage', label: 'Storage', order: 70 }),
-  Object.freeze({ key: 'system', label: 'System', order: 80 }),
+  Object.freeze({ key: 'specifications', label: 'Specifications', order: 80 }),
+  Object.freeze({ key: 'tests', label: 'Tests & Checks', order: 85 }),
   Object.freeze({ key: 'issues', label: 'Issues', order: 90 }),
   Object.freeze({ key: 'grade_outcome', label: 'Grade & Outcome', order: 100 }),
   Object.freeze({ key: 'comments', label: 'Comments', order: 110 }),
@@ -73,6 +74,8 @@ function defineField(definition) {
     protected: false,
     protectedReason: '',
     enabledForLotRules: true,
+    applicableManufacturers: null,
+    excludedManufacturers: null,
     ...definition
   });
 }
@@ -124,6 +127,15 @@ function repeatableChild(key, label, section, parentKey, submissionName, storage
     requirementConfigurable: false,
     enabledForLotRules: false,
     preservationPolicy: PRESERVATION.REPLACE_CURRENT_SET_WHEN_MANAGED,
+    ...extra
+  });
+}
+
+function configurableRepeatableChild(key, label, section, parentKey, submissionName, storagePath, extra = {}) {
+  return repeatableChild(key, label, section, parentKey, submissionName, storagePath, {
+    visibilityConfigurable: true,
+    requirementConfigurable: true,
+    enabledForLotRules: true,
     ...extra
   });
 }
@@ -180,6 +192,14 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
 
   configurableField('manufacturer', 'Manufacturer', 'model', 'manufacturerId', 'units.manufacturer_id'),
   configurableField('unit_model', 'Unit Model', 'model', 'unitModelId', 'units.unit_model_id'),
+  configurableField('screen_size', 'Screen Size', 'model', 'screenSizeConfigValueId', 'units.screen_size_config_value_id'),
+  configurableField('apple_model_number', 'Apple Model Number', 'model', 'appleModelNumber', 'unit_specifications.apple_model_number', {
+    applicableManufacturers: Object.freeze(['Apple'])
+  }),
+  configurableField('model_year', 'Model Year', 'model', 'modelYear', 'units.model_year', {
+    requiredSemantics: 'A four-digit model year from 1980 through 2100 is required.',
+    applicableManufacturers: Object.freeze(['Apple'])
+  }),
   protectedControl({
     key: 'unit_category',
     label: 'Unit Category',
@@ -315,24 +335,154 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
     requiredSemantics: null
   }),
 
-  configurableField('operating_system', 'Operating System', 'system', 'operatingSystemConfigValueId', 'units.operating_system_config_value_id'),
-  configurableField('os_build', 'OS Build', 'system', 'osBuild', 'unit_specifications.os_build'),
-  configurableField('bios_version', 'BIOS Version', 'system', 'biosVersion', 'unit_specifications.bios_version'),
-  configurableField('battery_health', 'Battery Health', 'system', 'batteryHealthPercent', 'units.battery_health_percent', {
-    requiredSemantics: 'A percentage from 0.0 through 100.0 with no more than one decimal place is required.'
+  configurableField('operating_system', 'Operating System', 'specifications', 'operatingSystemConfigValueId', 'units.operating_system_config_value_id'),
+  configurableField('os_build', 'OS Build', 'specifications', 'osBuild', 'unit_specifications.os_build'),
+  configurableField('bios_version', 'BIOS / Firmware Version', 'specifications', 'biosVersion', 'unit_specifications.bios_version'),
+  configurableField('keyboard_language', 'Keyboard Language', 'specifications', 'keyboardLanguageConfigValueId', 'unit_specifications.keyboard_language_config_value_id'),
+  configurableField('wifi_card_present', 'Wi-Fi Card Present', 'specifications', 'wifiCardPresentConfigValueId', 'unit_specifications.wifi_card_present_config_value_id', {
+    excludedManufacturers: Object.freeze(['Apple'])
   }),
-  configurableField('absolute_status', 'Absolute Status', 'system', 'absoluteStatusConfigValueId', 'unit_specifications.absolute_status_config_value_id'),
-  configurableField('physical_camera_status', 'Physical Camera', 'system', 'physicalCameraStatusConfigValueId', 'unit_specifications.physical_camera_status_config_value_id'),
-  configurableField('touchscreen_status', 'Touchscreen', 'system', 'touchscreenStatusConfigValueId', 'unit_specifications.touchscreen_status_config_value_id'),
-  configurableField('keyboard_language', 'Keyboard Language', 'system', 'keyboardLanguageConfigValueId', 'unit_specifications.keyboard_language_config_value_id'),
-  configurableField('complete_diagnostics', 'Complete Diagnostics', 'system', 'completeDiagnosticsStatusConfigValueId', 'unit_specifications.complete_diagnostics_status_config_value_id'),
-  configurableField('virus_check', 'Virus Check', 'system', 'virusCheckStatusConfigValueId', 'unit_specifications.virus_check_status_config_value_id'),
-  configurableField('driver_check', 'Driver Check', 'system', 'driverCheckStatusConfigValueId', 'unit_specifications.driver_check_status_config_value_id'),
-  configurableField('skinned_status', 'Skinned', 'system', 'skinnedStatusConfigValueId', 'unit_specifications.skinned_status_config_value_id'),
+  configurableField('charger_included', 'Charger Included', 'specifications', 'chargerIncludedConfigValueId', 'unit_specifications.charger_included_config_value_id'),
+  configurableField('display_type', 'Display Type', 'specifications', 'displayTypeConfigValueId', 'unit_specifications.display_type_config_value_id'),
+  configurableField('native_screen_resolution', 'Native Screen Resolution', 'specifications', 'nativeScreenResolutionConfigValueId', 'unit_specifications.native_screen_resolution_config_value_id', {
+    excludedManufacturers: Object.freeze(['Apple'])
+  }),
+  configurableField('refresh_rate', 'Refresh Rate', 'specifications', 'refreshRateConfigValueId', 'unit_specifications.refresh_rate_config_value_id', {
+    excludedManufacturers: Object.freeze(['Apple'])
+  }),
+  configurableField('color', 'Color', 'specifications', 'colorConfigValueId', 'unit_specifications.color_config_value_id'),
+
+  defineField({
+    key: 'cameras',
+    label: 'Cameras',
+    section: 'specifications',
+    submissionName: 'cameras[index][...]',
+    storagePath: 'unit_cameras',
+    ruleType: RULE_TYPE.REPEATABLE_SECTION,
+    availability: AVAILABILITY.CREATE_EDIT,
+    defaultVisible: true,
+    defaultRequired: false,
+    visibilityConfigurable: true,
+    requirementConfigurable: true,
+    enabledForLotRules: true,
+    preservationPolicy: PRESERVATION.REPLACE_CURRENT_SET_WHEN_MANAGED,
+    requiredSemantics: 'At least one camera row is required.'
+  }),
+  configurableRepeatableChild('camera_type', 'Camera Type', 'specifications', 'cameras', 'cameras[index][cameraTypeConfigValueId]', 'unit_cameras.camera_type_config_value_id'),
+  configurableRepeatableChild('camera_location', 'Camera Location', 'specifications', 'cameras', 'cameras[index][cameraLocationConfigValueId]', 'unit_cameras.camera_location_config_value_id'),
+  configurableRepeatableChild('camera_test', 'Camera Test', 'specifications', 'cameras', 'cameras[index][testResultConfigValueId]', 'unit_cameras.test_result_config_value_id'),
+
+  defineField({
+    key: 'batteries',
+    label: 'Batteries',
+    section: 'specifications',
+    submissionName: 'batteries[index][...]',
+    storagePath: 'unit_batteries and units.battery_health_percent summary',
+    ruleType: RULE_TYPE.REPEATABLE_SECTION,
+    availability: AVAILABILITY.CREATE_EDIT,
+    defaultVisible: true,
+    defaultRequired: false,
+    visibilityConfigurable: true,
+    requirementConfigurable: true,
+    enabledForLotRules: true,
+    preservationPolicy: PRESERVATION.REPLACE_CURRENT_SET_WHEN_MANAGED,
+    requiredSemantics: 'At least one battery row is required.'
+  }),
+  configurableRepeatableChild('battery_health', 'Battery Health', 'specifications', 'batteries', 'batteries[index][healthPercent]', 'unit_batteries.health_percent', {
+    requiredSemantics: 'Battery Health is required for every recorded battery.'
+  }),
+  configurableRepeatableChild('battery_cycle_count', 'Battery Cycle Count', 'specifications', 'batteries', 'batteries[index][cycleCount]', 'unit_batteries.cycle_count', {
+    requiredSemantics: 'Battery Cycle Count is required for every recorded battery.',
+    applicableManufacturers: Object.freeze(['Apple'])
+  }),
+
+  defineField({
+    key: 'biometrics',
+    label: 'Biometrics',
+    section: 'specifications',
+    submissionName: 'biometrics[index][...]',
+    storagePath: 'unit_biometrics',
+    ruleType: RULE_TYPE.REPEATABLE_SECTION,
+    availability: AVAILABILITY.CREATE_EDIT,
+    defaultVisible: true,
+    defaultRequired: false,
+    visibilityConfigurable: true,
+    requirementConfigurable: true,
+    enabledForLotRules: true,
+    preservationPolicy: PRESERVATION.REPLACE_CURRENT_SET_WHEN_MANAGED,
+    requiredSemantics: 'At least one biometric hardware row is required.'
+  }),
+  configurableRepeatableChild('biometric_hardware', 'Biometric Hardware', 'specifications', 'biometrics', 'biometrics[index][hardwareConfigValueId]', 'unit_biometrics.hardware_config_value_id'),
+  configurableRepeatableChild('biometrics_test', 'Biometrics Test', 'specifications', 'biometrics', 'biometrics[index][testResultConfigValueId]', 'unit_biometrics.test_result_config_value_id'),
+
+  defineField({
+    key: 'ports',
+    label: 'Ports / Expansion',
+    section: 'specifications',
+    submissionName: 'ports[index][...]',
+    storagePath: 'unit_ports',
+    ruleType: RULE_TYPE.REPEATABLE_SECTION,
+    availability: AVAILABILITY.CREATE_EDIT,
+    defaultVisible: true,
+    defaultRequired: false,
+    visibilityConfigurable: true,
+    requirementConfigurable: true,
+    enabledForLotRules: true,
+    preservationPolicy: PRESERVATION.REPLACE_CURRENT_SET_WHEN_MANAGED,
+    requiredSemantics: 'At least one Port / Expansion row is required.'
+  }),
+  configurableRepeatableChild('port_type', 'Port / Expansion Type', 'specifications', 'ports', 'ports[index][portTypeConfigValueId]', 'unit_ports.port_type_config_value_id'),
+  configurableRepeatableChild('port_count', 'Port / Expansion Count', 'specifications', 'ports', 'ports[index][portCount]', 'unit_ports.port_count'),
+
+  configurableField('keyboard_test', 'Keyboard Test', 'tests', 'keyboardTestResultConfigValueId', 'unit_specifications.keyboard_test_result_config_value_id'),
+  configurableField('touchscreen_status', 'Touchscreen Test', 'tests', 'touchscreenStatusConfigValueId', 'unit_specifications.touchscreen_status_config_value_id'),
+  configurableField('microphone_check', 'Microphone Check', 'tests', 'microphoneCheckResultConfigValueId', 'unit_specifications.microphone_check_result_config_value_id'),
+  configurableField('audio_output_check', 'Audio Output Check', 'tests', 'audioOutputCheckResultConfigValueId', 'unit_specifications.audio_output_check_result_config_value_id'),
+  configurableField('all_screws_present', 'All Screws Present', 'tests', 'allScrewsPresentConfigValueId', 'unit_specifications.all_screws_present_config_value_id'),
+  configurableField('complete_diagnostics', 'Diagnostics Test', 'tests', 'completeDiagnosticsStatusConfigValueId', 'unit_specifications.complete_diagnostics_status_config_value_id'),
+  configurableField('virus_check', 'Threat Protection Scan', 'tests', 'virusCheckStatusConfigValueId', 'unit_specifications.virus_check_status_config_value_id'),
+  configurableField('driver_check', 'Driver Check', 'tests', 'driverCheckStatusConfigValueId', 'unit_specifications.driver_check_status_config_value_id', {
+    excludedManufacturers: Object.freeze(['Apple'])
+  }),
+  configurableField('absolute_status', 'Absolute Status', 'tests', 'absoluteStatusConfigValueId', 'unit_specifications.absolute_status_config_value_id', {
+    excludedManufacturers: Object.freeze(['Apple'])
+  }),
+  configurableField('bios_lock', 'BIOS Lock', 'tests', 'biosLockConfigValueId', 'unit_specifications.bios_lock_config_value_id', {
+    excludedManufacturers: Object.freeze(['Apple'])
+  }),
+  configurableField('efi_lock', 'EFI Lock', 'tests', 'efiLockConfigValueId', 'unit_specifications.efi_lock_config_value_id', {
+    applicableManufacturers: Object.freeze(['Apple'])
+  }),
+  configurableField('mdm_lock', 'MDM Lock', 'tests', 'mdmLockConfigValueId', 'unit_specifications.mdm_lock_config_value_id'),
+  configurableField('icloud_activation_lock', 'iCloud Activation Lock', 'tests', 'icloudActivationLockConfigValueId', 'unit_specifications.icloud_activation_lock_config_value_id', {
+    applicableManufacturers: Object.freeze(['Apple'])
+  }),
+  configurableField('ce_certification', 'CE Certification', 'tests', 'ceCertificationConfigValueId', 'unit_specifications.ce_certification_config_value_id', {
+    applicableManufacturers: Object.freeze(['Apple'])
+  }),
+  configurableField('open_box_status', 'Open-Box Status', 'tests', 'openBoxStatusConfigValueId', 'unit_specifications.open_box_status_config_value_id', {
+    applicableManufacturers: Object.freeze(['Apple'])
+  }),
+  configurableField('box_language', 'Box Language', 'tests', 'boxLanguageConfigValueId', 'unit_specifications.box_language_config_value_id', {
+    applicableManufacturers: Object.freeze(['Apple'])
+  }),
+  configurableField('skinned_status', 'Skinned', 'tests', 'skinnedStatusConfigValueId', 'unit_specifications.skinned_status_config_value_id'),
+  protectedControl({
+    key: 'physical_camera_status',
+    label: 'Legacy Physical Camera Status',
+    section: 'legacy_hidden',
+    submissionName: 'physicalCameraStatusConfigValueId',
+    storagePath: 'unit_specifications.physical_camera_status_config_value_id',
+    ruleType: RULE_TYPE.LEGACY_HIDDEN,
+    availability: AVAILABILITY.NOT_RENDERED,
+    defaultVisible: false,
+    protectedReason: 'Superseded by structured Camera rows.',
+    preservationPolicy: PRESERVATION.PRESERVE_WHEN_HIDDEN
+  }),
   protectedControl({
     key: 'graphics_adapters',
     label: 'Graphics Adapters',
-    section: 'system',
+    section: 'specifications',
     submissionName: 'graphicsAdapters[index][...]',
     storagePath: 'unit_graphics_adapters',
     ruleType: RULE_TYPE.FUTURE_SECTION,
@@ -469,6 +619,24 @@ const FIELD_DEPENDENCY_RULES = Object.freeze([
   Object.freeze({ whenRequired: 'processor_model', forceRequired: ['unit_model'] }),
   Object.freeze({ whenVisible: 'processor_speed_ghz', forceVisible: ['processor_model'] }),
   Object.freeze({ whenVisible: 'os_build', forceVisible: ['operating_system'] }),
+  Object.freeze({ whenVisible: 'camera_type', forceVisible: ['cameras'] }),
+  Object.freeze({ whenVisible: 'camera_location', forceVisible: ['cameras'] }),
+  Object.freeze({ whenVisible: 'camera_test', forceVisible: ['cameras'] }),
+  Object.freeze({ whenRequired: 'camera_type', forceRequired: ['cameras'] }),
+  Object.freeze({ whenRequired: 'camera_location', forceRequired: ['cameras'] }),
+  Object.freeze({ whenRequired: 'camera_test', forceRequired: ['cameras'] }),
+  Object.freeze({ whenVisible: 'battery_health', forceVisible: ['batteries'] }),
+  Object.freeze({ whenVisible: 'battery_cycle_count', forceVisible: ['batteries'] }),
+  Object.freeze({ whenRequired: 'battery_health', forceRequired: ['batteries'] }),
+  Object.freeze({ whenRequired: 'battery_cycle_count', forceRequired: ['batteries'] }),
+  Object.freeze({ whenVisible: 'biometric_hardware', forceVisible: ['biometrics'] }),
+  Object.freeze({ whenVisible: 'biometrics_test', forceVisible: ['biometrics'] }),
+  Object.freeze({ whenRequired: 'biometric_hardware', forceRequired: ['biometrics'] }),
+  Object.freeze({ whenRequired: 'biometrics_test', forceRequired: ['biometrics'] }),
+  Object.freeze({ whenVisible: 'port_type', forceVisible: ['ports'] }),
+  Object.freeze({ whenVisible: 'port_count', forceVisible: ['ports'] }),
+  Object.freeze({ whenRequired: 'port_type', forceRequired: ['ports'] }),
+  Object.freeze({ whenRequired: 'port_count', forceRequired: ['ports'] }),
   Object.freeze({ whenVisible: 'overall_grade_notes', forceVisible: ['overall_grade'] }),
   Object.freeze({ whenVisible: 'outcome_notes', forceVisible: ['unit_outcome'] }),
   Object.freeze({ whenVisible: 'outcome_approval', forceVisible: ['unit_outcome'] })

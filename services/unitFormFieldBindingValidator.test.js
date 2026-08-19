@@ -10,14 +10,19 @@ const {
   validateUnitFormFieldBindings
 } = require('./unitFormFieldBindingValidator');
 
-test('the live Unit form binds every Lot-configurable registry field exactly once', () => {
+test('the live Unit form binds every Lot-configurable field and only repeats repeatable child bindings', () => {
   const formPath = path.join(__dirname, '..', 'views', 'fragments', 'tech-unit-form.ejs');
   const markup = fs.readFileSync(formPath, 'utf8');
   const result = validateUnitFormFieldBindings(markup);
 
   assert.equal(result.valid, true, JSON.stringify(result));
-  assert.equal(result.expectedCount, 29);
-  assert.equal(result.actualCount, 29);
+  assert.equal(result.expectedCount, 60);
+  assert.equal(result.uniqueActualCount, 60);
+  assert.equal(result.actualCount, 69);
+  assert.deepEqual(result.repeatableDuplicateKeys, [
+    'battery_cycle_count', 'battery_health', 'biometric_hardware', 'biometrics_test',
+    'camera_location', 'camera_test', 'camera_type', 'port_count', 'port_type'
+  ]);
   assert.deepEqual(result.unknownFollowerKeys, []);
   assert.deepEqual(result.unknownCompanionKeys, []);
   assert.ok(result.followerKeys.includes('unit_outcome'));

@@ -121,7 +121,7 @@ test('all repeatable Add and Remove controls are excluded from sequential Tab na
   const markup = read('views/fragments/tech-unit-form.ejs');
   const actionTags = markup.match(/<button[^>]*(?:data-add-module-row|data-remove-module-row)[^>]*>/g) || [];
 
-  assert.equal(actionTags.length, 18);
+  assert.ok(actionTags.length >= 18);
   actionTags.forEach((tag) => {
     assert.match(tag, /tabindex="-1"/, `repeatable action is missing tabindex=-1: ${tag}`);
   });

@@ -40,7 +40,7 @@ test('processor request state fix is cache-busted on every Tech Unit form surfac
     'views/pages/tech-unit-form.ejs',
     'views/pages/tech-unit-detail.ejs'
   ]) {
-    assert.match(read(relativePath), /tech-unit-form\.js\?v=20260813-stage10w51-processor-request-state/);
+    assert.match(read(relativePath), /tech-unit-form\.js\?v=20260817-stage10w66-specs-tests/);
   }
 });
 

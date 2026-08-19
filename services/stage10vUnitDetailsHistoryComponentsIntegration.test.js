@@ -80,10 +80,10 @@ test('History expands structured component snapshots into per-slot changes', () 
 test('component export columns are selected by default with the complete export contract', () => {
   const contract = require('../config/unitExportContract');
 
-  assert.equal(contract.UNIT_EXPORT_COLUMNS.length, 24);
+  assert.equal(contract.UNIT_EXPORT_COLUMNS.length, 57);
   assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
   assert.deepEqual(
-    contract.UNIT_EXPORT_COLUMNS.slice(12, 18).map((column) => column.key),
+    contract.DEFAULT_UNIT_EXPORT_COLUMNS.slice(12, 18).map((column) => column.key),
     [
       'previousMemoryModules',
       'currentMemoryModules',
@@ -93,7 +93,9 @@ test('component export columns are selected by default with the complete export 
       'storageDeviceChanges'
     ]
   );
-  assert.deepEqual(contract.DEFAULT_UNIT_EXPORT_COLUMNS, contract.UNIT_EXPORT_COLUMNS);
+  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
+  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.some((column) => column.key === 'screenSize'), false);
+  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.some((column) => column.key === 'modelYear'), false);
 });
 
 test('CSV and XLSX component columns use multiline text, fixed widths, and wrapping', () => {

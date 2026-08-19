@@ -291,6 +291,7 @@
           const expanded = unit.expandedDetails || {};
           const identifiers = Array.isArray(expanded.identifiers) ? expanded.identifiers : [];
           const specifications = expanded.specifications || null;
+          const specsTests = expanded.specsTests || null;
           const currentGrade = expanded.currentGrade || null;
           const currentOutcome = expanded.currentOutcome || null;
           const previousMemoryModules = Array.isArray(expanded.previousMemoryModules) ? expanded.previousMemoryModules : [];
@@ -914,6 +915,22 @@
                       </div>
 
                       <div>
+                        <dt>Screen Size</dt>
+                        <dd><%= unit.screenSizeLabel || '—' %></dd>
+                      </div>
+
+                      <% if (String(unit.manufacturerLabel || '').trim().toLowerCase() === 'apple') { %>
+                        <div>
+                          <dt>Apple Model Number</dt>
+                          <dd><%= specsTests && specsTests.appleModelNumber ? specsTests.appleModelNumber : '—' %></dd>
+                        </div>
+                        <div>
+                          <dt>Model Year</dt>
+                          <dd><%= unit.modelYear || '—' %></dd>
+                        </div>
+                      <% } %>
+
+                      <div>
                         <dt>Processor</dt>
                         <dd><%= unit.processorLabel || '—' %></dd>
                       </div>
@@ -951,64 +968,52 @@
                   </section>
 
                   <section class="tech-detail-section tech-detail-section--checks">
-                    <h3>System Checks</h3>
-
+                    <% const isAppleUnit = String(unit.manufacturerLabel || '').trim().toLowerCase() === 'apple'; %>
+                    <h3>Specifications / Tests</h3>
                     <dl class="tech-detail-list">
-                      <div>
-                        <dt>Operating System</dt>
-                        <dd><%= unit.operatingSystemLabel || '—' %></dd>
-                      </div>
-
-                      <div>
-                        <dt>BIOS Version</dt>
-                        <dd><%= specifications && specifications.biosVersion ? specifications.biosVersion : '—' %></dd>
-                      </div>
-
-                      <div>
-                        <dt>OS Build</dt>
-                        <dd><%= specifications && specifications.osBuild ? specifications.osBuild : '—' %></dd>
-                      </div>
-
-                      <div>
-                        <dt>Absolute Status</dt>
-                        <dd><%= specifications ? specifications.absoluteStatusLabel : '—' %></dd>
-                      </div>
-
-                      <div>
-                        <dt>Camera</dt>
-                        <dd><%= specifications ? specifications.physicalCameraStatusLabel : '—' %></dd>
-                      </div>
-
-                      <div>
-                        <dt>Touchscreen</dt>
-                        <dd><%= specifications ? specifications.touchscreenStatusLabel : '—' %></dd>
-                      </div>
-
-                      <div>
-                        <dt>Keyboard</dt>
-                        <dd><%= specifications ? specifications.keyboardLanguageLabel : '—' %></dd>
-                      </div>
-
-                      <div>
-                        <dt>Diagnostics</dt>
-                        <dd><%= specifications ? specifications.completeDiagnosticsStatusLabel : '—' %></dd>
-                      </div>
-
-                      <div>
-                        <dt>Virus Check</dt>
-                        <dd><%= specifications ? specifications.virusCheckStatusLabel : '—' %></dd>
-                      </div>
-
-                      <div>
-                        <dt>Driver Check</dt>
-                        <dd><%= specifications ? specifications.driverCheckStatusLabel : '—' %></dd>
-                      </div>
-
-                      <div>
-                        <dt>Skinned</dt>
-                        <dd><%= specifications ? specifications.skinnedStatusLabel : '—' %></dd>
-                      </div>
+                      <div><dt>Operating System</dt><dd><%= unit.operatingSystemLabel || '—' %></dd></div>
+                      <div><dt><%= isAppleUnit ? 'Firmware Version' : 'BIOS Version' %></dt><dd><%= specifications && specifications.biosVersion ? specifications.biosVersion : '—' %></dd></div>
+                      <div><dt><%= isAppleUnit ? 'OS Version' : 'OS Build' %></dt><dd><%= specifications && specifications.osBuild ? specifications.osBuild : '—' %></dd></div>
+                      <div><dt>Keyboard Language</dt><dd><%= specifications ? specifications.keyboardLanguageLabel : '—' %></dd></div>
+                      <% if (!isAppleUnit) { %><div><dt>Wi-Fi Card Present</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.wifiCardPresentConfigValueId || '—') : '—' %></dd></div><% } %>
+                      <div><dt>Charger Included</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.chargerIncludedConfigValueId || '—') : '—' %></dd></div>
+                      <div><dt>Display Type</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.displayTypeConfigValueId || '—') : '—' %></dd></div>
+                      <% if (!isAppleUnit) { %>
+                        <div><dt>Native Resolution</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.nativeScreenResolutionConfigValueId || '—') : '—' %></dd></div>
+                        <div><dt>Refresh Rate</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.refreshRateConfigValueId || '—') : '—' %></dd></div>
+                      <% } %>
+                      <div><dt>Color</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.colorConfigValueId || '—') : '—' %></dd></div>
+                      <div><dt>Keyboard Test</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.keyboardTestResultConfigValueId || '—') : '—' %></dd></div>
+                      <div><dt>Touchscreen Test</dt><dd><%= specifications ? specifications.touchscreenStatusLabel : '—' %></dd></div>
+                      <div><dt>Microphone Check</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.microphoneCheckResultConfigValueId || '—') : '—' %></dd></div>
+                      <div><dt>Audio Output Check</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.audioOutputCheckResultConfigValueId || '—') : '—' %></dd></div>
+                      <div><dt>All Screws Present</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.allScrewsPresentConfigValueId || '—') : '—' %></dd></div>
+                      <div><dt>Diagnostics Test</dt><dd><%= specifications ? specifications.completeDiagnosticsStatusLabel : '—' %></dd></div>
+                      <div><dt>Threat Protection Scan</dt><dd><%= specifications ? specifications.virusCheckStatusLabel : '—' %></dd></div>
+                      <% if (!isAppleUnit) { %>
+                        <div><dt>Driver Check</dt><dd><%= specifications ? specifications.driverCheckStatusLabel : '—' %></dd></div>
+                        <div><dt>Absolute Status</dt><dd><%= specifications ? specifications.absoluteStatusLabel : '—' %></dd></div>
+                        <div><dt>BIOS Lock</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.biosLockConfigValueId || '—') : '—' %></dd></div>
+                      <% } %>
+                      <div><dt>MDM Lock</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.mdmLockConfigValueId || '—') : '—' %></dd></div>
+                      <% if (isAppleUnit) { %>
+                        <div><dt>EFI Lock</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.efiLockConfigValueId || '—') : '—' %></dd></div>
+                        <div><dt>iCloud Activation Lock</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.icloudActivationLockConfigValueId || '—') : '—' %></dd></div>
+                        <div><dt>CE Certification</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.ceCertificationConfigValueId || '—') : '—' %></dd></div>
+                        <div><dt>Open-Box Status</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.openBoxStatusConfigValueId || '—') : '—' %></dd></div>
+                        <div><dt>Box Language</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.boxLanguageConfigValueId || '—') : '—' %></dd></div>
+                      <% } %>
+                      <div><dt>Skinned</dt><dd><%= specifications ? specifications.skinnedStatusLabel : '—' %></dd></div>
                     </dl>
+
+                    <% if (specsTests && ((specsTests.cameras || []).length || (specsTests.batteries || []).length || (specsTests.biometrics || []).length || (specsTests.ports || []).length)) { %>
+                      <div class="tech-detail-subsection">
+                        <% if ((specsTests.cameras || []).length) { %><p><strong>Cameras:</strong> <%= specsTests.cameras.map((row) => [row.cameraTypeLabel, row.cameraLocationLabel, row.testResultLabel].filter(Boolean).join(' · ')).join(' | ') %></p><% } %>
+                        <% if ((specsTests.batteries || []).length) { %><p><strong>Batteries:</strong> <%= specsTests.batteries.map((row) => [row.healthPercent !== '' ? `${row.healthPercent}%` : '', String(unit.manufacturerLabel || '').trim().toLowerCase() === 'apple' && row.cycleCount !== '' ? `${row.cycleCount} cycles` : ''].filter(Boolean).join(' · ')).join(' | ') %></p><% } %>
+                        <% if ((specsTests.biometrics || []).length) { %><p><strong>Biometrics:</strong> <%= specsTests.biometrics.map((row) => [row.hardwareLabel, row.testResultLabel].filter(Boolean).join(' · ')).join(' | ') %></p><% } %>
+                        <% if ((specsTests.ports || []).length) { %><p><strong>Ports / Expansion:</strong> <%= specsTests.ports.map((row) => [row.portTypeLabel, row.portCount !== '' ? `x${row.portCount}` : ''].filter(Boolean).join(' ')).join(' | ') %></p><% } %>
+                      </div>
+                    <% } %>
                   </section>
 
                   <section class="tech-detail-section tech-detail-section--workflow">

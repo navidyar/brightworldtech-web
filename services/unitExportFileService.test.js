@@ -11,6 +11,28 @@ const {
   parseBatteryHealthPercentage
 } = require('./unitExportFileService');
 
+
+function excelColumnName(columnNumber) {
+  let value = Number(columnNumber);
+  let name = '';
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+    name = String.fromCharCode(65 + remainder) + name;
+    value = Math.floor((value - 1) / 26);
+  }
+  return name;
+}
+
+function exportColumnNumber(key) {
+  const index = UNIT_EXPORT_COLUMNS.findIndex((column) => column.key === key);
+  assert.ok(index >= 0, `missing export column ${key}`);
+  return index + 1;
+}
+
+function exportColumnRef(key, rowNumber) {
+  return `${excelColumnName(exportColumnNumber(key))}${rowNumber}`;
+}
+
 function sampleDataset(overrides = {}) {
   return {
     columns: UNIT_EXPORT_COLUMNS,
@@ -22,6 +44,8 @@ function sampleDataset(overrides = {}) {
         unitType: 'Laptop',
         manufacturer: 'Dell',
         model: 'Latitude 5440',
+        screenSize: '14-inch',
+        modelYear: '2023',
         cpu: 'Intel Core i5-1355U',
         shortForm: 'i5-13th',
         previousMemorySize: '8 GB',
@@ -85,7 +109,7 @@ test('CSV exports UTF-8 BOM, all approved columns, quoted multiline values, and 
   const csv = buildCsvBuffer(sampleDataset()).toString('utf8');
 
   assert.equal(csv.charCodeAt(0), 0xfeff);
-  assert.match(csv, /^\ufeff"Asset Tag","Unit Serial Number","BIOS Serial Number"/);
+  assert.match(csv, /^\ufeff"Asset Tag","Unit Serial Number","BIOS Serial \/ Recovery Number"/);
   assert.match(csv, /"BWT2300001","0012345","'=unsafe"/);
   assert.match(csv, /"Keyboard: Missing key, requires repair"/);
   assert.match(csv, /"Line one\nLine two"/);
@@ -119,13 +143,16 @@ test('XLSX contains the Units and Export Scope sheets with frozen headers, filte
   assert.match(workbookXml, /sheet name="Units"/);
   assert.match(workbookXml, /sheet name="Export Scope"/);
   assert.match(unitsXml, /pane ySplit="1"/);
-  assert.match(unitsXml, /autoFilter ref="A1:X2"/);
-  assert.match(unitsXml, /<c r="T2" s="4"><v>0\.875<\/v><\/c>/);
+  const lastColumn = excelColumnName(UNIT_EXPORT_COLUMNS.length);
+  assert.match(unitsXml, new RegExp(`autoFilter ref="A1:${lastColumn}2"`));
+  assert.match(unitsXml, new RegExp(`<c r="${exportColumnRef('batteryHealth', 2)}" s="4"><v>0\\.875<\\/v><\\/c>`));
   assert.match(unitsXml, />=unsafe<\/t>/);
   assert.match(unitsXml, /Line one\nLine two/);
-  assert.match(unitsXml, /<col min="13" max="13" width="36" customWidth="1"\/>/);
-  assert.match(unitsXml, /<col min="15" max="15" width="42" customWidth="1"\/>/);
-  assert.match(unitsXml, /<c r="M2" s="3" t="inlineStr">/);
+  const previousMemoryModulesColumn = exportColumnNumber('previousMemoryModules');
+  const memoryModuleChangesColumn = exportColumnNumber('memoryModuleChanges');
+  assert.match(unitsXml, new RegExp(`<col min="${previousMemoryModulesColumn}" max="${previousMemoryModulesColumn}" width="36" customWidth="1"/>`));
+  assert.match(unitsXml, new RegExp(`<col min="${memoryModuleChangesColumn}" max="${memoryModuleChangesColumn}" width="42" customWidth="1"/>`));
+  assert.match(unitsXml, new RegExp(`<c r="${exportColumnRef('previousMemoryModules', 2)}" s="3" t="inlineStr">`));
   assert.match(unitsXml, /Slot 2: 0GB · Empty slot/);
   assert.match(scopeXml, /Matching Units/);
   assert.match(scopeXml, /Previous Memory Total/);
@@ -144,7 +171,7 @@ test('XLSX exports one worksheet row for every matching Unit plus the header', (
   const worksheetRows = unitsXml.match(/<row\b/g) || [];
 
   assert.equal(worksheetRows.length, 74);
-  assert.match(unitsXml, /dimension ref="A1:X74"/);
+  assert.match(unitsXml, new RegExp(`dimension ref="A1:${excelColumnName(UNIT_EXPORT_COLUMNS.length)}74"`));
 });
 
 test('filenames use the Dallas export date and distinguish parked exports', () => {

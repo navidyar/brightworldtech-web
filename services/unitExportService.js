@@ -135,6 +135,14 @@ function buildUnitExportScope(result = {}) {
   return entries;
 }
 
+function formatSpecsTestsRows(rows, formatter) {
+  return (Array.isArray(rows) ? rows : []).map(formatter).filter(Boolean).join(' | ');
+}
+
+function getSpecsTestsLabel(specsTests, propertyName) {
+  return normalizeText(specsTests && specsTests.labels ? specsTests.labels[propertyName] : '');
+}
+
 function buildUnitExportRow(unit, details = null) {
   const previousMemoryModules = details && Array.isArray(details.previousMemoryModules)
     ? details.previousMemoryModules
@@ -161,8 +169,11 @@ function buildUnitExportRow(unit, details = null) {
     ? details.storageComparisons
     : buildHardwareComponentComparisons(previousStorageDevices, storageDevices, { kind: 'storage' });
   const latestTech = details && details.latestTech ? details.latestTech : null;
+  const specsTests = details && details.specsTests ? details.specsTests : null;
+  const specifications = details && details.specifications ? details.specifications : null;
   const techName = normalizeText(unit.assignedToName)
     || normalizeText(latestTech && (latestTech.fullName || latestTech.displayName || latestTech.name));
+  const isApple = normalizeText(unit.manufacturerLabel).toLowerCase() === 'apple';
 
   return {
     assetTag: normalizeText(unit.assetTag),
@@ -171,6 +182,39 @@ function buildUnitExportRow(unit, details = null) {
     unitType: normalizeText(unit.categoryLabel).replace(/^Unknown$/, ''),
     manufacturer: normalizeText(unit.manufacturerLabel).replace(/^—$/, ''),
     model: normalizeText(unit.modelLabel).replace(/^—$/, ''),
+    screenSize: normalizeText(unit.screenSizeLabel).replace(/^—$/, ''),
+    modelYear: isApple && unit.modelYear ? String(unit.modelYear) : '',
+    appleModelNumber: normalizeText(specsTests && specsTests.appleModelNumber),
+    operatingSystem: normalizeText(unit.operatingSystemLabel).replace(/^—$/, ''),
+    osBuild: normalizeText(specifications && specifications.osBuild),
+    biosVersion: normalizeText(specifications && specifications.biosVersion),
+    keyboardLanguage: normalizeText(specifications && specifications.keyboardLanguageLabel).replace(/^—$/, ''),
+    wifiCardPresent: isApple ? '' : getSpecsTestsLabel(specsTests, 'wifiCardPresentConfigValueId'),
+    chargerIncluded: getSpecsTestsLabel(specsTests, 'chargerIncludedConfigValueId'),
+    displayType: getSpecsTestsLabel(specsTests, 'displayTypeConfigValueId'),
+    nativeScreenResolution: isApple ? '' : getSpecsTestsLabel(specsTests, 'nativeScreenResolutionConfigValueId'),
+    refreshRate: isApple ? '' : getSpecsTestsLabel(specsTests, 'refreshRateConfigValueId'),
+    color: getSpecsTestsLabel(specsTests, 'colorConfigValueId'),
+    cameras: formatSpecsTestsRows(specsTests && specsTests.cameras, (row) => [row.cameraTypeLabel, row.cameraLocationLabel, row.testResultLabel].filter(Boolean).join(' · ')),
+    batteries: formatSpecsTestsRows(specsTests && specsTests.batteries, (row) => [row.healthPercent !== '' ? `${row.healthPercent}%` : '', isApple && row.cycleCount !== '' ? `${row.cycleCount} cycles` : ''].filter(Boolean).join(' · ')),
+    biometrics: formatSpecsTestsRows(specsTests && specsTests.biometrics, (row) => [row.hardwareLabel, row.testResultLabel].filter(Boolean).join(' · ')),
+    portsExpansion: formatSpecsTestsRows(specsTests && specsTests.ports, (row) => [row.portTypeLabel, row.portCount !== '' ? `x${row.portCount}` : ''].filter(Boolean).join(' ')),
+    keyboardTest: getSpecsTestsLabel(specsTests, 'keyboardTestResultConfigValueId'),
+    touchscreenTest: normalizeText(specifications && specifications.touchscreenStatusLabel).replace(/^—$/, ''),
+    microphoneCheck: getSpecsTestsLabel(specsTests, 'microphoneCheckResultConfigValueId'),
+    audioOutputCheck: getSpecsTestsLabel(specsTests, 'audioOutputCheckResultConfigValueId'),
+    allScrewsPresent: getSpecsTestsLabel(specsTests, 'allScrewsPresentConfigValueId'),
+    diagnosticsTest: normalizeText(specifications && specifications.completeDiagnosticsStatusLabel).replace(/^—$/, ''),
+    threatProtectionScan: normalizeText(specifications && specifications.virusCheckStatusLabel).replace(/^—$/, ''),
+    driverCheck: isApple ? '' : normalizeText(specifications && specifications.driverCheckStatusLabel).replace(/^—$/, ''),
+    absoluteStatus: isApple ? '' : normalizeText(specifications && specifications.absoluteStatusLabel).replace(/^—$/, ''),
+    biosLock: isApple ? '' : getSpecsTestsLabel(specsTests, 'biosLockConfigValueId'),
+    efiLock: isApple ? getSpecsTestsLabel(specsTests, 'efiLockConfigValueId') : '',
+    mdmLock: getSpecsTestsLabel(specsTests, 'mdmLockConfigValueId'),
+    icloudActivationLock: isApple ? getSpecsTestsLabel(specsTests, 'icloudActivationLockConfigValueId') : '',
+    ceCertification: isApple ? getSpecsTestsLabel(specsTests, 'ceCertificationConfigValueId') : '',
+    openBoxStatus: isApple ? getSpecsTestsLabel(specsTests, 'openBoxStatusConfigValueId') : '',
+    boxLanguage: isApple ? getSpecsTestsLabel(specsTests, 'boxLanguageConfigValueId') : '',
     cpu: normalizeText(unit.processorLabel).replace(/^—$/, ''),
     shortForm: normalizeText(unit.processorShortForm),
     previousMemorySize: formatSizeGb(unit.previousRamGb),

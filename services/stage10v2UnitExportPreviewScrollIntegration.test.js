@@ -8,13 +8,13 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 
-test('all available Unit export columns are selected by default', () => {
+test('new optional export columns do not change the established default selection', () => {
   const contract = require('../config/unitExportContract');
 
-  assert.equal(contract.UNIT_EXPORT_COLUMNS.length, 24);
+  assert.equal(contract.UNIT_EXPORT_COLUMNS.length, 57);
   assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
-  assert.deepEqual(contract.DEFAULT_UNIT_EXPORT_COLUMNS, contract.UNIT_EXPORT_COLUMNS);
-  assert.equal(contract.UNIT_EXPORT_COLUMNS.some((column) => column.defaultSelected === false), false);
+  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.includes(contract.UNIT_EXPORT_COLUMNS.find((column) => column.key === 'screenSize')), false);
+  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.includes(contract.UNIT_EXPORT_COLUMNS.find((column) => column.key === 'modelYear')), false);
 });
 
 test('Export Preview renders a second horizontal scrollbar directly below the table headers', () => {

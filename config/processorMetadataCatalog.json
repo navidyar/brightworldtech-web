@@ -725,6 +725,36 @@
     "generation": "9th Gen",
     "baseSpeedGhz": 2.6
   },
+  "i9-8950HK": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "8th Gen",
+    "baseSpeedGhz": 2.9
+  },
+  "i9-9880H": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 2.3
+  },
+  "i9-9980HK": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 2.4
+  },
+  "i9-9900K": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 3.6
+  },
+  "i9-10910": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "10th Gen",
+    "baseSpeedGhz": 3.6
+  },
   "i9-12900H": {
     "brandName": "Intel",
     "processorFamily": "Core",

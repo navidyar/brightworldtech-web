@@ -16,6 +16,7 @@ const unitQcCorrectionModel = require('../models/unitQcCorrectionModel');
 const unitExportService = require('../services/unitExportService');
 const unitExportFileService = require('../services/unitExportFileService');
 const { UNIT_EXPORT_COLUMNS } = require('../config/unitExportContract');
+const { UNIT_FORM_FIELD_REGISTRY } = require('../config/unitFormFieldRegistry');
 const qcGradingModel = require('../models/qcGradingModel');
 const unitLotDestinationValidationModel = require('../models/unitLotDestinationValidationModel');
 const { buildUnitFormProfilePresentation } = require('../services/unitFormProfilePresentation');
@@ -660,12 +661,68 @@ function getIssueDetailsFromRequest(req) {
 
 
 
+function getSpecsTestsRowsFromRequest(req) {
+  return {
+    cameras: normalizeModuleRowsFromBody(req.body.cameras).slice(0, 3).map((row) => ({
+      rowId: normalizeModuleField(row.rowId),
+      cameraTypeConfigValueId: normalizeModuleField(row.cameraTypeConfigValueId),
+      cameraLocationConfigValueId: normalizeModuleField(row.cameraLocationConfigValueId),
+      testResultConfigValueId: normalizeModuleField(row.testResultConfigValueId)
+    })),
+    batteries: normalizeModuleRowsFromBody(req.body.batteries).slice(0, 2).map((row) => ({
+      rowId: normalizeModuleField(row.rowId),
+      healthPercent: normalizeModuleField(row.healthPercent),
+      cycleCount: normalizeModuleField(row.cycleCount)
+    })),
+    biometrics: normalizeModuleRowsFromBody(req.body.biometrics).slice(0, 6).map((row) => ({
+      rowId: normalizeModuleField(row.rowId),
+      hardwareConfigValueId: normalizeModuleField(row.hardwareConfigValueId),
+      testResultConfigValueId: normalizeModuleField(row.testResultConfigValueId)
+    })),
+    ports: normalizeModuleRowsFromBody(req.body.ports).slice(0, 30).map((row) => ({
+      rowId: normalizeModuleField(row.rowId),
+      portTypeConfigValueId: normalizeModuleField(row.portTypeConfigValueId),
+      portCount: normalizeModuleField(row.portCount)
+    }))
+  };
+}
+
+function getBatteryHealthSummaryFromRows(rows) {
+  const values = (Array.isArray(rows) ? rows : [])
+    .map((row) => Number(String(row.healthPercent || '').trim()))
+    .filter((value) => Number.isFinite(value) && value >= 0 && value <= 100);
+  return values.length > 0 ? String(Math.min(...values)) : '';
+}
+
 function getExpandedDetailsFromRequest(req) {
+  const specsTestsRows = getSpecsTestsRowsFromRequest(req);
   return {
     overallGradeConfigValueId: normalizeModuleField(req.body.overallGradeConfigValueId),
     overallGradeNotes: normalizeModuleField(req.body.overallGradeNotes),
     biosVersion: normalizeModuleField(req.body.biosVersion),
     osBuild: normalizeModuleField(req.body.osBuild),
+    wifiCardPresentConfigValueId: normalizeModuleField(req.body.wifiCardPresentConfigValueId),
+    chargerIncludedConfigValueId: normalizeModuleField(req.body.chargerIncludedConfigValueId),
+    displayTypeConfigValueId: normalizeModuleField(req.body.displayTypeConfigValueId),
+    nativeScreenResolutionConfigValueId: normalizeModuleField(req.body.nativeScreenResolutionConfigValueId),
+    refreshRateConfigValueId: normalizeModuleField(req.body.refreshRateConfigValueId),
+    colorConfigValueId: normalizeModuleField(req.body.colorConfigValueId),
+    appleModelNumber: normalizeModuleField(req.body.appleModelNumber),
+    keyboardTestResultConfigValueId: normalizeModuleField(req.body.keyboardTestResultConfigValueId),
+    microphoneCheckResultConfigValueId: normalizeModuleField(req.body.microphoneCheckResultConfigValueId),
+    audioOutputCheckResultConfigValueId: normalizeModuleField(req.body.audioOutputCheckResultConfigValueId),
+    allScrewsPresentConfigValueId: normalizeModuleField(req.body.allScrewsPresentConfigValueId),
+    biosLockConfigValueId: normalizeModuleField(req.body.biosLockConfigValueId),
+    efiLockConfigValueId: normalizeModuleField(req.body.efiLockConfigValueId),
+    mdmLockConfigValueId: normalizeModuleField(req.body.mdmLockConfigValueId),
+    icloudActivationLockConfigValueId: normalizeModuleField(req.body.icloudActivationLockConfigValueId),
+    ceCertificationConfigValueId: normalizeModuleField(req.body.ceCertificationConfigValueId),
+    openBoxStatusConfigValueId: normalizeModuleField(req.body.openBoxStatusConfigValueId),
+    boxLanguageConfigValueId: normalizeModuleField(req.body.boxLanguageConfigValueId),
+    cameras: specsTestsRows.cameras,
+    batteries: specsTestsRows.batteries,
+    biometrics: specsTestsRows.biometrics,
+    ports: specsTestsRows.ports,
     absoluteStatusConfigValueId: normalizeModuleField(req.body.absoluteStatusConfigValueId),
     physicalCameraStatusConfigValueId: normalizeModuleField(req.body.physicalCameraStatusConfigValueId),
     touchscreenStatusConfigValueId: normalizeModuleField(req.body.touchscreenStatusConfigValueId),
@@ -753,6 +810,8 @@ function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
     currentUnitStatusConfigValueId: String(req.body.currentUnitStatusConfigValueId || '').trim(),
     manufacturerId: String(req.body.manufacturerId || '').trim(),
     unitModelId: String(req.body.unitModelId || '').trim(),
+    screenSizeConfigValueId: String(req.body.screenSizeConfigValueId || '').trim(),
+    modelYear: String(req.body.modelYear || '').trim(),
     processorModelId: String(req.body.processorModelId || '').trim(),
     processorSpeedGhz: String(req.body.processorSpeedGhz || '').trim(),
     previousRamGb: getComponentCapacityTotalGb(previousMemoryModules, req.body.previousRamGb),
@@ -762,7 +821,7 @@ function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
     storageGb: getComponentCapacityTotalGb(storageDevices, req.body.storageGb),
     storageTypeConfigValueId: String(req.body.storageTypeConfigValueId || '').trim(),
     operatingSystemConfigValueId: String(req.body.operatingSystemConfigValueId || '').trim(),
-    batteryHealthPercent: String(req.body.batteryHealthPercent || '').trim(),
+    batteryHealthPercent: getBatteryHealthSummaryFromRows(expandedDetails.batteries),
     previousMemoryModules,
     memoryModules,
     previousStorageDevices,
@@ -775,6 +834,28 @@ function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
     overallGradeNotes: expandedDetails.overallGradeNotes,
     biosVersion: expandedDetails.biosVersion,
     osBuild: expandedDetails.osBuild,
+    wifiCardPresentConfigValueId: expandedDetails.wifiCardPresentConfigValueId,
+    chargerIncludedConfigValueId: expandedDetails.chargerIncludedConfigValueId,
+    displayTypeConfigValueId: expandedDetails.displayTypeConfigValueId,
+    nativeScreenResolutionConfigValueId: expandedDetails.nativeScreenResolutionConfigValueId,
+    refreshRateConfigValueId: expandedDetails.refreshRateConfigValueId,
+    colorConfigValueId: expandedDetails.colorConfigValueId,
+    appleModelNumber: expandedDetails.appleModelNumber,
+    cameras: expandedDetails.cameras,
+    batteries: expandedDetails.batteries,
+    biometrics: expandedDetails.biometrics,
+    ports: expandedDetails.ports,
+    keyboardTestResultConfigValueId: expandedDetails.keyboardTestResultConfigValueId,
+    microphoneCheckResultConfigValueId: expandedDetails.microphoneCheckResultConfigValueId,
+    audioOutputCheckResultConfigValueId: expandedDetails.audioOutputCheckResultConfigValueId,
+    allScrewsPresentConfigValueId: expandedDetails.allScrewsPresentConfigValueId,
+    biosLockConfigValueId: expandedDetails.biosLockConfigValueId,
+    efiLockConfigValueId: expandedDetails.efiLockConfigValueId,
+    mdmLockConfigValueId: expandedDetails.mdmLockConfigValueId,
+    icloudActivationLockConfigValueId: expandedDetails.icloudActivationLockConfigValueId,
+    ceCertificationConfigValueId: expandedDetails.ceCertificationConfigValueId,
+    openBoxStatusConfigValueId: expandedDetails.openBoxStatusConfigValueId,
+    boxLanguageConfigValueId: expandedDetails.boxLanguageConfigValueId,
     absoluteStatusConfigValueId: expandedDetails.absoluteStatusConfigValueId,
     physicalCameraStatusConfigValueId: expandedDetails.physicalCameraStatusConfigValueId,
     touchscreenStatusConfigValueId: expandedDetails.touchscreenStatusConfigValueId,
@@ -1067,12 +1148,28 @@ function validateExpandedDetails(formData) {
   const configFieldLabels = [
     ['overallGradeConfigValueId', 'Overall Unit Grade'],
     ['absoluteStatusConfigValueId', 'Absolute status'],
-    ['physicalCameraStatusConfigValueId', 'Physical camera status'],
-    ['touchscreenStatusConfigValueId', 'Touchscreen status'],
+    ['touchscreenStatusConfigValueId', 'Touchscreen test'],
     ['keyboardLanguageConfigValueId', 'Keyboard language'],
-    ['completeDiagnosticsStatusConfigValueId', 'Complete diagnostics status'],
-    ['virusCheckStatusConfigValueId', 'Virus check status'],
-    ['driverCheckStatusConfigValueId', 'Driver check status'],
+    ['wifiCardPresentConfigValueId', 'Wi-Fi Card Present'],
+    ['chargerIncludedConfigValueId', 'Charger Included'],
+    ['displayTypeConfigValueId', 'Display Type'],
+    ['nativeScreenResolutionConfigValueId', 'Native Screen Resolution'],
+    ['refreshRateConfigValueId', 'Refresh Rate'],
+    ['colorConfigValueId', 'Color'],
+    ['keyboardTestResultConfigValueId', 'Keyboard Test'],
+    ['microphoneCheckResultConfigValueId', 'Microphone Check'],
+    ['audioOutputCheckResultConfigValueId', 'Audio Output Check'],
+    ['allScrewsPresentConfigValueId', 'All Screws Present'],
+    ['completeDiagnosticsStatusConfigValueId', 'Diagnostics Test'],
+    ['virusCheckStatusConfigValueId', 'Threat Protection Scan'],
+    ['driverCheckStatusConfigValueId', 'Driver Check'],
+    ['biosLockConfigValueId', 'BIOS Lock'],
+    ['efiLockConfigValueId', 'EFI Lock'],
+    ['mdmLockConfigValueId', 'MDM Lock'],
+    ['icloudActivationLockConfigValueId', 'iCloud Activation Lock'],
+    ['ceCertificationConfigValueId', 'CE Certification'],
+    ['openBoxStatusConfigValueId', 'Open-Box Status'],
+    ['boxLanguageConfigValueId', 'Box Language'],
     ['skinnedStatusConfigValueId', 'Skinned status']
   ];
 
@@ -1080,6 +1177,28 @@ function validateExpandedDetails(formData) {
     if (formData[fieldName] && !isPositiveInteger(formData[fieldName])) {
       errors.push(`${label} is invalid.`);
     }
+  });
+
+  if (formData.appleModelNumber && formData.appleModelNumber.length > 80) {
+    errors.push('Apple Model Number must be 80 characters or fewer.');
+  }
+
+  (formData.cameras || []).forEach((row, index) => {
+    if (row.cameraTypeConfigValueId && !isPositiveInteger(row.cameraTypeConfigValueId)) errors.push(`Camera ${index + 1} has an invalid Camera Type.`);
+    if (row.cameraLocationConfigValueId && !isPositiveInteger(row.cameraLocationConfigValueId)) errors.push(`Camera ${index + 1} has an invalid Camera Location.`);
+    if (row.testResultConfigValueId && !isPositiveInteger(row.testResultConfigValueId)) errors.push(`Camera ${index + 1} has an invalid Test Result.`);
+  });
+  (formData.batteries || []).forEach((row, index) => {
+    if (!isNumberInRangeWithPrecision(row.healthPercent, 0, 100, 1)) errors.push(`Battery ${index + 1} Health must be from 0.0 through 100.0.`);
+    if (row.cycleCount && !isNonNegativeInteger(row.cycleCount)) errors.push(`Battery ${index + 1} Cycle Count must be a non-negative whole number.`);
+  });
+  (formData.biometrics || []).forEach((row, index) => {
+    if (row.hardwareConfigValueId && !isPositiveInteger(row.hardwareConfigValueId)) errors.push(`Biometric ${index + 1} has invalid hardware.`);
+    if (row.testResultConfigValueId && !isPositiveInteger(row.testResultConfigValueId)) errors.push(`Biometric ${index + 1} has an invalid Test Result.`);
+  });
+  (formData.ports || []).forEach((row, index) => {
+    if (row.portTypeConfigValueId && !isPositiveInteger(row.portTypeConfigValueId)) errors.push(`Port / Expansion ${index + 1} has an invalid type.`);
+    if (row.portCount && !isNonNegativeInteger(row.portCount)) errors.push(`Port / Expansion ${index + 1} Count must be a non-negative whole number.`);
   });
 
   if (formData.overallGradeNotes && formData.overallGradeNotes.length > 500) {
@@ -1189,6 +1308,33 @@ async function validateUnitForm(formData, formOptions, mode) {
 
   if (validationFormData.storageGb && !isNonNegativeInteger(validationFormData.storageGb)) {
     errors.push('Current storage total must be a non-negative whole number.');
+  }
+
+  if (validationFormData.screenSizeConfigValueId) {
+    const selectedScreenSizeId = Number(validationFormData.screenSizeConfigValueId);
+    const validScreenSize = isPositiveInteger(validationFormData.screenSizeConfigValueId)
+      && (Array.isArray(formOptions.screenSizes) ? formOptions.screenSizes : [])
+        .some((option) => Number(option.id) === selectedScreenSizeId);
+    if (!validScreenSize) {
+      errors.push('Choose a valid Screen Size.');
+    }
+  }
+
+  if (validationFormData.modelYear) {
+    const parsedModelYear = Number(validationFormData.modelYear);
+    if (!Number.isInteger(parsedModelYear) || parsedModelYear < 1980 || parsedModelYear > 2100) {
+      errors.push('Model Year must be a four-digit year from 1980 through 2100.');
+    }
+  }
+
+  const selectedManufacturerLabel = getOptionLabel(formOptions.manufacturers, validationFormData.manufacturerId).toLowerCase();
+  if (selectedManufacturerLabel === 'apple' && validationFormData.displayTypeConfigValueId) {
+    const selectedDisplayTypeId = Number(validationFormData.displayTypeConfigValueId);
+    const selectedDisplayType = (Array.isArray(formOptions.displayTypeOptions) ? formOptions.displayTypeOptions : [])
+      .find((option) => Number(option.id) === selectedDisplayTypeId);
+    if (selectedDisplayType && selectedDisplayType.appleDisallowed) {
+      errors.push('LCD and OLED are not available Display Type selections for Apple Units.');
+    }
   }
 
   if (validationFormData.processorModelId && !isPositiveInteger(validationFormData.processorModelId)) {
@@ -1410,6 +1556,51 @@ function getOptionLabel(options, selectedId) {
     .find((candidate) => String(candidate.id) === String(selectedId));
 
   return option ? String(option.label || option.name || option.modelName || '').trim() : '';
+}
+
+function applyManufacturerApplicabilityToUnitFormProfile(profile, formData, formOptions) {
+  const manufacturerLabel = getOptionLabel(formOptions?.manufacturers, formData?.manufacturerId);
+  const normalizedManufacturer = manufacturerLabel.trim().toLowerCase();
+  const isApple = normalizedManufacturer === 'apple';
+  const selectedProcessor = (Array.isArray(formOptions?.processorModels) ? formOptions.processorModels : [])
+    .find((processor) => String(processor.id) === String(formData?.processorModelId));
+  const processorName = String(selectedProcessor?.shortLabel || selectedProcessor?.label || '').trim();
+  const isAppleSilicon = isApple && /^(?:apple\s+)?m\d/i.test(processorName);
+  const fieldsByKey = new Map(profile.fieldsByKey);
+
+  UNIT_FORM_FIELD_REGISTRY.forEach((definition) => {
+    const allowed = Array.isArray(definition.applicableManufacturers)
+      ? definition.applicableManufacturers.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
+      : [];
+    const excluded = Array.isArray(definition.excludedManufacturers)
+      ? definition.excludedManufacturers.map((value) => String(value || '').trim().toLowerCase()).filter(Boolean)
+      : [];
+    const manufacturerAllowed = (allowed.length === 0 || allowed.includes(normalizedManufacturer))
+      && !excluded.includes(normalizedManufacturer);
+    if (manufacturerAllowed) return;
+    const resolved = fieldsByKey.get(definition.key);
+    if (!resolved) return;
+    fieldsByKey.set(definition.key, Object.freeze({
+      ...resolved,
+      visible: false,
+      required: false,
+      requiredSuppressedByHidden: Boolean(resolved.required)
+    }));
+  });
+
+  if (isAppleSilicon) {
+    const processorSpeed = fieldsByKey.get('processor_speed_ghz');
+    if (processorSpeed) {
+      fieldsByKey.set('processor_speed_ghz', Object.freeze({
+        ...processorSpeed,
+        visible: false,
+        required: false,
+        requiredSuppressedByHidden: Boolean(processorSpeed.required)
+      }));
+    }
+  }
+
+  return Object.freeze({ ...profile, fieldsByKey });
 }
 
 function buildIntentionalDuplicateRequestSnapshot({ formData, formOptions, candidate }) {
@@ -2087,7 +2278,7 @@ async function applyLatestLotUnitFormSubmissionPolicy({
       mode,
       submittedFormData: formData,
       existingFormData,
-      profile
+      profile: applyManufacturerApplicabilityToUnitFormProfile(profile, formData, formOptions)
     });
   } catch (error) {
     console.error('Authoritative Lot Unit form validation failed:', error);

@@ -607,3 +607,29 @@ test('zero is retained as a numeric requirement display value', () => {
   assert.equal(check.requiredValue, '0');
   assert.equal(check.status, 'accepted');
 });
+
+test('Model Year requirements apply only to Apple units', () => {
+  const modelYearRequirement = requirement({
+    requirement_key: 'model_year',
+    requirement_label: 'Model Year',
+    operator_code: 'greater_equal',
+    requirement_number: 2020,
+    required_value: '2020'
+  });
+
+  const dellResult = evaluateUnitSnapshot(
+    buildSampleSnapshot({ manufacturer_name: 'Dell', model_year: null }),
+    [modelYearRequirement]
+  );
+  assert.equal(dellResult.requirementCount, 0);
+  assert.equal(dellResult.checks.length, 0);
+  assert.equal(dellResult.status, 'open');
+
+  const appleResult = evaluateUnitSnapshot(
+    buildSampleSnapshot({ manufacturer_name: 'Apple', model_year: 2023 }),
+    [modelYearRequirement]
+  );
+  assert.equal(appleResult.requirementCount, 1);
+  assert.equal(appleResult.checks.length, 1);
+  assert.equal(appleResult.checks[0].passed, true);
+});

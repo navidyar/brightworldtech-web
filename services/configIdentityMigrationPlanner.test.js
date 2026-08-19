@@ -14,13 +14,13 @@ const {
 function buildLegacyFixture() {
   const categories = CATEGORY_BINDINGS.map((binding) => ({
     id: 1000 + binding.systemId,
-    code: binding.legacyCodes[0]
+    code: binding.legacyCodes[0] || ''
   }));
   const categoryIdBySystemId = new Map(CATEGORY_BINDINGS.map((binding) => [binding.systemId, 1000 + binding.systemId]));
   const values = VALUE_BINDINGS.map((binding) => ({
     id: 5000 + binding.systemId,
     categoryId: categoryIdBySystemId.get(binding.categorySystemId),
-    code: binding.legacyCodes[0]
+    code: binding.legacyCodes[0] || ''
   }));
   return { categories, values };
 }
@@ -37,7 +37,8 @@ test('legacy configuration rows resolve deterministically to numeric system bind
   const plan = planConfigIdentityBindings(fixture);
 
   assert.deepEqual(getPlanErrors(plan), []);
-  assert.equal(plan.resolvedCategories.size, CATEGORY_BINDINGS.length);
+  assert.equal(plan.resolvedCategories.size, CATEGORY_BINDINGS.filter((binding) => binding.legacyCodes.length > 0).length);
+  assert.equal(plan.missingCategories.some((binding) => binding.name === 'Screen Sizes'), true);
   assert.equal(plan.resolvedValues.size, VALUE_BINDINGS.length);
   assert.equal(plan.missingRequiredValues.length, 0);
   assert.equal(plan.duplicateCategoryTargets.length, 0);

@@ -1,6 +1,10 @@
 'use strict';
 
-const { listLotConfigurableUnitFormFields } = require('../config/unitFormFieldRegistry');
+const {
+  RULE_TYPE,
+  getUnitFormFieldDefinition,
+  listLotConfigurableUnitFormFields
+} = require('../config/unitFormFieldRegistry');
 
 function extractAttributeValues(markup, attributeName) {
   const pattern = new RegExp(`${attributeName}=["']([^"']+)["']`, 'g');
@@ -25,7 +29,9 @@ function validateUnitFormFieldBindings(markup) {
   const expectedKeySet = new Set(expectedKeys);
   const actualKeys = extractUnitFormFieldBindingKeys(markup);
   const actualKeySet = new Set(actualKeys);
-  const duplicateKeys = [...new Set(actualKeys.filter((key, index) => actualKeys.indexOf(key) !== index))].sort();
+  const repeatedKeys = [...new Set(actualKeys.filter((key, index) => actualKeys.indexOf(key) !== index))].sort();
+  const repeatableDuplicateKeys = repeatedKeys.filter((key) => getUnitFormFieldDefinition(key)?.ruleType === RULE_TYPE.REPEATABLE_CHILD);
+  const duplicateKeys = repeatedKeys.filter((key) => !repeatableDuplicateKeys.includes(key));
   const missingKeys = expectedKeys.filter((key) => !actualKeySet.has(key));
   const unknownKeys = [...actualKeySet].filter((key) => !expectedKeySet.has(key)).sort();
   const followerKeys = extractAttributeValues(markup, 'data-unit-form-follows-key');
@@ -41,7 +47,9 @@ function validateUnitFormFieldBindings(markup) {
       && unknownCompanionKeys.length === 0,
     expectedCount: expectedKeys.length,
     actualCount: actualKeys.length,
+    uniqueActualCount: actualKeySet.size,
     duplicateKeys: Object.freeze(duplicateKeys),
+    repeatableDuplicateKeys: Object.freeze(repeatableDuplicateKeys),
     missingKeys: Object.freeze(missingKeys),
     unknownKeys: Object.freeze(unknownKeys),
     followerKeys: Object.freeze(followerKeys),

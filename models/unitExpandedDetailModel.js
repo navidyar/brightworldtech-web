@@ -3,6 +3,7 @@ const unitOutcomeModel = require('./unitOutcomeModel');
 const { buildHardwareComponentComparisons } = require('../services/hardwareComponentComparison');
 const { getCanonicalCosmeticGrade, isNotYetGradedToken } = require('../services/cosmeticGradeNormalization');
 const { COSMETIC_GRADE_BY_SYSTEM_VALUE_ID, IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID } = require('../config/configIdentityRegistry');
+const { getSpecsTestsDetailsByUnitIds } = require('./unitSpecsTestsModel');
 const EXPANDED_TABLES = [
   'unit_identifiers',
   'unit_specifications',
@@ -37,6 +38,7 @@ function createEmptyDetails() {
     hasAnyExpandedData: false,
     identifiers: [],
     specifications: null,
+    specsTests: null,
     fieldSources: [],
     currentGrade: null,
     currentOutcome: null,
@@ -1337,6 +1339,21 @@ async function listExpandedDetailsForUnits(unitIds) {
   });
   await attachIdentifiers(detailsMap, safeUnitIds, existingTables);
   await attachSpecifications(detailsMap, safeUnitIds, existingTables);
+  const specsTestsByUnitId = await getSpecsTestsDetailsByUnitIds(safeUnitIds);
+  specsTestsByUnitId.forEach((specsTests, unitId) => {
+    const details = detailsMap.get(Number(unitId));
+    if (details) {
+      details.specsTests = specsTests;
+      if (specsTests && (
+        Object.values(specsTests.labels || {}).some(Boolean)
+        || specsTests.appleModelNumber
+        || (specsTests.cameras || []).length
+        || (specsTests.batteries || []).length
+        || (specsTests.biometrics || []).length
+        || (specsTests.ports || []).length
+      )) markHasData(details);
+    }
+  });
   await attachFieldSources(detailsMap, safeUnitIds, existingTables);
   await attachCurrentGrades(detailsMap, safeUnitIds, existingTables);
   await attachCurrentOutcomes(detailsMap, safeUnitIds, existingTables);

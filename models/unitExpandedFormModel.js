@@ -4,6 +4,7 @@ const { SYSTEM_CONFIG_CATEGORY_IDS, SYSTEM_CONFIG_VALUE_IDS, COSMETIC_GRADE_BY_S
 const unitOutcomeModel = require('./unitOutcomeModel');
 const overrideRequestModel = require('./overrideRequestModel');
 const operationalOptionRankingModel = require('./operationalOptionRankingModel');
+const unitSpecsTestsModel = require('./unitSpecsTestsModel');
 const { sortOptionsByPopularity } = require('../services/operationalOptionRanking');
 const {
   getCanonicalCosmeticGradeFromOption,
@@ -150,6 +151,7 @@ async function listConfigValuesBySystemCategories(systemCategoryIds, connection 
 
 function getBlankExpandedFormData() {
   return {
+    ...unitSpecsTestsModel.getBlankSpecsTestsData(),
     overallGradeConfigValueId: '',
     overallGradeNotes: '',
     outcomeCode: '',
@@ -200,7 +202,10 @@ async function getExpandedFormOptions() {
     operationalOptionRankingModel.loadRankingSnapshot()
   ]);
 
+  const specsTestsOptions = await unitSpecsTestsModel.getSpecsTestsOptions();
+
   return {
+    ...specsTestsOptions,
     expandedOptionsSupported: await tableExists('unit_specifications'),
     gradeOptionsSupported: await tableExists('unit_grade_assessments'),
     outcomeOptionsSupported: await unitOutcomeModel.tableExists(),
@@ -462,8 +467,9 @@ async function getExpandedFormDataByUnitId(unitId) {
     return getBlankExpandedFormData();
   }
 
-  const [specificationData, gradeData, outcomeData, graphicsData, scanToolOnlyData] = await Promise.all([
+  const [specificationData, specsTestsData, gradeData, outcomeData, graphicsData, scanToolOnlyData] = await Promise.all([
     getUnitSpecificationFormData(safeUnitId),
+    unitSpecsTestsModel.getSpecsTestsDataByUnitId(safeUnitId),
     getCurrentGradeFormData(safeUnitId),
     getCurrentOutcomeFormData(safeUnitId),
     getGraphicsFormData(safeUnitId),
@@ -473,6 +479,7 @@ async function getExpandedFormDataByUnitId(unitId) {
   return {
     ...getBlankExpandedFormData(),
     ...specificationData,
+    ...specsTestsData,
     ...gradeData,
     ...outcomeData,
     ...graphicsData,
@@ -802,6 +809,7 @@ async function saveExpandedDetailsForUnitWithConnection(connection, { unitId, fo
   }
 
   await saveUnitSpecifications(connection, safeUnitId, formData, currentUserId);
+  await unitSpecsTestsModel.saveSpecsTestsForUnitWithConnection(connection, { unitId: safeUnitId, formData, currentUserId });
   await saveOverallGrade(connection, safeUnitId, formData, currentUserId);
   await saveOutcome(connection, safeUnitId, formData, currentUserId);
 }

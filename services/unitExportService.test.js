@@ -8,7 +8,7 @@ const {
   buildUnitExportRow,
   combineRemarks
 } = require('./unitExportService');
-const { DEFAULT_UNIT_EXPORT_COLUMNS, UNIT_EXPORT_COLUMN_LABELS } = require('../config/unitExportContract');
+const { DEFAULT_UNIT_EXPORT_COLUMNS, UNIT_EXPORT_COLUMNS } = require('../config/unitExportContract');
 
 function sampleUnit(overrides = {}) {
   return {
@@ -17,6 +17,8 @@ function sampleUnit(overrides = {}) {
     categoryLabel: 'Laptop',
     manufacturerLabel: 'Dell',
     modelLabel: 'Latitude 5440',
+    screenSizeLabel: '14-inch',
+    modelYear: 2023,
     processorLabel: 'Intel Core i5-1355U',
     processorShortForm: 'i5-13th',
     previousRamGb: 8,
@@ -60,9 +62,10 @@ function sampleDetails() {
   };
 }
 
-test('Stage 10V.2 selects all 24 export columns by default', () => {
-  assert.deepEqual(UNIT_EXPORT_COLUMN_LABELS, [
-    'Asset Tag', 'Unit Serial Number', 'BIOS Serial Number', 'Unit Type',
+test('the established 24 export columns remain selected by default while new Specs / Tests columns stay optional', () => {
+  assert.equal(UNIT_EXPORT_COLUMNS.length, 57);
+  assert.deepEqual(DEFAULT_UNIT_EXPORT_COLUMNS.map((column) => column.label), [
+    'Asset Tag', 'Unit Serial Number', 'BIOS Serial / Recovery Number', 'Unit Type',
     'Manufacturer', 'Model', 'CPU', 'Short Form',
     'Previous Memory Size', 'Current Memory Size',
     'Previous Storage Size', 'Current Storage Size',
@@ -72,33 +75,45 @@ test('Stage 10V.2 selects all 24 export columns by default', () => {
     'Hardware Remarks', 'Cosmetic Remarks'
   ]);
   assert.equal(DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
-  assert.deepEqual(DEFAULT_UNIT_EXPORT_COLUMNS.map((column) => column.key).slice(8, 12), [
-    'previousMemorySize', 'currentMemorySize', 'previousStorageSize', 'currentStorageSize'
-  ]);
+  assert.equal(DEFAULT_UNIT_EXPORT_COLUMNS.some((column) => column.key === 'threatProtectionScan'), false);
+  assert.equal(DEFAULT_UNIT_EXPORT_COLUMNS.some((column) => column.key === 'cameras'), false);
 });
 
-test('export row contains full CPU, configured short form, battery health, grade, outcome, and remarks', () => {
+test('export row preserves established Unit data while adding optional Specs / Tests columns', () => {
   const row = buildUnitExportRow(sampleUnit(), sampleDetails());
 
-  assert.deepEqual(row, {
+  assert.deepEqual({
+    assetTag: row.assetTag,
+    unitSerialNumber: row.unitSerialNumber,
+    biosSerialNumber: row.biosSerialNumber,
+    unitType: row.unitType,
+    manufacturer: row.manufacturer,
+    model: row.model,
+    screenSize: row.screenSize,
+    modelYear: row.modelYear,
+    cpu: row.cpu,
+    shortForm: row.shortForm,
+    currentMemorySize: row.currentMemorySize,
+    currentStorageSize: row.currentStorageSize,
+    techName: row.techName,
+    batteryHealth: row.batteryHealth,
+    cosmeticGrade: row.cosmeticGrade,
+    passFail: row.passFail,
+    hardwareRemarks: row.hardwareRemarks,
+    cosmeticRemarks: row.cosmeticRemarks
+  }, {
     assetTag: 'BWT12345',
     unitSerialNumber: 'UNIT-SERIAL-1',
     biosSerialNumber: 'BIOS-SERIAL-1',
     unitType: 'Laptop',
     manufacturer: 'Dell',
     model: 'Latitude 5440',
+    screenSize: '14-inch',
+    modelYear: '',
     cpu: 'Intel Core i5-1355U',
     shortForm: 'i5-13th',
-    previousMemorySize: '8GB',
     currentMemorySize: '16GB',
-    previousStorageSize: '256GB',
     currentStorageSize: '512GB',
-    previousMemoryModules: 'Slot 1: 8GB · DDR4 · Removable Module',
-    currentMemoryModules: 'Slot 1: 16GB · DDR4 · Removable Module\nSlot 2: 0GB · Empty slot',
-    memoryModuleChanges: 'Slot 1 — Changed: 8GB · DDR4 · Removable Module → 16GB · DDR4 · Removable Module\nSlot 2 — Added: Not recorded → 0GB · Empty slot',
-    previousStorageDevices: 'Bay 1: 256GB · SATA SSD',
-    currentStorageDevices: 'Bay 1: 512GB · NVMe SSD · Wipe: Passed',
-    storageDeviceChanges: 'Bay 1 — Changed: 256GB · SATA SSD → 512GB · NVMe SSD · Wipe: Passed',
     techName: 'Anna Radnaeva',
     batteryHealth: '87.5%',
     cosmeticGrade: 'B',
@@ -106,6 +121,14 @@ test('export row contains full CPU, configured short form, battery health, grade
     hardwareRemarks: 'Legacy hardware note | Keyboard · Minor · Top: Missing key cap',
     cosmeticRemarks: 'Scratch · Lid: Two-inch scratch'
   });
+  assert.equal(row.threatProtectionScan, '');
+  assert.equal(row.cameras, '');
+  assert.equal(row.portsExpansion, '');
+});
+
+test('Model Year exports only for Apple units', () => {
+  const row = buildUnitExportRow(sampleUnit({ manufacturerLabel: 'Apple', modelYear: 2023 }), sampleDetails());
+  assert.equal(row.modelYear, '2023');
 });
 
 test('filtered export reuses Unit Browser permissions and filters while forcing all matching rows', async () => {
@@ -211,7 +234,7 @@ test('selected export columns preserve the approved contract order and add the s
 
   assert.deepEqual(selected.columns.map((column) => column.key), ['assetTag', 'cpu', 'batteryHealth']);
   assert.equal(selected.rows, dataset.rows);
-  assert.match(selected.scope.at(-1).value, /^3 of 24: Asset Tag, CPU, Battery Health$/);
+  assert.match(selected.scope.at(-1).value, new RegExp(`^3 of ${require('../config/unitExportContract').UNIT_EXPORT_COLUMNS.length}: Asset Tag, CPU, Battery Health$`));
 });
 
 test('missing column selection selects every available export column by default', () => {
@@ -221,6 +244,8 @@ test('missing column selection selects every available export column by default'
   assert.equal(selected.columns.length, 24);
   assert.equal(selected.columns.some((column) => column.key === 'memoryModuleChanges'), true);
   assert.equal(selected.columns.some((column) => column.key === 'storageDeviceChanges'), true);
+  assert.equal(selected.columns.some((column) => column.key === 'screenSize'), false);
+  assert.equal(selected.columns.some((column) => column.key === 'modelYear'), false);
 });
 
 test('legacy Memory Size and Storage Size column keys map to the current values', () => {

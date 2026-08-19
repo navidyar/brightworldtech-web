@@ -12,6 +12,8 @@ const FIELD_BINDINGS = Object.freeze({
   bios_serial_number: Object.freeze({ properties: ['biosSerialNumber'] }),
   manufacturer: Object.freeze({ properties: ['manufacturerId'] }),
   unit_model: Object.freeze({ properties: ['unitModelId'] }),
+  screen_size: Object.freeze({ properties: ['screenSizeConfigValueId'] }),
+  model_year: Object.freeze({ properties: ['modelYear'] }),
   processor_model: Object.freeze({ properties: ['processorModelId'] }),
   processor_speed_ghz: Object.freeze({ properties: ['processorSpeedGhz'] }),
   previous_memory_size: Object.freeze({ properties: ['previousRamGb', 'previousMemoryModules'] }),
@@ -27,14 +29,43 @@ const FIELD_BINDINGS = Object.freeze({
   operating_system: Object.freeze({ properties: ['operatingSystemConfigValueId'] }),
   os_build: Object.freeze({ properties: ['osBuild'] }),
   bios_version: Object.freeze({ properties: ['biosVersion'] }),
-  battery_health: Object.freeze({ properties: ['batteryHealthPercent'] }),
-  absolute_status: Object.freeze({ properties: ['absoluteStatusConfigValueId'] }),
-  physical_camera_status: Object.freeze({ properties: ['physicalCameraStatusConfigValueId'] }),
-  touchscreen_status: Object.freeze({ properties: ['touchscreenStatusConfigValueId'] }),
   keyboard_language: Object.freeze({ properties: ['keyboardLanguageConfigValueId'] }),
+  wifi_card_present: Object.freeze({ properties: ['wifiCardPresentConfigValueId'] }),
+  charger_included: Object.freeze({ properties: ['chargerIncludedConfigValueId'] }),
+  display_type: Object.freeze({ properties: ['displayTypeConfigValueId'] }),
+  native_screen_resolution: Object.freeze({ properties: ['nativeScreenResolutionConfigValueId'] }),
+  refresh_rate: Object.freeze({ properties: ['refreshRateConfigValueId'] }),
+  color: Object.freeze({ properties: ['colorConfigValueId'] }),
+  apple_model_number: Object.freeze({ properties: ['appleModelNumber'] }),
+  cameras: Object.freeze({ properties: ['cameras'], repeatableType: 'camera' }),
+  camera_type: Object.freeze({ repeatableProperty: 'cameras', childProperty: 'cameraTypeConfigValueId' }),
+  camera_location: Object.freeze({ repeatableProperty: 'cameras', childProperty: 'cameraLocationConfigValueId' }),
+  camera_test: Object.freeze({ repeatableProperty: 'cameras', childProperty: 'testResultConfigValueId' }),
+  batteries: Object.freeze({ properties: ['batteries'], repeatableType: 'battery' }),
+  battery_health: Object.freeze({ repeatableProperty: 'batteries', childProperty: 'healthPercent' }),
+  battery_cycle_count: Object.freeze({ repeatableProperty: 'batteries', childProperty: 'cycleCount' }),
+  biometrics: Object.freeze({ properties: ['biometrics'], repeatableType: 'biometric' }),
+  biometric_hardware: Object.freeze({ repeatableProperty: 'biometrics', childProperty: 'hardwareConfigValueId' }),
+  biometrics_test: Object.freeze({ repeatableProperty: 'biometrics', childProperty: 'testResultConfigValueId' }),
+  ports: Object.freeze({ properties: ['ports'], repeatableType: 'port' }),
+  port_type: Object.freeze({ repeatableProperty: 'ports', childProperty: 'portTypeConfigValueId' }),
+  port_count: Object.freeze({ repeatableProperty: 'ports', childProperty: 'portCount' }),
+  absolute_status: Object.freeze({ properties: ['absoluteStatusConfigValueId'] }),
+  touchscreen_status: Object.freeze({ properties: ['touchscreenStatusConfigValueId'] }),
+  keyboard_test: Object.freeze({ properties: ['keyboardTestResultConfigValueId'] }),
+  microphone_check: Object.freeze({ properties: ['microphoneCheckResultConfigValueId'] }),
+  audio_output_check: Object.freeze({ properties: ['audioOutputCheckResultConfigValueId'] }),
+  all_screws_present: Object.freeze({ properties: ['allScrewsPresentConfigValueId'] }),
   complete_diagnostics: Object.freeze({ properties: ['completeDiagnosticsStatusConfigValueId'] }),
   virus_check: Object.freeze({ properties: ['virusCheckStatusConfigValueId'] }),
   driver_check: Object.freeze({ properties: ['driverCheckStatusConfigValueId'] }),
+  bios_lock: Object.freeze({ properties: ['biosLockConfigValueId'] }),
+  efi_lock: Object.freeze({ properties: ['efiLockConfigValueId'] }),
+  mdm_lock: Object.freeze({ properties: ['mdmLockConfigValueId'] }),
+  icloud_activation_lock: Object.freeze({ properties: ['icloudActivationLockConfigValueId'] }),
+  ce_certification: Object.freeze({ properties: ['ceCertificationConfigValueId'] }),
+  open_box_status: Object.freeze({ properties: ['openBoxStatusConfigValueId'] }),
+  box_language: Object.freeze({ properties: ['boxLanguageConfigValueId'] }),
   skinned_status: Object.freeze({ properties: ['skinnedStatusConfigValueId'] }),
   cosmetic_issues: Object.freeze({
     properties: ['cosmeticIssues'],
@@ -206,6 +237,17 @@ function hasMeaningfulRepeatableValue(formData, fieldKey) {
     return normalizeRows(formData.hardwareIssues).some((row) => rowHasMeaningfulValue(row));
   }
 
+  const repeatableMap = {
+    cameras: 'cameras',
+    batteries: 'batteries',
+    biometrics: 'biometrics',
+    ports: 'ports'
+  };
+  const propertyName = repeatableMap[fieldKey];
+  if (propertyName) {
+    return normalizeRows(formData[propertyName]).some((row) => rowHasMeaningfulValue(row, ['rowId']));
+  }
+
   return false;
 }
 
@@ -226,6 +268,11 @@ function hasMeaningfulFieldValue(formData, fieldKey) {
 
   if (binding.repeatableType) {
     return hasMeaningfulRepeatableValue(formData, fieldKey);
+  }
+
+  if (binding.repeatableProperty && binding.childProperty) {
+    return normalizeRows(formData[binding.repeatableProperty])
+      .some((row) => normalizeText(row[binding.childProperty]) !== '');
   }
 
   if (binding.appendOnly) {
@@ -291,7 +338,18 @@ function hasCompleteRequiredFieldValue(formData, fieldKey) {
     });
   }
 
+  if (['cameras', 'batteries', 'biometrics', 'ports'].includes(fieldKey)) {
+    return hasMeaningfulRepeatableValue(formData, fieldKey);
+  }
+
   const binding = FIELD_BINDINGS[fieldKey];
+
+  if (binding?.repeatableProperty && binding?.childProperty) {
+    const meaningfulRows = normalizeRows(formData[binding.repeatableProperty])
+      .filter((row) => rowHasMeaningfulValue(row, ['rowId']));
+    return meaningfulRows.length > 0
+      && meaningfulRows.every((row) => normalizeText(row[binding.childProperty]) !== '');
+  }
 
   if (!binding) {
     return true;
@@ -324,6 +382,11 @@ function getRequiredMessage(field) {
     return 'Choose a hardware issue, enter a custom issue, or choose None when there is no hardware issue.';
   }
 
+  if (field.key === 'cameras') return 'Add at least one Camera.';
+  if (field.key === 'batteries') return 'Add at least one Battery.';
+  if (field.key === 'biometrics') return 'Add at least one Biometric Hardware row.';
+  if (field.key === 'ports') return 'Add at least one Port / Expansion row.';
+
   return `${field.label} is required by the selected Lot.`;
 }
 
@@ -348,7 +411,15 @@ function clearFieldProperties(formData, fieldKey) {
     return;
   }
 
-  binding.properties.forEach((propertyName) => clearPropertyValue(formData, propertyName));
+  if (binding.repeatableProperty && binding.childProperty) {
+    formData[binding.repeatableProperty] = normalizeRows(formData[binding.repeatableProperty]).map((row) => ({
+      ...row,
+      [binding.childProperty]: ''
+    }));
+    return;
+  }
+
+  (binding.properties || []).forEach((propertyName) => clearPropertyValue(formData, propertyName));
 }
 
 function preserveFieldProperties(formData, existingFormData, fieldKey) {
@@ -358,7 +429,26 @@ function preserveFieldProperties(formData, existingFormData, fieldKey) {
     return;
   }
 
-  binding.properties.forEach((propertyName) => {
+  if (binding.repeatableProperty && binding.childProperty) {
+    const submittedRows = normalizeRows(formData[binding.repeatableProperty]);
+    const existingRows = normalizeRows(existingFormData?.[binding.repeatableProperty]);
+    const existingRowsById = new Map(existingRows
+      .map((row) => [normalizeText(row.rowId), row])
+      .filter(([rowId]) => rowId));
+    formData[binding.repeatableProperty] = submittedRows.map((row, index) => {
+      const rowId = normalizeText(row.rowId);
+      const existingRow = (rowId && existingRowsById.get(rowId)) || existingRows[index] || null;
+      return {
+        ...row,
+        [binding.childProperty]: existingRow
+          ? cloneValue(existingRow[binding.childProperty] ?? '')
+          : ''
+      };
+    });
+    return;
+  }
+
+  (binding.properties || []).forEach((propertyName) => {
     if (Object.prototype.hasOwnProperty.call(existingFormData || {}, propertyName)) {
       formData[propertyName] = cloneValue(existingFormData[propertyName]);
       return;
@@ -508,8 +598,11 @@ function assertUnitFormSubmissionPolicyBindings() {
   CONFIGURABLE_FIELDS.forEach((field) => {
     const binding = FIELD_BINDINGS[field.key];
 
-    if (!Array.isArray(binding.properties) || binding.properties.length === 0) {
-      throw new Error(`Unit form submission binding ${field.key} must define at least one property.`);
+    const hasProperties = Array.isArray(binding.properties) && binding.properties.length > 0;
+    const hasRepeatableChild = Boolean(binding.repeatableProperty && binding.childProperty);
+
+    if (!hasProperties && !hasRepeatableChild) {
+      throw new Error(`Unit form submission binding ${field.key} must define at least one property or repeatable child property.`);
     }
 
     if (field.ruleType === RULE_TYPE.REPEATABLE_SECTION && !binding.repeatableType) {

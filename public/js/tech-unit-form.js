@@ -14,6 +14,8 @@
     hardwareIssue: 'Choose a hardware issue, enter a custom issue, or choose None when there is no hardware issue.'
   });
 
+  const COLLAPSIBLE_EMPTY_REPEATABLE_ROW_TYPES = new Set(['camera', 'battery', 'biometric', 'port']);
+
   const LOT_UNIT_FORM_PROFILE_REFRESH_INTERVAL_MS = 30000;
   const LOT_UNIT_FORM_PROFILE_SUBMIT_VERIFICATION_MAX_AGE_MS = 5000;
   const LOT_UNIT_FORM_PROFILE_STORAGE_KEY = 'bwt-lot-unit-form-profile-updated';
@@ -1049,6 +1051,7 @@
     });
 
     applyFollowerVisibility(form, visibleByKey);
+    applyManufacturerFieldApplicability(form);
     updateAutoCollapsedSections(form);
   }
 
@@ -1065,6 +1068,7 @@
     delete form.dataset.lotUnitFormProfileSignature;
     delete form.dataset.lotUnitFormProfileLotId;
     delete form.dataset.lotUnitFormProfileCheckedAt;
+    delete form._lotUnitFormProfile;
     delete form.dataset.lotProfileSubmitVerifiedAt;
     delete form.dataset.lotProfileSubmitVerifiedLotId;
     applyDefaultLotUnitFormProfile(form);
@@ -1114,12 +1118,146 @@
   }
 
 
+  function isAppleManufacturerSelected(form) {
+    const select = form ? form.querySelector('[data-manufacturer-select]') : null;
+    const option = select && select.selectedOptions ? select.selectedOptions[0] : null;
+    return Boolean(option && option.getAttribute('data-is-apple') === '1');
+  }
+
+  function isAppleSiliconProcessorSelected(form) {
+    const selectionInput = getProcessorSelectionInput(form);
+    const option = getProcessorOptionById(form, selectionInput ? selectionInput.value : '');
+    return Boolean(option && option.getAttribute('data-is-apple-silicon') === '1');
+  }
+
+
+  function updateRepeatableRecordedStates(form) {
+    if (!form) {
+      return;
+    }
+
+    form.querySelectorAll('[data-repeatable-recorded-state]').forEach((state) => {
+      const row = state.closest('[data-module-row]');
+      if (!row) {
+        return;
+      }
+
+      const visibleFields = Array.from(row.querySelectorAll('[data-unit-form-field-key]'))
+        .some((wrapper) => !wrapper.hidden);
+      state.hidden = visibleFields;
+    });
+  }
+
+  function primeRepeatableRowFromCurrentProfile(form, row) {
+    if (!form || !row) {
+      return;
+    }
+
+    const profile = form._lotUnitFormProfile;
+    const fieldStateByKey = new Map(
+      Array.isArray(profile?.fields)
+        ? profile.fields.map((field) => [field.key, field])
+        : []
+    );
+    const isApple = isAppleManufacturerSelected(form);
+
+    row.querySelectorAll('[data-unit-form-field-key]').forEach((wrapper) => {
+      const fieldKey = wrapper.getAttribute('data-unit-form-field-key');
+      const fieldState = fieldStateByKey.get(fieldKey);
+      const lotVisible = fieldState ? Boolean(fieldState.visible) : true;
+      const manufacturerVisible = !wrapper.hasAttribute('data-apple-only-field') || isApple;
+      const visible = lotVisible && manufacturerVisible;
+      const required = visible && fieldState ? Boolean(fieldState.required) : false;
+
+      wrapper.dataset.lotVisible = lotVisible ? 'true' : 'false';
+      wrapper.dataset.lotRequired = required ? 'true' : 'false';
+      wrapper.hidden = !visible;
+      applyControlRequirement(wrapper, required);
+      updateProfileManagedSubmissionState(form, wrapper, visible);
+    });
+
+    updateRepeatableRecordedStates(form);
+  }
+
+  function applyManufacturerFieldApplicability(form) {
+    if (!form) {
+      return;
+    }
+
+    const isApple = isAppleManufacturerSelected(form);
+    form.querySelectorAll('[data-apple-only-field]').forEach((wrapper) => {
+      const lotVisible = wrapper.dataset.lotVisible !== 'false';
+      const visible = lotVisible && isApple;
+      const required = visible && wrapper.dataset.lotRequired === 'true';
+
+      wrapper.hidden = !visible;
+      applyControlRequirement(wrapper, required);
+      updateProfileManagedSubmissionState(form, wrapper, visible);
+    });
+
+    form.querySelectorAll('[data-not-apple-field]').forEach((wrapper) => {
+      const lotVisible = wrapper.dataset.lotVisible !== 'false';
+      const visible = lotVisible && !isApple;
+      const required = visible && wrapper.dataset.lotRequired === 'true';
+
+      wrapper.hidden = !visible;
+      applyControlRequirement(wrapper, required);
+      updateProfileManagedSubmissionState(form, wrapper, visible);
+    });
+
+    const biosSerialLabel = form.querySelector('[data-bios-serial-label]');
+    const biosSerialHint = form.querySelector('[data-bios-serial-hint]');
+    const biosSerialInput = form.querySelector('[data-bios-serial-input]');
+    const osBuildLabel = form.querySelector('[data-os-build-label]');
+    const osBuildInput = form.querySelector('[data-os-build-input]');
+    const biosVersionLabel = form.querySelector('[data-bios-version-label]');
+    const biosVersionInput = form.querySelector('[data-bios-version-input]');
+
+    if (biosSerialLabel) biosSerialLabel.textContent = isApple ? 'Recovery Number' : 'BIOS Serial Number';
+    if (biosSerialHint) biosSerialHint.textContent = isApple
+      ? 'Recovery Number is checked against both stored serial types after you leave this field.'
+      : 'BIOS serial is checked against both stored serial types after you leave this field.';
+    if (biosSerialInput) biosSerialInput.placeholder = isApple ? 'Recovery Number' : 'Serial reported by BIOS or ScanTool';
+    if (osBuildLabel) osBuildLabel.textContent = isApple ? 'OS Version' : 'OS Build';
+    if (osBuildInput) osBuildInput.placeholder = isApple ? 'Example: Tahoe 26.0' : 'Example: 23H2 / 22631';
+    if (biosVersionLabel) biosVersionLabel.textContent = isApple ? 'Firmware Version' : 'BIOS Version';
+    if (biosVersionInput) biosVersionInput.placeholder = isApple ? 'Example: firmware version' : 'Example: 1.18.0';
+
+    const displayTypeSelect = form.querySelector('[data-display-type-select]');
+    if (displayTypeSelect) {
+      let selectedOptionBecameUnavailable = false;
+      Array.from(displayTypeSelect.options).forEach((option) => {
+        if (option.dataset.appleDisallowedOption !== 'true') return;
+        const unavailable = isApple;
+        if (unavailable && option.selected) selectedOptionBecameUnavailable = true;
+        option.hidden = unavailable;
+        option.disabled = unavailable;
+      });
+      if (selectedOptionBecameUnavailable) displayTypeSelect.value = '';
+    }
+
+    const processorSpeedWrapper = form.querySelector('[data-processor-speed-applicability-field]');
+    if (processorSpeedWrapper) {
+      const lotVisible = processorSpeedWrapper.dataset.lotVisible !== 'false';
+      const processorSpeedVisible = lotVisible && !isAppleSiliconProcessorSelected(form);
+      const processorSpeedRequired = processorSpeedVisible && processorSpeedWrapper.dataset.lotRequired === 'true';
+      processorSpeedWrapper.hidden = !processorSpeedVisible;
+      applyControlRequirement(processorSpeedWrapper, processorSpeedRequired);
+      updateProfileManagedSubmissionState(form, processorSpeedWrapper, processorSpeedVisible);
+    }
+
+    updateRepeatableRecordedStates(form);
+    updateAutoCollapsedSections(form);
+  }
+
   function applyLotUnitFormProfile(form, profile, options = {}) {
+    form._lotUnitFormProfile = profile;
     const fieldStateByKey = new Map(profile.fields.map((field) => [field.key, field]));
     let hiddenCount = 0;
     let requiredCount = 0;
 
     const visibleByKey = new Map();
+    const countedFieldKeys = new Set();
 
     getLotConfigurableFieldWrappers(form).forEach((wrapper) => {
       const fieldKey = wrapper.getAttribute('data-unit-form-field-key');
@@ -1127,6 +1265,7 @@
       const visible = fieldState ? Boolean(fieldState.visible) : true;
       const required = visible && fieldState ? Boolean(fieldState.required) : false;
 
+      wrapper.dataset.lotVisible = visible ? 'true' : 'false';
       wrapper.hidden = !visible;
       wrapper.dataset.lotRequired = required ? 'true' : 'false';
       applyControlRequirement(wrapper, required);
@@ -1135,16 +1274,15 @@
       validateRequiredRepeatableSection(wrapper, false);
       visibleByKey.set(fieldKey, visible);
 
-      if (!visible) {
-        hiddenCount += 1;
-      }
-
-      if (required) {
-        requiredCount += 1;
+      if (!countedFieldKeys.has(fieldKey)) {
+        countedFieldKeys.add(fieldKey);
+        if (!visible) hiddenCount += 1;
+        if (required) requiredCount += 1;
       }
     });
 
     applyFollowerVisibility(form, visibleByKey);
+    applyManufacturerFieldApplicability(form);
     updateAutoCollapsedSections(form);
 
     const statusPrefix = options.updatedWhileOpen
@@ -1166,6 +1304,7 @@
 
     const background = Boolean(options.background);
     const force = Boolean(options.force);
+    const applyEvenIfUnchanged = Boolean(options.applyEvenIfUnchanged);
     const lotSelect = getAssignableLotCatalog(form);
     const lotId = lotSelect ? String(lotSelect.value || '').trim() : '';
 
@@ -1223,7 +1362,7 @@
       const changed = Boolean(previousSignature && previousSignature !== nextSignature);
       const firstApplication = !previousSignature;
 
-      if (!background || firstApplication || changed) {
+      if (!background || firstApplication || changed || applyEvenIfUnchanged) {
         applyLotUnitFormProfile(form, profile, { updatedWhileOpen: background && changed });
       }
 
@@ -1268,6 +1407,10 @@
     }
 
     document.querySelectorAll('[data-tech-unit-form]').forEach((form) => {
+      if (form.dataset.techUnitSubmitPreflightPending === 'true') {
+        return;
+      }
+
       const lotSelect = getAssignableLotCatalog(form);
 
       if (lotSelect && lotSelect.value) {
@@ -1497,6 +1640,15 @@
     }
   }
 
+  function cancelScheduledLotRequirementWorkflowRefresh(form) {
+    if (!form || !form._lotRequirementWorkflowRefreshTimer) {
+      return;
+    }
+
+    window.clearTimeout(form._lotRequirementWorkflowRefreshTimer);
+    delete form._lotRequirementWorkflowRefreshTimer;
+  }
+
   function scheduleLotRequirementWorkflowRefresh(form, options = {}) {
     if (!form) {
       return;
@@ -1506,12 +1658,17 @@
     delete form.dataset.lotRequirementWorkflowVerifiedLotId;
     delete form.dataset.lotRequirementWorkflowVerifiedFingerprint;
 
-    if (form._lotRequirementWorkflowRefreshTimer) {
-      window.clearTimeout(form._lotRequirementWorkflowRefreshTimer);
-    }
+    cancelScheduledLotRequirementWorkflowRefresh(form);
 
     form._lotRequirementWorkflowRefreshTimer = window.setTimeout(() => {
       delete form._lotRequirementWorkflowRefreshTimer;
+
+      // A pending save performs its own authoritative requirement check. A
+      // delayed background refresh must never abort that one-click preflight.
+      if (form.dataset.techUnitSubmitPreflightPending === 'true') {
+        return;
+      }
+
       refreshLotRequirementWorkflow(form, { background: Boolean(options.background) });
     }, options.immediate ? 0 : LOT_REQUIREMENT_WORKFLOW_REFRESH_DELAY_MS);
   }
@@ -1522,6 +1679,10 @@
     }
 
     document.querySelectorAll('[data-tech-unit-form]').forEach((form) => {
+      if (form.dataset.techUnitSubmitPreflightPending === 'true') {
+        return;
+      }
+
       const lotSelect = getAssignableLotCatalog(form);
 
       if (lotSelect && lotSelect.value) {
@@ -2595,6 +2756,7 @@
     }
 
     updateUnitModelFilter(form, true);
+    applyManufacturerFieldApplicability(form);
     updateProcessorFilter(form, false);
     updateIntentionalDuplicateRequestControls(form);
   }
@@ -2931,6 +3093,7 @@
     if (brandSelect) brandSelect.value = option.getAttribute('data-processor-brand-id') || '';
     setProcessorInputValidity(form, '');
     applySelectedProcessorMetadata(form, false);
+    applyManufacturerFieldApplicability(form);
     closeProcessorOptions(form);
     updateCatalogRequestControls(form);
     scheduleLotRequirementWorkflowRefresh(form);
@@ -3003,6 +3166,22 @@
 
     if (rowType === 'hardwareIssue') {
       return 'hardwareIssues';
+    }
+
+    if (rowType === 'camera') {
+      return 'cameras';
+    }
+
+    if (rowType === 'battery') {
+      return 'batteries';
+    }
+
+    if (rowType === 'biometric') {
+      return 'biometrics';
+    }
+
+    if (rowType === 'port') {
+      return 'ports';
     }
 
     return '';
@@ -3372,6 +3551,18 @@
     updateStructuredCopyButtons(form);
   }
 
+  function updateRepeatableAddButtonState(form, rowType) {
+    const list = form ? form.querySelector(`[data-module-list="${rowType}"]`) : null;
+    const section = list ? list.closest('[data-unit-form-repeatable-type]') : null;
+    const addButton = form ? form.querySelector(`[data-add-module-row="${rowType}"]`) : null;
+    const maxRows = Number(section ? section.getAttribute('data-module-max') : 0);
+
+    if (!addButton || !Number.isInteger(maxRows) || maxRows <= 0) return;
+    const atLimit = getModuleRows(form, rowType).length >= maxRows;
+    addButton.disabled = atLimit;
+    addButton.setAttribute('aria-disabled', atLimit ? 'true' : 'false');
+  }
+
   function addModuleRow(form, rowType) {
     const list = form.querySelector(`[data-module-list="${rowType}"]`);
     const template = form.querySelector(`template[data-module-template="${rowType}"]`);
@@ -3380,7 +3571,13 @@
       return;
     }
 
+    const section = list.closest('[data-unit-form-repeatable-type]');
+    const maxRows = Number(section ? section.getAttribute('data-module-max') : 0);
     const rows = getModuleRows(form, rowType);
+    if (Number.isInteger(maxRows) && maxRows > 0 && rows.length >= maxRows) {
+      updateRepeatableAddButtonState(form, rowType);
+      return;
+    }
     const index = rows.length;
     const displayNumber = index + 1;
     const html = template.innerHTML
@@ -3393,7 +3590,9 @@
     const row = holder.firstElementChild;
 
     if (row) {
+      primeRepeatableRowFromCurrentProfile(form, row);
       list.appendChild(row);
+      updateRepeatableRecordedStates(form);
       syncCosmeticIssueRowState(row);
       syncHardwareIssueRowState(row);
     }
@@ -3401,6 +3600,13 @@
     renumberModuleRows(form, rowType);
     updateModuleTotals(form);
     validateRequiredRepeatableSection(list.closest('[data-unit-form-repeatable-type]'), false);
+    updateRepeatableAddButtonState(form, rowType);
+    applyManufacturerFieldApplicability(form);
+    refreshLotUnitFormProfile(form, {
+      background: true,
+      force: true,
+      applyEvenIfUnchanged: true
+    }).catch(() => {});
   }
 
   function setModuleRowFieldValue(row, fieldName, value) {
@@ -3514,7 +3720,7 @@
 
     clearValidationError(row);
 
-    if (rows.length <= 1) {
+    if (rows.length <= 1 && !COLLAPSIBLE_EMPTY_REPEATABLE_ROW_TYPES.has(rowType)) {
       row.querySelectorAll('input, select, textarea').forEach((field) => {
         if (field.tagName === 'SELECT') {
           field.selectedIndex = 0;
@@ -3537,6 +3743,7 @@
     renumberModuleRows(form, rowType);
     updateModuleTotals(form);
     validateRequiredRepeatableSection(section, false);
+    updateRepeatableAddButtonState(form, rowType);
     refreshValidationSummary(form);
   }
 
@@ -3863,6 +4070,10 @@
     renumberModuleRows(form, 'memory');
     renumberModuleRows(form, 'previousStorage');
     renumberModuleRows(form, 'storage');
+    ['camera', 'battery', 'biometric', 'port'].forEach((rowType) => {
+      renumberModuleRows(form, rowType);
+      updateRepeatableAddButtonState(form, rowType);
+    });
     syncAllCosmeticIssueRows(form);
     syncAllHardwareIssueRows(form);
     updateModuleTotals(form);
@@ -4047,6 +4258,7 @@
     if (modelFilterSelect) {
       const form = getFormFromElement(modelFilterSelect);
       updateUnitModelFilter(form, false);
+      applyManufacturerFieldApplicability(form);
       updateProcessorFilter(form, false);
       closeUnitModelOptions(form);
       updateProductionWeightPreview(form);
@@ -4078,6 +4290,7 @@
 
       if (selectedProcessor && selectedProcessor.getAttribute('data-processor-brand-id') !== processorBrandSelect.value) {
         clearProcessorSelection(form);
+        applyManufacturerFieldApplicability(form);
       }
 
       updateProcessorFilter(form, true);
@@ -4525,6 +4738,7 @@
     updateModuleTotals(form);
 
     if (!hasCurrentLotRequirementSubmitVerification(form, selectedLotId)) {
+      cancelScheduledLotRequirementWorkflowRefresh(form);
       const requirementResult = await refreshLotRequirementWorkflow(form, { background: true });
       const currentLotId = String(getAssignableLotCatalog(form)?.value || '').trim();
 
@@ -4615,6 +4829,7 @@
     }
 
     form.dataset.techUnitSubmitPreflightPending = 'true';
+    cancelScheduledLotRequirementWorkflowRefresh(form);
     const submitter = event.submitter || null;
 
     runTechUnitSubmitPreflight(form, selectedLotId).then((readyToSubmit) => {

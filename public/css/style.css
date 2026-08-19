@@ -32,6 +32,8 @@
   --slate-bg: #f7f9fc;
 
   --sidebar-bg: #ffffff;
+  --sidebar-width: 260px;
+  --sidebar-edge-trigger: 10px;
   --shadow: 0 8px 22px rgba(15, 23, 42, 0.045);
   --radius: 14px;
   --radius-sm: 10px;
@@ -159,23 +161,82 @@ code {
 .app-shell {
   display: grid;
   min-height: 100vh;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .sidebar {
   display: flex;
-  position: sticky;
+  position: fixed;
+  z-index: 45;
   top: 0;
+  bottom: 0;
+  left: 0;
+  width: var(--sidebar-width);
   height: 100vh;
   flex-direction: column;
   border-right: 1px solid var(--line);
   background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
   overflow-y: auto;
+  transform: translateX(calc(-100% + var(--sidebar-edge-trigger)));
+  transition:
+    transform 180ms ease,
+    box-shadow 180ms ease;
 }
 
 .sidebar-brand {
-  padding: 20px 18px 15px;
+  position: relative;
+  padding: 20px 58px 15px 18px;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.sidebar-pin-button {
+  display: none;
+  position: absolute;
+  top: 12px;
+  right: 10px;
+  min-width: 38px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: #475569;
+  background: #ffffff;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sidebar-pin-button:hover,
+.sidebar-pin-button:focus-visible {
+  border-color: rgba(29, 78, 216, 0.34);
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+}
+
+@media (min-width: 981px) {
+  .sidebar-pin-button {
+    display: inline-flex;
+  }
+
+  html:not([data-sidebar-pinned="true"]) .sidebar:is(:hover, :focus-within, .is-desktop-open) {
+    transform: translateX(0);
+    box-shadow: 18px 0 34px rgba(15, 23, 42, 0.16);
+  }
+
+  html[data-sidebar-pinned="true"] .app-shell {
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  }
+
+  html[data-sidebar-pinned="true"] .sidebar {
+    position: sticky;
+    z-index: auto;
+    width: auto;
+    transform: none;
+    box-shadow: none;
+  }
 }
 
 .brand-card {
@@ -1144,6 +1205,12 @@ pre {
   border-radius: 10px;
   color: #334155;
   background: #f8fafc;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar {
+    transition: none;
+  }
 }
 
 /* Responsive */

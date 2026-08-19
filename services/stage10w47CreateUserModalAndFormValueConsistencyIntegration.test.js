@@ -19,6 +19,16 @@ test('Create User opens and validates inside the shared management modal while r
   assert.match(modal, /class="modal-close-button"/);
 });
 
+
+test('Create User setup-link generation resolves the current initial setup link identity', () => {
+  const controller = read('controllers/managementController.js');
+  const authModel = read('models/authModel.js');
+
+  assert.match(controller, /linkTypeCode = hasExistingPassword \? 'password_reset' : 'initial_password_setup'/);
+  assert.match(authModel, /initial_password_setup:\s*SYSTEM_CONFIG_VALUE_IDS\.PASSWORD_LINK_SETUP/);
+  assert.match(authModel, /const linkTypeId = await getSystemConfigValueId\(PASSWORD_LINK_SYSTEM_ID_BY_CODE\[linkTypeCode\], connection\)/);
+});
+
 test('Create User result modal reuses the existing setup-link controls', () => {
   const createdModal = read('views/fragments/management-user-created-modal.ejs');
   const usersPage = read('views/pages/management-users.ejs');

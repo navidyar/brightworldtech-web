@@ -53,13 +53,31 @@
     : (formOptions.defaultCommentTypeConfigValueId || '');
   const overallGradeOptions = Array.isArray(formOptions.overallGradeOptions) ? formOptions.overallGradeOptions : [];
   const absoluteStatusOptions = Array.isArray(formOptions.absoluteStatusOptions) ? formOptions.absoluteStatusOptions : [];
-  const physicalCameraStatusOptions = Array.isArray(formOptions.physicalCameraStatusOptions) ? formOptions.physicalCameraStatusOptions : [];
   const touchscreenStatusOptions = Array.isArray(formOptions.touchscreenStatusOptions) ? formOptions.touchscreenStatusOptions : [];
   const keyboardLanguageOptions = Array.isArray(formOptions.keyboardLanguageOptions) ? formOptions.keyboardLanguageOptions : [];
   const diagnosticsStatusOptions = Array.isArray(formOptions.diagnosticsStatusOptions) ? formOptions.diagnosticsStatusOptions : [];
-  const virusCheckStatusOptions = Array.isArray(formOptions.virusCheckStatusOptions) ? formOptions.virusCheckStatusOptions : [];
+  const threatProtectionStatusOptions = Array.isArray(formOptions.virusCheckStatusOptions) ? formOptions.virusCheckStatusOptions : [];
   const driverCheckStatusOptions = Array.isArray(formOptions.driverCheckStatusOptions) ? formOptions.driverCheckStatusOptions : [];
   const skinnedStatusOptions = Array.isArray(formOptions.skinnedStatusOptions) ? formOptions.skinnedStatusOptions : [];
+  const yesNoOptions = Array.isArray(formOptions.yesNoOptions) ? formOptions.yesNoOptions : [];
+  const testResultOptions = Array.isArray(formOptions.testResultOptions) ? formOptions.testResultOptions : [];
+  const availabilityTestResultOptions = Array.isArray(formOptions.availabilityTestResultOptions) ? formOptions.availabilityTestResultOptions : [];
+  const lockStatusOptions = Array.isArray(formOptions.lockStatusOptions) ? formOptions.lockStatusOptions : [];
+  const displayTypeOptions = Array.isArray(formOptions.displayTypeOptions) ? formOptions.displayTypeOptions : [];
+  const screenResolutionOptions = Array.isArray(formOptions.screenResolutionOptions) ? formOptions.screenResolutionOptions : [];
+  const refreshRateOptions = Array.isArray(formOptions.refreshRateOptions) ? formOptions.refreshRateOptions : [];
+  const colorOptions = Array.isArray(formOptions.colorOptions) ? formOptions.colorOptions : [];
+  const cameraTypeOptions = Array.isArray(formOptions.cameraTypeOptions) ? formOptions.cameraTypeOptions : [];
+  const cameraLocationOptions = Array.isArray(formOptions.cameraLocationOptions) ? formOptions.cameraLocationOptions : [];
+  const biometricHardwareOptions = Array.isArray(formOptions.biometricHardwareOptions) ? formOptions.biometricHardwareOptions : [];
+  const portTypeOptions = Array.isArray(formOptions.portTypeOptions) ? formOptions.portTypeOptions : [];
+  const boxLanguageOptions = Array.isArray(formOptions.boxLanguageOptions) ? formOptions.boxLanguageOptions : [];
+  const cameraRows = Array.isArray(formData.cameras) ? formData.cameras : [];
+  const batteryRows = Array.isArray(formData.batteries) ? formData.batteries : [];
+  const biometricRows = Array.isArray(formData.biometrics) ? formData.biometrics : [];
+  const portRows = Array.isArray(formData.ports) ? formData.ports : [];
+  const selectedManufacturer = (formOptions.manufacturers || []).find((manufacturer) => String(manufacturer.id || '') === String(formData.manufacturerId || ''));
+  const initialIsApple = Boolean(selectedManufacturer && String(selectedManufacturer.label || '').trim().toLowerCase() === 'apple');
   const outcomeOptions = Array.isArray(formOptions.outcomeOptions) && formOptions.outcomeOptions.length > 0
     ? formOptions.outcomeOptions
     : [
@@ -404,12 +422,12 @@
       </label>
 
       <label class="form-field" data-unit-form-field-key="bios_serial_number">
-        <span>BIOS Serial Number</span>
+        <span data-bios-serial-label><%= initialIsApple ? 'Recovery Number' : 'BIOS Serial Number' %></span>
         <input
           type="text"
           name="biosSerialNumber"
           value="<%= formData.biosSerialNumber %>"
-          placeholder="Serial reported by BIOS or ScanTool"
+          placeholder="<%= initialIsApple ? 'Recovery Number' : 'Serial reported by BIOS or ScanTool' %>" data-bios-serial-input
           autocomplete="off"
           spellcheck="false"
           maxlength="150"
@@ -417,7 +435,7 @@
           data-serial-enter-no-submit
         />
         <small class="field-hint">
-          BIOS serial is checked against both stored serial types after you leave this field.
+          <span data-bios-serial-hint><%= initialIsApple ? 'Recovery Number is checked against both stored serial types after you leave this field.' : 'BIOS serial is checked against both stored serial types after you leave this field.' %></span>
         </small>
       </label>
     </div>
@@ -468,7 +486,7 @@
         <select name="manufacturerId" data-manufacturer-select>
           <option value="">Select manufacturer</option>
           <% formOptions.manufacturers.forEach((manufacturer) => { %>
-            <option value="<%= manufacturer.id %>" <%= selected(formData.manufacturerId, manufacturer.id) %>>
+            <option value="<%= manufacturer.id %>" data-is-apple="<%= String(manufacturer.label || '').trim().toLowerCase() === 'apple' ? '1' : '0' %>" <%= selected(formData.manufacturerId, manufacturer.id) %>>
               <%= manufacturer.label %>
             </option>
           <% }) %>
@@ -512,6 +530,26 @@
         <small class="field-hint" data-unit-model-hint>
           Select a manufacturer to load its model catalog. Selecting a Unit Category narrows the list to matching models.
         </small>
+      </label>
+
+      <label class="form-field" data-unit-form-field-key="screen_size">
+        <span>Screen Size</span>
+        <select name="screenSizeConfigValueId">
+          <option value="">Choose an option</option>
+          <% (formOptions.screenSizes || []).forEach((screenSize) => { %>
+            <option value="<%= screenSize.id %>" <%= selected(formData.screenSizeConfigValueId, screenSize.id) %>><%= screenSize.label %></option>
+          <% }) %>
+        </select>
+      </label>
+
+      <label class="form-field tech-spec-short-field tech-spec-short-field--apple-model" data-unit-form-field-key="apple_model_number" data-apple-only-field>
+        <span>Apple Model Number</span>
+        <input type="text" name="appleModelNumber" value="<%= formData.appleModelNumber || '' %>" maxlength="80" placeholder="Example: A2141" />
+      </label>
+
+      <label class="form-field tech-spec-short-field tech-spec-short-field--year" data-unit-form-field-key="model_year" data-apple-only-field>
+        <span>Model Year</span>
+        <input type="number" name="modelYear" value="<%= formData.modelYear || '' %>" min="1980" max="2100" step="1" inputmode="numeric" placeholder="Example: 2023" />
       </label>
 
     </div>
@@ -636,6 +674,7 @@
                 data-base-speed-ghz="<%= processorModel.baseSpeedGhz || '' %>"
                 data-usage-score="<%= Number(processorModel.usageScore || 0) %>"
                 data-context-usage-scores="<%= processorModel.usageScoresByContextSerialized || '' %>"
+                data-is-apple-silicon="<%= /^(?:Apple\s+)?M\d/i.test(String(processorModel.label || '').trim()) ? '1' : '0' %>"
                 <%= selected(formData.processorModelId, processorModel.id) %>
               >
                 <%= processorModel.label %>
@@ -648,7 +687,7 @@
         </small>
       </label>
 
-      <label class="form-field" data-unit-form-field-key="processor_speed_ghz">
+      <label class="form-field" data-unit-form-field-key="processor_speed_ghz" data-processor-speed-applicability-field>
         <span>Processor Speed GHz</span>
         <input
           type="number"
@@ -857,130 +896,131 @@
     </div>
   </div>
 
-  <div class="form-section tech-form-section--system" data-unit-form-auto-collapse>
+  <div class="form-section tech-form-section--specifications" data-unit-form-auto-collapse>
     <div class="form-section-header">
       <div>
-        <p class="eyebrow">Expanded Specifications</p>
-        <h3>Operating System, BIOS, and Status Fields</h3>
+        <p class="eyebrow">Specifications</p>
+        <h3>Unit Specifications</h3>
       </div>
-      <p>
-        Record operating-system, BIOS, and diagnostic values together. ScanTool-only cellular and band details stay visible in the expanded unit mini-menu.
-      </p>
+      <p>Record the current unit configuration. Fields hidden by the selected Lot stay out of the workflow and are not required.</p>
     </div>
 
-    <div class="form-grid">
+    <div class="form-grid tech-specs-tests-grid">
       <label class="form-field" data-unit-form-field-key="operating_system">
         <span>Operating System</span>
         <select name="operatingSystemConfigValueId">
-          <option value="">Select OS</option>
+          <option value="">Choose an option</option>
           <% formOptions.operatingSystems.forEach((operatingSystem) => { %>
-            <option value="<%= operatingSystem.id %>" <%= selected(formData.operatingSystemConfigValueId, operatingSystem.id) %>>
-              <%= operatingSystem.label %>
-            </option>
+            <option value="<%= operatingSystem.id %>" <%= selected(formData.operatingSystemConfigValueId, operatingSystem.id) %>><%= operatingSystem.label %></option>
           <% }) %>
         </select>
-        <small class="field-hint">
-          Record the installed operating system when known. OS build and diagnostics are tracked in the fields below.
-        </small>
       </label>
-
       <label class="form-field" data-unit-form-field-key="os_build">
-        <span>OS Build</span>
-        <input type="text" name="osBuild" value="<%= formData.osBuild || '' %>" maxlength="100" placeholder="Example: 23H2 / 22631" />
+        <span data-os-build-label><%= initialIsApple ? 'OS Version' : 'OS Build' %></span>
+        <input type="text" name="osBuild" value="<%= formData.osBuild || '' %>" maxlength="100" placeholder="<%= initialIsApple ? 'Example: Tahoe 26.0' : 'Example: 23H2 / 22631' %>" data-os-build-input />
       </label>
-
       <label class="form-field" data-unit-form-field-key="bios_version">
-        <span>BIOS Version</span>
-        <input type="text" name="biosVersion" value="<%= formData.biosVersion || '' %>" maxlength="100" placeholder="Example: 1.18.0" />
+        <span data-bios-version-label><%= initialIsApple ? 'Firmware Version' : 'BIOS Version' %></span>
+        <input type="text" name="biosVersion" value="<%= formData.biosVersion || '' %>" maxlength="100" placeholder="<%= initialIsApple ? 'Example: firmware version' : 'Example: 1.18.0' %>" data-bios-version-input />
       </label>
-
-      <% if (formOptions.batteryHealthSupported !== false) { %>
-        <label class="form-field" data-unit-form-field-key="battery_health">
-          <span>Battery Health</span>
-          <input type="number" name="batteryHealthPercent" value="<%= formData.batteryHealthPercent || '' %>" min="0" max="100" step="0.1" inputmode="decimal" placeholder="Example: 87.5" />
-          <small class="field-hint">Optional percentage from 0.0 through 100.0; tenths are supported.</small>
-        </label>
-      <% } %>
-
-      <label class="form-field" data-unit-form-field-key="absolute_status">
-        <span>Absolute Status</span>
-        <select name="absoluteStatusConfigValueId">
-          <option value="">Select status</option>
-          <% absoluteStatusOptions.forEach((statusOption) => { %>
-            <option value="<%= statusOption.id %>" <%= selected(formData.absoluteStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
-          <% }) %>
-        </select>
-      </label>
-
-      <label class="form-field" data-unit-form-field-key="physical_camera_status">
-        <span>Physical Camera</span>
-        <select name="physicalCameraStatusConfigValueId">
-          <option value="">Select status</option>
-          <% physicalCameraStatusOptions.forEach((statusOption) => { %>
-            <option value="<%= statusOption.id %>" <%= selected(formData.physicalCameraStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
-          <% }) %>
-        </select>
-      </label>
-
-      <label class="form-field" data-unit-form-field-key="touchscreen_status">
-        <span>Touchscreen</span>
-        <select name="touchscreenStatusConfigValueId">
-          <option value="">Select status</option>
-          <% touchscreenStatusOptions.forEach((statusOption) => { %>
-            <option value="<%= statusOption.id %>" <%= selected(formData.touchscreenStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
-          <% }) %>
-        </select>
-      </label>
-
       <label class="form-field" data-unit-form-field-key="keyboard_language">
         <span>Keyboard Language</span>
-        <select name="keyboardLanguageConfigValueId">
-          <option value="">Select language</option>
-          <% keyboardLanguageOptions.forEach((languageOption) => { %>
-            <option value="<%= languageOption.id %>" <%= selected(formData.keyboardLanguageConfigValueId, languageOption.id) %>><%= languageOption.label %></option>
-          <% }) %>
-        </select>
+        <select name="keyboardLanguageConfigValueId"><option value="">Choose an option</option><% keyboardLanguageOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.keyboardLanguageConfigValueId, option.id) %>><%= option.label %></option><% }) %></select>
       </label>
+      <label class="form-field" data-unit-form-field-key="wifi_card_present" data-not-apple-field <%= initialIsApple ? 'hidden' : '' %>>
+        <span>Wi-Fi Card Present</span>
+        <select name="wifiCardPresentConfigValueId"><option value="">Choose an option</option><% yesNoOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.wifiCardPresentConfigValueId, option.id) %>><%= option.label %></option><% }) %></select>
+      </label>
+      <label class="form-field" data-unit-form-field-key="charger_included">
+        <span>Charger Included</span>
+        <select name="chargerIncludedConfigValueId"><option value="">Choose an option</option><% yesNoOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.chargerIncludedConfigValueId, option.id) %>><%= option.label %></option><% }) %></select>
+      </label>
+      <label class="form-field" data-unit-form-field-key="display_type">
+        <span>Display Type</span>
+        <select name="displayTypeConfigValueId" data-display-type-select><option value="">Choose an option</option><% displayTypeOptions.forEach((option) => { %><option value="<%= option.id %>" data-apple-disallowed-option="<%= option.appleDisallowed ? 'true' : 'false' %>" <%= initialIsApple && option.appleDisallowed ? 'hidden disabled' : '' %> <%= selected(formData.displayTypeConfigValueId, option.id) %>><%= option.label %></option><% }) %></select>
+      </label>
+      <label class="form-field" data-unit-form-field-key="native_screen_resolution" data-not-apple-field <%= initialIsApple ? 'hidden' : '' %>>
+        <span>Native Screen Resolution</span>
+        <select name="nativeScreenResolutionConfigValueId"><option value="">Choose an option</option><% screenResolutionOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.nativeScreenResolutionConfigValueId, option.id) %>><%= option.label %></option><% }) %></select>
+      </label>
+      <label class="form-field" data-unit-form-field-key="refresh_rate" data-not-apple-field <%= initialIsApple ? 'hidden' : '' %>>
+        <span>Refresh Rate</span>
+        <select name="refreshRateConfigValueId"><option value="">Choose an option</option><% refreshRateOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.refreshRateConfigValueId, option.id) %>><%= option.label %></option><% }) %></select>
+      </label>
+      <label class="form-field" data-unit-form-field-key="color">
+        <span>Color</span>
+        <select name="colorConfigValueId"><option value="">Choose an option</option><% colorOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.colorConfigValueId, option.id) %>><%= option.label %></option><% }) %></select>
+      </label>
+    </div>
 
-      <label class="form-field" data-unit-form-field-key="complete_diagnostics">
-        <span>Complete Diagnostics</span>
-        <select name="completeDiagnosticsStatusConfigValueId">
-          <option value="">Select status</option>
-          <% diagnosticsStatusOptions.forEach((statusOption) => { %>
-            <option value="<%= statusOption.id %>" <%= selected(formData.completeDiagnosticsStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
+    <div class="tech-spec-repeatables">
+      <section class="tech-spec-repeatable" data-unit-form-field-key="cameras" data-unit-form-repeatable-type="camera" data-module-max="3">
+        <div class="tech-spec-repeatable-header"><strong>Cameras</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="camera">+ Add</button></div>
+        <div class="tech-spec-repeatable-list" data-module-list="camera">
+          <% cameraRows.forEach((row, index) => { %>
+            <div class="tech-spec-repeatable-row tech-spec-repeatable-row--camera" data-module-row="camera">
+              <input type="hidden" name="cameras[<%= index %>][rowId]" value="<%= row.rowId || '' %>" data-module-field />
+              <span class="tech-memory-row-number" data-module-display-number><%= index + 1 %></span>
+              <span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Camera recorded</span>
+              <label class="form-field" data-unit-form-field-key="camera_type"><span>Type</span><select name="cameras[<%= index %>][cameraTypeConfigValueId]" data-module-field><option value="">Choose an option</option><% cameraTypeOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.cameraTypeConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+              <label class="form-field" data-unit-form-field-key="camera_location"><span>Location</span><select name="cameras[<%= index %>][cameraLocationConfigValueId]" data-module-field><option value="">Choose an option</option><% cameraLocationOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.cameraLocationConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+              <label class="form-field" data-unit-form-field-key="camera_test"><span>Test</span><select name="cameras[<%= index %>][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% testResultOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.testResultConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+              <button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button>
+            </div>
           <% }) %>
-        </select>
-      </label>
+        </div>
+        <template data-module-template="camera"><div class="tech-spec-repeatable-row tech-spec-repeatable-row--camera" data-module-row="camera"><span class="tech-memory-row-number" data-module-display-number>__DISPLAY__</span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Camera recorded</span><label class="form-field" data-unit-form-field-key="camera_type"><span>Type</span><select name="cameras[__INDEX__][cameraTypeConfigValueId]" data-module-field><option value="">Choose an option</option><% cameraTypeOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="camera_location"><span>Location</span><select name="cameras[__INDEX__][cameraLocationConfigValueId]" data-module-field><option value="">Choose an option</option><% cameraLocationOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="camera_test"><span>Test</span><select name="cameras[__INDEX__][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% testResultOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div></template>
+      </section>
 
-      <label class="form-field" data-unit-form-field-key="virus_check">
-        <span>Virus Check</span>
-        <select name="virusCheckStatusConfigValueId">
-          <option value="">Select status</option>
-          <% virusCheckStatusOptions.forEach((statusOption) => { %>
-            <option value="<%= statusOption.id %>" <%= selected(formData.virusCheckStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
-          <% }) %>
-        </select>
-      </label>
+      <section class="tech-spec-repeatable" data-unit-form-field-key="batteries" data-unit-form-repeatable-type="battery" data-module-max="2">
+        <div class="tech-spec-repeatable-header"><strong>Batteries</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="battery">+ Add</button></div>
+        <div class="tech-spec-repeatable-list" data-module-list="battery">
+          <% batteryRows.forEach((row, index) => { %><div class="tech-spec-repeatable-row tech-spec-repeatable-row--battery" data-module-row="battery"><input type="hidden" name="batteries[<%= index %>][rowId]" value="<%= row.rowId || '' %>" data-module-field /><span class="tech-memory-row-number" data-module-display-number><%= index + 1 %></span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Battery recorded</span><label class="form-field" data-unit-form-field-key="battery_health"><span>Health %</span><input type="number" name="batteries[<%= index %>][healthPercent]" value="<%= row.healthPercent || '' %>" min="0" max="100" step="0.1" inputmode="decimal" placeholder="Example: 87.5" data-module-field /></label><label class="form-field" data-unit-form-field-key="battery_cycle_count" data-apple-only-field><span>Cycle Count</span><input type="number" name="batteries[<%= index %>][cycleCount]" value="<%= row.cycleCount || '' %>" min="0" step="1" inputmode="numeric" data-module-field /></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div><% }) %>
+        </div>
+        <template data-module-template="battery"><div class="tech-spec-repeatable-row tech-spec-repeatable-row--battery" data-module-row="battery"><span class="tech-memory-row-number" data-module-display-number>__DISPLAY__</span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Battery recorded</span><label class="form-field" data-unit-form-field-key="battery_health"><span>Health %</span><input type="number" name="batteries[__INDEX__][healthPercent]" value="" min="0" max="100" step="0.1" inputmode="decimal" placeholder="Example: 87.5" data-module-field /></label><label class="form-field" data-unit-form-field-key="battery_cycle_count" data-apple-only-field><span>Cycle Count</span><input type="number" name="batteries[__INDEX__][cycleCount]" value="" min="0" step="1" inputmode="numeric" data-module-field /></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div></template>
+      </section>
 
-      <label class="form-field" data-unit-form-field-key="driver_check">
-        <span>Driver Check</span>
-        <select name="driverCheckStatusConfigValueId">
-          <option value="">Select status</option>
-          <% driverCheckStatusOptions.forEach((statusOption) => { %>
-            <option value="<%= statusOption.id %>" <%= selected(formData.driverCheckStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
-          <% }) %>
-        </select>
-      </label>
+      <section class="tech-spec-repeatable" data-unit-form-field-key="biometrics" data-unit-form-repeatable-type="biometric" data-module-max="6">
+        <div class="tech-spec-repeatable-header"><strong>Biometrics</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="biometric">+ Add</button></div>
+        <div class="tech-spec-repeatable-list" data-module-list="biometric">
+          <% biometricRows.forEach((row, index) => { %><div class="tech-spec-repeatable-row tech-spec-repeatable-row--biometric" data-module-row="biometric"><input type="hidden" name="biometrics[<%= index %>][rowId]" value="<%= row.rowId || '' %>" data-module-field /><span class="tech-memory-row-number" data-module-display-number><%= index + 1 %></span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Biometric hardware recorded</span><label class="form-field" data-unit-form-field-key="biometric_hardware"><span>Hardware</span><select name="biometrics[<%= index %>][hardwareConfigValueId]" data-module-field><option value="">Choose an option</option><% biometricHardwareOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.hardwareConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="biometrics_test"><span>Test</span><select name="biometrics[<%= index %>][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% availabilityTestResultOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.testResultConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div><% }) %>
+        </div>
+        <template data-module-template="biometric"><div class="tech-spec-repeatable-row tech-spec-repeatable-row--biometric" data-module-row="biometric"><span class="tech-memory-row-number" data-module-display-number>__DISPLAY__</span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Biometric hardware recorded</span><label class="form-field" data-unit-form-field-key="biometric_hardware"><span>Hardware</span><select name="biometrics[__INDEX__][hardwareConfigValueId]" data-module-field><option value="">Choose an option</option><% biometricHardwareOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="biometrics_test"><span>Test</span><select name="biometrics[__INDEX__][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% availabilityTestResultOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div></template>
+      </section>
 
-      <label class="form-field" data-unit-form-field-key="skinned_status">
-        <span>Skinned</span>
-        <select name="skinnedStatusConfigValueId">
-          <option value="">Select status</option>
-          <% skinnedStatusOptions.forEach((statusOption) => { %>
-            <option value="<%= statusOption.id %>" <%= selected(formData.skinnedStatusConfigValueId, statusOption.id) %>><%= statusOption.label %></option>
-          <% }) %>
-        </select>
-      </label>
+      <section class="tech-spec-repeatable" data-unit-form-field-key="ports" data-unit-form-repeatable-type="port" data-module-max="30">
+        <div class="tech-spec-repeatable-header"><strong>Ports / Expansion</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="port">+ Add</button></div>
+        <div class="tech-spec-repeatable-list" data-module-list="port">
+          <% portRows.forEach((row, index) => { %><div class="tech-spec-repeatable-row tech-spec-repeatable-row--port" data-module-row="port"><input type="hidden" name="ports[<%= index %>][rowId]" value="<%= row.rowId || '' %>" data-module-field /><span class="tech-memory-row-number" data-module-display-number><%= index + 1 %></span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Port entry recorded</span><label class="form-field" data-unit-form-field-key="port_type"><span>Port Type</span><select name="ports[<%= index %>][portTypeConfigValueId]" data-module-field><option value="">Choose an option</option><% portTypeOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.portTypeConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="port_count"><span>Count</span><input type="number" name="ports[<%= index %>][portCount]" value="<%= row.portCount === 0 || row.portCount ? row.portCount : '' %>" min="0" step="1" inputmode="numeric" data-module-field /></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div><% }) %>
+        </div>
+        <template data-module-template="port"><div class="tech-spec-repeatable-row tech-spec-repeatable-row--port" data-module-row="port"><span class="tech-memory-row-number" data-module-display-number>__DISPLAY__</span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Port entry recorded</span><label class="form-field" data-unit-form-field-key="port_type"><span>Port Type</span><select name="ports[__INDEX__][portTypeConfigValueId]" data-module-field><option value="">Choose an option</option><% portTypeOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="port_count"><span>Count</span><input type="number" name="ports[__INDEX__][portCount]" value="" min="0" step="1" inputmode="numeric" data-module-field /></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div></template>
+      </section>
+    </div>
+  </div>
+
+  <div class="form-section tech-form-section--tests" data-unit-form-auto-collapse>
+    <div class="form-section-header">
+      <div><p class="eyebrow">Tests &amp; Checks</p><h3>Tests &amp; Checks</h3></div>
+      <p>Record verification results explicitly. No pass, unlocked, yes, or other result is selected automatically.</p>
+    </div>
+    <div class="form-grid tech-specs-tests-grid">
+      <label class="form-field" data-unit-form-field-key="keyboard_test"><span>Keyboard Test</span><select name="keyboardTestResultConfigValueId"><option value="">Choose an option</option><% testResultOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.keyboardTestResultConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="touchscreen_status"><span>Touchscreen Test</span><select name="touchscreenStatusConfigValueId"><option value="">Choose an option</option><% touchscreenStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.touchscreenStatusConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="microphone_check"><span>Microphone Check</span><select name="microphoneCheckResultConfigValueId"><option value="">Choose an option</option><% testResultOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.microphoneCheckResultConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="audio_output_check"><span>Audio Output Check</span><select name="audioOutputCheckResultConfigValueId"><option value="">Choose an option</option><% testResultOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.audioOutputCheckResultConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="all_screws_present"><span>All Screws Present</span><select name="allScrewsPresentConfigValueId"><option value="">Choose an option</option><% yesNoOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.allScrewsPresentConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="complete_diagnostics"><span>Diagnostics Test</span><select name="completeDiagnosticsStatusConfigValueId"><option value="">Choose an option</option><% diagnosticsStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.completeDiagnosticsStatusConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="virus_check"><span>Threat Protection Scan</span><select name="virusCheckStatusConfigValueId"><option value="">Choose an option</option><% threatProtectionStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.virusCheckStatusConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="driver_check" data-not-apple-field <%= initialIsApple ? 'hidden' : '' %>><span>Driver Check</span><select name="driverCheckStatusConfigValueId"><option value="">Choose an option</option><% driverCheckStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.driverCheckStatusConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="absolute_status" data-not-apple-field <%= initialIsApple ? 'hidden' : '' %>><span>Absolute Status</span><select name="absoluteStatusConfigValueId"><option value="">Choose an option</option><% absoluteStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.absoluteStatusConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="bios_lock" data-not-apple-field <%= initialIsApple ? 'hidden' : '' %>><span>BIOS Lock</span><select name="biosLockConfigValueId"><option value="">Choose an option</option><% lockStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.biosLockConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="efi_lock" data-apple-only-field><span>EFI Lock</span><select name="efiLockConfigValueId"><option value="">Choose an option</option><% lockStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.efiLockConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="mdm_lock"><span>MDM Lock</span><select name="mdmLockConfigValueId"><option value="">Choose an option</option><% lockStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.mdmLockConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="icloud_activation_lock" data-apple-only-field><span>iCloud Activation Lock</span><select name="icloudActivationLockConfigValueId"><option value="">Choose an option</option><% lockStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.icloudActivationLockConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="ce_certification" data-apple-only-field><span>CE Certification</span><select name="ceCertificationConfigValueId"><option value="">Choose an option</option><% yesNoOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.ceCertificationConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="open_box_status" data-apple-only-field><span>Open-Box Status</span><select name="openBoxStatusConfigValueId"><option value="">Choose an option</option><% yesNoOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.openBoxStatusConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="box_language" data-apple-only-field><span>Box Language</span><select name="boxLanguageConfigValueId"><option value="">Choose an option</option><% boxLanguageOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.boxLanguageConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="skinned_status"><span>Skinned</span><select name="skinnedStatusConfigValueId"><option value="">Choose an option</option><% skinnedStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.skinnedStatusConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
     </div>
   </div>
 

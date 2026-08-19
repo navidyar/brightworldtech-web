@@ -479,6 +479,12 @@ function buildUnitSnapshots({
           labels: [baseRow.model_display_label || baseRow.model_name],
           sourceLabel: 'Unit model'
         }),
+        screen_size: createCatalogActual({
+          ids: [baseRow.screen_size_config_value_id],
+          labels: [baseRow.screen_size_label],
+          sourceLabel: 'Screen size'
+        }),
+        model_year: createNumberActual({ value: baseRow.model_year, sourceLabel: 'Model year' }),
         processor: createCatalogActual({
           ids: [baseRow.processor_model_id],
           labels: [baseRow.processor_display_label || baseRow.processor_model_code],
@@ -955,9 +961,27 @@ function summarizeUnitValidation(checks, requirementCount) {
   return 'accepted';
 }
 
+function isRequirementApplicableToUnit(requirement, unitSnapshot) {
+  const field = getLotRequirementField(normalizeRequirementKey(requirement?.requirement_key));
+  const applicableManufacturers = Array.isArray(field?.applicableManufacturers)
+    ? field.applicableManufacturers.map(normalizeComparableText).filter(Boolean)
+    : [];
+  const excludedManufacturers = Array.isArray(field?.excludedManufacturers)
+    ? field.excludedManufacturers.map(normalizeComparableText).filter(Boolean)
+    : [];
+  const manufacturer = normalizeComparableText(unitSnapshot?.valuesByKey?.manufacturer?.displayValue);
+
+  if (excludedManufacturers.includes(manufacturer)) {
+    return false;
+  }
+
+  return applicableManufacturers.length === 0 || applicableManufacturers.includes(manufacturer);
+}
+
 function evaluateUnitSnapshot(unitSnapshot, requirements) {
   const activeRequirements = (Array.isArray(requirements) ? requirements : [])
-    .filter((requirement) => Number(requirement.is_active) === 1);
+    .filter((requirement) => Number(requirement.is_active) === 1)
+    .filter((requirement) => isRequirementApplicableToUnit(requirement, unitSnapshot));
   const requirementGroups = groupRequirementsByField(activeRequirements);
   const checks = requirementGroups.map((group) => evaluateRequirementGroup(unitSnapshot, group));
   const status = summarizeUnitValidation(checks, activeRequirements.length);

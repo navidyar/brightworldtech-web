@@ -25,7 +25,7 @@ test('Configure Unit Form covers every live independently configurable field and
   const form = read('views/fragments/tech-unit-form.ejs');
   const modal = read('views/fragments/lot-unit-form-rules-modal.ejs');
 
-  assert.equal(registry.length, 29);
+  assert.equal(registry.length, 60);
 
   for (const field of registry) {
     assert.equal(field.visibilityConfigurable, true, `${field.key} visibility`);
@@ -43,11 +43,11 @@ test('Configure Unit Form covers every live independently configurable field and
 test('requirements cover operational form values and numeric fields expose equals/minimum/maximum', () => {
   const definitions = new Map(listLotRequirementFields().map((field) => [field.key, field]));
   const expected = [
-    'unit_type', 'manufacturer', 'model',
+    'unit_type', 'manufacturer', 'model', 'screen_size', 'model_year',
     'processor', 'processor_family', 'processor_speed_ghz', 'ram_gb', 'ram_type',
     'memory_install_type', 'storage_gb', 'storage_type', 'storage_wipe_status',
     'operating_system', 'os_build', 'bios_version', 'battery_health', 'absolute_status',
-    'physical_camera_status', 'touchscreen_status', 'keyboard_language', 'complete_diagnostics',
+    'touchscreen_status', 'keyboard_language', 'complete_diagnostics',
     'virus_check', 'driver_check', 'skinned_status', 'overall_grade', 'unit_outcome'
   ];
 
@@ -55,7 +55,7 @@ test('requirements cover operational form values and numeric fields expose equal
   assert.equal(definitions.has('unit_serial_number'), false);
   assert.equal(definitions.has('bios_serial_number'), false);
 
-  for (const key of ['processor_speed_ghz', 'ram_gb', 'storage_gb', 'battery_health']) {
+  for (const key of ['model_year', 'processor_speed_ghz', 'ram_gb', 'storage_gb', 'battery_health']) {
     assert.deepEqual(definitions.get(key).allowedOperators, ['equals', 'greater_equal', 'less_equal']);
   }
 });
@@ -82,7 +82,7 @@ test('requirement UI supports searchable catalogs, exact text, and numeric range
   const detailPage = read('views/pages/management-lot-detail.ejs');
 
   for (const source of [
-    'storage_wipe_status', 'operating_system', 'absolute_status', 'physical_camera_status',
+    'screen_size', 'storage_wipe_status', 'operating_system', 'absolute_status',
     'touchscreen_status', 'keyboard_language', 'complete_diagnostics', 'virus_check',
     'driver_check', 'skinned_status', 'overall_grade'
   ]) {

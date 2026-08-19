@@ -67,15 +67,13 @@ test('Unit History records previous and current values separately', () => {
 });
 
 test('export contract preserves four hardware capacity columns and defaults component detail to selected', () => {
-  assert.deepEqual(UNIT_EXPORT_COLUMN_LABELS.slice(8, 12), [
+  assert.equal(UNIT_EXPORT_COLUMN_LABELS.length, 57);
+  assert.equal(DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
+  assert.deepEqual(DEFAULT_UNIT_EXPORT_COLUMNS.map((column) => column.label).slice(8, 18), [
     'Previous Memory Size',
     'Current Memory Size',
     'Previous Storage Size',
-    'Current Storage Size'
-  ]);
-  assert.equal(UNIT_EXPORT_COLUMN_LABELS.length, 24);
-  assert.equal(DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
-  assert.deepEqual(UNIT_EXPORT_COLUMN_LABELS.slice(12, 18), [
+    'Current Storage Size',
     'Previous Memory Modules',
     'Current Memory Modules',
     'Memory Module Changes',

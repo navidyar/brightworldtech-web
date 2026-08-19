@@ -270,6 +270,34 @@ test('hidden Edit fields preserve authoritative existing values', () => {
   assert.equal(isUnitFormFieldManaged(result.formData, 'memory_modules'), false);
 });
 
+test('hidden repeatable child fields preserve the matching existing row by row ID', () => {
+  const profile = buildProfile([
+    { fieldKey: 'battery_cycle_count', visibilityMode: 'hidden', requirementMode: 'optional' }
+  ]);
+  const existingFormData = buildFormData({
+    batteries: [
+      { rowId: '10', healthPercent: '88', cycleCount: '100' },
+      { rowId: '20', healthPercent: '91', cycleCount: '200' }
+    ]
+  });
+  const result = applyUnitFormSubmissionPolicy({
+    mode: 'edit',
+    submittedFormData: buildFormData({
+      batteries: [
+        { rowId: '20', healthPercent: '93', cycleCount: '' }
+      ]
+    }),
+    existingFormData,
+    profile
+  });
+
+  assert.equal(result.errors.length, 0);
+  assert.deepEqual(result.formData.batteries, [
+    { rowId: '20', healthPercent: '93', cycleCount: '200' }
+  ]);
+  assert.equal(isUnitFormFieldManaged(result.formData, 'battery_cycle_count'), false);
+});
+
 test('visible optional Edit fields may be intentionally cleared', () => {
   const profile = buildProfile();
   const result = applyUnitFormSubmissionPolicy({

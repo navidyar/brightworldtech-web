@@ -1056,6 +1056,7 @@ async function getTechUnitFormOptions(options = {}) {
     storageTypes,
     storageWipeStatuses,
     operatingSystems,
+    screenSizes,
     manufacturers,
     unitModels,
     processorBrands,
@@ -1069,6 +1070,7 @@ async function getTechUnitFormOptions(options = {}) {
     listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_TYPES),
     listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_WIPE_STATUSES),
     listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.OPERATING_SYSTEMS),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_SIZES),
     listManufacturers(),
     listUnitModels({ includeUnitModelId: includeCurrentUnitModelId }),
     listProcessorBrands(),
@@ -1179,6 +1181,7 @@ async function getTechUnitFormOptions(options = {}) {
     storageTypes: rankedStorageTypes,
     storageWipeStatuses: rankedStorageWipeStatuses,
     operatingSystems: rankedOperatingSystems,
+    screenSizes,
     manufacturers: rankedManufacturers,
     unitModels: rankedUnitModels,
     processorBrands: rankedProcessorBrands,
@@ -1201,6 +1204,8 @@ function getBlankUnitFormData(formOptions = null) {
     currentUnitStatusConfigValueId: formOptions ? formOptions.defaultUnitStatusId : '',
     manufacturerId: '',
     unitModelId: '',
+    screenSizeConfigValueId: '',
+    modelYear: '',
     processorModelId: '',
     processorSpeedGhz: '',
     previousRamGb: '',
@@ -1527,6 +1532,8 @@ async function getUnitFormDataById(unitId, formOptions = null) {
         : '',
     manufacturerId: unit.manufacturer_id ? String(unit.manufacturer_id) : '',
     unitModelId: unit.unit_model_id ? String(unit.unit_model_id) : '',
+    screenSizeConfigValueId: unit.screen_size_config_value_id ? String(unit.screen_size_config_value_id) : '',
+    modelYear: unit.model_year !== null && unit.model_year !== undefined ? String(unit.model_year) : '',
     processorModelId: unit.processor_model_id ? String(unit.processor_model_id) : '',
     processorSpeedGhz: unit.processor_speed_ghz !== null && unit.processor_speed_ghz !== undefined ? String(unit.processor_speed_ghz) : '',
     previousRamGb: unit.previous_ram_gb !== null && unit.previous_ram_gb !== undefined ? String(unit.previous_ram_gb) : '',
@@ -2131,6 +2138,7 @@ async function listTechUnits(filters = {}) {
     ramTypes,
     storageTypes,
     operatingSystems,
+    screenSizes,
     manufacturers,
     unitModels,
     processorBrands,
@@ -2145,6 +2153,7 @@ async function listTechUnits(filters = {}) {
     listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.RAM_TYPES),
     listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_TYPES),
     listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.OPERATING_SYSTEMS),
+    listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_SIZES),
     listManufacturers(),
     listUnitModels(),
     listProcessorBrands(),
@@ -2165,6 +2174,7 @@ async function listTechUnits(filters = {}) {
   const ramTypeMap = mapById(ramTypes);
   const storageTypeMap = mapById(storageTypes);
   const operatingSystemMap = mapById(operatingSystems);
+  const screenSizeMap = mapById(screenSizes);
   const manufacturerMap = mapById(manufacturers);
   const unitModelMap = mapById(unitModels);
   const processorModelMap = mapById(processorModels);
@@ -2526,6 +2536,7 @@ async function listTechUnits(filters = {}) {
     const ramTypeLabel = configLabelById(ramTypeMap, row.ram_type_config_value_id, '');
     const storageTypeLabel = configLabelById(storageTypeMap, row.storage_type_config_value_id, '');
     const operatingSystemLabel = configLabelById(operatingSystemMap, row.operating_system_config_value_id, '');
+    const screenSizeLabel = configLabelById(screenSizeMap, row.screen_size_config_value_id, '');
     const unitCategory = unitCategoryMap.get(Number(row.unit_category_config_value_id)) || null;
     const productionWeightDetails = getProductionWeightDetailsForUnit({
       row,
@@ -2595,6 +2606,8 @@ async function listTechUnits(filters = {}) {
       hasUnitProductionWeightOverride: unitProductionWeightOverride !== null,
       manufacturerLabel: manufacturerLabel || '—',
       modelLabel: modelLabel || '—',
+      screenSizeLabel: screenSizeLabel || '—',
+      modelYear: row.model_year !== null && row.model_year !== undefined ? Number(row.model_year) : null,
       processorLabel: processorLabel || '—',
       processorShortForm: processorOption ? String(processorOption.exportShortForm || '') : '',
       processorSpeedGhz: row.processor_speed_ghz !== null && row.processor_speed_ghz !== undefined ? row.processor_speed_ghz : '',
@@ -4033,6 +4046,12 @@ function buildWritePayload(formData, currentUserId, mode, assetNumber, unitColum
   }
   if (isUnitFormFieldManaged(formData, 'unit_model')) {
     addColumn('unit_model_id', normalizeOptionalInteger(formData.unitModelId));
+  }
+  if (isUnitFormFieldManaged(formData, 'screen_size') && (!unitColumns || hasColumn(unitColumns, 'screen_size_config_value_id'))) {
+    addColumn('screen_size_config_value_id', normalizeOptionalInteger(formData.screenSizeConfigValueId));
+  }
+  if (isUnitFormFieldManaged(formData, 'model_year') && (!unitColumns || hasColumn(unitColumns, 'model_year'))) {
+    addColumn('model_year', normalizeOptionalInteger(formData.modelYear));
   }
   if (isUnitFormFieldManaged(formData, 'processor_model')) {
     addColumn('processor_model_id', normalizeOptionalInteger(formData.processorModelId));
