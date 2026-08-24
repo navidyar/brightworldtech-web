@@ -1624,7 +1624,7 @@ async function approveIntentionalDuplicateRequest({ unitRequestId, reviewedByUse
   }
 }
 
-async function approveModelCatalogRequest({ unitRequestId, reviewedByUserId, reviewerNote = '', approvedModelName }) {
+async function approveModelCatalogRequest({ unitRequestId, reviewedByUserId, reviewerNote = '', approvedModelName, reviewerIsAdmin = false }) {
   const safeRequestId = normalizePositiveInteger(unitRequestId);
   const safeReviewerUserId = normalizePositiveInteger(reviewedByUserId);
   const safeApprovedModelName = normalizeText(approvedModelName, 150);
@@ -1632,6 +1632,12 @@ async function approveModelCatalogRequest({ unitRequestId, reviewedByUserId, rev
   if (!safeRequestId || !safeReviewerUserId || safeApprovedModelName.length < 2) {
     const error = new Error('Enter a canonical Unit Model name before approving this request.');
     error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
+    throw error;
+  }
+
+  if (!reviewerIsAdmin) {
+    const error = new Error('Only Admin can approve Model Catalog requests.');
+    error.code = 'BWT_CATALOG_ADMIN_REQUIRED';
     throw error;
   }
 
@@ -1673,11 +1679,7 @@ async function approveModelCatalogRequest({ unitRequestId, reviewedByUserId, rev
 
     if (request.status !== 'pending') return { approved: false, unitRequestId: safeRequestId };
 
-    if (Number(request.requested_by_user_id) === safeReviewerUserId) {
-      const error = new Error('A requester cannot approve their own Unit Request.');
-      error.code = 'BWT_UNIT_REQUEST_SELF_REVIEW';
-      throw error;
-    }
+    const isSelfReview = Number(request.requested_by_user_id) === safeReviewerUserId;
 
     const context = await assertActiveModelRequestContext(connection, request.manufacturer_id, request.unit_category_config_value_id);
     const [existingRows] = await connection.query(
@@ -1748,6 +1750,8 @@ async function approveModelCatalogRequest({ unitRequestId, reviewedByUserId, rev
       eventDetails: {
         approvedUnitModelId,
         approvedModelName: safeApprovedModelName,
+        selfReviewedByAdmin: isSelfReview,
+        reviewAuthority: 'admin',
         action: actionLabel
       }
     });
@@ -1873,9 +1877,7 @@ async function approveProcessorCatalogRequest({
   approvedProcessorFamily = '',
   approvedProcessorGeneration = '',
   approvedProcessorBaseSpeedGhz = '',
-  confirmedProcessorNamingWithAdmin = '',
   reviewerIsAdmin = false,
-  allowSelfReview = false,
   connection: providedConnection = null
 }) {
   const safeRequestId = normalizePositiveInteger(unitRequestId);
@@ -1889,6 +1891,12 @@ async function approveProcessorCatalogRequest({
   if (!safeRequestId || !safeReviewerUserId || (!safeExistingProcessorModelId && (requestedModelCode.length < 2 || (!normalizePositiveInteger(approvedProcessorBrandId) && requestedBrandName.length < 2)))) {
     const error = new Error('Choose an existing Processor or complete the canonical Processor Type and Processor values before approving this request.');
     error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
+    throw error;
+  }
+
+  if (!reviewerIsAdmin) {
+    const error = new Error('Only Admin can approve Processor Catalog requests.');
+    error.code = 'BWT_CATALOG_ADMIN_REQUIRED';
     throw error;
   }
 
@@ -1936,11 +1944,6 @@ async function approveProcessorCatalogRequest({
     }
 
     const isSelfReview = Number(request.requested_by_user_id) === safeReviewerUserId;
-    if (isSelfReview && !allowSelfReview) {
-      const error = new Error('A requester cannot approve their own Unit Request.');
-      error.code = 'BWT_UNIT_REQUEST_SELF_REVIEW';
-      throw error;
-    }
 
     const safeUnitModelId = await assertActiveUnitModel(connection, request.unit_model_id);
     let processorBrand;
@@ -2024,12 +2027,6 @@ async function approveProcessorCatalogRequest({
         const error = new Error(`${duplicateMatch.displayLabel} already exists globally as Processor #${duplicateMatch.id} (${state}). Use that canonical Processor and associate it with this Unit Model instead of creating another processor record.`);
         error.code = 'BWT_CATALOG_PROCESSOR_DUPLICATE';
         error.processorModelId = duplicateMatch.id;
-        throw error;
-      }
-
-      if (!reviewerIsAdmin && String(confirmedProcessorNamingWithAdmin || '') !== '1') {
-        const error = new Error('Management must confirm a new canonical Processor name and metadata with an Admin before creating it.');
-        error.code = 'BWT_CATALOG_PROCESSOR_ADMIN_CONFIRMATION_REQUIRED';
         throw error;
       }
 
@@ -2124,9 +2121,8 @@ async function approveProcessorCatalogRequest({
         approvedProcessorModelCode: canonicalModelCode,
         approvedProcessorBaseSpeedGhz: safeBaseSpeed,
         reusedExistingProcessor: Boolean(safeExistingProcessorModelId),
-        selfReviewedByCatalogManager: isSelfReview && Boolean(allowSelfReview),
-        newProcessorAdminConfirmationRequired: !safeExistingProcessorModelId && !reviewerIsAdmin,
-        newProcessorAdminConfirmationRecorded: !safeExistingProcessorModelId ? (reviewerIsAdmin || String(confirmedProcessorNamingWithAdmin || '') === '1') : false,
+        selfReviewedByAdmin: isSelfReview,
+        reviewAuthority: 'admin',
         processorBrandAction: processorBrand.action,
         assignedProcessorFamilyCodes: assignedProcessorFamilies.map((family) => family.code),
         action: actionLabel
@@ -2532,7 +2528,7 @@ async function approveQcReversionRequest({ unitRequestId, reviewedByUserId, revi
   }
 }
 
-async function rejectUnitRequest({ unitRequestId, reviewedByUserId, reviewerNote }) {
+async function rejectUnitRequest({ unitRequestId, reviewedByUserId, reviewerNote, catalogReviewAuthorized = false }) {
   const safeRequestId = normalizePositiveInteger(unitRequestId);
   const safeReviewerUserId = normalizePositiveInteger(reviewedByUserId);
   const safeReviewerNote = normalizeText(reviewerNote, 1000);
@@ -2585,6 +2581,12 @@ async function rejectUnitRequest({ unitRequestId, reviewedByUserId, reviewerNote
     }
 
     if (request.status !== 'pending') return false;
+
+    if (CATALOG_REQUEST_TYPES.has(request.request_type) && !catalogReviewAuthorized) {
+      const error = new Error('Only Admin can reject Model and Processor Catalog requests.');
+      error.code = 'BWT_CATALOG_ADMIN_REQUIRED';
+      throw error;
+    }
 
     if (request.request_type === QC_REVERSION_REQUEST_TYPE && Number(request.requested_by_user_id) === safeReviewerUserId) {
       const error = new Error('A requester cannot reject their own QC reversion request.');

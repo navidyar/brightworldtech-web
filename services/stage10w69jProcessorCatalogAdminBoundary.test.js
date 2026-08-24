@@ -43,21 +43,23 @@ test('Management no longer receives direct Processor Catalog navigation', () => 
   assert.doesNotMatch(nav, /isManagementConfigurationUser/);
 });
 
-test('Management keeps request-scoped Processor approval with mandatory Admin consultation for new canonical records', () => {
+test('Model and Processor Catalog request decisions are Admin-only while Management keeps inspection access', () => {
   const controller = read('controllers/unitRequestController.js');
   const model = read('models/unitRequestModel.js');
   const page = read('views/pages/unit-request-detail.ejs');
+  const queue = read('views/pages/unit-requests.ejs');
 
-  assert.match(controller, /const CATALOG_MANAGER_ROLE_CODES = new Set\(\['admin', 'management'\]\)/);
-  assert.match(controller, /approvedExistingProcessorModelId: req\.body\.approvedExistingProcessorModelId/);
-  assert.match(controller, /confirmedProcessorNamingWithAdmin: req\.body\.confirmedProcessorNamingWithAdmin/);
+  assert.match(controller, /const CATALOG_MANAGER_ROLE_CODES = new Set\(\['admin'\]\)/);
+  assert.match(controller, /Only Admin can approve or reject Model and Processor Catalog requests/);
   assert.match(controller, /reviewerIsAdmin: isAdminCatalogReviewer\(req\)/);
-  assert.match(model, /if \(!reviewerIsAdmin && String\(confirmedProcessorNamingWithAdmin \|\| ''\) !== '1'\)/);
-  assert.match(model, /Management must confirm a new canonical Processor name and metadata with an Admin before creating it/);
-  assert.match(page, /Management Request Boundary/);
-  assert.match(page, /Management may adjust and approve Processor values here only because this Processor request was initiated/);
-  assert.match(page, /name="confirmedProcessorNamingWithAdmin"/);
-  assert.match(page, /<% if \(isAdminCatalogReviewer\) \{ %>[\s\S]*?Open Processor Catalog/);
+  assert.doesNotMatch(controller, /confirmedProcessorNamingWithAdmin/);
+  assert.match(model, /Only Admin can approve Model Catalog requests/);
+  assert.match(model, /Only Admin can approve Processor Catalog requests/);
+  assert.doesNotMatch(model, /Management must confirm a new canonical Processor name and metadata with an Admin/);
+  assert.doesNotMatch(page, /Management Request Boundary/);
+  assert.doesNotMatch(page, /name="confirmedProcessorNamingWithAdmin"/);
+  assert.match(page, /Tech Leads and Management can inspect Model and Processor Catalog requests, but only Admin can approve or reject them/);
+  assert.match(queue, /Model and Processor Catalog approvals are Admin-only/);
 });
 
 test('Admin retains the complete direct Processor Catalog CRUD surface', () => {

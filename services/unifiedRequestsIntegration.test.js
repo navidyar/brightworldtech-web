@@ -67,11 +67,11 @@ test('requesters cannot approve or reject their own override requests', () => {
 });
 
 
-test('own pending Unit Requests stay non-reviewable except the authorized Processor Catalog self-review case', () => {
+test('own pending Unit Requests stay non-reviewable except the authorized Admin Catalog self-review case', () => {
   const controller = read('controllers/unitRequestController.js');
   assert.match(controller, /const isOwnRequest = Number\(request\.requestedByUserId\) === Number\(req\.currentUser\.user_id\)/);
-  assert.match(controller, /const canSelfReviewProcessorRequest = catalogManager[\s\S]*request\.requestType === unitRequestModel\.PROCESSOR_CATALOG_REQUEST_TYPE/);
-  assert.match(controller, /\(!isOwnRequest \|\| canSelfReviewProcessorRequest\)/);
+  assert.match(controller, /const canSelfReviewCatalogRequest = catalogManager && isCatalogRequest\(request\)/);
+  assert.match(controller, /\(!isOwnRequest \|\| canSelfReviewCatalogRequest\)/);
   assert.match(controller, /canWithdrawRequest: request\.isPending && Number\(request\.requestedByUserId\) === Number\(req\.currentUser\.user_id\)/);
 });
 

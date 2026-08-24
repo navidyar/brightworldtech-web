@@ -89,8 +89,8 @@ test('Processor request review can reuse an existing canonical processor and war
   assert.match(page, /data-processor-similarity-warning/);
   assert.match(page, /Open Processor Catalog/);
   assert.match(page, /<% if \(isAdminCatalogReviewer\) \{ %>[\s\S]*?Open Processor Catalog/);
-  assert.match(page, /Management Request Boundary/);
-  assert.match(page, /Global Processor Catalog maintenance remains Admin-only/);
+  assert.match(page, /Admin Catalog Review/);
+  assert.doesNotMatch(page, /Management Request Boundary|confirmedProcessorNamingWithAdmin/);
   assert.match(model, /safeExistingProcessorModelId/);
   assert.match(model, /Existing processor mapped/);
   assert.match(model, /reusedExistingProcessor: Boolean\(safeExistingProcessorModelId\)/);

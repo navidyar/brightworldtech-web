@@ -10,32 +10,24 @@ function read(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 }
 
-test('Management and Admin can review their own Processor Catalog request without opening self-review for other request types', () => {
+test('Admin can self-approve Model and Processor Catalog requests without opening self-review to non-Admin roles', () => {
   const controller = read('controllers/unitRequestController.js');
   const model = read('models/unitRequestModel.js');
 
-  assert.match(controller, /const isOwnRequest = Number\(request\.requestedByUserId\) === Number\(req\.currentUser\.user_id\)/);
-  assert.match(controller, /const canSelfReviewProcessorRequest = catalogManager[\s\S]*?request\.requestType === unitRequestModel\.PROCESSOR_CATALOG_REQUEST_TYPE/);
-  assert.match(controller, /\(!isOwnRequest \|\| canSelfReviewProcessorRequest\)/);
-  assert.match(controller, /allowSelfReview: canManageCatalogRequests\(req\)/);
+  assert.match(controller, /const CATALOG_MANAGER_ROLE_CODES = new Set\(\['admin'\]\)/);
+  assert.match(controller, /const canSelfReviewCatalogRequest = catalogManager && isCatalogRequest\(request\)/);
+  assert.match(controller, /\(!isOwnRequest \|\| canSelfReviewCatalogRequest\)/);
+  assert.match(controller, /approvedModelName: req\.body\.approvedModelName,[\s\S]*?reviewerIsAdmin: isAdminCatalogReviewer\(req\)/);
+  assert.match(controller, /approvedProcessorBaseSpeedGhz: req\.body\.approvedProcessorBaseSpeedGhz,[\s\S]*?reviewerIsAdmin: isAdminCatalogReviewer\(req\)/);
 
-  assert.match(model, /async function approveProcessorCatalogRequest\([\s\S]*?allowSelfReview = false/);
-  assert.match(model, /const isSelfReview = Number\(request\.requested_by_user_id\) === safeReviewerUserId;[\s\S]*?if \(isSelfReview && !allowSelfReview\)/);
-  assert.match(model, /selfReviewedByCatalogManager: isSelfReview && Boolean\(allowSelfReview\)/);
-
-  const duplicateApproval = model.slice(
-    model.indexOf('async function approveIntentionalDuplicateRequest'),
-    model.indexOf('async function approveModelCatalogRequest')
-  );
-  const modelApproval = model.slice(
-    model.indexOf('async function approveModelCatalogRequest'),
-    model.indexOf('async function approveProcessorCatalogRequest')
-  );
-  assert.match(duplicateApproval, /BWT_UNIT_REQUEST_SELF_REVIEW/);
-  assert.match(modelApproval, /BWT_UNIT_REQUEST_SELF_REVIEW/);
+  assert.match(model, /async function approveModelCatalogRequest\([\s\S]*?reviewerIsAdmin = false/);
+  assert.match(model, /Only Admin can approve Model Catalog requests/);
+  assert.match(model, /async function approveProcessorCatalogRequest\([\s\S]*?reviewerIsAdmin = false/);
+  assert.match(model, /Only Admin can approve Processor Catalog requests/);
+  assert.match(model, /selfReviewedByAdmin: isSelfReview/);
 });
 
-test('Processor approval runtime allows an explicitly authorized self-review and records it in request history', async () => {
+test('Processor approval runtime requires Admin authority, allows Admin self-review, and records it in request history', async () => {
   const modulePaths = [
     '../models/db',
     '../models/lotModel',
@@ -122,21 +114,22 @@ test('Processor approval runtime allows an explicitly authorized self-review and
         approvedExistingProcessorModelId: 41,
         connection
       }),
-      (error) => error && error.code === 'BWT_UNIT_REQUEST_SELF_REVIEW'
+      (error) => error && error.code === 'BWT_CATALOG_ADMIN_REQUIRED'
     );
 
     const result = await unitRequestModel.approveProcessorCatalogRequest({
       unitRequestId: 901,
       reviewedByUserId: 7,
       approvedExistingProcessorModelId: 41,
-      allowSelfReview: true,
+      reviewerIsAdmin: true,
       connection
     });
 
     assert.equal(result.approved, true);
     assert.equal(result.approvedProcessorModelId, 41);
     assert.equal(eventPayloads.length, 1);
-    assert.equal(eventPayloads[0].selfReviewedByCatalogManager, true);
+    assert.equal(eventPayloads[0].selfReviewedByAdmin, true);
+    assert.equal(eventPayloads[0].reviewAuthority, 'admin');
   } finally {
     for (const modulePath of modulePaths) {
       const prior = priorCache.get(modulePath);

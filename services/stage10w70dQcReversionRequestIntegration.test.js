@@ -141,8 +141,9 @@ test('Stage 10W70D migration is additive and rollback refuses to discard QC requ
   assert.match(preflight, /No database changes were made/);
 });
 
-test('Stage 10W70D does not change Model or Processor catalog authority', () => {
+test('QC reversion request workflow does not grant QC Model or Processor catalog authority', () => {
   const controller = read('controllers/unitRequestController.js');
-  assert.match(controller, /const CATALOG_MANAGER_ROLE_CODES = new Set\(\['admin', 'management'\]\)/);
-  assert.match(controller, /canSelfReviewProcessorRequest/);
+  assert.match(controller, /const CATALOG_MANAGER_ROLE_CODES = new Set\(\['admin'\]\)/);
+  assert.doesNotMatch(controller, /CATALOG_MANAGER_ROLE_CODES = new Set\([^)]*qc/);
+  assert.match(controller, /const canSelfReviewCatalogRequest = catalogManager && isCatalogRequest\(request\)/);
 });

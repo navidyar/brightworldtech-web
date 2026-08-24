@@ -5,7 +5,7 @@ const processorCatalogModel = require('../models/processorCatalogModel');
 const { publishUnitBrowserChange } = require('../services/unitBrowserRealtime');
 
 const REVIEW_ROLE_CODES = new Set(['admin', 'management', 'tech_lead']);
-const CATALOG_MANAGER_ROLE_CODES = new Set(['admin', 'management']);
+const CATALOG_MANAGER_ROLE_CODES = new Set(['admin']);
 const MAX_QUEUE_SEARCH_LENGTH = 150;
 
 function getCurrentRoleCodes(req) {
@@ -128,13 +128,12 @@ function getErrorMessages(query) {
   if (query.error === 'outcome-target-invalid') return ['This Pass/Fail confirmation no longer has the exact current pending outcome target recorded by the Tech. No review was recorded.'];
   if (query.error === 'qc-reversion-stale') return ['That QC decision is no longer the current decision for this Unit work cycle. No reversion was recorded. Refresh the Unit before taking action.'];
   if (query.error === 'not-owner') return ['You can withdraw only your own pending requests.'];
-  if (query.error === 'catalog-permission') return ['Only Management and Admin can approve or reject Catalog Exception requests.'];
+  if (query.error === 'catalog-permission') return ['Only Admin can approve or reject Model and Processor Catalog requests.'];
   if (query.error === 'catalog-input') return ['Complete the canonical catalog values before approving this request.'];
   if (query.error === 'processor-duplicate') {
     const detail = String(query.detail || '').trim().slice(0, 1000);
     return [detail || 'A matching processor already exists globally. Select the existing canonical Processor instead of creating a duplicate.'];
   }
-  if (query.error === 'processor-admin-confirmation') return ['Before creating a new canonical Processor, Management must confirm the proposed name and metadata with an Admin and check the confirmation box.'];
   if (query.error === 'processor-format') {
     const detail = String(query.detail || '').trim().slice(0, 1000);
     return [detail || 'Correct the canonical Processor name. Keep Processor Type, generation, and GHz in their separate fields.'];
@@ -240,10 +239,9 @@ async function renderUnitRequestDetail(req, res, next) {
     const queueFilters = getQueueFilters(req);
     const catalogManager = canManageCatalogRequests(req);
     const isOwnRequest = Number(request.requestedByUserId) === Number(req.currentUser.user_id);
-    const canSelfReviewProcessorRequest = catalogManager
-      && request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE;
+    const canSelfReviewCatalogRequest = catalogManager && isCatalogRequest(request);
     const canReviewThisRequest = isUnitRequestReviewer(req)
-      && (!isOwnRequest || canSelfReviewProcessorRequest)
+      && (!isOwnRequest || canSelfReviewCatalogRequest)
       && (!isCatalogRequest(request) || catalogManager);
     const needsProcessorReviewData = request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE
       && catalogManager
@@ -412,7 +410,8 @@ async function approveUnitRequest(req, res, next) {
         unitRequestId,
         reviewedByUserId: req.currentUser.user_id,
         reviewerNote: req.body.reviewerNote,
-        approvedModelName: req.body.approvedModelName
+        approvedModelName: req.body.approvedModelName,
+        reviewerIsAdmin: isAdminCatalogReviewer(req)
       });
     } else if (request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE) {
       catalogType = 'processor';
@@ -427,9 +426,7 @@ async function approveUnitRequest(req, res, next) {
         approvedProcessorFamily: req.body.approvedProcessorFamily,
         approvedProcessorGeneration: req.body.approvedProcessorGeneration,
         approvedProcessorBaseSpeedGhz: req.body.approvedProcessorBaseSpeedGhz,
-        confirmedProcessorNamingWithAdmin: req.body.confirmedProcessorNamingWithAdmin,
-        reviewerIsAdmin: isAdminCatalogReviewer(req),
-        allowSelfReview: canManageCatalogRequests(req)
+        reviewerIsAdmin: isAdminCatalogReviewer(req)
       });
     } else if (request.requestType === unitRequestModel.QC_REVERSION_REQUEST_TYPE) {
       result = await unitRequestModel.approveQcReversionRequest({
@@ -463,7 +460,7 @@ async function approveUnitRequest(req, res, next) {
     if (error?.code === 'BWT_UNIT_REQUEST_SELF_REVIEW') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'self-review' }));
     if (['BWT_QC_REVERSION_STALE', 'BWT_QC_REVERSION_NOT_LATEST', 'BWT_QC_REVERSION_ALREADY_REVERTED', 'BWT_QC_REVERSION_COMPLETION_STALE', 'BWT_QC_REVERSION_REQUEST_STALE'].includes(error?.code)) return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'qc-reversion-stale' }));
     if (error?.code === 'BWT_CATALOG_PROCESSOR_DUPLICATE') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'processor-duplicate', detail: String(error.message || '').slice(0, 1000) }));
-    if (error?.code === 'BWT_CATALOG_PROCESSOR_ADMIN_CONFIRMATION_REQUIRED') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'processor-admin-confirmation' }));
+    if (error?.code === 'BWT_CATALOG_ADMIN_REQUIRED') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'catalog-permission' }));
     if (error?.code === 'BWT_CATALOG_PROCESSOR_CANONICAL_FORMAT') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'processor-format', detail: String(error.message || '').slice(0, 1000) }));
     if (error?.code === 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'catalog-input' }));
     if (error?.code === 'BWT_INTENTIONAL_DUPLICATE_IDENTIFIER_STORAGE_BLOCKED') {
@@ -494,13 +491,15 @@ async function rejectUnitRequest(req, res, next) {
     const rejected = await unitRequestModel.rejectUnitRequest({
       unitRequestId,
       reviewedByUserId: req.currentUser.user_id,
-      reviewerNote: req.body.reviewerNote
+      reviewerNote: req.body.reviewerNote,
+      catalogReviewAuthorized: canManageCatalogRequests(req)
     });
 
     if (!rejected) return res.redirect(getReturnUrl(unitRequestId, queueFilters, { skipped: 'not-pending' }));
     return res.redirect(getReturnUrl(unitRequestId, queueFilters, { rejected: '1' }));
   } catch (error) {
     if (error?.code === 'BWT_UNIT_REQUEST_SELF_REVIEW') return res.redirect(getReturnUrl(getUnitRequestId(req), getQueueFilters(req), { error: 'self-review' }));
+    if (error?.code === 'BWT_CATALOG_ADMIN_REQUIRED') return res.redirect(getReturnUrl(getUnitRequestId(req), getQueueFilters(req), { error: 'catalog-permission' }));
     if (error?.code === 'BWT_UNIT_REQUEST_REJECTION_NOTE_REQUIRED') {
       return res.redirect(getReturnUrl(getUnitRequestId(req), getQueueFilters(req), { error: 'rejection-note-required' }));
     }

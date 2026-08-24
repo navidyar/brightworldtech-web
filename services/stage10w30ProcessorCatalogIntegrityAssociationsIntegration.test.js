@@ -155,25 +155,24 @@ test('Admin can maintain exact Processor-to-Model and Model-to-Processor associa
   assert.match(modelProcessorsModal, /data-association-filter="brand"/);
 });
 
-test('processor request approval reuses global processors, blocks strong duplicates, and requires Admin naming confirmation for Management-created processors', () => {
+test('Admin processor request approval reuses global processors and blocks strong duplicates', () => {
   const controller = read('controllers/unitRequestController.js');
   const model = read('models/unitRequestModel.js');
   const page = read('views/pages/unit-request-detail.ejs');
   const script = read('public/js/processor-request-review.js');
 
   assert.match(controller, /processorCatalogModel\.findLikelyProcessorMatches/);
-  assert.match(controller, /confirmedProcessorNamingWithAdmin: req\.body\.confirmedProcessorNamingWithAdmin/);
+  assert.doesNotMatch(controller, /confirmedProcessorNamingWithAdmin/);
   assert.match(controller, /reviewerIsAdmin: isAdminCatalogReviewer\(req\)/);
   assert.match(model, /safeExistingProcessorModelId/);
   assert.match(model, /BWT_CATALOG_PROCESSOR_DUPLICATE/);
-  assert.match(model, /BWT_CATALOG_PROCESSOR_ADMIN_CONFIRMATION_REQUIRED/);
+  assert.match(model, /Only Admin can approve Processor Catalog requests/);
   assert.match(model, /BWT_CATALOG_PROCESSOR_CANONICAL_FORMAT/);
   assert.match(model, /INSERT INTO unit_model_processor_options[\s\S]*?ON DUPLICATE KEY UPDATE is_active = 1/);
   assert.match(page, /Reuse an Existing Processor whenever possible/);
   assert.match(page, /Searches the entire Processor Catalog, not only processors already associated with this Unit Model/);
-  assert.match(page, /Management Request Boundary/);
-  assert.match(page, /Before creating a new canonical Processor from this request, confirm the proposed name and metadata with an Admin/);
-  assert.match(page, /name="confirmedProcessorNamingWithAdmin"/);
+  assert.match(page, /Admin Catalog Review/);
+  assert.doesNotMatch(page, /Management Request Boundary|confirmedProcessorNamingWithAdmin/);
   assert.match(script, /Associate Existing Processor/);
   assert.match(script, /Create and Associate Processor/);
   assert.match(script, /strongDuplicate/);
@@ -193,7 +192,7 @@ test('technician missing-processor request identifies a global processor as an a
   assert.match(modal, /reuse the existing Processor record/i);
 });
 
-test('Management processor approval fields use an aligned two-column grid with paired label and control rows', () => {
+test('Admin processor approval fields use an aligned two-column grid with paired label and control rows', () => {
   const page = read('views/pages/unit-request-detail.ejs');
   const css = read('public/css/unit-requests.css');
 

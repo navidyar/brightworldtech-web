@@ -323,19 +323,8 @@
                         <p class="field-hint processor-request-canonical-hint">Example canonical record: <strong>Intel</strong> · <strong>i5-9500T</strong> · Family <strong>Core</strong> · Generation <strong>9th Gen</strong> · Base Speed <strong>2.20 GHz</strong>. Do not put “Intel Core”, “@ 2.20 GHz”, or generation text into the Processor field.</p>
 
                         <div class="message info processor-request-admin-confirmation-note">
-                          <% if (isAdminCatalogReviewer) { %>
-                            <p><strong>New Processor Naming:</strong> Reuse an existing Processor whenever one already exists. Keep canonical Processor naming and metadata consistent with the global catalog.</p>
-                          <% } else { %>
-                            <p><strong>Management Request Boundary:</strong> Management may adjust and approve Processor values here only because this Processor request was initiated. Global Processor Catalog maintenance remains Admin-only. Before creating a new canonical Processor from this request, confirm the proposed name and metadata with an Admin.</p>
-                          <% } %>
+                          <p><strong>Admin Catalog Review:</strong> Reuse an existing Processor whenever one already exists. Keep canonical Processor naming and metadata consistent with the global catalog.</p>
                         </div>
-
-                        <% if (!isAdminCatalogReviewer) { %>
-                          <label class="unit-request-inline-check processor-request-admin-confirmation">
-                            <input type="checkbox" name="confirmedProcessorNamingWithAdmin" value="1" data-admin-confirmation data-new-processor-field />
-                            <span>I confirmed this new Processor name and metadata with an Admin.</span>
-                          </label>
-                        <% } %>
                       </div>
 
                       <label class="form-field processor-request-approval-note"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional compatibility or normalization note"></textarea></label>
@@ -359,7 +348,7 @@
             <% } else if (canReviewRequests && request.isCatalogRequest && request.isPending && !canManageCatalogRequests) { %>
               <section class="unit-request-detail-section">
                 <p class="eyebrow">Catalog Review Access</p>
-                <p>Tech Leads can inspect Catalog Exception requests, but only Management and Admin can approve or reject managed catalog changes.</p>
+                <p>Tech Leads and Management can inspect Model and Processor Catalog requests, but only Admin can approve or reject them.</p>
               </section>
             <% } else if (canWithdrawRequest) { %>
               <section class="unit-request-review-panel">

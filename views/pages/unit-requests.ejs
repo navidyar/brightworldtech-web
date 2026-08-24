@@ -68,7 +68,7 @@
             <div class="unit-request-workspace-heading">
               <h3 id="unit-request-workspace-heading"><%= isArchivedQueue ? 'Archived Requests' : (canReviewRequests ? 'Review Queue' : 'Request History') %></h3>
               <% if (canReviewRequests && !canManageCatalogRequests) { %>
-                <p class="unit-requests-content-summary">Tech Leads and higher roles can review requests. Management and Admin retain final approval authority for Catalog requests.</p>
+                <p class="unit-requests-content-summary">Tech Lead+ can review operational requests. Model and Processor Catalog approvals are Admin-only.</p>
               <% } %>
             </div>
 
