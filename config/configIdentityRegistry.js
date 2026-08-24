@@ -107,6 +107,7 @@ const SYSTEM_CONFIG_VALUE_IDS = Object.freeze({
   PASSWORD_LINK_SETUP: 111,
   PASSWORD_LINK_RESET: 112,
   PASSWORD_LINK_EXPIRY_HOURS: 121,
+  SESSION_INACTIVITY_TIMEOUT_MINUTES: 122,
 
   IDENTIFIER_ASSET_TAG: 201,
   IDENTIFIER_UNIT_SERIAL: 202,
@@ -234,6 +235,7 @@ const VALUE_BINDINGS = Object.freeze([
   { systemId: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_SETUP, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.PASSWORD_LINK_TYPES, name: 'Password setup link', legacyCodes: ['initial_password_setup', 'password_setup', 'setup'], required: true },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_RESET, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.PASSWORD_LINK_TYPES, name: 'Password reset link', legacyCodes: ['password_reset', 'reset'], required: true },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_EXPIRY_HOURS, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.SECURITY_SETTINGS, name: 'Password link expiry hours', legacyCodes: ['password_link_expiry_hours'], required: true },
+  { systemId: SYSTEM_CONFIG_VALUE_IDS.SESSION_INACTIVITY_TIMEOUT_MINUTES, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.SECURITY_SETTINGS, name: 'Session inactivity timeout minutes', legacyCodes: ['session_inactivity_timeout_minutes', 'session_timeout_minutes'], required: false },
 
   { systemId: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_ASSET_TAG, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_IDENTIFIER_TYPES, name: 'Asset Tag identifier', legacyCodes: ['asset_tag'], required: true },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_IDENTIFIER_TYPES, name: 'Unit Serial identifier', legacyCodes: ['unit_serial_number', 'unit_serial'], required: true },

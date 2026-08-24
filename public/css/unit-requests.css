@@ -1231,3 +1231,37 @@
     min-height: 0;
   }
 }
+
+/* Stage 10w69l: request details return to an in-page modal. */
+.unit-request-detail-modal {
+  display: flex;
+  width: min(1120px, 100%);
+  max-height: calc(100dvh - 48px);
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.unit-request-detail-modal .modal-header {
+  position: static;
+  flex: 0 0 auto;
+}
+
+.unit-request-detail-modal .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.unit-request-modal-content > .dashboard-hero {
+  margin-top: 0;
+}
+
+.unit-request-detail-modal .unit-request-detail-header > .secondary-button {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .unit-request-detail-modal {
+    max-height: calc(100dvh - 36px);
+  }
+}

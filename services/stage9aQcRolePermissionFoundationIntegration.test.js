@@ -17,23 +17,24 @@ test('QC is an assignable primary role without inherited Tech or Tech Lead autho
   assert.equal(accessPolicy.canAccessDashboard(['qc'], 'tech'), true);
   assert.equal(accessPolicy.canAccessDashboard(['qc'], 'management'), false);
   assert.equal(accessPolicy.canAccessMenuArea(['qc'], 'tech'), true);
-  assert.equal(accessPolicy.canAccessUnitRequests(['qc']), false);
+  assert.equal(accessPolicy.canAccessUnitRequests(['qc']), true);
   assert.equal(accessPolicy.canCreateOrEditTechUnits(['qc']), false);
 });
 
-test('QC receives Unit Browser and Unit History routes but no production or request routes', () => {
+test('QC receives Unit Browser, Unit History, and own Request-history routes without production authority', () => {
   const routes = read('routes/management.js');
 
   assert.match(routes, /const techRoles = \['admin', 'management', 'tech_lead', 'tech'\]/);
   assert.match(routes, /const unitBrowserRoles = \['admin', 'management', 'tech_lead', 'qc', 'tech'\]/);
-  assert.match(routes, /const unitHistoryRoles = \['admin', 'management', 'tech_lead', 'qc'\]/);
+  assert.match(routes, /const unitHistoryRoles = \['admin', 'management', 'tech_lead', 'qc', 'tech'\]/);
   assert.match(routes, /'\/tech\/units',[\s\S]*?requireRole\(unitBrowserRoles\)[\s\S]*?renderTechUnitsPage/);
   assert.match(routes, /'\/tech\/units\/table',[\s\S]*?requireRole\(unitBrowserRoles\)[\s\S]*?renderTechUnitsTable/);
   assert.match(routes, /'\/tech\/units\/:unitId\/history',[\s\S]*?requireRole\(unitHistoryRoles\)/);
   assert.match(routes, /'\/tech\/units\/:unitId',[\s\S]*?requireRole\(unitBrowserRoles\)[\s\S]*?renderTechUnitDetailPage/);
   assert.match(routes, /'\/tech\/units\/new',[\s\S]*?requireRole\(techRoles\)/);
   assert.match(routes, /'\/tech\/units\/:unitId\/edit',[\s\S]*?requireRole\(techRoles\)/);
-  assert.match(routes, /'\/unit-requests',[\s\S]*?requireRole\(techRoles\)/);
+  assert.match(routes, /const unitRequestRoles = \['admin', 'management', 'tech_lead', 'qc', 'tech'\]/);
+  assert.match(routes, /'\/unit-requests',[\s\S]*?requireRole\(unitRequestRoles\)/);
 });
 
 test('QC Unit Browser is cross-technician and hides production, request, and weight controls', () => {
@@ -43,11 +44,11 @@ test('QC Unit Browser is cross-technician and hides production, request, and wei
   const sidebar = read('views/partials/sidebar.ejs');
 
   assert.match(controller, /restrictToCurrentAssignment: isRegularTechUnitBrowserUser\(req\)/);
-  assert.match(controller, /return roleCodes\.includes\('tech'\) && !canViewParkedUnits\(req\)/);
+  assert.match(controller, /return roleCodes\.includes\('tech'\)[\s\S]*!roleCodes\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead', 'qc'\]\.includes\(roleCode\)\)/);
   assert.match(page, /isQcUnitBrowserUser/);
   assert.match(page, /<% if \(canCreateTechUnits\) \{ %>[\s\S]*Create Unit/);
-  assert.match(table, /const canEditTechUnits = currentUserRoles\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead', 'tech'\]/);
-  assert.match(table, /const canViewUnitHistory = currentUserRoles\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead', 'qc'\]/);
+  assert.match(table, /const canEditTechUnits = !isQcPortalMode && currentUserRoles\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead', 'tech'\]/);
+  assert.match(table, /const canViewUnitHistory = currentUserRoles\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead', 'qc', 'tech'\]/);
   assert.match(table, /<% if \(canEditTechUnits && !unit\.isParked && !isReadOnlySearchResult\) \{ %>/);
   assert.match(table, /<% if \(canViewCurrentLotWeight\) \{ %>/);
   assert.doesNotMatch(table, /canCompleteTechUnits[^\n]*'qc'/);

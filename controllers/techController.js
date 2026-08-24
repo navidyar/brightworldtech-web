@@ -86,7 +86,7 @@ function buildTechUnitsQcSummaryUrl(filters = {}, req = null) {
   return queryString ? `/tech/units/qc-summary?${queryString}` : '/tech/units/qc-summary';
 }
 
-function buildTechUnitsTableUrl(filters) {
+function buildTechUnitsTableUrl(filters, pathname = '/tech/units/table') {
   const params = new URLSearchParams();
   const passthroughKeys = [
     'search',
@@ -94,6 +94,7 @@ function buildTechUnitsTableUrl(filters) {
     'lotScope',
     'categoryId',
     'gradeFilter',
+    'completionFilter',
     'qcReviewFilter',
     'techUserId',
     'createdStartDate',
@@ -113,7 +114,7 @@ function buildTechUnitsTableUrl(filters) {
 
   const queryString = params.toString();
 
-  return queryString ? `/tech/units/table?${queryString}` : '/tech/units/table';
+  return queryString ? `${pathname}?${queryString}` : pathname;
 }
 
 const TECH_UNIT_EXPORT_FILTER_KEYS = Object.freeze([
@@ -122,6 +123,7 @@ const TECH_UNIT_EXPORT_FILTER_KEYS = Object.freeze([
   'lotScope',
   'categoryId',
   'gradeFilter',
+  'completionFilter',
   'qcReviewFilter',
   'techUserId',
   'createdStartDate',
@@ -347,7 +349,8 @@ function getUnitExportColumnSelection(req) {
 function isRegularTechUnitBrowserUser(req) {
   const roleCodes = getCurrentRoleCodes(req);
 
-  return roleCodes.includes('tech') && !canViewParkedUnits(req);
+  return roleCodes.includes('tech')
+    && !roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead', 'qc'].includes(roleCode));
 }
 
 function getFiltersFromRequest(req) {
@@ -357,6 +360,9 @@ function getFiltersFromRequest(req) {
     lotScope: String(req.query.lotScope || '').trim() === 'descendants' ? 'descendants' : 'direct',
     categoryId: String(req.query.categoryId || '').trim(),
     gradeFilter: String(req.query.gradeFilter || '').trim(),
+    completionFilter: ['completed', 'not_completed'].includes(String(req.query.completionFilter || '').trim())
+      ? String(req.query.completionFilter).trim()
+      : '',
     qcReviewFilter: String(req.query.qcReviewFilter || '').trim(),
     techUserId: String(req.query.techUserId || '').trim(),
     createdStartDate: String(req.query.createdStartDate || '').trim(),
@@ -371,6 +377,17 @@ function getFiltersFromRequest(req) {
     canViewParkedUnits: canViewParkedUnits(req),
     canSearchParkedUnits: canSearchParkedUnits(req),
     allowAnyLotFilter: canViewAnyLotFilter(req)
+  };
+}
+
+function getQcPortalFiltersFromRequest(req) {
+  return {
+    ...getFiltersFromRequest(req),
+    unitState: 'active',
+    restrictToCurrentAssignment: false,
+    canViewParkedUnits: false,
+    canSearchParkedUnits: false,
+    allowAnyLotFilter: false
   };
 }
 
@@ -696,6 +713,7 @@ function getBatteryHealthSummaryFromRows(rows) {
 
 function getExpandedDetailsFromRequest(req) {
   const specsTestsRows = getSpecsTestsRowsFromRequest(req);
+  const canRequestOutcomeConfirmation = isRegularTechUnitBrowserUser(req);
   return {
     overallGradeConfigValueId: normalizeModuleField(req.body.overallGradeConfigValueId),
     overallGradeNotes: normalizeModuleField(req.body.overallGradeNotes),
@@ -734,8 +752,8 @@ function getExpandedDetailsFromRequest(req) {
     graphicsAdapters: [],
     outcomeCode: normalizeModuleField(req.body.outcomeCode),
     outcomeNotes: normalizeModuleField(req.body.outcomeNotes),
-    outcomeApprovalRequested: req.body.outcomeApprovalRequested ? '1' : '',
-    outcomeApprovalRequestNotes: normalizeModuleField(req.body.outcomeApprovalRequestNotes)
+    outcomeApprovalRequested: canRequestOutcomeConfirmation && req.body.outcomeApprovalRequested ? '1' : '',
+    outcomeApprovalRequestNotes: canRequestOutcomeConfirmation ? normalizeModuleField(req.body.outcomeApprovalRequestNotes) : ''
   };
 }
 
@@ -2049,7 +2067,8 @@ async function getTechUnitFormOptionsWithIssues(req = null, options = {}) {
     ...expandedFormOptions,
     canViewProductionWeight: userCanViewProductionWeight(req),
     canOverrideProductionWeight: userCanOverrideProductionWeight(req),
-    canRequestCatalogException: canRequestCatalogException(req)
+    canRequestCatalogException: canRequestCatalogException(req),
+    canRequestOutcomeConfirmation: isRegularTechUnitBrowserUser(req)
   };
 }
 
@@ -2126,7 +2145,8 @@ async function createTechUnitWithAudit({ formData, formOptions, currentUserId })
       await unitExpandedFormModel.saveExpandedDetailsForUnitWithConnection(connection, {
         unitId: pendingUnitId,
         formData,
-        currentUserId
+        currentUserId,
+        canRequestOutcomeConfirmation: Boolean(formOptions.canRequestOutcomeConfirmation)
       });
 
       const event = buildUnitFormAuditEvent({
@@ -2194,7 +2214,8 @@ async function updateTechUnitWithAudit({
       await unitExpandedFormModel.saveExpandedDetailsForUnitWithConnection(connection, {
         unitId,
         formData,
-        currentUserId
+        currentUserId,
+        canRequestOutcomeConfirmation: Boolean(formOptions.canRequestOutcomeConfirmation)
       });
 
       const event = buildUnitFormAuditEvent({
@@ -2449,6 +2470,8 @@ async function renderTechUnitsPage(req, res, next) {
       result,
       filters: result.filters || filters,
       tableUrl: buildTechUnitsTableUrl(result.filters || filters),
+      unitBrowserBasePath: '/tech/units',
+      qcPortalMode: false,
       qcSummaryUrl: buildTechUnitsQcSummaryUrl(result.filters || filters, req),
       successMessage: req.query.created === '1'
         ? 'Unit created successfully.'
@@ -2471,6 +2494,46 @@ async function renderTechUnitsPage(req, res, next) {
     next(error);
   }
 }
+
+async function renderQcPortalReviewPage(req, res, next) {
+  try {
+    const filters = getQcPortalFiltersFromRequest(req);
+    const result = await buildTechUnitsResult(filters);
+    const effectiveFilters = result.filters || filters;
+
+    return res.render('pages/tech-units', {
+      pageTitle: 'QC Review',
+      currentNav: 'qc-review',
+      result,
+      filters: effectiveFilters,
+      tableUrl: buildTechUnitsTableUrl(effectiveFilters, '/qc/review/table'),
+      unitBrowserBasePath: '/qc/review',
+      qcPortalMode: true,
+      qcSummaryUrl: buildTechUnitsQcSummaryUrl(effectiveFilters, req),
+      successMessage: null,
+      warningMessage: null
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function renderQcPortalReviewTable(req, res, next) {
+  try {
+    const filters = getQcPortalFiltersFromRequest(req);
+    const result = await buildTechUnitsResult(filters);
+
+    return res.render('fragments/tech-units-table', {
+      result,
+      filters: result.filters || filters,
+      unitBrowserBasePath: '/qc/review',
+      qcPortalMode: true
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
 
 async function renderTechUnitsExportPreview(req, res) {
   if (!canExportTechUnits(req)) {
@@ -2624,7 +2687,9 @@ async function renderTechUnitsTable(req, res, next) {
 
     return res.render('fragments/tech-units-table', {
       result,
-      filters: result.filters || filters
+      filters: result.filters || filters,
+      unitBrowserBasePath: '/tech/units',
+      qcPortalMode: false
     });
   } catch (error) {
     next(error);
@@ -2753,6 +2818,7 @@ async function getQcReviewContext(unitId) {
       unit: null,
       latestCompletion: null,
       latestQcReview: null,
+      latestRecordedQcReview: null,
       latestQcCorrection: null,
       qcReviewHistory: [],
       qcCorrectionHistory: []
@@ -2770,7 +2836,10 @@ async function getQcReviewContext(unitId) {
       unitQcCorrectionModel.listCorrectionsForCompletion(latestCompletion.unitWorkCompletionId)
     ])
     : [[], []];
-  const latestQcReview = qcReviewHistory.at(-1) || null;
+  const latestRecordedQcReview = qcReviewHistory.at(-1) || null;
+  const latestQcReview = latestRecordedQcReview && !latestRecordedQcReview.isReverted
+    ? latestRecordedQcReview
+    : null;
   const latestQcCorrection = latestQcReview && latestQcReview.decisionCode === 'rejected'
     ? qcCorrectionHistory
       .filter((correction) => Number(correction.rejectedQcCheckId) === Number(latestQcReview.qcCheckId))
@@ -2781,6 +2850,7 @@ async function getQcReviewContext(unitId) {
     unit,
     latestCompletion,
     latestQcReview,
+    latestRecordedQcReview,
     latestQcCorrection,
     qcReviewHistory,
     qcCorrectionHistory
@@ -3052,9 +3122,23 @@ async function renderQcReviewDetailsModal(req, res, next) {
       errors.push('The selected unit could not be found.');
     } else if (!canViewQcReviewDetails(req, context.unit)) {
       errors.push('You do not have access to this Unit review.');
-    } else if (!context.latestQcReview) {
+    } else if (!context.latestRecordedQcReview) {
       errors.push('No Quality Control decision has been recorded for this unit.');
     }
+
+    const roleCodes = getCurrentRoleCodes(req);
+    const currentUserId = Number(req.currentUser && req.currentUser.user_id);
+    const isQcRequester = roleCodes.includes('qc')
+      && !roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+    const ownsLatestQcReview = Boolean(context.latestQcReview)
+      && Number(context.latestQcReview.reviewedByUserId) === currentUserId;
+    const pendingQcReversionRequest = context.latestQcReview
+      ? await unitRequestModel.getPendingQcReversionRequestForQcCheck({ qcCheckId: context.latestQcReview.qcCheckId })
+      : null;
+    const canRequestQcReversion = isQcRequester && ownsLatestQcReview && !pendingQcReversionRequest;
+    const canDirectlyRevertQc = Boolean(context.latestQcReview)
+      && !pendingQcReversionRequest
+      && roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
 
     return res.status(errors.length > 0 ? 404 : 200).render('fragments/tech-unit-qc-review-details-modal', {
       ...context,
@@ -3062,10 +3146,246 @@ async function renderQcReviewDetailsModal(req, res, next) {
         reviews: context.qcReviewHistory,
         corrections: context.qcCorrectionHistory
       }),
+      canRequestQcReversion,
+      pendingQcReversionRequest,
+      canDirectlyRevertQc,
       errorMessages: errors
     });
   } catch (error) {
     next(error);
+  }
+}
+
+
+
+function canRequestQcReviewReversion(req) {
+  const roleCodes = getCurrentRoleCodes(req);
+  return roleCodes.includes('qc')
+    && !roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+}
+
+function buildQcReversionRequestModalView({
+  context = {},
+  qcCheckId = null,
+  requesterNote = '',
+  pendingRequest = null,
+  errorMessages = []
+} = {}) {
+  return {
+    ...context,
+    qcCheckId: Number(qcCheckId) || null,
+    requesterNote: String(requesterNote || ''),
+    pendingRequest,
+    errorMessages: Array.isArray(errorMessages) ? errorMessages : []
+  };
+}
+
+async function renderQcReviewReversionRequestModal(req, res, next) {
+  try {
+    const unitId = normalizePositiveInteger(req.params.unitId);
+    const qcCheckId = normalizePositiveInteger(req.params.qcCheckId);
+    const context = await getQcReviewContext(unitId);
+    const errors = [];
+    let pendingRequest = null;
+
+    if (!unitId || !qcCheckId) {
+      errors.push('The selected Quality Control decision is invalid.');
+    } else if (!canRequestQcReviewReversion(req)) {
+      errors.push('Only a QC user can request review of their own current Quality Control decision.');
+    } else if (!context.unit || !context.latestCompletion) {
+      errors.push('The selected completed Unit could not be found.');
+    } else if (!context.latestQcReview || Number(context.latestQcReview.qcCheckId) !== qcCheckId) {
+      errors.push('This is no longer the current Quality Control decision. Refresh the Unit and review the latest QC status.');
+    } else if (Number(context.latestQcReview.reviewedByUserId) !== Number(req.currentUser.user_id)) {
+      errors.push('Only the QC user who recorded this current decision can request its reversion.');
+    } else {
+      pendingRequest = await unitRequestModel.getPendingQcReversionRequestForQcCheck({
+        qcCheckId,
+        requestedByUserId: req.currentUser.user_id
+      });
+      if (pendingRequest) errors.push(`Reversion Request #${pendingRequest.unitRequestId} is already pending for this QC decision.`);
+    }
+
+    return res.status(errors.length > 0 ? 409 : 200).render(
+      'fragments/tech-unit-qc-reversion-request-modal',
+      buildQcReversionRequestModalView({ context, qcCheckId, pendingRequest, errorMessages: errors })
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function requestQcReviewReversion(req, res, next) {
+  const unitId = normalizePositiveInteger(req.params.unitId);
+  const qcCheckId = normalizePositiveInteger(req.params.qcCheckId);
+  const requesterNote = String(req.body.requesterNote || '').trim();
+
+  try {
+    if (!canRequestQcReviewReversion(req)) {
+      return res.status(403).render('pages/forbidden', { pageTitle: 'Access Denied' });
+    }
+
+    const result = await unitRequestModel.createQcReversionRequest({
+      unitId,
+      qcCheckId,
+      requestedByUserId: req.currentUser.user_id,
+      requesterNote
+    });
+
+    publishUnitBrowserChange({ unitId, changeType: 'qc-reversion-requested' });
+    res.set('HX-Trigger', JSON.stringify({
+      'qc-reversion-requested': {
+        unitRequestId: result.unitRequestId,
+        message: `QC Reversion Request #${result.unitRequestId} submitted for Tech Lead+ review.`
+      }
+    }));
+    return res.send('');
+  } catch (error) {
+    if (error?.code === 'BWT_UNIT_REQUEST_ALREADY_PENDING' && error.unitRequestId) {
+      res.set('HX-Trigger', JSON.stringify({
+        'qc-reversion-requested': {
+          unitRequestId: error.unitRequestId,
+          message: `QC Reversion Request #${error.unitRequestId} is already pending.`
+        }
+      }));
+      return res.send('');
+    }
+
+    const handledCodes = new Set([
+      'BWT_UNIT_REQUEST_INPUT_INVALID',
+      'BWT_UNIT_REQUEST_REASON_REQUIRED',
+      'BWT_UNIT_REQUEST_SCHEMA_REQUIRED',
+      'BWT_QC_SCHEMA_REQUIRED',
+      'BWT_QC_REVERSION_STALE',
+      'BWT_QC_REVERSION_REQUEST_OWNER_REQUIRED',
+      'BWT_QC_REVERSION_COMPLETION_STALE',
+      'BWT_QC_REVERSION_NOT_LATEST',
+      'BWT_QC_REVERSION_ALREADY_REVERTED',
+      'BWT_QC_REVERSION_NOT_FOUND'
+    ]);
+    if (!handledCodes.has(error?.code)) return next(error);
+
+    let context = { unit: null, latestCompletion: null, latestQcReview: null, latestRecordedQcReview: null };
+    try {
+      context = await getQcReviewContext(unitId);
+    } catch (_contextError) {
+      // Preserve the original request failure.
+    }
+
+    return res.status(error.code === 'BWT_UNIT_REQUEST_REASON_REQUIRED' ? 400 : 409).render(
+      'fragments/tech-unit-qc-reversion-request-modal',
+      buildQcReversionRequestModalView({
+        context,
+        qcCheckId,
+        requesterNote,
+        errorMessages: [error.message]
+      })
+    );
+  }
+}
+
+function canDirectlyRevertQcReview(req) {
+  return getCurrentRoleCodes(req).some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+}
+
+function buildQcReversionModalView({
+  context = {},
+  qcCheckId = null,
+  reversionReason = '',
+  errorMessages = []
+} = {}) {
+  return {
+    ...context,
+    qcCheckId: Number(qcCheckId) || null,
+    reversionReason: String(reversionReason || ''),
+    errorMessages: Array.isArray(errorMessages) ? errorMessages : []
+  };
+}
+
+async function renderQcReviewReversionModal(req, res, next) {
+  try {
+    const unitId = Number(req.params.unitId);
+    const qcCheckId = Number(req.params.qcCheckId);
+    const context = await getQcReviewContext(unitId);
+    const errors = [];
+
+    if (!Number.isSafeInteger(unitId) || unitId <= 0 || !Number.isSafeInteger(qcCheckId) || qcCheckId <= 0) {
+      errors.push('The selected Quality Control decision is invalid.');
+    } else if (!canDirectlyRevertQcReview(req)) {
+      errors.push('Tech Lead+ authority is required to revert a Quality Control decision.');
+    } else if (!context.unit || !context.latestCompletion) {
+      errors.push('The selected completed Unit could not be found.');
+    } else if (!context.latestQcReview || Number(context.latestQcReview.qcCheckId) !== qcCheckId) {
+      errors.push('This is no longer the current Quality Control decision. Refresh the Unit and review the latest QC status.');
+    } else {
+      const pendingRequest = await unitRequestModel.getPendingQcReversionRequestForQcCheck({ qcCheckId });
+      if (pendingRequest) {
+        errors.push(`QC Reversion Request #${pendingRequest.unitRequestId} is pending for this decision. Review that request through Requests instead of using direct reversion.`);
+      }
+    }
+
+    return res.status(errors.length > 0 ? 409 : 200).render(
+      'fragments/tech-unit-qc-reversion-modal',
+      buildQcReversionModalView({ context, qcCheckId, errorMessages: errors })
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function revertQcReviewDirectly(req, res, next) {
+  const unitId = Number(req.params.unitId);
+  const qcCheckId = Number(req.params.qcCheckId);
+  const reversionReason = String(req.body.reversionReason || '').trim();
+
+  try {
+    if (!canDirectlyRevertQcReview(req)) {
+      return res.status(403).render('pages/forbidden', { pageTitle: 'Access Denied' });
+    }
+
+    await unitRequestModel.revertQcReviewDirectlyWithRequestGuard({
+      unitId,
+      qcCheckId,
+      revertedByUserId: req.currentUser.user_id,
+      reversionReason
+    });
+
+    publishUnitBrowserChange({ unitId, changeType: 'qc-reverted' });
+    res.set('HX-Trigger', JSON.stringify({ 'qc-review-reverted': true }));
+    return res.send('');
+  } catch (error) {
+    const handledCodes = new Set([
+      'BWT_QC_SCHEMA_REQUIRED',
+      'BWT_UNIT_REQUEST_SCHEMA_REQUIRED',
+      'BWT_UNIT_REQUEST_INPUT_INVALID',
+      'BWT_QC_REVERSION_PENDING_REQUEST',
+      'BWT_QC_REVERSION_REASON_REQUIRED',
+      'BWT_QC_REVERSION_REASON_TOO_LONG',
+      'BWT_QC_REVERSION_NOT_FOUND',
+      'BWT_QC_REVERSION_ALREADY_REVERTED',
+      'BWT_QC_REVERSION_COMPLETION_STALE',
+      'BWT_QC_REVERSION_NOT_LATEST',
+      'BWT_QC_REVERSION_STALE'
+    ]);
+
+    if (!handledCodes.has(error && error.code)) return next(error);
+
+    let context = { unit: null, latestCompletion: null, latestQcReview: null, latestRecordedQcReview: null };
+    try {
+      context = await getQcReviewContext(unitId);
+    } catch (_contextError) {
+      // Preserve the original reversion failure.
+    }
+
+    return res.status(error.code === 'BWT_QC_REVERSION_REASON_REQUIRED' || error.code === 'BWT_QC_REVERSION_REASON_TOO_LONG' ? 400 : 409).render(
+      'fragments/tech-unit-qc-reversion-modal',
+      buildQcReversionModalView({
+        context,
+        qcCheckId,
+        reversionReason,
+        errorMessages: [error.message]
+      })
+    );
   }
 }
 
@@ -3116,7 +3436,8 @@ async function renderTechUnitHistoryPanel(req, res, next) {
       creationContext,
       lotCatalog
     });
-    const timeline = userCanViewProductionWeight(req)
+    const qcPortalHistoryView = String((req.query && req.query.qcPortal) || '').trim() === '1';
+    const timeline = userCanViewProductionWeight(req) && !qcPortalHistoryView
       ? rawTimeline
       : redactProductionWeightFromTimeline(rawTimeline);
 
@@ -4325,119 +4646,11 @@ async function updateTechUnitModal(req, res, next) {
   }
 }
 
-async function renderOutcomeApprovalModal(req, res, next) {
-  try {
-    const unitId = Number(req.params.unitId);
-
-    if (!Number.isInteger(unitId) || unitId <= 0) {
-      return res.status(400).render('fragments/tech-unit-outcome-approval-modal', {
-        unit: null,
-        currentOutcome: null,
-        errorMessages: ['The selected unit ID is invalid.']
-      });
-    }
-
-    const unit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
-    const currentOutcome = await unitOutcomeModel.getCurrentOutcomeByUnitId(unitId);
-
-    if (!unit) {
-      return res.status(404).render('fragments/tech-unit-outcome-approval-modal', {
-        unit: null,
-        currentOutcome: null,
-        errorMessages: ['The selected unit could not be found.']
-      });
-    }
-
-    if (unit.isParked) {
-      return res.status(409).render('fragments/tech-unit-outcome-approval-modal', {
-        unit,
-        currentOutcome,
-        errorMessages: ['This unit is parked. Return it to Active before reviewing its Pass/Fail request.']
-      });
-    }
-
-    if (!currentOutcome || !currentOutcome.isPendingApproval) {
-      return res.status(400).render('fragments/tech-unit-outcome-approval-modal', {
-        unit,
-        currentOutcome,
-        errorMessages: ['This unit does not have a pending Pass/Fail approval request.']
-      });
-    }
-
-    return res.render('fragments/tech-unit-outcome-approval-modal', {
-      unit,
-      currentOutcome,
-      errorMessages: []
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-async function approveOutcomeRequest(req, res, next) {
-  try {
-    const unitId = Number(req.params.unitId);
-
-    if (!Number.isInteger(unitId) || unitId <= 0) {
-      return res.status(400).render('fragments/tech-unit-outcome-approval-modal', {
-        unit: null,
-        currentOutcome: null,
-        errorMessages: ['The selected unit ID is invalid.']
-      });
-    }
-
-    const unit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
-    const currentOutcome = await unitOutcomeModel.getCurrentOutcomeByUnitId(unitId);
-
-    if (!unit) {
-      return res.status(404).render('fragments/tech-unit-outcome-approval-modal', {
-        unit: null,
-        currentOutcome: null,
-        errorMessages: ['The selected unit could not be found.']
-      });
-    }
-
-    if (unit.isParked) {
-      return res.status(409).render('fragments/tech-unit-outcome-approval-modal', {
-        unit,
-        currentOutcome,
-        errorMessages: ['This unit is parked. Return it to Active before reviewing its Pass/Fail request.']
-      });
-    }
-
-    if (!currentOutcome || !currentOutcome.isPendingApproval) {
-      return res.status(400).render('fragments/tech-unit-outcome-approval-modal', {
-        unit,
-        currentOutcome,
-        errorMessages: ['This unit does not have a pending Pass/Fail approval request.']
-      });
-    }
-
-    const approved = await unitOutcomeModel.approveCurrentOutcome({
-      unitId,
-      approvedByUserId: req.currentUser.user_id,
-      approvalNotes: getOutcomeApprovalNotes(req)
-    });
-
-    if (!approved) {
-      return res.status(409).render('fragments/tech-unit-outcome-approval-modal', {
-        unit,
-        currentOutcome,
-        errorMessages: ['This approval request may have already been reviewed. Refresh the Unit Browser and try again.']
-      });
-    }
-
-    publishUnitBrowserChange({ unitId, changeType: 'outcome-approved' });
-    res.set('HX-Trigger', 'unit-saved');
-    return res.send('');
-  } catch (error) {
-    next(error);
-  }
-}
-
 module.exports = {
   streamTechUnitBrowserChanges,
   renderTechUnitsPage,
+  renderQcPortalReviewPage,
+  renderQcPortalReviewTable,
   renderTechUnitsExportPreview,
   downloadTechUnitsCsv,
   downloadTechUnitsXlsx,
@@ -4450,6 +4663,10 @@ module.exports = {
   renderQcCorrectionModal,
   submitQcCorrection,
   renderQcReviewDetailsModal,
+  renderQcReviewReversionRequestModal,
+  requestQcReviewReversion,
+  renderQcReviewReversionModal,
+  revertQcReviewDirectly,
   renderTechUnitHistoryPanel,
   renderMyUnitWeightPanel,
   renderCompleteTechUnitWorkModal,
@@ -4478,6 +4695,4 @@ module.exports = {
   renderEditTechUnitModal,
   updateTechUnit,
   updateTechUnitModal,
-  renderOutcomeApprovalModal,
-  approveOutcomeRequest
 };

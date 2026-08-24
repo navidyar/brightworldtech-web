@@ -1,5 +1,6 @@
 backup/
 handoff/
+sql/
 
 # Dependencies
 node_modules/

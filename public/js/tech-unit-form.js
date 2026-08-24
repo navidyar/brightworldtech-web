@@ -33,12 +33,9 @@
     storage_type: 'storage_devices'
   });
   const UNIT_FORM_SEQUENTIAL_FOCUS_SELECTOR = [
-    'a[href]',
-    'button',
-    'input:not([type="hidden"])',
+    'input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"])',
     'select',
-    'textarea',
-    '[tabindex]'
+    'textarea'
   ].join(',');
 
   function removeRepeatableActionsFromTabOrder(form) {
@@ -47,6 +44,22 @@
     }
 
     form.querySelectorAll('[data-add-module-row], [data-remove-module-row]').forEach((button) => {
+      button.setAttribute('tabindex', '-1');
+    });
+  }
+
+  function removeUnitModalButtonsFromTabOrder(form) {
+    if (!form || typeof form.closest !== 'function') {
+      return;
+    }
+
+    const modal = form.closest('.tech-unit-modal');
+
+    if (!modal) {
+      return;
+    }
+
+    modal.querySelectorAll('button').forEach((button) => {
       button.setAttribute('tabindex', '-1');
     });
   }
@@ -84,6 +97,76 @@
 
     return Array.from(form.querySelectorAll(UNIT_FORM_SEQUENTIAL_FOCUS_SELECTOR))
       .filter(isUnitFormSequentialFocusTarget);
+  }
+
+  function restoreSequentialFocusAfterVisibilityChange(form, previousFocus, previousTargets) {
+    if (!form || !previousFocus || !Array.isArray(previousTargets)) {
+      return;
+    }
+
+    const previousIndex = previousTargets.indexOf(previousFocus);
+
+    if (previousIndex < 0 || isUnitFormSequentialFocusTarget(previousFocus)) {
+      return;
+    }
+
+    const currentTargets = getUnitFormSequentialFocusTargets(form);
+    const currentTargetSet = new Set(currentTargets);
+    const nextTarget = previousTargets
+      .slice(previousIndex + 1)
+      .find((control) => currentTargetSet.has(control));
+    const previousTarget = previousTargets
+      .slice(0, previousIndex)
+      .reverse()
+      .find((control) => currentTargetSet.has(control));
+    const focusTarget = nextTarget || previousTarget || currentTargets[0] || null;
+
+    if (!focusTarget) {
+      return;
+    }
+
+    try {
+      focusTarget.focus({ preventScroll: true });
+    } catch (error) {
+      focusTarget.focus();
+    }
+  }
+
+  function handleUnitModalSequentialTab(event) {
+    if (
+      event.key !== 'Tab'
+      || event.defaultPrevented
+      || event.altKey
+      || event.ctrlKey
+      || event.metaKey
+    ) {
+      return;
+    }
+
+    const form = getFormFromElement(event.target);
+    const modal = form && typeof form.closest === 'function' ? form.closest('.tech-unit-modal') : null;
+
+    if (!form || !modal) {
+      return;
+    }
+
+    const focusTargets = getUnitFormSequentialFocusTargets(form);
+    const currentIndex = focusTargets.indexOf(event.target);
+
+    if (focusTargets.length < 2 || currentIndex < 0) {
+      return;
+    }
+
+    const offset = event.shiftKey ? -1 : 1;
+    const nextIndex = (currentIndex + offset + focusTargets.length) % focusTargets.length;
+    const nextTarget = focusTargets[nextIndex];
+
+    if (!nextTarget) {
+      return;
+    }
+
+    event.preventDefault();
+    nextTarget.focus();
   }
 
   function handleOutcomeSequentialTab(event) {
@@ -1251,6 +1334,9 @@
   }
 
   function applyLotUnitFormProfile(form, profile, options = {}) {
+    const activeControl = form && form.contains(document.activeElement) ? document.activeElement : null;
+    const previousFocusTargets = activeControl ? getUnitFormSequentialFocusTargets(form) : [];
+
     form._lotUnitFormProfile = profile;
     const fieldStateByKey = new Map(profile.fields.map((field) => [field.key, field]));
     let hiddenCount = 0;
@@ -1284,6 +1370,7 @@
     applyFollowerVisibility(form, visibleByKey);
     applyManufacturerFieldApplicability(form);
     updateAutoCollapsedSections(form);
+    restoreSequentialFocusAfterVisibilityChange(form, activeControl, previousFocusTargets);
 
     const statusPrefix = options.updatedWhileOpen
       ? `${profile.lotName} settings were updated while this form was open.`
@@ -1875,6 +1962,7 @@
       }
 
       region.innerHTML = await response.text();
+      removeUnitModalButtonsFromTabOrder(form);
       updateIntentionalDuplicateRequestControls(form);
       return { matchCount: getDuplicateMatchCount(region) };
     } catch (error) {
@@ -1904,6 +1992,28 @@
 
   function normalizeModelSearch(value) {
     return String(value || '').trim().toLocaleLowerCase();
+  }
+
+  function getLeadingSearchTokens(value) {
+    return normalizeModelSearch(value)
+      .replace(/([\p{L}])(\p{N})/gu, '$1 $2')
+      .replace(/(\p{N})([\p{L}])/gu, '$1 $2')
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter(Boolean);
+  }
+
+  function matchesLeadingSearch(value, search) {
+    const searchTokens = getLeadingSearchTokens(search);
+
+    if (searchTokens.length === 0) {
+      return true;
+    }
+
+    const valueTokens = getLeadingSearchTokens(value);
+
+    return searchTokens.every((searchToken) => (
+      valueTokens.some((valueToken) => valueToken.startsWith(searchToken))
+    ));
   }
 
   function getOperationalUsageScore(option, contextKey) {
@@ -2035,8 +2145,8 @@
     const matchingSelectableOptions = catalogOptions.filter((option) => {
       if (!isSelectableAssignableLotOption(option)) return false;
       const isSelected = includeSelectedOption && option.value === catalog.value;
-      const searchable = normalizeModelSearch(getAssignableLotOptionSearchText(option));
-      return searchable.includes(filters.search) || isSelected;
+      const searchable = getAssignableLotOptionSearchText(option);
+      return matchesLeadingSearch(searchable, filters.search) || isSelected;
     });
     const relevantIds = new Set();
     matchingSelectableOptions.forEach((option) => {
@@ -2058,6 +2168,7 @@
 
     if (comboboxInput) {
       comboboxInput.setAttribute('aria-expanded', 'false');
+      comboboxInput.removeAttribute('aria-activedescendant');
     }
 
     setAssignableLotComboboxLayer(form, false);
@@ -2202,6 +2313,7 @@
     }
 
     optionsContainer.replaceChildren();
+    comboboxInput.removeAttribute('aria-activedescendant');
 
     if (!openOptions) {
       closeAssignableLotOptions(form);
@@ -2222,6 +2334,8 @@
         if (!isSelectableAssignableLotOption(option)) {
           const heading = document.createElement('div');
           heading.className = 'tech-assignable-lot-option tech-assignable-lot-option--ancestor';
+          if (depth === 0) heading.classList.add('tech-assignable-lot-option--root');
+          else heading.classList.add('tech-assignable-lot-option--child');
           heading.setAttribute('aria-hidden', 'true');
           heading.style.setProperty('--lot-depth', String(depth));
           heading.textContent = getAssignableLotOptionName(option);
@@ -2231,8 +2345,12 @@
 
         const optionButton = document.createElement('button');
         optionButton.type = 'button';
+        optionButton.tabIndex = -1;
         optionButton.className = 'tech-assignable-lot-option tech-assignable-lot-option--selectable';
+        if (depth === 0) optionButton.classList.add('tech-assignable-lot-option--root');
+        else optionButton.classList.add('tech-assignable-lot-option--child');
         optionButton.setAttribute('role', 'option');
+        optionButton.id = `tech-unit-combobox-lot-${option.value}`;
         optionButton.setAttribute('data-assignable-lot-option', option.value);
         optionButton.setAttribute('aria-selected', option.value === catalog.value ? 'true' : 'false');
         optionButton.style.setProperty('--lot-depth', String(depth));
@@ -2407,10 +2525,10 @@
 
     const optionManufacturerId = option.getAttribute('data-manufacturer-id') || '';
     const optionCategoryId = option.getAttribute('data-category-id') || '';
-    const label = normalizeModelSearch(getUnitModelOptionLabel(option));
+    const label = getUnitModelOptionLabel(option);
     const manufacturerMatches = optionManufacturerId === filters.manufacturerId;
     const categoryMatches = !filters.categoryId || optionCategoryId === filters.categoryId;
-    const searchMatches = !filters.search || label.includes(filters.search);
+    const searchMatches = matchesLeadingSearch(label, filters.search);
 
     return manufacturerMatches && categoryMatches && searchMatches;
   }
@@ -2426,6 +2544,7 @@
 
     if (comboboxInput) {
       comboboxInput.setAttribute('aria-expanded', 'false');
+      comboboxInput.removeAttribute('aria-activedescendant');
     }
 
     setUnitModelComboboxLayer(form, false);
@@ -2598,6 +2717,7 @@
     }
 
     optionsContainer.replaceChildren();
+    comboboxInput.removeAttribute('aria-activedescendant');
 
     if (!filters.manufacturerId || !openOptions) {
       optionsContainer.hidden = true;
@@ -2617,8 +2737,10 @@
       visibleOptions.forEach((option) => {
         const optionButton = document.createElement('button');
         optionButton.type = 'button';
+        optionButton.tabIndex = -1;
         optionButton.className = 'tech-unit-model-option';
         optionButton.setAttribute('role', 'option');
+        optionButton.id = `tech-unit-combobox-model-${option.value}`;
         optionButton.setAttribute('data-unit-model-option', option.value);
         optionButton.setAttribute('aria-selected', option.value === (getUnitModelSelectionInput(form) || {}).value ? 'true' : 'false');
         optionButton.textContent = getUnitModelOptionLabel(option);
@@ -2828,7 +2950,7 @@
         const isSelected = includeSelectedOption && option.value === selectedId;
         const matchesModel = processorOptionSupportsUnitModel(option, modelSelectionInput.value);
         const matchesBrand = !selectedBrandId || (option.getAttribute('data-processor-brand-id') || '') === selectedBrandId;
-        const matchesSearch = !search || normalizeModelSearch(getProcessorOptionLabel(option)).includes(search);
+        const matchesSearch = matchesLeadingSearch(getProcessorOptionLabel(option), search);
 
         return (matchesModel || isSelected) && matchesBrand && matchesSearch;
       })
@@ -2853,6 +2975,7 @@
 
     if (comboboxInput) {
       comboboxInput.setAttribute('aria-expanded', 'false');
+      comboboxInput.removeAttribute('aria-activedescendant');
     }
 
     if (section) {
@@ -2990,6 +3113,7 @@
     }
 
     optionsContainer.replaceChildren();
+    comboboxInput.removeAttribute('aria-activedescendant');
 
     if (!openOptions || !brandSelect || !brandSelect.value) {
       optionsContainer.hidden = true;
@@ -3008,8 +3132,10 @@
       visibleOptions.forEach((option) => {
         const optionButton = document.createElement('button');
         optionButton.type = 'button';
+        optionButton.tabIndex = -1;
         optionButton.className = 'tech-unit-processor-option';
         optionButton.setAttribute('role', 'option');
+        optionButton.id = `tech-unit-combobox-processor-${option.value}`;
         optionButton.setAttribute('data-processor-option', option.value);
         optionButton.setAttribute('aria-selected', option.value === (getProcessorSelectionInput(form) || {}).value ? 'true' : 'false');
         optionButton.textContent = getProcessorOptionLabel(option);
@@ -4061,6 +4187,7 @@
     form.noValidate = true;
 
     removeRepeatableActionsFromTabOrder(form);
+    removeUnitModalButtonsFromTabOrder(form);
     setAssignableLotComboboxLayer(form, false);
     synchronizeAssignableLotCombobox(form);
     setUnitModelComboboxLayer(form, false);
@@ -4421,13 +4548,30 @@
     }
   });
 
+  document.addEventListener('click', (event) => {
+    const assignableLotComboboxInput = event.target.closest('[data-assignable-lot-combobox-input]');
+
+    if (!assignableLotComboboxInput || assignableLotComboboxInput.disabled) {
+      return;
+    }
+
+    const form = getFormFromElement(assignableLotComboboxInput);
+    const optionsContainer = getAssignableLotOptionsContainer(form);
+
+    if (optionsContainer && optionsContainer.hidden) {
+      renderAssignableLotOptions(form, true, true);
+    }
+  });
+
   document.addEventListener('focusin', (event) => {
     const assignableLotComboboxInput = event.target.closest('[data-assignable-lot-combobox-input]');
 
     if (assignableLotComboboxInput) {
-      const form = getFormFromElement(assignableLotComboboxInput);
+      // Receiving focus can be part of modal initialization or normal Tab
+      // navigation. Keep the Assignable Lot list closed until the user
+      // deliberately interacts with the combobox by clicking, typing, or
+      // using the arrow keys.
       assignableLotComboboxInput.select();
-      renderAssignableLotOptions(form, true, true);
       return;
     }
 
@@ -4509,48 +4653,142 @@
   });
 
   document.addEventListener('keydown', handleSerialScannerEnter, true);
+  document.addEventListener('keydown', handleUnitModalSequentialTab, true);
   document.addEventListener('keydown', handleOutcomeSequentialTab, true);
 
-  document.addEventListener('keydown', (event) => {
-    const assignableLotComboboxInput = event.target.closest('[data-assignable-lot-combobox-input]');
+  function getUnitFormSearchComboboxConfig(input) {
+    const form = getFormFromElement(input);
 
-    if (assignableLotComboboxInput) {
-      const form = getFormFromElement(assignableLotComboboxInput);
+    if (!form || !input) {
+      return null;
+    }
 
-      if (event.key === 'Escape') {
-        closeAssignableLotOptions(form);
-        return;
-      }
+    if (input.matches('[data-assignable-lot-combobox-input]')) {
+      return {
+        form,
+        input,
+        optionSelector: '[data-assignable-lot-option]',
+        valueAttribute: 'data-assignable-lot-option',
+        optionsContainer: getAssignableLotOptionsContainer(form),
+        renderOptions: renderAssignableLotOptions,
+        closeOptions: closeAssignableLotOptions,
+        selectOption: selectAssignableLotOption,
+        resolveExactMatch: resolveExactAssignableLotMatch
+      };
+    }
 
-      if (event.key !== 'Enter') {
-        return;
-      }
+    if (input.matches('[data-unit-model-combobox-input]')) {
+      return {
+        form,
+        input,
+        optionSelector: '[data-unit-model-option]',
+        valueAttribute: 'data-unit-model-option',
+        optionsContainer: getUnitModelOptionsContainer(form),
+        renderOptions: renderUnitModelOptions,
+        closeOptions: closeUnitModelOptions,
+        selectOption: selectUnitModelOption,
+        resolveExactMatch: resolveExactUnitModelMatch
+      };
+    }
 
-      const firstOption = form.querySelector('[data-assignable-lot-option]');
+    if (input.matches('[data-processor-combobox-input]')) {
+      return {
+        form,
+        input,
+        optionSelector: '[data-processor-option]',
+        valueAttribute: 'data-processor-option',
+        optionsContainer: getProcessorOptionsContainer(form),
+        renderOptions: renderProcessorOptions,
+        closeOptions: closeProcessorOptions,
+        selectOption: selectProcessorOption,
+        resolveExactMatch: resolveExactProcessorMatch
+      };
+    }
 
-      if (firstOption) {
-        event.preventDefault();
-        selectAssignableLotOption(form, firstOption.getAttribute('data-assignable-lot-option'));
-        return;
-      }
+    return null;
+  }
 
-      if (resolveExactAssignableLotMatch(form)) {
-        event.preventDefault();
-      }
+  function getRenderedSearchComboboxOptions(config) {
+    return config && config.optionsContainer
+      ? Array.from(config.optionsContainer.querySelectorAll(config.optionSelector))
+      : [];
+  }
 
+  function setSearchComboboxActiveOption(config, option) {
+    if (!config) {
       return;
     }
 
-    const modelComboboxInput = event.target.closest('[data-unit-model-combobox-input]');
+    getRenderedSearchComboboxOptions(config).forEach((candidate) => {
+      candidate.classList.toggle('is-active', candidate === option);
+    });
 
-    if (!modelComboboxInput || modelComboboxInput.disabled) {
+    if (!option) {
+      config.input.removeAttribute('aria-activedescendant');
       return;
     }
 
-    const form = getFormFromElement(modelComboboxInput);
+    config.input.setAttribute('aria-activedescendant', option.id);
+
+    if (typeof option.scrollIntoView === 'function') {
+      option.scrollIntoView({ block: 'nearest' });
+    }
+  }
+
+  function moveSearchComboboxActiveOption(config, direction) {
+    if (!config) {
+      return false;
+    }
+
+    if (!config.optionsContainer || config.optionsContainer.hidden) {
+      config.renderOptions(config.form, true, false);
+    }
+
+    const options = getRenderedSearchComboboxOptions(config);
+
+    if (options.length === 0) {
+      return false;
+    }
+
+    const activeIndex = options.findIndex((option) => option.classList.contains('is-active'));
+    const selectedIndex = options.findIndex((option) => option.getAttribute('aria-selected') === 'true');
+    let nextIndex;
+
+    if (activeIndex < 0) {
+      nextIndex = selectedIndex >= 0
+        ? selectedIndex
+        : (direction > 0 ? 0 : options.length - 1);
+    } else {
+      nextIndex = Math.min(Math.max(activeIndex + direction, 0), options.length - 1);
+    }
+
+    setSearchComboboxActiveOption(config, options[nextIndex]);
+    return true;
+  }
+
+  function handleUnitFormSearchComboboxKeydown(event) {
+    const input = event.target.closest(
+      '[data-assignable-lot-combobox-input], [data-unit-model-combobox-input], [data-processor-combobox-input]'
+    );
+
+    if (!input || input.disabled) {
+      return;
+    }
+
+    const config = getUnitFormSearchComboboxConfig(input);
+
+    if (!config) {
+      return;
+    }
 
     if (event.key === 'Escape') {
-      closeUnitModelOptions(form);
+      config.closeOptions(config.form);
+      return;
+    }
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      moveSearchComboboxActiveOption(config, event.key === 'ArrowDown' ? 1 : -1);
       return;
     }
 
@@ -4558,43 +4796,22 @@
       return;
     }
 
-    const firstOption = form.querySelector('[data-unit-model-option]');
+    const options = getRenderedSearchComboboxOptions(config);
+    const activeOption = options.find((option) => option.classList.contains('is-active'));
+    const optionToSelect = activeOption || options[0];
 
-    if (firstOption) {
+    if (optionToSelect) {
       event.preventDefault();
-      selectUnitModelOption(form, firstOption.getAttribute('data-unit-model-option'));
+      config.selectOption(config.form, optionToSelect.getAttribute(config.valueAttribute));
       return;
     }
 
-    if (resolveExactUnitModelMatch(form)) {
+    if (config.resolveExactMatch(config.form)) {
       event.preventDefault();
     }
-  });
+  }
 
-  document.addEventListener('keydown', (event) => {
-    const processorComboboxInput = event.target.closest('[data-processor-combobox-input]');
-
-    if (!processorComboboxInput || processorComboboxInput.disabled) return;
-
-    const form = getFormFromElement(processorComboboxInput);
-
-    if (event.key === 'Escape') {
-      closeProcessorOptions(form);
-      return;
-    }
-
-    if (event.key !== 'Enter') return;
-
-    const firstOption = form.querySelector('[data-processor-option]');
-
-    if (firstOption) {
-      event.preventDefault();
-      selectProcessorOption(form, firstOption.getAttribute('data-processor-option'));
-      return;
-    }
-
-    if (resolveExactProcessorMatch(form)) event.preventDefault();
-  });
+  document.addEventListener('keydown', handleUnitFormSearchComboboxKeydown, true);
 
   function ensureAssignableLotSelectionForSubmit(form, reportValidity) {
     const comboboxInput = getAssignableLotComboboxInput(form);
@@ -4853,6 +5070,22 @@
     });
   }, true);
 
+  document.addEventListener('mousedown', (event) => {
+    const searchOptionButton = event.target.closest(
+      '[data-assignable-lot-option], [data-unit-model-option], [data-processor-option]'
+    );
+
+    if (!searchOptionButton || !getFormFromElement(searchOptionButton)) {
+      return;
+    }
+
+    // Keep focus on the searchable input while the mouse click selects an
+    // option. If the transient option button takes focus and is then removed
+    // when the list closes, the modal loses its current Tab position and the
+    // next Tab can restart near the beginning of the form.
+    event.preventDefault();
+  }, true);
+
   document.addEventListener('click', (event) => {
     const assignableLotOptionButton = event.target.closest('[data-assignable-lot-option]');
 
@@ -4903,6 +5136,7 @@
       const rowType = addButton.getAttribute('data-add-module-row');
       addModuleRow(form, rowType);
       removeRepeatableActionsFromTabOrder(form);
+      removeUnitModalButtonsFromTabOrder(form);
       if (!String(rowType || '').startsWith('previous')) {
         scheduleLotRequirementWorkflowRefresh(form);
       }

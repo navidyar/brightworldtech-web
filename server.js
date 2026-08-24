@@ -16,6 +16,9 @@ const {
   scheduleOperationalOptionUsageRankingRefresh
 } = require('./models/operationalOptionRankingModel');
 const { loadCurrentUser } = require('./middleware/authMiddleware');
+const { applyConfiguredSessionTimeout } = require('./middleware/sessionTimeoutMiddleware');
+const { DEFAULT_SESSION_INACTIVITY_TIMEOUT_MINUTES } = require('./services/sessionInactivityTimeoutPolicy');
+const { applyAuthenticatedNavigationPolicy } = require('./middleware/navigationPolicyMiddleware');
 const { attachAccessLocals } = require('./middleware/accessMiddleware');
 const { escapeHtml, formatDateTime, formatDate, formatTime, formatNumber, formatRoleLabel, formatWeight } = require('./views/partials/helpers');
 
@@ -56,12 +59,14 @@ app.use(
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 1000 * 60 * 60 * 8
+      maxAge: 1000 * 60 * DEFAULT_SESSION_INACTIVITY_TIMEOUT_MINUTES
     }
   })
 );
 
+app.use(applyConfiguredSessionTimeout);
 app.use(loadCurrentUser);
+app.use(applyAuthenticatedNavigationPolicy);
 app.use(attachAccessLocals);
 
 app.use(authRoutes);

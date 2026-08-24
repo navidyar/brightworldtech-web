@@ -17,7 +17,10 @@ const requiredQcColumns = [
   'reviewed_by_user_id',
   'decision_code',
   'review_notes',
-  'reviewed_at'
+  'reviewed_at',
+  'reverted_at',
+  'reverted_by_user_id',
+  'reversion_reason'
 ];
 
 let insertAttempted = false;
@@ -66,6 +69,9 @@ const connection = {
         decision_code: 'accepted',
         review_notes: '',
         reviewed_at: '2026-07-29T18:00:00.000Z',
+        reverted_at: null,
+        reverted_by_user_id: null,
+        reversion_reason: null,
         reviewer_first_name: 'Quinn',
         reviewer_last_name: 'QC',
         reviewer_email: 'quinn@example.com'

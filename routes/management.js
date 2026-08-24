@@ -6,18 +6,22 @@ const unitRequestController = require('../controllers/unitRequestController');
 const catalogRequestController = require('../controllers/catalogRequestController');
 const qcReportingController = require('../controllers/qcReportingController');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
+const {
+  QC_PORTAL_ROLE_CODES,
+  QC_REVIEW_ROLE_CODES,
+  QC_REPORTING_ROLE_CODES
+} = require('../config/accessPolicy');
 
 const router = express.Router();
 
 const managementRoles = ['admin', 'management'];
 const techRoles = ['admin', 'management', 'tech_lead', 'tech'];
+const unitRequestRoles = ['admin', 'management', 'tech_lead', 'qc', 'tech'];
 const unitBrowserRoles = ['admin', 'management', 'tech_lead', 'qc', 'tech'];
-const unitHistoryRoles = ['admin', 'management', 'tech_lead', 'qc'];
-const qcReviewRoles = ['qc'];
+const unitHistoryRoles = ['admin', 'management', 'tech_lead', 'qc', 'tech'];
 const qcCorrectionRoles = ['admin', 'management', 'tech_lead', 'tech'];
 const techDeleteRoles = ['admin', 'management', 'tech_lead'];
 const unitLifecycleRoles = ['admin', 'management', 'tech_lead'];
-const outcomeApprovalRoles = ['admin', 'management', 'tech_lead'];
 const techHistoryRoles = ['admin', 'management', 'tech_lead'];
 const completionReversalRoles = ['admin', 'management', 'tech_lead'];
 const overrideReviewRoles = ['admin', 'management', 'tech_lead'];
@@ -29,7 +33,7 @@ const overrideReviewRoles = ['admin', 'management', 'tech_lead'];
 router.get(
   '/management/qc-reporting',
   requireAuth,
-  requireRole(managementRoles),
+  requireRole(QC_REPORTING_ROLE_CODES),
   qcReportingController.renderManagementQcReportingPage
 );
 
@@ -149,14 +153,14 @@ router.post(
 router.get(
   '/unit-requests',
   requireAuth,
-  requireRole(techRoles),
+  requireRole(unitRequestRoles),
   unitRequestController.renderUnitRequestsPage
 );
 
 router.get(
   '/unit-requests/:unitRequestId',
   requireAuth,
-  requireRole(techRoles),
+  requireRole(unitRequestRoles),
   unitRequestController.renderUnitRequestDetail
 );
 
@@ -191,7 +195,7 @@ router.post(
 router.post(
   '/unit-requests/:unitRequestId/withdraw',
   requireAuth,
-  requireRole(techRoles),
+  requireRole(unitRequestRoles),
   unitRequestController.withdrawUnitRequest
 );
 
@@ -242,6 +246,25 @@ router.post(
   requireAuth,
   requireRole(techRoles),
   catalogRequestController.createProcessorCatalogRequest
+);
+
+/*
+  Quality Control Portal
+*/
+
+
+router.get(
+  '/qc/review',
+  requireAuth,
+  requireRole(QC_PORTAL_ROLE_CODES),
+  techController.renderQcPortalReviewPage
+);
+
+router.get(
+  '/qc/review/table',
+  requireAuth,
+  requireRole(QC_PORTAL_ROLE_CODES),
+  techController.renderQcPortalReviewTable
 );
 
 /*
@@ -437,17 +460,46 @@ router.get(
   techController.renderQcReviewDetailsModal
 );
 
+
+router.get(
+  '/tech/units/:unitId/qc-review/:qcCheckId/reversion-request/modal',
+  requireAuth,
+  requireRole(['qc']),
+  techController.renderQcReviewReversionRequestModal
+);
+
+router.post(
+  '/tech/units/:unitId/qc-review/:qcCheckId/reversion-request',
+  requireAuth,
+  requireRole(['qc']),
+  techController.requestQcReviewReversion
+);
+
+router.get(
+  '/tech/units/:unitId/qc-review/:qcCheckId/revert/modal',
+  requireAuth,
+  requireRole(overrideReviewRoles),
+  techController.renderQcReviewReversionModal
+);
+
+router.post(
+  '/tech/units/:unitId/qc-review/:qcCheckId/revert',
+  requireAuth,
+  requireRole(overrideReviewRoles),
+  techController.revertQcReviewDirectly
+);
+
 router.get(
   '/tech/units/:unitId/qc-review/:decisionCode/modal',
   requireAuth,
-  requireRole(qcReviewRoles),
+  requireRole(QC_REVIEW_ROLE_CODES),
   techController.renderQcReviewModal
 );
 
 router.post(
   '/tech/units/:unitId/qc-review',
   requireAuth,
-  requireRole(qcReviewRoles),
+  requireRole(QC_REVIEW_ROLE_CODES),
   techController.recordQcReview
 );
 
@@ -480,19 +532,6 @@ router.post(
 );
 
 
-router.get(
-  '/tech/units/:unitId/outcome-approval/modal',
-  requireAuth,
-  requireRole(outcomeApprovalRoles),
-  techController.renderOutcomeApprovalModal
-);
-
-router.post(
-  '/tech/units/:unitId/outcome-approval',
-  requireAuth,
-  requireRole(outcomeApprovalRoles),
-  techController.approveOutcomeRequest
-);
 
 router.get(
   '/tech/units/:unitId/complete-work/modal',

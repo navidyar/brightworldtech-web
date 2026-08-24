@@ -218,6 +218,7 @@ async function recordCorrectionSubmission({
             WHERE qc.unit_work_completion_id = completion.unit_work_completion_id
           )
         WHERE u.unit_id = ?
+          AND latest_qc.reverted_at IS NULL
         LIMIT 1
         FOR UPDATE
       `,

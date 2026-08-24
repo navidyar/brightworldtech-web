@@ -15,7 +15,7 @@ test('Stage 9H exposes Management QC Reporting only through Admin and Management
   assert.match(routes, /qcReportingController/);
   const routeBlock = routes.match(/router\.get\(\s*'\/management\/qc-reporting'[\s\S]*?\n\);/)?.[0] || '';
   assert.match(routeBlock, /requireAuth/);
-  assert.match(routeBlock, /requireRole\(managementRoles\)/);
+  assert.match(routeBlock, /requireRole\(QC_REPORTING_ROLE_CODES\)/);
   assert.match(routeBlock, /renderManagementQcReportingPage/);
   assert.match(sidebar, /management-qc-reporting/);
   assert.match(sidebar, />QC Reporting</);

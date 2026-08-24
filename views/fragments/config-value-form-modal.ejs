@@ -10,6 +10,8 @@
   const title = safeMode === 'edit' ? 'Edit Config Value' : 'Create Config Value';
   const submitLabel = safeMode === 'edit' ? 'Save Config Value' : 'Create Config Value';
   const isPasswordLinkExpirySetting = Boolean(locals.isPasswordLinkExpirySetting);
+  const isSessionInactivityTimeoutSetting = Boolean(locals.isSessionInactivityTimeoutSetting);
+  const isProtectedSecuritySetting = isPasswordLinkExpirySetting || isSessionInactivityTimeoutSetting;
   const isProtectedValue = Boolean(safeConfigValue && safeConfigValue.isProtected);
 %>
 
@@ -36,6 +38,8 @@
       <p class="configuration-form-note">
         <% if (isPasswordLinkExpirySetting) { %>
           This security setting supplies the default for non-interactive setup/reset link generation. User Management chooses a 1–8 hour lifetime before each link is generated.
+        <% } else if (isSessionInactivityTimeoutSetting) { %>
+          Users are automatically signed out after this period without application activity. Active sessions adopt a changed timeout on their next authenticated request.
         <% } else if (isProtectedValue) { %>
           This is a protected system value. Its database ID remains unchanged. Renaming it also changes how current and historical records display this value. It may be deactivated, but it cannot be deleted or moved to another category.
         <% } else { %>
@@ -46,18 +50,26 @@
       <form class="app-form configuration-value-form" data-configuration-value-form data-form-mode="<%= safeMode %>" data-original-category-id="<%= safeConfigValue ? safeConfigValue.config_category_id : '' %>" data-original-active="<%= safeConfigValue && safeConfigValue.isActive ? '1' : '0' %>" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML" autocomplete="off">
         <input type="hidden" name="includeInactive" value="<%= safeFormData.includeInactive || '0' %>" />
 
-        <% if (isPasswordLinkExpirySetting) { %>
+        <% if (isProtectedSecuritySetting) { %>
           <input type="hidden" name="configCategoryId" value="<%= safeFormData.configCategoryId || '' %>" />
           <input type="hidden" name="label" value="<%= safeFormData.label || '' %>" />
           <input type="hidden" name="description" value="<%= safeFormData.description || '' %>" />
           <input type="hidden" name="sortOrder" value="<%= safeFormData.sortOrder || '0' %>" />
           <input type="hidden" name="isActive" value="1" />
 
-          <label class="form-field">
-            <span>Password setup/reset link expiration</span>
-            <input type="number" name="value" value="<%= safeFormData.value || '1' %>" min="1" max="8" step="1" inputmode="numeric" required autofocus />
-            <small class="field-hint">Whole hours from 1 through 8. Existing links keep the expiration they were issued with. Management can choose a specific 1–8 hour lifetime when generating a user link.</small>
-          </label>
+          <% if (isPasswordLinkExpirySetting) { %>
+            <label class="form-field">
+              <span>Password setup/reset link expiration</span>
+              <input type="number" name="value" value="<%= safeFormData.value || '1' %>" min="1" max="8" step="1" inputmode="numeric" required autofocus />
+              <small class="field-hint">Whole hours from 1 through 8. Existing links keep the expiration they were issued with. Management can choose a specific 1–8 hour lifetime when generating a user link.</small>
+            </label>
+          <% } else { %>
+            <label class="form-field">
+              <span>Session inactivity timeout (minutes)</span>
+              <input type="number" name="value" value="<%= safeFormData.value || '120' %>" min="5" max="1440" step="1" inputmode="numeric" required autofocus />
+              <small class="field-hint">Whole minutes from 5 through 1440. The default is 120 minutes (2 hours). Normal application activity resets the inactivity countdown.</small>
+            </label>
+          <% } %>
         <% } else { %>
           <div class="configuration-value-form-grid">
             <label class="form-field configuration-value-form-category">

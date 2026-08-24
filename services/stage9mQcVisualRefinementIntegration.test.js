@@ -79,11 +79,11 @@ test('Stage 9M cache-busts common and Unit Browser assets', () => {
   const techUnitsPage = read('views/pages/tech-units.ejs');
   const detailPage = read('views/pages/tech-unit-detail.ejs');
 
-  assert.match(head, /app\.css\?v=20260804-stage10w-ranking-administration/);
+  assert.match(head, /app\.css\?v=20260819-stage10w68w-half-size-lot-chevrons/);
   [techUnitsPage, detailPage].forEach((markup) => {
-    assert.match(markup, /tech-units-clean\.css\?v=20260730-stage10a-unit-export/);
-    assert.match(markup, /tech-units\.js\?v=20260731-stage10b-column-selection/);
-    assert.match(markup, /modal\.js\?v=20260729-stage9k-modal-accessibility/);
+    assert.match(markup, /tech-units-clean\.css\?v=20260819-stage10w68o-toggle-label-cleanup/);
+    assert.match(markup, /tech-units\.js\?v=20260819-stage10w68l-filter-toggles/);
+    assert.match(markup, /modal\.js\?v=20260819-stage10w68p-interaction-refinements/);
   });
 });
 

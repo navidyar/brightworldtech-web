@@ -1,7 +1,6 @@
 <%
   const assignedRoles = Array.isArray(currentRoles) ? currentRoles : [];
   const isAdminConfigurationUser = assignedRoles.includes('admin');
-  const isManagementConfigurationUser = assignedRoles.includes('management');
   const configurationItems = [
     {
       key: 'admin-config-values',
@@ -19,7 +18,7 @@
       key: 'admin-config-processors',
       label: 'Processor Catalog',
       href: '/management/config/processors',
-      allowed: isAdminConfigurationUser || isManagementConfigurationUser
+      allowed: isAdminConfigurationUser
     },
     {
       key: 'admin-config-models',

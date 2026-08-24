@@ -105,5 +105,5 @@ test('disabled decisions use the shared neutral gray treatment instead of active
 test('the shared application stylesheet is cache-busted for the revised decision treatment', () => {
   const head = read('views/partials/head.ejs');
 
-  assert.match(head, /app\.css\?v=20260804-stage10w4-parked-takeover-qc/);
+  assert.match(head, /app\.css\?v=20260819-stage10w68w-half-size-lot-chevrons/);
 });

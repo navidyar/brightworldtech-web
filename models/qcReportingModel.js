@@ -88,7 +88,8 @@ function buildManagementQcReportingQuery({
         ON reviewer.user_id = qc.reviewed_by_user_id
       ${correctionSchemaIsReady ? `LEFT JOIN unit_qc_corrections correction
         ON correction.rejected_qc_check_id = qc.unit_qc_check_id` : ''}
-      ${reportingFilters.whereSql}
+      ${reportingFilters.whereSql || 'WHERE 1 = 1'}
+        AND qc.reverted_at IS NULL
       ORDER BY qc.unit_qc_check_id
     `,
     params: reportingFilters.params
@@ -120,6 +121,7 @@ function buildManagementQcReportingTechnicianOptionsQuery({
     LEFT JOIN users technician
       ON technician.user_id = ${technicianAttribution.expression}
     WHERE ${technicianAttribution.expression} IS NOT NULL
+      AND qc.reverted_at IS NULL
     ORDER BY technician.last_name, technician.first_name, technician.email, technician_user_id
   `;
 }

@@ -4,10 +4,13 @@
     pageTitle,
     stylesheets: [
       '/css/tech.css',
-      '/css/unit-requests.css'
+      '/css/modal.css?v=stage8-config-consistency',
+      '/css/unit-requests.css?v=20260820-stage10w69l-request-modal-performance'
     ]
   }) %>
-  <script defer src="/js/unit-requests.js"></script>
+  <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+  <script defer src="/js/processor-request-review.js?v=20260820-stage10w69l-request-modal-performance"></script>
+  <script defer src="/js/unit-requests.js?v=20260820-stage10w69n-request-detail-performance"></script>
 
   <%
     const buildUnitRequestQueueUrl = (nextStatus = statusFilter, nextRequestType = requestTypeFilter, nextSearchTerm = searchTerm) => {
@@ -53,9 +56,9 @@
               <h2>Requests</h2>
               <p>
                 <% if (canReviewRequests) { %>
-                  Review existing Unit overrides, Intentional Duplicates, outcome confirmations, and Catalog requests in one queue.
+                  Review existing Unit overrides, Intentional Duplicates, outcome confirmations, QC reversion requests, and Catalog requests in one queue.
                 <% } else { %>
-                  Track your own pending and completed requests. Pending requests can be withdrawn before review.
+                  Track your own pending and completed requests. Pending requests can be withdrawn before review. A QC decision remains current while its reversion request is pending.
                 <% } %>
               </p>
             </div>
@@ -134,6 +137,7 @@
                     <option value="all" <%= requestTypeFilter === 'all' ? 'selected' : '' %>>All Types</option>
                     <option value="existing_unit_override" <%= requestTypeFilter === 'existing_unit_override' ? 'selected' : '' %>>Existing Unit Override</option>
                     <option value="outcome_confirmation" <%= requestTypeFilter === 'outcome_confirmation' ? 'selected' : '' %>>Outcome Confirmation</option>
+                    <option value="qc_reversion" <%= requestTypeFilter === 'qc_reversion' ? 'selected' : '' %>>QC Decision Reversion</option>
                     <option value="intentional_duplicate" <%= requestTypeFilter === 'intentional_duplicate' ? 'selected' : '' %>>Intentional Duplicate</option>
                     <option value="model_catalog_addition" <%= requestTypeFilter === 'model_catalog_addition' ? 'selected' : '' %>>Model Catalog Addition</option>
                     <option value="processor_catalog_addition" <%= requestTypeFilter === 'processor_catalog_addition' ? 'selected' : '' %>>Processor Catalog Addition</option>
@@ -162,6 +166,7 @@
                         class="unit-request-row-main-link<%= canWithdrawFromQueue ? '' : ' unit-request-row-main-link--full' %>"
                         href="<%= `${request.detailUrl}?${new URLSearchParams({ status: statusFilter, requestType: requestTypeFilter, ...(searchTerm ? { search: searchTerm } : {}) }).toString()}` %>"
                         data-unit-request-detail-link
+                        data-modal-trigger
                         aria-label="Open Request #<%= request.displayRequestId %>: <%= request.requestTypeLabel %>"
                       >
                         <div class="unit-request-row-request">
@@ -210,5 +215,6 @@
         </main>
       </div>
     </div>
+    <div id="modal-root"></div>
   </body>
 </html>

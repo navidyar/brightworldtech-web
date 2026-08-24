@@ -17,7 +17,7 @@
         <h2 id="lot-requirement-modal-title"><%= title %></h2>
       </div>
 
-      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+      <button type="button" class="modal-close-button" data-modal-close tabindex="-1" aria-label="Close modal">×</button>
     </header>
 
     <div class="modal-body">
@@ -110,8 +110,8 @@
         </div>
 
         <div class="form-actions">
-          <button type="submit" class="primary-button"><%= submitLabel %></button>
-          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          <button type="submit" class="primary-button" tabindex="-1"><%= submitLabel %></button>
+          <button type="button" class="secondary-button" data-modal-close tabindex="-1">Cancel</button>
         </div>
       </form>
     </div>

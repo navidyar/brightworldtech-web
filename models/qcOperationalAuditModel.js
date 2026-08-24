@@ -9,7 +9,8 @@ const { calculateQcGradeSummary } = require('../services/qcGradingService');
 const { buildManagementQcReport } = require('../services/qcReportingService');
 const {
   buildQcOperationalAudit,
-  inspectQcReviewSequences
+  inspectQcReviewSequences,
+  resolveCorrectionWorkflowBoundary
 } = require('../services/qcOperationalAuditService');
 
 const RECONCILIATION_FIELDS = Object.freeze([
@@ -52,6 +53,7 @@ async function getQcIntegrityCounts(connection = pool) {
     `
       SELECT
         COUNT(*) AS review_rows,
+        COALESCE(SUM(CASE WHEN qc.reverted_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS reverted_review_rows,
         COALESCE(SUM(CASE WHEN qc.unit_id <> completion.unit_id THEN 1 ELSE 0 END), 0) AS review_unit_mismatches,
         COALESCE(SUM(CASE WHEN completion.credit_source <> 'manual_completion' THEN 1 ELSE 0 END), 0) AS non_manual_completion_reviews,
         COALESCE(SUM(CASE WHEN completion.reversed_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS reversed_completion_reviews
@@ -79,6 +81,7 @@ async function getQcIntegrityCounts(connection = pool) {
 
   return {
     reviewRows: Number(reviewCounts.review_rows || 0),
+    revertedReviewRows: Number(reviewCounts.reverted_review_rows || 0),
     reviewUnitMismatches: Number(reviewCounts.review_unit_mismatches || 0),
     nonManualCompletionReviews: Number(reviewCounts.non_manual_completion_reviews || 0),
     reversedCompletionReviews: Number(reviewCounts.reversed_completion_reviews || 0),
@@ -89,6 +92,33 @@ async function getQcIntegrityCounts(connection = pool) {
   };
 }
 
+async function getQcCorrectionWorkflowBoundary(connection = pool) {
+  const [[row]] = await connection.query(
+    `
+      SELECT
+        table_info.CREATE_TIME AS correction_table_created_at,
+        correction_stats.first_correction_submitted_at
+      FROM (
+        SELECT CREATE_TIME
+        FROM information_schema.TABLES
+        WHERE TABLE_SCHEMA = DATABASE()
+          AND TABLE_NAME = 'unit_qc_corrections'
+        LIMIT 1
+      ) table_info
+      LEFT JOIN (
+        SELECT MIN(submitted_at) AS first_correction_submitted_at
+        FROM unit_qc_corrections
+      ) correction_stats
+        ON 1 = 1
+    `
+  );
+
+  return resolveCorrectionWorkflowBoundary(
+    row?.correction_table_created_at || null,
+    row?.first_correction_submitted_at || null
+  );
+}
+
 async function listQcSequenceRows(connection = pool) {
   const [rows] = await connection.query(
     `
@@ -97,6 +127,7 @@ async function listQcSequenceRows(connection = pool) {
         qc.unit_qc_check_id,
         qc.decision_code,
         qc.reviewed_at,
+        qc.reverted_at,
         correction.unit_qc_correction_id,
         correction.submitted_at AS correction_submitted_at
       FROM unit_qc_checks qc
@@ -135,13 +166,27 @@ async function getQcHistoryCoverage(connection = pool) {
               AND CAST(JSON_UNQUOTE(JSON_EXTRACT(audit_event.event_metadata_json, '$.qcCorrectionId')) AS UNSIGNED)
                 = correction.unit_qc_correction_id
           )
-        ) AS missing_correction_audit_events
+        ) AS missing_correction_audit_events,
+        (
+          SELECT COUNT(*)
+          FROM unit_qc_checks qc
+          WHERE qc.reverted_at IS NOT NULL
+            AND NOT EXISTS (
+              SELECT 1
+              FROM unit_audit_events audit_event
+              WHERE audit_event.unit_id = qc.unit_id
+                AND audit_event.event_type = 'unit_qc_reverted'
+                AND CAST(JSON_UNQUOTE(JSON_EXTRACT(audit_event.event_metadata_json, '$.qcCheckId')) AS UNSIGNED)
+                  = qc.unit_qc_check_id
+            )
+        ) AS missing_reversion_audit_events
     `
   );
 
   return {
     missingReviewAuditEvents: Number(row.missing_review_audit_events || 0),
-    missingCorrectionAuditEvents: Number(row.missing_correction_audit_events || 0)
+    missingCorrectionAuditEvents: Number(row.missing_correction_audit_events || 0),
+    missingReversionAuditEvents: Number(row.missing_reversion_audit_events || 0)
   };
 }
 
@@ -186,13 +231,16 @@ async function getQcOperationalAudit(connection = pool) {
     };
   }
 
-  const [integrity, sequenceRows, history, reporting] = await Promise.all([
+  const [integrity, sequenceRows, history, reporting, correctionWorkflowBoundary] = await Promise.all([
     getQcIntegrityCounts(connection),
     listQcSequenceRows(connection),
     getQcHistoryCoverage(connection),
-    getQcReportingReconciliation(connection)
+    getQcReportingReconciliation(connection),
+    getQcCorrectionWorkflowBoundary(connection)
   ]);
-  const sequences = inspectQcReviewSequences(sequenceRows);
+  const sequences = inspectQcReviewSequences(sequenceRows, {
+    correctionWorkflowStartedAt: correctionWorkflowBoundary.correctionWorkflowStartedAt
+  });
   const audit = buildQcOperationalAudit({
     role,
     storage,
@@ -209,12 +257,14 @@ async function getQcOperationalAudit(connection = pool) {
     integrity,
     history,
     sequences,
-    reporting
+    reporting,
+    correctionWorkflowBoundary
   };
 }
 
 module.exports = {
   RECONCILIATION_FIELDS,
+  getQcCorrectionWorkflowBoundary,
   getQcHistoryCoverage,
   getQcIntegrityCounts,
   getQcOperationalAudit,

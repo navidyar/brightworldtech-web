@@ -322,6 +322,42 @@
   outline: none;
 }
 
+.tech-units-clean-page .tech-filter-toggle-row {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+}
+
+.tech-units-clean-page .tech-filter-toggle-set {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.tech-units-clean-page .tech-filter-toggle-set.is-disabled {
+  opacity: 0.55;
+}
+
+
+/* Stage 10W68M — Lot Scope and Completion reuse the same compact switch
+   presentation as Show Parked Units instead of a separate segmented-button style. */
+.tech-units-clean-page .tech-filter-toggle-set .tech-unit-state-toggle {
+  gap: 6px;
+  font-size: 0.72rem;
+}
+
+.tech-units-clean-page .tech-filter-toggle-set > .tech-unit-state-toggle + .tech-unit-state-toggle {
+  margin-left: 7px;
+}
+
+.tech-units-clean-page .tech-filter-toggle-set .tech-unit-state-toggle input:disabled + .tech-unit-state-toggle-track {
+  cursor: not-allowed;
+}
+
 .tech-units-clean-page .tech-filter-layout {
   display: grid;
   grid-template-columns: minmax(340px, 0.9fr) minmax(660px, 1.55fr);
@@ -697,7 +733,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 12px 18px;
   margin: 12px 0 0;
   padding: 12px 0 0;
   border-top: 1px solid #dce7f2;
@@ -783,14 +819,6 @@
   vertical-align: middle;
   white-space: nowrap;
 }
-
-.tech-units-clean-page .tech-units-table thead th:nth-child(1) { width: 32%; }
-.tech-units-clean-page .tech-units-table thead th:nth-child(2) { width: 9%; }
-.tech-units-clean-page .tech-units-table thead th:nth-child(3) { width: 13%; }
-.tech-units-clean-page .tech-units-table thead th:nth-child(4) { width: 16%; }
-.tech-units-clean-page .tech-units-table thead th:nth-child(5) { width: 11%; }
-.tech-units-clean-page .tech-units-table thead th:nth-child(6) { width: 5%; }
-.tech-units-clean-page .tech-units-table thead th:nth-child(7) { width: 14%; }
 
 .tech-units-clean-page .tech-summary-row td {
   padding: 11px 12px;
@@ -964,8 +992,8 @@
 
 .tech-units-clean-page .tech-summary-actions .secondary-button,
 .tech-units-clean-page .tech-summary-actions .danger-button {
-  min-height: 32px;
-  padding: 6px 9px;
+  min-height: 26px;
+  padding: 3px 9px;
   border-radius: 6px;
   font-size: 0.76rem;
   font-weight: 650;
@@ -2176,12 +2204,10 @@
   font-size: 0.96rem;
 }
 
-/* Keep summary actions together; the data table, not the action group, scrolls when width is tight. */
+/* QC and Actions keep their content alignment; column widths and horizontal
+   cell padding are owned by the Stage 10W.68h colgroup model below. */
 .tech-units-clean-page .tech-units-qc-column,
 .tech-units-clean-page .tech-units-qc-cell {
-  width: 5%;
-  min-width: 58px;
-  padding-inline: 6px;
   text-align: center;
   white-space: nowrap;
 }
@@ -2207,10 +2233,8 @@
 
 .tech-units-clean-page .tech-units-actions-column,
 .tech-units-clean-page .tech-units-actions-cell {
-  min-width: 154px;
-  padding-right: 12px;
+  min-width: 0;
   text-align: right;
-  white-space: nowrap;
 }
 
 .tech-units-clean-page .tech-units-actions-column-label {
@@ -2220,11 +2244,6 @@
   width: 100%;
   margin-left: auto;
   text-align: right;
-}
-
-.tech-units-clean-page .tech-summary-actions {
-  min-width: max-content;
-  flex-wrap: nowrap;
 }
 
 /* Section color carries through to the bold hierarchy inside each pale Unit Details workspace. */
@@ -4250,12 +4269,6 @@
   background: #faecef;
 }
 
-.tech-units-clean-page .tech-chip--qc-ready {
-  border-color: #dfc98e;
-  color: #76571d;
-  background: #fbf4df;
-}
-
 .tech-units-clean-page .tech-qc-review-queue__link.has-rechecks strong {
   color: #76571d;
   background: #fbf0d2;
@@ -4389,49 +4402,72 @@
   cursor: not-allowed;
 }
 
-/* Stage 10W.1: responsive Unit Browser readability and stable summary columns.
-   Preserve the existing table-header typography while allowing complete Unit
-   values to wrap instead of truncating them with ellipses. The dense table
-   scrolls horizontally on narrow screens rather than compressing columns until
-   neighboring values overlap. */
+/* Stage 10W.68i: one authoritative fluid column model for the Unit Browser.
+   Each column has a content-based floor. Any width above the 1220px floor is
+   shared evenly between all seven columns until Unit / Weight reaches its
+   480px ceiling; after that, its unused share is redistributed evenly among
+   the remaining columns. This prevents surplus desktop width from collecting
+   beside QC or inside Unit / Weight while keeping the table fluid as the
+   workspace narrows. */
+.tech-units-clean-page .tech-units-clean-results-panel {
+  container-type: inline-size;
+  --tu-table-base-width: 1220px;
+  --tu-unit-base-width: 445px;
+  --tu-unit-max-width: 480px;
+  --tu-date-base-width: 85px;
+  --tu-work-base-width: 105px;
+  --tu-identifiers-base-width: 195px;
+  --tu-grade-base-width: 115px;
+  --tu-qc-base-width: 50px;
+  --tu-actions-base-width: 225px;
+  --tu-column-fluid-share: max(0px, calc((100cqi - var(--tu-table-base-width)) / 7));
+  --tu-unit-uncapped-width: calc(var(--tu-unit-base-width) + var(--tu-column-fluid-share));
+  --tu-unit-column-width: min(var(--tu-unit-max-width), var(--tu-unit-uncapped-width));
+  --tu-unit-overflow-share: max(0px, calc((var(--tu-unit-uncapped-width) - var(--tu-unit-max-width)) / 6));
+  --tu-secondary-fluid-share: calc(var(--tu-column-fluid-share) + var(--tu-unit-overflow-share));
+  --tu-cell-inline-padding: clamp(7px, 0.58cqi, 12px);
+}
+
 .tech-units-clean-page .tech-units-table {
-  min-width: 1370px;
-  table-layout: auto;
+  min-width: var(--tu-table-base-width);
+  table-layout: fixed;
 }
 
-.tech-units-clean-page .tech-units-table :is(th, td):nth-child(1) {
-  width: 29%;
-  min-width: 340px;
+.tech-units-clean-page .tech-units-col--unit {
+  width: var(--tu-unit-column-width);
 }
 
-.tech-units-clean-page .tech-units-table :is(th, td):nth-child(2) {
-  width: 11%;
-  min-width: 145px;
+.tech-units-clean-page .tech-units-col--date {
+  width: calc(var(--tu-date-base-width) + var(--tu-secondary-fluid-share));
 }
 
-.tech-units-clean-page .tech-units-table :is(th, td):nth-child(3) {
-  width: 15%;
-  min-width: 190px;
+.tech-units-clean-page .tech-units-col--work {
+  width: calc(var(--tu-work-base-width) + var(--tu-secondary-fluid-share));
 }
 
-.tech-units-clean-page .tech-units-table :is(th, td):nth-child(4) {
-  width: 20%;
-  min-width: 265px;
+.tech-units-clean-page .tech-units-col--identifiers {
+  width: calc(var(--tu-identifiers-base-width) + var(--tu-secondary-fluid-share));
 }
 
-.tech-units-clean-page .tech-units-table :is(th, td):nth-child(5) {
-  width: 11%;
-  min-width: 150px;
+.tech-units-clean-page .tech-units-col--grade {
+  width: calc(var(--tu-grade-base-width) + var(--tu-secondary-fluid-share));
 }
 
-.tech-units-clean-page .tech-units-table :is(th, td):nth-child(6) {
-  width: 5%;
-  min-width: 58px;
+.tech-units-clean-page .tech-units-col--qc {
+  width: calc(var(--tu-qc-base-width) + var(--tu-secondary-fluid-share));
 }
 
-.tech-units-clean-page .tech-units-table :is(th, td):nth-child(7) {
-  width: 9%;
-  min-width: 170px;
+.tech-units-clean-page .tech-units-col--actions {
+  width: calc(var(--tu-actions-base-width) + var(--tu-secondary-fluid-share));
+}
+
+/* Horizontal breathing room follows one shared fluid value instead of
+   per-column padding overrides, so it contracts continuously with the Unit
+   Browser workspace. Vertical table spacing and header typography stay as-is. */
+.tech-units-clean-page .tech-units-table thead th,
+.tech-units-clean-page .tech-summary-row > td {
+  padding-right: var(--tu-cell-inline-padding);
+  padding-left: var(--tu-cell-inline-padding);
 }
 
 .tech-units-clean-page .tech-unit-summary-spec {
@@ -4477,6 +4513,31 @@
   text-overflow: clip;
   white-space: nowrap;
 }
+
+/* Keep all available Unit actions in one ordered right-aligned flex flow.
+   On wide workspaces the actions stay on one vertically centered row. As the
+   Actions column contracts, later controls wrap naturally onto a second line,
+   preserving DOM order (Edit, Park Unit, Print Label, Complete/Undo for the
+   roles that expose those controls). */
+.tech-units-clean-page .tech-summary-actions {
+  display: flex;
+  align-items: center;
+  align-content: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  width: 100%;
+  min-width: 0;
+  margin-left: auto;
+  gap: 4px 6px;
+}
+
+.tech-units-clean-page .tech-summary-actions__primary,
+.tech-units-clean-page .tech-summary-actions__secondary {
+  display: contents;
+}
+
+/* Stage 10W.68e: QC status tooltip presentation now lives with the shared
+   QC icon palette in app.css instead of adding another page-local variant. */
 
 /* Stage 10W.12.1 — circular keyboard-focus halo for Pass/Fail radios. */
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option input[type="radio"][data-outcome-tab-stop]:is(:focus, :focus-visible) {
@@ -4599,27 +4660,6 @@
   background: #edf5ff;
 }
 
-
-/* Stage 10W31: hierarchical Lot context without widening operational selectors. */
-:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option {
-  padding-left: calc(11px + (var(--lot-depth, 0) * 15px));
-}
-
-:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--ancestor {
-  color: #7b8796;
-  background: #f8fafc;
-  cursor: default;
-  font-size: 0.8rem;
-  font-weight: 620;
-}
-
-:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--ancestor:hover {
-  background: #f8fafc;
-}
-
-:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--selectable {
-  color: #26384e;
-}
 
 :is(#modal-root, .tech-unit-form-clean-page) .tech-lot-hierarchy-breadcrumb {
   display: flex;

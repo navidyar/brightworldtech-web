@@ -19,9 +19,11 @@
     'admin-config-database'
   ];
   const adminSectionActive = adminConfigurationNavKeys.includes(currentNav);
-  const managementSectionActive =
-    ['management', 'management-login-activity', 'management-lots', 'management-qc-reporting'].includes(currentNav)
-      || (!canAccessMenuArea('admin') && currentNav === 'admin-config-processors');
+  const managementSectionActive = ['management', 'management-login-activity', 'management-lots'].includes(currentNav);
+  const sidebarRoleCodes = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
+  const isQcOnlyNavigationUser = sidebarRoleCodes.includes('qc')
+    && !sidebarRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
+  const qcSectionActive = ['qc-review', 'management-qc-reporting'].includes(currentNav) || (isQcOnlyNavigationUser && currentNav === 'unit-requests');
   const techSectionActive = currentNav === 'tech-units' || currentNav === 'unit-requests';
 %>
 
@@ -102,21 +104,38 @@
             <span>Lots</span>
           </a>
 
-          <a href="/management/qc-reporting" class="sidebar-sublink <%= currentNav === 'management-qc-reporting' ? 'active' : '' %>" <%= currentNav === 'management-qc-reporting' ? 'aria-current="page"' : '' %>>
-            <span>QC Reporting</span>
-          </a>
-
-          <% if (!canAccessMenuArea('admin')) { %>
-            <a href="/management/config/processors" class="sidebar-sublink <%= currentNav === 'admin-config-processors' ? 'active' : '' %>" <%= currentNav === 'admin-config-processors' ? 'aria-current="page"' : '' %>>
-              <span>Processor Catalog</span>
-            </a>
-          <% } %>
-
         </div>
       </section>
     <% } %>
 
-    <% if (canAccessMenuArea('tech')) { %>
+    <% if (canAccessMenuArea('qc')) { %>
+      <section class="sidebar-section <%= qcSectionActive ? 'is-active' : '' %>">
+        <div class="sidebar-section-heading <%= qcSectionActive ? 'is-active' : '' %>">
+          <span class="sidebar-icon" aria-hidden="true">✓</span>
+          <span>QC Portal</span>
+        </div>
+
+        <div class="sidebar-subnav">
+          <a href="/qc/review" class="sidebar-sublink <%= currentNav === 'qc-review' ? 'active' : '' %>" <%= currentNav === 'qc-review' ? 'aria-current="page"' : '' %>>
+            <span>QC Review</span>
+          </a>
+
+          <% if (isQcOnlyNavigationUser && typeof canAccessUnitRequests === 'function' && canAccessUnitRequests()) { %>
+            <a href="/unit-requests" class="sidebar-sublink <%= currentNav === 'unit-requests' ? 'active' : '' %>" <%= currentNav === 'unit-requests' ? 'aria-current="page"' : '' %>>
+              <span>Requests</span>
+            </a>
+          <% } %>
+
+          <% if (canAccessMenuArea('management')) { %>
+            <a href="/management/qc-reporting" class="sidebar-sublink <%= currentNav === 'management-qc-reporting' ? 'active' : '' %>" <%= currentNav === 'management-qc-reporting' ? 'aria-current="page"' : '' %>>
+              <span>QC Reporting</span>
+            </a>
+          <% } %>
+        </div>
+      </section>
+    <% } %>
+
+    <% if (canAccessMenuArea('tech') && !isQcOnlyNavigationUser) { %>
       <section class="sidebar-section <%= techSectionActive ? 'is-active' : '' %>">
         <div class="sidebar-section-heading <%= techSectionActive ? 'is-active' : '' %>">
           <span class="sidebar-icon" aria-hidden="true">▣</span>

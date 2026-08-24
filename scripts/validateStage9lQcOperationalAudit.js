@@ -12,7 +12,7 @@ function formatList(values = [], limit = 8) {
 
 async function main() {
   const result = await getQcOperationalAudit();
-  const { audit, integrity, history, sequences } = result;
+  const { audit, integrity, history, sequences, correctionWorkflowBoundary } = result;
 
   if (!audit.passed) {
     console.error('Stage 9L Quality Control operational audit failed.');
@@ -44,6 +44,12 @@ async function main() {
   console.log(`- Reviews retained on reversed completion cycles: ${audit.metrics.reversedCompletionReviews}`);
 
   audit.warnings.forEach((message) => console.warn(`Warning: ${message}`));
+  if (sequences?.affectedCompletionIds?.legacyRecheckWithoutCorrection?.length) {
+    console.warn(`Historical pre-Stage-9G recheck completion IDs: ${formatList(sequences.affectedCompletionIds.legacyRecheckWithoutCorrection)}`);
+    if (correctionWorkflowBoundary?.correctionWorkflowStartedAt) {
+      console.warn(`Stage 9G correction workflow boundary: ${correctionWorkflowBoundary.correctionWorkflowStartedAt}`);
+    }
+  }
   if (sequences?.affectedCompletionIds?.acceptedThenReviewed?.length) {
     console.warn(`Historical accepted-then-reviewed completion IDs: ${formatList(sequences.affectedCompletionIds.acceptedThenReviewed)}`);
   }

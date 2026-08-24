@@ -47,7 +47,8 @@ function buildQcReviewActionQuery({
   });
   const whereParts = [
     "completion.credit_source = 'manual_completion'",
-    'completion.reversed_at IS NULL'
+    'completion.reversed_at IS NULL',
+    'qc.reverted_at IS NULL'
   ];
   const params = [];
 

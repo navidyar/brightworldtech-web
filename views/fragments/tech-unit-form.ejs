@@ -86,6 +86,7 @@
       ];
   const selectedOutcomeCode = String(formData.outcomeCode || '').trim().toLowerCase();
   const outcomeApprovalRequested = Boolean(formData.outcomeApprovalRequested);
+  const canRequestOutcomeConfirmation = Boolean(formOptions.canRequestOutcomeConfirmation);
   const productionWeightCapabilities = formOptions.productionWeightCapabilities || {};
   const productionWeightDetails = formData.productionWeightDetails || {
     formattedEffectiveWeight: '—',
@@ -288,8 +289,8 @@
         const selectedAssignableLotHierarchy = assignableLotHierarchyOptions.find((lot) => String(lot.lotId) === String(formData.lotId || ''));
         const selectedAssignableLotLabel = selectedAssignableLot
           ? (selectedAssignableLot.isCurrentLotClosed
-            ? `${selectedAssignableLotHierarchy?.compactLabel || selectedAssignableLot.lot_name} (Closed — current lot)`
-            : (selectedAssignableLotHierarchy?.compactLabel || selectedAssignableLot.lot_name))
+            ? `${selectedAssignableLot.lot_name} (Closed — current lot)`
+            : selectedAssignableLot.lot_name)
           : '';
         const selectedAssignableLotAllowsAssumption = Boolean(
           selectedAssignableLot
@@ -320,8 +321,8 @@
                 const lotProductionWeightValue = Number.isFinite(lotProductionWeightNumber) ? lotProductionWeightNumber.toFixed(2) : '';
                 const lotOptionName = hierarchyLot.lotName || lot.lot_name || `Lot #${hierarchyLot.lotId}`;
                 const lotOptionCompactLabel = lot.isCurrentLotClosed
-                  ? `${hierarchyLot.compactLabel || lotOptionName} (Closed — current lot)`
-                  : (hierarchyLot.compactLabel || lotOptionName);
+                  ? `${lotOptionName} (Closed — current lot)`
+                  : lotOptionName;
               %>
               <option
                 value="<%= hierarchyLot.lotId %>"
@@ -1236,17 +1237,19 @@
       </label>
     </div>
 
-    <div class="tech-outcome-approval-box" data-unit-form-follows-key="unit_outcome" data-outcome-approval-request-box data-request-active="<%= outcomeApprovalRequested ? 'true' : 'false' %>">
-      <label class="tech-outcome-approval-check">
-        <input type="checkbox" name="outcomeApprovalRequested" value="1" data-outcome-approval-request-toggle <%= outcomeApprovalRequested ? 'checked' : '' %> />
-        <span>Request Management/Lead approval for this Pass/Fail decision</span>
-      </label>
+    <% if (canRequestOutcomeConfirmation) { %>
+      <div class="tech-outcome-approval-box" data-unit-form-follows-key="unit_outcome" data-outcome-approval-request-box data-request-active="<%= outcomeApprovalRequested ? 'true' : 'false' %>">
+        <label class="tech-outcome-approval-check">
+          <input type="checkbox" name="outcomeApprovalRequested" value="1" data-outcome-approval-request-toggle <%= outcomeApprovalRequested ? 'checked' : '' %> />
+          <span>Request Tech Lead+ confirmation for this Pass/Fail decision</span>
+        </label>
 
-      <label class="form-field">
-        <span>Approval Request Notes</span>
-        <textarea name="outcomeApprovalRequestNotes" rows="3" maxlength="1000" data-outcome-approval-request-notes placeholder="Check the request box to enter a note." <%= outcomeApprovalRequested ? '' : 'disabled aria-disabled="true"' %>><%= formData.outcomeApprovalRequestNotes || '' %></textarea>
-      </label>
-    </div>
+        <label class="form-field">
+          <span>Confirmation Request Note</span>
+          <textarea name="outcomeApprovalRequestNotes" rows="3" maxlength="1000" data-outcome-approval-request-notes placeholder="Explain why you want a second opinion." <%= outcomeApprovalRequested ? '' : 'disabled aria-disabled="true"' %>><%= formData.outcomeApprovalRequestNotes || '' %></textarea>
+        </label>
+      </div>
+    <% } %>
   </div>
 
   <div class="form-section tech-form-section--comments" data-unit-form-auto-collapse>

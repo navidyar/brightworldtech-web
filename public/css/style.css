@@ -226,6 +226,13 @@ code {
     box-shadow: 18px 0 34px rgba(15, 23, 42, 0.16);
   }
 
+  /* Stage 10W68P: an explicit Unpin click wins over the transient hover/focus
+     state long enough for the sidebar to complete its hide transition. */
+  html:not([data-sidebar-pinned="true"]) .sidebar.is-desktop-unpinning {
+    transform: translateX(calc(-100% + var(--sidebar-edge-trigger)));
+    box-shadow: none;
+  }
+
   html[data-sidebar-pinned="true"] .app-shell {
     grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   }

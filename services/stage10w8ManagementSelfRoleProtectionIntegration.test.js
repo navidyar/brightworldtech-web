@@ -174,7 +174,11 @@ test('Management self profile save preserves user_roles by using the profile-onl
     userId: 22,
     firstName: 'Morgan',
     lastName: 'Manager',
-    email: 'morgan.manager@example.com'
+    email: 'morgan.manager@example.com',
+    personalEmail: null,
+    phone: null,
+    startDate: null,
+    endDate: null
   });
   assert.equal(roleUpdateCalled, false);
   assert.equal(res.state.redirectUrl, '/management/users?updated=1');
@@ -256,7 +260,11 @@ test('Admin self profile save preserves the Admin role through the profile-only 
     userId: 1,
     firstName: 'Avery',
     lastName: 'Admin',
-    email: 'avery.admin@example.com'
+    email: 'avery.admin@example.com',
+    personalEmail: null,
+    phone: null,
+    startDate: null,
+    endDate: null
   });
   assert.equal(roleUpdateCalled, false);
   assert.equal(res.state.redirectUrl, '/management/users?updated=1');

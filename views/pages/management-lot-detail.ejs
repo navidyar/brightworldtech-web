@@ -9,7 +9,7 @@
   }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   <script defer src="/js/lot-form.js?v=20260813-stage10w61-lot-ui-export"></script>
-  <script defer src="/js/lot-requirements.js?v=20260807-stage10w17-expanded-requirements"></script>
+  <script defer src="/js/lot-requirements.js?v=20260819-stage10w68y-mouse-focus-continuity"></script>
   <script defer src="/js/lot-unit-form-rules.js"></script>
   <script defer src="/js/unit-export.js?v=20260813-stage10w63-multi-lot-export-scope"></script>
 
@@ -232,9 +232,20 @@
 
               <div class="compact-lot-list">
                 <% lotRelationships.directChildLots.forEach((childLot) => { %>
+                  <%
+                    const childDirectUnitCount = Number(childLot.directUnitCount || 0);
+                    const childInclusiveUnitCount = Number(childLot.descendantUnitCount || childDirectUnitCount);
+                  %>
                   <a href="/management/lots/<%= childLot.lot_id %>" class="compact-lot-item">
                     <strong class="lot-display-name"><%= childLot.lot_name %></strong>
-                    <span><%= childLot.lot_type_label || 'No type' %><%= Number(childLot.is_active) === 1 ? '' : ' · Hidden' %></span>
+                    <span>
+                      <%= childLot.lot_type_label || 'No type' %>
+                      · <%= formatNumber(childDirectUnitCount) %> direct <%= childDirectUnitCount === 1 ? 'unit' : 'units' %>
+                      <% if (childInclusiveUnitCount !== childDirectUnitCount) { %>
+                        · <%= formatNumber(childInclusiveUnitCount) %> incl. descendants
+                      <% } %>
+                      <%= Number(childLot.is_active) === 1 ? '' : ' · Hidden' %>
+                    </span>
                   </a>
                 <% }) %>
               </div>

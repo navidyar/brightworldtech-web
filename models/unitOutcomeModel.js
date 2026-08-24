@@ -1,5 +1,4 @@
 const { pool } = require('./db');
-const unitWorkflowAudit = require('../services/unitWorkflowAudit');
 
 const VALID_OUTCOME_CODES = new Set(['pass', 'fail']);
 
@@ -244,7 +243,7 @@ async function getOutcomeFormDataByUnitId(unitId) {
 }
 
 
-async function saveOutcomeForUnitWithConnection(connection, { unitId, formData, currentUserId }) {
+async function saveOutcomeForUnitWithConnection(connection, { unitId, formData, currentUserId, canRequestOutcomeConfirmation = false }) {
   const safeUnitId = normalizeOptionalInteger(unitId);
 
   if (!safeUnitId || !await tableExists(connection)) {
@@ -252,7 +251,8 @@ async function saveOutcomeForUnitWithConnection(connection, { unitId, formData, 
   }
 
   const outcomeCode = normalizeOutcomeCode(formData.outcomeCode);
-  const approvalRequested = normalizeApprovalRequested(formData.outcomeApprovalRequested);
+  const approvalRequested = canRequestOutcomeConfirmation
+    && normalizeApprovalRequested(formData.outcomeApprovalRequested);
 
   if (!outcomeCode) {
     return;
@@ -300,6 +300,7 @@ async function saveOutcomeForUnitWithConnection(connection, { unitId, formData, 
   if (!outcomeChanged && !approvalRequestChanged) {
     return {
       saved: false,
+      unitOutcomeId: normalizeOptionalInteger(currentRow?.unit_outcome_id),
       outcomeChanged: false,
       approvalRequested
     };
@@ -315,7 +316,7 @@ async function saveOutcomeForUnitWithConnection(connection, { unitId, formData, 
     [safeUnitId]
   );
 
-  await connection.query(
+  const [insertResult] = await connection.query(
     `
       INSERT INTO unit_outcomes (
         unit_id,
@@ -344,6 +345,7 @@ async function saveOutcomeForUnitWithConnection(connection, { unitId, formData, 
 
   return {
     saved: true,
+    unitOutcomeId: Number(insertResult.insertId) || null,
     outcomeChanged,
     approvalRequested
   };
@@ -371,77 +373,6 @@ async function saveOutcomeForUnit({ unitId, formData, currentUserId }) {
   }
 }
 
-async function approveCurrentOutcome({ unitId, approvedByUserId, approvalNotes }) {
-  const safeUnitId = normalizeOptionalInteger(unitId);
-  const reviewerUserId = normalizeOptionalInteger(approvedByUserId);
-
-  if (!safeUnitId || !reviewerUserId || !await tableExists()) {
-    return false;
-  }
-
-  const connection = await pool.getConnection();
-
-  try {
-    await connection.beginTransaction();
-    const [currentRows] = await connection.query(
-      `
-        SELECT unit_outcome_id, outcome_code
-        FROM unit_outcomes
-        WHERE unit_id = ?
-          AND is_current = 1
-          AND approval_status_code = 'pending'
-        ORDER BY selected_at DESC, unit_outcome_id DESC
-        LIMIT 1
-        FOR UPDATE
-      `,
-      [safeUnitId]
-    );
-    const current = currentRows[0] || null;
-
-    if (!current) {
-      await connection.rollback();
-      return false;
-    }
-
-    const [result] = await connection.query(
-      `
-        UPDATE unit_outcomes
-        SET
-          approval_status_code = 'approved',
-          approved_by_user_id = ?,
-          approved_at = NOW(),
-          approval_notes = ?,
-          updated_at = CURRENT_TIMESTAMP
-        WHERE unit_outcome_id = ?
-          AND approval_status_code = 'pending'
-        LIMIT 1
-      `,
-      [reviewerUserId, normalizeNullableText(approvalNotes, 1000), Number(current.unit_outcome_id)]
-    );
-
-    if (Number(result.affectedRows || 0) !== 1) {
-      await connection.rollback();
-      return false;
-    }
-
-    await unitWorkflowAudit.recordOutcomeApproved(connection, {
-      unitId: safeUnitId,
-      actorUserId: reviewerUserId,
-      outcomeLabel: getOutcomeLabel(current.outcome_code),
-      approvalNotes,
-      source: 'unit_outcome_approval'
-    });
-
-    await connection.commit();
-    return true;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
-}
-
 module.exports = {
   VALID_OUTCOME_CODES,
   normalizeOutcomeCode,
@@ -455,5 +386,4 @@ module.exports = {
   listCurrentOutcomesForUnits,
   saveOutcomeForUnit,
   saveOutcomeForUnitWithConnection,
-  approveCurrentOutcome
 };

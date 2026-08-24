@@ -76,6 +76,6 @@ test('Stage 10Q assets are cache-busted on all Unit form entry points', () => {
   assert.match(detailPage, /tech-units-clean\.css\?v=/);
   assert.match(formPage, /tech-units-clean\.css\?v=/);
   assert.match(browserPage, /tech-units-clean\.css\?v=/);
-  assert.match(formPage, /tech-unit-form\.js\?v=20260804-stage10w2-refinements/);
-  assert.match(browserPage, /tech-unit-form\.js\?v=20260804-stage10w2-refinements/);
+  assert.match(formPage, /tech-unit-form\.js\?v=20260819-stage10w68z-assignable-lot-closed-on-focus/);
+  assert.match(browserPage, /tech-unit-form\.js\?v=20260819-stage10w68z-assignable-lot-closed-on-focus/);
 });

@@ -29,42 +29,48 @@
             <% } %>
 
             <form class="auth-form management-user-create-form" method="post" action="/management/users" autocomplete="off">
-              <label class="form-field">
-                <span>First Name</span>
-                <input
-                  type="text"
-                  name="firstName"
-                  value="<%= formData.firstName %>"
-                  autocomplete="off"
-                  required
-                />
-              </label>
+              <div class="form-grid">
+                <label class="form-field">
+                  <span>First Name</span>
+                  <input type="text" name="firstName" value="<%= formData.firstName %>" autocomplete="off" required />
+                </label>
 
-              <label class="form-field">
-                <span>Last Name</span>
-                <input
-                  type="text"
-                  name="lastName"
-                  value="<%= formData.lastName %>"
-                  autocomplete="off"
-                  required
-                />
-              </label>
+                <label class="form-field">
+                  <span>Last Name</span>
+                  <input type="text" name="lastName" value="<%= formData.lastName %>" autocomplete="off" required />
+                </label>
+              </div>
 
               <p class="management-user-role-help">A BWT username is generated from the first two letters of the first and last name. For example, Natalie Garcia becomes NAGA; a duplicate becomes NAGA2. The username remains stable after account creation.</p>
 
+              <div class="form-grid">
+                <label class="form-field">
+                  <span>Work / Login Email</span>
+                  <input type="email" name="email" value="<%= formData.email %>" autocomplete="off" inputmode="email" spellcheck="false" required />
+                </label>
+
+                <label class="form-field">
+                  <span>Personal Email (optional)</span>
+                  <input type="email" name="personalEmail" maxlength="255" value="<%= formData.personalEmail || '' %>" autocomplete="off" inputmode="email" spellcheck="false" />
+                </label>
+              </div>
+
               <label class="form-field">
-                <span>Email Address</span>
-                <input
-                  type="email"
-                  name="email"
-                  value="<%= formData.email %>"
-                  autocomplete="off"
-                  inputmode="email"
-                  spellcheck="false"
-                  required
-                />
+                <span>Phone (optional)</span>
+                <input type="tel" name="phone" value="<%= formData.phone || '' %>" autocomplete="off" inputmode="tel" maxlength="50" />
               </label>
+
+              <div class="form-grid">
+                <label class="form-field">
+                  <span>Start Date (optional)</span>
+                  <input type="date" name="startDate" value="<%= formData.startDate || '' %>" />
+                </label>
+
+                <label class="form-field">
+                  <span>End Date (optional)</span>
+                  <input type="date" name="endDate" value="<%= formData.endDate || '' %>" />
+                </label>
+              </div>
 
               <label class="form-field">
                 <span>Setup Link Expiration (hours)</span>

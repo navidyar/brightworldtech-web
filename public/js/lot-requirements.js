@@ -56,12 +56,30 @@
     return String(option?.label || option?.value || '').trim();
   }
 
+  function getLeadingRequirementValueSearchTokens(value) {
+    return normalizeRequirementValueSearch(value)
+      .replace(/([\p{L}])(\p{N})/gu, '$1 $2')
+      .replace(/(\p{N})([\p{L}])/gu, '$1 $2')
+      .split(/[^\p{L}\p{N}]+/u)
+      .filter(Boolean);
+  }
+
+  function matchesLeadingRequirementValueSearch(value, search) {
+    const searchTokens = getLeadingRequirementValueSearchTokens(search);
+
+    if (searchTokens.length === 0) {
+      return true;
+    }
+
+    const valueTokens = getLeadingRequirementValueSearchTokens(value);
+
+    return searchTokens.every((searchToken) => (
+      valueTokens.some((valueToken) => valueToken.startsWith(searchToken))
+    ));
+  }
+
   function getRequirementValueOptionSearchText(option) {
-    return normalizeRequirementValueSearch([
-      option?.label,
-      option?.code,
-      option?.description
-    ].filter(Boolean).join(' '));
+    return [option?.label, option?.code].filter(Boolean).join(' ');
   }
 
   function filterRequirementValueOptions(options, query) {
@@ -72,7 +90,7 @@
     }
 
     return (Array.isArray(options) ? options : []).filter((option) => (
-      getRequirementValueOptionSearchText(option).includes(normalizedQuery)
+      matchesLeadingRequirementValueSearch(getRequirementValueOptionSearchText(option), normalizedQuery)
     ));
   }
 
@@ -175,6 +193,7 @@
         const optionButton = document.createElement('button');
         const optionLabel = getRequirementValueOptionLabel(option);
         optionButton.type = 'button';
+        optionButton.tabIndex = -1;
         optionButton.id = `lot-requirement-value-option-${index}`;
         optionButton.className = 'lot-requirement-value-option';
         optionButton.dataset.requiredValueOption = String(option.value);
@@ -515,12 +534,23 @@
         return;
       }
 
+      // Prevent the transient result button from stealing focus. Selection is
+      // handled on click so the result remains under the pointer through the
+      // complete mouse gesture and the next Tab continues from Required Value.
       event.preventDefault();
+    });
+
+    optionsContainer.addEventListener('click', (event) => {
+      const optionButton = event.target.closest('[data-required-value-option]');
+
+      if (!optionButton) {
+        return;
+      }
+
       const option = getCurrentOptions().find((candidate) => (
         String(candidate.value) === String(optionButton.dataset.requiredValueOption)
       ));
       selectRequirementValueOption({ searchInput, selectInput, optionsContainer, option });
-      searchInput.focus();
     });
 
     searchInput.addEventListener('blur', () => {

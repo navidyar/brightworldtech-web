@@ -5,14 +5,14 @@
     ? qcStatusPresentation
     : null;
   const statusCode = presentation ? presentation.statusCode : '';
-  const statusIconCode = statusCode === 'corrected' ? 'corrected' : statusCode;
+  const statusIconCode = statusCode === 'corrected' ? 'corrected' : (statusCode === 'reverted' ? 'not_reviewed' : statusCode);
   const review = presentation ? presentation.latestReview : latestQcReview;
   const correction = presentation ? presentation.latestCorrection : latestQcCorrection;
   const workflowSteps = presentation && Array.isArray(presentation.workflowSteps)
     ? presentation.workflowSteps
     : [];
   const currentUserRoles = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
-  const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'qc'].includes(roleCode));
+  const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'qc', 'tech'].includes(roleCode));
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
@@ -92,6 +92,29 @@
           <% } %>
         </section>
 
+        <% if (review.isReverted) { %>
+          <section class="tech-qc-correction-detail" aria-labelledby="tech-qc-reversion-detail-title">
+            <div class="tech-qc-correction-detail__heading">
+              <h3 id="tech-qc-reversion-detail-title">Decision Reverted</h3>
+              <span>Awaiting QC</span>
+            </div>
+            <dl class="tech-qc-review-meta tech-qc-review-meta--correction">
+              <div>
+                <dt>Reverted By</dt>
+                <dd><%= review.revertedByName || 'User not recorded' %></dd>
+              </div>
+              <div>
+                <dt>Reverted At</dt>
+                <dd><%= review.revertedAt ? formatDateTime(review.revertedAt) : '—' %></dd>
+              </div>
+            </dl>
+            <div class="tech-qc-correction-detail__notes">
+              <h4>Reversion Reason</h4>
+              <p><%= review.reversionReason || 'No reason recorded.' %></p>
+            </div>
+          </section>
+        <% } %>
+
         <% if (correction) { %>
           <section class="tech-qc-correction-detail" aria-labelledby="tech-qc-correction-detail-title">
             <div class="tech-qc-correction-detail__heading">
@@ -123,6 +146,31 @@
 
     <footer class="tech-qc-modal-footer">
       <div class="action-row tech-qc-modal-actions">
+        <% if (unit && review && pendingQcReversionRequest) { %>
+          <a
+            class="secondary-button"
+            href="/unit-requests/<%= pendingQcReversionRequest.unitRequestId %>"
+          >
+            Reversion Request #<%= pendingQcReversionRequest.unitRequestId %> Pending
+          </a>
+        <% } else if (unit && review && canRequestQcReversion) { %>
+          <a
+            class="secondary-button"
+            href="/tech/units/<%= unit.unitId %>/qc-review/<%= review.qcCheckId %>/reversion-request/modal"
+            data-tech-modal-trigger
+          >
+            Request Reversion
+          </a>
+        <% } %>
+        <% if (unit && review && canDirectlyRevertQc) { %>
+          <a
+            class="danger-button"
+            href="/tech/units/<%= unit.unitId %>/qc-review/<%= review.qcCheckId %>/revert/modal"
+            data-tech-modal-trigger
+          >
+            Revert Current QC Decision
+          </a>
+        <% } %>
         <% if (unit && canViewUnitHistory) { %>
           <button
             type="button"

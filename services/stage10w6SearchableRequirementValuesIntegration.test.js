@@ -20,11 +20,13 @@ test('Lot requirement Required Value uses a searchable combobox while preserving
   assert.match(modal, /data-required-value-options[\s\S]*?role="listbox"|role="listbox"[\s\S]*?data-required-value-options/);
 });
 
-test('search matches labels, codes, and descriptions and still requires an available-list selection', () => {
+test('search uses leading label/code tokens and still requires an available-list selection', () => {
   const script = read('public/js/lot-requirements.js');
 
   assert.match(script, /function filterRequirementValueOptions\(options, query\)/);
-  assert.match(script, /option\?\.label,[\s\S]*?option\?\.code,[\s\S]*?option\?\.description/);
+  assert.match(script, /function matchesLeadingRequirementValueSearch\(value, search\)/);
+  assert.match(script, /\[option\?\.label, option\?\.code\]/);
+  assert.doesNotMatch(script, /getRequirementValueOptionSearchText\(option\)[\s\S]*option\?\.description/);
   assert.match(script, /Select a value from the available list\./);
   assert.match(script, /selectInput\.value = String\(option\.value\)/);
   assert.match(script, /searchInput\.value = getRequirementValueOptionLabel\(option\)/);
@@ -55,5 +57,5 @@ test('Lots pages load the current requirement assets while preserving searchable
   assert.match(read('views/pages/management-lot-new.ejs'), /20260813-stage10w61-lot-ui-export/);
   assert.match(read('views/pages/management-lots.ejs'), /20260813-stage10w61-lot-ui-export/);
   assert.match(read('views/pages/management-lot-detail.ejs'), /20260813-stage10w61-lot-ui-export/);
-  assert.match(read('views/pages/management-lot-detail.ejs'), /lot-requirements\.js\?v=20260807-stage10w17-expanded-requirements/);
+  assert.match(read('views/pages/management-lot-detail.ejs'), /lot-requirements\.js\?v=20260819-stage10w68y-mouse-focus-continuity/);
 });

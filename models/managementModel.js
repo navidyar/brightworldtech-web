@@ -1,6 +1,7 @@
 const { pool } = require('./db');
 const accessPolicy = require('../config/accessPolicy');
 const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
+const { normalizeUserListSort, sortUserRows } = require('../utils/managementUserSort');
 
 function getPasswordLinkStatus(row) {
   if (!row || !row.latest_password_link_expires_at) {
@@ -89,7 +90,9 @@ async function getRoleId(roleCode, connection = pool) {
 }
 
 async function listUsers(options = {}) {
-  const activeFilter = options.activeOnly === false ? 0 : 1;
+  const activeOnly = options.activeOnly !== false;
+  const activeFilter = activeOnly ? 1 : 0;
+  const sort = normalizeUserListSort(options.sort);
 
   const [rows] = await pool.query(
     `
@@ -99,6 +102,10 @@ async function listUsers(options = {}) {
         u.last_name,
         u.username,
         u.email,
+        u.personal_email,
+        u.phone,
+        DATE_FORMAT(u.start_date, '%Y-%m-%d') AS start_date,
+        DATE_FORMAT(u.end_date, '%Y-%m-%d') AS end_date,
         status_system.system_config_value_id AS account_status_system_config_value_id,
         status.label AS account_status_label,
         u.password_hash IS NOT NULL AS has_password,
@@ -139,6 +146,10 @@ async function listUsers(options = {}) {
         u.last_name,
         u.username,
         u.email,
+        u.personal_email,
+        u.phone,
+        u.start_date,
+        u.end_date,
         status_system.system_config_value_id,
         status.label,
         u.password_hash,
@@ -155,7 +166,7 @@ async function listUsers(options = {}) {
     [activeFilter]
   );
 
-  return rows.map(mapUserRow);
+  return sortUserRows(rows.map(mapUserRow), { sort, activeOnly });
 }
 
 async function countUsersByActiveStatus() {
@@ -203,6 +214,10 @@ async function getUserById(userId) {
         u.last_name,
         u.username,
         u.email,
+        u.personal_email,
+        u.phone,
+        DATE_FORMAT(u.start_date, '%Y-%m-%d') AS start_date,
+        DATE_FORMAT(u.end_date, '%Y-%m-%d') AS end_date,
         status_system.system_config_value_id AS account_status_system_config_value_id,
         status.label AS account_status_label,
         u.password_hash IS NOT NULL AS has_password,
@@ -241,6 +256,10 @@ async function getUserById(userId) {
         u.last_name,
         u.username,
         u.email,
+        u.personal_email,
+        u.phone,
+        u.start_date,
+        u.end_date,
         status_system.system_config_value_id,
         status.label,
         u.password_hash,
@@ -258,7 +277,7 @@ async function getUserById(userId) {
   return rows[0] ? mapUserRow(rows[0]) : null;
 }
 
-async function updateUserProfile({ userId, firstName, lastName, email }) {
+async function updateUserProfile({ userId, firstName, lastName, email, personalEmail = null, phone = null, startDate = null, endDate = null }) {
   const safeUserId = Number(userId);
 
   const [result] = await pool.query(
@@ -268,10 +287,14 @@ async function updateUserProfile({ userId, firstName, lastName, email }) {
         first_name = ?,
         last_name = ?,
         email = ?,
+        personal_email = ?,
+        phone = ?,
+        start_date = ?,
+        end_date = ?,
         updated_at = CURRENT_TIMESTAMP
       WHERE user_id = ?
     `,
-    [firstName, lastName, email, safeUserId]
+    [firstName, lastName, email, personalEmail, phone, startDate, endDate, safeUserId]
   );
 
   if (result.affectedRows === 0) {
@@ -281,7 +304,7 @@ async function updateUserProfile({ userId, firstName, lastName, email }) {
   return getUserById(safeUserId);
 }
 
-async function updateUserWithRoles({ userId, firstName, lastName, email, roleCodes }) {
+async function updateUserWithRoles({ userId, firstName, lastName, email, personalEmail = null, phone = null, startDate = null, endDate = null, roleCodes }) {
   const safeUserId = Number(userId);
   const connection = await pool.getConnection();
 
@@ -295,10 +318,14 @@ async function updateUserWithRoles({ userId, firstName, lastName, email, roleCod
           first_name = ?,
           last_name = ?,
           email = ?,
+          personal_email = ?,
+          phone = ?,
+          start_date = ?,
+          end_date = ?,
           updated_at = CURRENT_TIMESTAMP
         WHERE user_id = ?
       `,
-      [firstName, lastName, email, safeUserId]
+      [firstName, lastName, email, personalEmail, phone, startDate, endDate, safeUserId]
     );
 
     if (result.affectedRows === 0) {

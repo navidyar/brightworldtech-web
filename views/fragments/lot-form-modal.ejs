@@ -104,15 +104,14 @@
             <% if (safeFormOptions.capabilities.hasParentLotId) { %>
               <label class="form-field">
                 <span>Parent Lot</span>
-                <select name="parentLotId">
-                  <option value="">No parent lot</option>
-                  <% safeFormOptions.parentLots.forEach((parentLot) => { %>
-                    <% if (!safeLot || Number(parentLot.lot_id) !== Number(safeLot.lot_id)) { %>
-                      <option value="<%= parentLot.lot_id %>" <%= String(safeFormData.parentLotId || '') === String(parentLot.lot_id) ? 'selected' : '' %>>
-                        <%= parentLot.lot_name %><%= Number(parentLot.is_active) === 1 ? '' : ' (Hidden)' %>
-                      </option>
-                    <% } %>
-                  <% }) %>
+                <select name="parentLotId" data-hierarchical-lot-select>
+                  <%- include('../partials/parent-lot-options', {
+                    parentLots: safeFormOptions.parentLots,
+                    selectedParentLotId: safeFormData.parentLotId,
+                    excludedLotId: safeLot ? safeLot.lot_id : null,
+                    emptyLabel: 'No parent lot',
+                    showHiddenStatus: true
+                  }) %>
                 </select>
                 </label>
             <% } %>

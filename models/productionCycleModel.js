@@ -73,6 +73,10 @@ async function getProductionCycleSchemaCapabilities(connection = pool) {
     hasLotPolicy: lotColumns.has('start_new_production_cycle_on_move'),
     hasHistoryStartFlag: historyColumns.has('starts_new_production_cycle'),
     hasHistoryProductionCycleKey: historyColumns.has('production_cycle_key'),
+    hasHistoryFromLotIdSnapshot: historyColumns.has('from_lot_id_snapshot'),
+    hasHistoryToLotIdSnapshot: historyColumns.has('to_lot_id_snapshot'),
+    hasHistoryFromLotNameSnapshot: historyColumns.has('from_lot_name_snapshot'),
+    hasHistoryToLotNameSnapshot: historyColumns.has('to_lot_name_snapshot'),
     hasCompletionProductionCycleKey: completionColumns.has('production_cycle_key'),
     hasCompletionCreditFlag: completionColumns.has('grants_production_credit'),
     hasCompletionWorkCycleKey: completionColumns.has('work_cycle_key'),
@@ -337,6 +341,27 @@ async function planLotMoveProductionCycle({
   };
 }
 
+async function getLotNameSnapshots(lotIds, connection = pool) {
+  const normalizedLotIds = Array.from(new Set((Array.isArray(lotIds) ? lotIds : [])
+    .map(normalizePositiveInteger)
+    .filter(Boolean)));
+
+  if (normalizedLotIds.length === 0) {
+    return new Map();
+  }
+
+  const [rows] = await connection.query(
+    `
+      SELECT lot_id, name
+      FROM lots
+      WHERE lot_id IN (${normalizedLotIds.map(() => '?').join(', ')})
+    `,
+    normalizedLotIds
+  );
+
+  return new Map(rows.map((row) => [Number(row.lot_id), String(row.name || '').trim()]));
+}
+
 async function recordLotMove({
   unitId,
   fromLotId,
@@ -369,14 +394,39 @@ async function recordLotMove({
     ? 'Destination Lot started a new production cycle. Another production unit and weight are earned only after the Unit is completed again.'
     : '';
   const moveNotes = [String(notes || '').trim(), productionCycleNote].filter(Boolean).join(' ');
+  const safeFromLotId = normalizePositiveInteger(fromLotId);
   const columns = ['unit_id', 'from_lot_id', 'to_lot_id', 'moved_by_user_id', 'notes'];
   const values = [
     safeUnitId,
-    normalizePositiveInteger(fromLotId),
+    safeFromLotId,
     safeToLotId,
     safeMovedByUserId,
     moveNotes || null
   ];
+
+  if (capabilities.hasHistoryFromLotIdSnapshot) {
+    columns.push('from_lot_id_snapshot');
+    values.push(safeFromLotId);
+  }
+
+  if (capabilities.hasHistoryToLotIdSnapshot) {
+    columns.push('to_lot_id_snapshot');
+    values.push(safeToLotId);
+  }
+
+  if (capabilities.hasHistoryFromLotNameSnapshot || capabilities.hasHistoryToLotNameSnapshot) {
+    const lotNameSnapshots = await getLotNameSnapshots([safeFromLotId, safeToLotId], connection);
+
+    if (capabilities.hasHistoryFromLotNameSnapshot) {
+      columns.push('from_lot_name_snapshot');
+      values.push(safeFromLotId ? lotNameSnapshots.get(safeFromLotId) || null : null);
+    }
+
+    if (capabilities.hasHistoryToLotNameSnapshot) {
+      columns.push('to_lot_name_snapshot');
+      values.push(lotNameSnapshots.get(safeToLotId) || null);
+    }
+  }
 
   if (capabilities.hasHistoryStartFlag) {
     columns.push('starts_new_production_cycle');

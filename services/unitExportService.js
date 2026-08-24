@@ -115,6 +115,7 @@ function buildUnitExportScope(result = {}) {
     ['Lot', findOptionLabel(result.lots, filters.lotId, { idKeys: ['lot_id', 'id'], labelKeys: ['name', 'lot_name', 'label'] })],
     ['Unit Type', findOptionLabel(result.unitCategories, filters.categoryId)],
     ['Cosmetic Grade', findOptionLabel(result.gradeFilterOptions, filters.gradeFilter, { idKeys: ['filterValue', 'id'], labelKeys: ['label'] })],
+    ['Completion', filters.completionFilter === 'completed' ? 'Completed' : (filters.completionFilter === 'not_completed' ? 'Not Completed' : '')],
     ['QC Status', QC_REVIEW_FILTER_LABELS[filters.qcReviewFilter] || ''],
     ['Tech Name', findOptionLabel(result.techUserOptions, filters.techUserId)],
     ['Created Start Date', normalizeText(filters.createdStartDate)],

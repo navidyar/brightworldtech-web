@@ -47,9 +47,9 @@ test('updated page assets force browsers to load the refined Lot and Unit form b
   const unitForm = read('views/pages/tech-unit-form.ejs');
 
   [lotDetail, lotBrowser, lotNew].forEach((markup) => {
-    assert.match(markup, /lots\.css\?v=20260804-stage10w2-refinements/);
+    assert.match(markup, /lots\.css\?v=20260813-stage10w61-lot-ui-export/);
   });
   [unitBrowser, unitForm].forEach((markup) => {
-    assert.match(markup, /tech-unit-form\.js\?v=20260804-stage10w2-refinements/);
+    assert.match(markup, /tech-unit-form\.js\?v=20260819-stage10w68z-assignable-lot-closed-on-focus/);
   });
 });

@@ -89,11 +89,47 @@ test('an unchanged save without a new request preserves an existing pending outc
 
   assert.deepEqual(result, {
     saved: false,
+    unitOutcomeId: 5,
     outcomeChanged: false,
     approvalRequested: false
   });
   assert.equal(connection.calls.length, 2);
   assert.equal(connection.calls.some((call) => /UPDATE unit_outcomes/.test(call.sql)), false);
+  assert.equal(connection.calls.some((call) => /INSERT INTO unit_outcomes/.test(call.sql)), false);
+});
+
+
+test('outcome persistence ignores a crafted confirmation action unless the caller grants regular-Tech authority', async () => {
+  const model = loadOutcomeModel();
+  const connection = createConnection([
+    [[{ table_exists: 1 }]],
+    [[{
+      unit_outcome_id: 5,
+      outcome_code: 'pass',
+      outcome_notes: 'Ready',
+      approval_status_code: 'not_requested',
+      approval_requested_by_user_id: null,
+      approval_request_notes: null
+    }]]
+  ]);
+
+  const result = await model.saveOutcomeForUnitWithConnection(connection, {
+    unitId: 12,
+    currentUserId: 9,
+    formData: {
+      outcomeCode: 'pass',
+      outcomeNotes: 'Ready',
+      outcomeApprovalRequested: true,
+      outcomeApprovalRequestNotes: 'Crafted request'
+    }
+  });
+
+  assert.deepEqual(result, {
+    saved: false,
+    unitOutcomeId: 5,
+    outcomeChanged: false,
+    approvalRequested: false
+  });
   assert.equal(connection.calls.some((call) => /INSERT INTO unit_outcomes/.test(call.sql)), false);
 });
 
@@ -116,6 +152,7 @@ test('another tech can submit a fresh request for the same unchanged outcome', a
   const result = await model.saveOutcomeForUnitWithConnection(connection, {
     unitId: 12,
     currentUserId: 9,
+    canRequestOutcomeConfirmation: true,
     formData: {
       outcomeCode: 'pass',
       outcomeNotes: 'Ready',

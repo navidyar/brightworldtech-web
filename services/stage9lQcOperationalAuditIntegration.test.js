@@ -49,3 +49,16 @@ test('Stage 9L validator treats historical accepted-then-reviewed cycles as visi
   assert.match(service, /Historical completion cycles contain a QC review after acceptance/);
   assert.match(validator, /Historical accepted-then-reviewed completion IDs/);
 });
+
+
+test('Stage 9L distinguishes pre-Stage-9G legacy rechecks from current correction-workflow violations', () => {
+  const validator = read('scripts/validateStage9lQcOperationalAudit.js');
+  const auditModel = read('models/qcOperationalAuditModel.js');
+  const service = read('services/qcOperationalAuditService.js');
+
+  assert.match(auditModel, /information_schema\.TABLES/);
+  assert.match(auditModel, /correctionWorkflowStartedAt/);
+  assert.match(service, /legacyRechecksWithoutCorrection/);
+  assert.match(service, /after the correction workflow became available/);
+  assert.match(validator, /Historical pre-Stage-9G recheck completion IDs/);
+});

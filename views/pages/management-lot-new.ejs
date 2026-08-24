@@ -106,13 +106,13 @@
                   <% if (formOptions.capabilities.hasParentLotId) { %>
                     <label class="form-field">
                       <span>Parent Lot</span>
-                      <select name="parentLotId">
-                        <option value="">No parent lot</option>
-                        <% formOptions.parentLots.forEach((lot) => { %>
-                          <option value="<%= lot.lot_id %>" <%= String(formData.parentLotId) === String(lot.lot_id) ? 'selected' : '' %>>
-                            <%= lot.lot_name %><%= lot.lot_code ? ` (${lot.lot_code})` : '' %>
-                          </option>
-                        <% }) %>
+                      <select name="parentLotId" data-hierarchical-lot-select>
+                        <%- include('../partials/parent-lot-options', {
+                          parentLots: formOptions.parentLots,
+                          selectedParentLotId: formData.parentLotId,
+                          emptyLabel: 'No parent lot',
+                          showLotCode: true
+                        }) %>
                       </select>
                     </label>
                   <% } %>

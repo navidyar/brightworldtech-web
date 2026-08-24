@@ -54,7 +54,15 @@ test('Processor approval runtime allows an explicitly authorized self-review and
   const connection = {
     async query(sql, params = []) {
       const compact = String(sql).replace(/\s+/g, ' ').trim();
-      if (compact.includes('FROM information_schema.TABLES')) return [[{ table_count: 1 }]];
+      if (compact.includes('FROM information_schema.TABLES')) {
+        return [[
+          { TABLE_NAME: 'unit_requests' },
+          { TABLE_NAME: 'unit_duplicate_requests' },
+          { TABLE_NAME: 'unit_request_events' },
+          { TABLE_NAME: 'unit_model_catalog_requests' },
+          { TABLE_NAME: 'unit_processor_catalog_requests' }
+        ]];
+      }
       if (compact.includes('FROM unit_requests ur') && compact.includes('INNER JOIN unit_processor_catalog_requests upcr')) {
         return [[{
           unit_request_id: 901,

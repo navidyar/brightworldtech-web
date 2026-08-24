@@ -2,6 +2,7 @@ const unitRequestModel = require('../models/unitRequestModel');
 const overrideRequestModel = require('../models/overrideRequestModel');
 const unifiedRequestQueue = require('../services/unifiedRequestQueue');
 const processorCatalogModel = require('../models/processorCatalogModel');
+const { publishUnitBrowserChange } = require('../services/unitBrowserRealtime');
 
 const REVIEW_ROLE_CODES = new Set(['admin', 'management', 'tech_lead']);
 const CATALOG_MANAGER_ROLE_CODES = new Set(['admin', 'management']);
@@ -103,6 +104,7 @@ function getReturnUrl(unitRequestId, queueFilters, query = {}) {
 function getSuccessMessage(query) {
   if (query.submitted === '1') return 'Intentional Duplicate request submitted for review.';
   if (query.withdrawn === '1') return 'Request withdrawn.';
+  if (query.qcReverted === '1') return 'QC decision reverted. The Unit is now Awaiting QC and the original decision remains in audit history.';
   if (query.approved === '1') {
     if (query.catalog === 'model') return query.result
       ? `Model Catalog request approved. ${query.result} is now available.`
@@ -123,6 +125,8 @@ function getErrorMessages(query) {
   if (query.error === 'rejection-note-required') return ['Enter a rejection note before rejecting this request.'];
   if (query.error === 'destination-invalid') return ['The originally requested destination lot is no longer open, visible, and assignable. Reject this request and have the Tech submit a new request with a current lot.'];
   if (query.error === 'self-review') return ['You cannot approve or reject your own request. Withdraw it instead if it is still pending.'];
+  if (query.error === 'outcome-target-invalid') return ['This Pass/Fail confirmation no longer has the exact current pending outcome target recorded by the Tech. No review was recorded.'];
+  if (query.error === 'qc-reversion-stale') return ['That QC decision is no longer the current decision for this Unit work cycle. No reversion was recorded. Refresh the Unit before taking action.'];
   if (query.error === 'not-owner') return ['You can withdraw only your own pending requests.'];
   if (query.error === 'catalog-permission') return ['Only Management and Admin can approve or reject Catalog Exception requests.'];
   if (query.error === 'catalog-input') return ['Complete the canonical catalog values before approving this request.'];
@@ -162,6 +166,12 @@ function isCatalogRequest(request) {
   return Boolean(request && request.isCatalogRequest);
 }
 
+function getOverrideQueueStatusFilter(statusFilter) {
+  if (statusFilter === 'rejected') return 'denied';
+  if (statusFilter === 'withdrawn') return 'cancelled';
+  return statusFilter;
+}
+
 async function renderUnitRequestsPage(req, res, next) {
   try {
     const queueFilters = getQueueFilters(req);
@@ -170,18 +180,22 @@ async function renderUnitRequestsPage(req, res, next) {
     // Search and Request Type are live client-side filters on the queue. Load
     // the full role-scoped data set for the selected status tab so typing never
     // causes another request, SQL search, or focus/caret interruption.
+    const overrideResultPromise = queueFilters.statusFilter === 'archived'
+      ? Promise.resolve({ supported: true, message: '', requests: [] })
+      : overrideRequestModel.listOverrideRequestSummaries({
+        statusFilter: getOverrideQueueStatusFilter(queueFilters.statusFilter),
+        requestedByUserId: requesterUserId,
+        includeAssignableLots: false,
+        limit: 250
+      });
     const [unitResult, overrideResult] = await Promise.all([
-      unitRequestModel.listUnitRequests({
+      unitRequestModel.listUnitRequestSummaries({
         statusFilter: queueFilters.statusFilter,
         requestTypeFilter: 'all',
         searchTerm: '',
         requestedByUserId: requesterUserId
       }),
-      overrideRequestModel.listOverrideRequests({
-        statusFilter: 'all',
-        requestedByUserId: requesterUserId,
-        limit: 250
-      })
+      overrideResultPromise
     ]);
     const result = unifiedRequestQueue.combineRequestResults({
       unitResult,
@@ -231,20 +245,29 @@ async function renderUnitRequestDetail(req, res, next) {
     const canReviewThisRequest = isUnitRequestReviewer(req)
       && (!isOwnRequest || canSelfReviewProcessorRequest)
       && (!isCatalogRequest(request) || catalogManager);
-    const processorBrands = request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE && catalogManager
-      ? await unitRequestModel.listActiveProcessorBrands()
-      : [];
-    const processorCatalogOptions = request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE && catalogManager
-      ? await processorCatalogModel.listProcessorCatalogOptions()
-      : [];
-    const processorCatalogMatches = request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE && catalogManager
-      ? await processorCatalogModel.findLikelyProcessorMatches({
+    const needsProcessorReviewData = request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE
+      && catalogManager
+      && request.isPending
+      && canReviewThisRequest;
+    let processorBrands = [];
+    let processorCatalogOptions = [];
+    let processorCatalogMatches = [];
+
+    if (needsProcessorReviewData) {
+      let allProcessorCatalogOptions = [];
+      [processorBrands, allProcessorCatalogOptions] = await Promise.all([
+        unitRequestModel.listActiveProcessorBrands(),
+        processorCatalogModel.listProcessorCatalogOptions({ includeInactive: true })
+      ]);
+      processorCatalogOptions = allProcessorCatalogOptions.filter((processor) => processor.isActive);
+      processorCatalogMatches = await processorCatalogModel.findLikelyProcessorMatches({
         brandName: request.catalogContext?.requestedProcessorType || '',
         modelCode: request.catalogContext?.requestedProcessorName || '',
         includeInactive: true,
-        limit: 5
-      })
-      : [];
+        limit: 5,
+        processorOptions: allProcessorCatalogOptions
+      });
+    }
 
     return res.render('pages/unit-request-detail', {
       pageTitle: `Unit Request #${unitRequestId}`,
@@ -310,7 +333,13 @@ async function renderOverrideRequestDetail(req, res, next) {
     };
 
     const queueFilters = getQueueFilters(req);
-    const assignableLotOptions = await overrideRequestModel.getAssignableLotOptions();
+    const canReviewRequest = isUnitRequestReviewer(req) && Number(request.requestedByUserId) !== Number(req.currentUser?.user_id);
+    const needsAssignableLots = canReviewRequest
+      && request.isPending
+      && request.requestType === 'manual_tech_override_request';
+    const assignableLotOptions = needsAssignableLots
+      ? await overrideRequestModel.getAssignableLotOptions()
+      : { lots: [], hierarchyOptions: [] };
     const assignableLots = assignableLotOptions.lots;
     const assignableLotHierarchyOptions = assignableLotOptions.hierarchyOptions;
     return res.render('pages/override-request-detail', {
@@ -323,7 +352,7 @@ async function renderOverrideRequestDetail(req, res, next) {
       requestTypeFilter: queueFilters.requestTypeFilter,
       searchTerm: queueFilters.searchTerm,
       requestQueueUrl: getOverrideReturnUrl(null, queueFilters),
-      canReviewRequest: isUnitRequestReviewer(req) && Number(request.requestedByUserId) !== Number(req.currentUser?.user_id),
+      canReviewRequest,
       canWithdrawRequest: request.isPending && Number(request.requestedByUserId) === Number(req.currentUser?.user_id),
       successMessage: req.query.approved === '1'
         ? 'Request approved.'
@@ -402,6 +431,12 @@ async function approveUnitRequest(req, res, next) {
         reviewerIsAdmin: isAdminCatalogReviewer(req),
         allowSelfReview: canManageCatalogRequests(req)
       });
+    } else if (request.requestType === unitRequestModel.QC_REVERSION_REQUEST_TYPE) {
+      result = await unitRequestModel.approveQcReversionRequest({
+        unitRequestId,
+        reviewedByUserId: req.currentUser.user_id,
+        reviewerNote: req.body.reviewerNote
+      });
     } else {
       result = await unitRequestModel.approveIntentionalDuplicateRequest({
         unitRequestId,
@@ -412,6 +447,11 @@ async function approveUnitRequest(req, res, next) {
 
     if (!result.approved) return res.redirect(getReturnUrl(unitRequestId, queueFilters, { skipped: 'not-pending' }));
 
+    if (request.requestType === unitRequestModel.QC_REVERSION_REQUEST_TYPE) {
+      publishUnitBrowserChange({ unitId: result.unitId, changeType: 'qc-reverted' });
+      return res.redirect(getReturnUrl(unitRequestId, queueFilters, { approved: '1', qcReverted: '1' }));
+    }
+
     return res.redirect(getReturnUrl(unitRequestId, queueFilters, catalogType
       ? { approved: '1', catalog: catalogType, result: result.resultLabel || '' }
       : { approved: '1', assetTag: result.createdAssetTag || '' }
@@ -421,6 +461,7 @@ async function approveUnitRequest(req, res, next) {
     const queueFilters = getQueueFilters(req);
     if (error?.code === 'BWT_UNIT_REQUEST_DESTINATION_INVALID') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'destination-invalid' }));
     if (error?.code === 'BWT_UNIT_REQUEST_SELF_REVIEW') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'self-review' }));
+    if (['BWT_QC_REVERSION_STALE', 'BWT_QC_REVERSION_NOT_LATEST', 'BWT_QC_REVERSION_ALREADY_REVERTED', 'BWT_QC_REVERSION_COMPLETION_STALE', 'BWT_QC_REVERSION_REQUEST_STALE'].includes(error?.code)) return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'qc-reversion-stale' }));
     if (error?.code === 'BWT_CATALOG_PROCESSOR_DUPLICATE') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'processor-duplicate', detail: String(error.message || '').slice(0, 1000) }));
     if (error?.code === 'BWT_CATALOG_PROCESSOR_ADMIN_CONFIRMATION_REQUIRED') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'processor-admin-confirmation' }));
     if (error?.code === 'BWT_CATALOG_PROCESSOR_CANONICAL_FORMAT') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'processor-format', detail: String(error.message || '').slice(0, 1000) }));
@@ -459,6 +500,7 @@ async function rejectUnitRequest(req, res, next) {
     if (!rejected) return res.redirect(getReturnUrl(unitRequestId, queueFilters, { skipped: 'not-pending' }));
     return res.redirect(getReturnUrl(unitRequestId, queueFilters, { rejected: '1' }));
   } catch (error) {
+    if (error?.code === 'BWT_UNIT_REQUEST_SELF_REVIEW') return res.redirect(getReturnUrl(getUnitRequestId(req), getQueueFilters(req), { error: 'self-review' }));
     if (error?.code === 'BWT_UNIT_REQUEST_REJECTION_NOTE_REQUIRED') {
       return res.redirect(getReturnUrl(getUnitRequestId(req), getQueueFilters(req), { error: 'rejection-note-required' }));
     }

@@ -9,9 +9,9 @@
     const optionName = String(lotOption.lotName || lotOption.lot_name || lotOption.label || lotOption.name || `Lot #${optionId}`).trim();
     const optionDepth = Math.max(Number(lotOption.depth || 0), 0);
     const isSelectable = lotOption.selectable !== false;
-    const indentation = '\u00A0\u00A0'.repeat(optionDepth);
-    const hierarchyPrefix = optionDepth > 0 ? '› ' : '';
-    const optionDisplayName = isSelectable && lotOption.compactLabel ? String(lotOption.compactLabel) : optionName;
+    const indentation = '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0'.repeat(optionDepth);
+    const hierarchyPrefix = optionDepth > 0 ? '❯ ' : '';
+    const optionDisplayName = optionName;
     const countText = showCounts && isSelectable ? ` (${formatNumber(Number(lotOption.count || 0))})` : '';
   %>
   <option
@@ -21,5 +21,6 @@
     data-lot-id="<%= optionId %>"
     data-lot-depth="<%= optionDepth %>"
     data-lot-full-path="<%= lotOption.fullPath || optionName %>"
+    data-lot-label="<%= optionDisplayName %><%= countText %>"
   ><%= indentation %><%= hierarchyPrefix %><%= optionDisplayName %><%= countText %></option>
 <% }) %>

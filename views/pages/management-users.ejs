@@ -4,15 +4,27 @@
     pageTitle,
     stylesheets: [
       '/css/modal.css?v=step5c-ui-hotfix',
-      '/css/management.css?v=step5c-ui-hotfix',
+      '/css/management.css?v=20260819-stage10w68p-interaction-refinements',
       '/css/copy-link.css?v=20260811-stage10w32'
     ]
   }) %>
-  <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+  <script defer src="/js/modal.js?v=20260819-stage10w68p-interaction-refinements"></script>
   <script defer src="/js/password-link-status.js?v=20260811-stage10w32"></script>
   <script defer src="/js/copy-link.js?v=20260811-stage10w32"></script>
 
   <body>
+    <%
+      const userListBasePath = isInactiveView ? '/management/users/inactive' : '/management/users';
+      const normalizedActiveSort = activeSort || 'user_az';
+      const nextUserSort = (forward, reverse) => normalizedActiveSort === forward ? reverse : forward;
+      const userSortClass = (forward, reverse) => `table-sort-link${[forward, reverse].includes(normalizedActiveSort) ? ' is-active' : ''}`;
+      const userSortIndicator = (forward, reverse, forwardIndicator = '↑', reverseIndicator = '↓') => {
+        if (normalizedActiveSort === forward) return forwardIndicator;
+        if (normalizedActiveSort === reverse) return reverseIndicator;
+        return '';
+      };
+      const userSortHref = (forward, reverse) => `${userListBasePath}?sort=${encodeURIComponent(nextUserSort(forward, reverse))}`;
+    %>
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 
@@ -100,11 +112,36 @@
               <table>
                 <thead>
                   <tr>
-                    <th>User</th>
-                    <th>Primary Role</th>
-                    <th>Employee</th>
-                    <th>Account Setup</th>
-                    <th>Last Login</th>
+                    <th>
+                      <a class="<%= userSortClass('user_az', 'user_za') %>" href="<%= userSortHref('user_az', 'user_za') %>">
+                        User
+                        <% if (userSortIndicator('user_az', 'user_za')) { %><span aria-hidden="true"><%= userSortIndicator('user_az', 'user_za') %></span><% } %>
+                      </a>
+                    </th>
+                    <th>
+                      <a class="<%= userSortClass('role_az', 'role_za') %>" href="<%= userSortHref('role_az', 'role_za') %>">
+                        Primary Role
+                        <% if (userSortIndicator('role_az', 'role_za')) { %><span aria-hidden="true"><%= userSortIndicator('role_az', 'role_za') %></span><% } %>
+                      </a>
+                    </th>
+                    <th>
+                      <a class="<%= userSortClass('employee_asc', 'employee_desc') %>" href="<%= userSortHref('employee_asc', 'employee_desc') %>">
+                        Employee
+                        <% if (userSortIndicator('employee_asc', 'employee_desc')) { %><span aria-hidden="true"><%= userSortIndicator('employee_asc', 'employee_desc') %></span><% } %>
+                      </a>
+                    </th>
+                    <th>
+                      <a class="<%= userSortClass('account_setup_asc', 'account_setup_desc') %>" href="<%= userSortHref('account_setup_asc', 'account_setup_desc') %>">
+                        Account Setup
+                        <% if (userSortIndicator('account_setup_asc', 'account_setup_desc')) { %><span aria-hidden="true"><%= userSortIndicator('account_setup_asc', 'account_setup_desc') %></span><% } %>
+                      </a>
+                    </th>
+                    <th>
+                      <a class="<%= userSortClass('last_login_desc', 'last_login_asc') %>" href="<%= userSortHref('last_login_desc', 'last_login_asc') %>">
+                        Last Login
+                        <% if (userSortIndicator('last_login_desc', 'last_login_asc', '↓', '↑')) { %><span aria-hidden="true"><%= userSortIndicator('last_login_desc', 'last_login_asc', '↓', '↑') %></span><% } %>
+                      </a>
+                    </th>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -123,7 +160,9 @@
                         <div class="management-user-identity">
                           <strong><%= user.first_name %> <%= user.last_name %></strong>
                           <span class="management-user-username">Username: <b><%= user.username || 'Migration required' %></b></span>
-                          <span><%= user.email %></span>
+                          <span>Work: <%= user.email %></span>
+                          <% if (user.personal_email) { %><span>Personal: <%= user.personal_email %></span><% } %>
+                          <% if (user.phone) { %><span>Phone: <%= user.phone %></span><% } %>
                           <% if (Number(user.user_id) === Number(currentUserId)) { %>
                             <em>Current user</em>
                           <% } %>
@@ -142,11 +181,15 @@
                         <% } %>
                       </td>
                       <td>
-                        <% if (user.is_active) { %>
-                          <span class="pill good">Active</span>
-                        <% } else { %>
-                          <span class="pill bad">Inactive</span>
-                        <% } %>
+                        <div class="management-user-account-stack">
+                          <% if (user.is_active) { %>
+                            <span class="pill good">Active</span>
+                          <% } else { %>
+                            <span class="pill bad">Inactive</span>
+                          <% } %>
+                          <% if (user.start_date) { %><small>Start: <%= user.start_date %></small><% } %>
+                          <% if (user.end_date) { %><small>End: <%= user.end_date %></small><% } %>
+                        </div>
                       </td>
                       <td>
                         <div class="management-user-account-stack">

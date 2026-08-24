@@ -157,6 +157,10 @@ async function getUserByIdWithRoles(userId) {
         u.last_name,
         u.username,
         u.email,
+        u.personal_email,
+        u.phone,
+        DATE_FORMAT(u.start_date, '%Y-%m-%d') AS start_date,
+        DATE_FORMAT(u.end_date, '%Y-%m-%d') AS end_date,
         u.is_active,
         status_system.system_config_value_id AS account_status_system_config_value_id,
         GROUP_CONCAT(r.code ORDER BY r.code SEPARATOR ',') AS role_codes
@@ -176,6 +180,10 @@ async function getUserByIdWithRoles(userId) {
         u.last_name,
         u.username,
         u.email,
+        u.personal_email,
+        u.phone,
+        u.start_date,
+        u.end_date,
         u.is_active,
         status_system.system_config_value_id
       LIMIT 1
@@ -296,7 +304,7 @@ async function allocateUsernameWithConnection({ firstName, lastName }, connectio
   return nextAvailableUsername(stem, rows.map((row) => row.username));
 }
 
-async function createUserWithRoles({ firstName, lastName, email, roleCodes }) {
+async function createUserWithRoles({ firstName, lastName, email, personalEmail = null, phone = null, startDate = null, endDate = null, roleCodes }) {
   const normalizedEmail = normalizeEmail(email);
   const primaryRoleCodes = Array.isArray(roleCodes) ? roleCodes.slice(0, 1) : [];
   const connection = await pool.getConnection();
@@ -331,10 +339,14 @@ async function createUserWithRoles({ firstName, lastName, email, roleCodes }) {
             first_name = ?,
             last_name = ?,
             username = ?,
+            personal_email = ?,
+            phone = ?,
+            start_date = ?,
+            end_date = ?,
             updated_at = CURRENT_TIMESTAMP
           WHERE user_id = ?
         `,
-        [firstName, lastName, username, userId]
+        [firstName, lastName, username, personalEmail, phone, startDate, endDate, userId]
       );
     } else {
       const username = await allocateUsernameWithConnection({ firstName, lastName }, connection);
@@ -346,11 +358,15 @@ async function createUserWithRoles({ firstName, lastName, email, roleCodes }) {
             last_name,
             username,
             email,
+            personal_email,
+            phone,
+            start_date,
+            end_date,
             is_active
           )
-          VALUES (?, ?, ?, ?, ?, 1)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
         `,
-        [pendingStatusId, firstName, lastName, username, normalizedEmail]
+        [pendingStatusId, firstName, lastName, username, normalizedEmail, personalEmail, phone, startDate, endDate]
       );
 
       userId = Number(userResult.insertId);

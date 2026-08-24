@@ -197,12 +197,12 @@ test('QC modal uses the dedicated delegated submit transport and cache-busted br
   assert.match(modal, /data-qc-review-form/);
   assert.doesNotMatch(modal, /hx-post=.*qc-review/);
   assert.match(script, /addEventListener\('submit'/);
-  assert.match(script, /closest\('\[data-qc-review-form\], \[data-qc-correction-form\]'/);
+  assert.match(script, /closest\('\[data-qc-review-form\], \[data-qc-correction-form\], \[data-qc-reversion-form\], \[data-qc-reversion-request-form\]'/);
   assert.match(script, /await fetch\(form\.action/);
   assert.match(script, /'HX-Request': 'true'/);
   assert.match(script, /if \(!response\.ok\)/);
   assert.match(script, /replaceQcReviewModal\(responseMarkup\)/);
   assert.match(script, /dispatchHxTriggerHeader/);
-  assert.match(browserPage, /tech-units\.js\?v=20260731-stage10b-column-selection/);
-  assert.match(detailPage, /tech-units\.js\?v=20260731-stage10b-column-selection/);
+  assert.match(browserPage, /tech-units\.js\?v=20260819-stage10w68l-filter-toggles/);
+  assert.match(detailPage, /tech-units\.js\?v=20260819-stage10w68l-filter-toggles/);
 });

@@ -7,6 +7,12 @@ const {
   parsePasswordLinkExpiryHours
 } = require('../services/passwordLinkExpiryPolicy');
 const {
+  MIN_SESSION_INACTIVITY_TIMEOUT_MINUTES,
+  MAX_SESSION_INACTIVITY_TIMEOUT_MINUTES,
+  parseSessionInactivityTimeoutMinutes
+} = require('../services/sessionInactivityTimeoutPolicy');
+const { setCachedSessionInactivityTimeoutMinutes } = require('../models/sessionTimeoutConfigModel');
+const {
   buildOperationalOptionRankingAdministration,
   formatRefreshIntervalLabel,
   parseAllowedRefreshIntervalMinutes
@@ -14,6 +20,14 @@ const {
 
 function isPasswordLinkExpirySetting(configValue) {
   return Number(configValue?.system_config_value_id || 0) === SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_EXPIRY_HOURS;
+}
+
+function isSessionInactivityTimeoutSetting(configValue) {
+  return Number(configValue?.system_config_value_id || 0) === SYSTEM_CONFIG_VALUE_IDS.SESSION_INACTIVITY_TIMEOUT_MINUTES;
+}
+
+function isRequiredSecuritySetting(configValue) {
+  return isPasswordLinkExpirySetting(configValue) || isSessionInactivityTimeoutSetting(configValue);
 }
 
 
@@ -196,7 +210,8 @@ async function validateConfigValueForm(formData, options = {}) {
   const errorMessages = [];
   const configCategoryId = parsePositiveInteger(formData.configCategoryId);
   const configValueId = options.configValueId ? Number(options.configValueId) : null;
-  const protectedSecuritySetting = isPasswordLinkExpirySetting(options.configValue);
+  const passwordLinkExpirySetting = isPasswordLinkExpirySetting(options.configValue);
+  const sessionInactivityTimeoutSetting = isSessionInactivityTimeoutSetting(options.configValue);
   let selectedCategory = null;
 
   if (!configCategoryId) {
@@ -232,11 +247,19 @@ async function validateConfigValueForm(formData, options = {}) {
     errorMessages.push('Description must be 500 characters or less.');
   }
 
-  if (protectedSecuritySetting) {
+  if (passwordLinkExpirySetting) {
     const expiryHours = parsePasswordLinkExpiryHours(formData.value);
 
     if (expiryHours === null) {
       errorMessages.push(`Password setup/reset link expiration must be a whole number from ${MIN_PASSWORD_LINK_EXPIRY_HOURS} through ${MAX_PASSWORD_LINK_EXPIRY_HOURS} hours.`);
+    }
+  }
+
+  if (sessionInactivityTimeoutSetting) {
+    const timeoutMinutes = parseSessionInactivityTimeoutMinutes(formData.value);
+
+    if (timeoutMinutes === null) {
+      errorMessages.push(`Session inactivity timeout must be a whole number from ${MIN_SESSION_INACTIVITY_TIMEOUT_MINUTES} through ${MAX_SESSION_INACTIVITY_TIMEOUT_MINUTES} minutes.`);
     }
   }
 
@@ -459,7 +482,8 @@ async function renderEditConfigValueModal(req, res, next) {
       categories,
       errorMessages: [],
       formData: getInitialConfigValueFormData({ configValue, includeInactiveValues }),
-      isPasswordLinkExpirySetting: isPasswordLinkExpirySetting(configValue)
+      isPasswordLinkExpirySetting: isPasswordLinkExpirySetting(configValue),
+      isSessionInactivityTimeoutSetting: isSessionInactivityTimeoutSetting(configValue)
     });
   } catch (error) {
     next(error);
@@ -477,7 +501,8 @@ async function updateConfigValue(req, res, next) {
       return sendHtmxRedirect(req, res, getConfigReturnUrl(formData.includeInactive === '1', 'error=not_found'));
     }
 
-    const protectedSecuritySetting = isPasswordLinkExpirySetting(configValue);
+    const protectedSecuritySetting = isRequiredSecuritySetting(configValue);
+    const sessionInactivityTimeoutSetting = isSessionInactivityTimeoutSetting(configValue);
 
     if (protectedSecuritySetting) {
       formData.configCategoryId = String(configValue.config_category_id);
@@ -496,7 +521,8 @@ async function updateConfigValue(req, res, next) {
         categories,
         errorMessages,
         formData,
-        isPasswordLinkExpirySetting: protectedSecuritySetting
+        isPasswordLinkExpirySetting: isPasswordLinkExpirySetting(configValue),
+        isSessionInactivityTimeoutSetting: sessionInactivityTimeoutSetting
       });
     }
 
@@ -522,6 +548,14 @@ async function updateConfigValue(req, res, next) {
       sortOrder,
       isActive: formData.isActive === '1'
     });
+
+    if (sessionInactivityTimeoutSetting) {
+      const timeoutMinutes = parseSessionInactivityTimeoutMinutes(formData.value);
+      setCachedSessionInactivityTimeoutMinutes(timeoutMinutes);
+      if (req.session?.cookie) {
+        req.session.cookie.maxAge = timeoutMinutes * 60 * 1000;
+      }
+    }
 
     return sendHtmxRedirect(
       req,
@@ -581,12 +615,14 @@ async function renderConfigValueStatusModal(req, res, next) {
       });
     }
 
-    if (actionType === 'deactivate' && isPasswordLinkExpirySetting(configValue)) {
+    if (actionType === 'deactivate' && isRequiredSecuritySetting(configValue)) {
       return res.status(400).render('fragments/config-value-status-modal', {
         actionType: 'error',
         configValue,
         includeInactiveValues,
-        errorMessages: ['Password setup/reset link expiration is a required system security setting and cannot be deactivated. Edit its hour value instead.']
+        errorMessages: [isSessionInactivityTimeoutSetting(configValue)
+          ? 'Session inactivity timeout is a required system security setting and cannot be deactivated. Edit its minute value instead.'
+          : 'Password setup/reset link expiration is a required system security setting and cannot be deactivated. Edit its hour value instead.']
       });
     }
 
@@ -612,12 +648,14 @@ async function updateConfigValueStatus(req, res, next) {
       return sendHtmxRedirect(req, res, getConfigReturnUrl(includeInactiveValues, 'error=not_found'));
     }
 
-    if (!shouldActivate && isPasswordLinkExpirySetting(configValue)) {
+    if (!shouldActivate && isRequiredSecuritySetting(configValue)) {
       return res.status(400).render('fragments/config-value-status-modal', {
         actionType: 'error',
         configValue,
         includeInactiveValues,
-        errorMessages: ['Password setup/reset link expiration is a required system security setting and cannot be deactivated. Edit its hour value instead.']
+        errorMessages: [isSessionInactivityTimeoutSetting(configValue)
+          ? 'Session inactivity timeout is a required system security setting and cannot be deactivated. Edit its minute value instead.'
+          : 'Password setup/reset link expiration is a required system security setting and cannot be deactivated. Edit its hour value instead.']
       });
     }
 

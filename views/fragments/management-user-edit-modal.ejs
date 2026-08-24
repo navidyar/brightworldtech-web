@@ -12,7 +12,7 @@
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel management-user-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-edit-title">
+  <section class="modal-panel management-user-modal management-user-form-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-edit-title">
     <header class="modal-header">
       <div>
         <p class="eyebrow">Management</p>
@@ -39,15 +39,17 @@
           <span class="pill <%= user.account_status_code === 'active' ? 'good' : 'bad' %>"><%= user.account_status_label || user.account_status_code || 'Unknown Account Status' %></span>
         </div>
 
-        <label class="form-field">
-          <span>First Name</span>
-          <input type="text" name="firstName" value="<%= safeFormData.firstName || '' %>" autocomplete="off" required />
-        </label>
+        <div class="form-grid">
+          <label class="form-field">
+            <span>First Name</span>
+            <input type="text" name="firstName" value="<%= safeFormData.firstName || '' %>" autocomplete="off" required />
+          </label>
 
-        <label class="form-field">
-          <span>Last Name</span>
-          <input type="text" name="lastName" value="<%= safeFormData.lastName || '' %>" autocomplete="off" required />
-        </label>
+          <label class="form-field">
+            <span>Last Name</span>
+            <input type="text" name="lastName" value="<%= safeFormData.lastName || '' %>" autocomplete="off" required />
+          </label>
+        </div>
 
         <label class="form-field">
           <span>BWT Username</span>
@@ -55,10 +57,34 @@
           <small id="management-user-username-help" class="management-user-role-help">Generated when the account is created and kept stable for ScanTools, TechTools, and future API matching.</small>
         </label>
 
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Work / Login Email</span>
+            <input type="email" name="email" value="<%= safeFormData.email || '' %>" autocomplete="off" inputmode="email" spellcheck="false" required />
+          </label>
+
+          <label class="form-field">
+            <span>Personal Email (optional)</span>
+            <input type="email" name="personalEmail" maxlength="255" value="<%= safeFormData.personalEmail || '' %>" autocomplete="off" inputmode="email" spellcheck="false" />
+          </label>
+        </div>
+
         <label class="form-field">
-          <span>Email Address</span>
-          <input type="email" name="email" value="<%= safeFormData.email || '' %>" autocomplete="off" inputmode="email" spellcheck="false" required />
+          <span>Phone (optional)</span>
+          <input type="tel" name="phone" value="<%= safeFormData.phone || '' %>" autocomplete="off" inputmode="tel" maxlength="50" />
         </label>
+
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Start Date (optional)</span>
+            <input type="date" name="startDate" value="<%= safeFormData.startDate || '' %>" />
+          </label>
+
+          <label class="form-field">
+            <span>End Date (optional)</span>
+            <input type="date" name="endDate" value="<%= safeFormData.endDate || '' %>" />
+          </label>
+        </div>
 
         <div>
           <p class="eyebrow management-user-modal-roles-label">Primary Access Role</p>

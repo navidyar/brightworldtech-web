@@ -13,11 +13,11 @@ test('topbar renders the QC role as Quality Control', () => {
   assert.match(read('views/partials/helpers.js'), /qc: 'Quality Control'/);
 });
 
-test('only QC receives the accept and reject routes', () => {
+test('QC Portal reviewer roles receive the accept and reject routes', () => {
   const routes = read('routes/management.js');
-  assert.match(routes, /const qcReviewRoles = \['qc'\]/);
-  assert.match(routes, /qc-review\/:decisionCode\/modal[\s\S]*?requireRole\(qcReviewRoles\)/);
-  assert.match(routes, /qc-review'[\s\S]*?requireRole\(qcReviewRoles\)/);
+  assert.match(routes, /QC_REVIEW_ROLE_CODES/);
+  assert.match(routes, /qc-review\/:decisionCode\/modal[\s\S]*?requireRole\(QC_REVIEW_ROLE_CODES\)/);
+  assert.match(routes, /qc-review'[\s\S]*?requireRole\(QC_REVIEW_ROLE_CODES\)/);
   assert.match(routes, /qc-review\/details\/modal[\s\S]*?requireRole\(unitBrowserRoles\)/);
 });
 
@@ -29,9 +29,9 @@ test('QC review modal requires rejection notes and keeps acceptance notes option
   assert.match(controller, /decisionCode === 'rejected' && !reviewNotes/);
 });
 
-test('unit table shows compact clickable QC indicators and QC-only review controls', () => {
+test('unit table shows compact clickable QC indicators and QC Portal review controls', () => {
   const table = read('views/fragments/tech-units-table.ejs');
-  assert.match(table, /const canRecordQcReview = currentUserRoles\.includes\('qc'\)/);
+  assert.match(table, /const canRecordQcReview = isQcPortalMode \|\| currentUserRoles\.includes\('qc'\)/);
   assert.match(table, /include\('tech-unit-qc-status-icon', \{ statusCode: unit\.qcReviewStateCode, decisionCode: latestQcReview\.decisionCode \}\)/);
   assert.match(read('views/fragments/tech-unit-qc-status-icon.ejs'), /tech-qc-status-indicator--<%= qcStatusCode %>/);
   assert.match(table, /qc-review\/details\/modal/);
@@ -47,7 +47,11 @@ test('QC decisions are append-only and create Unit History audit events', () => 
   assert.match(model, /unit_qc_accepted/);
   assert.match(model, /unit_qc_rejected/);
   assert.match(model, /Quality Control Notes/);
-  assert.doesNotMatch(model, /UPDATE unit_qc_checks/);
+  assert.match(
+    model,
+    /UPDATE unit_qc_checks\s+SET\s+reverted_at = CURRENT_TIMESTAMP\(6\),\s+reverted_by_user_id = \?,\s+reversion_reason = \?\s+WHERE unit_qc_check_id = \?\s+AND reverted_at IS NULL/
+  );
+  assert.doesNotMatch(model, /UPDATE unit_qc_checks[\s\S]*?SET[\s\S]*?decision_code\s*=/);
 });
 
 test('Stage 9B migration creates constrained QC storage and full role label', () => {

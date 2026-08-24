@@ -1,5 +1,4 @@
 const { pool } = require('./db');
-const lotModel = require('./lotModel');
 const productionWeightSyncModel = require('./productionWeightSyncModel');
 const productionCycleModel = require('./productionCycleModel');
 const unitWorkflowAudit = require('../services/unitWorkflowAudit');
@@ -10,6 +9,8 @@ const MANUAL_TECH_OVERRIDE_REQUEST_TYPE = 'manual_tech_override_request';
 const OUTCOME_CONFIRMATION_REQUEST_TYPE = 'outcome_confirmation';
 const DEFAULT_LIMIT = 100;
 const VALID_STATUS_FILTERS = new Set(['pending', 'approved', 'denied', 'cancelled', 'all']);
+const OVERRIDE_SCHEMA_CAPABILITY_CACHE_MS = 60000;
+let overrideSchemaCapabilityCache = null;
 
 function getAssetTagPrefix() {
   const prefix = String(process.env.ASSET_TAG_PREFIX || 'BWT').trim();
@@ -55,8 +56,27 @@ async function columnExists(tableName, columnName) {
 }
 
 async function overrideTableExists() {
-  return await tableExists(OVERRIDE_TABLE)
-    && await columnExists(OVERRIDE_TABLE, 'requested_destination_lot_id');
+  const now = Date.now();
+  if (overrideSchemaCapabilityCache && overrideSchemaCapabilityCache.expiresAt > now) {
+    return overrideSchemaCapabilityCache.supported;
+  }
+
+  const [rows] = await pool.query(
+    `
+      SELECT COUNT(*) AS column_count
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = 'requested_destination_lot_id'
+    `,
+    [OVERRIDE_TABLE]
+  );
+  const supported = Number(rows[0]?.column_count || 0) > 0;
+  overrideSchemaCapabilityCache = {
+    expiresAt: now + OVERRIDE_SCHEMA_CAPABILITY_CACHE_MS,
+    supported
+  };
+  return supported;
 }
 
 function normalizeStatusFilter(statusFilter) {
@@ -141,12 +161,30 @@ function getPersonName(row, prefix) {
   return fullName || email || 'Unknown user';
 }
 
+async function listLotReferenceRows() {
+  const [rows] = await pool.query(
+    `
+      SELECT
+        lot_id,
+        name AS lot_name,
+        parent_lot_id,
+        is_active,
+        is_closed,
+        is_assignable
+      FROM lots
+      ORDER BY COALESCE(parent_lot_id, 0), name, lot_id
+    `
+  );
+
+  return rows;
+}
+
 async function getLotNameMap() {
-  const lots = await lotModel.listLots({ includeHidden: true });
+  const lots = await listLotReferenceRows();
   const lotMap = new Map();
 
   lots.forEach((lot) => {
-    lotMap.set(Number(lot.lot_id), lot.lot_name || lot.name || 'Lot name not available');
+    lotMap.set(Number(lot.lot_id), lot.lot_name || 'Lot name not available');
   });
 
   return lotMap;
@@ -154,7 +192,7 @@ async function getLotNameMap() {
 
 
 async function getAssignableLotOptions() {
-  const lots = await lotModel.listLots({ includeHidden: true });
+  const lots = await listLotReferenceRows();
   const activeLots = lots.filter((lot) => Number(lot.is_active) === 1 && Number(lot.is_closed || 0) !== 1);
   const parentLotIdsWithChildren = new Set(
     activeLots
@@ -170,7 +208,7 @@ async function getAssignableLotOptions() {
   });
   const assignableLots = assignableLotRows.map((lot) => ({
     lotId: Number(lot.lot_id),
-    lotName: lot.lot_name || lot.name || 'Lot name not available'
+    lotName: lot.lot_name || 'Lot name not available'
   }));
 
   return {
@@ -295,13 +333,22 @@ function getDecisionLabel(decision) {
   return decision || 'Not captured yet';
 }
 
-function mapOverrideRequest(row, lotMap) {
+function mapOverrideRequest(row, lotMap = new Map()) {
   const normalizedRequestStatus = normalizeRequestStatus(row.request_status);
   const unitAssetTag = row.asset_number
     ? getDisplayAssetTag(row.asset_number)
     : null;
   const requestDetails = parseRequestDetails(row.request_details);
   const isOutcomeConfirmationRequest = row.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE;
+  const unitOutcomeId = normalizeOptionalInteger(row.unit_outcome_id || requestDetails.unit_outcome_id);
+  const outcomeConfirmationOutcomeCode = isOutcomeConfirmationRequest
+    ? String(row.linked_outcome_code || requestDetails.outcome_code || '').trim().toLowerCase()
+    : '';
+  const outcomeConfirmationOutcomeLabel = outcomeConfirmationOutcomeCode === 'pass'
+    ? 'Pass'
+    : outcomeConfirmationOutcomeCode === 'fail'
+      ? 'Fail'
+      : '';
   const requesterNote = isOutcomeConfirmationRequest
     ? String(requestDetails.request_notes || '').trim()
     : String(row.reason || '').trim();
@@ -320,15 +367,20 @@ function mapOverrideRequest(row, lotMap) {
   return {
     unitOverrideRequestId: Number(row.unit_override_request_id),
     unitId: row.unit_id ? Number(row.unit_id) : null,
+    unitOutcomeId,
+    outcomeConfirmationOutcomeCode,
+    outcomeConfirmationOutcomeLabel,
+    outcomeConfirmationTargetStatusCode: isOutcomeConfirmationRequest ? String(row.linked_outcome_status_code || '').trim().toLowerCase() : '',
+    outcomeConfirmationTargetIsCurrent: isOutcomeConfirmationRequest ? Number(row.linked_outcome_is_current || 0) === 1 : false,
     lotId: row.lot_id ? Number(row.lot_id) : null,
     lotName: isParkedTakeoverRequest
       ? 'Parked · No active lot'
       : row.lot_id
-        ? lotMap.get(Number(row.lot_id)) || 'Lot name not available'
+        ? row.current_lot_name || lotMap.get(Number(row.lot_id)) || 'Lot name not available'
         : 'No lot selected',
     requestedDestinationLotId,
     requestedDestinationLotName: requestedDestinationLotId
-      ? lotMap.get(requestedDestinationLotId) || 'Lot name not available'
+      ? row.requested_destination_lot_name || lotMap.get(requestedDestinationLotId) || 'Lot name not available'
       : 'No destination selected',
     unitAssetTag,
     unitLabel: unitAssetTag || 'No asset tag',
@@ -367,6 +419,120 @@ function mapOverrideRequest(row, lotMap) {
   };
 }
 
+
+async function listOverrideRequestSummaries(options = {}) {
+  const exists = await overrideTableExists();
+
+  if (!exists) {
+    return {
+      supported: false,
+      message: 'The override request lifecycle migration is not ready. Apply the Stage 7B database migration before using overrides.',
+      statusFilter: normalizeStatusFilter(options.statusFilter),
+      requests: []
+    };
+  }
+
+  const statusFilter = normalizeStatusFilter(options.statusFilter);
+  const limit = Number.isInteger(Number(options.limit)) && Number(options.limit) > 0
+    ? Math.min(Number(options.limit), 250)
+    : DEFAULT_LIMIT;
+  const where = [];
+  const params = [];
+
+  if (statusFilter !== 'all') {
+    where.push('r.request_status = ?');
+    params.push(statusFilter);
+  }
+
+  const requestedByUserId = normalizeOptionalInteger(options.requestedByUserId);
+  if (requestedByUserId) {
+    where.push('r.requested_by_user_id = ?');
+    params.push(requestedByUserId);
+  }
+
+  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+  const orderBySql = statusFilter === 'all'
+    ? `
+      ORDER BY
+        CASE r.request_status
+          WHEN 'pending' THEN 10
+          WHEN 'approved' THEN 20
+          WHEN 'denied' THEN 30
+          WHEN 'cancelled' THEN 40
+          ELSE 999
+        END,
+        r.created_at DESC,
+        r.unit_override_request_id DESC
+    `
+    : 'ORDER BY r.created_at DESC, r.unit_override_request_id DESC';
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        r.unit_override_request_id,
+        r.unit_id,
+        r.unit_outcome_id,
+        r.lot_id,
+        r.requested_destination_lot_id,
+        r.request_type,
+        r.request_status,
+        r.validation_status,
+        r.enforcement_decision,
+        r.reason,
+        r.review_notes,
+        r.requested_by_user_id,
+        r.reviewed_at,
+        r.created_at,
+        r.updated_at,
+        CASE WHEN JSON_VALID(r.request_details) THEN JSON_UNQUOTE(JSON_EXTRACT(r.request_details, '$.source')) ELSE NULL END AS request_detail_source,
+        CASE WHEN JSON_VALID(r.request_details) THEN JSON_UNQUOTE(JSON_EXTRACT(r.request_details, '$.source_unit_state')) ELSE NULL END AS request_detail_source_unit_state,
+        CASE WHEN JSON_VALID(r.request_details) THEN JSON_UNQUOTE(JSON_EXTRACT(r.request_details, '$.action_kind')) ELSE NULL END AS request_detail_action_kind,
+        CASE WHEN JSON_VALID(r.request_details) THEN JSON_UNQUOTE(JSON_EXTRACT(r.request_details, '$.request_notes')) ELSE NULL END AS request_detail_request_notes,
+        CASE WHEN JSON_VALID(r.request_details) THEN JSON_UNQUOTE(JSON_EXTRACT(r.request_details, '$.unit_outcome_id')) ELSE NULL END AS request_detail_unit_outcome_id,
+        CASE WHEN JSON_VALID(r.request_details) THEN JSON_UNQUOTE(JSON_EXTRACT(r.request_details, '$.outcome_code')) ELSE NULL END AS request_detail_outcome_code,
+        CASE WHEN JSON_VALID(r.request_details) THEN JSON_UNQUOTE(JSON_EXTRACT(r.request_details, '$.requested_destination_lot_id')) ELSE NULL END AS request_detail_destination_lot_id,
+        u.asset_number,
+        current_lot.name AS current_lot_name,
+        requested_destination_lot.name AS requested_destination_lot_name,
+        requested_by.first_name AS requested_by_first_name,
+        requested_by.last_name AS requested_by_last_name,
+        requested_by.email AS requested_by_email
+      FROM unit_override_requests r
+      LEFT JOIN units u
+        ON u.unit_id = r.unit_id
+      LEFT JOIN lots current_lot
+        ON current_lot.lot_id = r.lot_id
+      LEFT JOIN lots requested_destination_lot
+        ON requested_destination_lot.lot_id = r.requested_destination_lot_id
+      LEFT JOIN users requested_by
+        ON requested_by.user_id = r.requested_by_user_id
+      ${whereSql}
+      ${orderBySql}
+      LIMIT ?
+    `,
+    [...params, limit]
+  );
+
+  return {
+    supported: true,
+    message: 'Override requests loaded.',
+    statusFilter,
+    assignableLots: [],
+    requests: rows.map((row) => mapOverrideRequest({
+      ...row,
+      request_details: {
+        source: row.request_detail_source || '',
+        source_unit_state: row.request_detail_source_unit_state || '',
+        action_kind: row.request_detail_action_kind || '',
+        request_notes: row.request_detail_request_notes || '',
+        unit_outcome_id: row.request_detail_unit_outcome_id || row.unit_outcome_id || null,
+        outcome_code: row.request_detail_outcome_code || '',
+        requested_destination_lot_id: row.request_detail_destination_lot_id || null
+      }
+    }))
+  };
+}
+
 async function listOverrideRequests(options = {}) {
   const exists = await overrideTableExists();
 
@@ -399,16 +565,16 @@ async function listOverrideRequests(options = {}) {
   }
 
   const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
-  const [lotMap, assignableLots] = await Promise.all([
-    getLotNameMap(),
-    listAssignableLots()
-  ]);
+  const includeAssignableLots = options.includeAssignableLots !== false;
+  const assignableLotsPromise = includeAssignableLots ? listAssignableLots() : Promise.resolve([]);
 
-  const [rows] = await pool.query(
+  const [[rows], assignableLots] = await Promise.all([
+    pool.query(
     `
       SELECT
         r.unit_override_request_id,
         r.unit_id,
+        r.unit_outcome_id,
         r.lot_id,
         r.requested_destination_lot_id,
         r.request_type,
@@ -434,6 +600,8 @@ async function listOverrideRequests(options = {}) {
             AND completion_check.reversed_at IS NULL
         ) AS has_recorded_work,
         u.asset_number,
+        current_lot.name AS current_lot_name,
+        requested_destination_lot.name AS requested_destination_lot_name,
         requested_by.first_name AS requested_by_first_name,
         requested_by.last_name AS requested_by_last_name,
         requested_by.email AS requested_by_email,
@@ -446,6 +614,10 @@ async function listOverrideRequests(options = {}) {
       FROM unit_override_requests r
       LEFT JOIN units u
         ON u.unit_id = r.unit_id
+      LEFT JOIN lots current_lot
+        ON current_lot.lot_id = r.lot_id
+      LEFT JOIN lots requested_destination_lot
+        ON requested_destination_lot.lot_id = r.requested_destination_lot_id
       LEFT JOIN users requested_by
         ON requested_by.user_id = r.requested_by_user_id
       LEFT JOIN users reviewed_by
@@ -466,14 +638,16 @@ async function listOverrideRequests(options = {}) {
       LIMIT ?
     `,
     [...params, limit]
-  );
+    ),
+    assignableLotsPromise
+  ]);
 
   return {
     supported: true,
     message: 'Override requests loaded.',
     statusFilter,
     assignableLots,
-    requests: rows.map((row) => mapOverrideRequest(row, lotMap))
+    requests: rows.map((row) => mapOverrideRequest(row))
   };
 }
 
@@ -501,6 +675,7 @@ async function getLatestOverrideRequestMapForUnits(unitIds) {
         SELECT
           r.unit_override_request_id,
           r.unit_id,
+          r.unit_outcome_id,
           r.lot_id,
           r.requested_destination_lot_id,
           r.request_type,
@@ -573,6 +748,7 @@ async function listOverrideRequestsForUnit(unitId, limit = 25) {
       SELECT
         r.unit_override_request_id,
         r.unit_id,
+        r.unit_outcome_id,
         r.lot_id,
         r.requested_destination_lot_id,
         r.request_type,
@@ -636,13 +812,13 @@ async function getOverrideRequestById(overrideRequestId) {
     return null;
   }
 
-  const lotMap = await getLotNameMap();
 
   const [rows] = await pool.query(
     `
       SELECT
         r.unit_override_request_id,
         r.unit_id,
+        r.unit_outcome_id,
         r.lot_id,
         r.requested_destination_lot_id,
         r.request_type,
@@ -662,6 +838,8 @@ async function getOverrideRequestById(overrideRequestId) {
         r.created_at,
         r.updated_at,
         u.asset_number,
+        current_lot.name AS current_lot_name,
+        destination_lot.name AS requested_destination_lot_name,
         requested_by.first_name AS requested_by_first_name,
         requested_by.last_name AS requested_by_last_name,
         requested_by.email AS requested_by_email,
@@ -670,23 +848,32 @@ async function getOverrideRequestById(overrideRequestId) {
         reviewed_by.email AS reviewed_by_email,
         prior_tech_credit_user.first_name AS prior_tech_credit_user_first_name,
         prior_tech_credit_user.last_name AS prior_tech_credit_user_last_name,
-        prior_tech_credit_user.email AS prior_tech_credit_user_email
+        prior_tech_credit_user.email AS prior_tech_credit_user_email,
+        linked_outcome.outcome_code AS linked_outcome_code,
+        linked_outcome.approval_status_code AS linked_outcome_status_code,
+        linked_outcome.is_current AS linked_outcome_is_current
       FROM unit_override_requests r
       LEFT JOIN units u
         ON u.unit_id = r.unit_id
+      LEFT JOIN lots current_lot
+        ON current_lot.lot_id = r.lot_id
+      LEFT JOIN lots destination_lot
+        ON destination_lot.lot_id = r.requested_destination_lot_id
       LEFT JOIN users requested_by
         ON requested_by.user_id = r.requested_by_user_id
       LEFT JOIN users reviewed_by
         ON reviewed_by.user_id = r.reviewed_by_user_id
       LEFT JOIN users prior_tech_credit_user
         ON prior_tech_credit_user.user_id = r.prior_tech_credit_user_id
+      LEFT JOIN unit_outcomes linked_outcome
+        ON linked_outcome.unit_outcome_id = r.unit_outcome_id
       WHERE r.unit_override_request_id = ?
       LIMIT 1
     `,
     [requestId]
   );
 
-  return rows[0] ? mapOverrideRequest(rows[0], lotMap) : null;
+  return rows[0] ? mapOverrideRequest(rows[0]) : null;
 }
 
 async function getPendingOverrideRequestForUnit({ unitId, requestType = null }) {
@@ -709,6 +896,7 @@ async function getPendingOverrideRequestForUnit({ unitId, requestType = null }) 
       SELECT
         r.unit_override_request_id,
         r.unit_id,
+        r.unit_outcome_id,
         r.lot_id,
         r.requested_destination_lot_id,
         r.request_type,
@@ -761,6 +949,7 @@ async function syncOutcomeConfirmationRequestWithConnection(connection, {
   outcomeCode,
   outcomeNotes = null,
   requestNotes = null,
+  unitOutcomeId = null,
   approvalRequested = false
 }) {
   if (!await tableExists(OVERRIDE_TABLE)) {
@@ -770,6 +959,7 @@ async function syncOutcomeConfirmationRequestWithConnection(connection, {
   const safeUnitId = normalizeOptionalInteger(unitId);
   const safeRequestedByUserId = normalizeOptionalInteger(requestedByUserId);
   const safeLotId = normalizeOptionalInteger(lotId);
+  const safeUnitOutcomeId = normalizeOptionalInteger(unitOutcomeId);
   const normalizedOutcomeCode = String(outcomeCode || '').trim().toLowerCase();
 
   if (!safeUnitId || !safeRequestedByUserId || !['pass', 'fail'].includes(normalizedOutcomeCode)) {
@@ -778,7 +968,7 @@ async function syncOutcomeConfirmationRequestWithConnection(connection, {
 
   const [pendingRows] = await connection.query(
     `
-      SELECT unit_override_request_id
+      SELECT unit_override_request_id, unit_outcome_id
       FROM unit_override_requests
       WHERE unit_id = ?
         AND request_type = ?
@@ -794,20 +984,48 @@ async function syncOutcomeConfirmationRequestWithConnection(connection, {
 
   if (!approvalRequested) {
     if (pendingRequest) {
+      const withdrawalNote = 'Pass/Fail confirmation request was withdrawn when the outcome was updated without confirmation.';
+      const linkedOutcomeId = normalizeOptionalInteger(pendingRequest.unit_outcome_id);
+
       await connection.query(
         `
           UPDATE unit_override_requests
           SET
             request_status = 'cancelled',
-            review_notes = 'Pass/Fail confirmation request was withdrawn when the outcome was updated without confirmation.',
+            review_notes = ?,
             reviewed_at = NOW()
           WHERE unit_override_request_id = ?
         `,
-        [pendingRequest.unit_override_request_id]
+        [withdrawalNote, pendingRequest.unit_override_request_id]
       );
+
+      if (linkedOutcomeId) {
+        await connection.query(
+          `
+            UPDATE unit_outcomes
+            SET
+              approval_status_code = 'not_requested',
+              approved_by_user_id = NULL,
+              approved_at = NULL,
+              approval_notes = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE unit_outcome_id = ?
+              AND unit_id = ?
+              AND approval_status_code = 'pending'
+            LIMIT 1
+          `,
+          [withdrawalNote, linkedOutcomeId, safeUnitId]
+        );
+      }
     }
 
     return null;
+  }
+
+  if (!safeUnitOutcomeId) {
+    const error = new Error('The Pass/Fail confirmation request could not be linked to the exact outcome decision.');
+    error.code = 'BWT_OUTCOME_CONFIRMATION_TARGET_REQUIRED';
+    throw error;
   }
 
   const outcomeLabel = getOutcomeConfirmationLabel(normalizedOutcomeCode);
@@ -816,43 +1034,58 @@ async function syncOutcomeConfirmationRequestWithConnection(connection, {
     source: 'tech_unit_pass_fail_confirmation',
     outcome_code: normalizedOutcomeCode,
     outcome_label: outcomeLabel,
+    unit_outcome_id: safeUnitOutcomeId,
     outcome_notes: normalizeText(outcomeNotes),
     request_notes: normalizeText(requestNotes)
   });
 
   if (pendingRequest) {
+    const pendingOutcomeId = normalizeOptionalInteger(pendingRequest.unit_outcome_id);
+
+    if (pendingOutcomeId === safeUnitOutcomeId) {
+      return Number(pendingRequest.unit_override_request_id);
+    }
+
+    const supersededNote = 'Pass/Fail confirmation request was superseded by a newer Pass/Fail confirmation decision.';
     await connection.query(
       `
         UPDATE unit_override_requests
         SET
-          lot_id = ?,
-          validation_status = 'needs_review',
-          enforcement_decision = 'review',
-          reason = ?,
-          request_details = ?,
-          requested_by_user_id = ?,
-          review_notes = NULL,
-          reviewed_by_user_id = NULL,
-          reviewed_at = NULL,
+          request_status = 'cancelled',
+          review_notes = ?,
+          reviewed_at = NOW(),
           updated_at = NOW()
         WHERE unit_override_request_id = ?
+          AND LOWER(request_status) = 'pending'
       `,
-      [
-        safeLotId,
-        reason,
-        requestDetails,
-        safeRequestedByUserId,
-        pendingRequest.unit_override_request_id
-      ]
+      [supersededNote, pendingRequest.unit_override_request_id]
     );
 
-    return Number(pendingRequest.unit_override_request_id);
+    if (pendingOutcomeId) {
+      await connection.query(
+        `
+          UPDATE unit_outcomes
+          SET
+            approval_status_code = 'not_requested',
+            approved_by_user_id = NULL,
+            approved_at = NULL,
+            approval_notes = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE unit_outcome_id = ?
+            AND unit_id = ?
+            AND approval_status_code = 'pending'
+          LIMIT 1
+        `,
+        [supersededNote, pendingOutcomeId, safeUnitId]
+      );
+    }
   }
 
   const [result] = await connection.query(
     `
       INSERT INTO unit_override_requests (
         unit_id,
+        unit_outcome_id,
         lot_id,
         request_type,
         request_status,
@@ -862,10 +1095,11 @@ async function syncOutcomeConfirmationRequestWithConnection(connection, {
         request_details,
         requested_by_user_id
       )
-      VALUES (?, ?, ?, 'pending', 'needs_review', 'review', ?, ?, ?)
+      VALUES (?, ?, ?, ?, 'pending', 'needs_review', 'review', ?, ?, ?)
     `,
     [
       safeUnitId,
+      safeUnitOutcomeId,
       safeLotId,
       OUTCOME_CONFIRMATION_REQUEST_TYPE,
       reason,
@@ -1024,6 +1258,81 @@ async function createOverrideRequest({
   }
 }
 
+function createOutcomeConfirmationTargetError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+async function lockOutcomeConfirmationTargetRow(connection, request, { requireTarget = true } = {}) {
+  const linkedOutcomeId = normalizeOptionalInteger(request && request.unit_outcome_id);
+  const requestUnitId = normalizeOptionalInteger(request && request.unit_id);
+
+  if (!linkedOutcomeId) {
+    if (!requireTarget) return null;
+    throw createOutcomeConfirmationTargetError(
+      'BWT_OUTCOME_CONFIRMATION_TARGET_REQUIRED',
+      'This Pass/Fail confirmation request is missing its immutable outcome target.'
+    );
+  }
+
+  const [rows] = await connection.query(
+    `
+      SELECT
+        unit_outcome_id,
+        unit_id,
+        outcome_code,
+        approval_status_code,
+        is_current,
+        approval_requested_by_user_id
+      FROM unit_outcomes
+      WHERE unit_outcome_id = ?
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [linkedOutcomeId]
+  );
+  const outcome = rows[0] || null;
+
+  if (!outcome || normalizeOptionalInteger(outcome.unit_id) !== requestUnitId) {
+    if (!requireTarget) return null;
+    throw createOutcomeConfirmationTargetError(
+      'BWT_OUTCOME_CONFIRMATION_TARGET_STALE',
+      'The linked Pass/Fail decision no longer matches this request.'
+    );
+  }
+
+  return outcome;
+}
+
+function assertOutcomeConfirmationTargetReviewable(outcome, request) {
+  const requestedByUserId = normalizeOptionalInteger(request && request.requested_by_user_id);
+  const exactTargetIsReviewable = outcome
+    && Number(outcome.is_current || 0) === 1
+    && String(outcome.approval_status_code || '').toLowerCase() === 'pending'
+    && normalizeOptionalInteger(outcome.approval_requested_by_user_id) === requestedByUserId;
+
+  if (!exactTargetIsReviewable) {
+    throw createOutcomeConfirmationTargetError(
+      'BWT_OUTCOME_CONFIRMATION_TARGET_STALE',
+      'The linked Pass/Fail decision is no longer the current pending confirmation target.'
+    );
+  }
+}
+
+async function lockOutcomeConfirmationTarget(connection, request) {
+  const outcome = await lockOutcomeConfirmationTargetRow(connection, request);
+  assertOutcomeConfirmationTargetReviewable(outcome, request);
+  return outcome;
+}
+
+function sameOutcomeConfirmationRequestTarget(firstRequest, secondRequest) {
+  return normalizeOptionalInteger(firstRequest && firstRequest.unit_id) === normalizeOptionalInteger(secondRequest && secondRequest.unit_id)
+    && normalizeOptionalInteger(firstRequest && firstRequest.unit_outcome_id) === normalizeOptionalInteger(secondRequest && secondRequest.unit_outcome_id)
+    && normalizeOptionalInteger(firstRequest && firstRequest.requested_by_user_id) === normalizeOptionalInteger(secondRequest && secondRequest.requested_by_user_id)
+    && String(firstRequest && firstRequest.request_type || '') === String(secondRequest && secondRequest.request_type || '');
+}
+
 async function approveOverrideRequest({
   overrideRequestId,
   reviewedByUserId,
@@ -1048,11 +1357,35 @@ async function approveOverrideRequest({
       await connection.beginTransaction();
     }
 
+    const [previewRows] = await connection.query(
+      `
+        SELECT unit_id, unit_outcome_id, request_type, request_status, requested_by_user_id
+        FROM unit_override_requests
+        WHERE unit_override_request_id = ?
+        LIMIT 1
+      `,
+      [requestId]
+    );
+    const requestPreview = previewRows[0] || null;
+
+    if (!requestPreview || String(requestPreview.request_status || '').toLowerCase() !== 'pending') {
+      if (ownsConnection) {
+        await connection.rollback();
+      }
+      return false;
+    }
+
+    const previewIsOutcomeConfirmation = requestPreview.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE;
+    const linkedOutcome = previewIsOutcomeConfirmation
+      ? await lockOutcomeConfirmationTarget(connection, requestPreview)
+      : null;
+
     const [requestRows] = await connection.query(
       `
         SELECT
           r.unit_override_request_id,
           r.unit_id,
+          r.unit_outcome_id,
           r.request_type,
           r.requested_by_user_id,
           r.requested_destination_lot_id,
@@ -1079,13 +1412,21 @@ async function approveOverrideRequest({
       return false;
     }
 
+    const isOutcomeConfirmation = request.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE;
+    if (previewIsOutcomeConfirmation !== isOutcomeConfirmation
+      || (isOutcomeConfirmation && !sameOutcomeConfirmationRequestTarget(requestPreview, request))) {
+      throw createOutcomeConfirmationTargetError(
+        'BWT_OUTCOME_CONFIRMATION_TARGET_STALE',
+        'The Pass/Fail confirmation request changed before it could be reviewed.'
+      );
+    }
+
     if (Number(request.requested_by_user_id) === reviewerId) {
       const error = new Error('A requester cannot approve their own request.');
       error.code = 'BWT_OVERRIDE_SELF_REVIEW';
       throw error;
     }
 
-    const isOutcomeConfirmation = request.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE;
     const isManualTechOverride = request.request_type === MANUAL_TECH_OVERRIDE_REQUEST_TYPE;
     const wasParked = Number(request.is_parked || 0) === 1;
 
@@ -1110,7 +1451,7 @@ async function approveOverrideRequest({
       ? null
       : normalizeOptionalInteger(request.assigned_to_user_id) || normalizeOptionalInteger(request.created_by_user_id);
     const currentLotId = normalizeOptionalInteger(request.current_lot_id);
-    const completionTableReady = await tableExists('unit_work_completions');
+    const completionTableReady = isManualTechOverride && await tableExists('unit_work_completions');
     let hasRecordedWork = false;
 
     if (isManualTechOverride && request.unit_id && completionTableReady) {
@@ -1220,20 +1561,6 @@ async function approveOverrideRequest({
     }
 
     if (isOutcomeConfirmation) {
-      const [outcomeRows] = await connection.query(
-        `
-          SELECT outcome_code
-          FROM unit_outcomes
-          WHERE unit_id = ?
-            AND is_current = 1
-            AND approval_status_code = 'pending'
-          ORDER BY selected_at DESC, unit_outcome_id DESC
-          LIMIT 1
-          FOR UPDATE
-        `,
-        [request.unit_id]
-      );
-      const pendingOutcome = outcomeRows[0] || null;
       const [outcomeResult] = await connection.query(
         `
           UPDATE unit_outcomes
@@ -1243,28 +1570,34 @@ async function approveOverrideRequest({
             approved_at = NOW(),
             approval_notes = ?,
             updated_at = CURRENT_TIMESTAMP
-          WHERE unit_id = ?
+          WHERE unit_outcome_id = ?
+            AND unit_id = ?
             AND is_current = 1
             AND approval_status_code = 'pending'
-          ORDER BY selected_at DESC, unit_outcome_id DESC
           LIMIT 1
         `,
-        [reviewerId, normalizedReviewNotes, request.unit_id]
+        [reviewerId, normalizedReviewNotes, linkedOutcome.unit_outcome_id, request.unit_id]
       );
-      if (Number(outcomeResult.affectedRows || 0) === 1) {
-        const outcomeLabel = pendingOutcome && pendingOutcome.outcome_code === 'pass'
-          ? 'Pass'
-          : pendingOutcome && pendingOutcome.outcome_code === 'fail'
-            ? 'Fail'
-            : '';
-        await unitWorkflowAudit.recordOutcomeApproved(connection, {
-          unitId: request.unit_id,
-          actorUserId: reviewerId,
-          outcomeLabel,
-          approvalNotes: normalizedReviewNotes,
-          source: 'override_outcome_confirmation'
-        });
+
+      if (Number(outcomeResult.affectedRows || 0) !== 1) {
+        throw createOutcomeConfirmationTargetError(
+          'BWT_OUTCOME_CONFIRMATION_TARGET_STALE',
+          'The linked Pass/Fail decision changed before the confirmation could be recorded.'
+        );
       }
+
+      const outcomeLabel = linkedOutcome.outcome_code === 'pass'
+        ? 'Pass'
+        : linkedOutcome.outcome_code === 'fail'
+          ? 'Fail'
+          : '';
+      await unitWorkflowAudit.recordOutcomeApproved(connection, {
+        unitId: request.unit_id,
+        actorUserId: reviewerId,
+        outcomeLabel,
+        approvalNotes: normalizedReviewNotes,
+        source: 'override_outcome_confirmation'
+      });
     } else if (requestedByUserId && request.unit_id) {
       const unitUpdates = [
         'assigned_to_user_id = ?',
@@ -1448,9 +1781,37 @@ async function withdrawOverrideRequest({ overrideRequestId, requestedByUserId, w
 
   try {
     await connection.beginTransaction();
+    const [previewRows] = await connection.query(
+      `
+        SELECT unit_id, unit_outcome_id, request_type, request_status, requested_by_user_id
+        FROM unit_override_requests
+        WHERE unit_override_request_id = ?
+        LIMIT 1
+      `,
+      [requestId]
+    );
+    const requestPreview = previewRows[0] || null;
+
+    if (!requestPreview || Number(requestPreview.requested_by_user_id) !== requesterId) {
+      const error = new Error('You can withdraw only your own pending request.');
+      error.code = 'BWT_OVERRIDE_REQUEST_NOT_OWNER';
+      throw error;
+    }
+
+    if (String(requestPreview.request_status || '').toLowerCase() !== 'pending') {
+      const error = new Error('Only pending requests can be withdrawn.');
+      error.code = 'BWT_OVERRIDE_REQUEST_NOT_PENDING';
+      throw error;
+    }
+
+    const previewIsOutcomeConfirmation = requestPreview.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE;
+    if (previewIsOutcomeConfirmation && normalizeOptionalInteger(requestPreview.unit_outcome_id)) {
+      await lockOutcomeConfirmationTargetRow(connection, requestPreview, { requireTarget: false });
+    }
+
     const [rows] = await connection.query(
       `
-        SELECT unit_id, request_type, request_status, requested_by_user_id
+        SELECT unit_id, unit_outcome_id, request_type, request_status, requested_by_user_id
         FROM unit_override_requests
         WHERE unit_override_request_id = ?
         LIMIT 1
@@ -1466,7 +1827,8 @@ async function withdrawOverrideRequest({ overrideRequestId, requestedByUserId, w
       throw error;
     }
 
-    if (String(request.request_status || '').toLowerCase() !== 'pending') {
+    if (String(request.request_status || '').toLowerCase() !== 'pending'
+      || (previewIsOutcomeConfirmation && !sameOutcomeConfirmationRequestTarget(requestPreview, request))) {
       const error = new Error('Only pending requests can be withdrawn.');
       error.code = 'BWT_OVERRIDE_REQUEST_NOT_PENDING';
       throw error;
@@ -1495,23 +1857,44 @@ async function withdrawOverrideRequest({ overrideRequestId, requestedByUserId, w
     }
 
     if (request.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE) {
-      await connection.query(
-        `
-          UPDATE unit_outcomes
-          SET
-            approval_status_code = 'not_requested',
-            approved_by_user_id = NULL,
-            approved_at = NULL,
-            approval_notes = ?,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE unit_id = ?
-            AND is_current = 1
-            AND approval_status_code = 'pending'
-          ORDER BY selected_at DESC, unit_outcome_id DESC
-          LIMIT 1
-        `,
-        [note, request.unit_id]
-      );
+      const linkedOutcomeId = normalizeOptionalInteger(request.unit_outcome_id);
+      if (linkedOutcomeId) {
+        await connection.query(
+          `
+            UPDATE unit_outcomes
+            SET
+              approval_status_code = 'not_requested',
+              approved_by_user_id = NULL,
+              approved_at = NULL,
+              approval_notes = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE unit_outcome_id = ?
+              AND unit_id = ?
+              AND approval_status_code = 'pending'
+            LIMIT 1
+          `,
+          [note, linkedOutcomeId, request.unit_id]
+        );
+      } else {
+        // Compatibility for a pending request created before Stage 10W70A.
+        await connection.query(
+          `
+            UPDATE unit_outcomes
+            SET
+              approval_status_code = 'not_requested',
+              approved_by_user_id = NULL,
+              approved_at = NULL,
+              approval_notes = ?,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE unit_id = ?
+              AND is_current = 1
+              AND approval_status_code = 'pending'
+            ORDER BY selected_at DESC, unit_outcome_id DESC
+            LIMIT 1
+          `,
+          [note, request.unit_id]
+        );
+      }
     }
 
     await connection.commit();
@@ -1537,9 +1920,30 @@ async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, review
   try {
     await connection.beginTransaction();
 
+    const [previewRows] = await connection.query(
+      `
+        SELECT unit_id, unit_outcome_id, request_type, request_status, requested_by_user_id
+        FROM unit_override_requests
+        WHERE unit_override_request_id = ?
+        LIMIT 1
+      `,
+      [requestId]
+    );
+    const requestPreview = previewRows[0] || null;
+
+    if (!requestPreview || String(requestPreview.request_status || '').toLowerCase() !== 'pending') {
+      await connection.rollback();
+      return false;
+    }
+
+    const previewIsOutcomeConfirmation = requestPreview.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE;
+    const linkedOutcome = previewIsOutcomeConfirmation
+      ? await lockOutcomeConfirmationTarget(connection, requestPreview)
+      : null;
+
     const [requestRows] = await connection.query(
       `
-        SELECT unit_id, request_type, request_status, requested_by_user_id
+        SELECT unit_id, unit_outcome_id, request_type, request_status, requested_by_user_id
         FROM unit_override_requests
         WHERE unit_override_request_id = ?
         FOR UPDATE
@@ -1553,11 +1957,22 @@ async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, review
       return false;
     }
 
+    const isOutcomeConfirmation = request.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE;
+    if (previewIsOutcomeConfirmation !== isOutcomeConfirmation
+      || (isOutcomeConfirmation && !sameOutcomeConfirmationRequestTarget(requestPreview, request))) {
+      throw createOutcomeConfirmationTargetError(
+        'BWT_OUTCOME_CONFIRMATION_TARGET_STALE',
+        'The Pass/Fail confirmation request changed before it could be reviewed.'
+      );
+    }
+
     if (Number(request.requested_by_user_id) === reviewerId) {
       const error = new Error('A requester cannot review their own request.');
       error.code = 'BWT_OVERRIDE_SELF_REVIEW';
       throw error;
     }
+
+    const normalizedReviewNotes = normalizeText(reviewNotes);
 
     const [result] = await connection.query(
       `
@@ -1570,7 +1985,7 @@ async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, review
         WHERE unit_override_request_id = ?
           AND LOWER(request_status) = 'pending'
       `,
-      [reviewerId, normalizeText(reviewNotes), requestId]
+      [reviewerId, normalizedReviewNotes, requestId]
     );
 
     if (Number(result.affectedRows) === 0) {
@@ -1578,8 +1993,8 @@ async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, review
       return false;
     }
 
-    if (request.request_type === OUTCOME_CONFIRMATION_REQUEST_TYPE) {
-      await connection.query(
+    if (isOutcomeConfirmation) {
+      const [outcomeResult] = await connection.query(
         `
           UPDATE unit_outcomes
           SET
@@ -1588,14 +2003,21 @@ async function denyOverrideRequest({ overrideRequestId, reviewedByUserId, review
             approved_at = NOW(),
             approval_notes = ?,
             updated_at = CURRENT_TIMESTAMP
-          WHERE unit_id = ?
+          WHERE unit_outcome_id = ?
+            AND unit_id = ?
             AND is_current = 1
             AND approval_status_code = 'pending'
-          ORDER BY selected_at DESC, unit_outcome_id DESC
           LIMIT 1
         `,
-        [reviewerId, normalizeText(reviewNotes), request.unit_id]
+        [reviewerId, normalizedReviewNotes, linkedOutcome.unit_outcome_id, request.unit_id]
       );
+
+      if (Number(outcomeResult.affectedRows || 0) !== 1) {
+        throw createOutcomeConfirmationTargetError(
+          'BWT_OUTCOME_CONFIRMATION_TARGET_STALE',
+          'The linked Pass/Fail decision changed before the rejection could be recorded.'
+        );
+      }
     }
 
     await connection.commit();
@@ -1614,6 +2036,7 @@ module.exports = {
   listAssignableLots,
   listAssignableLotHierarchyOptions,
   listOverrideRequests,
+  listOverrideRequestSummaries,
   getLatestOverrideRequestMapForUnits,
   listOverrideRequestsForUnit,
   getOverrideRequestById,

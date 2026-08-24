@@ -96,7 +96,7 @@ async function validateForm(formData, processorModelId) {
         limit: 8
       });
       const duplicate = likelyMatches.find((processor) => processor.identityMatch && processor.id !== processorModelId);
-      if (duplicate) errors.push(`Processor #${duplicate.id} (${duplicate.displayLabel}) already represents this canonical processor. Ask an Admin to use Resolve Duplicate so the duplicate can be consolidated safely.`);
+      if (duplicate) errors.push(`Processor #${duplicate.id} (${duplicate.displayLabel}) already represents this canonical processor. Use Resolve Duplicate so the duplicate can be consolidated safely.`);
     }
   }
   if (processorBrandId && formData.modelCode && await processorCatalogModel.processorExists({
@@ -104,7 +104,7 @@ async function validateForm(formData, processorModelId) {
     modelCode: formData.modelCode,
     excludeProcessorModelId: processorModelId
   })) {
-    errors.push('That canonical Processor already exists for this Processor Type. Ask an Admin to use Resolve Duplicate instead of keeping two records.');
+    errors.push('That canonical Processor already exists for this Processor Type. Use Resolve Duplicate instead of keeping two records.');
   }
   return errors;
 }
@@ -130,6 +130,64 @@ async function renderProcessorCatalogPage(req, res, next) {
   }
 }
 
+async function renderNewProcessorModal(req, res, next) {
+  try {
+    const filters = getFilters(req);
+    const brands = await processorCatalogModel.listProcessorBrands();
+    return res.render('fragments/processor-catalog-edit-modal', {
+      mode: 'create',
+      processor: null,
+      brands,
+      formData: {
+        processorBrandId: filters.processorBrandId ? String(filters.processorBrandId) : '',
+        modelCode: '',
+        legacyFamily: '',
+        generation: '',
+        baseSpeedGhz: '',
+        isActive: '1'
+      },
+      filters,
+      returnTo: 'processor-catalog',
+      errorMessages: []
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function createProcessor(req, res, next) {
+  const filters = getFilters(req);
+  try {
+    const brands = await processorCatalogModel.listProcessorBrands();
+    const formData = getFormData(req);
+    const errorMessages = await validateForm(formData, null);
+    if (errorMessages.length > 0) {
+      return res.status(400).render('fragments/processor-catalog-edit-modal', {
+        mode: 'create', processor: null, brands, formData, filters, returnTo: 'processor-catalog', errorMessages
+      });
+    }
+
+    await processorCatalogModel.createProcessorModel({
+      processorBrandId: formData.processorBrandId,
+      modelCode: formData.modelCode,
+      legacyFamily: formData.legacyFamily,
+      generation: formData.generation,
+      baseSpeedGhz: formData.baseSpeedGhz,
+      isActive: formData.isActive === '1'
+    }, req.currentUser.user_id);
+    operationalOptionRankingModel.invalidateRankingSnapshot();
+    return sendRedirect(req, res, buildReturnUrl(filters, 'created'));
+  } catch (error) {
+    if (error?.code === 'BWT_PROCESSOR_CATALOG_DUPLICATE' || error?.code === 'BWT_PROCESSOR_CATALOG_INPUT_INVALID') {
+      const brands = await processorCatalogModel.listProcessorBrands();
+      return res.status(400).render('fragments/processor-catalog-edit-modal', {
+        mode: 'create', processor: null, brands, formData: getFormData(req), filters, returnTo: 'processor-catalog', errorMessages: [error.message]
+      });
+    }
+    next(error);
+  }
+}
+
 async function renderEditProcessorModal(req, res, next) {
   try {
     const processorModelId = processorCatalogModel.normalizePositiveInteger(req.params.processorModelId);
@@ -146,6 +204,7 @@ async function renderEditProcessorModal(req, res, next) {
       });
     }
     return res.render('fragments/processor-catalog-edit-modal', {
+      mode: 'edit',
       processor,
       brands,
       formData: getFormData(null, processor),
@@ -173,7 +232,7 @@ async function updateProcessor(req, res, next) {
     const errorMessages = await validateForm(formData, processorModelId);
     if (errorMessages.length > 0) {
       return res.status(400).render('fragments/processor-catalog-edit-modal', {
-        processor, brands, formData, filters, returnTo, errorMessages
+        mode: 'edit', processor, brands, formData, filters, returnTo, errorMessages
       });
     }
 
@@ -197,7 +256,7 @@ async function updateProcessor(req, res, next) {
         processorCatalogModel.listProcessorBrands()
       ]);
       return res.status(400).render('fragments/processor-catalog-edit-modal', {
-        processor, brands, formData: getFormData(req), filters, returnTo, errorMessages: [error.message]
+        mode: 'edit', processor, brands, formData: getFormData(req), filters, returnTo, errorMessages: [error.message]
       });
     }
     next(error);
@@ -439,6 +498,8 @@ async function mergeProcessor(req, res, next) {
 
 module.exports = {
   renderProcessorCatalogPage,
+  renderNewProcessorModal,
+  createProcessor,
   renderEditProcessorModal,
   updateProcessor,
   renderProcessorFamiliesModal,

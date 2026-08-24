@@ -1850,6 +1850,65 @@ body :is(input[type="checkbox"], input[type="radio"]) {
   box-shadow: 0 0 0 3px rgb(60 116 170 / 14%);
 }
 
+/* Stage 10W.68e: shared QC status tooltips use the same status palette as the icons.
+   The Unit Browser positions them to the left so they do not consume table width. */
+.tech-units-clean-page :is(.tech-qc-status-link, .tech-qc-status-empty)[data-qc-tooltip] {
+  --tech-qc-tooltip-border: #d6e1ed;
+  --tech-qc-tooltip-ink: var(--qc-neutral-ink);
+  --tech-qc-tooltip-background: var(--qc-neutral-background);
+  position: relative;
+}
+
+.tech-units-clean-page .tech-qc-tooltip--accepted {
+  --tech-qc-tooltip-border: #b7dcc4;
+  --tech-qc-tooltip-ink: var(--qc-accepted-ink);
+  --tech-qc-tooltip-background: var(--qc-accepted-background);
+}
+
+.tech-units-clean-page .tech-qc-tooltip--rejected {
+  --tech-qc-tooltip-border: #d8a7ae;
+  --tech-qc-tooltip-ink: var(--qc-rejected-ink);
+  --tech-qc-tooltip-background: var(--qc-rejected-background);
+}
+
+.tech-units-clean-page .tech-qc-tooltip--ready-recheck {
+  --tech-qc-tooltip-border: #dfc98e;
+  --tech-qc-tooltip-ink: var(--qc-ready-ink);
+  --tech-qc-tooltip-background: var(--qc-ready-background);
+}
+
+.tech-units-clean-page :is(.tech-qc-status-link, .tech-qc-status-empty)[data-qc-tooltip]::after {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 7px);
+  z-index: 8;
+  width: max-content;
+  max-width: 190px;
+  padding: 4px 7px;
+  border: 1px solid var(--tech-qc-tooltip-border);
+  border-radius: 5px;
+  color: var(--tech-qc-tooltip-ink);
+  background: var(--tech-qc-tooltip-background);
+  box-shadow: 0 3px 10px rgba(55, 65, 81, 0.12);
+  content: attr(data-qc-tooltip);
+  font-family: inherit;
+  font-size: 0.71rem;
+  font-weight: 620;
+  line-height: 1.2;
+  text-align: left;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-50%) translateX(2px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.tech-units-clean-page :is(.tech-qc-status-link, .tech-qc-status-empty)[data-qc-tooltip]:hover::after,
+.tech-units-clean-page .tech-qc-status-link[data-qc-tooltip]:focus-visible::after {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
 .tech-qc-detail-chip {
   min-height: 1.75rem;
   padding: 0.18rem 0.5rem;
@@ -3524,6 +3583,63 @@ select[data-hierarchical-lot-select] option:disabled {
   background: #f7f9fb;
 }
 
+/* Stage 10W68L — shared Lot hierarchy recognition in every Lot picker.
+   Native option indentation is backed by non-breaking spaces in the shared
+   option partials because browser support for option padding still varies. */
+body select[data-hierarchical-lot-select] option[data-lot-depth="0"] {
+  color: #315e9d;
+  background: #edf5ff;
+  font-weight: 650;
+}
+
+body select[data-hierarchical-lot-select] option[data-lot-depth="0"]:disabled {
+  color: #667f9b;
+  background: #eef3f8;
+}
+
+body select[data-hierarchical-lot-select] option[data-lot-depth]:not([data-lot-depth="0"]) {
+  padding-inline-start: 18px;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option {
+  padding-left: calc(12px + (var(--lot-depth, 0) * 26px));
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--child::before {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin: 0 9px 1px 1px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  opacity: 0.78;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--ancestor {
+  color: #7b8796;
+  background: #f8fafc;
+  cursor: default;
+  font-size: 0.8rem;
+  font-weight: 620;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--ancestor:hover {
+  background: #f8fafc;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--selectable {
+  color: #26384e;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--root,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--root:hover {
+  color: #315e9d;
+  background: #edf5ff;
+  font-weight: 650;
+}
+
 /* Stage 10W45 — application-wide visual consistency consolidation.
    This final shared layer intentionally normalizes presentation only. Feature
    mechanics, Lot hierarchy behavior, Unit Browser layout, and Unit-form
@@ -3966,4 +4082,191 @@ body :is(.form-field > span:first-child, .form-field > label:first-child, .stack
   .dashboard-filter-actions > :is(.primary-button, .secondary-button) {
     width: 100%;
   }
+}
+
+/* Stage 10W68V — shared custom Lot hierarchy picker. Native Lot selects remain
+   the form source of truth and are enhanced progressively so hierarchy spacing
+   and chevrons render consistently across browsers and Windows native controls. */
+.hierarchical-lot-picker {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+}
+
+.hierarchical-lot-picker-native {
+  position: absolute !important;
+  left: 0;
+  bottom: 0;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.form-field .hierarchical-lot-picker-trigger,
+.hierarchical-lot-picker-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  height: 40px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  color: var(--text);
+  background: #fff;
+  font: inherit;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.hierarchical-lot-picker-trigger:hover {
+  border-color: #9db3cf;
+}
+
+.hierarchical-lot-picker-trigger:focus-visible,
+.hierarchical-lot-picker.is-open .hierarchical-lot-picker-trigger {
+  border-color: rgba(49, 95, 156, 0.45);
+  box-shadow: 0 0 0 3px rgba(49, 95, 156, 0.09);
+}
+
+.hierarchical-lot-picker.is-invalid .hierarchical-lot-picker-trigger {
+  border-color: #cf6d6d;
+  box-shadow: 0 0 0 3px rgba(185, 28, 28, 0.07);
+}
+
+.hierarchical-lot-picker-trigger:disabled {
+  color: var(--muted);
+  background: #f8fafc;
+  cursor: not-allowed;
+}
+
+.hierarchical-lot-picker-trigger-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hierarchical-lot-picker-trigger-chevron {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  margin: -3px 2px 0 0;
+  border-right: 1.75px solid #58708e;
+  border-bottom: 1.75px solid #58708e;
+  transform: rotate(45deg);
+  transition: transform 140ms ease, margin 140ms ease;
+}
+
+.hierarchical-lot-picker.is-open .hierarchical-lot-picker-trigger-chevron {
+  margin-top: 3px;
+  transform: rotate(225deg);
+}
+
+.hierarchical-lot-picker-options {
+  position: fixed;
+  z-index: 2400;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 4px;
+  border: 1px solid #b8c9dd;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 14px 34px rgba(16, 36, 62, 0.19);
+}
+
+.hierarchical-lot-picker-options[hidden] {
+  display: none;
+}
+
+.hierarchical-lot-picker-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 31px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 0;
+  border-radius: 5px;
+  color: #26384e;
+  background: transparent;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 500;
+  line-height: 1.25;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.hierarchical-lot-picker-option + .hierarchical-lot-picker-option {
+  margin-top: 1px;
+}
+
+.hierarchical-lot-picker-option:hover,
+.hierarchical-lot-picker-option.is-active,
+.hierarchical-lot-picker-option[aria-selected="true"] {
+  background: #f0f5fb;
+}
+
+.hierarchical-lot-picker-option--root,
+.hierarchical-lot-picker-option--root:hover,
+.hierarchical-lot-picker-option--root.is-active,
+.hierarchical-lot-picker-option--root[aria-selected="true"] {
+  color: #315e9d;
+  background: #e9f3ff;
+  font-weight: 650;
+}
+
+.hierarchical-lot-picker-option--child {
+  padding-left: calc(12px + (var(--lot-depth, 0) * 30px));
+}
+
+.hierarchical-lot-picker-option--child::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 4.5px;
+  height: 4.5px;
+  margin: 0 8px 0 2px;
+  border-right: 1.125px solid currentColor;
+  border-bottom: 1.125px solid currentColor;
+  transform: rotate(-45deg);
+  opacity: 0.82;
+}
+
+.hierarchical-lot-picker-option--disabled {
+  color: #7b8796;
+  background: #f8fafc;
+  cursor: default;
+}
+
+.hierarchical-lot-picker-option--disabled.hierarchical-lot-picker-option--root {
+  color: #667f9b;
+  background: #eef3f8;
+}
+
+.hierarchical-lot-picker-option--placeholder {
+  color: #334a67;
+}
+
+/* Match the existing searchable Add/Edit Unit Lot picker to the shared hierarchy. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option {
+  padding-left: calc(12px + (var(--lot-depth, 0) * 30px));
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-assignable-lot-option--child::before {
+  width: 4.5px;
+  height: 4.5px;
+  margin-right: 8px;
+  border-right-width: 1.125px;
+  border-bottom-width: 1.125px;
 }

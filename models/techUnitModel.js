@@ -182,6 +182,7 @@ async function getTableColumns(tableName) {
     'unit_qc_checks',
     'unit_qc_corrections',
     'unit_assignment_history',
+    'unit_lot_history',
     'unit_park_history'
   ];
 
@@ -1873,13 +1874,13 @@ function getQcReviewStateJoinSql(
         SELECT
           summary.unit_work_completion_id,
           latest_qc.unit_qc_check_id AS latest_qc_check_id,
-          latest_qc.decision_code AS latest_decision_code,
+          CASE WHEN latest_qc.reverted_at IS NULL THEN latest_qc.decision_code ELSE NULL END AS latest_decision_code,
           summary.has_rejection
         FROM (
           SELECT
             qc.unit_work_completion_id,
             MAX(qc.unit_qc_check_id) AS latest_qc_check_id,
-            MAX(CASE WHEN qc.decision_code = 'rejected' THEN 1 ELSE 0 END) AS has_rejection
+            MAX(CASE WHEN qc.decision_code = 'rejected' AND qc.reverted_at IS NULL THEN 1 ELSE 0 END) AS has_rejection
           FROM unit_qc_checks qc
           GROUP BY qc.unit_work_completion_id
         ) summary
@@ -2196,6 +2197,7 @@ async function listTechUnits(filters = {}) {
   const createdEndDate = normalizeDashboardDrilldownDate(filters.createdEndDate);
   const createdWindow = String(filters.createdWindow || '').trim();
   const gradeFilter = String(filters.gradeFilter || '').trim();
+  const requestedCompletionFilter = String(filters.completionFilter || '').trim();
   const sort = normalizeUnitSort(filters.sort);
   const currentUserId = normalizePositiveFilterId(filters.currentUserId);
   const requestedUnitId = normalizePositiveFilterId(filters.unitId);
@@ -2232,6 +2234,9 @@ async function listTechUnits(filters = {}) {
     : false;
   const completionHasWorkCycleKey = completionColumns.has('work_cycle_key');
   const qcReviewFilter = qcReviewSchemaIsReady ? requestedQcReviewFilter : '';
+  const completionFilter = qcReviewSchemaIsReady && ['completed', 'not_completed'].includes(requestedCompletionFilter)
+    ? requestedCompletionFilter
+    : '';
   const ownershipUserSql = getUnitOwnerUserSql(state, 'u');
 
   if (!searchIncludesParkedUnits) {
@@ -2486,6 +2491,12 @@ async function listTechUnits(filters = {}) {
     qcReviewQueue = mapQcReviewQueueCounts(baseCountRows[0], { available: false });
   }
 
+  if (completionFilter === 'completed') {
+    where.push('qc_current_completion.unit_work_completion_id IS NOT NULL');
+  } else if (completionFilter === 'not_completed') {
+    where.push('qc_current_completion.unit_work_completion_id IS NULL');
+  }
+
   const qcReviewConditionSql = getQcReviewFilterConditionSql(qcReviewFilter, qcCorrectionSchemaIsReady);
   if (qcReviewConditionSql) {
     where.push(`(${qcReviewConditionSql})`);
@@ -2655,6 +2666,7 @@ async function listTechUnits(filters = {}) {
       lotScope: isParkedUnitState ? 'direct' : (String(filters.lotScope || '').trim() === 'descendants' ? 'descendants' : 'direct'),
       categoryId: isParkedUnitState ? '' : filters.categoryId,
       gradeFilter: isParkedUnitState ? '' : filters.gradeFilter,
+      completionFilter: isParkedUnitState ? '' : completionFilter,
       qcReviewFilter: isParkedUnitState ? '' : qcReviewFilter,
       techUserId: isParkedUnitState ? '' : filters.techUserId,
       createdStartDate: isParkedUnitState ? '' : filters.createdStartDate,
@@ -6474,6 +6486,21 @@ async function getUnitOperationalHistory(unitId) {
     tableExists('unit_lot_history'),
     tableExists('unit_park_history')
   ]);
+  const lotHistoryColumns = hasLotHistory
+    ? await getTableColumns('unit_lot_history')
+    : new Map();
+  const fromLotIdSql = hasColumn(lotHistoryColumns, 'from_lot_id_snapshot')
+    ? 'COALESCE(h.from_lot_id, h.from_lot_id_snapshot)'
+    : 'h.from_lot_id';
+  const toLotIdSql = hasColumn(lotHistoryColumns, 'to_lot_id_snapshot')
+    ? 'COALESCE(h.to_lot_id, h.to_lot_id_snapshot)'
+    : 'h.to_lot_id';
+  const fromLotNameSql = hasColumn(lotHistoryColumns, 'from_lot_name_snapshot')
+    ? "COALESCE(NULLIF(h.from_lot_name_snapshot, ''), from_lot.name)"
+    : 'from_lot.name';
+  const toLotNameSql = hasColumn(lotHistoryColumns, 'to_lot_name_snapshot')
+    ? "COALESCE(NULLIF(h.to_lot_name_snapshot, ''), to_lot.name)"
+    : 'to_lot.name';
 
   const [workRows, assignmentRows, lotRows, parkRows] = await Promise.all([
     hasWorkCompletions
@@ -6556,13 +6583,13 @@ async function getUnitOperationalHistory(unitId) {
         `
           SELECT
             h.unit_lot_history_id,
-            h.from_lot_id,
-            h.to_lot_id,
+            ${fromLotIdSql} AS from_lot_id,
+            ${toLotIdSql} AS to_lot_id,
             h.moved_by_user_id,
             h.notes,
             h.moved_at,
-            from_lot.name AS from_lot_name,
-            to_lot.name AS to_lot_name,
+            ${fromLotNameSql} AS from_lot_name,
+            ${toLotNameSql} AS to_lot_name,
             moved_by.first_name AS moved_by_first_name,
             moved_by.last_name AS moved_by_last_name,
             moved_by.email AS moved_by_email

@@ -82,7 +82,7 @@ test('QC summary uses a compact shared panel and responsive inline statistics', 
   assert.match(css, /\.tech-qc-summary-stats \{[\s\S]*grid-template-columns: repeat\(4/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.tech-qc-summary-stats \{[\s\S]*grid-template-columns: 1fr/);
   [page, detail].forEach((template) => {
-    assert.match(template, /tech-units-clean\.css\?v=20260730-stage10a-unit-export/);
-    assert.match(template, /tech-units\.js\?v=20260731-stage10b-column-selection/);
+    assert.match(template, /tech-units-clean\.css\?v=20260819-stage10w68o-toggle-label-cleanup/);
+    assert.match(template, /tech-units\.js\?v=20260819-stage10w68l-filter-toggles/);
   });
 });

@@ -14,7 +14,8 @@ test('Stage 9F derives queue state from current completion and append-only QC re
   assert.match(model, /ROW_NUMBER\(\) OVER \([\s\S]*PARTITION BY completion\.unit_id[\s\S]*completion\.completed_at DESC/);
   assert.match(model, /completion\.reversed_at IS NULL/);
   assert.match(model, /MAX\(qc\.unit_qc_check_id\) AS latest_qc_check_id/);
-  assert.match(model, /MAX\(CASE WHEN qc\.decision_code = 'rejected' THEN 1 ELSE 0 END\) AS has_rejection/);
+  assert.match(model, /CASE WHEN latest_qc\.reverted_at IS NULL THEN latest_qc\.decision_code ELSE NULL END AS latest_decision_code/);
+  assert.match(model, /MAX\(CASE WHEN qc\.decision_code = 'rejected' AND qc\.reverted_at IS NULL THEN 1 ELSE 0 END\) AS has_rejection/);
   assert.match(model, /qc_review_state\.latest_decision_code = 'accepted'[\s\S]*has_rejection, 0\) = 0/);
   assert.match(model, /qc_review_state\.latest_decision_code = 'accepted'[\s\S]*has_rejection, 0\) = 1/);
   assert.match(model, /qc_review_state\.latest_decision_code = 'rejected'/);
@@ -71,7 +72,7 @@ test('Stage 9F cache versions and validation command are wired', () => {
 
   assert.equal(packageJson.scripts['validate:qc-queue'], 'node --test services/qcReviewQueue.test.js services/stage9fQcReviewQueueIntegration.test.js services/stage9fQcAwaitingCompletionConsistency.test.js');
   for (const template of [page, detail]) {
-    assert.match(template, /tech-units-clean\.css\?v=20260730-stage10a-unit-export/);
-    assert.match(template, /tech-units\.js\?v=20260731-stage10b-column-selection/);
+    assert.match(template, /tech-units-clean\.css\?v=20260819-stage10w68o-toggle-label-cleanup/);
+    assert.match(template, /tech-units\.js\?v=20260819-stage10w68l-filter-toggles/);
   }
 });

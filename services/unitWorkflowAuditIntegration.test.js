@@ -17,10 +17,10 @@ test('Unit lifecycle and duplicate assumption transactions write grouped workflo
   assert.match(source, /unitWorkflowAudit\.recordAssignmentChanged\(connection/);
 });
 
-test('outcome and override approvals write authoritative workflow audits', () => {
+test('unified request review writes authoritative outcome and override approval audits', () => {
   const outcomeSource = read('models/unitOutcomeModel.js');
   const overrideSource = read('models/overrideRequestModel.js');
-  assert.match(outcomeSource, /unitWorkflowAudit\.recordOutcomeApproved\(connection/);
+  assert.doesNotMatch(outcomeSource, /approveCurrentOutcome|unitWorkflowAudit\.recordOutcomeApproved\(connection/);
   assert.match(overrideSource, /unitWorkflowAudit\.recordOutcomeApproved\(connection/);
   assert.match(overrideSource, /unitWorkflowAudit\.recordOverrideApproved\(connection/);
 });

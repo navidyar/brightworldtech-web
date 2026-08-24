@@ -23,7 +23,9 @@
               <p>
                 <%= request.isIntentionalDuplicateRequest
                   ? 'Review the matching existing record, immutable requested intake snapshot, and request history.'
-                  : 'Review the original observed catalog value, requester explanation, canonical approval details, and request history.' %>
+                  : request.isQcReversionRequest
+                    ? 'Review the exact QC decision being challenged, the QC requester reason, and the immutable audit context.'
+                    : 'Review the original observed catalog value, requester explanation, canonical approval details, and request history.' %>
               </p>
             </div>
 
@@ -91,6 +93,26 @@
                   </dl>
                 </section>
               <% } %>
+            <% } else if (request.isQcReversionRequest && request.qcReversionContext) { %>
+              <div class="unit-request-detail-grid unit-request-detail-overview">
+                <section class="unit-request-detail-card">
+                  <p class="eyebrow">Quality Control Decision</p>
+                  <h3><%= request.qcReversionContext.unitLabel %></h3>
+                  <dl class="unit-request-detail-list">
+                    <div><dt>Decision</dt><dd><%= request.qcReversionContext.decisionLabel %></dd></div>
+                    <div><dt>Exact QC Check</dt><dd>#<%= request.qcReversionContext.qcCheckId %></dd></div>
+                    <div><dt>Work Completion</dt><dd>#<%= request.qcReversionContext.unitWorkCompletionId %></dd></div>
+                    <div><dt>Recorded By</dt><dd><%= request.qcReversionContext.qcReviewedByName || 'User not recorded' %></dd></div>
+                    <div><dt>Recorded At</dt><dd><%= request.qcReversionContext.qcReviewedAt ? formatDateTime(request.qcReversionContext.qcReviewedAt) : '—' %></dd></div>
+                  </dl>
+                </section>
+                <section class="unit-request-detail-card">
+                  <p class="eyebrow">Immutable QC Snapshot</p>
+                  <h3><%= request.qcReversionContext.detailLabel %></h3>
+                  <p><%= request.qcReversionContext.qcReviewNotes || 'No QC review note was recorded.' %></p>
+                  <p class="table-muted-line">While this request is pending, the <%= request.qcReversionContext.decisionLabel %> decision remains current. Approval reverts only this exact QC check, preserves the original decision in audit history, and returns the Unit to Awaiting QC.</p>
+                </section>
+              </div>
             <% } else if (request.catalogContext && request.catalogContext.kind === 'model') { %>
               <div class="unit-request-detail-grid unit-request-detail-overview">
                 <section class="unit-request-detail-card">
@@ -155,11 +177,30 @@
                   <p>
                     <%= request.isIntentionalDuplicateRequest
                       ? 'Approval creates the requested new Unit in the original destination lot only if that lot is still open, visible, and assignable.'
-                      : 'Approval writes only the canonical catalog value or compatibility mapping shown here. It does not create a Unit.' %>
+                      : request.isQcReversionRequest
+                        ? 'Approval revalidates and reverts only the exact current QC decision shown here. The QC requester reason becomes the permanent reversion reason; an optional reviewer note remains separate.'
+                        : 'Approval writes only the canonical catalog value or compatibility mapping shown here. It does not create a Unit.' %>
                   </p>
                 </div>
 
-                <% if (request.isIntentionalDuplicateRequest) { %>
+                <% if (request.isQcReversionRequest) { %>
+                  <div class="unit-request-review-actions">
+                    <form method="post" action="/unit-requests/<%= request.unitRequestId %>/approve">
+                      <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                      <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                      <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                      <label class="form-field"><span>Reviewer Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional context for approving this QC reversion request."></textarea></label>
+                      <button class="primary-button" type="submit">Approve Reversion</button>
+                    </form>
+                    <form method="post" action="/unit-requests/<%= request.unitRequestId %>/reject">
+                      <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
+                      <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
+                      <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
+                      <label class="form-field"><span>Rejection Note</span><textarea name="reviewerNote" rows="3" minlength="3" maxlength="1000" required placeholder="Explain why the current QC decision should remain in effect."></textarea></label>
+                      <button class="secondary-button" type="submit">Reject Reversion</button>
+                    </form>
+                  </div>
+                <% } else if (request.isIntentionalDuplicateRequest) { %>
                   <div class="unit-request-review-actions">
                     <form method="post" action="/unit-requests/<%= request.unitRequestId %>/approve">
                       <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
@@ -215,7 +256,7 @@
                               <div class="processor-request-catalog-match <%= match.identityMatch ? 'processor-request-catalog-match--strong' : '' %>">
                                 <span><strong>#<%= match.id %> · <%= match.displayLabel %></strong> <span class="pill <%= match.isActive ? 'good' : 'neutral' %>"><%= match.isActive ? 'Active' : 'Inactive' %></span></span>
                                 <small><%= match.unitModelLabels.length ? `Currently associated with ${match.unitModelLabels.slice(0, 4).join(', ')}${match.unitModelLabels.length > 4 ? ` +${match.unitModelLabels.length - 4} more` : ''}.` : 'Not currently associated with any Unit Models.' %></small>
-                                <% if (match.isActive) { %><button type="button" class="secondary-button button-small" data-use-existing-processor-value="#<%= match.id %> · <%= match.displayLabel %>">Use Existing</button><% } else { %><small>Reactivate this Processor in Processor Catalog before using it.</small><% } %>
+                                <% if (match.isActive) { %><button type="button" class="secondary-button button-small" data-use-existing-processor-value="#<%= match.id %> · <%= match.displayLabel %>">Use Existing</button><% } else if (isAdminCatalogReviewer) { %><small>Reactivate this Processor in Processor Catalog before using it.</small><% } else { %><small>Ask an Admin to reactivate this Processor in Configuration before using it.</small><% } %>
                               </div>
                             <% }) %>
                           </div>
@@ -282,7 +323,11 @@
                         <p class="field-hint processor-request-canonical-hint">Example canonical record: <strong>Intel</strong> · <strong>i5-9500T</strong> · Family <strong>Core</strong> · Generation <strong>9th Gen</strong> · Base Speed <strong>2.20 GHz</strong>. Do not put “Intel Core”, “@ 2.20 GHz”, or generation text into the Processor field.</p>
 
                         <div class="message info processor-request-admin-confirmation-note">
-                          <p><strong>New Processor Naming:</strong> Before creating a new Processor Catalog entry, confirm the proposed Processor name and metadata with an Admin. Reuse an existing Processor whenever one already exists.</p>
+                          <% if (isAdminCatalogReviewer) { %>
+                            <p><strong>New Processor Naming:</strong> Reuse an existing Processor whenever one already exists. Keep canonical Processor naming and metadata consistent with the global catalog.</p>
+                          <% } else { %>
+                            <p><strong>Management Request Boundary:</strong> Management may adjust and approve Processor values here only because this Processor request was initiated. Global Processor Catalog maintenance remains Admin-only. Before creating a new canonical Processor from this request, confirm the proposed name and metadata with an Admin.</p>
+                          <% } %>
                         </div>
 
                         <% if (!isAdminCatalogReviewer) { %>
@@ -296,7 +341,9 @@
                       <label class="form-field processor-request-approval-note"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional compatibility or normalization note"></textarea></label>
                       <div class="form-actions">
                         <button class="primary-button" type="submit" data-processor-approve-button>Approve Processor Request</button>
-                        <a class="secondary-button" href="/management/config/processors?search=<%= encodeURIComponent(request.catalogContext.requestedProcessorName || '') %>">Open Processor Catalog</a>
+                        <% if (isAdminCatalogReviewer) { %>
+                          <a class="secondary-button" href="/management/config/processors?search=<%= encodeURIComponent(request.catalogContext.requestedProcessorName || '') %>">Open Processor Catalog</a>
+                        <% } %>
                       </div>
                     </form>
                     <form method="post" action="/unit-requests/<%= request.unitRequestId %>/reject">

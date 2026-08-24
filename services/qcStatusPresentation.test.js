@@ -71,3 +71,18 @@ test('historical accept-reject-correct-accept is still described conservatively'
   assert.equal(presentation.statusCode, 'corrected');
   assert.equal(presentation.title, 'Corrected and accepted');
 });
+
+
+test('a reverted latest decision returns the current presentation to Awaiting QC without resurrecting older QC state', () => {
+  const oldRejection = review(20, 'rejected');
+  const revertedAcceptance = { ...review(21, 'accepted'), isReverted: true, reversionReason: 'Wrong unit reviewed.' };
+  const presentation = buildQcStatusPresentation({
+    reviews: [oldRejection, revertedAcceptance],
+    corrections: [correction(30, 20)]
+  });
+
+  assert.equal(presentation.statusCode, 'reverted');
+  assert.equal(presentation.statusLabel, 'Awaiting QC');
+  assert.equal(presentation.latestReview.qcCheckId, 21);
+  assert.equal(presentation.latestCorrection, null);
+});

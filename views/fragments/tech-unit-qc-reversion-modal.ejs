@@ -1,0 +1,78 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const review = latestQcReview && Number(latestQcReview.qcCheckId) === Number(qcCheckId) ? latestQcReview : null;
+  const unitLabel = unit && unit.assetTag ? unit.assetTag : (unit && unit.unitId ? `Unit ${unit.unitId}` : 'Selected Unit');
+  const canSubmit = Boolean(unit && latestCompletion && review && qcCheckId);
+  const reasonInputId = `tech-qc-reversion-reason-${qcCheckId || 'decision'}`;
+  const reasonHintId = `${reasonInputId}-hint`;
+%>
+
+<div class="modal-backdrop" data-modal-backdrop>
+  <section
+    class="modal-panel site-clean-modal tech-qc-review-modal"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="tech-qc-reversion-title"
+    aria-describedby="tech-qc-reversion-description"
+    tabindex="-1"
+  >
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Quality Control</p>
+        <h2 id="tech-qc-reversion-title">Revert Current QC Decision</h2>
+        <p id="tech-qc-reversion-description" class="modal-description">
+          Return this completed Unit to Awaiting QC without deleting its original QC history.
+        </p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close QC reversion">
+        <svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M5.5 5.5 14.5 14.5M14.5 5.5 5.5 14.5" /></svg>
+      </button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error" role="alert" aria-live="assertive">
+          <% safeErrors.forEach((errorMessage) => { %><p><%= errorMessage %></p><% }) %>
+        </div>
+      <% } %>
+
+      <% if (unit && review) { %>
+        <dl class="tech-qc-review-summary">
+          <div><dt>Unit</dt><dd><strong><%= unitLabel %></strong></dd></div>
+          <div><dt>Exact QC Decision</dt><dd><%= review.decisionLabel %> · QC #<%= review.qcCheckId %></dd></div>
+          <div><dt>Reviewed By</dt><dd><%= review.reviewedByName %></dd></div>
+        </dl>
+      <% } %>
+
+      <% if (canSubmit) { %>
+        <form method="post" action="/tech/units/<%= unit.unitId %>/qc-review/<%= qcCheckId %>/revert" data-qc-reversion-form>
+          <label class="form-field" for="<%= reasonInputId %>">
+            <span>Reversion Reason (required)</span>
+            <textarea
+              id="<%= reasonInputId %>"
+              name="reversionReason"
+              rows="5"
+              maxlength="2000"
+              required
+              aria-describedby="<%= reasonHintId %>"
+              data-modal-initial-focus
+              placeholder="Explain why this exact QC decision must be reverted."
+            ><%= reversionReason || '' %></textarea>
+          </label>
+          <p id="<%= reasonHintId %>" class="field-hint">
+            The original <%= review.decisionLabel %> decision, reviewer, notes, and this reversion reason remain in Unit History. Older QC decisions will not become current again.
+          </p>
+          <p class="visually-hidden" data-qc-submit-status aria-live="polite" aria-atomic="true"></p>
+          <div class="action-row tech-qc-modal-actions">
+            <button type="submit" class="danger-button" data-qc-submit-button>Revert QC Decision</button>
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          </div>
+        </form>
+      <% } else { %>
+        <div class="action-row tech-qc-modal-actions">
+          <button type="button" class="secondary-button" data-modal-close data-modal-initial-focus>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

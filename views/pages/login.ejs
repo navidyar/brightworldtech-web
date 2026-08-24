@@ -25,14 +25,14 @@
           <div class="message error"><%= errorMessage %></div>
         <% } %>
 
-        <form class="auth-form" method="post" action="/login">
+        <form class="auth-form" method="post" action="/login" autocomplete="off">
           <label class="form-field">
             <span>Email or Username</span>
             <input
               type="text"
               name="identifier"
               value="<%= formData.identifier %>"
-              autocomplete="username"
+              autocomplete="off"
               autocapitalize="none"
               spellcheck="false"
               required
@@ -44,7 +44,7 @@
             <input
               type="password"
               name="password"
-              autocomplete="current-password"
+              autocomplete="off"
               required
             />
           </label>

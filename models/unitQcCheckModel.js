@@ -13,7 +13,10 @@ const REQUIRED_COLUMNS = new Set([
   'reviewed_by_user_id',
   'decision_code',
   'review_notes',
-  'reviewed_at'
+  'reviewed_at',
+  'reverted_at',
+  'reverted_by_user_id',
+  'reversion_reason'
 ]);
 
 function normalizePositiveInteger(value, fieldName) {
@@ -64,7 +67,15 @@ function mapQcCheckRow(row) {
     decisionCode: code,
     decisionLabel: decisionLabel(code),
     notes: String(row.review_notes || '').trim(),
-    reviewedAt: row.reviewed_at || null
+    reviewedAt: row.reviewed_at || null,
+    isReverted: Boolean(row.reverted_at),
+    revertedAt: row.reverted_at || null,
+    revertedByUserId: Number(row.reverted_by_user_id) || null,
+    revertedByName: [row.reverted_by_first_name, row.reverted_by_last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || row.reverted_by_email || '',
+    reversionReason: String(row.reversion_reason || '').trim()
   };
 }
 
@@ -102,9 +113,15 @@ async function listLatestQcChecksForCompletions(completionIds, connection = pool
         qc.decision_code,
         qc.review_notes,
         qc.reviewed_at,
+        qc.reverted_at,
+        qc.reverted_by_user_id,
+        qc.reversion_reason,
         reviewer.first_name AS reviewer_first_name,
         reviewer.last_name AS reviewer_last_name,
-        reviewer.email AS reviewer_email
+        reviewer.email AS reviewer_email,
+        reverted_by.first_name AS reverted_by_first_name,
+        reverted_by.last_name AS reverted_by_last_name,
+        reverted_by.email AS reverted_by_email
       FROM unit_qc_checks qc
       INNER JOIN (
         SELECT unit_work_completion_id, MAX(unit_qc_check_id) AS latest_qc_check_id
@@ -115,6 +132,9 @@ async function listLatestQcChecksForCompletions(completionIds, connection = pool
         ON latest.latest_qc_check_id = qc.unit_qc_check_id
       LEFT JOIN users reviewer
         ON reviewer.user_id = qc.reviewed_by_user_id
+      LEFT JOIN users reverted_by
+        ON reverted_by.user_id = qc.reverted_by_user_id
+      WHERE qc.reverted_at IS NULL
     `,
     ids
   );
@@ -144,12 +164,20 @@ async function listQcChecksForCompletion(unitWorkCompletionId, connection = pool
         qc.decision_code,
         qc.review_notes,
         qc.reviewed_at,
+        qc.reverted_at,
+        qc.reverted_by_user_id,
+        qc.reversion_reason,
         reviewer.first_name AS reviewer_first_name,
         reviewer.last_name AS reviewer_last_name,
-        reviewer.email AS reviewer_email
+        reviewer.email AS reviewer_email,
+        reverted_by.first_name AS reverted_by_first_name,
+        reverted_by.last_name AS reverted_by_last_name,
+        reverted_by.email AS reverted_by_email
       FROM unit_qc_checks qc
       LEFT JOIN users reviewer
         ON reviewer.user_id = qc.reviewed_by_user_id
+      LEFT JOIN users reverted_by
+        ON reverted_by.user_id = qc.reverted_by_user_id
       WHERE qc.unit_work_completion_id = ?
       ORDER BY qc.reviewed_at ASC, qc.unit_qc_check_id ASC
     `,
@@ -323,6 +351,220 @@ async function recordQcReview({ unitId, unitWorkCompletionId, reviewedByUserId, 
   }
 }
 
+
+function normalizeReversionReason(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    const error = new Error('Enter a reason for reverting the Quality Control decision.');
+    error.code = 'BWT_QC_REVERSION_REASON_REQUIRED';
+    throw error;
+  }
+  if (normalized.length > 2000) {
+    const error = new Error('QC reversion reason must be 2,000 characters or fewer.');
+    error.code = 'BWT_QC_REVERSION_REASON_TOO_LONG';
+    throw error;
+  }
+  return normalized;
+}
+
+async function lockQcReviewReversionTargetWithConnection(connection, {
+  unitId,
+  qcCheckId
+}) {
+  const safeUnitId = normalizePositiveInteger(unitId, 'Unit ID');
+  const safeQcCheckId = normalizePositiveInteger(qcCheckId, 'QC check ID');
+
+  if (!await isQcCheckSchemaReady(connection)) {
+    const error = new Error('QC reversion storage is not ready. Apply the Stage 10W70C migration.');
+    error.code = 'BWT_QC_SCHEMA_REQUIRED';
+    throw error;
+  }
+
+  const [[state]] = await connection.query(
+    `
+      SELECT
+        qc.unit_qc_check_id,
+        qc.unit_id,
+        qc.unit_work_completion_id,
+        qc.reviewed_by_user_id,
+        qc.decision_code,
+        qc.review_notes,
+        qc.reviewed_at,
+        qc.reverted_at,
+        u.lot_id AS current_lot_id,
+        u.created_at AS unit_created_at,
+        completion.lot_id AS completion_lot_id,
+        completion.credit_source,
+        completion.work_cycle_key,
+        completion.completed_at,
+        completion.reversed_at,
+        (
+          SELECT history.unit_lot_history_id
+          FROM unit_lot_history history
+          WHERE history.unit_id = u.unit_id
+            AND history.to_lot_id = u.lot_id
+          ORDER BY history.moved_at DESC, history.unit_lot_history_id DESC
+          LIMIT 1
+        ) AS current_lot_history_id,
+        (
+          SELECT history.moved_at
+          FROM unit_lot_history history
+          WHERE history.unit_id = u.unit_id
+            AND history.to_lot_id = u.lot_id
+          ORDER BY history.moved_at DESC, history.unit_lot_history_id DESC
+          LIMIT 1
+        ) AS current_lot_moved_at
+      FROM unit_qc_checks qc
+      INNER JOIN unit_work_completions completion
+        ON completion.unit_work_completion_id = qc.unit_work_completion_id
+       AND completion.unit_id = qc.unit_id
+      INNER JOIN units u
+        ON u.unit_id = qc.unit_id
+      WHERE qc.unit_qc_check_id = ?
+        AND qc.unit_id = ?
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [safeQcCheckId, safeUnitId]
+  );
+
+  if (!state) {
+    const error = new Error('The selected Quality Control decision could not be found.');
+    error.code = 'BWT_QC_REVERSION_NOT_FOUND';
+    throw error;
+  }
+
+  if (state.reverted_at) {
+    const error = new Error('This Quality Control decision has already been reverted.');
+    error.code = 'BWT_QC_REVERSION_ALREADY_REVERTED';
+    throw error;
+  }
+
+  assertCurrentQcCompletionCycle(state, {
+    code: 'BWT_QC_REVERSION_COMPLETION_STALE',
+    message: 'This Quality Control decision belongs to an older Unit work cycle and cannot be reverted.'
+  });
+
+  const [[latest]] = await connection.query(
+    `
+      SELECT unit_qc_check_id, reverted_at
+      FROM unit_qc_checks
+      WHERE unit_work_completion_id = ?
+      ORDER BY unit_qc_check_id DESC
+      LIMIT 1
+      FOR UPDATE
+    `,
+    [state.unit_work_completion_id]
+  );
+
+  if (Number(latest && latest.unit_qc_check_id || 0) !== safeQcCheckId) {
+    const error = new Error('A newer Quality Control decision exists. Refresh the Unit and review the latest decision.');
+    error.code = 'BWT_QC_REVERSION_NOT_LATEST';
+    throw error;
+  }
+
+  if (latest && latest.reverted_at) {
+    const error = new Error('This Quality Control decision has already been reverted.');
+    error.code = 'BWT_QC_REVERSION_ALREADY_REVERTED';
+    throw error;
+  }
+
+  return state;
+}
+
+async function revertQcReviewWithConnection(connection, {
+  unitId,
+  qcCheckId,
+  revertedByUserId,
+  reversionReason,
+  unitRequestId = null
+}) {
+  const safeUnitId = normalizePositiveInteger(unitId, 'Unit ID');
+  const safeQcCheckId = normalizePositiveInteger(qcCheckId, 'QC check ID');
+  const safeRevertedByUserId = normalizePositiveInteger(revertedByUserId, 'Reverting user ID');
+  const safeReason = normalizeReversionReason(reversionReason);
+  const safeUnitRequestId = unitRequestId ? normalizePositiveInteger(unitRequestId, 'Unit Request ID') : null;
+  const state = await lockQcReviewReversionTargetWithConnection(connection, {
+    unitId: safeUnitId,
+    qcCheckId: safeQcCheckId
+  });
+
+  const [updateResult] = await connection.query(
+    `
+      UPDATE unit_qc_checks
+      SET
+        reverted_at = CURRENT_TIMESTAMP(6),
+        reverted_by_user_id = ?,
+        reversion_reason = ?
+      WHERE unit_qc_check_id = ?
+        AND reverted_at IS NULL
+      LIMIT 1
+    `,
+    [safeRevertedByUserId, safeReason, safeQcCheckId]
+  );
+
+  if (Number(updateResult.affectedRows || 0) !== 1) {
+    const error = new Error('The Quality Control decision changed before it could be reverted. Refresh and try again.');
+    error.code = 'BWT_QC_REVERSION_STALE';
+    throw error;
+  }
+
+  await unitAuditEventModel.insertEventWithConnection(connection, {
+    unitId: safeUnitId,
+    actorUserId: safeRevertedByUserId,
+    eventType: 'unit_qc_reverted',
+    eventSource: safeUnitRequestId ? 'quality_control_reversion_request' : 'quality_control_reversion',
+    eventSummary: 'Quality Control decision reverted to Awaiting QC',
+    metadata: {
+      qcCheckId: safeQcCheckId,
+      unitWorkCompletionId: Number(state.unit_work_completion_id),
+      decisionCode: String(state.decision_code || ''),
+      ...(safeUnitRequestId ? { unitRequestId: safeUnitRequestId } : {})
+    },
+    changes: [
+      {
+        fieldKey: 'qc_decision',
+        fieldLabel: 'Quality Control Decision',
+        changeType: 'reverted',
+        oldValueText: decisionLabel(String(state.decision_code || '')),
+        newValueText: 'Awaiting QC',
+        sortOrder: 10
+      },
+      {
+        fieldKey: 'qc_reversion_reason',
+        fieldLabel: 'QC Reversion Reason',
+        changeType: 'recorded',
+        oldValueText: null,
+        newValueText: safeReason,
+        sortOrder: 20
+      }
+    ]
+  });
+
+  return {
+    reverted: true,
+    unitId: safeUnitId,
+    qcCheckId: safeQcCheckId,
+    unitWorkCompletionId: Number(state.unit_work_completion_id),
+    previousDecisionCode: String(state.decision_code || '')
+  };
+}
+
+async function revertQcReview(values) {
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await revertQcReviewWithConnection(connection, values);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 module.exports = {
   VALID_DECISIONS,
   decisionLabel,
@@ -330,8 +572,12 @@ module.exports = {
   isQcCheckSchemaReady,
   listLatestQcChecksForCompletions,
   listQcChecksForCompletion,
+  lockQcReviewReversionTargetWithConnection,
   mapQcCheckRow,
   normalizeDecisionCode,
   normalizeReviewNotes,
-  recordQcReview
+  normalizeReversionReason,
+  recordQcReview,
+  revertQcReview,
+  revertQcReviewWithConnection
 };

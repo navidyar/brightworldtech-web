@@ -159,6 +159,12 @@
   width: min(720px, 100%);
 }
 
+/* Stage 10W68P: Create/Edit User follows the normal scrolling modal body;
+   its title bar is not pinned while the user scrolls the form. */
+.management-user-form-modal > .modal-header {
+  position: static;
+}
+
 .management-user-edit-form {
   max-width: none;
 }

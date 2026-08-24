@@ -710,7 +710,7 @@ async function saveOverallGrade(connection, unitId, formData, currentUserId) {
   await upsertManualFieldSources(connection, unitId, ['overall_grade'], currentUserId);
 }
 
-async function saveOutcome(connection, unitId, formData, currentUserId) {
+async function saveOutcome(connection, unitId, formData, currentUserId, { canRequestOutcomeConfirmation = false } = {}) {
   if (!isAnyUnitFormFieldManaged(formData, ['unit_outcome', 'outcome_notes'])) {
     return;
   }
@@ -722,11 +722,13 @@ async function saveOutcome(connection, unitId, formData, currentUserId) {
   const outcomeSaveResult = await unitOutcomeModel.saveOutcomeForUnitWithConnection(connection, {
     unitId,
     formData,
-    currentUserId
+    currentUserId,
+    canRequestOutcomeConfirmation
   });
 
   const outcomeCode = unitOutcomeModel.normalizeOutcomeCode(formData.outcomeCode);
-  const approvalRequested = unitOutcomeModel.normalizeApprovalRequested(formData.outcomeApprovalRequested);
+  const approvalRequested = canRequestOutcomeConfirmation
+    && unitOutcomeModel.normalizeApprovalRequested(formData.outcomeApprovalRequested);
 
   if (!outcomeCode || (!approvalRequested && !outcomeSaveResult?.outcomeChanged)) {
     return;
@@ -749,6 +751,7 @@ async function saveOutcome(connection, unitId, formData, currentUserId) {
     outcomeCode,
     outcomeNotes: formData.outcomeNotes,
     requestNotes: formData.outcomeApprovalRequestNotes,
+    unitOutcomeId: outcomeSaveResult?.unitOutcomeId || null,
     approvalRequested
   });
 }
@@ -801,7 +804,7 @@ async function saveGraphicsAdapters(connection, unitId, formData, currentUserId)
   await upsertManualFieldSources(connection, unitId, ['graphics_adapters'], currentUserId);
 }
 
-async function saveExpandedDetailsForUnitWithConnection(connection, { unitId, formData, currentUserId }) {
+async function saveExpandedDetailsForUnitWithConnection(connection, { unitId, formData, currentUserId, canRequestOutcomeConfirmation = false }) {
   const safeUnitId = Number(unitId);
 
   if (!connection || !Number.isInteger(safeUnitId) || safeUnitId <= 0) {
@@ -811,7 +814,7 @@ async function saveExpandedDetailsForUnitWithConnection(connection, { unitId, fo
   await saveUnitSpecifications(connection, safeUnitId, formData, currentUserId);
   await unitSpecsTestsModel.saveSpecsTestsForUnitWithConnection(connection, { unitId: safeUnitId, formData, currentUserId });
   await saveOverallGrade(connection, safeUnitId, formData, currentUserId);
-  await saveOutcome(connection, safeUnitId, formData, currentUserId);
+  await saveOutcome(connection, safeUnitId, formData, currentUserId, { canRequestOutcomeConfirmation });
 }
 
 async function saveExpandedDetailsForUnit({ unitId, formData, currentUserId }) {

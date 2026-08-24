@@ -171,7 +171,8 @@ test('processor request approval reuses global processors, blocks strong duplica
   assert.match(model, /INSERT INTO unit_model_processor_options[\s\S]*?ON DUPLICATE KEY UPDATE is_active = 1/);
   assert.match(page, /Reuse an Existing Processor whenever possible/);
   assert.match(page, /Searches the entire Processor Catalog, not only processors already associated with this Unit Model/);
-  assert.match(page, /Before creating a new Processor Catalog entry, confirm the proposed Processor name and metadata with an Admin/);
+  assert.match(page, /Management Request Boundary/);
+  assert.match(page, /Before creating a new canonical Processor from this request, confirm the proposed name and metadata with an Admin/);
   assert.match(page, /name="confirmedProcessorNamingWithAdmin"/);
   assert.match(script, /Associate Existing Processor/);
   assert.match(script, /Create and Associate Processor/);

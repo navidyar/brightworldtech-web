@@ -1,0 +1,28 @@
+<%
+  const safeParentLots = Array.isArray(parentLots) ? parentLots : [];
+  const selectedId = String(typeof selectedParentLotId !== 'undefined' && selectedParentLotId != null ? selectedParentLotId : '');
+  const excludedId = Number(typeof excludedLotId !== 'undefined' ? excludedLotId : 0);
+  const emptyOptionLabel = typeof emptyLabel !== 'undefined' && emptyLabel ? String(emptyLabel) : 'No parent lot';
+  const includeLotCode = typeof showLotCode !== 'undefined' && Boolean(showLotCode);
+  const includeHiddenStatus = typeof showHiddenStatus !== 'undefined' && Boolean(showHiddenStatus);
+%>
+<option value=""><%= emptyOptionLabel %></option>
+<% safeParentLots.forEach((parentLot) => { %>
+  <%
+    const lotId = Number(parentLot.lot_id || 0);
+    if (excludedId && lotId === excludedId) return;
+    const depth = Math.max(Number(parentLot.hierarchy_depth || 0), 0);
+    const indentation = '\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0\u00A0'.repeat(depth);
+    const hierarchyPrefix = depth > 0 ? '❯ ' : '';
+    const lotCode = includeLotCode && parentLot.lot_code ? ` (${parentLot.lot_code})` : '';
+    const hiddenStatus = includeHiddenStatus && Number(parentLot.is_active) !== 1 ? ' (Hidden)' : '';
+  %>
+  <option
+    value="<%= lotId %>"
+    <%= selectedId === String(lotId) ? 'selected' : '' %>
+    data-lot-id="<%= lotId %>"
+    data-lot-depth="<%= depth %>"
+    data-lot-full-path="<%= parentLot.hierarchy_full_path || parentLot.lot_name || `Lot #${lotId}` %>"
+    data-lot-label="<%= parentLot.lot_name %><%= lotCode %><%= hiddenStatus %>"
+  ><%= indentation %><%= hierarchyPrefix %><%= parentLot.lot_name %><%= lotCode %><%= hiddenStatus %></option>
+<% }) %>

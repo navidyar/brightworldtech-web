@@ -9,7 +9,6 @@ const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const router = express.Router();
 
 const configRoles = ['admin'];
-const processorCatalogRoles = ['admin', 'management'];
 
 router.get(
   '/management/config',
@@ -37,35 +36,49 @@ router.post(
 router.get(
   '/management/config/processors',
   requireAuth,
-  requireRole(processorCatalogRoles),
+  requireRole(configRoles),
   processorCatalogController.renderProcessorCatalogPage
+);
+
+router.get(
+  '/management/config/processors/new/modal',
+  requireAuth,
+  requireRole(configRoles),
+  processorCatalogController.renderNewProcessorModal
+);
+
+router.post(
+  '/management/config/processors/new/modal',
+  requireAuth,
+  requireRole(configRoles),
+  processorCatalogController.createProcessor
 );
 
 router.get(
   '/management/config/processors/:processorModelId/edit/modal',
   requireAuth,
-  requireRole(processorCatalogRoles),
+  requireRole(configRoles),
   processorCatalogController.renderEditProcessorModal
 );
 
 router.post(
   '/management/config/processors/:processorModelId/edit/modal',
   requireAuth,
-  requireRole(processorCatalogRoles),
+  requireRole(configRoles),
   processorCatalogController.updateProcessor
 );
 
 router.get(
   '/management/config/processors/:processorModelId/families/modal',
   requireAuth,
-  requireRole(processorCatalogRoles),
+  requireRole(configRoles),
   processorCatalogController.renderProcessorFamiliesModal
 );
 
 router.post(
   '/management/config/processors/:processorModelId/families',
   requireAuth,
-  requireRole(processorCatalogRoles),
+  requireRole(configRoles),
   processorCatalogController.updateProcessorFamilies
 );
 
@@ -100,14 +113,14 @@ router.post(
 router.get(
   '/management/config/processors/:processorModelId/delete/modal',
   requireAuth,
-  requireRole(processorCatalogRoles),
+  requireRole(configRoles),
   processorCatalogController.renderDeleteProcessorModal
 );
 
 router.post(
   '/management/config/processors/:processorModelId/delete',
   requireAuth,
-  requireRole(processorCatalogRoles),
+  requireRole(configRoles),
   processorCatalogController.deleteProcessor
 );
 

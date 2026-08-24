@@ -9,10 +9,10 @@ function read(relativePath) {
   return fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
 }
 
-test('the unified Requests page merges Unit Requests and existing Unit overrides', () => {
+test('the unified Requests page merges Unit Request and existing Unit override summaries', () => {
   const controller = read('controllers/unitRequestController.js');
-  assert.match(controller, /unitRequestModel\.listUnitRequests/);
-  assert.match(controller, /overrideRequestModel\.listOverrideRequests/);
+  assert.match(controller, /unitRequestModel\.listUnitRequestSummaries/);
+  assert.match(controller, /overrideRequestModel\.listOverrideRequestSummaries/);
   assert.match(controller, /combineRequestResults/);
 });
 
@@ -44,6 +44,8 @@ test('Tech Lead and higher roles review overrides from the unified detail page',
   const detail = read('views/pages/override-request-detail.ejs');
   assert.match(routes, /\/unit-requests\/override\/:overrideRequestId\/approve/);
   assert.match(routes, /\/unit-requests\/override\/:overrideRequestId\/reject/);
+  assert.match(detail, /Approve Confirmation/);
+  assert.match(detail, /Reject Confirmation/);
   assert.match(detail, /Approve Request/);
   assert.match(detail, /Reject Request/);
 });
@@ -65,9 +67,12 @@ test('requesters cannot approve or reject their own override requests', () => {
 });
 
 
-test('reviewers see withdrawal rather than review controls on their own pending request', () => {
+test('own pending Unit Requests stay non-reviewable except the authorized Processor Catalog self-review case', () => {
   const controller = read('controllers/unitRequestController.js');
-  assert.match(controller, /Number\(request\.requestedByUserId\) !== Number\(req\.currentUser\.user_id\)/);
+  assert.match(controller, /const isOwnRequest = Number\(request\.requestedByUserId\) === Number\(req\.currentUser\.user_id\)/);
+  assert.match(controller, /const canSelfReviewProcessorRequest = catalogManager[\s\S]*request\.requestType === unitRequestModel\.PROCESSOR_CATALOG_REQUEST_TYPE/);
+  assert.match(controller, /\(!isOwnRequest \|\| canSelfReviewProcessorRequest\)/);
+  assert.match(controller, /canWithdrawRequest: request\.isPending && Number\(request\.requestedByUserId\) === Number\(req\.currentUser\.user_id\)/);
 });
 
 test('dashboard and Unit workflow links point to the unified Requests queue', () => {

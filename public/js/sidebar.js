@@ -11,6 +11,7 @@
   const mobileQuery = window.matchMedia('(max-width: 980px)');
   const storageKey = 'bwtdallas-sidebar-pinned';
   let desktopCloseTimer = null;
+  let desktopUnpinTimer = null;
 
   const isPinned = () => document.documentElement.getAttribute('data-sidebar-pinned') === 'true';
 
@@ -54,6 +55,13 @@
   };
 
   const setPinned = (pinned) => {
+    if (desktopUnpinTimer) {
+      window.clearTimeout(desktopUnpinTimer);
+      desktopUnpinTimer = null;
+    }
+
+    sidebar.classList.remove('is-desktop-unpinning');
+
     if (pinned) {
       document.documentElement.setAttribute('data-sidebar-pinned', 'true');
     } else {
@@ -68,6 +76,20 @@
 
     cancelDesktopClose();
     sidebar.classList.remove('is-desktop-open');
+
+    if (!pinned && !mobileQuery.matches) {
+      sidebar.classList.add('is-desktop-unpinning');
+
+      if (pinButton && document.activeElement === pinButton) {
+        pinButton.blur();
+      }
+
+      desktopUnpinTimer = window.setTimeout(() => {
+        desktopUnpinTimer = null;
+        sidebar.classList.remove('is-desktop-unpinning');
+      }, 220);
+    }
+
     syncPinButton();
   };
 
@@ -118,6 +140,13 @@
 
   mobileQuery.addEventListener('change', () => {
     cancelDesktopClose();
+
+    if (desktopUnpinTimer) {
+      window.clearTimeout(desktopUnpinTimer);
+      desktopUnpinTimer = null;
+    }
+
+    sidebar.classList.remove('is-desktop-unpinning');
     setOpen(false);
     sidebar.classList.remove('is-desktop-open');
     syncPinButton();

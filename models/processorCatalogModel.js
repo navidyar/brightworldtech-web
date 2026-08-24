@@ -135,37 +135,34 @@ async function listProcessorCatalogOptions({ includeInactive = false } = {}, con
         pm.base_speed_ghz,
         pm.is_active,
         pb.name AS brand_name,
-        (
-          SELECT COUNT(*)
-          FROM unit_model_processor_options umpo_count
-          WHERE umpo_count.processor_model_id = pm.processor_model_id
-            AND umpo_count.is_active = 1
-        ) AS unit_model_count,
-        (
-          SELECT GROUP_CONCAT(umpo_ids.unit_model_id ORDER BY umpo_ids.unit_model_id SEPARATOR ',')
-          FROM unit_model_processor_options umpo_ids
-          WHERE umpo_ids.processor_model_id = pm.processor_model_id
-            AND umpo_ids.is_active = 1
-        ) AS unit_model_ids,
-        (
-          SELECT GROUP_CONCAT(
-            CONCAT(m_assoc.name, ' ', um_assoc.model_name)
-            ORDER BY m_assoc.name, um_assoc.model_name
-            SEPARATOR '||'
-          )
-          FROM unit_model_processor_options umpo_assoc
-          INNER JOIN unit_models um_assoc
-            ON um_assoc.unit_model_id = umpo_assoc.unit_model_id
-          INNER JOIN manufacturers m_assoc
-            ON m_assoc.manufacturer_id = um_assoc.manufacturer_id
-          WHERE umpo_assoc.processor_model_id = pm.processor_model_id
-            AND umpo_assoc.is_active = 1
+        COUNT(DISTINCT umpo.unit_model_id) AS unit_model_count,
+        GROUP_CONCAT(DISTINCT umpo.unit_model_id ORDER BY umpo.unit_model_id SEPARATOR ',') AS unit_model_ids,
+        GROUP_CONCAT(
+          DISTINCT CONCAT(m_assoc.name, ' ', um_assoc.model_name)
+          ORDER BY m_assoc.name, um_assoc.model_name
+          SEPARATOR '||'
         ) AS unit_model_labels
       FROM processor_models pm
       INNER JOIN processor_brands pb
         ON pb.processor_brand_id = pm.processor_brand_id
+      LEFT JOIN unit_model_processor_options umpo
+        ON umpo.processor_model_id = pm.processor_model_id
+       AND umpo.is_active = 1
+      LEFT JOIN unit_models um_assoc
+        ON um_assoc.unit_model_id = umpo.unit_model_id
+      LEFT JOIN manufacturers m_assoc
+        ON m_assoc.manufacturer_id = um_assoc.manufacturer_id
       WHERE (? = 1 OR pm.is_active = 1)
         AND pb.is_active = 1
+      GROUP BY
+        pm.processor_model_id,
+        pm.processor_brand_id,
+        pm.model_code,
+        pm.processor_family,
+        pm.generation,
+        pm.base_speed_ghz,
+        pm.is_active,
+        pb.name
       ORDER BY pb.name, pm.model_code, pm.generation, pm.processor_model_id
     `,
     [includeInactive ? 1 : 0]
@@ -187,14 +184,16 @@ async function listProcessorCatalogOptions({ includeInactive = false } = {}, con
   }));
 }
 
-async function findLikelyProcessorMatches({ processorBrandId = null, brandName = '', modelCode = '', includeInactive = false, limit = 8 } = {}, connection = pool) {
+async function findLikelyProcessorMatches({ processorBrandId = null, brandName = '', modelCode = '', includeInactive = false, limit = 8, processorOptions = null } = {}, connection = pool) {
   const safeBrandId = normalizePositiveInteger(processorBrandId);
   const safeBrandName = normalizeText(brandName, 100);
   const safeModelCode = normalizeText(modelCode, MAX_PROCESSOR_MODEL_LENGTH);
   const requestedIdentity = normalizeProcessorIdentity(safeModelCode, safeBrandName);
   if (requestedIdentity.length < 4) return [];
 
-  const options = await listProcessorCatalogOptions({ includeInactive }, connection);
+  const options = Array.isArray(processorOptions)
+    ? processorOptions.filter((processor) => includeInactive || processor.isActive)
+    : await listProcessorCatalogOptions({ includeInactive }, connection);
   const candidates = options
     .filter((processor) => {
       if (safeBrandId) return processor.processorBrandId === safeBrandId;
@@ -387,6 +386,81 @@ async function processorExists({ processorBrandId, modelCode, excludeProcessorMo
     excludeId ? [brandId, code, excludeId] : [brandId, code]
   );
   return Boolean(rows[0]);
+}
+
+async function createProcessorModel(input = {}, currentUserId = null) {
+  const processorBrandId = normalizePositiveInteger(input.processorBrandId);
+  const modelCode = normalizeText(input.modelCode, MAX_PROCESSOR_MODEL_LENGTH);
+  const legacyFamily = normalizeText(input.legacyFamily, MAX_PROCESSOR_FAMILY_LENGTH);
+  const generation = normalizeText(input.generation, MAX_PROCESSOR_GENERATION_LENGTH);
+  const baseSpeedGhz = normalizeOptionalDecimal(input.baseSpeedGhz);
+  const isActive = input.isActive === true || input.isActive === '1';
+
+  if (!processorBrandId || modelCode.length < 2) {
+    const error = new Error('Choose a Processor Type and enter a Processor name of at least 2 characters.');
+    error.code = 'BWT_PROCESSOR_CATALOG_INPUT_INVALID';
+    throw error;
+  }
+  if (baseSpeedGhz !== null && (baseSpeedGhz < 0.01 || baseSpeedGhz > 99.99)) {
+    const error = new Error('Base Speed must be blank or between 0.01 and 99.99 GHz.');
+    error.code = 'BWT_PROCESSOR_CATALOG_INPUT_INVALID';
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [brandRows] = await connection.query(
+      'SELECT processor_brand_id, name FROM processor_brands WHERE processor_brand_id = ? AND is_active = 1 LIMIT 1 FOR UPDATE',
+      [processorBrandId]
+    );
+    const brand = brandRows[0];
+    if (!brand) {
+      const error = new Error('Select an active Processor Type.');
+      error.code = 'BWT_PROCESSOR_CATALOG_INPUT_INVALID';
+      throw error;
+    }
+
+    if (await processorExists({ processorBrandId, modelCode }, connection)) {
+      const error = new Error('A processor with that Processor Type and canonical Processor name already exists. Use the existing record or Resolve Duplicate instead.');
+      error.code = 'BWT_PROCESSOR_CATALOG_DUPLICATE';
+      throw error;
+    }
+
+    const [result] = await connection.query(
+      `
+        INSERT INTO processor_models (
+          processor_brand_id,
+          processor_family,
+          model_code,
+          base_speed_ghz,
+          generation,
+          is_active
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [processorBrandId, legacyFamily || null, modelCode, baseSpeedGhz, generation || null, isActive ? 1 : 0]
+    );
+    const processorModelId = Number(result.insertId);
+
+    await processorFamilyModel.autoAssignProcessorFamilyMembershipWithConnection(connection, {
+      processorModelId,
+      processorBrandName: brand.name,
+      modelCode,
+      currentUserId: normalizePositiveInteger(currentUserId)
+    });
+
+    await connection.commit();
+    return processorModelId;
+  } catch (error) {
+    await connection.rollback();
+    if (error && error.code === 'ER_DUP_ENTRY') {
+      error.code = 'BWT_PROCESSOR_CATALOG_DUPLICATE';
+      error.message = 'A processor with that Processor Type and canonical Processor name already exists. Use the existing record or Resolve Duplicate instead.';
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 async function updateProcessorModel(processorModelId, input = {}, currentUserId = null) {
@@ -1099,6 +1173,7 @@ module.exports = {
   MAX_PROCESSOR_FAMILY_LENGTH,
   MAX_PROCESSOR_GENERATION_LENGTH,
   buildProcessorDisplayLabel,
+  createProcessorModel,
   getCatalogFilters,
   getCanonicalProcessorNameErrors,
   getProcessorById,

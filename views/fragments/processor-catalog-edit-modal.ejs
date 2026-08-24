@@ -7,12 +7,15 @@
   if (filters.search) query.set('search', filters.search);
   if (returnTo === 'processor-families') query.set('returnTo', 'processor-families');
   const queryString = query.toString();
-  const formAction = `/management/config/processors/${processor.id}/edit/modal${queryString ? `?${queryString}` : ''}`;
+  const isCreate = mode === 'create';
+  const formAction = isCreate
+    ? `/management/config/processors/new/modal${queryString ? `?${queryString}` : ''}`
+    : `/management/config/processors/${processor.id}/edit/modal${queryString ? `?${queryString}` : ''}`;
 %>
 <div class="modal-backdrop" data-modal-backdrop>
   <section class="modal-panel site-clean-modal" role="dialog" aria-modal="true" aria-labelledby="processor-catalog-edit-title">
     <header class="modal-header">
-      <div><h2 id="processor-catalog-edit-title">Edit Processor</h2></div>
+      <div><h2 id="processor-catalog-edit-title"><%= isCreate ? 'Add Processor' : 'Edit Processor' %></h2></div>
       <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
     </header>
 
@@ -60,10 +63,10 @@
           </label>
         </div>
 
-        <p class="field-hint">For Intel Core processors, keep the canonical Processor concise (for example, <strong>i5-9500T</strong>). Store Core, 9th Gen, and 2.20 GHz in their separate metadata fields. If another record already represents the same physical processor, ask an Admin to use Resolve Duplicate instead of renaming into a duplicate.</p>
+        <p class="field-hint">For Intel Core processors, keep the canonical Processor concise (for example, <strong>i5-9500T</strong>). Store Core, 9th Gen, and 2.20 GHz in their separate metadata fields. If another record already represents the same physical processor, use the existing canonical record or Resolve Duplicate instead of creating another duplicate.</p>
 
         <div class="form-actions">
-          <button class="primary-button" type="submit">Save Processor</button>
+          <button class="primary-button" type="submit"><%= isCreate ? 'Add Processor' : 'Save Processor' %></button>
           <button class="secondary-button" type="button" data-modal-close>Cancel</button>
         </div>
       </form>

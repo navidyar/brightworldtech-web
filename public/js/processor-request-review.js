@@ -204,4 +204,5 @@
   }
 
   document.addEventListener('DOMContentLoaded', () => init(document));
+  document.addEventListener('unit-request:modal-loaded', (event) => init(event.detail?.root || document));
 })();

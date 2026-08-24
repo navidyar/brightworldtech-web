@@ -29,6 +29,7 @@ const {
 const { buildEffectiveLotRequirements } = require('../services/lotRequirementInheritance');
 const { normalizeCosmeticGradeOptions } = require('../services/cosmeticGradeNormalization');
 const { buildLotExportScope } = require('../services/lotExportScope');
+const { buildLotHierarchyLookup } = require('../services/lotHierarchyPresentation');
 const {
   collectDescendantLotIds,
   assertValidLotParentAssignment,
@@ -43,6 +44,12 @@ const INSPECTABLE_TABLES = [
   'config_values',
   'lot_unit_form_field_rules',
   'lot_requirement_inheritance_suppressions'
+];
+
+const LOT_OWNED_CONFIGURATION_TABLES = [
+  'lot_requirement_inheritance_suppressions',
+  'lot_unit_form_field_rules',
+  'lot_requirements'
 ];
 
 async function getColumnSet(tableName) {
@@ -65,6 +72,32 @@ async function getColumnSet(tableName) {
 
 function hasColumn(columns, columnName) {
   return columns.has(columnName);
+}
+
+async function deleteLotOwnedConfigurationRows(connection, lotId) {
+  const placeholders = LOT_OWNED_CONFIGURATION_TABLES.map(() => '?').join(', ');
+  const [rows] = await connection.query(
+    `
+      SELECT DISTINCT TABLE_NAME AS tableName
+      FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND COLUMN_NAME = 'lot_id'
+        AND TABLE_NAME IN (${placeholders})
+    `,
+    LOT_OWNED_CONFIGURATION_TABLES
+  );
+  const existingTables = new Set(rows.map((row) => String(row.tableName || '').trim()));
+
+  for (const tableName of LOT_OWNED_CONFIGURATION_TABLES) {
+    if (!existingTables.has(tableName)) {
+      continue;
+    }
+
+    await connection.query(
+      `DELETE FROM \`${tableName}\` WHERE lot_id = ?`,
+      [Number(lotId)]
+    );
+  }
 }
 
 function pickColumn(columns, candidates) {
@@ -341,15 +374,31 @@ async function getLotFormOptions(options = {}) {
     requirementPolicyResult,
     gradeResult,
     productionWeightOptions,
-    parentLots
+    parentLots,
+    hierarchyRows
   ] = await Promise.all([
     getLotSchemaCapabilities(),
     listConfigValuesForSystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.LOT_TYPES),
     listConfigValuesForSystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.LOT_REQUIREMENT_POLICIES),
     listConfigValuesForSystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES),
     productionWeightModel.listProductionWeightOptions(),
-    listParentLotOptions({ includeLotIds: includeParentLotIds, excludeLotIds: excludedParentLotIds })
+    listParentLotOptions({ includeLotIds: includeParentLotIds, excludeLotIds: excludedParentLotIds }),
+    listLotHierarchyRows()
   ]);
+  const hierarchyLookup = buildLotHierarchyLookup(hierarchyRows, { includeInactiveAncestors: true });
+  const parentLotOptions = parentLots.map((lot) => {
+    const hierarchy = hierarchyLookup.get(Number(lot.lot_id));
+
+    return {
+      ...lot,
+      hierarchy_depth: hierarchy ? hierarchy.depth : 0,
+      hierarchy_full_path: hierarchy ? hierarchy.fullPath : lot.lot_name
+    };
+  }).sort((left, right) => String(left.hierarchy_full_path || left.lot_name || '').localeCompare(
+    String(right.hierarchy_full_path || right.lot_name || ''),
+    undefined,
+    { numeric: true, sensitivity: 'base' }
+  ));
 
   return {
     capabilities,
@@ -362,7 +411,7 @@ async function getLotFormOptions(options = {}) {
     ),
     gradeCategory: gradeResult.category,
     productionWeightOptions,
-    parentLots,
+    parentLots: parentLotOptions,
     excludedParentLotIds
   };
 }
@@ -1252,14 +1301,11 @@ async function deleteLotIfEmpty(lotId) {
   try {
     await connection.beginTransaction();
 
-    const requirementColumns = await getColumnSet('lot_requirements');
-
-    if (hasColumn(requirementColumns, 'lot_id')) {
-      await connection.query(
-        'DELETE FROM lot_requirements WHERE lot_id = ?',
-        [Number(lotId)]
-      );
-    }
+    // Older Lots can carry per-Lot configuration rows created before all
+    // supporting foreign keys consistently used ON DELETE CASCADE. Remove
+    // those configuration-owned rows explicitly so an otherwise empty legacy
+    // Lot follows the same delete path as a newly created empty Lot.
+    await deleteLotOwnedConfigurationRows(connection, lotId);
 
     const [result] = await connection.query(
       'DELETE FROM lots WHERE lot_id = ? LIMIT 1',

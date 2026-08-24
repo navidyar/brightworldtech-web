@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const authModel = require('../models/authModel');
 const managementModel = require('../models/managementModel');
+const { normalizeUserListSort } = require('../utils/managementUserSort');
 const accessPolicy = require('../config/accessPolicy');
 const managementUserRoleEditPolicy = require('../services/managementUserRoleEditPolicy');
 const { buildUsernameStem } = require('../services/userUsernamePolicy');
@@ -97,7 +98,29 @@ function getUsersReturnUrl(returnPath, queryString = '') {
   return queryString ? `${basePath}?${queryString}` : basePath;
 }
 
-function validateUserForm({ firstName, lastName, email, roleCodes }) {
+function normalizeOptionalUserText(value) {
+  const normalized = String(value || '').trim();
+  return normalized || null;
+}
+
+function normalizeOptionalUserEmail(value) {
+  const normalized = authModel.normalizeEmail(value);
+  return normalized || null;
+}
+
+function normalizeOptionalDate(value) {
+  const normalized = String(value || '').trim();
+  return normalized || null;
+}
+
+function isValidDateInput(value) {
+  if (!value) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T12:00:00.000Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+
+function validateUserForm({ firstName, lastName, email, personalEmail, phone, startDate, endDate, roleCodes }) {
   const errors = [];
 
   if (!firstName || firstName.length < 2) {
@@ -109,7 +132,31 @@ function validateUserForm({ firstName, lastName, email, roleCodes }) {
   }
 
   if (!email || !email.includes('@')) {
-    errors.push('A valid email address is required.');
+    errors.push('A valid work/login email address is required.');
+  }
+
+  if (personalEmail && !personalEmail.includes('@')) {
+    errors.push('Personal Email must be a valid email address when provided.');
+  }
+
+  if (personalEmail && personalEmail.length > 255) {
+    errors.push('Personal Email cannot exceed 255 characters.');
+  }
+
+  if (phone && phone.length > 50) {
+    errors.push('Phone cannot exceed 50 characters.');
+  }
+
+  if (!isValidDateInput(startDate)) {
+    errors.push('Start Date must be a valid date.');
+  }
+
+  if (!isValidDateInput(endDate)) {
+    errors.push('End Date must be a valid date.');
+  }
+
+  if (startDate && endDate && isValidDateInput(startDate) && isValidDateInput(endDate) && endDate < startDate) {
+    errors.push('End Date cannot be before Start Date.');
   }
 
   if (roleCodes.length === 0) {
@@ -213,7 +260,8 @@ async function createSetupLinkForUser(user, createdByUserId = null, requestedExp
 
 async function renderUsersPage(req, res, next) {
   try {
-    const users = await managementModel.listUsers({ activeOnly: true });
+    const activeSort = normalizeUserListSort(req.query.sort);
+    const users = await managementModel.listUsers({ activeOnly: true, sort: activeSort });
     const userCounts = await managementModel.countUsersByActiveStatus();
     const messages = getUserListMessages(req.query);
 
@@ -223,6 +271,7 @@ async function renderUsersPage(req, res, next) {
       users,
       userCounts,
       isInactiveView: false,
+      activeSort,
       currentUserId: req.currentUser.user_id,
       successMessage: messages.successMessage,
       errorMessages: messages.errorMessages
@@ -234,7 +283,8 @@ async function renderUsersPage(req, res, next) {
 
 async function renderInactiveUsersPage(req, res, next) {
   try {
-    const users = await managementModel.listUsers({ activeOnly: false });
+    const activeSort = normalizeUserListSort(req.query.sort);
+    const users = await managementModel.listUsers({ activeOnly: false, sort: activeSort });
     const userCounts = await managementModel.countUsersByActiveStatus();
     const messages = getUserListMessages(req.query);
 
@@ -244,6 +294,7 @@ async function renderInactiveUsersPage(req, res, next) {
       users,
       userCounts,
       isInactiveView: true,
+      activeSort,
       currentUserId: req.currentUser.user_id,
       successMessage: messages.successMessage,
       errorMessages: messages.errorMessages
@@ -293,6 +344,10 @@ async function renderNewUserPage(req, res, next) {
         firstName: '',
         lastName: '',
         email: '',
+        personalEmail: '',
+        phone: '',
+        startDate: '',
+        endDate: '',
         roleCodes: [],
         setupLinkExpiryHours: String(DEFAULT_PASSWORD_LINK_EXPIRY_HOURS)
       },
@@ -312,6 +367,10 @@ async function createUser(req, res, next) {
     const firstName = String(req.body.firstName || '').trim();
     const lastName = String(req.body.lastName || '').trim();
     const email = authModel.normalizeEmail(req.body.email);
+    const personalEmail = normalizeOptionalUserEmail(req.body.personalEmail);
+    const phone = normalizeOptionalUserText(req.body.phone);
+    const startDate = normalizeOptionalDate(req.body.startDate);
+    const endDate = normalizeOptionalDate(req.body.endDate);
     const roleCodes = normalizeRoleCodes(req.body.roleCodes);
     const setupLinkExpiryHoursRaw = String(req.body.setupLinkExpiryHours || '').trim();
     const setupLinkExpiryHours = parsePasswordLinkExpiryHours(setupLinkExpiryHoursRaw);
@@ -327,6 +386,10 @@ async function createUser(req, res, next) {
       firstName,
       lastName,
       email,
+      personalEmail,
+      phone,
+      startDate,
+      endDate,
       roleCodes: validRoleCodes
     });
 
@@ -354,6 +417,10 @@ async function createUser(req, res, next) {
           firstName,
           lastName,
           email,
+          personalEmail: personalEmail || '',
+          phone: phone || '',
+          startDate: startDate || '',
+          endDate: endDate || '',
           roleCodes: validRoleCodes,
           setupLinkExpiryHours: setupLinkExpiryHoursRaw || String(DEFAULT_PASSWORD_LINK_EXPIRY_HOURS)
         },
@@ -369,6 +436,10 @@ async function createUser(req, res, next) {
       firstName,
       lastName,
       email,
+      personalEmail,
+      phone,
+      startDate,
+      endDate,
       roleCodes: validRoleCodes
     });
 
@@ -450,6 +521,10 @@ async function renderEditUserModal(req, res, next) {
         firstName: user.first_name || '',
         lastName: user.last_name || '',
         email: user.email || '',
+        personalEmail: user.personal_email || '',
+        phone: user.phone || '',
+        startDate: user.start_date || '',
+        endDate: user.end_date || '',
         roleCodes: normalizeRoleCodes(user.roles || [])
       }
     });
@@ -485,6 +560,10 @@ async function updateUserModal(req, res, next) {
     const firstName = String(req.body.firstName || '').trim();
     const lastName = String(req.body.lastName || '').trim();
     const email = authModel.normalizeEmail(req.body.email);
+    const personalEmail = normalizeOptionalUserEmail(req.body.personalEmail);
+    const phone = normalizeOptionalUserText(req.body.phone);
+    const startDate = normalizeOptionalDate(req.body.startDate);
+    const endDate = normalizeOptionalDate(req.body.endDate);
     const roleCodes = normalizeRoleCodes(req.body.roleCodes);
     const existingRoleCodes = normalizeRoleCodes(user.roles || []);
     const roleEditingLockCode = managementUserRoleEditPolicy.getSelfRoleLockCode({
@@ -508,6 +587,10 @@ async function updateUserModal(req, res, next) {
       firstName,
       lastName,
       email,
+      personalEmail,
+      phone,
+      startDate,
+      endDate,
       roleCodes: validRoleCodes
     });
 
@@ -535,6 +618,10 @@ async function updateUserModal(req, res, next) {
           firstName,
           lastName,
           email,
+          personalEmail: personalEmail || '',
+          phone: phone || '',
+          startDate: startDate || '',
+          endDate: endDate || '',
           roleCodes: validRoleCodes
         }
       });
@@ -546,7 +633,11 @@ async function updateUserModal(req, res, next) {
           userId,
           firstName,
           lastName,
-          email
+          email,
+          personalEmail,
+          phone,
+          startDate,
+          endDate
         });
       } else {
         await managementModel.updateUserWithRoles({
@@ -554,6 +645,10 @@ async function updateUserModal(req, res, next) {
           firstName,
           lastName,
           email,
+          personalEmail,
+          phone,
+          startDate,
+          endDate,
           roleCodes: validRoleCodes
         });
       }
@@ -570,6 +665,10 @@ async function updateUserModal(req, res, next) {
             firstName,
             lastName,
             email,
+            personalEmail: personalEmail || '',
+            phone: phone || '',
+            startDate: startDate || '',
+            endDate: endDate || '',
             roleCodes: validRoleCodes
           }
         });

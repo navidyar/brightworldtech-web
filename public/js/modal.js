@@ -37,9 +37,13 @@
     return !element.closest('[hidden], [aria-hidden="true"]');
   }
 
+  function isTabbable(element) {
+    return Boolean(isFocusable(element) && Number(element.tabIndex) >= 0);
+  }
+
   function getFocusableElements(dialog) {
     return dialog
-      ? Array.from(dialog.querySelectorAll(focusableSelector)).filter(isFocusable)
+      ? Array.from(dialog.querySelectorAll(focusableSelector)).filter(isTabbable)
       : [];
   }
 
@@ -152,7 +156,7 @@
   }
 
   function trapModalFocus(event) {
-    if (event.key !== 'Tab') {
+    if (event.key !== 'Tab' || event.defaultPrevented) {
       return false;
     }
 

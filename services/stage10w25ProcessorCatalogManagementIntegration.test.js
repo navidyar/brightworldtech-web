@@ -10,18 +10,22 @@ function read(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 }
 
-test('Processor Catalog is a dedicated configuration surface available to Admin and Management', () => {
+test('Processor Catalog is an Admin-only configuration surface while request-scoped processor review stays separate', () => {
   const routes = read('routes/config.js');
   const nav = read('views/partials/configuration-nav.ejs');
   const sidebar = read('views/partials/sidebar.ejs');
   const page = read('views/pages/management-processors.ejs');
 
-  assert.match(routes, /const processorCatalogRoles = \['admin', 'management'\]/);
-  assert.match(routes, /\/management\/config\/processors'[\s\S]*?requireRole\(processorCatalogRoles\)/);
+  assert.doesNotMatch(routes, /processorCatalogRoles/);
+  assert.match(routes, /\/management\/config\/processors'[\s\S]*?requireRole\(configRoles\)/);
+  assert.match(routes, /processors\/:processorModelId\/edit\/modal'[\s\S]*?requireRole\(configRoles\)/);
+  assert.match(routes, /processors\/:processorModelId\/families'[\s\S]*?requireRole\(configRoles\)/);
+  assert.match(routes, /processors\/:processorModelId\/delete'[\s\S]*?requireRole\(configRoles\)/);
   assert.match(nav, /label: 'Processor Catalog'/);
-  assert.match(nav, /allowed: isAdminConfigurationUser \|\| isManagementConfigurationUser/);
+  assert.match(nav, /label: 'Processor Catalog'[\s\S]*?allowed: isAdminConfigurationUser/);
+  assert.doesNotMatch(nav, /isManagementConfigurationUser/);
   assert.match(nav, /configurationItems\.filter\(\(item\) => item\.allowed\)/);
-  assert.match(sidebar, /!canAccessMenuArea\('admin'\)[\s\S]*?\/management\/config\/processors/);
+  assert.doesNotMatch(sidebar, /!canAccessMenuArea\('admin'\)[\s\S]*?\/management\/config\/processors/);
   assert.match(page, /<h1>Processor Catalog<\/h1>/);
   assert.match(page, /name="processorBrandId"/);
   assert.match(page, /name="needsReview"/);
@@ -84,6 +88,9 @@ test('Processor request review can reuse an existing canonical processor and war
   assert.match(page, /name="approvedExistingProcessorModelId"/);
   assert.match(page, /data-processor-similarity-warning/);
   assert.match(page, /Open Processor Catalog/);
+  assert.match(page, /<% if \(isAdminCatalogReviewer\) \{ %>[\s\S]*?Open Processor Catalog/);
+  assert.match(page, /Management Request Boundary/);
+  assert.match(page, /Global Processor Catalog maintenance remains Admin-only/);
   assert.match(model, /safeExistingProcessorModelId/);
   assert.match(model, /Existing processor mapped/);
   assert.match(model, /reusedExistingProcessor: Boolean\(safeExistingProcessorModelId\)/);

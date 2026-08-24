@@ -1,10 +1,12 @@
 const EXISTING_UNIT_OVERRIDE_TYPE = 'existing_unit_override';
 const OUTCOME_CONFIRMATION_TYPE = 'outcome_confirmation';
+const QC_REVERSION_TYPE = 'qc_reversion';
 
 const UNIFIED_REQUEST_TYPES = new Set([
   'all',
   EXISTING_UNIT_OVERRIDE_TYPE,
   OUTCOME_CONFIRMATION_TYPE,
+  QC_REVERSION_TYPE,
   'intentional_duplicate',
   'model_catalog_addition',
   'processor_catalog_addition'
@@ -73,7 +75,12 @@ function mapUnitRequest(request) {
       request.catalogContext?.requestedModelName,
       request.catalogContext?.unitModelName,
       request.catalogContext?.requestedProcessorType,
-      request.catalogContext?.requestedProcessorName
+      request.catalogContext?.requestedProcessorName,
+      request.qcReversionContext?.assetLabel,
+      request.qcReversionContext?.decisionLabel,
+      request.qcReversionContext?.qcCheckId,
+      request.qcReversionContext?.qcReviewedByName,
+      request.qcReversionContext?.qcReviewNotes
     ]
   };
 }
@@ -91,9 +98,11 @@ function mapOverrideRequest(request) {
         : request.isDuplicateIntakeMoveRequest
           ? 'Move / Takeover Existing Unit'
           : 'Existing Unit Override';
-  const listContextSecondary = request.requestedDestinationLotName && request.requestedDestinationLotName !== 'No destination selected'
-    ? `${request.lotName} → ${request.requestedDestinationLotName}`
-    : request.lotName;
+  const listContextSecondary = isOutcomeConfirmation
+    ? [request.lotName, request.outcomeConfirmationOutcomeLabel ? `Requested ${request.outcomeConfirmationOutcomeLabel}` : ''].filter(Boolean).join(' · ')
+    : request.requestedDestinationLotName && request.requestedDestinationLotName !== 'No destination selected'
+      ? `${request.lotName} → ${request.requestedDestinationLotName}`
+      : request.lotName;
 
   return {
     requestSource: 'override',
@@ -137,6 +146,7 @@ function mapOverrideRequest(request) {
       request.requestedDestinationLotName,
       request.reason,
       request.requesterNote,
+      request.outcomeConfirmationOutcomeLabel,
       request.reviewNotes,
       request.validationLabel,
       request.decisionLabel
@@ -187,6 +197,7 @@ function combineRequestResults({ unitResult, overrideResult, statusFilter = 'pen
 module.exports = {
   EXISTING_UNIT_OVERRIDE_TYPE,
   OUTCOME_CONFIRMATION_TYPE,
+  QC_REVERSION_TYPE,
   combineRequestResults,
   mapOverrideRequest,
   mapOverrideStatus,

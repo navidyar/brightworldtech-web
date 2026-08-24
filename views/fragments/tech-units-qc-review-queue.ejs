@@ -2,6 +2,9 @@
   const safeQueue = queue || {};
   const safeFilters = filters || {};
   const selectedFilter = String(safeFilters.qcReviewFilter || '').trim();
+  const browserBasePath = typeof unitBrowserBasePath !== 'undefined' && unitBrowserBasePath
+    ? String(unitBrowserBasePath)
+    : '/tech/units';
   const queueOptions = [
     { code: '', label: 'All Units', count: Number(safeQueue.allUnits || 0) },
     { code: 'awaiting', label: 'Awaiting QC', count: Number(safeQueue.awaitingUnits || 0) },
@@ -13,8 +16,10 @@
   const queueQueryKeys = [
     'search',
     'lotId',
+    'lotScope',
     'categoryId',
     'gradeFilter',
+    'completionFilter',
     'techUserId',
     'createdStartDate',
     'createdEndDate',
@@ -38,7 +43,7 @@
     }
 
     const queryString = params.toString();
-    return queryString ? `/tech/units?${queryString}` : '/tech/units';
+    return queryString ? `${browserBasePath}?${queryString}` : browserBasePath;
   };
 %>
 

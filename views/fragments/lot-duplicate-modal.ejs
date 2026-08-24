@@ -58,11 +58,12 @@
 
               <label class="form-field form-field-wide" data-lot-duplicate-parent-field <%= safeFormData.placementMode === 'child' ? '' : 'hidden' %>>
                 <span>Parent Lot</span>
-                <select name="parentLotId" data-lot-duplicate-parent-select <%= safeFormData.placementMode === 'child' ? '' : 'disabled' %>>
-                  <option value="">Select Parent Lot</option>
-                  <% (safeOptions.parentLots || []).forEach((parentLot) => { %>
-                    <option value="<%= parentLot.lot_id %>" <%= String(safeFormData.parentLotId || '') === String(parentLot.lot_id) ? 'selected' : '' %>><%= parentLot.lot_name %></option>
-                  <% }) %>
+                <select name="parentLotId" data-lot-duplicate-parent-select data-hierarchical-lot-select <%= safeFormData.placementMode === 'child' ? '' : 'disabled' %>>
+                  <%- include('../partials/parent-lot-options', {
+                    parentLots: safeOptions.parentLots,
+                    selectedParentLotId: safeFormData.parentLotId,
+                    emptyLabel: 'Select Parent Lot'
+                  }) %>
                 </select>
               </label>
             </div>

@@ -84,17 +84,21 @@
 
   const isSingleUnitViewPage = typeof singleUnitView !== 'undefined' && Boolean(singleUnitView);
   const currentUserRoles = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
-  const canDeleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canManageUnitLifecycle = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canApproveUnitOutcomes = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canEditTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
-  const canCompleteTechUnits = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
-  const canReverseTechUnitCompletion = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'qc'].includes(roleCode));
-  const canRecordQcReview = currentUserRoles.includes('qc');
-  const canSubmitAnyQcCorrection = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canViewTechWeightDetails = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canViewCurrentLotWeight = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const isQcPortalMode = typeof qcPortalMode !== 'undefined' && Boolean(qcPortalMode);
+  const browserBasePath = typeof unitBrowserBasePath !== 'undefined' && unitBrowserBasePath
+    ? String(unitBrowserBasePath)
+    : '/tech/units';
+  const canDeleteTechUnits = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canManageUnitLifecycle = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canApproveUnitOutcomes = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canEditTechUnits = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
+  const canCompleteTechUnits = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
+  const canReverseTechUnitCompletion = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'qc', 'tech'].includes(roleCode));
+  const canRecordQcReview = isQcPortalMode || currentUserRoles.includes('qc');
+  const canSubmitAnyQcCorrection = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canViewTechWeightDetails = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canViewCurrentLotWeight = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const currentUserId = currentUser && Number.isInteger(Number(currentUser.user_id))
     ? Number(currentUser.user_id)
     : null;
@@ -108,8 +112,10 @@
   const sortQueryKeys = [
     'search',
     'lotId',
+    'lotScope',
     'categoryId',
     'gradeFilter',
+    'completionFilter',
     'qcReviewFilter',
     'techUserId',
     'createdStartDate',
@@ -135,7 +141,7 @@
 
     const queryString = params.toString();
 
-    return queryString ? `/tech/units?${queryString}` : '/tech/units';
+    return queryString ? `${browserBasePath}?${queryString}` : browserBasePath;
   }
 
   function nextSortValue(forwardSortValue, reverseSortValue) {
@@ -215,17 +221,26 @@
 %>
 
 <% if (!isSingleUnitViewPage && result && result.qcReviewQueue) { %>
-  <%- include('tech-units-qc-review-queue', { queue: result.qcReviewQueue, filters, oob: true }) %>
+  <%- include('tech-units-qc-review-queue', { queue: result.qcReviewQueue, filters, oob: true, unitBrowserBasePath: browserBasePath }) %>
 <% } %>
 
 <% if (!isSingleUnitViewPage) { %>
   <strong id="tech-units-loaded-count" hx-swap-oob="true"><%= result && result.pagination ? formatNumber(result.pagination.totalRows) : (result && result.units ? formatNumber(result.units.length) : '—') %></strong>
 
-  <%- include('../partials/table-pagination', { pagination: result.pagination, filters, basePath: '/tech/units', itemLabel: 'units', pageSizeLabel: 'Units per page', modifierClass: 'table-pagination--top', ariaLabel: 'Top unit pagination' }) %>
+  <%- include('../partials/table-pagination', { pagination: result.pagination, filters, basePath: browserBasePath, itemLabel: 'units', pageSizeLabel: 'Units per page', modifierClass: 'table-pagination--top', ariaLabel: 'Top unit pagination' }) %>
 <% } %>
 
 <div class="table-card tech-table-card">
   <table class="tech-units-table">
+    <colgroup>
+      <col class="tech-units-col tech-units-col--unit">
+      <col class="tech-units-col tech-units-col--date">
+      <col class="tech-units-col tech-units-col--work">
+      <col class="tech-units-col tech-units-col--identifiers">
+      <col class="tech-units-col tech-units-col--grade">
+      <col class="tech-units-col tech-units-col--qc">
+      <col class="tech-units-col tech-units-col--actions">
+    </colgroup>
     <thead>
       <tr>
         <th>Unit<%= canViewCurrentLotWeight ? ' / Weight' : '' %></th>
@@ -454,21 +469,28 @@
 
           <td class="tech-units-qc-cell">
             <% if (latestQcReview) { %>
+              <%
+                const qcTooltipTone = ['accepted', 'corrected'].includes(unit.qcReviewStateCode)
+                  ? 'accepted'
+                  : (unit.qcReviewStateCode === 'ready_recheck' ? 'ready-recheck' : 'rejected');
+                const qcTooltipLabel = unit.qcReviewStateLabel || ('QC ' + latestQcReview.decisionLabel);
+              %>
               <a
-                class="tech-qc-status-link"
+                class="tech-qc-status-link tech-qc-tooltip--<%= qcTooltipTone %>"
                 href="/tech/units/<%= unit.unitId %>/qc-review/details/modal"
                 data-tech-modal-trigger
                 data-no-row-toggle
+                data-qc-tooltip="<%= qcTooltipLabel %>"
                 aria-label="View <%= unit.qcReviewStateLabel || ('Quality Control ' + latestQcReview.decisionLabel.toLowerCase()) %> details"
-                title="<%= unit.qcReviewStateLabel || ('QC ' + latestQcReview.decisionLabel) %> — click for details"
               >
                 <%- include('tech-unit-qc-status-icon', { statusCode: unit.qcReviewStateCode, decisionCode: latestQcReview.decisionCode }) %>
               </a>
             <% } else { %>
+              <% const qcTooltipLabel = unit.qcReviewStateLabel || 'QC not performed'; %>
               <span
-                class="tech-qc-status-empty"
-                aria-label="Quality Control not performed"
-                title="QC not performed"
+                class="tech-qc-status-empty tech-qc-tooltip--neutral"
+                data-qc-tooltip="<%= qcTooltipLabel %>"
+                aria-label="<%= qcTooltipLabel %>"
               >
                 <%- include('tech-unit-qc-status-icon', { statusCode: 'not_reviewed', decisionCode: '' }) %>
               </span>
@@ -478,128 +500,130 @@
           <td class="tech-units-actions-cell">
             <% if (unit.unitId) { %>
               <div class="tech-summary-actions">
-                <% if (canShowQcReviewActions) { %>
-                  <% if (qcReviewActionAvailability.acceptEnabled) { %>
-                    <a
-                      class="secondary-button tech-action-button tech-action-button--qc-accept"
-                      href="/tech/units/<%= unit.unitId %>/qc-review/accepted/modal"
-                      data-tech-modal-trigger
-                      data-no-row-toggle
-                    >
-                      Accept
-                    </a>
-                  <% } else { %>
-                    <button
-                      type="button"
-                      class="secondary-button tech-action-button tech-action-button--qc-accept decision-action-disabled"
-                      data-no-row-toggle
-                      disabled
-                      aria-disabled="true"
-                      title="<%= qcReviewActionAvailability.acceptDisabledReason || 'Accept is not available for the current QC state.' %>"
-                    >
-                      Accept
-                    </button>
-                  <% } %>
-
-                  <% if (qcReviewActionAvailability.rejectEnabled) { %>
-                    <a
-                      class="danger-button tech-action-button tech-action-button--qc-reject"
-                      href="/tech/units/<%= unit.unitId %>/qc-review/rejected/modal"
-                      data-tech-modal-trigger
-                      data-no-row-toggle
-                    >
-                      Reject
-                    </a>
-                  <% } else { %>
-                    <button
-                      type="button"
-                      class="danger-button tech-action-button tech-action-button--qc-reject decision-action-disabled"
-                      data-no-row-toggle
-                      disabled
-                      aria-disabled="true"
-                      title="<%= qcReviewActionAvailability.rejectDisabledReason || 'Reject is not available for the current QC state.' %>"
-                    >
-                      Reject
-                    </button>
-                  <% } %>
-                <% } %>
-                <% if (canRecordQcReview && unit.latestWorkCompletion && latestQcReview && latestQcReview.decisionCode === 'rejected' && !latestQcCorrection && !unit.isParked) { %>
-                  <span class="tech-chip tech-chip--qc-pending">Awaiting correction</span>
-                <% } %>
-                <% if (canRecordQcReview && !unit.latestWorkCompletion && !unit.isParked) { %>
-                  <span class="tech-chip">Awaiting completion</span>
-                <% } %>
-                <% if (canSubmitQcCorrection) { %>
-                  <a
-                    class="secondary-button tech-action-button tech-action-button--qc-corrected"
-                    href="/tech/units/<%= unit.unitId %>/qc-correction/modal"
-                    data-tech-modal-trigger
-                    data-no-row-toggle
-                  >
-                    Mark Corrected
-                  </a>
-                <% } else if (latestQcCorrection && latestQcReview && latestQcReview.decisionCode === 'rejected' && !canRecordQcReview) { %>
-                  <span class="tech-chip tech-chip--qc-ready">Ready for QC recheck</span>
-                <% } %>
-                <% if (canCompleteTechUnits && !unit.isParked && !isReadOnlySearchResult) { %>
-                  <% if (unit.latestWorkCompletion) { %>
-                    <button
-                      type="button"
-                      class="secondary-button tech-action-button tech-action-button--print tech-print-label-action-button"
-                      data-no-row-toggle
-                      disabled
-                      aria-disabled="true"
-                      title="Label printing will be connected in the label-printing step."
-                    >
-                      Print Label
-                    </button>
-                    <% if (canReverseTechUnitCompletion && unit.latestWorkCompletion.creditSource === 'manual_completion') { %>
+                <div class="tech-summary-actions__primary">
+                    <% if (canShowQcReviewActions) { %>
+                    <% if (qcReviewActionAvailability.acceptEnabled) { %>
                       <a
-                        class="secondary-button tech-action-button tech-action-button--undo tech-delete-action-button"
-                        href="/tech/units/<%= unit.unitId %>/completions/<%= unit.latestWorkCompletion.unitWorkCompletionId %>/reverse/modal"
+                        class="secondary-button tech-action-button tech-action-button--qc-accept"
+                        href="/tech/units/<%= unit.unitId %>/qc-review/accepted/modal"
                         data-tech-modal-trigger
                         data-no-row-toggle
                       >
-                        Undo Completion
+                        Accept
+                      </a>
+                    <% } else { %>
+                      <button
+                        type="button"
+                        class="secondary-button tech-action-button tech-action-button--qc-accept decision-action-disabled"
+                        data-no-row-toggle
+                        disabled
+                        aria-disabled="true"
+                        title="<%= qcReviewActionAvailability.acceptDisabledReason || 'Accept is not available for the current QC state.' %>"
+                      >
+                        Accept
+                      </button>
+                    <% } %>
+
+                    <% if (qcReviewActionAvailability.rejectEnabled) { %>
+                      <a
+                        class="danger-button tech-action-button tech-action-button--qc-reject"
+                        href="/tech/units/<%= unit.unitId %>/qc-review/rejected/modal"
+                        data-tech-modal-trigger
+                        data-no-row-toggle
+                      >
+                        Reject
+                      </a>
+                    <% } else { %>
+                      <button
+                        type="button"
+                        class="danger-button tech-action-button tech-action-button--qc-reject decision-action-disabled"
+                        data-no-row-toggle
+                        disabled
+                        aria-disabled="true"
+                        title="<%= qcReviewActionAvailability.rejectDisabledReason || 'Reject is not available for the current QC state.' %>"
+                      >
+                        Reject
+                      </button>
+                    <% } %>
+                  <% } %>
+                  <% if (canRecordQcReview && unit.latestWorkCompletion && latestQcReview && latestQcReview.decisionCode === 'rejected' && !latestQcCorrection && !unit.isParked) { %>
+                    <span class="tech-chip tech-chip--qc-pending">Awaiting correction</span>
+                  <% } %>
+                  <% if (canRecordQcReview && !unit.latestWorkCompletion && !unit.isParked) { %>
+                    <span class="tech-chip">Awaiting completion</span>
+                  <% } %>
+                  <% if (canSubmitQcCorrection) { %>
+                    <a
+                      class="secondary-button tech-action-button tech-action-button--qc-corrected"
+                      href="/tech/units/<%= unit.unitId %>/qc-correction/modal"
+                      data-tech-modal-trigger
+                      data-no-row-toggle
+                    >
+                      Mark Corrected
+                    </a>
+                  <% } %>
+                  <% if (canEditTechUnits && !unit.isParked && !isReadOnlySearchResult) { %>
+                    <a class="secondary-button tech-action-button tech-action-button--edit" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" data-no-row-toggle>
+                      Edit
+                    </a>
+                  <% } %>
+                  <% if (unit.isParked) { %>
+                    <span class="tech-chip">Parked</span>
+                    <% if (canManageUnitLifecycle) { %>
+                      <a
+                        class="secondary-button tech-action-button tech-action-button--return"
+                        href="/tech/units/<%= unit.unitId %>/return-to-active/modal"
+                        data-tech-modal-trigger
+                        data-no-row-toggle
+                      >
+                        Return to Active
                       </a>
                     <% } %>
-                  <% } else { %>
+                  <% } else if (canManageUnitLifecycle) { %>
                     <a
-                      class="secondary-button tech-action-button tech-action-button--complete"
-                      href="/tech/units/<%= unit.unitId %>/complete-work/modal"
+                      class="secondary-button tech-action-button tech-action-button--park tech-delete-action-button"
+                      href="/tech/units/<%= unit.unitId %>/park/modal"
                       data-tech-modal-trigger
                       data-no-row-toggle
                     >
-                      Unit Complete
+                      Park Unit
                     </a>
                   <% } %>
-                <% } %>
-                <% if (canEditTechUnits && !unit.isParked && !isReadOnlySearchResult) { %>
-                  <a class="secondary-button tech-action-button tech-action-button--edit" href="/tech/units/<%= unit.unitId %>/edit" hx-get="/tech/units/<%= unit.unitId %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML" data-no-row-toggle>
-                    Edit
-                  </a>
-                <% } %>
-                <% if (unit.isParked) { %>
-                  <span class="tech-chip">Parked</span>
-                  <% if (canManageUnitLifecycle) { %>
-                    <a
-                      class="secondary-button tech-action-button tech-action-button--return"
-                      href="/tech/units/<%= unit.unitId %>/return-to-active/modal"
-                      data-tech-modal-trigger
-                      data-no-row-toggle
-                    >
-                      Return to Active
-                    </a>
-                  <% } %>
-                <% } else if (canManageUnitLifecycle) { %>
-                  <a
-                    class="secondary-button tech-action-button tech-action-button--park tech-delete-action-button"
-                    href="/tech/units/<%= unit.unitId %>/park/modal"
-                    data-tech-modal-trigger
-                    data-no-row-toggle
-                  >
-                    Park Unit
-                  </a>
+                </div>
+                <% if (canCompleteTechUnits && !unit.isParked && !isReadOnlySearchResult) { %>
+                  <div class="tech-summary-actions__secondary">
+                    <% if (unit.latestWorkCompletion) { %>
+                      <button
+                        type="button"
+                        class="secondary-button tech-action-button tech-action-button--print tech-print-label-action-button"
+                        data-no-row-toggle
+                        disabled
+                        aria-disabled="true"
+                        title="Label printing will be connected in the label-printing step."
+                      >
+                        Print Label
+                      </button>
+                      <% if (canReverseTechUnitCompletion && unit.latestWorkCompletion.creditSource === 'manual_completion') { %>
+                        <a
+                          class="secondary-button tech-action-button tech-action-button--undo tech-delete-action-button"
+                          href="/tech/units/<%= unit.unitId %>/completions/<%= unit.latestWorkCompletion.unitWorkCompletionId %>/reverse/modal"
+                          data-tech-modal-trigger
+                          data-no-row-toggle
+                        >
+                          Undo Completion
+                        </a>
+                      <% } %>
+                    <% } else { %>
+                      <a
+                        class="secondary-button tech-action-button tech-action-button--complete"
+                        href="/tech/units/<%= unit.unitId %>/complete-work/modal"
+                        data-tech-modal-trigger
+                        data-no-row-toggle
+                      >
+                        Unit Complete
+                      </a>
+                    <% } %>
+                  </div>
                 <% } %>
               </div>
             <% } else { %>
@@ -710,7 +734,7 @@
                           data-unit-panel-button
                           data-panel="history"
                           data-no-row-toggle
-                          hx-get="/tech/units/<%= unit.unitId %>/history"
+                          hx-get="/tech/units/<%= unit.unitId %>/history<%= isQcPortalMode ? '?qcPortal=1' : '' %>"
                           hx-target="#tech-unit-history-content-<%= unit.unitId %>"
                           hx-swap="innerHTML"
                         >
@@ -875,7 +899,7 @@
                       <% if (currentOutcome && currentOutcome.isPendingApproval && canApproveUnitOutcomes) { %>
                         <div>
                           <dt>Review</dt>
-                          <dd><a href="/unit-requests?status=pending&requestType=existing_unit_override">Review Request</a></dd>
+                          <dd><a href="/unit-requests?status=pending&requestType=outcome_confirmation">Review Request</a></dd>
                         </div>
                       <% } %>
 
@@ -1283,5 +1307,5 @@
 </div>
 
 <% if (!isSingleUnitViewPage) { %>
-  <%- include('../partials/table-pagination', { pagination: result.pagination, filters, basePath: '/tech/units', itemLabel: 'units', pageSizeLabel: 'Units per page', modifierClass: 'table-pagination--bottom', ariaLabel: 'Bottom unit pagination' }) %>
+  <%- include('../partials/table-pagination', { pagination: result.pagination, filters, basePath: browserBasePath, itemLabel: 'units', pageSizeLabel: 'Units per page', modifierClass: 'table-pagination--bottom', ariaLabel: 'Bottom unit pagination' }) %>
 <% } %>

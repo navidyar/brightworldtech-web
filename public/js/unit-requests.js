@@ -208,4 +208,159 @@
     filterRequestRows();
     focusSearchInput();
   });
+
+  const modalRoot = document.getElementById('modal-root');
+  let detailRequestSequence = 0;
+
+  function isRequestDetailPath(value) {
+    try {
+      const url = new URL(value, window.location.href);
+      return /^\/unit-requests\/(?:override\/)?\d+$/.test(url.pathname);
+    } catch (error) {
+      return false;
+    }
+  }
+
+  function buildRequestDetailModal(markup, fallbackTitle = 'Request Details') {
+    const parsed = new DOMParser().parseFromString(String(markup || ''), 'text/html');
+    const content = parsed.querySelector('main.unit-requests-page');
+    if (!content || !modalRoot) return false;
+
+    const title = content.querySelector('.dashboard-hero h2, .unit-request-detail-header h2')?.textContent?.trim() || fallbackTitle;
+    const panel = document.createElement('div');
+    panel.innerHTML = `
+      <div class="modal-backdrop" data-modal-backdrop>
+        <section class="modal-panel site-clean-modal unit-request-detail-modal" role="dialog" aria-modal="true" aria-labelledby="unit-request-detail-modal-title">
+          <header class="modal-header">
+            <div><h2 id="unit-request-detail-modal-title"></h2></div>
+            <button type="button" class="modal-close-button" data-modal-close aria-label="Close request details">×</button>
+          </header>
+          <div class="modal-body unit-request-modal-content"></div>
+        </section>
+      </div>`;
+
+    panel.querySelector('#unit-request-detail-modal-title').textContent = title;
+    panel.querySelector('.unit-request-modal-content').innerHTML = content.innerHTML;
+    modalRoot.replaceChildren(...Array.from(panel.childNodes));
+    document.dispatchEvent(new CustomEvent('unit-request:modal-loaded', { detail: { root: modalRoot } }));
+    return true;
+  }
+
+  function renderRequestLoadingModal(title = 'Request Details') {
+    if (!modalRoot) return;
+    modalRoot.innerHTML = `
+      <div class="modal-backdrop" data-modal-backdrop>
+        <section class="modal-panel site-clean-modal unit-request-detail-modal" role="dialog" aria-modal="true" aria-labelledby="unit-request-loading-title" aria-busy="true">
+          <header class="modal-header">
+            <div><h2 id="unit-request-loading-title">${title}</h2></div>
+            <button type="button" class="modal-close-button" data-modal-close aria-label="Close request details">×</button>
+          </header>
+          <div class="modal-body unit-request-modal-content">
+            <div class="message"><p>Loading request details…</p></div>
+          </div>
+        </section>
+      </div>`;
+  }
+
+  function renderRequestLoadError(message) {
+    if (!modalRoot) return;
+    modalRoot.innerHTML = `
+      <div class="modal-backdrop" data-modal-backdrop>
+        <section class="modal-panel site-clean-modal" role="alertdialog" aria-modal="true" aria-labelledby="unit-request-load-error-title">
+          <header class="modal-header">
+            <div><h2 id="unit-request-load-error-title">Request Could Not Be Loaded</h2></div>
+            <button type="button" class="modal-close-button" data-modal-close aria-label="Close">×</button>
+          </header>
+          <div class="modal-body"><div class="message error"><p>${message}</p></div></div>
+        </section>
+      </div>`;
+  }
+
+  async function openRequestDetail(link) {
+    if (!modalRoot || !link?.href || link.dataset.unitRequestLoading === '1') return;
+    const sequence = ++detailRequestSequence;
+    link.dataset.unitRequestLoading = '1';
+    link.setAttribute('aria-busy', 'true');
+    renderRequestLoadingModal(link.getAttribute('aria-label') || 'Request Details');
+
+    try {
+      const response = await fetch(link.href, {
+        method: 'GET',
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: { 'Accept': 'text/html', 'HX-Request': 'true' }
+      });
+      const markup = await response.text();
+      if (sequence !== detailRequestSequence) return;
+      if (!response.ok || !buildRequestDetailModal(markup, link.getAttribute('aria-label') || 'Request Details')) {
+        if (response.ok) {
+          window.location.replace(link.href);
+          return;
+        }
+        renderRequestLoadError('The request details could not be loaded. Refresh the queue and try again.');
+      }
+    } catch (error) {
+      renderRequestLoadError('The request details could not reach the server. Refresh the queue and try again.');
+    } finally {
+      delete link.dataset.unitRequestLoading;
+      link.removeAttribute('aria-busy');
+    }
+  }
+
+  async function submitRequestModalForm(form, submitter) {
+    if (!modalRoot || form.dataset.unitRequestSubmitting === '1') return;
+    form.dataset.unitRequestSubmitting = '1';
+    form.setAttribute('aria-busy', 'true');
+    if (submitter) submitter.disabled = true;
+
+    try {
+      const body = new URLSearchParams();
+      new FormData(form, submitter || undefined).forEach((value, key) => {
+        if (typeof value === 'string') body.append(key, value);
+      });
+      const response = await fetch(form.action, {
+        method: String(form.method || 'POST').toUpperCase(),
+        credentials: 'same-origin',
+        cache: 'no-store',
+        headers: {
+          'Accept': 'text/html',
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'HX-Request': 'true'
+        },
+        body: body.toString()
+      });
+      const markup = await response.text();
+      if (isRequestDetailPath(response.url)) {
+        if (!buildRequestDetailModal(markup)) window.location.replace(response.url);
+        return;
+      }
+      if (!response.ok) {
+        renderRequestLoadError('The server could not complete this request action. No successful change was confirmed.');
+        return;
+      }
+      window.location.replace(response.url || buildQueueUrl());
+    } catch (error) {
+      renderRequestLoadError('The request action failed before the server confirmed the change.');
+    } finally {
+      if (form.isConnected) {
+        delete form.dataset.unitRequestSubmitting;
+        form.removeAttribute('aria-busy');
+      }
+      if (submitter?.isConnected) submitter.disabled = false;
+    }
+  }
+
+  document.addEventListener('click', (event) => {
+    const link = event.target.closest('[data-unit-request-detail-link]');
+    if (!link || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    openRequestDetail(link);
+  });
+
+  document.addEventListener('submit', (event) => {
+    const form = event.target.closest('#modal-root .unit-request-modal-content form');
+    if (!form || event.defaultPrevented) return;
+    event.preventDefault();
+    submitRequestModalForm(form, event.submitter);
+  });
 }());

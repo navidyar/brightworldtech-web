@@ -47,8 +47,10 @@ function loadModel(queryResults) {
 }
 
 test('requester withdrawal cancels only their own pending override', async () => {
+  const request = { unit_id: 9, request_type: 'manual_tech_override_request', request_status: 'pending', requested_by_user_id: 4 };
   const { model, calls } = loadModel([
-    [[{ unit_id: 9, request_type: 'manual_tech_override_request', request_status: 'pending', requested_by_user_id: 4 }]],
+    [[request]],
+    [[request]],
     [{ affectedRows: 1 }]
   ]);
 
@@ -72,14 +74,22 @@ test('requester cannot withdraw another user\'s override', async () => {
 });
 
 test('withdrawing an outcome confirmation returns the current outcome to not requested', async () => {
+  const request = { unit_id: 9, unit_outcome_id: 41, request_type: 'outcome_confirmation', request_status: 'pending', requested_by_user_id: 4 };
   const { model, calls } = loadModel([
-    [[{ unit_id: 9, request_type: 'outcome_confirmation', request_status: 'pending', requested_by_user_id: 4 }]],
+    [[request]],
+    [[{ unit_outcome_id: 41, unit_id: 9, outcome_code: 'pass', approval_status_code: 'pending', is_current: 1, approval_requested_by_user_id: 4 }]],
+    [[request]],
     [{ affectedRows: 1 }],
     [{ affectedRows: 1 }]
   ]);
 
   await model.withdrawOverrideRequest({ overrideRequestId: 18, requestedByUserId: 4 });
+  const outcomeLock = calls.find((call) => call.kind === 'query' && /FROM unit_outcomes/.test(call.sql) && /FOR UPDATE/.test(call.sql));
+  const requestLock = calls.find((call) => call.kind === 'query' && /FROM unit_override_requests/.test(call.sql) && /FOR UPDATE/.test(call.sql));
+  assert.ok(outcomeLock);
+  assert.ok(requestLock);
+  assert.ok(calls.indexOf(outcomeLock) < calls.indexOf(requestLock));
   const outcomeUpdate = calls.find((call) => call.kind === 'query' && /approval_status_code = 'not_requested'/.test(call.sql));
   assert.ok(outcomeUpdate);
-  assert.equal(outcomeUpdate.values[1], 9);
+  assert.deepEqual(outcomeUpdate.values, ['Withdrawn by requester.', 41, 9]);
 });

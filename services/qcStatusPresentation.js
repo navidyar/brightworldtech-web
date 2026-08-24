@@ -40,11 +40,11 @@ function buildWorkflowSteps(statusCode) {
 }
 
 function buildQcStatusPresentation({ reviews = [], corrections = [] } = {}) {
-  const reviewHistory = normalizeReviewHistory(reviews);
+  const recordedReviewHistory = normalizeReviewHistory(reviews);
   const correctionHistory = normalizeCorrectionHistory(corrections);
-  const latestReview = reviewHistory.at(-1) || null;
+  const latestRecordedReview = recordedReviewHistory.at(-1) || null;
 
-  if (!latestReview) {
+  if (!latestRecordedReview) {
     return {
       available: false,
       statusCode: '',
@@ -58,6 +58,22 @@ function buildQcStatusPresentation({ reviews = [], corrections = [] } = {}) {
     };
   }
 
+  if (latestRecordedReview.isReverted) {
+    return {
+      available: true,
+      statusCode: 'reverted',
+      title: 'Quality Control decision reverted',
+      statusLabel: 'Awaiting QC',
+      description: 'The latest Quality Control decision was reverted. This Unit is awaiting a new QC decision.',
+      notesHeading: 'Reverted Decision Notes',
+      latestReview: latestRecordedReview,
+      latestCorrection: null,
+      workflowSteps: []
+    };
+  }
+
+  const reviewHistory = recordedReviewHistory.filter((review) => !review.isReverted);
+  const latestReview = reviewHistory.at(-1) || null;
   const rejectionIds = new Set(
     reviewHistory
       .filter((review) => review.decisionCode === 'rejected')

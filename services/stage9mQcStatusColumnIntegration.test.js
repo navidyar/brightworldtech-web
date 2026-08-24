@@ -39,11 +39,15 @@ test('QC header and symbol share one centered width while actions share one righ
   const page = read('views/pages/tech-units.ejs');
 
   assert.match(css, /\.tech-units-clean-page \.tech-units-table thead th \{[\s\S]*?vertical-align: middle;/);
-  assert.match(css, /\.tech-units-clean-page \.tech-units-qc-column,[\s\S]*?min-width: 58px;[\s\S]*?text-align: center;/);
+  assert.match(css, /--tu-qc-base-width:\s*50px;/);
+  assert.match(css, /--tu-actions-base-width:\s*225px;/);
+  assert.match(css, /\.tech-units-clean-page \.tech-units-col--qc \{[\s\S]*?width: calc\(var\(--tu-qc-base-width\) \+ var\(--tu-secondary-fluid-share\)\);/);
+  assert.match(css, /\.tech-units-clean-page \.tech-units-qc-column,[\s\S]*?text-align: center;[\s\S]*?white-space: nowrap;/);
   assert.match(css, /\.tech-units-clean-page \.tech-units-qc-column-label,[\s\S]*?width: 34px;[\s\S]*?margin-inline: auto;/);
-  assert.match(css, /\.tech-units-clean-page \.tech-units-actions-column,[\s\S]*?min-width: 154px;[\s\S]*?padding-right: 12px;[\s\S]*?text-align: right;/);
+  assert.match(css, /\.tech-units-clean-page \.tech-units-col--actions \{[\s\S]*?width: calc\(var\(--tu-actions-base-width\) \+ var\(--tu-secondary-fluid-share\)\);/);
+  assert.match(css, /\.tech-units-clean-page \.tech-units-actions-column,[\s\S]*?min-width: 0;[\s\S]*?text-align: right;/);
   assert.match(css, /\.tech-units-clean-page \.tech-units-actions-column-label \{[\s\S]*?justify-content: flex-end;[\s\S]*?width: 100%;/);
-  assert.match(page, /tech-units-clean\.css\?v=20260730-stage10a-unit-export/);
+  assert.match(page, /tech-units-clean\.css\?v=20260819-stage10w68o-toggle-label-cleanup/);
 });
 
 test('unreviewed Units use the shared subtle neutral QC symbol instead of a dash', () => {
@@ -52,11 +56,11 @@ test('unreviewed Units use the shared subtle neutral QC symbol instead of a dash
   const appCss = read('public/css/app.css');
   const head = read('views/partials/head.ejs');
 
-  assert.match(table, /class="tech-qc-status-empty"[\s\S]*?aria-label="Quality Control not performed"[\s\S]*?statusCode: 'not_reviewed'/);
+  assert.match(table, /const qcTooltipLabel = unit\.qcReviewStateLabel \|\| 'QC not performed';[\s\S]*?class="tech-qc-status-empty tech-qc-tooltip--neutral"[\s\S]*?aria-label="<%= qcTooltipLabel %>"[\s\S]*?statusCode: 'not_reviewed'/);
   assert.doesNotMatch(table, /tech-qc-status-empty[^>]*>—<\/span>/);
   assert.match(icon, /'not_reviewed'[\s\S]*?'not-reviewed'/);
   assert.match(icon, /tech-qc-status-indicator__mark--neutral[\s\S]*?M7\.8 11h6\.4/);
   assert.match(appCss, /--qc-neutral-ink:/);
   assert.match(appCss, /\.tech-qc-status-indicator--not-reviewed \{[\s\S]*?--tech-qc-icon-ink: var\(--qc-neutral-ink\);/);
-  assert.match(head, /app\.css\?v=20260804-stage10w-ranking-administration/);
+  assert.match(head, /app\.css\?v=20260819-stage10w68w-half-size-lot-chevrons/);
 });

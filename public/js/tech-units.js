@@ -57,6 +57,23 @@
     }, UNIT_SAVE_CONFIRMATION_TIMEOUT_MS);
   }
 
+  function showTechUnitWorkflowConfirmation(message) {
+    const notification = document.getElementById('tech-unit-save-notification');
+    const normalizedMessage = String(message || '').trim();
+
+    if (!notification || !normalizedMessage) {
+      return;
+    }
+
+    window.clearTimeout(techUnitSaveConfirmationTimer);
+    notification.textContent = normalizedMessage;
+    notification.hidden = false;
+    techUnitSaveConfirmationTimer = window.setTimeout(() => {
+      hideUnitSaveConfirmation();
+      techUnitSaveConfirmationTimer = null;
+    }, UNIT_SAVE_CONFIRMATION_TIMEOUT_MS);
+  }
+
   function normalizePanelName(panelName) {
     return ['history', 'my-weight'].includes(panelName) ? panelName : 'details';
   }
@@ -682,14 +699,24 @@
 
     form.dataset.qcReviewSubmitting = 'true';
     const isCorrectionForm = form.matches('[data-qc-correction-form]');
-    const failureTitle = isCorrectionForm ? 'Correction not saved' : 'Decision not saved';
-    const failureMessage = isCorrectionForm
-      ? 'The correction could not be saved. No workflow change was recorded.'
-      : 'The Quality Control decision could not be saved. No review was recorded.';
+    const isReversionForm = form.matches('[data-qc-reversion-form]');
+    const isReversionRequestForm = form.matches('[data-qc-reversion-request-form]');
+    const failureTitle = isReversionRequestForm
+      ? 'Reversion request not submitted'
+      : (isReversionForm ? 'Reversion not saved' : (isCorrectionForm ? 'Correction not saved' : 'Decision not saved'));
+    const failureMessage = isReversionRequestForm
+      ? 'The QC reversion request could not be submitted. The current QC decision remains unchanged.'
+      : (isReversionForm
+        ? 'The Quality Control decision could not be reverted. No workflow change was recorded.'
+        : (isCorrectionForm
+          ? 'The correction could not be saved. No workflow change was recorded.'
+          : 'The Quality Control decision could not be saved. No review was recorded.'));
     const submitButton = submitter || form.querySelector('[data-qc-submit-button], button[type="submit"]');
     const submitStatus = form.querySelector('[data-qc-submit-status]');
     const originalButtonLabel = submitButton ? submitButton.textContent.trim() : '';
-    const progressLabel = isCorrectionForm ? 'Saving correction...' : 'Saving QC decision...';
+    const progressLabel = isReversionRequestForm
+      ? 'Submitting reversion request...'
+      : (isReversionForm ? 'Reverting QC decision...' : (isCorrectionForm ? 'Saving correction...' : 'Saving QC decision...'));
 
     form.setAttribute('aria-busy', 'true');
 
@@ -735,8 +762,14 @@
       closeModalRoot();
 
       if (!dispatchHxTriggerHeader(response.headers.get('HX-Trigger'))) {
-        dispatchQcReviewEvent('unit-saved', true);
-        dispatchQcReviewEvent(isCorrectionForm ? 'qc-correction-submitted' : 'qc-review-recorded', true);
+        if (isReversionRequestForm) {
+          dispatchQcReviewEvent('qc-reversion-requested', { message: 'QC reversion request submitted for Tech Lead+ review.' });
+        } else {
+          dispatchQcReviewEvent(isReversionForm ? 'qc-review-reverted' : 'unit-saved', true);
+          if (!isReversionForm) {
+            dispatchQcReviewEvent(isCorrectionForm ? 'qc-correction-submitted' : 'qc-review-recorded', true);
+          }
+        }
       }
     } catch (error) {
       renderQcReviewSubmissionError(`${failureMessage} The request failed before the server confirmed it.`, failureTitle);
@@ -759,7 +792,7 @@
   }
 
   document.addEventListener('submit', (event) => {
-    const qcReviewForm = event.target.closest('[data-qc-review-form], [data-qc-correction-form]');
+    const qcReviewForm = event.target.closest('[data-qc-review-form], [data-qc-correction-form], [data-qc-reversion-form], [data-qc-reversion-request-form]');
 
     if (!qcReviewForm) {
       return;
@@ -1294,6 +1327,19 @@
       return;
     }
 
+    if (autoFilterControl.matches('[data-tech-exclusive-filter-toggle]') && autoFilterControl.checked) {
+      const filterForm = autoFilterControl.closest('.tech-filter-form');
+      const controlName = autoFilterControl.name;
+
+      if (filterForm && controlName) {
+        filterForm.querySelectorAll('[data-tech-exclusive-filter-toggle]').forEach((otherControl) => {
+          if (otherControl !== autoFilterControl && otherControl.name === controlName) {
+            otherControl.checked = false;
+          }
+        });
+      }
+    }
+
     submitAutoFilterControl(autoFilterControl);
   });
 
@@ -1301,9 +1347,16 @@
     showUnitSaveConfirmation(event.detail || null);
   });
 
+  document.body.addEventListener('qc-reversion-requested', (event) => {
+    const detail = event.detail && typeof event.detail === 'object' ? event.detail : {};
+    showTechUnitWorkflowConfirmation(detail.message || 'QC reversion request submitted for Tech Lead+ review.');
+  });
+
   [
     'unit-saved',
     'qc-review-recorded',
+    'qc-review-reverted',
+    'qc-reversion-requested',
     'unit-work-completed',
     'unit-work-completion-reversed',
     'override-requested'

@@ -98,7 +98,7 @@ test('history snapshots keep the historical ID chain while resolving current Lot
   assert.equal(timeline.events[0].changes[0].newValueText, 'Corporate HQ › Projects › Dell Systems');
 });
 
-test('operational Lot selectors and Unit views expose hierarchy without changing Lot Management parent selectors', () => {
+test('operational and Management Lot selectors expose the shared hierarchy presentation', () => {
   const techForm = read('views/fragments/tech-unit-form.ejs');
   const techPage = read('views/pages/tech-units.ejs');
   const parkModal = read('views/fragments/tech-unit-park-modal.ejs');
@@ -118,9 +118,11 @@ test('operational Lot selectors and Unit views expose hierarchy without changing
   assert.match(dashboardFilters, /hierarchical-lot-options/);
   assert.match(unitTable, /data-lot-hierarchy-help/);
   assert.match(unitTable, /Lot Hierarchy/);
-  assert.match(read('views/pages/tech-unit-detail.ejs'), /tech-units\.js\?v=20260811-stage10w31-lot-hierarchy-context/);
-  assert.match(lotNew, /<select name="parentLotId">/);
-  assert.match(lotEdit, /<select name="parentLotId">/);
+  assert.match(read('views/pages/tech-unit-detail.ejs'), /tech-units\.js\?v=20260819-stage10w68l-filter-toggles/);
+  assert.match(lotNew, /<select name="parentLotId" data-hierarchical-lot-select>/);
+  assert.match(lotNew, /parent-lot-options/);
+  assert.match(lotEdit, /<select name="parentLotId" data-hierarchical-lot-select>/);
+  assert.match(lotEdit, /parent-lot-options/);
 });
 
 test('future audit events snapshot Lot hierarchy IDs into existing event metadata without a schema migration', () => {
@@ -133,10 +135,18 @@ test('future audit events snapshot Lot hierarchy IDs into existing event metadat
   assert.doesNotMatch(auditModel, /ALTER TABLE|CREATE TABLE/);
 });
 
-test('custom Add\/Edit Lot search uses full ancestry but keeps compact Parent › Child selection text', () => {
+test('Lot selectors keep full ancestry for search/context but render one Lot name per hierarchy row', () => {
+  const hierarchyPartial = read('views/partials/hierarchical-lot-options.ejs');
+  const techForm = read('views/fragments/tech-unit-form.ejs');
   const formScript = read('public/js/tech-unit-form.js');
+
+  assert.match(hierarchyPartial, /const optionDisplayName = optionName;/);
+  assert.doesNotMatch(hierarchyPartial, /optionDisplayName = isSelectable && lotOption\.compactLabel/);
+  assert.match(techForm, /data-lot-name="<%= lotOptionName %>"/);
+  assert.match(techForm, /data-lot-search-text="<%= hierarchyLot\.searchText \|\| hierarchyLot\.fullPath \|\| lotOptionName %>"/);
+  assert.match(techForm, /\? `\$\{selectedAssignableLot\.lot_name\} \(Closed — current lot\)`/);
+  assert.match(techForm, /: selectedAssignableLot\.lot_name\)/);
   assert.match(formScript, /data-lot-search-text/);
-  assert.match(formScript, /data-lot-compact-label/);
   assert.match(formScript, /tech-assignable-lot-option--ancestor/);
   assert.match(formScript, /updateAssignableLotHierarchyBreadcrumb/);
   const lookup = buildLotHierarchyLookup(lots);

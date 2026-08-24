@@ -44,9 +44,14 @@
                 <h3><%= request.unitLabel %></h3>
                 <dl class="unit-request-detail-list">
                   <div><dt>Current Lot</dt><dd><%= request.lotName %></dd></div>
-                  <div><dt>Requested Destination</dt><dd><%= request.requestedDestinationLotName %></dd></div>
-                  <div><dt>Validation</dt><dd><%= request.validationLabel %></dd></div>
-                  <div><dt>Decision</dt><dd><%= request.decisionLabel %></dd></div>
+                  <% if (request.requestType === 'outcome_confirmation') { %>
+                    <div><dt>Requested Pass/Fail</dt><dd><strong><%= request.outcomeConfirmationOutcomeLabel || 'Unavailable' %></strong></dd></div>
+                    <div><dt>Outcome Target</dt><dd><%= request.unitOutcomeId ? `Outcome #${request.unitOutcomeId}` : 'Legacy request without exact target' %></dd></div>
+                  <% } else { %>
+                    <div><dt>Requested Destination</dt><dd><%= request.requestedDestinationLotName %></dd></div>
+                    <div><dt>Validation</dt><dd><%= request.validationLabel %></dd></div>
+                    <div><dt>Decision</dt><dd><%= request.decisionLabel %></dd></div>
+                  <% } %>
                 </dl>
               </section>
 
@@ -73,9 +78,11 @@
                 <div>
                   <p class="eyebrow">Reviewer Action</p>
                   <h3>Approve or Reject</h3>
-                  <p><%= request.isParkedTakeoverRequest
-                    ? 'Approval rechecks the selected destination Lot, returns the Unit to Active, and assigns it to the requesting Tech.'
-                    : 'Approval rechecks the selected destination Lot before changing the Unit assignment or Lot.' %></p>
+                  <p><%= request.requestType === 'outcome_confirmation'
+                    ? 'Approval or rejection records your review of the Tech’s exact Pass/Fail decision. It does not change the Tech’s Pass/Fail selection.'
+                    : request.isParkedTakeoverRequest
+                      ? 'Approval rechecks the selected destination Lot, returns the Unit to Active, and assigns it to the requesting Tech.'
+                      : 'Approval rechecks the selected destination Lot before changing the Unit assignment or Lot.' %></p>
                 </div>
 
                 <div class="unit-request-review-actions">
@@ -107,7 +114,7 @@
                       <input type="hidden" name="destinationLotId" value="<%= request.requestedDestinationLotId || request.lotId || '' %>" />
                     <% } %>
                     <label class="form-field"><span>Approval Note <small>(optional)</small></span><textarea name="reviewNotes" rows="3" maxlength="500"></textarea></label>
-                    <button class="primary-button" type="submit">Approve Request</button>
+                    <button class="primary-button" type="submit"><%= request.requestType === 'outcome_confirmation' ? 'Approve Confirmation' : 'Approve Request' %></button>
                   </form>
 
                   <form method="post" action="/unit-requests/override/<%= request.unitOverrideRequestId %>/reject">
@@ -115,7 +122,7 @@
                     <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
                     <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
                     <label class="form-field"><span>Rejection Note <small>(optional)</small></span><textarea name="reviewNotes" rows="3" maxlength="500"></textarea></label>
-                    <button class="secondary-button" type="submit">Reject Request</button>
+                    <button class="secondary-button" type="submit"><%= request.requestType === 'outcome_confirmation' ? 'Reject Confirmation' : 'Reject Request' %></button>
                   </form>
                 </div>
               </section>

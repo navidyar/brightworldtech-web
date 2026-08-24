@@ -1725,7 +1725,17 @@ async function deleteLot(req, res, next) {
       });
     }
 
-    await lotModel.deleteLotIfEmpty(lotId);
+    const deleted = await lotModel.deleteLotIfEmpty(lotId);
+
+    if (!deleted) {
+      const refreshedSummary = await lotModel.getLotDeleteSummary(lotId);
+
+      return res.status(409).render('fragments/lot-delete-modal', {
+        lot: refreshedSummary ? refreshedSummary.lot : deleteSummary.lot,
+        deleteSummary: refreshedSummary || deleteSummary,
+        errorMessages: ['The lot changed before it could be deleted. Review its current Units and child Lots, then try again.']
+      });
+    }
 
     return sendHtmxRedirect(req, res, addCacheBuster('/management/lots?deleted=1'));
   } catch (error) {

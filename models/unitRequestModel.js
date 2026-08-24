@@ -7,16 +7,20 @@ const unitExpandedFormModel = require('./unitExpandedFormModel');
 const unitLotDestinationValidationModel = require('./unitLotDestinationValidationModel');
 const processorFamilyModel = require('./processorFamilyModel');
 const processorCatalogModel = require('./processorCatalogModel');
+const unitQcCheckModel = require('./unitQcCheckModel');
+const unitAuditEventModel = require('./unitAuditEventModel');
 
 const UNIT_REQUESTS_TABLE = 'unit_requests';
 const UNIT_DUPLICATE_REQUESTS_TABLE = 'unit_duplicate_requests';
 const UNIT_REQUEST_EVENTS_TABLE = 'unit_request_events';
 const UNIT_MODEL_CATALOG_REQUESTS_TABLE = 'unit_model_catalog_requests';
 const UNIT_PROCESSOR_CATALOG_REQUESTS_TABLE = 'unit_processor_catalog_requests';
+const UNIT_QC_REVERSION_REQUESTS_TABLE = 'unit_qc_reversion_requests';
 
 const INTENTIONAL_DUPLICATE_REQUEST_TYPE = 'intentional_duplicate';
 const MODEL_CATALOG_REQUEST_TYPE = 'model_catalog_addition';
 const PROCESSOR_CATALOG_REQUEST_TYPE = 'processor_catalog_addition';
+const QC_REVERSION_REQUEST_TYPE = 'qc_reversion';
 const CATALOG_REQUEST_TYPES = new Set([
   MODEL_CATALOG_REQUEST_TYPE,
   PROCESSOR_CATALOG_REQUEST_TYPE
@@ -28,9 +32,12 @@ const VALID_REQUEST_TYPE_FILTERS = new Set([
   'all',
   INTENTIONAL_DUPLICATE_REQUEST_TYPE,
   MODEL_CATALOG_REQUEST_TYPE,
-  PROCESSOR_CATALOG_REQUEST_TYPE
+  PROCESSOR_CATALOG_REQUEST_TYPE,
+  QC_REVERSION_REQUEST_TYPE
 ]);
 const MAX_REQUEST_SEARCH_LENGTH = 150;
+const REQUEST_SCHEMA_CAPABILITY_CACHE_MS = 60000;
+let requestSchemaCapabilityCache = null;
 
 function normalizePositiveInteger(value) {
   const parsed = Number(String(value || '').trim());
@@ -118,23 +125,55 @@ async function columnExists(tableName, columnName, connection = pool) {
   return Number(rows[0]?.column_count || 0) > 0;
 }
 
-async function requestTablesSupported(connection = pool) {
-  const [requestsReady, duplicatesReady, eventsReady] = await Promise.all([
-    tableExists(UNIT_REQUESTS_TABLE, connection),
-    tableExists(UNIT_DUPLICATE_REQUESTS_TABLE, connection),
-    tableExists(UNIT_REQUEST_EVENTS_TABLE, connection)
-  ]);
+async function getRequestSchemaCapabilities(connection = pool) {
+  const canUseCache = connection === pool;
+  const now = Date.now();
 
-  return requestsReady && duplicatesReady && eventsReady;
+  if (canUseCache && requestSchemaCapabilityCache && requestSchemaCapabilityCache.expiresAt > now) {
+    return requestSchemaCapabilityCache.value;
+  }
+
+  const requiredTables = [
+    UNIT_REQUESTS_TABLE,
+    UNIT_DUPLICATE_REQUESTS_TABLE,
+    UNIT_REQUEST_EVENTS_TABLE,
+    UNIT_MODEL_CATALOG_REQUESTS_TABLE,
+    UNIT_PROCESSOR_CATALOG_REQUESTS_TABLE,
+    UNIT_QC_REVERSION_REQUESTS_TABLE
+  ];
+  const [rows] = await connection.query(
+    `
+      SELECT TABLE_NAME
+      FROM information_schema.TABLES
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME IN (${requiredTables.map(() => '?').join(', ')})
+    `,
+    requiredTables
+  );
+  const availableTables = new Set(rows.map((row) => String(row.TABLE_NAME || row.table_name || '')));
+  const value = {
+    baseSupported: [UNIT_REQUESTS_TABLE, UNIT_DUPLICATE_REQUESTS_TABLE, UNIT_REQUEST_EVENTS_TABLE, UNIT_QC_REVERSION_REQUESTS_TABLE]
+      .every((tableName) => availableTables.has(tableName)),
+    catalogSupported: [UNIT_MODEL_CATALOG_REQUESTS_TABLE, UNIT_PROCESSOR_CATALOG_REQUESTS_TABLE]
+      .every((tableName) => availableTables.has(tableName))
+  };
+
+  if (canUseCache) {
+    requestSchemaCapabilityCache = {
+      expiresAt: now + REQUEST_SCHEMA_CAPABILITY_CACHE_MS,
+      value
+    };
+  }
+
+  return value;
+}
+
+async function requestTablesSupported(connection = pool) {
+  return (await getRequestSchemaCapabilities(connection)).baseSupported;
 }
 
 async function catalogRequestTablesSupported(connection = pool) {
-  const [modelsReady, processorsReady] = await Promise.all([
-    tableExists(UNIT_MODEL_CATALOG_REQUESTS_TABLE, connection),
-    tableExists(UNIT_PROCESSOR_CATALOG_REQUESTS_TABLE, connection)
-  ]);
-
-  return modelsReady && processorsReady;
+  return (await getRequestSchemaCapabilities(connection)).catalogSupported;
 }
 
 async function requestArchiveSupported(connection = pool) {
@@ -161,6 +200,7 @@ function getRequestTypeLabel(requestType) {
   if (requestType === INTENTIONAL_DUPLICATE_REQUEST_TYPE) return 'Intentional Duplicate';
   if (requestType === MODEL_CATALOG_REQUEST_TYPE) return 'Model Catalog Addition';
   if (requestType === PROCESSOR_CATALOG_REQUEST_TYPE) return 'Processor Catalog Addition';
+  if (requestType === QC_REVERSION_REQUEST_TYPE) return 'QC Decision Reversion';
   return 'Unit Request';
 }
 
@@ -244,13 +284,37 @@ function buildCatalogContext(row) {
   return null;
 }
 
-function mapRequest(row, lotMap) {
+function buildQcReversionContext(row) {
+  if (row.request_type !== QC_REVERSION_REQUEST_TYPE || !row.qc_reversion_qc_check_id) return null;
+
+  const decisionCode = String(row.qc_reversion_decision_code || '').trim().toLowerCase();
+  const decisionLabelValue = decisionCode === 'accepted' ? 'Accepted' : decisionCode === 'rejected' ? 'Rejected' : 'Unknown';
+  const unitLabel = row.qc_reversion_asset_number ? getAssetTagLabel(row.qc_reversion_asset_number) : 'Unit';
+
+  return {
+    unitId: Number(row.qc_reversion_unit_id) || null,
+    unitLabel,
+    unitWorkCompletionId: Number(row.qc_reversion_completion_id) || null,
+    qcCheckId: Number(row.qc_reversion_qc_check_id) || null,
+    decisionCode,
+    decisionLabel: decisionLabelValue,
+    qcReviewedByUserId: Number(row.qc_reversion_reviewed_by_user_id) || null,
+    qcReviewedByName: String(row.qc_reversion_reviewed_by_name || '').trim(),
+    qcReviewedAt: row.qc_reversion_reviewed_at || null,
+    qcReviewNotes: String(row.qc_reversion_review_notes || '').trim(),
+    summary: unitLabel,
+    detailLabel: `QC ${decisionLabelValue} decision #${Number(row.qc_reversion_qc_check_id)}`
+  };
+}
+
+function mapRequest(row, lotMap = new Map()) {
   const intakeSnapshot = parseJsonValue(row.intake_snapshot_json, {});
   const matchedUnitSnapshot = parseJsonValue(row.matched_unit_snapshot_json, {});
   const destinationLotId = Number(row.requested_destination_lot_id || 0) || null;
   const matchedLotId = Number(row.current_matched_lot_id || 0) || null;
   const createdLotId = Number(row.created_unit_lot_id || 0) || null;
   const catalogContext = buildCatalogContext(row);
+  const qcReversionContext = buildQcReversionContext(row);
   const isDuplicateRequest = row.request_type === INTENTIONAL_DUPLICATE_REQUEST_TYPE;
 
   return {
@@ -259,7 +323,9 @@ function mapRequest(row, lotMap) {
     requestTypeLabel: getRequestTypeLabel(row.request_type),
     isIntentionalDuplicateRequest: isDuplicateRequest,
     isCatalogRequest: CATALOG_REQUEST_TYPES.has(row.request_type),
+    isQcReversionRequest: row.request_type === QC_REVERSION_REQUEST_TYPE,
     catalogContext,
+    qcReversionContext,
     status: row.status,
     statusLabel: getStatusLabel(row.status),
     statusClass: getStatusClass(row.status),
@@ -277,13 +343,13 @@ function mapRequest(row, lotMap) {
     matchedUnitId: isDuplicateRequest && row.matched_unit_id ? Number(row.matched_unit_id) : null,
     matchedUnitLabel: isDuplicateRequest ? getAssetTagLabel(row.matched_unit_asset_number) : '',
     matchedUnitCurrentLotId: isDuplicateRequest ? matchedLotId : null,
-    matchedUnitCurrentLotName: isDuplicateRequest ? (matchedLotId ? getLotName(lotMap, matchedLotId) : 'No current lot') : '',
+    matchedUnitCurrentLotName: isDuplicateRequest ? (matchedLotId ? (row.current_matched_lot_name || getLotName(lotMap, matchedLotId)) : 'No current lot') : '',
     requestedDestinationLotId: isDuplicateRequest ? destinationLotId : null,
-    requestedDestinationLotName: isDuplicateRequest ? (destinationLotId ? getLotName(lotMap, destinationLotId) : 'No lot selected') : '',
+    requestedDestinationLotName: isDuplicateRequest ? (destinationLotId ? (row.requested_destination_lot_name || getLotName(lotMap, destinationLotId)) : 'No lot selected') : '',
     createdUnitId: isDuplicateRequest && row.created_unit_id ? Number(row.created_unit_id) : null,
     createdUnitLabel: isDuplicateRequest && row.created_unit_asset_number ? getAssetTagLabel(row.created_unit_asset_number) : '',
     createdUnitLotId: isDuplicateRequest ? createdLotId : null,
-    createdUnitLotName: isDuplicateRequest && createdLotId ? getLotName(lotMap, createdLotId) : '',
+    createdUnitLotName: isDuplicateRequest && createdLotId ? (row.created_unit_lot_name || getLotName(lotMap, createdLotId)) : '',
     intakeSnapshot,
     matchedUnitSnapshot,
     snapshotDisplay: intakeSnapshot.display && typeof intakeSnapshot.display === 'object'
@@ -292,10 +358,10 @@ function mapRequest(row, lotMap) {
     serialSummary: intakeSnapshot.display?.serialSummary || 'Serial values recorded in the intake snapshot.',
     listContextPrimary: isDuplicateRequest
       ? getAssetTagLabel(row.matched_unit_asset_number)
-      : (catalogContext ? catalogContext.summary : 'Request details unavailable'),
+      : (catalogContext ? catalogContext.summary : qcReversionContext ? qcReversionContext.summary : 'Request details unavailable'),
     listContextSecondary: isDuplicateRequest
-      ? (destinationLotId ? getLotName(lotMap, destinationLotId) : 'No lot selected')
-      : (catalogContext ? catalogContext.detailLabel : '')
+      ? (destinationLotId ? (row.requested_destination_lot_name || getLotName(lotMap, destinationLotId)) : 'No lot selected')
+      : (catalogContext ? catalogContext.detailLabel : qcReversionContext ? qcReversionContext.detailLabel : '')
   };
 }
 
@@ -351,7 +417,11 @@ function getBaseRequestWhere({
       'CAST(matched_unit.asset_number AS CHAR) LIKE ?',
       'CAST(udr.intake_snapshot_json AS CHAR) LIKE ?',
       'CAST(udr.matched_unit_snapshot_json AS CHAR) LIKE ?',
-      'requested_destination_lot.name LIKE ?'
+      'requested_destination_lot.name LIKE ?',
+      'CAST(qrr.unit_qc_check_id AS CHAR) LIKE ?',
+      'CAST(qc_reversion_unit.asset_number AS CHAR) LIKE ?',
+      'qrr.decision_code LIKE ?',
+      'CAST(ur.requester_note AS CHAR) LIKE ?'
     ];
     const searchValues = Array(searchConditions.length).fill(searchLike);
     const matchingAssetNumber = techUnitModel.normalizeAssetTagInput(normalizedSearchTerm);
@@ -452,6 +522,15 @@ function getRequestSelectSql({ includeCatalogTables }) {
       ur.submitted_at,
       ur.reviewed_at,
       ur.archived_at,
+      qrr.unit_id AS qc_reversion_unit_id,
+      qrr.unit_work_completion_id AS qc_reversion_completion_id,
+      qrr.unit_qc_check_id AS qc_reversion_qc_check_id,
+      qrr.decision_code AS qc_reversion_decision_code,
+      qrr.qc_reviewed_by_user_id AS qc_reversion_reviewed_by_user_id,
+      qrr.qc_reviewed_at AS qc_reversion_reviewed_at,
+      qrr.qc_review_notes AS qc_reversion_review_notes,
+      CONCAT_WS(' ', qc_reversion_reviewer.first_name, qc_reversion_reviewer.last_name) AS qc_reversion_reviewed_by_name,
+      qc_reversion_unit.asset_number AS qc_reversion_asset_number,
       udr.matched_unit_id,
       udr.requested_destination_lot_id,
       udr.created_unit_id,
@@ -459,8 +538,11 @@ function getRequestSelectSql({ includeCatalogTables }) {
       udr.matched_unit_snapshot_json,
       matched_unit.asset_number AS matched_unit_asset_number,
       matched_unit.lot_id AS current_matched_lot_id,
+      matched_current_lot.name AS current_matched_lot_name,
       created_unit.asset_number AS created_unit_asset_number,
       created_unit.lot_id AS created_unit_lot_id,
+      created_current_lot.name AS created_unit_lot_name,
+      requested_destination_lot.name AS requested_destination_lot_name,
       requested_by.first_name AS requested_by_first_name,
       requested_by.last_name AS requested_by_last_name,
       requested_by.email AS requested_by_email,
@@ -472,6 +554,12 @@ function getRequestSelectSql({ includeCatalogTables }) {
     FROM unit_requests ur
     LEFT JOIN unit_duplicate_requests udr
       ON udr.unit_request_id = ur.unit_request_id
+    LEFT JOIN unit_qc_reversion_requests qrr
+      ON qrr.unit_request_id = ur.unit_request_id
+    LEFT JOIN units qc_reversion_unit
+      ON qc_reversion_unit.unit_id = qrr.unit_id
+    LEFT JOIN users qc_reversion_reviewer
+      ON qc_reversion_reviewer.user_id = qrr.qc_reviewed_by_user_id
     INNER JOIN users requested_by
       ON requested_by.user_id = ur.requested_by_user_id
     LEFT JOIN users reviewed_by
@@ -480,10 +568,247 @@ function getRequestSelectSql({ includeCatalogTables }) {
       ON matched_unit.unit_id = udr.matched_unit_id
     LEFT JOIN units created_unit
       ON created_unit.unit_id = udr.created_unit_id
+    LEFT JOIN lots matched_current_lot
+      ON matched_current_lot.lot_id = matched_unit.lot_id
+    LEFT JOIN lots created_current_lot
+      ON created_current_lot.lot_id = created_unit.lot_id
     LEFT JOIN lots requested_destination_lot
       ON requested_destination_lot.lot_id = udr.requested_destination_lot_id
     ${catalogJoinSql}
   `;
+}
+
+
+function mapRequestSummary(row) {
+  const destinationLotId = Number(row.requested_destination_lot_id || 0) || null;
+  const matchedLotId = Number(row.current_matched_lot_id || 0) || null;
+  const createdLotId = Number(row.created_unit_lot_id || 0) || null;
+  const catalogContext = buildCatalogContext(row);
+  const qcReversionContext = buildQcReversionContext(row);
+  const isDuplicateRequest = row.request_type === INTENTIONAL_DUPLICATE_REQUEST_TYPE;
+  const serialSummary = String(row.queue_serial_summary || '').trim();
+  const matchedSerialSummary = String(row.queue_matched_serial_summary || '').trim();
+
+  return {
+    unitRequestId: Number(row.unit_request_id),
+    requestType: row.request_type,
+    requestTypeLabel: getRequestTypeLabel(row.request_type),
+    isIntentionalDuplicateRequest: isDuplicateRequest,
+    isCatalogRequest: CATALOG_REQUEST_TYPES.has(row.request_type),
+    isQcReversionRequest: row.request_type === QC_REVERSION_REQUEST_TYPE,
+    catalogContext,
+    qcReversionContext,
+    status: row.status,
+    statusLabel: getStatusLabel(row.status),
+    statusClass: getStatusClass(row.status),
+    isPending: row.status === 'pending',
+    isArchived: Boolean(row.archived_at),
+    archivedAt: row.archived_at || null,
+    requestedByUserId: Number(row.requested_by_user_id),
+    requestedByName: getPersonName(row, 'requested_by'),
+    reviewedByUserId: row.reviewed_by_user_id ? Number(row.reviewed_by_user_id) : null,
+    reviewedByName: row.reviewed_by_user_id ? getPersonName(row, 'reviewed_by') : '',
+    requesterNote: '',
+    reviewerNote: '',
+    submittedAt: row.submitted_at || null,
+    reviewedAt: row.reviewed_at || null,
+    matchedUnitId: isDuplicateRequest && row.matched_unit_id ? Number(row.matched_unit_id) : null,
+    matchedUnitLabel: isDuplicateRequest ? getAssetTagLabel(row.matched_unit_asset_number) : '',
+    matchedUnitCurrentLotId: isDuplicateRequest ? matchedLotId : null,
+    matchedUnitCurrentLotName: isDuplicateRequest
+      ? (matchedLotId ? (row.current_matched_lot_name || 'Lot name not available') : 'No current lot')
+      : '',
+    requestedDestinationLotId: isDuplicateRequest ? destinationLotId : null,
+    requestedDestinationLotName: isDuplicateRequest
+      ? (destinationLotId ? (row.requested_destination_lot_name || 'Lot name not available') : 'No lot selected')
+      : '',
+    createdUnitId: isDuplicateRequest && row.created_unit_id ? Number(row.created_unit_id) : null,
+    createdUnitLabel: isDuplicateRequest && row.created_unit_asset_number ? getAssetTagLabel(row.created_unit_asset_number) : '',
+    createdUnitLotId: isDuplicateRequest ? createdLotId : null,
+    createdUnitLotName: isDuplicateRequest && createdLotId ? (row.created_unit_lot_name || 'Lot name not available') : '',
+    intakeSnapshot: {},
+    matchedUnitSnapshot: matchedSerialSummary ? { display: { serialSummary: matchedSerialSummary } } : {},
+    snapshotDisplay: {},
+    serialSummary: serialSummary || 'Serial values recorded in the intake snapshot.',
+    listContextPrimary: isDuplicateRequest
+      ? getAssetTagLabel(row.matched_unit_asset_number)
+      : (catalogContext ? catalogContext.summary : qcReversionContext ? qcReversionContext.summary : 'Request details unavailable'),
+    listContextSecondary: isDuplicateRequest
+      ? (destinationLotId ? (row.requested_destination_lot_name || 'Lot name not available') : 'No lot selected')
+      : (catalogContext ? catalogContext.detailLabel : qcReversionContext ? qcReversionContext.detailLabel : '')
+  };
+}
+
+function getRequestSummarySelectSql({ includeCatalogTables }) {
+  const catalogJoinSql = includeCatalogTables
+    ? `
+        LEFT JOIN unit_model_catalog_requests umcr
+          ON umcr.unit_request_id = ur.unit_request_id
+        LEFT JOIN manufacturers model_request_manufacturer
+          ON model_request_manufacturer.manufacturer_id = umcr.manufacturer_id
+        LEFT JOIN config_values model_request_category
+          ON model_request_category.config_value_id = umcr.unit_category_config_value_id
+        LEFT JOIN unit_models approved_model
+          ON approved_model.unit_model_id = umcr.approved_unit_model_id
+        LEFT JOIN unit_processor_catalog_requests upcr
+          ON upcr.unit_request_id = ur.unit_request_id
+        LEFT JOIN unit_models processor_request_model
+          ON processor_request_model.unit_model_id = upcr.unit_model_id
+        LEFT JOIN manufacturers processor_request_manufacturer
+          ON processor_request_manufacturer.manufacturer_id = processor_request_model.manufacturer_id
+        LEFT JOIN config_values processor_request_category
+          ON processor_request_category.config_value_id = processor_request_model.unit_category_config_value_id
+        LEFT JOIN processor_brands approved_processor_brand
+          ON approved_processor_brand.processor_brand_id = upcr.approved_processor_brand_id
+        LEFT JOIN processor_models approved_processor_model
+          ON approved_processor_model.processor_model_id = upcr.approved_processor_model_id
+      `
+    : '';
+
+  const catalogFields = includeCatalogTables
+    ? `
+          umcr.manufacturer_id AS model_request_manufacturer_id,
+          umcr.unit_category_config_value_id AS model_request_category_id,
+          umcr.requested_model_name,
+          umcr.approved_model_name,
+          umcr.approved_unit_model_id,
+          model_request_manufacturer.name AS model_request_manufacturer_name,
+          COALESCE(model_request_category.label, model_request_category.value) AS model_request_category_label,
+          approved_model.model_name AS approved_unit_model_label,
+          upcr.unit_model_id AS processor_request_unit_model_id,
+          upcr.requested_processor_type,
+          upcr.requested_processor_name,
+          upcr.requested_processor_speed_ghz,
+          upcr.approved_processor_brand_id,
+          upcr.approved_processor_model_id,
+          processor_request_manufacturer.name AS processor_request_manufacturer_name,
+          processor_request_model.model_name AS processor_request_unit_model_name,
+          COALESCE(processor_request_category.label, processor_request_category.value) AS processor_request_category_label,
+          approved_processor_brand.name AS approved_processor_brand_name,
+          approved_processor_model.model_code AS approved_processor_model_label,
+          approved_processor_model.base_speed_ghz AS approved_processor_base_speed_ghz,
+      `
+    : '';
+
+  return `
+    SELECT
+      ur.unit_request_id,
+      ur.request_type,
+      ur.status,
+      ur.requested_by_user_id,
+      ur.reviewed_by_user_id,
+      ur.submitted_at,
+      ur.reviewed_at,
+      ur.archived_at,
+      qrr.unit_id AS qc_reversion_unit_id,
+      qrr.unit_work_completion_id AS qc_reversion_completion_id,
+      qrr.unit_qc_check_id AS qc_reversion_qc_check_id,
+      qrr.decision_code AS qc_reversion_decision_code,
+      qrr.qc_reviewed_by_user_id AS qc_reversion_reviewed_by_user_id,
+      qrr.qc_reviewed_at AS qc_reversion_reviewed_at,
+      qrr.qc_review_notes AS qc_reversion_review_notes,
+      CONCAT_WS(' ', qc_reversion_reviewer.first_name, qc_reversion_reviewer.last_name) AS qc_reversion_reviewed_by_name,
+      qc_reversion_unit.asset_number AS qc_reversion_asset_number,
+      udr.matched_unit_id,
+      udr.requested_destination_lot_id,
+      udr.created_unit_id,
+      JSON_UNQUOTE(JSON_EXTRACT(udr.intake_snapshot_json, '$.display.serialSummary')) AS queue_serial_summary,
+      JSON_UNQUOTE(JSON_EXTRACT(udr.matched_unit_snapshot_json, '$.display.serialSummary')) AS queue_matched_serial_summary,
+      matched_unit.asset_number AS matched_unit_asset_number,
+      matched_unit.lot_id AS current_matched_lot_id,
+      matched_current_lot.name AS current_matched_lot_name,
+      created_unit.asset_number AS created_unit_asset_number,
+      created_unit.lot_id AS created_unit_lot_id,
+      created_current_lot.name AS created_unit_lot_name,
+      requested_destination_lot.name AS requested_destination_lot_name,
+      requested_by.first_name AS requested_by_first_name,
+      requested_by.last_name AS requested_by_last_name,
+      requested_by.email AS requested_by_email,
+      reviewed_by.first_name AS reviewed_by_first_name,
+      reviewed_by.last_name AS reviewed_by_last_name,
+      reviewed_by.email AS reviewed_by_email,
+      ${catalogFields}
+      NULL AS _catalog_placeholder
+    FROM unit_requests ur
+    LEFT JOIN unit_duplicate_requests udr
+      ON udr.unit_request_id = ur.unit_request_id
+    LEFT JOIN unit_qc_reversion_requests qrr
+      ON qrr.unit_request_id = ur.unit_request_id
+    LEFT JOIN units qc_reversion_unit
+      ON qc_reversion_unit.unit_id = qrr.unit_id
+    LEFT JOIN users qc_reversion_reviewer
+      ON qc_reversion_reviewer.user_id = qrr.qc_reviewed_by_user_id
+    INNER JOIN users requested_by
+      ON requested_by.user_id = ur.requested_by_user_id
+    LEFT JOIN users reviewed_by
+      ON reviewed_by.user_id = ur.reviewed_by_user_id
+    LEFT JOIN units matched_unit
+      ON matched_unit.unit_id = udr.matched_unit_id
+    LEFT JOIN units created_unit
+      ON created_unit.unit_id = udr.created_unit_id
+    LEFT JOIN lots matched_current_lot
+      ON matched_current_lot.lot_id = matched_unit.lot_id
+    LEFT JOIN lots created_current_lot
+      ON created_current_lot.lot_id = created_unit.lot_id
+    LEFT JOIN lots requested_destination_lot
+      ON requested_destination_lot.lot_id = udr.requested_destination_lot_id
+    ${catalogJoinSql}
+  `;
+}
+
+async function listUnitRequestSummaries({
+  statusFilter = 'pending',
+  requestTypeFilter = 'all',
+  searchTerm = '',
+  requestedByUserId = null,
+  includeArchived = false
+} = {}) {
+  const capabilities = await getRequestSchemaCapabilities();
+  const baseSupported = capabilities.baseSupported;
+  const catalogSupported = baseSupported && capabilities.catalogSupported;
+  const {
+    normalizedStatus,
+    normalizedRequestType,
+    normalizedSearchTerm,
+    where,
+    values
+  } = getBaseRequestWhere({
+    statusFilter,
+    requestTypeFilter,
+    searchTerm,
+    requestedByUserId,
+    catalogSupported,
+    includeArchived
+  });
+
+  if (!baseSupported) {
+    return {
+      supported: false,
+      message: 'Unit Requests tables are not available yet. Run the Step 7e.3 database migration.',
+      statusFilter: normalizedStatus,
+      requestTypeFilter: normalizedRequestType,
+      searchTerm: normalizedSearchTerm,
+      requests: []
+    };
+  }
+
+  const [rowsResult] = await pool.query(
+    `
+      ${getRequestSummarySelectSql({ includeCatalogTables: catalogSupported })}
+      ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
+    `,
+    values
+  );
+
+  return {
+    supported: true,
+    catalogSupported,
+    message: catalogSupported ? '' : 'Catalog Exception requests are unavailable until the Step 7f database migration is complete.',
+    statusFilter: normalizedStatus,
+    requestTypeFilter: normalizedRequestType,
+    searchTerm: normalizedSearchTerm,
+    requests: rowsResult.map((row) => mapRequestSummary(row))
+  };
 }
 
 async function listUnitRequests({
@@ -527,19 +852,14 @@ async function listUnitRequests({
     ? 'ORDER BY ur.archived_at DESC, ur.unit_request_id DESC'
     : 'ORDER BY ur.submitted_at ASC, ur.unit_request_id ASC';
 
-  const [rowsResult, lots] = await Promise.all([
-    pool.query(
-      `
-        ${getRequestSelectSql({ includeCatalogTables: catalogSupported })}
-        ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
-        ${orderBySql}
-      `,
-      values
-    ),
-    lotModel.listLots({ includeHidden: true })
-  ]);
-
-  const lotMap = new Map(lots.map((lot) => [Number(lot.lot_id), lot]));
+  const [rowsResult] = await pool.query(
+    `
+      ${getRequestSelectSql({ includeCatalogTables: catalogSupported })}
+      ${where.length > 0 ? `WHERE ${where.join(' AND ')}` : ''}
+      ${orderBySql}
+    `,
+    values
+  );
 
   return {
     supported: true,
@@ -548,7 +868,7 @@ async function listUnitRequests({
     statusFilter: normalizedStatus,
     requestTypeFilter: normalizedRequestType,
     searchTerm: normalizedSearchTerm,
-    requests: rowsResult[0].map((row) => mapRequest(row, lotMap))
+    requests: rowsResult.map((row) => mapRequest(row))
   };
 }
 
@@ -594,15 +914,12 @@ async function getUnitRequestById(unitRequestId) {
   const safeRequestId = normalizePositiveInteger(unitRequestId);
   if (!safeRequestId) return null;
 
-  const result = await listUnitRequests({
+  const requestPromise = listUnitRequests({
     statusFilter: 'all',
     requestId: safeRequestId,
     includeArchived: true
   });
-  const request = result.requests[0] || null;
-  if (!request) return null;
-
-  const [eventRows] = await pool.query(
+  const eventsPromise = pool.query(
     `
       SELECT
         ure.unit_request_event_id,
@@ -621,6 +938,10 @@ async function getUnitRequestById(unitRequestId) {
     `,
     [safeRequestId]
   );
+
+  const [result, [eventRows]] = await Promise.all([requestPromise, eventsPromise]);
+  const request = result.requests[0] || null;
+  if (!request) return null;
 
   request.events = eventRows.map((row) => ({
     unitRequestEventId: Number(row.unit_request_event_id),
@@ -1832,6 +2153,385 @@ async function approveProcessorCatalogRequest({
   }
 }
 
+
+async function revertQcReviewDirectlyWithRequestGuard({ unitId, qcCheckId, revertedByUserId, reversionReason }) {
+  const safeUnitId = normalizePositiveInteger(unitId);
+  const safeQcCheckId = normalizePositiveInteger(qcCheckId);
+  const safeRevertedByUserId = normalizePositiveInteger(revertedByUserId);
+
+  if (!safeUnitId || !safeQcCheckId || !safeRevertedByUserId) {
+    const error = new Error('The QC decision could not be verified for direct reversion.');
+    error.code = 'BWT_UNIT_REQUEST_INPUT_INVALID';
+    throw error;
+  }
+
+  if (!await requestTablesSupported()) {
+    const error = new Error('QC reversion request coordination is not ready. Apply the Stage 10W70D migration first.');
+    error.code = 'BWT_UNIT_REQUEST_SCHEMA_REQUIRED';
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await unitQcCheckModel.lockQcReviewReversionTargetWithConnection(connection, {
+      unitId: safeUnitId,
+      qcCheckId: safeQcCheckId
+    });
+
+    const [pendingRows] = await connection.query(
+      `
+        SELECT ur.unit_request_id
+        FROM unit_requests ur
+        INNER JOIN unit_qc_reversion_requests qrr
+          ON qrr.unit_request_id = ur.unit_request_id
+        WHERE ur.request_type = ?
+          AND ur.status = 'pending'
+          AND qrr.unit_qc_check_id = ?
+        ORDER BY ur.unit_request_id DESC
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [QC_REVERSION_REQUEST_TYPE, safeQcCheckId]
+    );
+
+    if (pendingRows[0]) {
+      const error = new Error(`QC Reversion Request #${pendingRows[0].unit_request_id} is pending for this decision. Review that request instead of bypassing it with a direct reversion.`);
+      error.code = 'BWT_QC_REVERSION_PENDING_REQUEST';
+      error.unitRequestId = Number(pendingRows[0].unit_request_id);
+      throw error;
+    }
+
+    const result = await unitQcCheckModel.revertQcReviewWithConnection(connection, {
+      unitId: safeUnitId,
+      qcCheckId: safeQcCheckId,
+      revertedByUserId: safeRevertedByUserId,
+      reversionReason
+    });
+
+    await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+async function getPendingQcReversionRequestForQcCheck({ qcCheckId, requestedByUserId = null } = {}) {
+  const safeQcCheckId = normalizePositiveInteger(qcCheckId);
+  const safeRequesterUserId = normalizePositiveInteger(requestedByUserId);
+  if (!safeQcCheckId || !await requestTablesSupported()) return null;
+
+  const values = [QC_REVERSION_REQUEST_TYPE, safeQcCheckId];
+  const requesterSql = safeRequesterUserId ? 'AND ur.requested_by_user_id = ?' : '';
+  if (safeRequesterUserId) values.push(safeRequesterUserId);
+
+  const [rows] = await pool.query(
+    `
+      SELECT ur.unit_request_id, ur.requested_by_user_id, ur.requester_note, ur.submitted_at
+      FROM unit_requests ur
+      INNER JOIN unit_qc_reversion_requests qrr
+        ON qrr.unit_request_id = ur.unit_request_id
+      WHERE ur.request_type = ?
+        AND ur.status = 'pending'
+        AND qrr.unit_qc_check_id = ?
+        ${requesterSql}
+      ORDER BY ur.unit_request_id DESC
+      LIMIT 1
+    `,
+    values
+  );
+
+  return rows[0] ? {
+    unitRequestId: Number(rows[0].unit_request_id),
+    requestedByUserId: Number(rows[0].requested_by_user_id),
+    requesterNote: String(rows[0].requester_note || ''),
+    submittedAt: rows[0].submitted_at || null
+  } : null;
+}
+
+async function createQcReversionRequest({ unitId, qcCheckId, requestedByUserId, requesterNote }) {
+  const safeUnitId = normalizePositiveInteger(unitId);
+  const safeQcCheckId = normalizePositiveInteger(qcCheckId);
+  const safeRequesterUserId = normalizePositiveInteger(requestedByUserId);
+  const safeRequesterNote = normalizeText(requesterNote, 1000);
+
+  if (!safeUnitId || !safeQcCheckId || !safeRequesterUserId) {
+    const error = new Error('The QC reversion request could not be verified.');
+    error.code = 'BWT_UNIT_REQUEST_INPUT_INVALID';
+    throw error;
+  }
+
+  if (safeRequesterNote.length < 3) {
+    const error = new Error('Enter a reason for requesting QC decision reversion.');
+    error.code = 'BWT_UNIT_REQUEST_REASON_REQUIRED';
+    throw error;
+  }
+
+  if (!await requestTablesSupported()) {
+    const error = new Error('QC reversion requests are not ready. Apply the Stage 10W70D migration first.');
+    error.code = 'BWT_UNIT_REQUEST_SCHEMA_REQUIRED';
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const state = await unitQcCheckModel.lockQcReviewReversionTargetWithConnection(connection, {
+      unitId: safeUnitId,
+      qcCheckId: safeQcCheckId
+    });
+
+    if (Number(state.reviewed_by_user_id) !== safeRequesterUserId) {
+      const error = new Error('Only the QC user who recorded this current decision can request its reversion.');
+      error.code = 'BWT_QC_REVERSION_REQUEST_OWNER_REQUIRED';
+      throw error;
+    }
+
+    const [pendingRows] = await connection.query(
+      `
+        SELECT ur.unit_request_id
+        FROM unit_requests ur
+        INNER JOIN unit_qc_reversion_requests qrr
+          ON qrr.unit_request_id = ur.unit_request_id
+        WHERE ur.request_type = ?
+          AND ur.status = 'pending'
+          AND qrr.unit_qc_check_id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [QC_REVERSION_REQUEST_TYPE, safeQcCheckId]
+    );
+    if (pendingRows[0]) {
+      const error = new Error(`QC reversion request #${pendingRows[0].unit_request_id} is already pending for this decision.`);
+      error.code = 'BWT_UNIT_REQUEST_ALREADY_PENDING';
+      error.unitRequestId = Number(pendingRows[0].unit_request_id);
+      throw error;
+    }
+
+    const unitRequestId = await insertBaseRequest(connection, {
+      requestType: QC_REVERSION_REQUEST_TYPE,
+      requestedByUserId: safeRequesterUserId,
+      requesterNote: safeRequesterNote
+    });
+
+    const [snapshotResult] = await connection.query(
+      `
+        INSERT INTO unit_qc_reversion_requests (
+          unit_request_id,
+          unit_id,
+          unit_work_completion_id,
+          unit_qc_check_id,
+          decision_code,
+          qc_reviewed_by_user_id,
+          qc_reviewed_at,
+          qc_review_notes
+        )
+        SELECT
+          ?,
+          qc.unit_id,
+          qc.unit_work_completion_id,
+          qc.unit_qc_check_id,
+          qc.decision_code,
+          qc.reviewed_by_user_id,
+          qc.reviewed_at,
+          qc.review_notes
+        FROM unit_qc_checks qc
+        WHERE qc.unit_qc_check_id = ?
+          AND qc.unit_id = ?
+        LIMIT 1
+      `,
+      [unitRequestId, safeQcCheckId, safeUnitId]
+    );
+
+    if (Number(snapshotResult.affectedRows || 0) !== 1) {
+      const error = new Error('The exact Quality Control decision could not be snapshotted for this request.');
+      error.code = 'BWT_QC_REVERSION_REQUEST_SNAPSHOT_FAILED';
+      throw error;
+    }
+
+    await recordRequestEvent(connection, {
+      unitRequestId,
+      eventType: 'submitted',
+      performedByUserId: safeRequesterUserId,
+      eventNote: safeRequesterNote,
+      eventDetails: {
+        unitId: safeUnitId,
+        unitWorkCompletionId: Number(state.unit_work_completion_id),
+        qcCheckId: safeQcCheckId,
+        decisionCode: String(state.decision_code || '')
+      }
+    });
+
+    await connection.commit();
+    return { unitRequestId, unitId: safeUnitId, qcCheckId: safeQcCheckId };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+function sameQcReversionRequestTarget(preview, locked) {
+  return Number(preview && preview.unit_id) === Number(locked && locked.unit_id)
+    && Number(preview && preview.unit_work_completion_id) === Number(locked && locked.unit_work_completion_id)
+    && Number(preview && preview.unit_qc_check_id) === Number(locked && locked.unit_qc_check_id)
+    && Number(preview && preview.requested_by_user_id) === Number(locked && locked.requested_by_user_id);
+}
+
+async function approveQcReversionRequest({ unitRequestId, reviewedByUserId, reviewerNote = '' }) {
+  const safeRequestId = normalizePositiveInteger(unitRequestId);
+  const safeReviewerUserId = normalizePositiveInteger(reviewedByUserId);
+  const safeReviewerNote = normalizeText(reviewerNote, 1000);
+
+  if (!safeRequestId || !safeReviewerUserId) {
+    const error = new Error('The QC reversion request could not be verified.');
+    error.code = 'BWT_UNIT_REQUEST_INPUT_INVALID';
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+
+    const [previewRows] = await connection.query(
+      `
+        SELECT
+          ur.unit_request_id,
+          ur.request_type,
+          ur.status,
+          ur.requested_by_user_id,
+          ur.requester_note,
+          qrr.unit_id,
+          qrr.unit_work_completion_id,
+          qrr.unit_qc_check_id
+        FROM unit_requests ur
+        INNER JOIN unit_qc_reversion_requests qrr
+          ON qrr.unit_request_id = ur.unit_request_id
+        WHERE ur.unit_request_id = ?
+        LIMIT 1
+      `,
+      [safeRequestId]
+    );
+    const preview = previewRows[0] || null;
+
+    if (!preview || preview.request_type !== QC_REVERSION_REQUEST_TYPE) {
+      const error = new Error('The selected QC reversion request could not be found.');
+      error.code = 'BWT_UNIT_REQUEST_NOT_FOUND';
+      throw error;
+    }
+    if (preview.status !== 'pending') {
+      await connection.rollback();
+      return { approved: false, unitRequestId: safeRequestId };
+    }
+
+    await unitQcCheckModel.lockQcReviewReversionTargetWithConnection(connection, {
+      unitId: preview.unit_id,
+      qcCheckId: preview.unit_qc_check_id
+    });
+
+    const [lockedRows] = await connection.query(
+      `
+        SELECT
+          ur.unit_request_id,
+          ur.request_type,
+          ur.status,
+          ur.requested_by_user_id,
+          ur.requester_note,
+          qrr.unit_id,
+          qrr.unit_work_completion_id,
+          qrr.unit_qc_check_id,
+          qrr.decision_code,
+          qrr.qc_reviewed_by_user_id,
+          qrr.qc_reviewed_at,
+          qrr.qc_review_notes,
+          (
+            qrr.unit_id = qc.unit_id
+            AND qrr.unit_work_completion_id = qc.unit_work_completion_id
+            AND qrr.unit_qc_check_id = qc.unit_qc_check_id
+            AND qrr.decision_code = qc.decision_code
+            AND qrr.qc_reviewed_by_user_id = qc.reviewed_by_user_id
+            AND qrr.qc_reviewed_at = qc.reviewed_at
+            AND qrr.qc_review_notes <=> qc.review_notes
+          ) AS snapshot_matches_qc
+        FROM unit_requests ur
+        INNER JOIN unit_qc_reversion_requests qrr
+          ON qrr.unit_request_id = ur.unit_request_id
+        INNER JOIN unit_qc_checks qc
+          ON qc.unit_qc_check_id = qrr.unit_qc_check_id
+        WHERE ur.unit_request_id = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [safeRequestId]
+    );
+    const request = lockedRows[0] || null;
+
+    if (!request || request.status !== 'pending') {
+      await connection.rollback();
+      return { approved: false, unitRequestId: safeRequestId };
+    }
+    if (request.request_type !== QC_REVERSION_REQUEST_TYPE || !sameQcReversionRequestTarget(preview, request)) {
+      const error = new Error('The QC reversion request changed before it could be reviewed.');
+      error.code = 'BWT_QC_REVERSION_REQUEST_STALE';
+      throw error;
+    }
+    if (Number(request.snapshot_matches_qc) !== 1) {
+      const error = new Error('The saved QC reversion request snapshot no longer matches the exact Quality Control decision.');
+      error.code = 'BWT_QC_REVERSION_REQUEST_SNAPSHOT_MISMATCH';
+      throw error;
+    }
+    if (Number(request.requested_by_user_id) === safeReviewerUserId) {
+      const error = new Error('A requester cannot approve their own QC reversion request.');
+      error.code = 'BWT_UNIT_REQUEST_SELF_REVIEW';
+      throw error;
+    }
+
+    await unitQcCheckModel.revertQcReviewWithConnection(connection, {
+      unitId: request.unit_id,
+      qcCheckId: request.unit_qc_check_id,
+      revertedByUserId: safeReviewerUserId,
+      reversionReason: request.requester_note,
+      unitRequestId: safeRequestId
+    });
+
+    await connection.query(
+      `
+        UPDATE unit_requests
+        SET status = 'approved', reviewed_by_user_id = ?, reviewed_at = NOW(), reviewer_note = ?
+        WHERE unit_request_id = ?
+          AND status = 'pending'
+        LIMIT 1
+      `,
+      [safeReviewerUserId, safeReviewerNote || null, safeRequestId]
+    );
+
+    await recordRequestEvent(connection, {
+      unitRequestId: safeRequestId,
+      eventType: 'approved',
+      performedByUserId: safeReviewerUserId,
+      eventNote: safeReviewerNote || null,
+      eventDetails: {
+        unitId: Number(request.unit_id),
+        unitWorkCompletionId: Number(request.unit_work_completion_id),
+        qcCheckId: Number(request.unit_qc_check_id),
+        resultingQcState: 'awaiting_qc'
+      }
+    });
+
+    await connection.commit();
+    return { approved: true, unitRequestId: safeRequestId, unitId: Number(request.unit_id), qcCheckId: Number(request.unit_qc_check_id) };
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function rejectUnitRequest({ unitRequestId, reviewedByUserId, reviewerNote }) {
   const safeRequestId = normalizePositiveInteger(unitRequestId);
   const safeReviewerUserId = normalizePositiveInteger(reviewedByUserId);
@@ -1855,9 +2555,22 @@ async function rejectUnitRequest({ unitRequestId, reviewedByUserId, reviewerNote
     await connection.beginTransaction();
     const [rows] = await connection.query(
       `
-        SELECT request_type, status
-        FROM unit_requests
-        WHERE unit_request_id = ?
+        SELECT
+          ur.request_type,
+          ur.status,
+          ur.requested_by_user_id,
+          ur.requester_note,
+          qrr.unit_id AS qc_reversion_unit_id,
+          qrr.unit_work_completion_id AS qc_reversion_completion_id,
+          qrr.unit_qc_check_id AS qc_reversion_qc_check_id,
+          qrr.decision_code AS qc_reversion_decision_code,
+          CONCAT_WS(' ', requester.first_name, requester.last_name) AS requester_name
+        FROM unit_requests ur
+        LEFT JOIN unit_qc_reversion_requests qrr
+          ON qrr.unit_request_id = ur.unit_request_id
+        LEFT JOIN users requester
+          ON requester.user_id = ur.requested_by_user_id
+        WHERE ur.unit_request_id = ?
         LIMIT 1
         FOR UPDATE
       `,
@@ -1872,6 +2585,12 @@ async function rejectUnitRequest({ unitRequestId, reviewedByUserId, reviewerNote
     }
 
     if (request.status !== 'pending') return false;
+
+    if (request.request_type === QC_REVERSION_REQUEST_TYPE && Number(request.requested_by_user_id) === safeReviewerUserId) {
+      const error = new Error('A requester cannot reject their own QC reversion request.');
+      error.code = 'BWT_UNIT_REQUEST_SELF_REVIEW';
+      throw error;
+    }
 
     await connection.query(
       `
@@ -1890,6 +2609,76 @@ async function rejectUnitRequest({ unitRequestId, reviewedByUserId, reviewerNote
       eventNote: safeReviewerNote
     });
 
+    if (request.request_type === QC_REVERSION_REQUEST_TYPE) {
+      const unitId = normalizePositiveInteger(request.qc_reversion_unit_id);
+      const completionId = normalizePositiveInteger(request.qc_reversion_completion_id);
+      const qcCheckId = normalizePositiveInteger(request.qc_reversion_qc_check_id);
+      const decisionCode = normalizeText(request.qc_reversion_decision_code, 20).toLowerCase();
+
+      if (!unitId || !completionId || !qcCheckId || !['accepted', 'rejected'].includes(decisionCode)) {
+        const error = new Error('The QC reversion request linkage could not be audited.');
+        error.code = 'BWT_QC_REVERSION_REQUEST_STALE';
+        throw error;
+      }
+
+      await unitAuditEventModel.insertEventWithConnection(connection, {
+        unitId,
+        actorUserId: safeReviewerUserId,
+        eventType: 'unit_qc_reversion_request_rejected',
+        eventSource: 'quality_control_reversion_request',
+        eventSummary: 'Rejected QC decision reversion request',
+        metadata: {
+          unitRequestId: safeRequestId,
+          unitWorkCompletionId: completionId,
+          qcCheckId,
+          decisionCode,
+          requestedByUserId: Number(request.requested_by_user_id) || null
+        },
+        changes: [
+          {
+            fieldKey: 'qc_reversion_request',
+            fieldLabel: 'QC Reversion Request',
+            changeType: 'rejected',
+            oldValueText: 'Pending',
+            newValueText: 'Rejected',
+            sortOrder: 10
+          },
+          {
+            fieldKey: 'qc_decision',
+            fieldLabel: 'Quality Control Decision Retained',
+            changeType: 'recorded',
+            oldValueText: null,
+            newValueText: decisionCode === 'accepted' ? 'Accepted' : 'Rejected',
+            sortOrder: 20
+          },
+          {
+            fieldKey: 'qc_reversion_requested_by',
+            fieldLabel: 'Requested By',
+            changeType: 'recorded',
+            oldValueText: null,
+            newValueText: normalizeText(request.requester_name, 255) || `User #${Number(request.requested_by_user_id)}`,
+            sortOrder: 30
+          },
+          {
+            fieldKey: 'qc_reversion_request_reason',
+            fieldLabel: 'Reversion Request Reason',
+            changeType: 'recorded',
+            oldValueText: null,
+            newValueText: normalizeText(request.requester_note, 1000) || 'No reason recorded.',
+            sortOrder: 40
+          },
+          {
+            fieldKey: 'qc_reversion_reviewer_note',
+            fieldLabel: 'Rejection Note',
+            changeType: 'recorded',
+            oldValueText: null,
+            newValueText: safeReviewerNote,
+            sortOrder: 50
+          }
+        ]
+      });
+    }
+
     await connection.commit();
     return true;
   } catch (error) {
@@ -1904,6 +2693,7 @@ module.exports = {
   INTENTIONAL_DUPLICATE_REQUEST_TYPE,
   MODEL_CATALOG_REQUEST_TYPE,
   PROCESSOR_CATALOG_REQUEST_TYPE,
+  QC_REVERSION_REQUEST_TYPE,
   CATALOG_REQUEST_TYPES,
   ARCHIVED_STATUS_FILTER,
   UNIT_REQUEST_ARCHIVE_RETENTION_DAYS,
@@ -1916,14 +2706,19 @@ module.exports = {
   requestArchiveSupported,
   archiveResolvedUnitRequests,
   listUnitRequests,
+  listUnitRequestSummaries,
   listActiveProcessorBrands,
   getUnitRequestById,
   createIntentionalDuplicateRequest,
   createModelCatalogRequest,
   createProcessorCatalogRequest,
+  revertQcReviewDirectlyWithRequestGuard,
+  createQcReversionRequest,
+  getPendingQcReversionRequestForQcCheck,
   withdrawUnitRequest,
   approveIntentionalDuplicateRequest,
   approveModelCatalogRequest,
   approveProcessorCatalogRequest,
+  approveQcReversionRequest,
   rejectUnitRequest
 };

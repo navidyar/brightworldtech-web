@@ -1,6 +1,7 @@
 <%
   const selected = (actual, expected) => String(actual || '') === String(expected || '') ? 'selected' : '';
   const noticeMessages = {
+    created: 'Processor added.',
     updated: 'Processor updated.',
     merged: 'Duplicate processor merged into the selected canonical processor. The duplicate record was permanently removed.',
     'families-updated': 'Processor Family memberships updated.',
@@ -38,6 +39,9 @@
             <div>
               <h1>Processor Catalog</h1>
               <p>Correct processor metadata and model compatibility. Admins can permanently resolve true duplicate processor records while preserving all Unit and catalog references.</p>
+            </div>
+            <div class="page-heading-actions">
+              <a class="primary-button" href="/management/config/processors/new/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/new/modal<%= queryString ? `?${queryString}` : '' %>">Add Processor</a>
             </div>
           </section>
 

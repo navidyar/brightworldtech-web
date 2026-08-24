@@ -36,10 +36,18 @@ function getLoginSuccessMessage(req) {
   return null;
 }
 
+function getLoginErrorMessage(req) {
+  if (req.query.session === 'expired') {
+    return 'Your session has ended. Please sign in again.';
+  }
+
+  return null;
+}
+
 function renderLogin(req, res) {
   res.render('pages/login', {
     pageTitle: 'Sign In',
-    errorMessage: null,
+    errorMessage: getLoginErrorMessage(req),
     successMessage: getLoginSuccessMessage(req),
     formData: {
       identifier: ''
@@ -86,6 +94,9 @@ async function login(req, res, next) {
       }
 
       req.session.userId = user.user_id;
+      if (Number.isFinite(req.sessionInactivityTimeoutMs) && req.sessionInactivityTimeoutMs > 0) {
+        req.session.cookie.maxAge = req.sessionInactivityTimeoutMs;
+      }
 
       await authModel.recordSuccessfulLogin(user.user_id);
 

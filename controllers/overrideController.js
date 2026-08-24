@@ -319,6 +319,10 @@ async function approveOverrideRequest(req, res, next) {
       return res.redirect(getUnifiedReturnUrl(req, getOverrideRequestId(req), { error: 'self-review' }));
     }
 
+    if (error && ['BWT_OUTCOME_CONFIRMATION_TARGET_REQUIRED', 'BWT_OUTCOME_CONFIRMATION_TARGET_STALE'].includes(error.code)) {
+      return res.redirect(getUnifiedReturnUrl(req, getOverrideRequestId(req), { error: 'outcome-target-invalid' }));
+    }
+
     next(error);
   }
 }
@@ -350,6 +354,9 @@ async function denyOverrideRequest(req, res, next) {
   } catch (error) {
     if (error && error.code === 'BWT_OVERRIDE_SELF_REVIEW') {
       return res.redirect(getUnifiedReturnUrl(req, getOverrideRequestId(req), { error: 'self-review' }));
+    }
+    if (error && ['BWT_OUTCOME_CONFIRMATION_TARGET_REQUIRED', 'BWT_OUTCOME_CONFIRMATION_TARGET_STALE'].includes(error.code)) {
+      return res.redirect(getUnifiedReturnUrl(req, getOverrideRequestId(req), { error: 'outcome-target-invalid' }));
     }
     next(error);
   }

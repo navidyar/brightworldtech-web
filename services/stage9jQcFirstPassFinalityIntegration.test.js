@@ -35,9 +35,13 @@ test('Stage 9J locks an accepted completion cycle in the model and both controll
 test('Stage 9J removes ordinary QC controls after acceptance and permits only corrected rejection rechecks', () => {
   const table = read('views/fragments/tech-units-table.ejs');
   const modal = read('views/fragments/tech-unit-qc-review-modal.ejs');
+  const availability = read('services/qcReviewActionAvailability.js');
 
-  assert.match(table, /!latestQcReview \|\| \(latestQcReview\.decisionCode === 'rejected' && latestQcCorrection\)/);
-  assert.doesNotMatch(table, /latestQcReview\.decisionCode !== 'rejected' \|\| latestQcCorrection/);
+  assert.match(table, /qcReviewActionAvailability\.acceptEnabled/);
+  assert.match(table, /qcReviewActionAvailability\.rejectEnabled/);
+  assert.match(availability, /const acceptedFinal = decisionCode === 'accepted'/);
+  assert.match(availability, /const readyForRecheck = decisionCode === 'rejected' && Boolean\(hasCorrection\)/);
+  assert.match(availability, /const canRecordDecision = visible && \(!decisionCode \|\| readyForRecheck\)/);
   assert.match(modal, /const canSubmitReview = Boolean/);
   assert.match(modal, /!latestQcReview \|\| \(latestQcReview\.decisionCode === 'rejected' && latestQcCorrection\)/);
   assert.match(modal, /if \(canSubmitReview\)/);
