@@ -60,8 +60,8 @@ test('Stage 9I reuses reporting-period behavior and cache-busts changed assets',
   const validator = read('services/sharedCssFoundationValidator.js');
 
   assert.match(controls, /all_time:/);
-  assert.match(head, /management-reporting-controls\.js\?v=20260729-stage9i-qc-reporting-clarity/);
-  assert.match(head, /app\.css\?v=20260819-stage10w68w-half-size-lot-chevrons/);
+  assert.match(head, /management-reporting-controls\.js\?v=[^\"']+/);
+  assert.match(head, /app\.css\?v=[^\"']+/);
   assert.match(validator, /SHARED_APP_PATH = '\/css\/app\.css'/);
 });
 

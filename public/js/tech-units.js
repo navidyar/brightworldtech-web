@@ -6,6 +6,110 @@
   let techUnitRefreshQueued = false;
   let techUnitRefreshQueueTimer = null;
   let techUnitEventSource = null;
+  let activeUnitBrowserCommentTrigger = null;
+  let unitBrowserCommentHideTimer = null;
+
+  function getUnitBrowserCommentTooltip() {
+    let tooltip = document.getElementById('tech-unit-browser-comment-tooltip');
+    if (tooltip) return tooltip;
+
+    tooltip = document.createElement('div');
+    tooltip.id = 'tech-unit-browser-comment-tooltip';
+    tooltip.className = 'tech-unit-browser-comment-tooltip';
+    tooltip.setAttribute('role', 'tooltip');
+    tooltip.hidden = true;
+    tooltip.addEventListener('mouseenter', () => {
+      if (unitBrowserCommentHideTimer) {
+        clearTimeout(unitBrowserCommentHideTimer);
+        unitBrowserCommentHideTimer = null;
+      }
+    });
+    tooltip.addEventListener('mouseleave', () => scheduleUnitBrowserCommentTooltipHide(activeUnitBrowserCommentTrigger));
+    document.body.appendChild(tooltip);
+    return tooltip;
+  }
+
+  function getUnitBrowserCommentText(trigger) {
+    const sourceId = trigger && trigger.dataset ? trigger.dataset.unitBrowserCommentSource : '';
+    const source = sourceId ? document.getElementById(sourceId) : null;
+    return source ? String(source.textContent || '').trim() : '';
+  }
+
+  function positionUnitBrowserCommentTooltip() {
+    if (!activeUnitBrowserCommentTrigger) return;
+    if (!activeUnitBrowserCommentTrigger.isConnected) {
+      hideUnitBrowserCommentTooltip();
+      return;
+    }
+    const tooltip = getUnitBrowserCommentTooltip();
+    const rect = activeUnitBrowserCommentTrigger.getBoundingClientRect();
+    const viewportGap = 8;
+
+    tooltip.style.left = '0px';
+    tooltip.style.top = '0px';
+    tooltip.hidden = false;
+
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const left = Math.min(
+      Math.max(viewportGap, rect.left),
+      Math.max(viewportGap, window.innerWidth - tooltipRect.width - viewportGap)
+    );
+    const belowTop = rect.bottom + viewportGap;
+    const aboveTop = rect.top - tooltipRect.height - viewportGap;
+    const top = belowTop + tooltipRect.height <= window.innerHeight - viewportGap
+      ? belowTop
+      : Math.max(viewportGap, aboveTop);
+
+    tooltip.style.left = `${Math.round(left)}px`;
+    tooltip.style.top = `${Math.round(top)}px`;
+  }
+
+  function showUnitBrowserCommentTooltip(trigger) {
+    if (unitBrowserCommentHideTimer) {
+      clearTimeout(unitBrowserCommentHideTimer);
+      unitBrowserCommentHideTimer = null;
+    }
+    const text = getUnitBrowserCommentText(trigger);
+    if (!trigger || !text) return;
+
+    const tooltip = getUnitBrowserCommentTooltip();
+    activeUnitBrowserCommentTrigger = trigger;
+    tooltip.textContent = text;
+    tooltip.hidden = false;
+    trigger.setAttribute('aria-describedby', tooltip.id);
+    positionUnitBrowserCommentTooltip();
+  }
+
+  function hideUnitBrowserCommentTooltip(trigger = null) {
+    if (trigger && activeUnitBrowserCommentTrigger && trigger !== activeUnitBrowserCommentTrigger) return;
+    if (unitBrowserCommentHideTimer) {
+      clearTimeout(unitBrowserCommentHideTimer);
+      unitBrowserCommentHideTimer = null;
+    }
+    const tooltip = document.getElementById('tech-unit-browser-comment-tooltip');
+    if (activeUnitBrowserCommentTrigger) {
+      activeUnitBrowserCommentTrigger.removeAttribute('aria-describedby');
+    }
+    activeUnitBrowserCommentTrigger = null;
+    if (tooltip) {
+      tooltip.hidden = true;
+      tooltip.textContent = '';
+    }
+  }
+
+  function scheduleUnitBrowserCommentTooltipHide(trigger) {
+    if (unitBrowserCommentHideTimer) clearTimeout(unitBrowserCommentHideTimer);
+    unitBrowserCommentHideTimer = window.setTimeout(() => {
+      unitBrowserCommentHideTimer = null;
+      const tooltip = document.getElementById('tech-unit-browser-comment-tooltip');
+      const activeTriggerHovered = Boolean(activeUnitBrowserCommentTrigger && activeUnitBrowserCommentTrigger.matches(':hover'));
+      const activeTriggerFocused = Boolean(activeUnitBrowserCommentTrigger && activeUnitBrowserCommentTrigger.matches(':focus'));
+      const tooltipHovered = Boolean(tooltip && tooltip.matches(':hover'));
+      if (!activeTriggerHovered && !activeTriggerFocused && !tooltipHovered) {
+        hideUnitBrowserCommentTooltip(trigger);
+      }
+    }, 80);
+  }
 
   function normalizeUnitSaveConfirmationValue(value) {
     return String(value || '').trim();
@@ -1165,7 +1269,13 @@
       return;
     }
 
-    reconcileTechUnitRecords(currentTable, incomingTable);
+    if (currentTable.getAttribute('data-unit-browser-layout-signature') !== incomingTable.getAttribute('data-unit-browser-layout-signature')) {
+      const replacement = document.importNode(incomingTable, true);
+      currentTable.replaceWith(replacement);
+      processHtmxContent(replacement);
+    } else {
+      reconcileTechUnitRecords(currentTable, incomingTable);
+    }
     replacePaginationIfChanged(container, incomingDocument, '.table-pagination--top');
     replacePaginationIfChanged(container, incomingDocument, '.table-pagination--bottom');
     updateLoadedCount(incomingDocument);
@@ -1303,6 +1413,167 @@
     });
   }
 
+  const palletFilterStates = new WeakMap();
+
+  function getPalletFilterState(wrapper) {
+    let state = palletFilterStates.get(wrapper);
+
+    if (!state) {
+      state = {
+        abortController: null,
+        debounceTimer: null,
+        activeIndex: -1
+      };
+      palletFilterStates.set(wrapper, state);
+    }
+
+    return state;
+  }
+
+  function getPalletFilterParts(wrapper) {
+    return {
+      input: wrapper ? wrapper.querySelector('[data-tech-pallet-filter-input]') : null,
+      valueInput: wrapper ? wrapper.querySelector('[data-tech-pallet-filter-value]') : null,
+      options: wrapper ? wrapper.querySelector('[data-tech-pallet-filter-options]') : null
+    };
+  }
+
+  function getPalletFilterOptions(wrapper) {
+    const { options } = getPalletFilterParts(wrapper);
+    return options ? Array.from(options.querySelectorAll('[data-tech-pallet-filter-option]')) : [];
+  }
+
+  function setPalletFilterExpanded(wrapper, expanded) {
+    const { input, options } = getPalletFilterParts(wrapper);
+    if (!input || !options) return;
+
+    input.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    if (!expanded) {
+      input.removeAttribute('aria-activedescendant');
+      options.hidden = true;
+      getPalletFilterState(wrapper).activeIndex = -1;
+    }
+  }
+
+  function setPalletFilterActiveIndex(wrapper, nextIndex) {
+    const state = getPalletFilterState(wrapper);
+    const { input } = getPalletFilterParts(wrapper);
+    const options = getPalletFilterOptions(wrapper);
+
+    if (!input || options.length === 0) {
+      state.activeIndex = -1;
+      if (input) input.removeAttribute('aria-activedescendant');
+      return;
+    }
+
+    const normalizedIndex = ((nextIndex % options.length) + options.length) % options.length;
+    state.activeIndex = normalizedIndex;
+
+    options.forEach((option, index) => {
+      const isActive = index === normalizedIndex;
+      option.classList.toggle('is-active', isActive);
+      option.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+
+    const activeOption = options[normalizedIndex];
+    input.setAttribute('aria-activedescendant', activeOption.id);
+    activeOption.scrollIntoView({ block: 'nearest' });
+  }
+
+  function restorePalletFilterSelection(wrapper) {
+    const { input, valueInput } = getPalletFilterParts(wrapper);
+    if (!input || !valueInput) return;
+    input.value = valueInput.value || '';
+  }
+
+  function closePalletFilter(wrapper, { restoreSelection = false } = {}) {
+    if (!wrapper) return;
+    const state = getPalletFilterState(wrapper);
+
+    if (state.debounceTimer) {
+      window.clearTimeout(state.debounceTimer);
+      state.debounceTimer = null;
+    }
+
+    if (state.abortController) {
+      state.abortController.abort();
+      state.abortController = null;
+    }
+
+    if (restoreSelection) {
+      restorePalletFilterSelection(wrapper);
+    }
+
+    setPalletFilterExpanded(wrapper, false);
+  }
+
+  async function loadPalletFilterOptions(wrapper) {
+    const { input, options } = getPalletFilterParts(wrapper);
+    const lotId = String(wrapper && wrapper.dataset ? wrapper.dataset.lotId || '' : '').trim();
+    if (!input || !options || !lotId) return;
+
+    const state = getPalletFilterState(wrapper);
+    if (state.abortController) {
+      state.abortController.abort();
+    }
+
+    const controller = new AbortController();
+    state.abortController = controller;
+    const params = new URLSearchParams({
+      lotId,
+      search: input.value.trim()
+    });
+
+    try {
+      const response = await fetch(`/tech/units/pallet-options?${params.toString()}`, {
+        signal: controller.signal,
+        headers: { Accept: 'text/html' }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Pallet options request failed with status ${response.status}.`);
+      }
+
+      options.innerHTML = await response.text();
+      options.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+      state.activeIndex = -1;
+    } catch (error) {
+      if (error && error.name === 'AbortError') return;
+      options.innerHTML = '<div class="tech-pallet-filter-message" role="option" aria-disabled="true">Pallets could not be loaded.</div>';
+      options.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    } finally {
+      if (state.abortController === controller) {
+        state.abortController = null;
+      }
+    }
+  }
+
+  function queuePalletFilterOptions(wrapper) {
+    const state = getPalletFilterState(wrapper);
+
+    if (state.debounceTimer) {
+      window.clearTimeout(state.debounceTimer);
+    }
+
+    state.debounceTimer = window.setTimeout(() => {
+      state.debounceTimer = null;
+      loadPalletFilterOptions(wrapper);
+    }, 140);
+  }
+
+  function selectPalletFilterOption(wrapper, option) {
+    const { input, valueInput } = getPalletFilterParts(wrapper);
+    const value = String(option && option.dataset ? option.dataset.value || '' : '').trim();
+    if (!input || !valueInput || !value) return;
+
+    input.value = value;
+    valueInput.value = value;
+    closePalletFilter(wrapper);
+    submitAutoFilterControl(input);
+  }
+
   function submitAutoFilterControl(control) {
     const filterForm = control.closest('.tech-filter-form');
 
@@ -1319,6 +1590,116 @@
 
     filterForm.submit();
   }
+
+  document.body.addEventListener('focusin', (event) => {
+    const input = event.target.closest('[data-tech-pallet-filter-input]');
+    if (!input) return;
+
+    const wrapper = input.closest('[data-tech-pallet-filter]');
+    if (wrapper) {
+      loadPalletFilterOptions(wrapper);
+    }
+  });
+
+  document.body.addEventListener('input', (event) => {
+    const input = event.target.closest('[data-tech-pallet-filter-input]');
+    if (!input) return;
+
+    const wrapper = input.closest('[data-tech-pallet-filter]');
+    const valueInput = wrapper ? wrapper.querySelector('[data-tech-pallet-filter-value]') : null;
+    if (!wrapper || !valueInput) return;
+
+    if (!input.value.trim()) {
+      const hadSelection = Boolean(valueInput.value);
+      valueInput.value = '';
+      closePalletFilter(wrapper);
+      if (hadSelection) {
+        submitAutoFilterControl(input);
+      } else {
+        loadPalletFilterOptions(wrapper);
+      }
+      return;
+    }
+
+    const optionsContainer = wrapper.querySelector('[data-tech-pallet-filter-options]');
+    if (optionsContainer) {
+      optionsContainer.innerHTML = '';
+    }
+    setPalletFilterExpanded(wrapper, false);
+    queuePalletFilterOptions(wrapper);
+  });
+
+  document.body.addEventListener('keydown', (event) => {
+    const input = event.target.closest('[data-tech-pallet-filter-input]');
+    if (!input) return;
+
+    const wrapper = input.closest('[data-tech-pallet-filter]');
+    if (!wrapper) return;
+
+    const state = getPalletFilterState(wrapper);
+    const options = getPalletFilterOptions(wrapper);
+
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (options.length === 0) {
+        loadPalletFilterOptions(wrapper);
+        return;
+      }
+      const direction = event.key === 'ArrowDown' ? 1 : -1;
+      const startIndex = state.activeIndex < 0 ? (direction > 0 ? 0 : options.length - 1) : state.activeIndex + direction;
+      setPalletFilterActiveIndex(wrapper, startIndex);
+      return;
+    }
+
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      const activeOption = options[state.activeIndex] || options[0] || null;
+      if (activeOption) {
+        selectPalletFilterOption(wrapper, activeOption);
+      } else {
+        loadPalletFilterOptions(wrapper);
+      }
+      return;
+    }
+
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      closePalletFilter(wrapper, { restoreSelection: true });
+    }
+  });
+
+  document.body.addEventListener('mousedown', (event) => {
+    const option = event.target.closest('[data-tech-pallet-filter-option]');
+    if (!option) return;
+
+    event.preventDefault();
+    const wrapper = option.closest('[data-tech-pallet-filter]');
+    if (wrapper) {
+      selectPalletFilterOption(wrapper, option);
+    }
+  });
+
+  document.body.addEventListener('focusout', (event) => {
+    const input = event.target.closest('[data-tech-pallet-filter-input]');
+    if (!input) return;
+
+    const wrapper = input.closest('[data-tech-pallet-filter]');
+    if (!wrapper) return;
+
+    window.setTimeout(() => {
+      if (!wrapper.contains(document.activeElement)) {
+        closePalletFilter(wrapper, { restoreSelection: true });
+      }
+    }, 0);
+  });
+
+  document.body.addEventListener('mousedown', (event) => {
+    document.querySelectorAll('[data-tech-pallet-filter]').forEach((wrapper) => {
+      if (!wrapper.contains(event.target)) {
+        closePalletFilter(wrapper, { restoreSelection: true });
+      }
+    });
+  });
 
   document.body.addEventListener('change', (event) => {
     const autoFilterControl = event.target.closest('[data-tech-filter-auto-submit]');
@@ -1341,6 +1722,34 @@
     }
 
     submitAutoFilterControl(autoFilterControl);
+  });
+
+  document.body.addEventListener('mouseover', (event) => {
+    const trigger = event.target.closest('[data-unit-browser-comment-link]');
+    if (!trigger || (event.relatedTarget && trigger.contains(event.relatedTarget))) return;
+    showUnitBrowserCommentTooltip(trigger);
+  });
+
+  document.body.addEventListener('mouseout', (event) => {
+    const trigger = event.target.closest('[data-unit-browser-comment-link]');
+    if (!trigger || (event.relatedTarget && trigger.contains(event.relatedTarget))) return;
+    scheduleUnitBrowserCommentTooltipHide(trigger);
+  });
+
+  document.body.addEventListener('focusin', (event) => {
+    const trigger = event.target.closest('[data-unit-browser-comment-link]');
+    if (trigger) showUnitBrowserCommentTooltip(trigger);
+  });
+
+  document.body.addEventListener('focusout', (event) => {
+    const trigger = event.target.closest('[data-unit-browser-comment-link]');
+    if (trigger) hideUnitBrowserCommentTooltip(trigger);
+  });
+
+  document.body.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && activeUnitBrowserCommentTrigger) {
+      hideUnitBrowserCommentTooltip();
+    }
   });
 
   document.body.addEventListener('unit-saved', (event) => {
@@ -1412,7 +1821,10 @@
 
   window.addEventListener('resize', () => {
     initializeUnitExportTableScroll(document.querySelector('[data-unit-export-modal]'));
+    positionUnitBrowserCommentTooltip();
   });
+
+  window.addEventListener('scroll', positionUnitBrowserCommentTooltip, true);
 
   updateUnitExportSelection(document.querySelector('[data-unit-export-modal]'));
   startTargetedTechUnitRefresh();

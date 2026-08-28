@@ -9,10 +9,11 @@ function getQcReviewActionAvailability({
   hasCompletion = false,
   isParked = false,
   latestDecisionCode = '',
-  hasCorrection = false
+  hasCorrection = false,
+  qcRequired = true
 } = {}) {
   const decisionCode = normalizeDecisionCode(latestDecisionCode);
-  const visible = Boolean(hasCompletion) && !Boolean(isParked);
+  const visible = Boolean(qcRequired) && Boolean(hasCompletion) && !Boolean(isParked);
   const acceptedFinal = decisionCode === 'accepted';
   const rejectedAwaitingCorrection = decisionCode === 'rejected' && !Boolean(hasCorrection);
   const readyForRecheck = decisionCode === 'rejected' && Boolean(hasCorrection);
@@ -21,7 +22,10 @@ function getQcReviewActionAvailability({
   let acceptDisabledReason = '';
   let rejectDisabledReason = '';
 
-  if (acceptedFinal) {
+  if (!qcRequired) {
+    acceptDisabledReason = 'Quality Control is not required for Units in the current Lot.';
+    rejectDisabledReason = acceptDisabledReason;
+  } else if (acceptedFinal) {
     acceptDisabledReason = 'This completion cycle has already been accepted by Quality Control.';
     rejectDisabledReason = 'This accepted completion cycle is final. Reverse completion and record a new completion cycle before changing the QC decision.';
   } else if (rejectedAwaitingCorrection) {

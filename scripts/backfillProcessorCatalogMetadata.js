@@ -23,6 +23,7 @@ async function assertSchema(connection) {
     ['processor_families', 'processor_brand_id'],
     ['processor_families', 'code'],
     ['processor_families', 'name'],
+    ['processor_families', 'export_short_form'],
     ['processor_families', 'description'],
     ['processor_families', 'membership_version'],
     ['processor_families', 'sort_order'],
@@ -102,15 +103,17 @@ async function createFamilies(connection, definitions) {
          processor_brand_id,
          code,
          name,
+         export_short_form,
          description,
          membership_version,
          sort_order,
          is_active
-       ) VALUES (?, ?, ?, ?, 1, ?, 1)`,
+       ) VALUES (?, ?, ?, ?, ?, 1, ?, 1)`,
       [
         definition.processorBrandId,
         definition.code,
         definition.name,
+        definition.exportShortForm,
         definition.description,
         definition.sortOrder
       ]

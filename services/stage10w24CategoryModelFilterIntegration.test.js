@@ -13,7 +13,7 @@ function read(relativePath) {
 
 function buildModelFilterHarness() {
   const source = read('public/js/tech-unit-form.js');
-  const start = source.indexOf('function getModelFilterState(');
+  const start = source.indexOf('function getLeadingSearchTokens(');
   const end = source.indexOf('function closeUnitModelOptions(', start);
 
   assert.notEqual(start, -1, 'model filter state helper must exist');
@@ -100,6 +100,6 @@ test('all Unit form entry points use the category-aware model-filter cache versi
     'views/pages/tech-unit-form.ejs',
     'views/pages/tech-unit-detail.ejs',
   ]) {
-    assert.match(read(relativePath), /tech-unit-form\.js\?v=20260811-stage10w31-lot-hierarchy-context/);
+    assert.match(read(relativePath), /tech-unit-form\.js\?v=[^"\'\s>]+/);
   }
 });

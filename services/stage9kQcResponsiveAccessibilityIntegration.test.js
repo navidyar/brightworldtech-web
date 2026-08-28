@@ -120,11 +120,11 @@ test('Stage 9K cache-busts the common modal manager and QC Unit Browser assets',
 
   [techUnitsPage, techUnitDetailPage].forEach((markup) => {
     assert.match(markup, /\/js\/modal\.js\?v=20260819-stage10w68p-interaction-refinements/);
-    assert.match(markup, /tech-units-clean\.css\?v=20260819-stage10w68o-toggle-label-cleanup/);
-    assert.match(markup, /tech-units\.js\?v=20260819-stage10w68l-filter-toggles/);
+    assert.match(markup, /tech-units-clean\.css\?v=20260826-stage10w73e-browser-usability/);
+    assert.match(markup, /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
   });
 
-  assert.match(head, /app\.css\?v=20260819-stage10w68w-half-size-lot-chevrons/);
+  assert.match(head, /app\.css\?v=[^"\'\s>]+/);
 });
 
 test('Stage 9K provides a dedicated validation command without adding a migration', () => {

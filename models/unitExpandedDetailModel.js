@@ -2,10 +2,16 @@ const { pool } = require('./db');
 const unitOutcomeModel = require('./unitOutcomeModel');
 const { buildHardwareComponentComparisons } = require('../services/hardwareComponentComparison');
 const { getCanonicalCosmeticGrade, isNotYetGradedToken } = require('../services/cosmeticGradeNormalization');
-const { COSMETIC_GRADE_BY_SYSTEM_VALUE_ID, IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID } = require('../config/configIdentityRegistry');
+const {
+  COSMETIC_GRADE_BY_SYSTEM_VALUE_ID,
+  IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID,
+  SYSTEM_CONFIG_VALUE_IDS
+} = require('../config/configIdentityRegistry');
 const { getSpecsTestsDetailsByUnitIds } = require('./unitSpecsTestsModel');
+const { getAmazonDetailsByUnitIds } = require('./unitAmazonModel');
 const EXPANDED_TABLES = [
   'unit_identifiers',
+  'unit_amazon_details',
   'unit_specifications',
   'unit_field_sources',
   'unit_grade_assessments',
@@ -37,6 +43,7 @@ function createEmptyDetails() {
     schemaReady: false,
     hasAnyExpandedData: false,
     identifiers: [],
+    amazonDetails: null,
     specifications: null,
     specsTests: null,
     fieldSources: [],
@@ -1101,6 +1108,7 @@ async function attachComments(detailsMap, unitIds, existingTables) {
         SELECT
           uc.unit_comment_id,
           uc.unit_id,
+          comment_system.system_config_value_id AS note_type_system_config_value_id,
           COALESCE(note_type.label, note_type.value) AS note_type_label,
           uc.comment_text,
           uc.source_code,
@@ -1111,28 +1119,48 @@ async function attachComments(detailsMap, unitIds, existingTables) {
           ROW_NUMBER() OVER (
             PARTITION BY uc.unit_id
             ORDER BY uc.created_at DESC, uc.unit_comment_id DESC
-          ) AS row_rank
+          ) AS row_rank,
+          ROW_NUMBER() OVER (
+            PARTITION BY uc.unit_id, comment_system.system_config_value_id
+            ORDER BY uc.created_at DESC, uc.unit_comment_id DESC
+          ) AS note_type_rank
         FROM unit_comments uc
         LEFT JOIN config_values note_type
           ON note_type.config_value_id = uc.note_type_config_value_id
+        LEFT JOIN system_config_values comment_system
+          ON comment_system.config_value_id = uc.note_type_config_value_id
         LEFT JOIN users created_by
           ON created_by.user_id = uc.created_by_user_id
         WHERE uc.unit_id IN (${buildPlaceholders(unitIds)})
       ) ranked_comments
       WHERE row_rank <= 25
+         OR (
+           note_type_system_config_value_id = ?
+           AND note_type_rank = 1
+         )
       ORDER BY unit_id, created_at DESC, unit_comment_id DESC
     `,
-    unitIds
+    [...unitIds, SYSTEM_CONFIG_VALUE_IDS.COMMENT_GENERAL]
   );
   rows.forEach((row) => {
-    addToUnitList(detailsMap, row.unit_id, 'comments', {
+    const comment = {
+      noteTypeSystemId: Number(row.note_type_system_config_value_id) || null,
       noteTypeLabel: row.note_type_label || 'Comment',
       noteTypeCode: '',
       commentText: row.comment_text || '',
       sourceCode: row.source_code || '',
       createdByName: getPersonName(row, 'created_by'),
       createdAt: row.created_at
-    });
+    };
+    if (
+      comment.noteTypeSystemId === SYSTEM_CONFIG_VALUE_IDS.COMMENT_GENERAL
+      && Number(row.note_type_rank) === 1
+    ) {
+      setForUnit(detailsMap, row.unit_id, 'latestGeneralComment', comment);
+    }
+    if (Number(row.row_rank) <= 25) {
+      addToUnitList(detailsMap, row.unit_id, 'comments', comment);
+    }
   });
 }
 async function attachLatestTechActivity(detailsMap, unitIds, existingTables) {
@@ -1339,6 +1367,13 @@ async function listExpandedDetailsForUnits(unitIds) {
   });
   await attachIdentifiers(detailsMap, safeUnitIds, existingTables);
   await attachSpecifications(detailsMap, safeUnitIds, existingTables);
+  const amazonDetailsByUnitId = await getAmazonDetailsByUnitIds(safeUnitIds);
+  amazonDetailsByUnitId.forEach((amazonDetails, unitId) => {
+    const details = detailsMap.get(Number(unitId));
+    if (!details) return;
+    details.amazonDetails = amazonDetails;
+    if (amazonDetails && Object.values(amazonDetails).some((value) => String(value || '').trim())) markHasData(details);
+  });
   const specsTestsByUnitId = await getSpecsTestsDetailsByUnitIds(safeUnitIds);
   specsTestsByUnitId.forEach((specsTests, unitId) => {
     const details = detailsMap.get(Number(unitId));

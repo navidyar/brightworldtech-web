@@ -4,6 +4,12 @@ const UNIT_EXPORT_COLUMNS = Object.freeze([
   Object.freeze({ key: 'assetTag', label: 'Asset Tag' }),
   Object.freeze({ key: 'unitSerialNumber', label: 'Unit Serial Number' }),
   Object.freeze({ key: 'biosSerialNumber', label: 'BIOS Serial / Recovery Number' }),
+  Object.freeze({ key: 'amazonAssetTag', label: 'Amazon Asset Tag', defaultSelected: false }),
+  Object.freeze({ key: 'fnsku', label: 'FNSKU', defaultSelected: false }),
+  Object.freeze({ key: 'asin', label: 'ASIN', defaultSelected: false }),
+  Object.freeze({ key: 'trackingNumber', label: 'Tracking Number', defaultSelected: false }),
+  Object.freeze({ key: 'palletNumber', label: 'Pallet Number', defaultSelected: false }),
+  Object.freeze({ key: 'buyerComments', label: 'Buyer Comments', defaultSelected: false }),
   Object.freeze({ key: 'unitType', label: 'Unit Type' }),
   Object.freeze({ key: 'manufacturer', label: 'Manufacturer' }),
   Object.freeze({ key: 'model', label: 'Model' }),
@@ -41,6 +47,7 @@ const UNIT_EXPORT_COLUMNS = Object.freeze([
   Object.freeze({ key: 'openBoxStatus', label: 'Open-Box Status', defaultSelected: false }),
   Object.freeze({ key: 'boxLanguage', label: 'Box Language', defaultSelected: false }),
   Object.freeze({ key: 'cpu', label: 'CPU' }),
+  Object.freeze({ key: 'processorSpeedGhz', label: 'Processor Speed GHz', defaultSelected: false }),
   Object.freeze({ key: 'shortForm', label: 'Short Form' }),
   Object.freeze({ key: 'previousMemorySize', label: 'Previous Memory Size' }),
   Object.freeze({ key: 'currentMemorySize', label: 'Current Memory Size' }),
@@ -53,18 +60,25 @@ const UNIT_EXPORT_COLUMNS = Object.freeze([
   Object.freeze({ key: 'currentStorageDevices', label: 'Current Storage Devices' }),
   Object.freeze({ key: 'storageDeviceChanges', label: 'Storage Device Changes' }),
   Object.freeze({ key: 'techName', label: 'Tech Name' }),
+  Object.freeze({ key: 'createdDate', label: 'Created Date', defaultSelected: false }),
+  Object.freeze({ key: 'createdTime', label: 'Created Time', defaultSelected: false }),
+  Object.freeze({ key: 'completedDate', label: 'Completed Date', defaultSelected: false }),
+  Object.freeze({ key: 'completedTime', label: 'Completed Time', defaultSelected: false }),
   Object.freeze({ key: 'batteryHealth', label: 'Battery Health' }),
+  Object.freeze({ key: 'skinnedStatus', label: 'Skinned Status', defaultSelected: false }),
   Object.freeze({ key: 'cosmeticGrade', label: 'Cosmetic Grade' }),
+  Object.freeze({ key: 'gradeNotes', label: 'Grade Notes', defaultSelected: false }),
   Object.freeze({ key: 'passFail', label: 'Pass / Fail' }),
+  Object.freeze({ key: 'outcomeNotes', label: 'Outcome Notes', defaultSelected: false }),
   Object.freeze({ key: 'hardwareRemarks', label: 'Hardware Remarks' }),
-  Object.freeze({ key: 'cosmeticRemarks', label: 'Cosmetic Remarks' })
+  Object.freeze({ key: 'cosmeticRemarks', label: 'Cosmetic Remarks' }),
+  Object.freeze({ key: 'generalComment', label: 'General Comment', defaultSelected: false })
 ]);
 
 const UNIT_EXPORT_COLUMN_KEYS = Object.freeze(UNIT_EXPORT_COLUMNS.map((column) => column.key));
 const UNIT_EXPORT_COLUMN_LABELS = Object.freeze(UNIT_EXPORT_COLUMNS.map((column) => column.label));
-const DEFAULT_UNIT_EXPORT_COLUMNS = Object.freeze(
-  UNIT_EXPORT_COLUMNS.filter((column) => column.defaultSelected !== false)
-);
+// Export selection is deliberate: the modal always opens with no columns selected.
+const DEFAULT_UNIT_EXPORT_COLUMNS = Object.freeze([]);
 const UNIT_EXPORT_COLUMN_KEY_SET = new Set(UNIT_EXPORT_COLUMN_KEYS);
 const UNIT_EXPORT_COLUMN_KEY_ALIASES = Object.freeze({
   memorySize: 'currentMemorySize',

@@ -32,8 +32,8 @@ test('regular Tech and QC roles do not receive visible Production Weight informa
   assert.match(form, /if \(isEditMode && canViewProductionWeight\)/);
   assert.match(form, /canViewProductionWeight \? lotProductionWeightValue : ''/);
   assert.match(form, /canViewProductionWeight \? \(category\.defaultProductionWeightValue/);
-  assert.match(table, /canViewCurrentLotWeight = currentUserRoles\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead'\]/);
-  assert.match(table, /canViewTechWeightDetails = currentUserRoles\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead'\]/);
+  assert.match(table, /canViewCurrentLotWeight = !isQcPortalMode && currentUserRoles\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead'\]/);
+  assert.match(table, /canViewTechWeightDetails = !isQcPortalMode && currentUserRoles\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead'\]/);
   assert.match(completeModal, /showProductionWeight/);
   assert.match(completeModal, /Completed By/);
 });

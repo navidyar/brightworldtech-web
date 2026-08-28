@@ -66,10 +66,10 @@ test('Unit History records previous and current values separately', () => {
   assert.equal(snapshot.current_storage_size.text, '512GB');
 });
 
-test('export contract preserves four hardware capacity columns and defaults component detail to selected', () => {
-  assert.equal(UNIT_EXPORT_COLUMN_LABELS.length, 57);
-  assert.equal(DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
-  assert.deepEqual(DEFAULT_UNIT_EXPORT_COLUMNS.map((column) => column.label).slice(8, 18), [
+test('export contract preserves hardware columns while requiring deliberate export selection', () => {
+  assert.equal(UNIT_EXPORT_COLUMN_LABELS.length, 72);
+  assert.deepEqual(DEFAULT_UNIT_EXPORT_COLUMNS, []);
+  for (const label of [
     'Previous Memory Size',
     'Current Memory Size',
     'Previous Storage Size',
@@ -80,7 +80,9 @@ test('export contract preserves four hardware capacity columns and defaults comp
     'Previous Storage Devices',
     'Current Storage Devices',
     'Storage Device Changes'
-  ]);
+  ]) {
+    assert.equal(UNIT_EXPORT_COLUMN_LABELS.includes(label), true);
+  }
 
   const row = buildUnitExportRow({
     previousRamGb: 8,

@@ -23,11 +23,11 @@
       <% } %>
 
       <% if (sourceLot) { %>
-        <form class="app-form app-form-clean lot-form-modal-form" method="post" action="/management/lots/<%= sourceLot.lot_id %>/duplicate" hx-post="/management/lots/<%= sourceLot.lot_id %>/duplicate" hx-target="#modal-root" hx-swap="innerHTML" data-lot-duplicate-form>
+        <form class="app-form app-form-clean lot-form-modal-form" method="post" action="/management/lots/<%= sourceLot.lot_id %>/duplicate" hx-post="/management/lots/<%= sourceLot.lot_id %>/duplicate" hx-target="#modal-root" hx-swap="innerHTML" data-lot-duplicate-form data-source-lot-name="<%= sourceLot.lot_name %>">
           <div class="form-section">
             <div class="form-section-header">
               <div><h3>New Lot</h3></div>
-              <p>Configuration is copied from <strong><%= sourceLot.lot_name %></strong>. Units, child Lots, history, validation decisions, and production records are not copied. The new Lot starts hidden.</p>
+              <p>Configuration is copied from <strong><%= sourceLot.lot_name %></strong>. Direct Requirements are copied automatically; when the duplicate has a Parent Lot, every other Requirement inherits from that destination parent. The inheritance choice below applies only to Unit Form and Unit Browser behavior. Units, child Lots, history, validation decisions, and production records are not copied. The new Lot starts hidden.</p>
             </div>
 
             <div class="form-grid lot-form-grid">
@@ -70,20 +70,27 @@
           </div>
 
           <div class="form-section">
-            <div class="form-section-header"><div><h3>Inheritance</h3></div></div>
+            <div class="form-section-header">
+              <div><h3>Inheritance</h3></div>
+              <p>
+                Source: <strong><%= sourceLot.lot_name %></strong>
+                · Destination: <strong data-lot-duplicate-destination-label>Root-level Lot (no Parent Lot)</strong>
+              </p>
+              <p data-lot-duplicate-requirement-description>Requirements: Direct Requirements from <strong><%= sourceLot.lot_name %></strong> are copied. This is a root-level Lot, so there is no Parent Lot to inherit additional Requirements from.</p>
+            </div>
             <div class="form-grid single-column">
               <label class="checkbox-card" for="duplicateInheritancePreserve">
                 <input id="duplicateInheritancePreserve" type="radio" name="inheritanceMode" value="preserve_source" <%= safeFormData.inheritanceMode !== 'new_parent' ? 'checked' : '' %> data-lot-duplicate-preserve-inheritance />
                 <span>
-                  <strong>Preserve Source Lot Behavior</strong>
-                  <small>Copies the source Lot's effective Requirements and Unit Form behavior so a different parent does not change the duplicate unexpectedly.</small>
+                  <strong data-lot-duplicate-preserve-title>Keep Unit Form & Browser Behavior from <%= sourceLot.lot_name %></strong>
+                  <small data-lot-duplicate-preserve-description>Create the duplicate as a root-level Lot and copy the effective Unit Form behavior and Unit Browser layout currently used by <%= sourceLot.lot_name %>.</small>
                 </span>
               </label>
               <label class="checkbox-card" for="duplicateInheritanceParent">
                 <input id="duplicateInheritanceParent" type="radio" name="inheritanceMode" value="new_parent" <%= safeFormData.inheritanceMode === 'new_parent' ? 'checked' : '' %> data-lot-duplicate-parent-inheritance />
                 <span>
-                  <strong>Use New Parent Inheritance</strong>
-                  <small>Copies the source Lot's direct configuration, then allows inherited configuration from the new Parent Lot to apply normally.</small>
+                  <strong data-lot-duplicate-parent-title>Inherit Unit Form & Browser from Destination Parent</strong>
+                  <small data-lot-duplicate-parent-description>Available only when the duplicate is placed under another Parent Lot. Requirements follow the automatic rule above either way.</small>
                 </span>
               </label>
             </div>

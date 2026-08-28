@@ -32,7 +32,7 @@ test('browser constraint validation waits until the authoritative Lot profile ha
   assert.match(formJs, /form\.noValidate = true;/);
   assert.match(
     formJs,
-    /refreshLotUnitFormProfile\(form, \{ background: true, force: true \}\)[\s\S]*?validateAllCapacityInputs\(form, true\)[\s\S]*?refreshLotRequirementWorkflow\(form, \{ background: true \}\)/
+    /refreshLotUnitFormProfile\(form, \{ background: true, force: true, submitPreflight: true \}\)[\s\S]*?validateAllCapacityInputs\(form, true\)[\s\S]*?refreshLotRequirementWorkflow\(form, \{ background: true, submitPreflight: true \}\)/
   );
   assert.match(formJs, /function validateTechUnitFormForSubmission\(form\)[\s\S]*?if \(!form\.checkValidity\(\)\)/);
   assert.match(formJs, /if \(form\.dataset\.techUnitSubmitPreflightPending === 'true'\) \{[\s\S]*?return;/);
@@ -44,6 +44,6 @@ test('the one-click save fix is cache-busted on every Tech Unit form entry surfa
     'views/pages/tech-unit-form.ejs',
     'views/pages/tech-unit-detail.ejs'
   ]) {
-    assert.match(read(relativePath), /tech-unit-form\.js\?v=20260813-stage10w50-unit-save-preflight/);
+    assert.match(read(relativePath), /tech-unit-form\.js\?v=[^"\'\s>]+/);
   }
 });

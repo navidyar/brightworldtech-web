@@ -71,7 +71,7 @@ test('a read-only Lot hierarchy audit and focused validation commands are availa
 });
 
 test('all Lots pages use the hierarchy-integrity cache-busted stylesheet', () => {
-  const expected = '/css/lots.css?v=20260813-stage10w61-lot-ui-export';
+  const expected = '/css/lots.css?v=20260826-stage10w73c-browser-config-refinement';
 
   for (const relativePath of [
     'views/pages/management-lots.ejs',

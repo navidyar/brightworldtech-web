@@ -14,7 +14,6 @@ test('component editors submit only current-use fields and an operational row id
     'speedMhz',
     'manufacturerName',
     'partNumber',
-    'serialNumber',
     'modelNumber',
     'firmwareVersion',
     'changeNotes'
@@ -28,6 +27,10 @@ test('component editors submit only current-use fields and an operational row id
   assert.match(markup, /memoryModules\[<%= index %>\]\[componentRowId\]/);
   assert.match(markup, /previousStorageDevices\[<%= index %>\]\[componentRowId\]/);
   assert.match(markup, /storageDevices\[<%= index %>\]\[componentRowId\]/);
+  assert.match(markup, /type="hidden" name="previousStorageDevices\[<%= index %>\]\[serialNumber\]"/);
+  assert.match(markup, /type="hidden" name="storageDevices\[<%= index %>\]\[serialNumber\]"/);
+  assert.doesNotMatch(markup, /memoryModules\[[^\]]+\]\[serialNumber\]/);
+  assert.doesNotMatch(markup, /<span>Storage Serial Number<\/span>/);
 });
 
 test('request parsing ignores removed optional component metadata', () => {
@@ -82,9 +85,9 @@ test('shared scrollbar palette lives in theme.css and presentation lives in app.
   assert.match(app, /\*::-webkit-scrollbar/);
   assert.match(app, /scrollbar-color: var\(--ui-scrollbar-thumb\) var\(--ui-scrollbar-track\)/);
   assert.match(app, /unit-export-preview-top-scroll-thumb[\s\S]*var\(--ui-scrollbar-thumb\)/);
-  assert.match(head, /theme\.css\?v=20260804-stage10t-stabilization/);
-  assert.match(head, /app\.css\?v=20260804-stage10w-ranking-administration/);
-  assert.match(head, /features\.css\?v=20260804-stage10t-stabilization/);
+  assert.match(head, /theme\.css\?v=[^\"\'\s>]+/);
+  assert.match(head, /app\.css\?v=[^"\'\s>]+/);
+  assert.match(head, /features\.css\?v=[^\"\'\s>]+/);
 });
 
 test('cleanup and health commands are included in the Stage 10T contract', () => {

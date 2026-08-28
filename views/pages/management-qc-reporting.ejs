@@ -7,6 +7,16 @@
     Array.isArray(scope && scope.selectedTechnicianIds) ? scope.selectedTechnicianIds.map(Number) : []
   );
   const selectedTeamCount = selectedTechnicianIds.size;
+  const sortableNumber = (value, fallback = '') => {
+    if (value === null || value === undefined || String(value).trim() === '') return fallback;
+    const numeric = Number(value);
+    return Number.isFinite(numeric) ? numeric : fallback;
+  };
+  const sortableDate = (value) => {
+    if (!value) return '';
+    const timestamp = new Date(value).getTime();
+    return Number.isFinite(timestamp) ? timestamp : '';
+  };
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -46,10 +56,16 @@
                 <h2 id="qc-reporting-scope-heading">Reporting Scope</h2>
                 <p class="site-section-description">Date ranges use the Unit completion date. Choose one or more technicians to create an ad hoc reporting team, or leave every technician unchecked to include all reviewed technicians.</p>
               </div>
-              <span class="pill neutral"><%= scope.scopeLabel %></span>
+              <div class="qc-reporting-scope-heading-actions">
+                <span class="pill neutral"><%= scope.scopeLabel %></span>
+                <div class="site-clean-actions qc-reporting-scope-actions" aria-label="Reporting scope actions">
+                  <button class="primary-button" type="submit" form="qc-reporting-scope-form">Apply Scope</button>
+                  <a class="secondary-button" href="/management/qc-reporting">Reset</a>
+                </div>
+              </div>
             </div>
 
-            <form class="qc-reporting-scope-form" data-reporting-controls method="get" action="/management/qc-reporting">
+            <form id="qc-reporting-scope-form" class="qc-reporting-scope-form" data-reporting-controls method="get" action="/management/qc-reporting">
               <label class="form-field qc-reporting-scope-control qc-reporting-period-main-field">
                 <span>Reporting Period</span>
                 <select name="period" data-reporting-period-select>
@@ -105,7 +121,7 @@
 
               <div class="qc-reporting-team-field qc-reporting-scope-control">
                 <span class="qc-reporting-scope-label">Reporting Team</span>
-                <details class="qc-reporting-team-picker" <%= selectedTeamCount > 0 ? 'open' : '' %>>
+                <details class="qc-reporting-team-picker" data-reporting-team-picker>
                   <summary>
                     <span><%= selectedTeamCount > 0 ? `${selectedTeamCount} selected` : 'All reviewed technicians' %></span>
                   </summary>
@@ -131,10 +147,6 @@
                 <small>Leave every technician unchecked to include all reviewed technicians.</small>
               </div>
 
-              <div class="qc-reporting-scope-actions" aria-label="Reporting scope actions">
-                <button class="primary-button" type="submit">Apply Scope</button>
-                <a class="secondary-button" href="/management/qc-reporting">Reset</a>
-              </div>
             </form>
 
             <div class="qc-reporting-selected-scope" aria-live="polite">
@@ -181,15 +193,15 @@
                 <table>
                   <thead>
                     <tr>
-                      <th>Technician</th>
-                      <th class="table-numeric">Reviewed Units</th>
-                      <th class="table-numeric">First-Pass Accepted</th>
-                      <th class="table-numeric">Currently Accepted</th>
-                      <th class="table-numeric">Rejected First Pass</th>
-                      <th class="table-numeric">Corrected After Rejection</th>
-                      <th class="table-numeric">Pending Correction</th>
-                      <th class="table-numeric">Ready for Recheck</th>
-                      <th class="table-numeric">Rechecked Units</th>
+                      <th><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="text" data-sort-initial="asc">Technician<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Reviewed Units<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">First-Pass Accepted<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Currently Accepted<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Rejected First Pass<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Corrected After Rejection<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Pending Correction<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Ready for Recheck<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Rechecked Units<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -198,73 +210,28 @@
                     <% } %>
 
                     <% report.technicianComparisons.forEach((technician) => { %>
-                      <tr>
-                        <td><strong><%= technician.technicianName %></strong></td>
-                        <td class="table-numeric"><%= formatNumber(technician.reviewedUnits) %></td>
-                        <td class="table-numeric">
+                      <tr data-qc-report-sort-row>
+                        <td data-sort-value="<%= String(technician.technicianName || '').toLocaleLowerCase('en-US') %>"><strong><%= technician.technicianName %></strong></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(technician.reviewedUnits) %>"><%= formatNumber(technician.reviewedUnits) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(technician.firstPassAcceptedUnits) %>">
                           <span class="table-value-inline" aria-label="<%= formatNumber(technician.firstPassAcceptedUnits) %> first-pass accepted; QC Grade <%= formatQcPercent(technician.qualityGrade) %>">
                             <strong><%= formatNumber(technician.firstPassAcceptedUnits) %></strong>
                             <span class="table-value-inline-separator" aria-hidden="true">·</span>
                             <small><%= formatQcPercent(technician.qualityGrade) %></small>
                           </span>
                         </td>
-                        <td class="table-numeric">
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(technician.currentlyAcceptedUnits) %>">
                           <span class="table-value-inline" aria-label="<%= formatNumber(technician.currentlyAcceptedUnits) %> currently accepted; Current Acceptance <%= formatQcPercent(technician.currentAcceptanceRate) %>">
                             <strong><%= formatNumber(technician.currentlyAcceptedUnits) %></strong>
                             <span class="table-value-inline-separator" aria-hidden="true">·</span>
                             <small><%= formatQcPercent(technician.currentAcceptanceRate) %></small>
                           </span>
                         </td>
-                        <td class="table-numeric"><%= formatNumber(technician.firstPassRejectedUnits) %></td>
-                        <td class="table-numeric"><%= formatNumber(technician.correctedUnits) %></td>
-                        <td class="table-numeric"><span class="pill <%= technician.pendingCorrectionUnits > 0 ? 'bad' : 'neutral' %>"><%= formatNumber(technician.pendingCorrectionUnits) %></span></td>
-                        <td class="table-numeric"><span class="pill <%= technician.readyForRecheckUnits > 0 ? 'warning' : 'neutral' %>"><%= formatNumber(technician.readyForRecheckUnits) %></span></td>
-                        <td class="table-numeric"><%= formatNumber(technician.repeatedReviewUnits) %></td>
-                      </tr>
-                    <% }) %>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
-
-          <section class="site-clean-section site-clean-surface">
-            <div class="site-clean-section-heading">
-              <div>
-                <h2>Rejection Patterns</h2>
-                <p class="site-section-description">Exact rejection notes are grouped after whitespace and capitalization are normalized. Similar wording is not automatically merged.</p>
-              </div>
-              <span class="pill neutral"><%= formatNumber(report.rejectionActions) %> rejection action<%= report.rejectionActions === 1 ? '' : 's' %></span>
-            </div>
-
-            <div class="table-card">
-              <div class="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Rejection Note</th>
-                      <th class="table-numeric">Occurrences</th>
-                      <th class="table-numeric">Technicians</th>
-                      <th class="table-numeric">Resolved Later</th>
-                      <th class="table-numeric">Pending Correction</th>
-                      <th class="table-numeric">Ready for Recheck</th>
-                      <th class="table-numeric">Most Recent</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% if (!report.rejectionPatterns.length) { %>
-                      <tr><td colspan="7">No QC rejection notes match the selected reporting scope.</td></tr>
-                    <% } %>
-
-                    <% report.rejectionPatterns.forEach((pattern) => { %>
-                      <tr>
-                        <td class="table-wrap-cell"><span><%= pattern.reason %></span></td>
-                        <td class="table-numeric"><%= formatNumber(pattern.occurrences) %></td>
-                        <td class="table-numeric"><%= formatNumber(pattern.techniciansAffected) %></td>
-                        <td class="table-numeric"><%= formatNumber(pattern.resolvedAfterCorrection) %></td>
-                        <td class="table-numeric"><%= formatNumber(pattern.pendingCorrection) %></td>
-                        <td class="table-numeric"><%= formatNumber(pattern.readyForRecheck) %></td>
-                        <td class="table-numeric"><%= pattern.latestReviewedAt ? formatDateTime(pattern.latestReviewedAt) : '—' %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(technician.firstPassRejectedUnits) %>"><%= formatNumber(technician.firstPassRejectedUnits) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(technician.correctedUnits) %>"><%= formatNumber(technician.correctedUnits) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(technician.pendingCorrectionUnits) %>"><span class="pill <%= technician.pendingCorrectionUnits > 0 ? 'bad' : 'neutral' %>"><%= formatNumber(technician.pendingCorrectionUnits) %></span></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(technician.readyForRecheckUnits) %>"><span class="pill <%= technician.readyForRecheckUnits > 0 ? 'warning' : 'neutral' %>"><%= formatNumber(technician.readyForRecheckUnits) %></span></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(technician.repeatedReviewUnits) %>"><%= formatNumber(technician.repeatedReviewUnits) %></td>
                       </tr>
                     <% }) %>
                   </tbody>
@@ -287,15 +254,15 @@
                 <table>
                   <thead>
                     <tr>
-                      <th>Reviewer</th>
-                      <th class="table-numeric">Reviews</th>
-                      <th class="table-numeric">Accepted</th>
-                      <th class="table-numeric">Rejected</th>
-                      <th class="table-numeric">Acceptance Rate</th>
-                      <th class="table-numeric">First-pass Reviews</th>
-                      <th class="table-numeric">Rechecks</th>
-                      <th class="table-numeric">Technicians Reviewed</th>
-                      <th class="table-numeric">Most Recent</th>
+                      <th><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="text" data-sort-initial="asc">Reviewer<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Reviews<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Accepted<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Rejected<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Acceptance Rate<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">First-pass Reviews<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Rechecks<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Technicians Reviewed<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="date" data-sort-initial="desc">Most Recent<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
                     </tr>
                   </thead>
                   <tbody>
@@ -304,16 +271,16 @@
                     <% } %>
 
                     <% report.reviewerActivity.forEach((reviewer) => { %>
-                      <tr>
-                        <td><strong><%= reviewer.reviewerName %></strong></td>
-                        <td class="table-numeric"><%= formatNumber(reviewer.reviews) %></td>
-                        <td class="table-numeric"><%= formatNumber(reviewer.acceptedReviews) %></td>
-                        <td class="table-numeric"><%= formatNumber(reviewer.rejectedReviews) %></td>
-                        <td class="table-numeric"><%= formatQcPercent(reviewer.acceptanceRate) %></td>
-                        <td class="table-numeric"><%= formatNumber(reviewer.firstPassReviews) %></td>
-                        <td class="table-numeric"><%= formatNumber(reviewer.rechecks) %></td>
-                        <td class="table-numeric"><%= formatNumber(reviewer.techniciansReviewed) %></td>
-                        <td class="table-numeric"><%= reviewer.latestReviewedAt ? formatDateTime(reviewer.latestReviewedAt) : '—' %></td>
+                      <tr data-qc-report-sort-row>
+                        <td data-sort-value="<%= String(reviewer.reviewerName || '').toLocaleLowerCase('en-US') %>"><strong><%= reviewer.reviewerName %></strong></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.reviews) %>"><%= formatNumber(reviewer.reviews) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.acceptedReviews) %>"><%= formatNumber(reviewer.acceptedReviews) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.rejectedReviews) %>"><%= formatNumber(reviewer.rejectedReviews) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.acceptanceRate) %>"><%= formatQcPercent(reviewer.acceptanceRate) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.firstPassReviews) %>"><%= formatNumber(reviewer.firstPassReviews) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.rechecks) %>"><%= formatNumber(reviewer.rechecks) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.techniciansReviewed) %>"><%= formatNumber(reviewer.techniciansReviewed) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableDate(reviewer.latestReviewedAt) %>"><%= reviewer.latestReviewedAt ? formatDateTime(reviewer.latestReviewedAt) : '—' %></td>
                       </tr>
                     <% }) %>
                   </tbody>

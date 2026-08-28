@@ -59,12 +59,11 @@ function createEmptyManagementQcReport() {
     activeReviewers: 0,
     rejectionActions: 0,
     technicianComparisons: [],
-    reviewerActivity: [],
-    rejectionPatterns: []
+    reviewerActivity: []
   };
 }
 
-function buildManagementQcReport(sourceRows = [], { rejectionPatternLimit = 20 } = {}) {
+function buildManagementQcReport(sourceRows = []) {
   const rows = (Array.isArray(sourceRows) ? sourceRows : [])
     .map(normalizeReportingRow)
     .filter(Boolean)
@@ -77,11 +76,8 @@ function buildManagementQcReport(sourceRows = [], { rejectionPatternLimit = 20 }
   const summary = calculateQcGradeSummary(rows);
   const technicianNames = new Map();
   const reviewerGroups = new Map();
-  const rejectionGroups = new Map();
   const cycles = groupReviewActionsByCompletion(rows);
   const firstReviewIds = new Set();
-  const latestReviewIds = new Set();
-  const laterAcceptedAfterReview = new Set();
 
   rows.forEach((row) => {
     technicianNames.set(row.technicianUserId, row.technicianName);
@@ -92,14 +88,6 @@ function buildManagementQcReport(sourceRows = [], { rejectionPatternLimit = 20 }
     if (actions.length === 0) return;
 
     firstReviewIds.add(actions[0].unitQcCheckId);
-    latestReviewIds.add(actions[actions.length - 1].unitQcCheckId);
-
-    actions.forEach((action, index) => {
-      if (action.decisionCode !== 'rejected') return;
-      if (actions.slice(index + 1).some((laterAction) => laterAction.decisionCode === 'accepted')) {
-        laterAcceptedAfterReview.add(action.unitQcCheckId);
-      }
-    });
   });
 
   rows.forEach((row) => {
@@ -129,35 +117,6 @@ function buildManagementQcReport(sourceRows = [], { rejectionPatternLimit = 20 }
       reviewer.latestReviewedAt = row.reviewedAt;
     }
 
-    if (row.decisionCode !== 'rejected') return;
-
-    const normalizedNotes = row.reviewNotes.replace(/\s+/g, ' ').trim();
-    const reasonLabel = normalizedNotes || 'No rejection note recorded';
-    const reasonKey = reasonLabel.toLocaleLowerCase('en-US');
-
-    if (!rejectionGroups.has(reasonKey)) {
-      rejectionGroups.set(reasonKey, {
-        reason: reasonLabel,
-        occurrences: 0,
-        technicianIds: new Set(),
-        reviewerIds: new Set(),
-        pendingCorrection: 0,
-        readyForRecheck: 0,
-        resolvedAfterCorrection: 0,
-        latestReviewedAt: null
-      });
-    }
-
-    const pattern = rejectionGroups.get(reasonKey);
-    pattern.occurrences += 1;
-    pattern.technicianIds.add(row.technicianUserId);
-    if (row.reviewerUserId) pattern.reviewerIds.add(row.reviewerUserId);
-    pattern.pendingCorrection += latestReviewIds.has(row.unitQcCheckId) && !row.hasCorrectionSubmission ? 1 : 0;
-    pattern.readyForRecheck += latestReviewIds.has(row.unitQcCheckId) && row.hasCorrectionSubmission ? 1 : 0;
-    pattern.resolvedAfterCorrection += laterAcceptedAfterReview.has(row.unitQcCheckId) ? 1 : 0;
-    if (!pattern.latestReviewedAt || compareNullableDatesDescending(row.reviewedAt, pattern.latestReviewedAt) < 0) {
-      pattern.latestReviewedAt = row.reviewedAt;
-    }
   });
 
   const technicianComparisons = calculateQcGradeSummariesByTechnician(rows)
@@ -191,26 +150,6 @@ function buildManagementQcReport(sourceRows = [], { rejectionPatternLimit = 20 }
       || left.reviewerName.localeCompare(right.reviewerName)
     ));
 
-  const safePatternLimit = Number.isSafeInteger(Number(rejectionPatternLimit)) && Number(rejectionPatternLimit) > 0
-    ? Number(rejectionPatternLimit)
-    : 20;
-  const rejectionPatterns = [...rejectionGroups.values()]
-    .map((pattern) => ({
-      reason: pattern.reason,
-      occurrences: pattern.occurrences,
-      techniciansAffected: pattern.technicianIds.size,
-      reviewersInvolved: pattern.reviewerIds.size,
-      pendingCorrection: pattern.pendingCorrection,
-      readyForRecheck: pattern.readyForRecheck,
-      resolvedAfterCorrection: pattern.resolvedAfterCorrection,
-      latestReviewedAt: pattern.latestReviewedAt
-    }))
-    .sort((left, right) => (
-      right.occurrences - left.occurrences
-      || compareNullableDatesDescending(left.latestReviewedAt, right.latestReviewedAt)
-      || left.reason.localeCompare(right.reason)
-    ))
-    .slice(0, safePatternLimit);
 
   const report = {
     summary,
@@ -218,8 +157,7 @@ function buildManagementQcReport(sourceRows = [], { rejectionPatternLimit = 20 }
     activeReviewers: reviewerActivity.length,
     rejectionActions: rows.filter((row) => row.decisionCode === 'rejected').length,
     technicianComparisons,
-    reviewerActivity,
-    rejectionPatterns
+    reviewerActivity
   };
 
   assertValidManagementQcReport(report);

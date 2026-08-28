@@ -20,6 +20,11 @@ test('Stage 9H exposes Management QC Reporting only through Admin and Management
   assert.match(sidebar, /management-qc-reporting/);
   assert.match(sidebar, />QC Reporting</);
   assert.doesNotMatch(routeBlock, /unitBrowserRoles/);
+
+  const policy = require('../config/accessPolicy');
+  assert.deepEqual([...policy.QC_REPORTING_ROLE_CODES], ['admin', 'management']);
+  assert.equal(policy.hasAnyAssignedRole(['tech_lead'], policy.QC_REPORTING_ROLE_CODES), false);
+  assert.equal(policy.canAccessMenuArea(['tech_lead'], 'management'), false);
 });
 
 test('Stage 9H reporting query excludes reversed completions and preserves reviewer and correction context', () => {
@@ -39,7 +44,7 @@ test('Stage 9H provides one compact summary and shared table-based reporting rat
   assert.match(page, /class="site-summary-panel"/);
   assert.match(page, /class="content-shell site-work-page"/);
   assert.match(page, />Technician Comparison</);
-  assert.match(page, />Rejection Patterns</);
+  assert.doesNotMatch(page, />Rejection Patterns</);
   assert.match(page, />Reviewer Activity</);
   assert.match(page, /class="table-card"/);
   assert.match(page, /class="table-numeric"/);
@@ -57,9 +62,8 @@ test('Stage 9H retains first-pass quality, current acceptance, correction status
   assert.match(service, /calculateQcGradeSummariesByTechnician/);
   assert.match(service, /firstPassReviews/);
   assert.match(service, /rechecks/);
-  assert.match(service, /pendingCorrection/);
-  assert.match(service, /readyForRecheck/);
-  assert.match(service, /resolvedAfterCorrection/);
+  assert.match(service, /pendingCorrectionUnits/);
+  assert.match(service, /readyForRecheckUnits/);
   assert.match(page, />First-Pass Accepted</);
   assert.match(page, />Currently Accepted</);
   assert.match(page, /technician\.firstPassAcceptedUnits/);

@@ -88,6 +88,9 @@
   const browserBasePath = typeof unitBrowserBasePath !== 'undefined' && unitBrowserBasePath
     ? String(unitBrowserBasePath)
     : '/tech/units';
+  const browserPresentation = unitBrowserPresentation || {};
+  const browserColumns = Array.isArray(browserPresentation.columns) ? browserPresentation.columns : [];
+  const browserColumnCount = Number(browserPresentation.renderedColumnCount) || browserColumns.length;
   const canDeleteTechUnits = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const canManageUnitLifecycle = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
   const canApproveUnitOutcomes = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
@@ -111,6 +114,8 @@
   const activeSort = String((filters && filters.sort) || 'date_desc');
   const sortQueryKeys = [
     'search',
+    'searchMode',
+    'palletNumber',
     'lotId',
     'lotScope',
     'categoryId',
@@ -231,66 +236,89 @@
 <% } %>
 
 <div class="table-card tech-table-card">
-  <table class="tech-units-table">
+  <table class="tech-units-table<%= isSingleUnitViewPage ? ' table-density-compact table-layout-auto-fit table-leading-column-floor' : '' %>" data-unit-browser-layout-signature="<%= browserPresentation.layoutSignature || '' %>" style="--tu-table-base-width: <%= browserPresentation.tableMinimumWidthPx %>px; --tu-unit-base-width: <%= browserPresentation.unitColumnMinimumWidthPx %>px; --table-leading-column-min-width: <%= browserPresentation.unitColumnMinimumWidthPx %>px; --tu-rendered-column-count: <%= browserColumnCount %>; --tu-secondary-column-count: <%= browserPresentation.secondaryColumnCount %>; --tu-secondary-growth-unit-count: <%= browserPresentation.secondaryGrowthUnitCount %>;">
     <colgroup>
-      <col class="tech-units-col tech-units-col--unit">
-      <col class="tech-units-col tech-units-col--date">
-      <col class="tech-units-col tech-units-col--work">
-      <col class="tech-units-col tech-units-col--identifiers">
-      <col class="tech-units-col tech-units-col--grade">
-      <col class="tech-units-col tech-units-col--qc">
-      <col class="tech-units-col tech-units-col--actions">
+      <% browserColumns.forEach((column) => { %>
+        <col class="tech-units-col tech-units-col--<%= column.key %> tech-units-col--grow-<%= column.growthUnits %>" style="--tu-column-base-width: <%= column.minimumWidthPx %>px;">
+      <% }) %>
     </colgroup>
     <thead>
       <tr>
-        <th>Unit<%= canViewCurrentLotWeight ? ' / Weight' : '' %></th>
-        <th>
-          <a class="<%= sortLinkClass('date_desc', 'date_asc') %>" href="<%= makeUnitSortUrl(nextSortValue('date_desc', 'date_asc')) %>" <%= sortAriaCurrent('date_desc', 'date_asc') ? 'aria-current="page"' : '' %>>
-            Date
-            <% if (sortDirectionIndicator('date_desc', 'date_asc', '↓', '↑')) { %><span aria-hidden="true"><%= sortDirectionIndicator('date_desc', 'date_asc', '↓', '↑') %></span><% } %>
-          </a>
-        </th>
-        <th>
-          <a class="<%= sortLinkClass('tech_az', 'tech_za') %>" href="<%= makeUnitSortUrl(nextSortValue('tech_az', 'tech_za')) %>" <%= sortAriaCurrent('tech_az', 'tech_za') ? 'aria-current="page"' : '' %>>
-            Work / Assignment
-            <% if (sortDirectionIndicator('tech_az', 'tech_za')) { %><span aria-hidden="true"><%= sortDirectionIndicator('tech_az', 'tech_za') %></span><% } %>
-          </a>
-        </th>
-        <th>Identifiers</th>
-        <th>
-          <span class="table-sort-group" aria-label="Grade and pass-fail sorting">
-            <a class="<%= sortLinkClass('grade_asc', 'grade_desc') %>" href="<%= makeUnitSortUrl(nextSortValue('grade_asc', 'grade_desc')) %>" <%= sortAriaCurrent('grade_asc', 'grade_desc') ? 'aria-current="page"' : '' %>>
-              Grade
-              <% if (sortDirectionIndicator('grade_asc', 'grade_desc')) { %><span aria-hidden="true"><%= sortDirectionIndicator('grade_asc', 'grade_desc') %></span><% } %>
-            </a>
-            <span class="table-sort-group__separator" aria-hidden="true">/</span>
-            <a class="<%= sortLinkClass('outcome_pass_first', 'outcome_fail_first') %>" href="<%= makeUnitSortUrl(nextSortValue('outcome_pass_first', 'outcome_fail_first')) %>" <%= sortAriaCurrent('outcome_pass_first', 'outcome_fail_first') ? 'aria-current="page"' : '' %>>
-              Pass-Fail
-              <% if (sortDirectionIndicator('outcome_pass_first', 'outcome_fail_first')) { %><span aria-hidden="true"><%= sortDirectionIndicator('outcome_pass_first', 'outcome_fail_first') %></span><% } %>
-            </a>
-          </span>
-        </th>
-        <th class="tech-units-qc-column" scope="col">
-          <a
-            class="tech-units-qc-column-label <%= sortLinkClass('qc_status_desc', 'qc_status_asc') %>"
-            href="<%= makeUnitSortUrl(nextSortValue('qc_status_desc', 'qc_status_asc')) %>"
-            <%= sortAriaCurrent('qc_status_desc', 'qc_status_asc') ? 'aria-current="page"' : '' %>
-            aria-label="Sort Units by Quality Control status"
-          >
-            QC
-            <% if (sortDirectionIndicator('qc_status_desc', 'qc_status_asc', '↓', '↑')) { %><span aria-hidden="true"><%= sortDirectionIndicator('qc_status_desc', 'qc_status_asc', '↓', '↑') %></span><% } %>
-          </a>
-        </th>
-        <th class="tech-units-actions-column" scope="col">
-          <span class="tech-units-actions-column-label">Unit Actions</span>
-        </th>
+        <% browserColumns.forEach((column) => { %>
+          <% if (column.key === 'unit_weight') { %>
+            <th class="tech-units-browser-header tech-units-browser-header--<%= column.spacingProfile %> tech-units-browser-header--unit_weight">Unit<%= canViewCurrentLotWeight ? ' / Weight' : '' %></th>
+          <% } else if (column.key === 'created_work_assignment') { %>
+            <th class="tech-units-browser-header tech-units-browser-header--<%= column.spacingProfile %>">
+              <span class="table-sort-group table-sort-group--created-work" aria-label="Created date and assignment sorting">
+                <a class="<%= sortLinkClass('date_desc', 'date_asc') %>" href="<%= makeUnitSortUrl(nextSortValue('date_desc', 'date_asc')) %>" <%= sortAriaCurrent('date_desc', 'date_asc') ? 'aria-current="page"' : '' %>>
+                  Created
+                  <% if (sortDirectionIndicator('date_desc', 'date_asc', '↓', '↑')) { %><span aria-hidden="true"><%= sortDirectionIndicator('date_desc', 'date_asc', '↓', '↑') %></span><% } %>
+                </a>
+                <span class="table-sort-group__separator" aria-hidden="true">/</span>
+                <a class="<%= sortLinkClass('tech_az', 'tech_za') %>" href="<%= makeUnitSortUrl(nextSortValue('tech_az', 'tech_za')) %>" <%= sortAriaCurrent('tech_az', 'tech_za') ? 'aria-current="page"' : '' %>>
+                  Assignment
+                  <% if (sortDirectionIndicator('tech_az', 'tech_za')) { %><span aria-hidden="true"><%= sortDirectionIndicator('tech_az', 'tech_za') %></span><% } %>
+                </a>
+              </span>
+            </th>
+          <% } else if (column.key === 'identifiers') { %>
+            <th class="tech-units-browser-header tech-units-browser-header--<%= column.spacingProfile %>">
+              <span class="tech-unit-identifiers-header">
+                <span>Identifiers</span>
+                <span class="table-sort-group table-sort-group--identifiers" aria-label="Identifier sorting">
+                  <a class="<%= sortLinkClass('asset_asc', 'asset_desc') %>" href="<%= makeUnitSortUrl(nextSortValue('asset_asc', 'asset_desc')) %>" <%= sortAriaCurrent('asset_asc', 'asset_desc') ? 'aria-current="page"' : '' %>>
+                    Asset
+                    <% if (sortDirectionIndicator('asset_asc', 'asset_desc')) { %><span aria-hidden="true"><%= sortDirectionIndicator('asset_asc', 'asset_desc') %></span><% } %>
+                  </a>
+                  <span class="table-sort-group__separator" aria-hidden="true">/</span>
+                  <a class="<%= sortLinkClass('az_asc', 'az_desc') %>" href="<%= makeUnitSortUrl(nextSortValue('az_asc', 'az_desc')) %>" <%= sortAriaCurrent('az_asc', 'az_desc') ? 'aria-current="page"' : '' %>>
+                    AZ
+                    <% if (sortDirectionIndicator('az_asc', 'az_desc')) { %><span aria-hidden="true"><%= sortDirectionIndicator('az_asc', 'az_desc') %></span><% } %>
+                  </a>
+                </span>
+              </span>
+            </th>
+          <% } else if (column.key === 'grade_pass_fail') { %>
+            <th class="tech-units-browser-header tech-units-browser-header--<%= column.spacingProfile %>">
+              <span class="table-sort-group" aria-label="Grade and pass-fail sorting">
+                <a class="<%= sortLinkClass('grade_asc', 'grade_desc') %>" href="<%= makeUnitSortUrl(nextSortValue('grade_asc', 'grade_desc')) %>" <%= sortAriaCurrent('grade_asc', 'grade_desc') ? 'aria-current="page"' : '' %>>
+                  Grade
+                  <% if (sortDirectionIndicator('grade_asc', 'grade_desc')) { %><span aria-hidden="true"><%= sortDirectionIndicator('grade_asc', 'grade_desc') %></span><% } %>
+                </a>
+                <span class="table-sort-group__separator" aria-hidden="true">/</span>
+                <a class="<%= sortLinkClass('outcome_pass_first', 'outcome_fail_first') %>" href="<%= makeUnitSortUrl(nextSortValue('outcome_pass_first', 'outcome_fail_first')) %>" <%= sortAriaCurrent('outcome_pass_first', 'outcome_fail_first') ? 'aria-current="page"' : '' %>>
+                  Pass-Fail
+                  <% if (sortDirectionIndicator('outcome_pass_first', 'outcome_fail_first')) { %><span aria-hidden="true"><%= sortDirectionIndicator('outcome_pass_first', 'outcome_fail_first') %></span><% } %>
+                </a>
+              </span>
+            </th>
+          <% } else if (column.key === 'qc') { %>
+            <th class="tech-units-browser-header tech-units-browser-header--<%= column.spacingProfile %> tech-units-qc-column" scope="col">
+              <a
+                class="tech-units-qc-column-label <%= sortLinkClass('qc_status_desc', 'qc_status_asc') %>"
+                href="<%= makeUnitSortUrl(nextSortValue('qc_status_desc', 'qc_status_asc')) %>"
+                <%= sortAriaCurrent('qc_status_desc', 'qc_status_asc') ? 'aria-current="page"' : '' %>
+                aria-label="Sort Units by Quality Control status"
+              >
+                QC
+                <% if (sortDirectionIndicator('qc_status_desc', 'qc_status_asc', '↓', '↑')) { %><span aria-hidden="true"><%= sortDirectionIndicator('qc_status_desc', 'qc_status_asc', '↓', '↑') %></span><% } %>
+              </a>
+            </th>
+          <% } else if (['amazon_ids', 'amazon_logistics', 'completion', 'system_bios', 'display_power', 'security_locks', 'comments'].includes(column.key)) { %>
+            <th class="tech-units-browser-header tech-units-browser-header--<%= column.spacingProfile %>"><%= column.label %></th>
+          <% } else if (column.key === 'unit_actions') { %>
+            <th class="tech-units-browser-header tech-units-browser-header--<%= column.spacingProfile %> tech-units-actions-column" scope="col">
+              <span class="tech-units-actions-column-label">Unit Actions</span>
+            </th>
+          <% } %>
+        <% }) %>
       </tr>
     </thead>
 
     <% if (result.units.length === 0) { %>
       <tbody data-unit-empty-state>
         <tr>
-          <td colspan="7">No units match the current filters.</td>
+          <td colspan="<%= browserColumnCount %>">No units match the current filters.</td>
         </tr>
       </tbody>
     <% } %>
@@ -305,6 +333,8 @@
         <%
           const expanded = unit.expandedDetails || {};
           const identifiers = Array.isArray(expanded.identifiers) ? expanded.identifiers : [];
+          const amazonDetails = expanded.amazonDetails || {};
+          const hasAmazonDetails = Boolean(amazonDetails.amazonAssetTag || amazonDetails.fnsku || amazonDetails.asin || amazonDetails.trackingNumber || amazonDetails.palletNumber || amazonDetails.buyerComments);
           const specifications = expanded.specifications || null;
           const specsTests = expanded.specsTests || null;
           const currentGrade = expanded.currentGrade || null;
@@ -321,6 +351,7 @@
           const hardwareIssues = Array.isArray(expanded.hardwareIssues) ? expanded.hardwareIssues : [];
           const comments = Array.isArray(expanded.comments) ? expanded.comments : [];
           const assetTagValue = displayAssetTag(unit.assetTag || identifierValue(identifiers, 'asset_tag')) || '—';
+          const amazonAssetTagValue = identifierValue(identifiers, 'amazon_asset_tag');
           const biosSerialValue = identifierValue(identifiers, 'bios_serial_number') || '—';
           const unitSerialValue = identifierValue(identifiers, 'unit_serial_number') || '—';
           const currentGradeLabel = currentGrade && currentGrade.gradeLabel ? currentGrade.gradeLabel : '—';
@@ -339,7 +370,8 @@
           const latestQcCorrection = unit.latestQcCorrection || null;
           const hasPendingManualOverride = Boolean(latestManualOverride && latestManualOverride.isPending);
           const canSubmitQcCorrection = Boolean(
-            latestQcReview
+            unit.qcRequired !== false
+            && latestQcReview
             && latestQcReview.decisionCode === 'rejected'
             && !latestQcCorrection
             && !unit.isParked
@@ -357,10 +389,58 @@
           );
           const unitCreatedDate = formatUnitCreatedDate(unit.createdAt);
           const unitCreatedTime = formatUnitCreatedTime(unit.createdAt);
+          const latestCompletion = unit.latestWorkCompletion || null;
+          const specsLabels = specsTests && specsTests.labels ? specsTests.labels : {};
+          const batteryRows = specsTests && Array.isArray(specsTests.batteries) ? specsTests.batteries : [];
+          const batteryHealthText = batteryRows
+            .map((battery) => String(battery.healthPercent || '').trim())
+            .filter(Boolean)
+            .map((value) => `${value}%`)
+            .join(' / ');
+          const commentLinks = [];
+
+          if (amazonDetails.buyerComments) {
+            commentLinks.push({ key: 'buyer', label: 'Buyer Comments', text: String(amazonDetails.buyerComments) });
+          }
+
+          const generalCommentText = comments
+            .filter((comment) => String(comment.commentText || '').trim())
+            .map((comment) => {
+              const meta = [comment.noteTypeLabel || 'General Comment', comment.createdByName || ''].filter(Boolean).join(' · ');
+              return `${meta}\n${String(comment.commentText || '').trim()}`;
+            })
+            .join('\n\n');
+          if (generalCommentText) {
+            commentLinks.push({ key: 'general', label: 'General Comments', text: generalCommentText });
+          }
+
+          const hardwareCommentText = hardwareIssues
+            .filter((issue) => String(issue.issueRemark || '').trim())
+            .map((issue) => {
+              const meta = [issue.issueLabel || 'Hardware Issue', issue.locationLabel || ''].filter(Boolean).join(' · ');
+              return `${meta}\n${String(issue.issueRemark || '').trim()}`;
+            })
+            .join('\n\n');
+          if (hardwareCommentText) {
+            commentLinks.push({ key: 'hardware', label: 'Hardware Comments', text: hardwareCommentText });
+          }
+
+          const cosmeticCommentText = cosmeticIssues
+            .filter((issue) => String(issue.issueRemark || '').trim())
+            .map((issue) => {
+              const meta = [issue.issueLabel || 'Cosmetic Issue', issue.severityLabel || '', issue.locationLabel || ''].filter(Boolean).join(' · ');
+              return `${meta}\n${String(issue.issueRemark || '').trim()}`;
+            })
+            .join('\n\n');
+          if (cosmeticCommentText) {
+            commentLinks.push({ key: 'cosmetic', label: 'Cosmetic Comments', text: cosmeticCommentText });
+          }
         %>
 
         <tr class="tech-summary-row" data-unit-summary-row data-target="tech-unit-detail-<%= unit.unitId %>">
-          <td>
+          <% browserColumns.forEach((column) => { %>
+          <% if (column.key === 'unit_weight') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-browser-cell--unit_weight">
             <button
               type="button"
               class="tech-unit-toggle tech-unit-summary-toggle"
@@ -402,37 +482,36 @@
               </span>
             </button>
           </td>
+          <% } %>
+          <% if (column.key === 'created_work_assignment') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-browser-cell--created_work_assignment">
+            <div class="tech-unit-summary-created-work">
+              <span class="tech-unit-summary-created">
+                <span><%= unitCreatedDate %></span>
+                <% if (unitCreatedTime) { %>
+                  <small class="tech-unit-summary-created-time"><%= unitCreatedTime %></small>
+                <% } %>
+              </span>
 
-          <td>
-            <span class="tech-unit-summary-created">
-              <span><%= unitCreatedDate %></span>
-              <% if (unitCreatedTime) { %>
-                <small><%= unitCreatedTime %></small>
-              <% } %>
-            </span>
+              <span class="tech-unit-summary-work-stack">
+                <span class="tech-unit-summary-tech-user"><%= assignedTechName %></span>
+              </span>
+            </div>
           </td>
-
-          <td>
-            <span class="tech-unit-summary-work-stack">
-              <small class="tech-outcome-status">Assigned To</small>
-              <span class="tech-unit-summary-tech-user"><%= assignedTechName %></span>
-              <% if (latestManualOverride) { %>
-                <small class="tech-outcome-status">
-                  Override <%= latestManualOverride.statusLabel %>
-                  <% if (latestManualOverride.requestedDestinationLotName) { %>
-                    · <%= latestManualOverride.requestedDestinationLotName %>
-                  <% } %>
-                </small>
-              <% } %>
-            </span>
-          </td>
-
-          <td>
+          <% } %>
+          <% if (column.key === 'identifiers') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-browser-cell--identifiers">
             <div class="tech-unit-summary-identifiers" aria-label="Unit identifiers">
               <span class="tech-unit-summary-id-item">
                 <span class="tech-unit-summary-id-label">Asset</span>
                 <span class="tech-unit-summary-id-value"><%= assetTagValue %></span>
               </span>
+              <% if (amazonAssetTagValue) { %>
+                <span class="tech-unit-summary-id-item">
+                  <span class="tech-unit-summary-id-label">AZ</span>
+                  <span class="tech-unit-summary-id-value"><%= amazonAssetTagValue %></span>
+                </span>
+              <% } %>
               <span class="tech-unit-summary-id-item">
                 <span class="tech-unit-summary-id-label">BIOS</span>
                 <span class="tech-unit-summary-id-value"><%= biosSerialValue %></span>
@@ -443,8 +522,9 @@
               </span>
             </div>
           </td>
-
-          <td>
+          <% } %>
+          <% if (column.key === 'grade_pass_fail') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-browser-cell--grade_pass_fail">
             <div class="tech-unit-summary-grade-stack">
               <div class="tech-unit-summary-grade-row">
                 <span class="tech-unit-summary-grade"><%= currentGradeLabel %></span>
@@ -466,9 +546,18 @@
               <% } %>
             </div>
           </td>
-
-          <td class="tech-units-qc-cell">
-            <% if (latestQcReview) { %>
+          <% } %>
+          <% if (column.key === 'qc') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-qc-cell">
+            <% if (unit.qcReviewStateCode === 'not_required') { %>
+              <span
+                class="tech-qc-status-empty tech-qc-tooltip--not-required"
+                data-qc-tooltip="<%= unit.qcReviewStateLabel || 'QC not required for this Lot' %>"
+                aria-label="<%= unit.qcReviewStateLabel || 'QC not required for this Lot' %>"
+              >
+                <%- include('tech-unit-qc-status-icon', { statusCode: 'not_required', decisionCode: '' }) %>
+              </span>
+            <% } else if (latestQcReview) { %>
               <%
                 const qcTooltipTone = ['accepted', 'corrected'].includes(unit.qcReviewStateCode)
                   ? 'accepted'
@@ -477,7 +566,7 @@
               %>
               <a
                 class="tech-qc-status-link tech-qc-tooltip--<%= qcTooltipTone %>"
-                href="/tech/units/<%= unit.unitId %>/qc-review/details/modal"
+                href="/tech/units/<%= unit.unitId %>/qc-review/details/modal<%= isQcPortalMode ? '?qcPortal=1' : '' %>"
                 data-tech-modal-trigger
                 data-no-row-toggle
                 data-qc-tooltip="<%= qcTooltipLabel %>"
@@ -488,16 +577,127 @@
             <% } else { %>
               <% const qcTooltipLabel = unit.qcReviewStateLabel || 'QC not performed'; %>
               <span
-                class="tech-qc-status-empty tech-qc-tooltip--neutral"
+                class="tech-qc-status-empty tech-qc-tooltip--pending"
                 data-qc-tooltip="<%= qcTooltipLabel %>"
                 aria-label="<%= qcTooltipLabel %>"
               >
-                <%- include('tech-unit-qc-status-icon', { statusCode: 'not_reviewed', decisionCode: '' }) %>
+                <%- include('tech-unit-qc-status-icon', { statusCode: unit.qcReviewStateCode, decisionCode: '' }) %>
               </span>
             <% } %>
           </td>
-
-          <td class="tech-units-actions-cell">
+          <% } %>
+          <% if (column.key === 'amazon_ids') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-browser-cell--amazon_ids">
+            <div class="tech-unit-summary-data-stack" aria-label="Amazon identifiers">
+              <span class="tech-unit-summary-data-item">
+                <span class="tech-unit-summary-data-label">FNSKU</span>
+                <span class="tech-unit-summary-data-value"><%= amazonDetails.fnsku || '—' %></span>
+              </span>
+              <span class="tech-unit-summary-data-item">
+                <span class="tech-unit-summary-data-label">ASIN</span>
+                <span class="tech-unit-summary-data-value"><%= amazonDetails.asin || '—' %></span>
+              </span>
+            </div>
+          </td>
+          <% } %>
+          <% if (column.key === 'amazon_logistics') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-browser-cell--amazon_logistics">
+            <div class="tech-unit-summary-data-stack" aria-label="Amazon logistics">
+              <span class="tech-unit-summary-data-item">
+                <span class="tech-unit-summary-data-label">Tracking</span>
+                <span class="tech-unit-summary-data-value"><%= amazonDetails.trackingNumber || '—' %></span>
+              </span>
+              <span class="tech-unit-summary-data-item">
+                <span class="tech-unit-summary-data-label">Pallet</span>
+                <span class="tech-unit-summary-data-value"><%= amazonDetails.palletNumber || '—' %></span>
+              </span>
+            </div>
+          </td>
+          <% } %>
+          <% if (column.key === 'completion') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-browser-cell--completion">
+            <div class="tech-unit-summary-data-stack" aria-label="Completion">
+              <span class="tech-unit-summary-data-item">
+                <span class="tech-unit-summary-data-label">State</span>
+                <span class="tech-unit-summary-data-value"><%= latestCompletion ? 'Completed' : 'Not Completed' %></span>
+              </span>
+              <% if (latestCompletion) { %>
+                <span class="tech-unit-summary-data-item">
+                  <span class="tech-unit-summary-data-label">By</span>
+                  <span class="tech-unit-summary-data-value"><%= latestCompletion.completedByName || 'Unknown user' %></span>
+                </span>
+                <span class="tech-unit-summary-data-item">
+                  <span class="tech-unit-summary-data-label">At</span>
+                  <span class="tech-unit-summary-data-value"><%= latestCompletion.completedAt ? formatDateTime(latestCompletion.completedAt) : '—' %></span>
+                </span>
+              <% } %>
+            </div>
+          </td>
+          <% } %>
+          <% if (column.key === 'system_bios') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-browser-cell--system_bios">
+            <div class="tech-unit-summary-data-stack" aria-label="System and BIOS">
+              <span class="tech-unit-summary-data-item">
+                <span class="tech-unit-summary-data-label">OS</span>
+                <span class="tech-unit-summary-data-value tech-unit-summary-copy-value"><%= specifications && specifications.osBuild ? specifications.osBuild : '—' %></span>
+              </span>
+              <span class="tech-unit-summary-data-item">
+                <span class="tech-unit-summary-data-label">BIOS</span>
+                <span class="tech-unit-summary-data-value tech-unit-summary-copy-value"><%= specifications && specifications.biosVersion ? specifications.biosVersion : '—' %></span>
+              </span>
+              <% if (specsTests && specsTests.appleModelNumber) { %>
+                <span class="tech-unit-summary-data-item">
+                  <span class="tech-unit-summary-data-label">Apple</span>
+                  <span class="tech-unit-summary-data-value tech-unit-summary-copy-value"><%= specsTests.appleModelNumber %></span>
+                </span>
+              <% } %>
+            </div>
+          </td>
+          <% } %>
+          <% if (column.key === 'display_power') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-browser-cell--display_power">
+            <div class="tech-unit-summary-data-stack" aria-label="Display and power">
+              <span class="tech-unit-summary-data-item"><span class="tech-unit-summary-data-label">Display</span><span class="tech-unit-summary-data-value"><%= specsLabels.displayTypeConfigValueId || '—' %></span></span>
+              <span class="tech-unit-summary-data-item"><span class="tech-unit-summary-data-label">Resolution</span><span class="tech-unit-summary-data-value"><%= specsLabels.nativeScreenResolutionConfigValueId || '—' %></span></span>
+              <span class="tech-unit-summary-data-item"><span class="tech-unit-summary-data-label">Refresh</span><span class="tech-unit-summary-data-value"><%= specsLabels.refreshRateConfigValueId || '—' %></span></span>
+              <span class="tech-unit-summary-data-item"><span class="tech-unit-summary-data-label">Battery</span><span class="tech-unit-summary-data-value"><%= batteryHealthText || '—' %></span></span>
+              <span class="tech-unit-summary-data-item"><span class="tech-unit-summary-data-label">Charger</span><span class="tech-unit-summary-data-value"><%= specsLabels.chargerIncludedConfigValueId || '—' %></span></span>
+            </div>
+          </td>
+          <% } %>
+          <% if (column.key === 'security_locks') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-browser-cell--security_locks">
+            <div class="tech-unit-summary-data-stack" aria-label="Security and lock status">
+              <span class="tech-unit-summary-data-item"><span class="tech-unit-summary-data-label">BIOS</span><span class="tech-unit-summary-data-value"><%= specsLabels.biosLockConfigValueId || '—' %></span></span>
+              <span class="tech-unit-summary-data-item"><span class="tech-unit-summary-data-label">EFI</span><span class="tech-unit-summary-data-value"><%= specsLabels.efiLockConfigValueId || '—' %></span></span>
+              <span class="tech-unit-summary-data-item"><span class="tech-unit-summary-data-label">MDM</span><span class="tech-unit-summary-data-value"><%= specsLabels.mdmLockConfigValueId || '—' %></span></span>
+              <span class="tech-unit-summary-data-item"><span class="tech-unit-summary-data-label">iCloud</span><span class="tech-unit-summary-data-value"><%= specsLabels.icloudActivationLockConfigValueId || '—' %></span></span>
+              <span class="tech-unit-summary-data-item"><span class="tech-unit-summary-data-label">Absolute</span><span class="tech-unit-summary-data-value"><%= specifications && specifications.absoluteStatusLabel ? specifications.absoluteStatusLabel : '—' %></span></span>
+            </div>
+          </td>
+          <% } %>
+          <% if (column.key === 'comments') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-browser-cell--comments">
+            <% if (commentLinks.length > 0) { %>
+              <div class="tech-unit-browser-comment-links" aria-label="Available Unit comments">
+                <% commentLinks.forEach((commentLink) => { const sourceId = `unit-browser-comment-${unit.unitId}-${commentLink.key}`; %>
+                  <a
+                    class="tech-unit-browser-comment-link"
+                    href="/tech/units/<%= unit.unitId %>"
+                    data-unit-browser-comment-link
+                    data-unit-browser-comment-source="<%= sourceId %>"
+                    data-no-row-toggle
+                  ><%= commentLink.label %></a>
+                  <span id="<%= sourceId %>" hidden><%= commentLink.text %></span>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <span class="tech-unit-summary-data-value">—</span>
+            <% } %>
+          </td>
+          <% } %>
+          <% if (column.key === 'unit_actions') { %>
+          <td class="tech-units-browser-cell tech-units-browser-cell--<%= column.spacingProfile %> tech-units-browser-cell--wrap-<%= column.valueWrapMode %> tech-units-actions-cell">
             <% if (unit.unitId) { %>
               <div class="tech-summary-actions">
                 <div class="tech-summary-actions__primary">
@@ -546,10 +746,10 @@
                       </button>
                     <% } %>
                   <% } %>
-                  <% if (canRecordQcReview && unit.latestWorkCompletion && latestQcReview && latestQcReview.decisionCode === 'rejected' && !latestQcCorrection && !unit.isParked) { %>
+                  <% if (canRecordQcReview && unit.qcRequired !== false && unit.latestWorkCompletion && latestQcReview && latestQcReview.decisionCode === 'rejected' && !latestQcCorrection && !unit.isParked) { %>
                     <span class="tech-chip tech-chip--qc-pending">Awaiting correction</span>
                   <% } %>
-                  <% if (canRecordQcReview && !unit.latestWorkCompletion && !unit.isParked) { %>
+                  <% if (canRecordQcReview && unit.qcRequired !== false && !unit.latestWorkCompletion && !unit.isParked) { %>
                     <span class="tech-chip">Awaiting completion</span>
                   <% } %>
                   <% if (canSubmitQcCorrection) { %>
@@ -630,10 +830,13 @@
               —
             <% } %>
           </td>
+
+          <% } %>
+          <% }) %>
         </tr>
 
         <tr class="tech-detail-row" id="tech-unit-detail-<%= unit.unitId %>" <%= isSingleUnitViewPage ? '' : 'hidden' %>>
-          <td colspan="7">
+          <td colspan="<%= browserColumnCount %>">
             <div class="tech-detail-offset">
               <div class="tech-detail-panel" data-unit-detail-panel>
                 <div class="tech-detail-header tech-detail-header--details" data-unit-panel-header="details">
@@ -663,10 +866,12 @@
                       <% if (latestManualOverride) { %>
                         <span class="tech-chip">Override <%= latestManualOverride.statusLabel %></span>
                       <% } %>
-                      <% if (latestQcReview) { %>
+                      <% if (unit.qcReviewStateCode === 'not_required') { %>
+                        <span class="tech-chip">QC Not Required</span>
+                      <% } else if (latestQcReview) { %>
                         <a
                           class="tech-qc-detail-chip tech-qc-detail-chip--<%= latestQcReview.decisionCode %>"
-                          href="/tech/units/<%= unit.unitId %>/qc-review/details/modal"
+                          href="/tech/units/<%= unit.unitId %>/qc-review/details/modal<%= isQcPortalMode ? '?qcPortal=1' : '' %>"
                           data-tech-modal-trigger
                           data-no-row-toggle
                         >
@@ -855,6 +1060,19 @@
                       <p class="field-hint">No serial or BIOS identifier rows have been recorded yet.</p>
                     <% } %>
                   </section>
+
+                  <% if (hasAmazonDetails) { %>
+                    <section class="tech-detail-section">
+                      <h3>Amazon</h3>
+                      <dl class="tech-detail-list">
+                        <% if (amazonDetails.fnsku) { %><div><dt>FNSKU</dt><dd><%= amazonDetails.fnsku %></dd></div><% } %>
+                        <% if (amazonDetails.asin) { %><div><dt>ASIN</dt><dd><%= amazonDetails.asin %></dd></div><% } %>
+                        <% if (amazonDetails.trackingNumber) { %><div><dt>Tracking Number</dt><dd><%= amazonDetails.trackingNumber %></dd></div><% } %>
+                        <% if (amazonDetails.palletNumber) { %><div><dt>Current Pallet Number</dt><dd><%= amazonDetails.palletNumber %></dd></div><% } %>
+                        <% if (amazonDetails.buyerComments) { %><div class="tech-detail-list--wide-value"><dt>Buyer Comments</dt><dd><%= amazonDetails.buyerComments %></dd></div><% } %>
+                      </dl>
+                    </section>
+                  <% } %>
 
                   <section class="tech-detail-section tech-detail-section--grade">
                     <h3>Cosmetic Grade & Unit Outcome</h3>

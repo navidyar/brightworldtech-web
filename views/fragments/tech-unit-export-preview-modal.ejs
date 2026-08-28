@@ -8,6 +8,7 @@
   const safeCsvDownloadUrl = typeof csvDownloadUrl === 'string' ? csvDownloadUrl : '';
   const safeXlsxDownloadUrl = typeof xlsxDownloadUrl === 'string' ? xlsxDownloadUrl : '';
   const selectedColumnKeys = new Set(safeDataset ? safeDataset.columns.map((column) => column.key) : []);
+  const hasSelectedExportColumns = selectedColumnKeys.size > 0;
   const safeExportPresentation = typeof exportPresentation !== 'undefined' && exportPresentation && typeof exportPresentation === 'object'
     ? exportPresentation
     : {};
@@ -98,16 +99,16 @@
           <div class="action-row unit-export-download-actions">
             <% if (safeCsvDownloadUrl) { %>
               <a
-                class="secondary-button"
-                href="<%= safeCsvDownloadUrl %>"
+                class="secondary-button<%= hasSelectedExportColumns ? '' : ' is-disabled' %>"
+                <% if (hasSelectedExportColumns) { %>href="<%= safeCsvDownloadUrl %>"<% } else { %>aria-disabled="true" tabindex="-1"<% } %>
                 data-unit-export-download
                 data-unit-export-base-url="<%= safeCsvDownloadUrl %>"
               >Download CSV</a>
             <% } %>
             <% if (safeXlsxDownloadUrl) { %>
               <a
-                class="primary-button"
-                href="<%= safeXlsxDownloadUrl %>"
+                class="primary-button<%= hasSelectedExportColumns ? '' : ' is-disabled' %>"
+                <% if (hasSelectedExportColumns) { %>href="<%= safeXlsxDownloadUrl %>"<% } else { %>aria-disabled="true" tabindex="-1"<% } %>
                 data-unit-export-download
                 data-unit-export-base-url="<%= safeXlsxDownloadUrl %>"
               >Download XLSX</a>
@@ -129,7 +130,7 @@
           </div>
           <fieldset class="unit-export-column-options" aria-describedby="unit-export-column-selection-help">
             <legend class="visually-hidden">Choose Unit export columns</legend>
-            <span id="unit-export-column-selection-help" class="visually-hidden">At least one column must remain selected.</span>
+            <span id="unit-export-column-selection-help" class="visually-hidden">Select at least one column to enable CSV or XLSX downloads.</span>
             <% safeAvailableColumns.forEach((column) => { %>
               <label class="form-check unit-export-column-option">
                 <input

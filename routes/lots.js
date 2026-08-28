@@ -191,6 +191,20 @@ router.post(
 );
 
 router.get(
+  '/management/lots/:lotId/amazon-asset-tags/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderAmazonAssetTagBulkModal
+);
+
+router.post(
+  '/management/lots/:lotId/amazon-asset-tags/generate',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.generateAmazonAssetTagsForDirectLot
+);
+
+router.get(
   '/management/lots/:lotId/unit-form/modal',
   requireAuth,
   requireRole(lotManagementRoles),
@@ -202,6 +216,20 @@ router.post(
   requireAuth,
   requireRole(lotManagementRoles),
   lotController.updateLotUnitFormRules
+);
+
+router.get(
+  '/management/lots/:lotId/unit-browser/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotUnitBrowserLayoutModalPage
+);
+
+router.post(
+  '/management/lots/:lotId/unit-browser/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.updateLotUnitBrowserLayout
 );
 
 router.get(

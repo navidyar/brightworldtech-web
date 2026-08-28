@@ -34,6 +34,10 @@ function mapQcReviewQueueCounts(row, { available = true } = {}) {
 }
 
 function resolveQcReviewState(row) {
+  if (row && Number(row.qc_is_required) === 0) {
+    return { code: 'not_required', label: 'QC not required for this Lot' };
+  }
+
   if (!row || !row.qc_current_completion_id) {
     return { code: 'not_completed', label: 'Awaiting completion' };
   }

@@ -42,9 +42,126 @@
     });
   }
 
+
+  function parseSortableCell(cell, type) {
+    const raw = cell ? String(cell.dataset.sortValue ?? '').trim() : '';
+    if (!raw) return { missing: true, value: null };
+
+    if (type === 'number' || type === 'date') {
+      const numeric = Number(raw);
+      return Number.isFinite(numeric)
+        ? { missing: false, value: numeric }
+        : { missing: true, value: null };
+    }
+
+    return { missing: false, value: raw };
+  }
+
+  function compareSortableValues(left, right, type) {
+    if (type === 'number' || type === 'date') {
+      return left.value - right.value;
+    }
+
+    return String(left.value).localeCompare(String(right.value), 'en-US', {
+      sensitivity: 'base',
+      numeric: true
+    });
+  }
+
+  function sortReportingTable(link) {
+    const header = link.closest('th');
+    const table = link.closest('table');
+    const body = table && table.tBodies ? table.tBodies[0] : null;
+    if (!header || !table || !body) return;
+
+    const rows = Array.from(body.querySelectorAll('tr[data-qc-report-sort-row]'));
+    if (rows.length < 2) return;
+
+    const columnIndex = header.cellIndex;
+    const type = link.dataset.sortType || 'text';
+    const currentDirection = link.dataset.sortDirection || '';
+    const direction = currentDirection
+      ? (currentDirection === 'asc' ? 'desc' : 'asc')
+      : (link.dataset.sortInitial || 'asc');
+    const directionFactor = direction === 'desc' ? -1 : 1;
+
+    rows.forEach((row, originalIndex) => {
+      if (!row.dataset.qcReportSortIndex) {
+        row.dataset.qcReportSortIndex = String(originalIndex + 1);
+      }
+    });
+
+    rows.sort((leftRow, rightRow) => {
+      const left = parseSortableCell(leftRow.cells[columnIndex], type);
+      const right = parseSortableCell(rightRow.cells[columnIndex], type);
+      if (left.missing && right.missing) return Number(leftRow.dataset.qcReportSortIndex) - Number(rightRow.dataset.qcReportSortIndex);
+      if (left.missing) return 1;
+      if (right.missing) return -1;
+
+      const comparison = compareSortableValues(left, right, type);
+      if (comparison !== 0) return comparison * directionFactor;
+      return Number(leftRow.dataset.qcReportSortIndex) - Number(rightRow.dataset.qcReportSortIndex);
+    });
+
+    rows.forEach((row) => body.appendChild(row));
+
+    table.querySelectorAll('[data-qc-report-sort]').forEach((sortLink) => {
+      const sortHeader = sortLink.closest('th');
+      const indicator = sortLink.querySelector('.qc-reporting-sort-indicator');
+      const isActive = sortLink === link;
+
+      sortLink.classList.toggle('is-active', isActive);
+      if (isActive) {
+        sortLink.dataset.sortDirection = direction;
+        if (sortHeader) sortHeader.setAttribute('aria-sort', direction === 'asc' ? 'ascending' : 'descending');
+        if (indicator) indicator.textContent = direction === 'asc' ? '↑' : '↓';
+      } else {
+        delete sortLink.dataset.sortDirection;
+        if (sortHeader) sortHeader.removeAttribute('aria-sort');
+        if (indicator) indicator.textContent = '';
+      }
+    });
+  }
+
+
+
+  function closeTeamPickersOutside(target) {
+    document.querySelectorAll('[data-reporting-team-picker][open]').forEach((picker) => {
+      if (!picker.contains(target)) {
+        picker.removeAttribute('open');
+      }
+    });
+  }
+
+  function closeTeamPickerOnEscape(event) {
+    if (event.key !== 'Escape') return;
+
+    const picker = event.target.closest('[data-reporting-team-picker]');
+    if (!picker || !picker.open) return;
+
+    picker.removeAttribute('open');
+    const summary = picker.querySelector('summary');
+    if (summary) summary.focus();
+  }
+
   function init(root) {
     root.querySelectorAll('[data-reporting-controls]').forEach(updateForm);
   }
+
+
+  document.addEventListener('click', (event) => {
+    const sortLink = event.target.closest('[data-qc-report-sort]');
+    if (!sortLink) return;
+
+    event.preventDefault();
+    sortReportingTable(sortLink);
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    closeTeamPickersOutside(event.target);
+  });
+
+  document.addEventListener('keydown', closeTeamPickerOnEscape);
 
   document.addEventListener('change', (event) => {
     if (!event.target.matches('[data-reporting-period-select]')) return;

@@ -26,6 +26,7 @@ const PRESERVATION = Object.freeze({
   APPEND_ONLY: 'append_only',
   REPLACE_CURRENT_SET_WHEN_MANAGED: 'replace_current_set_when_managed',
   SYSTEM_MANAGED: 'system_managed',
+  CLEAR_WHEN_HIDDEN: 'clear_when_hidden',
   NOT_APPLICABLE: 'not_applicable'
 });
 
@@ -54,6 +55,7 @@ const AVAILABILITY = Object.freeze({
 const UNIT_FORM_SECTIONS = Object.freeze([
   Object.freeze({ key: 'assignment', label: 'Assignment', order: 10 }),
   Object.freeze({ key: 'identity', label: 'Identity', order: 20 }),
+  Object.freeze({ key: 'amazon', label: 'Amazon', order: 25 }),
   Object.freeze({ key: 'model', label: 'Model', order: 30 }),
   Object.freeze({ key: 'production_weight', label: 'Production Weight', order: 40 }),
   Object.freeze({ key: 'processor', label: 'Processor', order: 50 }),
@@ -189,6 +191,31 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
   }),
   configurableField('unit_serial_number', 'Unit Serial Number', 'identity', 'unitSerialNumber', 'unit_identifiers.identifier_value'),
   configurableField('bios_serial_number', 'BIOS Serial Number', 'identity', 'biosSerialNumber', 'unit_identifiers.identifier_value'),
+
+  defineField({
+    key: 'amazon_asset_tag',
+    label: 'Amazon Asset Tag',
+    section: 'amazon',
+    submissionName: null,
+    storagePath: 'unit_identifiers.identifier_value',
+    ruleType: RULE_TYPE.DERIVED_CONTROL,
+    availability: AVAILABILITY.EDIT_ONLY,
+    defaultVisible: false,
+    defaultRequired: false,
+    visibilityConfigurable: true,
+    requirementConfigurable: false,
+    enabledForLotRules: true,
+    preservationPolicy: PRESERVATION.SYSTEM_MANAGED,
+    requiredSemantics: 'Generated automatically from the global AZ sequence when the Lot enables Amazon Asset Tag generation.'
+  }),
+  configurableField('fnsku', 'FNSKU', 'amazon', 'fnsku', 'unit_amazon_details.fnsku', { defaultVisible: false }),
+  configurableField('asin', 'ASIN', 'amazon', 'asin', 'unit_amazon_details.asin', { defaultVisible: false }),
+  configurableField('tracking_number', 'Tracking Number', 'amazon', 'trackingNumber', 'unit_amazon_details.tracking_number', { defaultVisible: false }),
+  configurableField('pallet_number', 'Pallet Number', 'amazon', 'palletNumber', 'unit_amazon_details.pallet_number', {
+    defaultVisible: false,
+    preservationPolicy: PRESERVATION.CLEAR_WHEN_HIDDEN
+  }),
+  configurableField('buyer_comments', 'Buyer Comments', 'amazon', 'buyerComments', 'unit_amazon_details.buyer_comments', { defaultVisible: false }),
 
   configurableField('manufacturer', 'Manufacturer', 'model', 'manufacturerId', 'units.manufacturer_id'),
   configurableField('unit_model', 'Unit Model', 'model', 'unitModelId', 'units.unit_model_id'),

@@ -34,11 +34,11 @@ test('Stage 10W70D separates QC request authority from Tech Lead+ direct reversi
   assert.match(routes, /qc-review\/:qcCheckId\/reversion-request\/modal'[\s\S]*requireRole\(\['qc'\]\)/);
   assert.match(routes, /qc-review\/:qcCheckId\/reversion-request'[\s\S]*requireRole\(\['qc'\]\)/);
   assert.match(routes, /qc-review\/:qcCheckId\/revert\/modal'[\s\S]*requireRole\(overrideReviewRoles\)/);
-  assert.match(controller, /Number\(context\.latestQcReview\.reviewedByUserId\) === currentUserId/);
-  assert.match(controller, /canRequestQcReversion = isQcRequester && ownsLatestQcReview && !pendingQcReversionRequest/);
+  assert.doesNotMatch(controller, /ownsLatestQcReview|reviewedByUserId\) === currentUserId/);
+  assert.match(controller, /canRequestQcReversion = Boolean\(context\.latestQcReview\)[\s\S]*?isQcRequester[\s\S]*?!pendingQcReversionRequest/);
   assert.match(details, /Request Reversion/);
   assert.match(details, /reversion-request\/modal/);
-  assert.match(details, /Reversion Request #<%= pendingQcReversionRequest\.unitRequestId %> Pending/);
+  assert.match(details, /Reversion Request Pending/);
   assert.match(details, /Revert Current QC Decision/);
   assert.doesNotMatch(history, /reversion-request\/modal|Request Reversion/);
 });
@@ -48,7 +48,10 @@ test('Stage 10W70D snapshots the exact QC target and keeps the QC decision activ
   const modal = read('views/fragments/tech-unit-qc-reversion-request-modal.ejs');
 
   assert.match(model, /lockQcReviewReversionTargetWithConnection/);
-  assert.match(model, /Number\(state\.reviewed_by_user_id\) !== safeRequesterUserId/);
+  assert.doesNotMatch(model, /BWT_QC_REVERSION_REQUEST_OWNER_REQUIRED|reviewed_by_user_id\) !== safeRequesterUserId/);
+  assert.match(model, /unit_qc_reversion_request_submitted/);
+  assert.match(model, /Requested QC decision reversion/);
+  assert.match(model, /originalQcReviewerUserId/);
   assert.match(model, /INSERT INTO unit_qc_reversion_requests/);
   assert.match(model, /SELECT[\s\S]*qc\.unit_id,[\s\S]*qc\.unit_work_completion_id,[\s\S]*qc\.unit_qc_check_id,[\s\S]*qc\.decision_code,[\s\S]*qc\.reviewed_by_user_id,[\s\S]*qc\.reviewed_at,[\s\S]*qc\.review_notes[\s\S]*FROM unit_qc_checks qc/);
   assert.doesNotMatch(model, /state\.reviewed_at,[\s\S]*state\.review_notes/);
@@ -85,7 +88,7 @@ test('Stage 10W70D rejects stale targets and prevents direct reversion from bypa
 
   assert.match(requestModel, /BWT_QC_REVERSION_REQUEST_STALE/);
   assert.match(requestModel, /async function revertQcReviewDirectlyWithRequestGuard/);
-  assert.match(requestModel, /QC Reversion Request #[^\n]*is pending for this decision/);
+  assert.match(requestModel, /A QC Reversion Request is pending for this decision/);
   assert.match(requestModel, /BWT_QC_REVERSION_PENDING_REQUEST/);
   assert.match(controller, /Review that request through Requests instead of using direct reversion/);
   assert.match(controller, /revertQcReviewDirectlyWithRequestGuard/);

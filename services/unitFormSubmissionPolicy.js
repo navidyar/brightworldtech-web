@@ -2,7 +2,8 @@
 
 const {
   UNIT_FORM_FIELD_REGISTRY,
-  RULE_TYPE
+  RULE_TYPE,
+  PRESERVATION
 } = require('../config/unitFormFieldRegistry');
 
 const POLICY_METADATA_KEY = '_unitFormSubmissionPolicy';
@@ -10,6 +11,12 @@ const POLICY_METADATA_KEY = '_unitFormSubmissionPolicy';
 const FIELD_BINDINGS = Object.freeze({
   unit_serial_number: Object.freeze({ properties: ['unitSerialNumber'] }),
   bios_serial_number: Object.freeze({ properties: ['biosSerialNumber'] }),
+  amazon_asset_tag: Object.freeze({ properties: ['amazonAssetTag'] }),
+  fnsku: Object.freeze({ properties: ['fnsku'] }),
+  asin: Object.freeze({ properties: ['asin'] }),
+  tracking_number: Object.freeze({ properties: ['trackingNumber'] }),
+  pallet_number: Object.freeze({ properties: ['palletNumber'] }),
+  buyer_comments: Object.freeze({ properties: ['buyerComments'] }),
   manufacturer: Object.freeze({ properties: ['manufacturerId'] }),
   unit_model: Object.freeze({ properties: ['unitModelId'] }),
   screen_size: Object.freeze({ properties: ['screenSizeConfigValueId'] }),
@@ -512,10 +519,10 @@ function applyUnitFormSubmissionPolicy({
 
     hiddenFieldKeys.push(registryField.key);
 
-    if (normalizedMode === 'create') {
-      // Hidden fields are not part of the selected Lot's form contract. Ignore any
-      // stale/derived browser value and remove it before persistence instead of
-      // blocking an otherwise valid Create submission.
+    if (normalizedMode === 'create' || registryField.preservationPolicy === PRESERVATION.CLEAR_WHEN_HIDDEN) {
+      // Hidden fields are not part of the selected Lot's form contract. Create
+      // submissions discard them. Fields explicitly marked clear_when_hidden
+      // also clear on Edit (used by current-context values such as Pallet Number).
       clearFieldProperties(formData, registryField.key);
       return;
     }

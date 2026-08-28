@@ -25,8 +25,8 @@ const ACCOUNT_ROLE_CODES = [
 const UNIT_BROWSER_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'qc', 'tech']);
 const UNIT_PRODUCTION_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'tech']);
 const UNIT_HISTORY_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'qc', 'tech']);
-const QC_PORTAL_ROLE_CODES = Object.freeze(['admin', 'management', 'qc']);
-const QC_REVIEW_ROLE_CODES = Object.freeze(['admin', 'management', 'qc']);
+const QC_PORTAL_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'qc']);
+const QC_REVIEW_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'qc']);
 const QC_REPORTING_ROLE_CODES = Object.freeze(['admin', 'management']);
 const UNIT_REQUEST_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'qc', 'tech']);
 

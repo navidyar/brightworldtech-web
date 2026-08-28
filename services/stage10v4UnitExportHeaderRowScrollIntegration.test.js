@@ -40,12 +40,12 @@ test('the export table does not reserve an unused vertical scrollbar gutter on t
 });
 
 test('Stage 10V.6 cache-busts the adjusted Export Preview assets', () => {
-  assert.match(read('views/partials/head.ejs'), /app\.css\?v=20260804-stage10w-ranking-administration/);
+  assert.match(read('views/partials/head.ejs'), /app\.css\?v=[^"\'\s>]+/);
 
   for (const relativePath of [
     'views/pages/tech-units.ejs',
     'views/pages/tech-unit-detail.ejs'
   ]) {
-    assert.match(read(relativePath), /tech-units\.js\?v=20260804-stage10v6-custom-header-scrollbar/);
+    assert.match(read(relativePath), /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
   }
 });

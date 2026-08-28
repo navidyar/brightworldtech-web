@@ -34,10 +34,14 @@ test('registry system IDs are unique and every system value points to a known ca
 
 test('legacy configuration rows resolve deterministically to numeric system bindings', () => {
   const fixture = buildLegacyFixture();
-  const plan = planConfigIdentityBindings(fixture);
+  const displayTypeCategory = CATEGORY_BINDINGS.find((binding) => binding.name === 'Display Types');
+  const persistedCategoryBindings = new Map([
+    [displayTypeCategory.systemId, 1000 + displayTypeCategory.systemId]
+  ]);
+  const plan = planConfigIdentityBindings({ ...fixture, persistedCategoryBindings });
 
   assert.deepEqual(getPlanErrors(plan), []);
-  assert.equal(plan.resolvedCategories.size, CATEGORY_BINDINGS.filter((binding) => binding.legacyCodes.length > 0).length);
+  assert.equal(plan.resolvedCategories.size, CATEGORY_BINDINGS.filter((binding) => binding.legacyCodes.length > 0).length + 1);
   assert.equal(plan.missingCategories.some((binding) => binding.name === 'Screen Sizes'), true);
   assert.equal(plan.resolvedValues.size, VALUE_BINDINGS.length);
   assert.equal(plan.missingRequiredValues.length, 0);

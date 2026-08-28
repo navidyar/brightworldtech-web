@@ -99,8 +99,17 @@ async function main() {
       restrictToCurrentAssignment: false
     });
 
-    if (UNIT_EXPORT_COLUMNS.length !== 18 || dataset.columns.length !== 18) {
-      throw new Error(`Stage 10C export contract contains ${dataset.columns.length} columns; expected 18.`);
+    const requiredKeys = [
+      'previousMemorySize', 'currentMemorySize', 'previousStorageSize', 'currentStorageSize',
+      'previousMemoryModules', 'currentMemoryModules', 'previousStorageDevices', 'currentStorageDevices'
+    ];
+    const datasetKeys = dataset.columns.map((column) => column.key);
+    const contractKeys = UNIT_EXPORT_COLUMNS.map((column) => column.key);
+    const missingKeys = requiredKeys.filter((key) => !contractKeys.includes(key));
+    if (missingKeys.length > 0 || JSON.stringify(datasetKeys) !== JSON.stringify(contractKeys)) {
+      throw new Error(
+        `Stage 10C export contract is out of sync${missingKeys.length ? `; missing ${missingKeys.join(', ')}` : ''}.`
+      );
     }
     validateDatasetTotals(dataset);
 

@@ -46,14 +46,14 @@
 
       <% if (pendingRequest) { %>
         <div class="message info">
-          <p>Reversion Request #<%= pendingRequest.unitRequestId %> is already pending for this exact QC decision.</p>
+          <p>A reversion request is already pending for this exact QC decision.</p>
         </div>
         <div class="action-row tech-qc-modal-actions">
-          <a class="secondary-button" href="/unit-requests/<%= pendingRequest.unitRequestId %>">View Request</a>
+          <a class="secondary-button" href="/unit-requests/<%= pendingRequest.unitRequestId %>">View Request Details</a>
           <button type="button" class="secondary-button" data-modal-close>Close</button>
         </div>
       <% } else if (canSubmit) { %>
-        <form method="post" action="/tech/units/<%= unit.unitId %>/qc-review/<%= qcCheckId %>/reversion-request" data-qc-reversion-request-form>
+        <form method="post" action="/tech/units/<%= unit.unitId %>/qc-review/<%= qcCheckId %>/reversion-request<%= qcPortalMode ? '?qcPortal=1' : '' %>" data-qc-reversion-request-form>
           <label class="form-field" for="<%= reasonInputId %>">
             <span>Reason for Reversion Request (required)</span>
             <textarea

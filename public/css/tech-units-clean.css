@@ -939,6 +939,40 @@
   align-content: center;
 }
 
+.tech-units-clean-page .tech-unit-summary-created-work {
+  display: grid;
+  gap: 5px;
+  align-content: center;
+}
+
+.tech-units-clean-page .tech-unit-summary-data-stack {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: #66778d;
+}
+
+.tech-units-clean-page .tech-unit-summary-data-item {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 5px;
+  min-width: 0;
+}
+
+.tech-units-clean-page .tech-unit-summary-data-label {
+  color: #71839a;
+  font-size: 0.72rem;
+}
+
+.tech-units-clean-page .tech-unit-summary-data-value {
+  min-width: 0;
+  color: #27374c;
+  font-size: 0.75rem;
+  font-weight: 650;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .tech-units-clean-page .tech-unit-summary-created > span {
   color: #4d637f;
   font-size: 0.78rem;
@@ -2332,6 +2366,79 @@
   background-repeat: no-repeat;
   background-position: right 12px center;
   background-size: 16px 16px;
+}
+
+/* Stage 10W72F — keep Search Match directly beneath the Search Units textarea. */
+.tech-units-clean-page .tech-filter-search-stack {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tech-units-clean-page .tech-filter-search-stack .tech-filter-search-field textarea {
+  height: 148px;
+}
+
+.tech-units-clean-page .tech-filter-search-stack .tech-search-match-field {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+/* Stage 10W72E — compact Any/All search-match control. */
+.tech-units-clean-page .tech-search-match-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  min-height: 39px;
+  overflow: hidden;
+  border: 1px solid #c9d6e4;
+  border-radius: 7px;
+  background: #ffffff;
+}
+
+.tech-units-clean-page .tech-search-match-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 12px;
+  color: var(--tu-muted, var(--muted));
+  font-size: 0.82rem;
+  font-weight: 700;
+  cursor: pointer;
+  user-select: none;
+}
+
+.tech-units-clean-page .tech-search-match-option + .tech-search-match-option {
+  border-left: 1px solid #c9d6e4;
+}
+
+.tech-units-clean-page .tech-search-match-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.tech-units-clean-page .tech-search-match-option:has(input:checked) {
+  background: var(--tu-blue-soft);
+  color: var(--tu-blue-dark);
+}
+
+.tech-units-clean-page .tech-search-match-option:hover {
+  background: var(--tu-blue-soft-2);
+}
+
+.tech-units-clean-page .tech-search-match-option:has(input:focus-visible) {
+  z-index: 1;
+  outline: 3px solid rgba(49, 94, 157, 0.16);
+  outline-offset: -3px;
 }
 
 
@@ -4402,68 +4509,53 @@
   cursor: not-allowed;
 }
 
-/* Stage 10W.68i: one authoritative fluid column model for the Unit Browser.
-   Each column has a content-based floor. Any width above the 1220px floor is
-   shared evenly between all seven columns until Unit / Weight reaches its
-   480px ceiling; after that, its unused share is redistributed evenly among
-   the remaining columns. This prevents surplus desktop width from collecting
-   beside QC or inside Unit / Weight while keeping the table fluid as the
-   workspace narrows. */
+/* Stage 10W73B/10W73C: the Unit Browser registry supplies each rendered
+   column floor and the total table floor. Unit / Weight retains its approved
+   480px ceiling; remaining workspace is distributed only to columns whose
+   registry growth metadata says they benefit from it. Compact/action columns
+   therefore stay close to their useful width instead of receiving equal empty
+   space whenever the Browser gets wider. */
 .tech-units-clean-page .tech-units-clean-results-panel {
   container-type: inline-size;
   --tu-table-base-width: 1220px;
   --tu-unit-base-width: 445px;
   --tu-unit-max-width: 480px;
-  --tu-date-base-width: 85px;
-  --tu-work-base-width: 105px;
-  --tu-identifiers-base-width: 195px;
-  --tu-grade-base-width: 115px;
-  --tu-qc-base-width: 50px;
-  --tu-actions-base-width: 225px;
-  --tu-column-fluid-share: max(0px, calc((100cqi - var(--tu-table-base-width)) / 7));
-  --tu-unit-uncapped-width: calc(var(--tu-unit-base-width) + var(--tu-column-fluid-share));
-  --tu-unit-column-width: min(var(--tu-unit-max-width), var(--tu-unit-uncapped-width));
-  --tu-unit-overflow-share: max(0px, calc((var(--tu-unit-uncapped-width) - var(--tu-unit-max-width)) / 6));
-  --tu-secondary-fluid-share: calc(var(--tu-column-fluid-share) + var(--tu-unit-overflow-share));
   --tu-cell-inline-padding: clamp(7px, 0.58cqi, 12px);
 }
 
 .tech-units-clean-page .tech-units-table {
-  min-width: var(--tu-table-base-width);
+  min-width: var(--tu-table-base-width, 1220px);
   table-layout: fixed;
+  --tu-unit-max-width: 480px;
+  --tu-cell-inline-padding: clamp(7px, 0.58cqi, 12px);
+  --tu-total-fluid-space: max(0px, calc(100cqi - var(--tu-table-base-width, 1220px)));
+  --tu-unit-fluid-share: calc(var(--tu-total-fluid-space) / var(--tu-rendered-column-count, 6));
+  --tu-unit-growth-limit: calc(var(--tu-unit-max-width) - var(--tu-unit-base-width, 445px));
+  --tu-unit-growth: min(var(--tu-unit-growth-limit), var(--tu-unit-fluid-share));
+  --tu-unit-column-width: calc(var(--tu-unit-base-width, 445px) + var(--tu-unit-growth));
+  --tu-secondary-fluid-space: max(0px, calc(var(--tu-total-fluid-space) - var(--tu-unit-growth)));
+  --tu-secondary-growth-unit: calc(var(--tu-secondary-fluid-space) / var(--tu-secondary-growth-unit-count, 1));
 }
 
-.tech-units-clean-page .tech-units-col--unit {
+.tech-units-clean-page .tech-units-col {
+  width: var(--tu-column-base-width);
+}
+
+.tech-units-clean-page .tech-units-col--grow-1 {
+  width: calc(var(--tu-column-base-width) + var(--tu-secondary-growth-unit));
+}
+
+.tech-units-clean-page .tech-units-col--grow-2 {
+  width: calc(var(--tu-column-base-width) + var(--tu-secondary-growth-unit) + var(--tu-secondary-growth-unit));
+}
+
+.tech-units-clean-page .tech-units-col--unit_weight {
   width: var(--tu-unit-column-width);
 }
 
-.tech-units-clean-page .tech-units-col--date {
-  width: calc(var(--tu-date-base-width) + var(--tu-secondary-fluid-share));
-}
-
-.tech-units-clean-page .tech-units-col--work {
-  width: calc(var(--tu-work-base-width) + var(--tu-secondary-fluid-share));
-}
-
-.tech-units-clean-page .tech-units-col--identifiers {
-  width: calc(var(--tu-identifiers-base-width) + var(--tu-secondary-fluid-share));
-}
-
-.tech-units-clean-page .tech-units-col--grade {
-  width: calc(var(--tu-grade-base-width) + var(--tu-secondary-fluid-share));
-}
-
-.tech-units-clean-page .tech-units-col--qc {
-  width: calc(var(--tu-qc-base-width) + var(--tu-secondary-fluid-share));
-}
-
-.tech-units-clean-page .tech-units-col--actions {
-  width: calc(var(--tu-actions-base-width) + var(--tu-secondary-fluid-share));
-}
-
-/* Horizontal breathing room follows one shared fluid value instead of
-   per-column padding overrides, so it contracts continuously with the Unit
-   Browser workspace. Vertical table spacing and header typography stay as-is. */
+/* Horizontal breathing room starts from one shared fluid baseline so it
+   contracts continuously with the Browser workspace. Registry spacing
+   profiles may tighten individual groups further without positional rules. */
 .tech-units-clean-page .tech-units-table thead th,
 .tech-units-clean-page .tech-summary-row > td {
   padding-right: var(--tu-cell-inline-padding);
@@ -4915,4 +5007,205 @@
   :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-spec-repeatable-row--port {
     grid-template-columns: 1fr;
   }
+}
+
+
+/* Stage 10W72H — scalable Pallet Number filter with select-style typeahead. */
+.tech-units-clean-page .tech-pallet-filter-field {
+  position: relative;
+  min-width: 0;
+}
+
+.tech-units-clean-page .tech-pallet-filter-combobox {
+  position: relative;
+  min-width: 0;
+}
+
+.tech-units-clean-page .tech-pallet-filter-input {
+  width: 100%;
+  min-height: 39px;
+  padding-right: 38px;
+  background-color: #ffffff;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4.5 6 3.5 3.5L11.5 6' stroke='%23476c9a' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px 16px;
+}
+
+.tech-units-clean-page .tech-pallet-filter-options {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  border: 1px solid #c9d6e4;
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(29, 44, 69, 0.14);
+}
+
+.tech-units-clean-page .tech-pallet-filter-option {
+  display: block;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 0;
+  background: #ffffff;
+  color: #25364a;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tech-units-clean-page .tech-pallet-filter-option:hover,
+.tech-units-clean-page .tech-pallet-filter-option.is-active {
+  background: #edf4fb;
+}
+
+.tech-units-clean-page .tech-pallet-filter-option:focus-visible {
+  outline: 2px solid rgba(49, 94, 157, 0.28);
+  outline-offset: -2px;
+}
+
+.tech-units-clean-page .tech-pallet-filter-message {
+  padding: 9px 11px;
+  color: #66788d;
+  font-size: 0.84rem;
+  line-height: 1.35;
+}
+
+.tech-units-clean-page .tech-pallet-filter-message--more {
+  border-top: 1px solid #e5ebf2;
+  background: #f8fafc;
+}
+
+/* Stage 10W73B — combined Created / Work / Assignment header stays compact while both sort controls remain independently keyboard accessible. */
+.tech-units-clean-page .table-sort-group--created-work {
+  gap: 3px 5px;
+}
+
+/* Stage 10W73C — compact configurable Browser spacing and copy-safe values.
+   The table uses one compact baseline, then lets each registry spacing profile
+   tighten or relax individual columns without introducing positional rules. */
+.tech-units-clean-page .tech-units-clean-results-panel,
+.tech-units-clean-page .tech-units-table {
+  --tu-cell-inline-padding: clamp(5px, 0.42cqi, 8px);
+}
+
+.tech-units-clean-page :is(.tech-units-browser-header, .tech-units-browser-cell) {
+  padding-right: var(--tu-cell-inline-padding);
+  padding-left: var(--tu-cell-inline-padding);
+}
+
+.tech-units-clean-page :is(.tech-units-browser-header--compact, .tech-units-browser-cell--compact) {
+  padding-right: clamp(4px, 0.32cqi, 6px);
+  padding-left: clamp(4px, 0.32cqi, 6px);
+}
+
+.tech-units-clean-page :is(.tech-units-browser-header--tight, .tech-units-browser-cell--tight) {
+  padding-right: clamp(3px, 0.24cqi, 5px);
+  padding-left: clamp(3px, 0.24cqi, 5px);
+}
+
+.tech-units-clean-page :is(.tech-units-browser-header--actions, .tech-units-browser-cell--actions) {
+  padding-right: clamp(4px, 0.3cqi, 6px);
+  padding-left: clamp(4px, 0.3cqi, 6px);
+}
+
+/* Browser values must remain fully represented. Copy-sensitive identifiers
+   stay visually unbroken; horizontal scrolling is preferable to truncation. */
+.tech-units-clean-page .tech-unit-summary-id-value,
+.tech-units-clean-page .tech-unit-summary-copy-value,
+.tech-units-clean-page .tech-units-browser-cell--wrap-copy_single_line .tech-unit-summary-data-value {
+  display: inline-block;
+  max-width: none;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.tech-units-clean-page .tech-unit-summary-id-item,
+.tech-units-clean-page .tech-units-browser-cell--wrap-copy_single_line .tech-unit-summary-data-item {
+  grid-template-columns: max-content max-content;
+  width: max-content;
+  max-width: none;
+}
+
+.tech-units-clean-page .tech-unit-browser-comment-links {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.tech-units-clean-page .tech-unit-browser-comment-link {
+  color: #245ba6;
+  font-size: 0.74rem;
+  font-weight: 650;
+  line-height: 1.25;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.tech-units-clean-page .tech-unit-browser-comment-link:is(:hover, :focus-visible) {
+  text-decoration: underline;
+}
+
+.tech-unit-browser-comment-tooltip {
+  position: fixed;
+  z-index: 10050;
+  width: max-content;
+  max-width: min(430px, calc(100vw - 24px));
+  max-height: min(360px, calc(100vh - 24px));
+  overflow: auto;
+  padding: 9px 11px;
+  border: 1px solid #c8d6e6;
+  border-radius: 7px;
+  color: #26384d;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(28, 45, 68, 0.18);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  pointer-events: auto;
+  user-select: text;
+}
+
+/* Stage 10W73D — keep Browser expansion globally balanced. New columns use
+   the registry's default single growth share unless they are intentionally
+   compact (QC, Comments, or Actions). Unit / Weight keeps its larger base. */
+.tech-units-clean-page .tech-unit-identifiers-header {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+}
+
+.tech-units-clean-page .table-sort-group--identifiers {
+  gap: 2px 4px;
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+
+/* Stage 10W73E — small Unit Browser usability refinements. */
+.tech-units-clean-page .tech-unit-summary-created {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.tech-units-clean-page .tech-unit-summary-created-time {
+  white-space: nowrap;
+}
+
+.tech-units-clean-page .tech-units-browser-header--unit_weight {
+  padding-left: calc(var(--tu-cell-inline-padding) + 10px);
 }

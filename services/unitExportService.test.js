@@ -9,6 +9,7 @@ const {
   combineRemarks
 } = require('./unitExportService');
 const { DEFAULT_UNIT_EXPORT_COLUMNS, UNIT_EXPORT_COLUMNS } = require('../config/unitExportContract');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 
 function sampleUnit(overrides = {}) {
   return {
@@ -20,12 +21,15 @@ function sampleUnit(overrides = {}) {
     screenSizeLabel: '14-inch',
     modelYear: 2023,
     processorLabel: 'Intel Core i5-1355U',
+    processorSpeedGhz: '1.70',
     processorShortForm: 'i5-13th',
     previousRamGb: 8,
     ramGb: 16,
     previousStorageGb: 256,
     storageGb: 512,
     assignedToName: 'Anna Radnaeva',
+    createdAt: '2026-08-27T19:34:00.000Z',
+    completedAt: '2026-08-28T01:05:00.000Z',
     batteryHealthPercent: 87.5,
     hardwareNotes: 'Legacy hardware note',
     cosmeticNotes: '',
@@ -54,29 +58,27 @@ function sampleDetails() {
     ],
     memoryTotalGb: 16,
     storageTotalGb: 512,
-    currentGrade: { gradeLabel: 'B' },
-    currentOutcome: { outcomeLabel: 'Pass' },
+    specifications: { skinnedStatusLabel: 'Skinned' },
+    currentGrade: { gradeLabel: 'B', notes: 'Light lid wear' },
+    currentOutcome: { outcomeLabel: 'Pass', outcomeNotes: 'Ready for resale' },
+    latestGeneralComment: {
+      noteTypeSystemId: SYSTEM_CONFIG_VALUE_IDS.COMMENT_GENERAL,
+      commentText: 'Latest general comment'
+    },
+    comments: [
+      { noteTypeSystemId: SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_RESET, commentText: 'Ignore non-general note' },
+      { noteTypeSystemId: SYSTEM_CONFIG_VALUE_IDS.COMMENT_GENERAL, commentText: 'First general comment' },
+      { noteTypeSystemId: SYSTEM_CONFIG_VALUE_IDS.COMMENT_GENERAL, commentText: 'Second general comment' }
+    ],
     hardwareIssues: [{ issueLabel: 'Keyboard', severityLabel: 'Minor', locationLabel: 'Top', issueRemark: 'Missing key cap' }],
     cosmeticIssues: [{ issueLabel: 'Scratch', locationLabel: 'Lid', issueRemark: 'Two-inch scratch' }],
     latestTech: { name: 'Fallback Tech' }
   };
 }
 
-test('the established 24 export columns remain selected by default while new Specs / Tests columns stay optional', () => {
-  assert.equal(UNIT_EXPORT_COLUMNS.length, 57);
-  assert.deepEqual(DEFAULT_UNIT_EXPORT_COLUMNS.map((column) => column.label), [
-    'Asset Tag', 'Unit Serial Number', 'BIOS Serial / Recovery Number', 'Unit Type',
-    'Manufacturer', 'Model', 'CPU', 'Short Form',
-    'Previous Memory Size', 'Current Memory Size',
-    'Previous Storage Size', 'Current Storage Size',
-    'Previous Memory Modules', 'Current Memory Modules', 'Memory Module Changes',
-    'Previous Storage Devices', 'Current Storage Devices', 'Storage Device Changes',
-    'Tech Name', 'Battery Health', 'Cosmetic Grade', 'Pass / Fail',
-    'Hardware Remarks', 'Cosmetic Remarks'
-  ]);
-  assert.equal(DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
-  assert.equal(DEFAULT_UNIT_EXPORT_COLUMNS.some((column) => column.key === 'threatProtectionScan'), false);
-  assert.equal(DEFAULT_UNIT_EXPORT_COLUMNS.some((column) => column.key === 'cameras'), false);
+test('export columns require deliberate selection and the modal default is empty', () => {
+  assert.equal(UNIT_EXPORT_COLUMNS.length, 72);
+  assert.deepEqual(DEFAULT_UNIT_EXPORT_COLUMNS, []);
 });
 
 test('export row preserves established Unit data while adding optional Specs / Tests columns', () => {
@@ -92,15 +94,24 @@ test('export row preserves established Unit data while adding optional Specs / T
     screenSize: row.screenSize,
     modelYear: row.modelYear,
     cpu: row.cpu,
+    processorSpeedGhz: row.processorSpeedGhz,
     shortForm: row.shortForm,
     currentMemorySize: row.currentMemorySize,
     currentStorageSize: row.currentStorageSize,
     techName: row.techName,
+    createdDate: row.createdDate,
+    createdTime: row.createdTime,
+    completedDate: row.completedDate,
+    completedTime: row.completedTime,
     batteryHealth: row.batteryHealth,
     cosmeticGrade: row.cosmeticGrade,
+    skinnedStatus: row.skinnedStatus,
+    gradeNotes: row.gradeNotes,
     passFail: row.passFail,
+    outcomeNotes: row.outcomeNotes,
     hardwareRemarks: row.hardwareRemarks,
-    cosmeticRemarks: row.cosmeticRemarks
+    cosmeticRemarks: row.cosmeticRemarks,
+    generalComment: row.generalComment
   }, {
     assetTag: 'BWT12345',
     unitSerialNumber: 'UNIT-SERIAL-1',
@@ -111,15 +122,24 @@ test('export row preserves established Unit data while adding optional Specs / T
     screenSize: '14-inch',
     modelYear: '',
     cpu: 'Intel Core i5-1355U',
+    processorSpeedGhz: '1.70',
     shortForm: 'i5-13th',
     currentMemorySize: '16GB',
     currentStorageSize: '512GB',
     techName: 'Anna Radnaeva',
+    createdDate: '08/27/2026',
+    createdTime: '02:34 PM',
+    completedDate: '08/27/2026',
+    completedTime: '08:05 PM',
     batteryHealth: '87.5%',
     cosmeticGrade: 'B',
+    skinnedStatus: 'Skinned',
+    gradeNotes: 'Light lid wear',
     passFail: 'Pass',
+    outcomeNotes: 'Ready for resale',
     hardwareRemarks: 'Legacy hardware note | Keyboard · Minor · Top: Missing key cap',
-    cosmeticRemarks: 'Scratch · Lid: Two-inch scratch'
+    cosmeticRemarks: 'Scratch · Lid: Two-inch scratch',
+    generalComment: 'Latest general comment'
   });
   assert.equal(row.threatProtectionScan, '');
   assert.equal(row.cameras, '');
@@ -237,15 +257,12 @@ test('selected export columns preserve the approved contract order and add the s
   assert.match(selected.scope.at(-1).value, new RegExp(`^3 of ${require('../config/unitExportContract').UNIT_EXPORT_COLUMNS.length}: Asset Tag, CPU, Battery Health$`));
 });
 
-test('missing column selection selects every available export column by default', () => {
-  const dataset = { columns: [], rows: [], totalRows: 0, scope: [] };
+test('missing column selection leaves the export preview deliberately empty', () => {
+  const dataset = { columns: UNIT_EXPORT_COLUMNS, rows: [], totalRows: 0, scope: [] };
   const selected = applyUnitExportColumnSelection(dataset, undefined, { selectionProvided: false });
 
-  assert.equal(selected.columns.length, 24);
-  assert.equal(selected.columns.some((column) => column.key === 'memoryModuleChanges'), true);
-  assert.equal(selected.columns.some((column) => column.key === 'storageDeviceChanges'), true);
-  assert.equal(selected.columns.some((column) => column.key === 'screenSize'), false);
-  assert.equal(selected.columns.some((column) => column.key === 'modelYear'), false);
+  assert.deepEqual(selected.columns, []);
+  assert.match(selected.scope.at(-1).value, new RegExp(`^0 of ${UNIT_EXPORT_COLUMNS.length}:`));
 });
 
 test('legacy Memory Size and Storage Size column keys map to the current values', () => {

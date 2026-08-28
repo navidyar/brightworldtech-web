@@ -8,6 +8,7 @@ const forbiddenTopLevel = [
   '=',
   'CACHED',
   '[internal]',
+  'bash',
   'bwtdallas-app@1.0.0',
   'exporting',
   'naming',
@@ -19,9 +20,18 @@ const forbiddenTopLevel = [
   'unpacking'
 ];
 
+const forbiddenLegacyFiles = [
+  'public/css/tech-units-stage-a.css',
+  'public/js/management-overrides.js'
+];
+
 const errors = forbiddenTopLevel
   .filter((name) => fs.existsSync(path.join(projectRoot, name)))
   .map((name) => `Unexpected top-level artifact remains: ${name}`);
+
+forbiddenLegacyFiles
+  .filter((relativePath) => fs.existsSync(path.join(projectRoot, relativePath)))
+  .forEach((relativePath) => errors.push(`Superseded static asset remains: ${relativePath}`));
 
 function walk(directory) {
   for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {

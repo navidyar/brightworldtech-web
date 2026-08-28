@@ -15,6 +15,9 @@
     : hasExistingGlobalProcessor
       ? 'This processor already exists in the global Processor Catalog but is not associated with this exact Unit Model. Approval should reuse the existing Processor record and add only the missing model association.'
       : 'This creates a review request only. It does not change the current Unit. After Management or Admin approval, the processor becomes selectable for this Unit Model.';
+  const requestSubject = isModelRequest
+    ? (safeContext.requestedModelName || 'this model')
+    : ([requestedProcessorType, requestedProcessorName].filter(Boolean).join(' · ') || safeContext.unitModelName || 'this processor');
 %>
 
 <div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close data-modal-escape-close>
@@ -30,10 +33,10 @@
     <div class="modal-body">
       <% if (successRequestId) { %>
         <div class="message success">
-          <p><%= title %> #<%= successRequestId %> is pending review. No catalog value was changed.</p>
+          <p><%= isModelRequest ? 'Model Catalog Addition' : 'Processor Catalog Addition' %> for <strong><%= requestSubject %></strong> is pending review. No catalog value was changed.</p>
         </div>
         <div class="form-actions">
-          <a class="primary-button" href="/unit-requests/<%= successRequestId %>">View Unit Request</a>
+          <a class="primary-button" href="/unit-requests/<%= successRequestId %>">View Request Details</a>
           <button type="button" class="secondary-button" data-modal-close>Done</button>
         </div>
       <% } else { %>

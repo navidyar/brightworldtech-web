@@ -81,6 +81,13 @@ test('all classified catalog processors resolve to an existing or repair-created
   assert.deepEqual(unresolved, []);
 });
 
+test('every repair-created Processor Family has a valid export short form', () => {
+  for (const definition of listProcessorCoverageFamilyDefinitions()) {
+    assert.ok(definition.exportShortForm, `${definition.code} is missing an export short form`);
+    assert.ok(definition.exportShortForm.length <= 40, `${definition.code} export short form exceeds 40 characters`);
+  }
+});
+
 test('metadata repair covers representative Intel, AMD, Xeon, Pentium, and Microsoft SQ processors', () => {
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Intel', modelCode: 'i3-4130' }), ['intel-i3-4th-gen']);
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Intel', modelCode: 'i7-14700T' }), ['intel-i7-14th-gen']);
@@ -89,9 +96,13 @@ test('metadata repair covers representative Intel, AMD, Xeon, Pentium, and Micro
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Intel', modelCode: 'Xeon E-2276M' }), ['intel-xeon-mobile-9th-gen']);
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Intel', modelCode: 'Pentium Gold 6500Y' }), ['intel-pentium-gold']);
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'AMD', modelCode: 'Ryzen 9 8945HS' }), ['amd-ryzen-9-8000-series']);
+  assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'AMD', modelCode: 'Ryzen 5 PRO 5650GE' }), ['amd-ryzen-5-5000-series']);
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Qualcomm', modelCode: 'Microsoft SQ3' }), ['qualcomm-microsoft-sq']);
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'Intel', modelCode: 'Intel Processor N200' }), ['intel-processor-n-series']);
   assert.deepEqual(classifyProcessorFamilyCodes({ brandName: 'AMD', modelCode: 'AMD PRO A10-8700B' }), ['amd-pro-a10-6th-gen']);
+  const metadataByCode = new Map(listProcessorMetadata().map((entry) => [entry.modelCode, entry]));
+  assert.equal(metadataByCode.get('Ryzen 5 PRO 5650U').baseSpeedGhz, 2.3);
+  assert.equal(metadataByCode.get('i9-9900').baseSpeedGhz, 3.1);
 });
 
 test('backfill is dry-run by default, transactional, and blank-only', () => {
@@ -105,6 +116,8 @@ test('backfill is dry-run by default, transactional, and blank-only', () => {
   assert.match(script, /generation IS NULL OR TRIM\(generation\) = ''/);
   assert.match(script, /base_speed_ghz = COALESCE\(base_speed_ghz, \?\)/);
   assert.match(script, /INSERT IGNORE INTO processor_family_members/);
+  assert.match(script, /\['processor_families', 'export_short_form'\]/);
+  assert.match(script, /definition\.exportShortForm/);
 });
 
 test('package exposes separate metadata audit, apply, and validation commands', () => {

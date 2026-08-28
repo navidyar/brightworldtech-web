@@ -1,0 +1,17 @@
+<% if (!Array.isArray(palletNumbers) || palletNumbers.length === 0) { %>
+  <div class="tech-pallet-filter-message" role="option" aria-disabled="true">No matching pallets</div>
+<% } else { %>
+  <% palletNumbers.forEach((palletNumber, index) => { %>
+    <button
+      type="button"
+      id="tech-pallet-filter-option-<%= index %>"
+      class="tech-pallet-filter-option"
+      role="option"
+      data-tech-pallet-filter-option
+      data-value="<%= palletNumber %>"
+    ><%= palletNumber %></button>
+  <% }) %>
+  <% if (hasMore) { %>
+    <div class="tech-pallet-filter-message tech-pallet-filter-message--more">More matches available. Keep typing to narrow the list.</div>
+  <% } %>
+<% } %>

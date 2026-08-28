@@ -92,10 +92,21 @@ async function getSchemaStatus() {
     exists: existingTableSet.has(tableName)
   }));
 
-  const requiredViews = REQUIRED_VIEWS.map((viewName) => ({
-    viewName,
-    exists: existingViewSet.has(viewName)
-  }));
+  const requiredViews = [];
+  for (const viewName of REQUIRED_VIEWS) {
+    const exists = existingViewSet.has(viewName);
+    let readable = false;
+    let error = '';
+    if (exists) {
+      try {
+        await pool.query(`SELECT 1 FROM \`${viewName}\` LIMIT 0`);
+        readable = true;
+      } catch (viewError) {
+        error = viewError.message;
+      }
+    }
+    requiredViews.push({ viewName, exists, readable, error });
+  }
 
   const missingTables = requiredTables
     .filter((table) => !table.exists)
@@ -103,6 +114,10 @@ async function getSchemaStatus() {
 
   const missingViews = requiredViews
     .filter((view) => !view.exists)
+    .map((view) => view.viewName);
+
+  const invalidViews = requiredViews
+    .filter((view) => view.exists && !view.readable)
     .map((view) => view.viewName);
 
   const summaryCounts = [];
@@ -122,7 +137,7 @@ async function getSchemaStatus() {
   }
 
   return {
-    ok: missingTables.length === 0 && missingViews.length === 0,
+    ok: missingTables.length === 0 && missingViews.length === 0 && invalidViews.length === 0,
     connectionInfo,
     existingTables,
     existingViews,
@@ -133,6 +148,7 @@ async function getSchemaStatus() {
     requiredViews,
     missingTables,
     missingViews,
+    invalidViews,
     summaryCounts
   };
 }
@@ -155,6 +171,7 @@ async function getFoundationStatus() {
         requiredViews: [],
         missingTables: [],
         missingViews: [],
+        invalidViews: [],
         summaryCounts: []
       }
     };
@@ -185,6 +202,7 @@ async function getFoundationStatus() {
         requiredViews: [],
         missingTables: [],
         missingViews: [],
+        invalidViews: [],
         summaryCounts: []
       }
     };

@@ -203,6 +203,6 @@ test('QC modal uses the dedicated delegated submit transport and cache-busted br
   assert.match(script, /if \(!response\.ok\)/);
   assert.match(script, /replaceQcReviewModal\(responseMarkup\)/);
   assert.match(script, /dispatchHxTriggerHeader/);
-  assert.match(browserPage, /tech-units\.js\?v=20260819-stage10w68l-filter-toggles/);
-  assert.match(detailPage, /tech-units\.js\?v=20260819-stage10w68l-filter-toggles/);
+  assert.match(browserPage, /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
+  assert.match(detailPage, /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
 });

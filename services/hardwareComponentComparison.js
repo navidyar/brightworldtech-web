@@ -77,6 +77,7 @@ function normalizeStorageComponent(row, index = 0) {
   const slotLabel = normalizeSlotLabel(row, 'Drive', index);
   const typeLabel = normalizeText(row.storageTypeLabel || row.type || row.storageTypeConfigValueId);
   const wipeStatusLabel = normalizeText(row.wipeStatusLabel || row.wipeStatus || row.wipeStatusConfigValueId);
+  const serialNumber = normalizeText(row.serialNumber || row.serial_number);
 
   return {
     kind: 'storage',
@@ -85,11 +86,13 @@ function normalizeStorageComponent(row, index = 0) {
     sizeLabel: sizeGb === null ? 'Not recorded' : formatHardwareCapacityGb(sizeGb),
     typeLabel,
     wipeStatusLabel,
+    serialNumber,
     isEmpty: sizeGb === 0,
     signature: JSON.stringify({
       sizeGb,
       typeLabel: typeLabel.toLowerCase(),
-      wipeStatusLabel: wipeStatusLabel.toLowerCase()
+      wipeStatusLabel: wipeStatusLabel.toLowerCase(),
+      serialNumber: serialNumber.toLowerCase()
     })
   };
 }
@@ -100,7 +103,12 @@ function componentText(component) {
 
   const details = component.kind === 'memory'
     ? [component.sizeLabel, component.typeLabel, component.installTypeLabel]
-    : [component.sizeLabel, component.typeLabel, component.wipeStatusLabel ? `Wipe: ${component.wipeStatusLabel}` : ''];
+    : [
+      component.sizeLabel,
+      component.typeLabel,
+      component.serialNumber ? `Serial: ${component.serialNumber}` : '',
+      component.wipeStatusLabel ? `Wipe: ${component.wipeStatusLabel}` : ''
+    ];
 
   return details.filter(Boolean).join(' · ') || 'Not recorded';
 }

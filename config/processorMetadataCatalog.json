@@ -743,6 +743,12 @@
     "generation": "9th Gen",
     "baseSpeedGhz": 2.4
   },
+  "i9-9900": {
+    "brandName": "Intel",
+    "processorFamily": "Core",
+    "generation": "9th Gen",
+    "baseSpeedGhz": 3.1
+  },
   "i9-9900K": {
     "brandName": "Intel",
     "processorFamily": "Core",
@@ -862,6 +868,18 @@
     "processorFamily": "Ryzen",
     "generation": "4000 Series",
     "baseSpeedGhz": 3.3
+  },
+  "Ryzen 5 PRO 5650GE": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "5000 Series",
+    "baseSpeedGhz": 3.4
+  },
+  "Ryzen 5 PRO 5650U": {
+    "brandName": "AMD",
+    "processorFamily": "Ryzen",
+    "generation": "5000 Series",
+    "baseSpeedGhz": 2.3
   },
   "Ryzen 7 4800H": {
     "brandName": "AMD",

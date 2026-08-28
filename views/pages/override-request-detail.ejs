@@ -19,7 +19,7 @@
           <section class="dashboard-hero accent-green">
             <div>
               <p class="eyebrow"><%= request.requestType === 'outcome_confirmation' ? 'Outcome Confirmation' : (request.isParkedTakeoverRequest ? 'Parked Unit Takeover' : (request.isDuplicateIntakeMoveRequest ? request.duplicateIntakeRequestLabel : 'Existing Unit Override')) %></p>
-              <h2>Request #<%= request.unitOverrideRequestId %></h2>
+              <h2><%= request.displaySubject %></h2>
               <p>Review the existing Unit, current assignment, requested destination, reason, and validation result.</p>
             </div>
             <div class="hero-badge"><span>Status</span><strong><%= request.statusLabel %></strong></div>

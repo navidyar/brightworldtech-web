@@ -4,12 +4,12 @@
     pageTitle,
     stylesheets: [
       '/css/modal.css',
-      '/css/tech-units-clean.css?v=20260819-stage10w68o-toggle-label-cleanup'
+      '/css/tech-units-clean.css?v=20260826-stage10w73e-browser-usability'
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260819-stage10w68p-interaction-refinements"></script>
-  <script defer src="/js/tech-units.js?v=20260819-stage10w68l-filter-toggles&r=20260824-stage10w70d-qc-reversion-request"></script>
-  <script defer src="/js/tech-unit-form.js?v=20260819-stage10w68z-assignable-lot-closed-on-focus"></script>
+  <script defer src="/js/tech-units.js?v=20260826-stage10w73c-browser-refinement"></script>
+  <script defer src="/js/tech-unit-form.js?v=20260828-stage10w74n-request-context-labels"></script>
 
   <body>
     <div class="app-shell">
@@ -35,7 +35,8 @@
             <%- include('../fragments/tech-units-table', {
               result,
               filters,
-              singleUnitView: true
+              singleUnitView: true,
+              unitBrowserPresentation
             }) %>
           </div>
         </main>

@@ -53,8 +53,9 @@ test('Management can create or reuse a Processor Type and map the approved Proce
   const controller = read('controllers/unitRequestController.js');
   const model = read('models/unitRequestModel.js');
 
+  assert.match(requestDetail, /name="approvedProcessorBrandId"/);
+  assert.match(requestDetail, /<select name="approvedProcessorBrandId"[\s\S]*?<option value="">[\s\S]*?<\/option>[\s\S]*?processorBrands\.forEach/);
   assert.match(requestDetail, /name="approvedProcessorBrandName"/);
-  assert.match(requestDetail, /Create or reuse the typed Processor Type below/);
   assert.match(requestDetail, /value="<%= request\.catalogContext\.requestedProcessorSpeedGhz \|\| '' %>"/);
   assert.match(controller, /approvedProcessorBrandName: req\.body\.approvedProcessorBrandName/);
   assert.match(model, /resolveProcessorBrandForApproval/);

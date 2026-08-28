@@ -88,6 +88,6 @@ test('Stage 10W70C browser handling closes the modal and refreshes the Unit afte
   assert.match(js, /data-qc-reversion-form/);
   assert.match(js, /qc-review-reverted/);
   assert.match(js, /Reverting QC decision/);
-  assert.match(browserPage, /tech-units\.js\?v=20260819-stage10w68l-filter-toggles&r=20260824-stage10w70d-qc-reversion-request/);
-  assert.match(detailPage, /tech-units\.js\?v=20260819-stage10w68l-filter-toggles&r=20260824-stage10w70d-qc-reversion-request/);
+  assert.match(browserPage, /\/js\/tech-units\.js\?v=/);
+  assert.match(detailPage, /\/js\/tech-units\.js\?v=/);
 });

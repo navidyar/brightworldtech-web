@@ -12,7 +12,7 @@ async function main() {
         AND table_name = 'unit_work_completions'
     `
   );
-  const columns = new Map(columnRows.map((row) => [row.column_name, row]));
+  const columns = new Map(columnRows.map((row) => [row.column_name || row.COLUMN_NAME, row]));
   const requiredColumns = ['reversed_at', 'reversed_by_user_id', 'reversal_reason', 'active_work_cycle_key'];
   const missingColumns = requiredColumns.filter((column) => !columns.has(column));
 
@@ -28,9 +28,11 @@ async function main() {
         AND table_name = 'unit_work_completions'
     `
   );
-  const activeCycleIndex = indexRows.find((row) => row.index_name === 'uniq_unit_work_completions_active_cycle');
+  const activeCycleIndex = indexRows.find((row) => (
+    row.index_name || row.INDEX_NAME
+  ) === 'uniq_unit_work_completions_active_cycle');
 
-  if (!activeCycleIndex || Number(activeCycleIndex.non_unique) !== 0) {
+  if (!activeCycleIndex || Number(activeCycleIndex.non_unique ?? activeCycleIndex.NON_UNIQUE) !== 0) {
     throw new Error('The active Unit-completion work-cycle unique index is missing.');
   }
 

@@ -1,6 +1,8 @@
 'use strict';
 
 const { pool } = require('./db');
+const unitAmazonModel = require('./unitAmazonModel');
+const lotQcRequirementModel = require('./lotQcRequirementModel');
 const {
   shouldGrantProductionCredit,
   shouldStartNewProductionCycle
@@ -368,11 +370,29 @@ async function recordLotMove({
   toLotId,
   movedByUserId,
   notes = null,
-  allowNewProductionCycle = true
+  allowNewProductionCycle = true,
+  auditAmazonPalletClear = true
 }, connection = pool) {
   const safeUnitId = normalizePositiveInteger(unitId);
   const safeToLotId = normalizePositiveInteger(toLotId);
   const safeMovedByUserId = normalizePositiveInteger(movedByUserId);
+
+  if (safeUnitId && safeToLotId && safeMovedByUserId) {
+    await unitAmazonModel.applyDestinationLotAmazonPolicy(connection, {
+      unitId: safeUnitId,
+      destinationLotId: safeToLotId,
+      actorUserId: safeMovedByUserId,
+      source: 'unit_lot_move',
+      auditPalletClear: auditAmazonPalletClear
+    });
+    await lotQcRequirementModel.auditUnitEnteredLot(connection, {
+      unitId: safeUnitId,
+      fromLotId,
+      toLotId: safeToLotId,
+      actorUserId: safeMovedByUserId,
+      source: 'unit_lot_move'
+    });
+  }
 
   if (!safeUnitId || !safeToLotId || !safeMovedByUserId || !await tableExists(connection, 'unit_lot_history')) {
     return {

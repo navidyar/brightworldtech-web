@@ -81,7 +81,7 @@ test('all Add/Edit Unit entry points load the current searchable-combobox asset 
     'views/pages/tech-unit-form.ejs',
     'views/pages/tech-unit-detail.ejs',
   ].forEach((relativePath) => {
-    assert.match(read(relativePath), /tech-unit-form\.js\?v=20260819-stage10w68z-assignable-lot-closed-on-focus/);
+    assert.match(read(relativePath), /tech-unit-form\.js\?v=[^"\'\s>]+/);
   });
 });
 

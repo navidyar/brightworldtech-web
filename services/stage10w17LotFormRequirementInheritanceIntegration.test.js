@@ -25,11 +25,12 @@ test('Configure Unit Form covers every live independently configurable field and
   const form = read('views/fragments/tech-unit-form.ejs');
   const modal = read('views/fragments/lot-unit-form-rules-modal.ejs');
 
-  assert.equal(registry.length, 60);
+  assert.equal(registry.length, 66);
 
   for (const field of registry) {
     assert.equal(field.visibilityConfigurable, true, `${field.key} visibility`);
-    assert.equal(field.requirementConfigurable, true, `${field.key} requirement`);
+    const visibilityOnly = field.key === 'amazon_asset_tag';
+    assert.equal(field.requirementConfigurable, !visibilityOnly, `${field.key} requirement`);
     assert.match(form, new RegExp(`data-unit-form-field-key=["']${field.key}["']`));
   }
 
@@ -95,7 +96,7 @@ test('requirement UI supports searchable catalogs, exact text, and numeric range
   assert.match(browser, /optionSet\.type === 'text'/);
   assert.match(browser, /Must Equal, Minimum, and Maximum/);
   assert.match(modal, /data-required-value-text/);
-  assert.match(detailPage, /lot-requirements\.js\?v=20260807-stage10w17-expanded-requirements/);
+  assert.match(detailPage, /lot-requirements\.js\?v=20260819-stage10w68y-mouse-focus-continuity/);
 });
 
 test('child Lot validation and requirement-aware form profiles consume direct-parent effective requirements', () => {

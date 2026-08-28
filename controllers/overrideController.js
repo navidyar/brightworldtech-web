@@ -755,10 +755,10 @@ async function createTechOverrideRequest(req, res, next) {
       },
       supported: true,
       successMessage: modalContext.requestContext === 'duplicate_intake'
-        ? `${requestWording.successName} #${overrideRequestId} is pending Tech Lead+ review.`
+        ? `${requestWording.successName} is pending Tech Lead+ review.`
         : modalContext.isParkedTakeoverRequest
-          ? `Parked Unit takeover request #${overrideRequestId} is pending Tech Lead+ review.`
-          : `Override request #${overrideRequestId} is pending Tech Lead+ review.`,
+          ? 'Parked Unit takeover request is pending Tech Lead+ review.'
+          : 'Override request is pending Tech Lead+ review.',
       errorMessages: [],
       formData: {
         reason: ''

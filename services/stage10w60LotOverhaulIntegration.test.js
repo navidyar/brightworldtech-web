@@ -57,8 +57,9 @@ test('Tech Unit Browser supports explicit direct and descendant Lot scopes', () 
 
   assert.match(techController, /lotScope: String\(req\.query\.lotScope/);
   assert.match(techUnitModel, /filters\.lotScope[\s\S]*?lotModel\.listDescendantLotIds\(lotId\)[\s\S]*?const scopedLotIds = \[lotId, \.\.\.descendantLotIds\]/);
-  assert.match(techUnitsPage, /This Lot only/);
-  assert.match(techUnitsPage, /This Lot \+ descendants/);
+  assert.match(techUnitsPage, /name="lotScope"/);
+  assert.match(techUnitsPage, /value="descendants"/);
+  assert.match(techUnitsPage, /Include Descendants/);
   assert.match(pagination, /'lotScope'/);
 });
 
@@ -82,13 +83,13 @@ test('Duplicate Lot is Management-only, starts hidden, and excludes Units and op
   assert.doesNotMatch(duplicateModal, /0 copied/);
 });
 
-test('preserve-source duplication materializes and verifies effective Requirements and Unit Form behavior', () => {
+test('duplication keeps direct Requirements as child overrides while preserve-source materializes Unit Form behavior', () => {
   const lotModel = read('models/lotModel.js');
 
-  assert.match(lotModel, /sourceEffectiveRequirements/);
+  assert.match(lotModel, /insertClonedRequirementRows\([\s\S]*?sourceDirectRequirements/);
+  assert.doesNotMatch(lotModel, /copyRequirementInheritanceSuppressionsForPreservedBehavior/);
+  assert.doesNotMatch(lotModel, /sourceEffectiveRequirements/);
   assert.match(lotModel, /buildMaterializedUnitFormRules\(sourceEffectiveUnitFormProfile\)/);
-  assert.match(lotModel, /copyRequirementInheritanceSuppressionsForPreservedBehavior/);
-  assert.match(lotModel, /buildRequirementBehaviorSignature\(targetEffectiveRequirements\)/);
   assert.match(lotModel, /buildUnitFormBehaviorSignature\(targetEffectiveUnitFormProfile\)/);
   assert.match(lotModel, /No Lot was created/);
 });

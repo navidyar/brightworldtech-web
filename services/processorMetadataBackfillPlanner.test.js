@@ -67,6 +67,7 @@ test('plans missing standard Processor Family definitions and memberships', () =
   }));
 
   assert.deepEqual(plan.familiesToCreate.map((family) => family.code), ['intel-i7-14th-gen']);
+  assert.equal(plan.familiesToCreate[0].exportShortForm, 'i7-14th');
   assert.deepEqual(plan.membershipsToCreate, [{
     processorModelId: 10,
     brandName: 'Intel',
@@ -125,4 +126,5 @@ test('leaves Microsoft SQ GHz blank when no verified base clock is cataloged', (
   assert.equal(plan.unresolvedSpeeds.length, 1);
   assert.equal(plan.unresolvedSpeeds[0].modelCode, 'Microsoft SQ3');
   assert.deepEqual(plan.familiesToCreate.map((family) => family.code), ['qualcomm-microsoft-sq']);
+  assert.equal(plan.familiesToCreate[0].exportShortForm, 'Microsoft SQ');
 });

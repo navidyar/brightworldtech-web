@@ -14,7 +14,7 @@ const {
 } = require('../config/unitFormFieldRegistry');
 
 test('authoritative registry contains every Stage 1A audited control', () => {
-  assert.equal(UNIT_FORM_FIELD_REGISTRY.length, 85);
+  assert.equal(UNIT_FORM_FIELD_REGISTRY.length, 91);
   assert.equal(assertValidUnitFormFieldRegistry(), true);
 });
 
@@ -145,7 +145,8 @@ test('Configure Unit Form exposes every independently configurable live Add/Edit
   const configurableKeys = listLotConfigurableUnitFormFields().map((field) => field.key);
 
   assert.deepEqual(configurableKeys, [
-    'unit_serial_number', 'bios_serial_number', 'manufacturer', 'unit_model', 'screen_size', 'apple_model_number', 'model_year',
+    'unit_serial_number', 'bios_serial_number', 'amazon_asset_tag', 'fnsku', 'asin', 'tracking_number', 'pallet_number',
+    'buyer_comments', 'manufacturer', 'unit_model', 'screen_size', 'apple_model_number', 'model_year',
     'processor_model', 'processor_speed_ghz', 'memory_modules', 'previous_memory_size', 'storage_devices',
     'previous_storage_size', 'operating_system', 'os_build', 'bios_version', 'keyboard_language',
     'wifi_card_present', 'charger_included', 'display_type', 'native_screen_resolution', 'refresh_rate',
@@ -160,6 +161,7 @@ test('Configure Unit Form exposes every independently configurable live Add/Edit
 
   for (const field of listLotConfigurableUnitFormFields()) {
     assert.equal(field.visibilityConfigurable, true, `${field.key} should support visibility.`);
-    assert.equal(field.requirementConfigurable, true, `${field.key} should support required/optional.`);
+    const visibilityOnly = field.key === 'amazon_asset_tag';
+    assert.equal(field.requirementConfigurable, !visibilityOnly, `${field.key} required/optional policy mismatch.`);
   }
 });

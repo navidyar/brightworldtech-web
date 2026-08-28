@@ -53,6 +53,7 @@ function mapUnitRequest(request) {
     requestSource: 'unit_request',
     requestKey: `unit-${request.unitRequestId}`,
     displayRequestId: request.unitRequestId,
+    displaySubject: request.displaySubject || request.listContextPrimary || request.requestTypeLabel,
     detailUrl: `/unit-requests/${request.unitRequestId}`,
     withdrawUrl: `/unit-requests/${request.unitRequestId}/withdraw`,
     submittedAt: request.submittedAt || null,
@@ -103,6 +104,9 @@ function mapOverrideRequest(request) {
     : request.requestedDestinationLotName && request.requestedDestinationLotName !== 'No destination selected'
       ? `${request.lotName} → ${request.requestedDestinationLotName}`
       : request.lotName;
+  const displaySubject = isOutcomeConfirmation
+    ? [request.unitLabel, request.outcomeConfirmationOutcomeLabel].filter(Boolean).join(' · ')
+    : request.unitLabel || requestTypeLabel;
 
   return {
     requestSource: 'override',
@@ -111,6 +115,7 @@ function mapOverrideRequest(request) {
     unitOverrideRequestId: request.unitOverrideRequestId,
     requestType,
     requestTypeLabel,
+    displaySubject,
     status,
     statusLabel: getStatusLabel(status),
     statusClass: getStatusClass(status),

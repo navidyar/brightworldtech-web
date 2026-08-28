@@ -2,6 +2,7 @@
 
 const { pool } = require('./db');
 const unitAuditEventModel = require('./unitAuditEventModel');
+const lotQcRequirementModel = require('./lotQcRequirementModel');
 const unitQcCorrectionModel = require('./unitQcCorrectionModel');
 const { assertCurrentQcCompletionCycle } = require('../services/qcCompletionCyclePolicy');
 
@@ -264,6 +265,8 @@ async function recordQcReview({ unitId, unitWorkCompletionId, reviewedByUserId, 
       throw error;
     }
 
+    await lotQcRequirementModel.assertUnitQcRequired({ unitId: safeUnitId, connection });
+
     assertCurrentQcCompletionCycle(unit, {
       code: 'BWT_QC_COMPLETION_STALE',
       message: 'This Unit completion is no longer the current work cycle. Refresh the Unit Browser before recording a Quality Control decision.'
@@ -439,6 +442,8 @@ async function lockQcReviewReversionTargetWithConnection(connection, {
     error.code = 'BWT_QC_REVERSION_ALREADY_REVERTED';
     throw error;
   }
+
+  await lotQcRequirementModel.assertUnitQcRequired({ unitId: safeUnitId, connection });
 
   assertCurrentQcCompletionCycle(state, {
     code: 'BWT_QC_REVERSION_COMPLETION_STALE',

@@ -51,3 +51,18 @@ test('corrected rejected Units re-enable both decisions for QC recheck', () => {
   assert.equal(state.acceptEnabled, true);
   assert.equal(state.rejectEnabled, true);
 });
+
+
+test('QC-disabled Lots hide current QC actions even for completed Units', () => {
+  const state = getQcReviewActionAvailability({
+    qcRequired: false,
+    hasCompletion: true,
+    latestDecisionCode: 'rejected',
+    hasCorrection: true
+  });
+
+  assert.equal(state.visible, false);
+  assert.equal(state.acceptEnabled, false);
+  assert.equal(state.rejectEnabled, false);
+  assert.match(state.acceptDisabledReason, /not required/i);
+});

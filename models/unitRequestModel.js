@@ -9,6 +9,7 @@ const processorFamilyModel = require('./processorFamilyModel');
 const processorCatalogModel = require('./processorCatalogModel');
 const unitQcCheckModel = require('./unitQcCheckModel');
 const unitAuditEventModel = require('./unitAuditEventModel');
+const { buildUnitFormAuditEvent } = require('../services/unitAuditSnapshot');
 
 const UNIT_REQUESTS_TABLE = 'unit_requests';
 const UNIT_DUPLICATE_REQUESTS_TABLE = 'unit_duplicate_requests';
@@ -307,6 +308,22 @@ function buildQcReversionContext(row) {
   };
 }
 
+function getUnitRequestDisplaySubject({ isDuplicateRequest, matchedUnitLabel, catalogContext, qcReversionContext }) {
+  if (isDuplicateRequest) return matchedUnitLabel || 'Matching existing Unit';
+  if (catalogContext?.kind === 'model') return catalogContext.requestedModelName || catalogContext.summary;
+  if (catalogContext?.kind === 'processor') {
+    return [catalogContext.requestedProcessorType, catalogContext.requestedProcessorName]
+      .filter(Boolean)
+      .join(' · ') || catalogContext.unitModelName || catalogContext.summary;
+  }
+  if (qcReversionContext) {
+    return [qcReversionContext.unitLabel, qcReversionContext.decisionLabel]
+      .filter(Boolean)
+      .join(' · ');
+  }
+  return 'Request details';
+}
+
 function mapRequest(row, lotMap = new Map()) {
   const intakeSnapshot = parseJsonValue(row.intake_snapshot_json, {});
   const matchedUnitSnapshot = parseJsonValue(row.matched_unit_snapshot_json, {});
@@ -316,11 +333,19 @@ function mapRequest(row, lotMap = new Map()) {
   const catalogContext = buildCatalogContext(row);
   const qcReversionContext = buildQcReversionContext(row);
   const isDuplicateRequest = row.request_type === INTENTIONAL_DUPLICATE_REQUEST_TYPE;
+  const matchedUnitLabel = isDuplicateRequest ? getAssetTagLabel(row.matched_unit_asset_number) : '';
+  const displaySubject = getUnitRequestDisplaySubject({
+    isDuplicateRequest,
+    matchedUnitLabel,
+    catalogContext,
+    qcReversionContext
+  });
 
   return {
     unitRequestId: Number(row.unit_request_id),
     requestType: row.request_type,
     requestTypeLabel: getRequestTypeLabel(row.request_type),
+    displaySubject,
     isIntentionalDuplicateRequest: isDuplicateRequest,
     isCatalogRequest: CATALOG_REQUEST_TYPES.has(row.request_type),
     isQcReversionRequest: row.request_type === QC_REVERSION_REQUEST_TYPE,
@@ -341,7 +366,7 @@ function mapRequest(row, lotMap = new Map()) {
     submittedAt: row.submitted_at || null,
     reviewedAt: row.reviewed_at || null,
     matchedUnitId: isDuplicateRequest && row.matched_unit_id ? Number(row.matched_unit_id) : null,
-    matchedUnitLabel: isDuplicateRequest ? getAssetTagLabel(row.matched_unit_asset_number) : '',
+    matchedUnitLabel,
     matchedUnitCurrentLotId: isDuplicateRequest ? matchedLotId : null,
     matchedUnitCurrentLotName: isDuplicateRequest ? (matchedLotId ? (row.current_matched_lot_name || getLotName(lotMap, matchedLotId)) : 'No current lot') : '',
     requestedDestinationLotId: isDuplicateRequest ? destinationLotId : null,
@@ -357,7 +382,7 @@ function mapRequest(row, lotMap = new Map()) {
       : {},
     serialSummary: intakeSnapshot.display?.serialSummary || 'Serial values recorded in the intake snapshot.',
     listContextPrimary: isDuplicateRequest
-      ? getAssetTagLabel(row.matched_unit_asset_number)
+      ? matchedUnitLabel
       : (catalogContext ? catalogContext.summary : qcReversionContext ? qcReversionContext.summary : 'Request details unavailable'),
     listContextSecondary: isDuplicateRequest
       ? (destinationLotId ? (row.requested_destination_lot_name || getLotName(lotMap, destinationLotId)) : 'No lot selected')
@@ -586,6 +611,13 @@ function mapRequestSummary(row) {
   const catalogContext = buildCatalogContext(row);
   const qcReversionContext = buildQcReversionContext(row);
   const isDuplicateRequest = row.request_type === INTENTIONAL_DUPLICATE_REQUEST_TYPE;
+  const matchedUnitLabel = isDuplicateRequest ? getAssetTagLabel(row.matched_unit_asset_number) : '';
+  const displaySubject = getUnitRequestDisplaySubject({
+    isDuplicateRequest,
+    matchedUnitLabel,
+    catalogContext,
+    qcReversionContext
+  });
   const serialSummary = String(row.queue_serial_summary || '').trim();
   const matchedSerialSummary = String(row.queue_matched_serial_summary || '').trim();
 
@@ -593,6 +625,7 @@ function mapRequestSummary(row) {
     unitRequestId: Number(row.unit_request_id),
     requestType: row.request_type,
     requestTypeLabel: getRequestTypeLabel(row.request_type),
+    displaySubject,
     isIntentionalDuplicateRequest: isDuplicateRequest,
     isCatalogRequest: CATALOG_REQUEST_TYPES.has(row.request_type),
     isQcReversionRequest: row.request_type === QC_REVERSION_REQUEST_TYPE,
@@ -613,7 +646,7 @@ function mapRequestSummary(row) {
     submittedAt: row.submitted_at || null,
     reviewedAt: row.reviewed_at || null,
     matchedUnitId: isDuplicateRequest && row.matched_unit_id ? Number(row.matched_unit_id) : null,
-    matchedUnitLabel: isDuplicateRequest ? getAssetTagLabel(row.matched_unit_asset_number) : '',
+    matchedUnitLabel,
     matchedUnitCurrentLotId: isDuplicateRequest ? matchedLotId : null,
     matchedUnitCurrentLotName: isDuplicateRequest
       ? (matchedLotId ? (row.current_matched_lot_name || 'Lot name not available') : 'No current lot')
@@ -631,7 +664,7 @@ function mapRequestSummary(row) {
     snapshotDisplay: {},
     serialSummary: serialSummary || 'Serial values recorded in the intake snapshot.',
     listContextPrimary: isDuplicateRequest
-      ? getAssetTagLabel(row.matched_unit_asset_number)
+      ? matchedUnitLabel
       : (catalogContext ? catalogContext.summary : qcReversionContext ? qcReversionContext.summary : 'Request details unavailable'),
     listContextSecondary: isDuplicateRequest
       ? (destinationLotId ? (row.requested_destination_lot_name || 'Lot name not available') : 'No lot selected')
@@ -1072,7 +1105,7 @@ async function createIntentionalDuplicateRequest({
     );
 
     if (existingRows[0]) {
-      const error = new Error(`Intentional Duplicate request #${existingRows[0].unit_request_id} is already pending for this matching unit and destination lot.`);
+      const error = new Error('An Intentional Duplicate request is already pending for this matching Unit and destination Lot.');
       error.code = 'BWT_UNIT_REQUEST_ALREADY_PENDING';
       error.unitRequestId = Number(existingRows[0].unit_request_id);
       throw error;
@@ -1222,7 +1255,7 @@ async function createModelCatalogRequest({
     );
 
     if (pendingRows[0]) {
-      const error = new Error(`Model Catalog request #${pendingRows[0].unit_request_id} is already pending for this model.`);
+      const error = new Error('A Model Catalog request is already pending for this model.');
       error.code = 'BWT_CATALOG_REQUEST_ALREADY_PENDING';
       error.unitRequestId = Number(pendingRows[0].unit_request_id);
       throw error;
@@ -1351,7 +1384,7 @@ async function createProcessorCatalogRequest({
     );
 
     if (pendingRows[0]) {
-      const error = new Error(`Processor Catalog request #${pendingRows[0].unit_request_id} is already pending for this model and processor.`);
+      const error = new Error('A Processor Catalog request is already pending for this Unit Model and processor.');
       error.code = 'BWT_CATALOG_REQUEST_ALREADY_PENDING';
       error.unitRequestId = Number(pendingRows[0].unit_request_id);
       throw error;
@@ -1482,6 +1515,20 @@ async function assertRequestedDestinationLotIsAssignable(destinationLotId) {
   }
 }
 
+async function getIntentionalDuplicateAuditFormOptions(formData) {
+  const [formOptions, issueFormOptions, expandedFormOptions] = await Promise.all([
+    techUnitModel.getTechUnitFormOptions({
+      includeCurrentLotId: normalizePositiveInteger(formData && formData.lotId),
+      includeCurrentUnitModelId: normalizePositiveInteger(formData && formData.unitModelId),
+      includeCurrentProcessorModelId: normalizePositiveInteger(formData && formData.processorModelId)
+    }),
+    unitIssueEntryModel.getIssueFormOptions(),
+    unitExpandedFormModel.getExpandedFormOptions()
+  ]);
+
+  return { ...formOptions, ...issueFormOptions, ...expandedFormOptions };
+}
+
 async function approveIntentionalDuplicateRequest({ unitRequestId, reviewedByUserId, reviewerNote = '' }) {
   const safeRequestId = normalizePositiveInteger(unitRequestId);
   const safeReviewerUserId = normalizePositiveInteger(reviewedByUserId);
@@ -1574,6 +1621,25 @@ async function approveIntentionalDuplicateRequest({ unitRequestId, reviewedByUse
       formData: creationFormData,
       currentUserId: Number(request.requested_by_user_id)
     });
+
+    const auditFormOptions = await getIntentionalDuplicateAuditFormOptions(creationFormData);
+    const creationAuditEvent = buildUnitFormAuditEvent({
+      mode: 'create',
+      unitId: creation.unitId,
+      actorUserId: Number(request.requested_by_user_id),
+      afterFormData: {
+        ...creationFormData,
+        assetTag: techUnitModel.getDisplayAssetTag(creation.assetNumber)
+      },
+      formOptions: auditFormOptions,
+      source: 'intentional_duplicate_approval'
+    });
+    creationAuditEvent.metadata = {
+      ...creationAuditEvent.metadata,
+      unitRequestId: safeRequestId,
+      approvedByUserId: safeReviewerUserId
+    };
+    await unitAuditEventModel.createUnitAuditEvent(creationAuditEvent, connection);
 
     await connection.query(
       'UPDATE unit_duplicate_requests SET created_unit_id = ? WHERE unit_request_id = ? LIMIT 1',
@@ -2192,7 +2258,7 @@ async function revertQcReviewDirectlyWithRequestGuard({ unitId, qcCheckId, rever
     );
 
     if (pendingRows[0]) {
-      const error = new Error(`QC Reversion Request #${pendingRows[0].unit_request_id} is pending for this decision. Review that request instead of bypassing it with a direct reversion.`);
+      const error = new Error('A QC Reversion Request is pending for this decision. Review that request instead of bypassing it with a direct reversion.');
       error.code = 'BWT_QC_REVERSION_PENDING_REQUEST';
       error.unitRequestId = Number(pendingRows[0].unit_request_id);
       throw error;
@@ -2280,12 +2346,6 @@ async function createQcReversionRequest({ unitId, qcCheckId, requestedByUserId, 
       qcCheckId: safeQcCheckId
     });
 
-    if (Number(state.reviewed_by_user_id) !== safeRequesterUserId) {
-      const error = new Error('Only the QC user who recorded this current decision can request its reversion.');
-      error.code = 'BWT_QC_REVERSION_REQUEST_OWNER_REQUIRED';
-      throw error;
-    }
-
     const [pendingRows] = await connection.query(
       `
         SELECT ur.unit_request_id
@@ -2301,7 +2361,7 @@ async function createQcReversionRequest({ unitId, qcCheckId, requestedByUserId, 
       [QC_REVERSION_REQUEST_TYPE, safeQcCheckId]
     );
     if (pendingRows[0]) {
-      const error = new Error(`QC reversion request #${pendingRows[0].unit_request_id} is already pending for this decision.`);
+      const error = new Error('A QC reversion request is already pending for this decision.');
       error.code = 'BWT_UNIT_REQUEST_ALREADY_PENDING';
       error.unitRequestId = Number(pendingRows[0].unit_request_id);
       throw error;
@@ -2359,6 +2419,56 @@ async function createQcReversionRequest({ unitId, qcCheckId, requestedByUserId, 
         qcCheckId: safeQcCheckId,
         decisionCode: String(state.decision_code || '')
       }
+    });
+
+    const decisionCode = String(state.decision_code || '').trim().toLowerCase();
+    await unitAuditEventModel.insertEventWithConnection(connection, {
+      unitId: safeUnitId,
+      actorUserId: safeRequesterUserId,
+      eventType: 'unit_qc_reversion_request_submitted',
+      eventSource: 'quality_control_reversion_request',
+      eventSummary: 'Requested QC decision reversion',
+      metadata: {
+        unitRequestId,
+        unitWorkCompletionId: Number(state.unit_work_completion_id),
+        qcCheckId: safeQcCheckId,
+        decisionCode,
+        originalQcReviewerUserId: Number(state.reviewed_by_user_id) || null
+      },
+      changes: [
+        {
+          fieldKey: 'qc_reversion_request',
+          fieldLabel: 'QC Reversion Request',
+          changeType: 'submitted',
+          oldValueText: null,
+          newValueText: 'QC Reversion Request Pending',
+          sortOrder: 10
+        },
+        {
+          fieldKey: 'qc_decision',
+          fieldLabel: 'Quality Control Decision',
+          changeType: 'recorded',
+          oldValueText: null,
+          newValueText: decisionCode === 'accepted' ? 'Accepted' : 'Rejected',
+          sortOrder: 20
+        },
+        {
+          fieldKey: 'qc_reversion_original_reviewer',
+          fieldLabel: 'Original QC Reviewer',
+          changeType: 'recorded',
+          oldValueText: null,
+          newValueText: Number(state.reviewed_by_user_id) ? `User #${Number(state.reviewed_by_user_id)}` : 'Unknown',
+          sortOrder: 30
+        },
+        {
+          fieldKey: 'qc_reversion_request_reason',
+          fieldLabel: 'Reversion Request Reason',
+          changeType: 'recorded',
+          oldValueText: null,
+          newValueText: safeRequesterNote,
+          sortOrder: 40
+        }
+      ]
     });
 
     await connection.commit();

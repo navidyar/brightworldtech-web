@@ -75,6 +75,6 @@ test('shared and Units table styles are cache-busted together', () => {
 
   assert.match(head, /work-area\.css\?v=20260812-stage10w48-cross-browser-period-picker/);
   for (const template of [page, detail]) {
-    assert.match(template, /tech-units-clean\.css\?v=20260819-stage10w68o-toggle-label-cleanup/);
+    assert.match(template, /tech-units-clean\.css\?v=20260826-stage10w73e-browser-usability/);
   }
 });

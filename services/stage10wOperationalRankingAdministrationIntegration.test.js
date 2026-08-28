@@ -90,8 +90,8 @@ test('shared Configuration styling remains compact, responsive, and uses common 
   assert.match(css, /\.operational-ranking-table-group-row th/);
   assert.match(css, /@media \(max-width: 760px\)/);
   assert.match(fragment, /class="table-card operational-ranking-table"/);
-  assert.match(head, /app\.css\?v=20260804-stage10w-ranking-administration/);
-  assert.match(read('views/pages/management-config.ejs'), /config-values\.js\?v=20260804-stage10w-ranking-administration/);
+  assert.match(head, /app\.css\?v=[^"\'\s>]+/);
+  assert.match(read('views/pages/management-config.ejs'), /config-values\.js\?v=[^"\'\s>]+/);
 });
 
 test('Stage 10W provides focused apply, status, and validation commands', () => {

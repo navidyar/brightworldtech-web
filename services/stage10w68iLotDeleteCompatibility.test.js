@@ -25,7 +25,7 @@ function loadLotOwnedConfigurationCleanup() {
 test('legacy empty Lot deletion explicitly clears all Lot-owned configuration rows', () => {
   const model = read('models/lotModel.js');
 
-  assert.match(model, /const LOT_OWNED_CONFIGURATION_TABLES = \[[\s\S]*'lot_requirement_inheritance_suppressions'[\s\S]*'lot_unit_form_field_rules'[\s\S]*'lot_requirements'[\s\S]*\];/);
+  assert.match(model, /const LOT_OWNED_CONFIGURATION_TABLES = \[[\s\S]*'lot_unit_browser_columns'[\s\S]*'lot_unit_browser_layouts'[\s\S]*'lot_requirement_inheritance_suppressions'[\s\S]*'lot_unit_form_field_rules'[\s\S]*'lot_requirements'[\s\S]*\];/);
   assert.match(model, /async function deleteLotOwnedConfigurationRows\(connection, lotId\)/);
   assert.match(model, /information_schema\.COLUMNS[\s\S]*COLUMN_NAME = 'lot_id'[\s\S]*TABLE_NAME IN/);
   assert.match(model, /await deleteLotOwnedConfigurationRows\(connection, lotId\);[\s\S]*DELETE FROM lots WHERE lot_id = \? LIMIT 1/);
@@ -56,6 +56,8 @@ test('legacy Lot cleanup removes only known configuration tables that actually e
 
   assert.equal(calls.length, 4);
   assert.deepEqual(Array.from(calls[0].values), [
+    'lot_unit_browser_columns',
+    'lot_unit_browser_layouts',
     'lot_requirement_inheritance_suppressions',
     'lot_unit_form_field_rules',
     'lot_requirements'

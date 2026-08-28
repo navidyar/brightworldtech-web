@@ -72,18 +72,25 @@ test('Unit Model refresh remains compatible with MySQL ONLY_FULL_GROUP_BY', () =
   assert.doesNotMatch(model, /groupBySql: `u\.unit_model_id, \$\{contextExpression\}`/);
 });
 
-test('Unit Model and Processor lists carry contextual cache scores into the existing comboboxes', () => {
+test('Unit Category, Unit Model, and Processor form options retain operational ranking integration', () => {
+  const techModel = read('models/techUnitModel.js');
   const form = read('views/fragments/tech-unit-form.ejs');
   const browser = read('public/js/tech-unit-form.js');
+  const formPage = read('views/pages/tech-unit-form.ejs');
+  const browserPage = read('views/pages/tech-units.ejs');
 
+  assert.match(techModel, /const rankedUnitCategories = sortOptionsByPopularity\(unitCategories, operationalRankingSnapshot, \{[\s\S]*?optionScope: 'unit_category'/);
+  assert.match(techModel, /const unitCategoriesWithProductionWeights = rankedUnitCategories\.map/);
+  assert.match(techModel, /unitCategories: unitCategoriesWithProductionWeights/);
+  assert.match(form, /formOptions\.unitCategories\.forEach/);
   assert.match(form, /data-usage-score/);
   assert.match(form, /data-context-usage-scores/);
   assert.match(browser, /getOperationalUsageScore/);
   assert.match(browser, /compareOperationalOptions/);
   assert.match(browser, /filters\.manufacturerId/);
   assert.match(browser, /modelSelectionInput\.value/);
-  assert.match(read('views/pages/tech-unit-form.ejs'), /stage10t-stabilization/);
-  assert.match(read('views/pages/tech-units.ejs'), /stage10t-stabilization/);
+  assert.match(formPage, /tech-unit-form\.js\?v=[^\"']+/);
+  assert.match(browserPage, /tech-unit-form\.js\?v=[^\"']+/);
 });
 
 test('configuration administration order is not rewritten by the ranking service', () => {

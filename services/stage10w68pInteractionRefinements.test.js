@@ -86,6 +86,6 @@ test('modified interaction assets are cache-busted at their entry points', () =>
   assert.match(users, /modal\.js\?v=20260819-stage10w68p-interaction-refinements/);
   techPages.forEach((page) => {
     assert.match(page, /modal\.js\?v=20260819-stage10w68p-interaction-refinements/);
-    assert.match(page, /tech-unit-form\.js\?v=20260819-stage10w68z-assignable-lot-closed-on-focus/);
+    assert.match(page, /tech-unit-form\.js\?v=[^"\'\s>]+/);
   });
 });

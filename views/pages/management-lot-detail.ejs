@@ -3,14 +3,15 @@
   <%- include('../partials/head', {
     pageTitle,
     stylesheets: [
-      '/css/lots.css?v=20260813-stage10w61-lot-ui-export',
+      '/css/lots.css?v=20260826-stage10w73c-browser-config-refinement',
       '/css/modal.css'
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
-  <script defer src="/js/lot-form.js?v=20260813-stage10w61-lot-ui-export"></script>
+  <script defer src="/js/lot-form.js?v=20260828-stage10w74p-automatic-requirement-inheritance"></script>
   <script defer src="/js/lot-requirements.js?v=20260819-stage10w68y-mouse-focus-continuity"></script>
   <script defer src="/js/lot-unit-form-rules.js"></script>
+  <script defer src="/js/lot-unit-browser-layout.js?v=20260826-stage10w73e"></script>
   <script defer src="/js/unit-export.js?v=20260813-stage10w63-multi-lot-export-scope"></script>
 
   <body class="lots-lookup-typography-preview lots-lookup-ui-preview">
@@ -47,19 +48,23 @@
                 <a class="secondary-button" href="/tech/units?lotId=<%= lot.lot_id %>&amp;lotScope=descendants&amp;perPage=all">Open Lot + Descendants</a>
               <% } %>
               <button type="button" class="secondary-button" hx-get="/management/lots/<%= lot.lot_id %>/export/preview?scope=direct" hx-target="#modal-root" hx-swap="innerHTML">Export Units</button>
-              <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
+              <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal?returnTo=lot-detail" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal?returnTo=lot-detail" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/duplicate/modal" hx-get="/management/lots/<%= lot.lot_id %>/duplicate/modal" hx-target="#modal-root" hx-swap="innerHTML">Duplicate Lot</a>
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-target="#modal-root" hx-swap="innerHTML">Requirements</a>
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-get="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Unit Form</a>
+              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unit-browser/modal" hx-get="/management/lots/<%= lot.lot_id %>/unit-browser/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Unit Browser</a>
+              <% if (Number(lot.generate_amazon_asset_tag || 0) === 1) { %>
+                <button type="button" class="secondary-button" hx-get="/management/lots/<%= lot.lot_id %>/amazon-asset-tags/modal" hx-target="#modal-root" hx-swap="innerHTML">Generate Missing AZ Tags</button>
+              <% } %>
               <% if (Number(lot.is_closed) === 1) { %>
-                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-target="#modal-root" hx-swap="innerHTML">Reopen Lot</a>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal?returnTo=lot-detail" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal?returnTo=lot-detail" hx-target="#modal-root" hx-swap="innerHTML">Reopen Lot</a>
               <% } else { %>
-                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/close/modal" hx-get="/management/lots/<%= lot.lot_id %>/close/modal" hx-target="#modal-root" hx-swap="innerHTML">Close Lot</a>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/close/modal?returnTo=lot-detail" hx-get="/management/lots/<%= lot.lot_id %>/close/modal?returnTo=lot-detail" hx-target="#modal-root" hx-swap="innerHTML">Close Lot</a>
               <% } %>
               <% if (Number(lot.is_active) === 1) { %>
-                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal" hx-target="#modal-root" hx-swap="innerHTML">Hide Lot</a>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal?returnTo=lot-detail" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal?returnTo=lot-detail" hx-target="#modal-root" hx-swap="innerHTML">Hide Lot</a>
               <% } else { %>
-                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-get="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-target="#modal-root" hx-swap="innerHTML">Unhide Lot</a>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unhide/modal?returnTo=lot-detail" hx-get="/management/lots/<%= lot.lot_id %>/unhide/modal?returnTo=lot-detail" hx-target="#modal-root" hx-swap="innerHTML">Unhide Lot</a>
               <% } %>
               <% if (Number(lot.unitCount || 0) === 0 && lotRelationships.directChildLots.length === 0) { %>
                 <a class="secondary-button danger-button" href="/management/lots/<%= lot.lot_id %>/delete/modal" hx-get="/management/lots/<%= lot.lot_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Lot</a>
@@ -219,6 +224,16 @@
                 <div>
                   <dt>Moved-In Production</dt>
                   <dd><%= Number(lot.start_new_production_cycle_on_move || 0) === 1 ? 'Start new cycle' : 'Continue existing cycle' %></dd>
+                </div>
+
+                <div>
+                  <dt>Amazon AZ Tags</dt>
+                  <dd><%= Number(lot.generate_amazon_asset_tag || 0) === 1 ? 'Generate when missing' : 'Off' %></dd>
+                </div>
+
+                <div>
+                  <dt>Quality Control</dt>
+                  <dd><%= Number(lot.qc_required ?? 1) === 1 ? 'Required' : 'Not required' %></dd>
                 </div>
               </dl>
             </aside>

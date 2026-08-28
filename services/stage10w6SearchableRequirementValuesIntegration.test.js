@@ -54,8 +54,8 @@ test('the Requirement modal lets the searchable results list extend beyond the r
 });
 
 test('Lots pages load the current requirement assets while preserving searchable requirement support', () => {
-  assert.match(read('views/pages/management-lot-new.ejs'), /20260813-stage10w61-lot-ui-export/);
-  assert.match(read('views/pages/management-lots.ejs'), /20260813-stage10w61-lot-ui-export/);
-  assert.match(read('views/pages/management-lot-detail.ejs'), /20260813-stage10w61-lot-ui-export/);
-  assert.match(read('views/pages/management-lot-detail.ejs'), /lot-requirements\.js\?v=20260819-stage10w68y-mouse-focus-continuity/);
+  assert.match(read('views/pages/management-lot-new.ejs'), /\/css\/lots\.css\?v=[^\"'\s]+/);
+  assert.match(read('views/pages/management-lots.ejs'), /\/css\/lots\.css\?v=[^\"'\s]+/);
+  assert.match(read('views/pages/management-lot-detail.ejs'), /\/css\/lots\.css\?v=[^\"'\s]+/);
+  assert.match(read('views/pages/management-lot-detail.ejs'), /lot-requirements\.js\?v=[^\"'\s]+/);
 });

@@ -13,7 +13,7 @@ async function getColumns(tableName) {
     `,
     [tableName]
   );
-  return new Set(rows.map((row) => row.column_name));
+  return new Set(rows.map((row) => row.column_name || row.COLUMN_NAME).filter(Boolean));
 }
 
 async function main() {

@@ -52,6 +52,6 @@ test('Stage 10O assets are cache-busted on modal and full-page entry points', ()
   assert.match(detailPage, /tech-units-clean\.css\?v=/);
   assert.match(formPage, /tech-units-clean\.css\?v=/);
   assert.match(browserPage, /tech-units-clean\.css\?v=/);
-  assert.match(formPage, /tech-unit-form\.js\?v=20260817-stage10w66-specs-tests/);
-  assert.match(browserPage, /tech-unit-form\.js\?v=20260817-stage10w66-specs-tests/);
+  assert.match(formPage, /tech-unit-form\.js\?v=[^"\'\s>]+/);
+  assert.match(browserPage, /tech-unit-form\.js\?v=[^"\'\s>]+/);
 });

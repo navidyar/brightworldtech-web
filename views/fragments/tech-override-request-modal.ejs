@@ -63,7 +63,7 @@
 
         <div class="form-actions">
           <% if (existingPendingRequest && existingPendingRequest.unitOverrideRequestId) { %>
-            <a class="primary-button" href="/unit-requests/override/<%= existingPendingRequest.unitOverrideRequestId %>">View Request</a>
+            <a class="primary-button" href="/unit-requests/override/<%= existingPendingRequest.unitOverrideRequestId %>">View Request Details</a>
           <% } %>
           <button type="button" class="secondary-button" data-modal-close>Done</button>
         </div>
@@ -100,13 +100,13 @@
         <% if (existingPendingRequest) { %>
           <div class="message warning">
             <p>
-              Override request #<%= existingPendingRequest.unitOverrideRequestId %> is already pending for this Unit.
+              An override request is already pending for this Unit.
               Management must approve or deny it before another request can be created.
             </p>
           </div>
 
           <div class="form-actions">
-            <a class="primary-button" href="/unit-requests/override/<%= existingPendingRequest.unitOverrideRequestId %>">View Request</a>
+            <a class="primary-button" href="/unit-requests/override/<%= existingPendingRequest.unitOverrideRequestId %>">View Request Details</a>
             <button type="button" class="secondary-button" data-modal-close>Close</button>
           </div>
         <% } else if (supported) { %>

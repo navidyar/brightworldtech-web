@@ -25,8 +25,9 @@ test('Duplicate Lot reuses rounded choice cards and hides the Parent Lot control
   assert.match(lotScript, /function setupLotDuplicateForm/);
   assert.match(lotScript, /parentField\.hidden = !isChildPlacement/);
   assert.match(lotScript, /parentSelect\.disabled = !isChildPlacement/);
-  assert.match(lotScript, /parentInheritance\.disabled = !isChildPlacement/);
+  assert.match(lotScript, /parentInheritance\.disabled = !hasDestinationParent/);
   assert.match(lotScript, /preserveInheritance\.checked = true/);
+  assert.match(lotScript, /parentSelect\.addEventListener\('change', syncPlacement\)/);
 
   assert.match(lotCss, /\.lot-choice-fieldset[\s\S]*?border: 0/);
   assert.match(lotCss, /input\[type="checkbox"\], input\[type="radio"\][\s\S]*?width: 16px/);

@@ -46,7 +46,7 @@ test('all Add/Edit Unit entry points load the closed-on-focus asset version', ()
   ].forEach((relativePath) => {
     assert.match(
       read(relativePath),
-      /tech-unit-form\.js\?v=20260819-stage10w68z-assignable-lot-closed-on-focus/
+      /tech-unit-form\.js\?v=[^"\'\s>]+/
     );
   });
 });

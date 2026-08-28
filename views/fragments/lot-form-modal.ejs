@@ -4,6 +4,7 @@
   const safeFormOptions = formOptions || { capabilities: {}, parentLots: [], lotTypes: [], requirementPolicies: [], grades: [], productionWeightOptions: [] };
   const safeMode = mode === 'edit' ? 'edit' : 'create';
   const safeLot = lot || null;
+  const safeReturnTo = typeof returnTo !== 'undefined' && returnTo === 'lot-detail' ? 'lot-detail' : 'lot-browser';
   const formAction = safeMode === 'edit' && safeLot
     ? `/management/lots/${safeLot.lot_id}/edit/modal`
     : '/management/lots';
@@ -43,6 +44,7 @@
       <% } %>
 
       <form class="app-form app-form-clean lot-form-modal-form" method="post" action="<%= formAction %>" hx-post="<%= formAction %>" hx-target="#modal-root" hx-swap="innerHTML" data-lot-form>
+        <% if (safeMode === 'edit') { %><input type="hidden" name="returnTo" value="<%= safeReturnTo %>" /><% } %>
         <div class="form-section">
           <div class="form-section-header">
             <div>
@@ -66,6 +68,21 @@
                 </span>
               </label>
             <% } %>
+            <% if (safeFormOptions.capabilities.hasQcRequired) { %>
+              <label class="lot-inline-option plain-checkbox-row form-field-wide" for="qcRequiredModal">
+                <input
+                  id="qcRequiredModal"
+                  type="checkbox"
+                  name="qcRequired"
+                  value="1"
+                  <%= safeFormData.qcRequired === '1' ? 'checked' : '' %>
+                />
+                <span>
+                  <strong>Require Quality Control (QC) for Units in this Lot</strong>
+                  <small>When off, Units in this Lot do not enter the QC Review queue. Existing QC history is preserved, and the change is recorded in Unit History.</small>
+                </span>
+              </label>
+            <% } %>
             <% if (safeFormOptions.capabilities.hasDuplicateUnitAssumption) { %>
               <label class="lot-inline-option plain-checkbox-row form-field-wide" for="allowDuplicateUnitAssumptionModal">
                 <input
@@ -78,6 +95,21 @@
                 <span>
                   <strong>Allow duplicate-match unit assumption</strong>
                   <small>Affects duplicate-match behavior for regular Techs in this lot.</small>
+                </span>
+              </label>
+            <% } %>
+            <% if (safeFormOptions.capabilities.hasGenerateAmazonAssetTag) { %>
+              <label class="lot-inline-option plain-checkbox-row form-field-wide" for="generateAmazonAssetTagModal">
+                <input
+                  id="generateAmazonAssetTagModal"
+                  type="checkbox"
+                  name="generateAmazonAssetTag"
+                  value="1"
+                  <%= safeFormData.generateAmazonAssetTag === '1' ? 'checked' : '' %>
+                />
+                <span>
+                  <strong>Generate Amazon Asset Tag (AZ)</strong>
+                  <small>New Units and Units moved into this Lot receive a permanent AZ tag if missing. Enabling this setting does not modify Units already in the Lot.</small>
                 </span>
               </label>
             <% } %>
@@ -113,6 +145,9 @@
                     showHiddenStatus: true
                   }) %>
                 </select>
+                <% if (mode === 'edit') { %>
+                  <small>Changing the Parent Lot automatically restores Requirement inheritance from the new parent. Existing direct Requirements on this Lot remain child-specific overrides.</small>
+                <% } %>
                 </label>
             <% } %>
 

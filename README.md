@@ -201,6 +201,9 @@ Page-specific CSS should be limited to genuinely unique layout or behavior. Shar
 
 - Newly created Lots are hidden until Management manually unhides them.
 - Lot Unit Form Configuration controls which Unit fields are visible and required.
+- Amazon workflow fields (FNSKU, ASIN, Tracking Number, Pallet Number, and Buyer Comments) use the same Lot Unit Form Configuration. Pallet Number is cleared when a Unit enters a Lot where that field is hidden; its prior value remains in Unit History.
+- Lots may independently enable permanent Amazon Asset Tag generation. AZ tags use one global `AZ00000001` sequence, are assigned only when missing, and remain with the Unit across later Lot moves. Enabling the Lot setting does not backfill existing Units; Management must explicitly generate missing AZ tags for direct Units in that Lot.
+- Unit Browser free-text search supports identifiers, FNSKU, ASIN, Tracking Number, Pallet Number, Manufacturer, Unit Model, Processor, and Processor Family/Generation. Multi-line search defaults to Any/OR and can be switched to All/AND.
 - Lot Requirements evaluate whether a Unit qualifies for a Lot; they are separate from form visibility and required-field rules.
 - Each Lot has an explicit Strict, Warn Only, or Open / Mixed requirement policy. The policy is independent from the Unit amount goal; Strict blocks technical mismatches, while the other policies report them without blocking.
 - Admin and Management may accept a Lot requirement exception with a required reason. Acceptance, revocation, and expiration records remain visible in Unit History.

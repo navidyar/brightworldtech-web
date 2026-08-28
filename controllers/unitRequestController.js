@@ -268,7 +268,7 @@ async function renderUnitRequestDetail(req, res, next) {
     }
 
     return res.render('pages/unit-request-detail', {
-      pageTitle: `Unit Request #${unitRequestId}`,
+      pageTitle: `${request.requestTypeLabel} · ${request.displaySubject}`,
       currentNav: 'unit-requests',
       request,
       statusFilter: queueFilters.statusFilter,
@@ -325,6 +325,7 @@ async function renderOverrideRequestDetail(req, res, next) {
     const presentation = unifiedRequestQueue.mapOverrideRequest(rawRequest);
     const request = {
       ...rawRequest,
+      displaySubject: presentation.displaySubject,
       statusLabel: presentation.statusLabel,
       statusClass: presentation.statusClass,
       isPending: presentation.isPending
@@ -341,7 +342,7 @@ async function renderOverrideRequestDetail(req, res, next) {
     const assignableLots = assignableLotOptions.lots;
     const assignableLotHierarchyOptions = assignableLotOptions.hierarchyOptions;
     return res.render('pages/override-request-detail', {
-      pageTitle: `Request #${overrideRequestId}`,
+      pageTitle: `${presentation.requestTypeLabel} · ${presentation.displaySubject}`,
       currentNav: 'unit-requests',
       request,
       assignableLots,

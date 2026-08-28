@@ -4,7 +4,7 @@
     pageTitle,
     stylesheets: [
       '/css/tech.css',
-      '/css/unit-requests.css?v=20260810-stage10w30-processor-catalog-integrity'
+      '/css/unit-requests.css?v=20260828-stage10w74n-request-context-labels'
     ]
   }) %>
 
@@ -19,7 +19,7 @@
           <section class="dashboard-hero accent-green">
             <div>
               <p class="eyebrow"><%= request.requestTypeLabel %></p>
-              <h2>Request #<%= request.unitRequestId %></h2>
+              <h2><%= request.displaySubject %></h2>
               <p>
                 <%= request.isIntentionalDuplicateRequest
                   ? 'Review the matching existing record, immutable requested intake snapshot, and request history.'

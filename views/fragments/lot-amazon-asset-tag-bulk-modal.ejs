@@ -1,0 +1,58 @@
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal lot-modal lot-amazon-asset-tag-bulk-modal" role="dialog" aria-modal="true" aria-labelledby="amazonAzBulkTitle">
+    <header class="modal-header">
+      <div>
+        <h2 id="amazonAzBulkTitle">Generate Missing AZ Tags</h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (errorMessages?.length) { %>
+        <div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <% if (lot) { %>
+        <p><strong><%= lot.lot_name %></strong></p>
+        <p>This action applies to <strong>direct Units in this Lot only</strong>. Descendant Lots are not included.</p>
+        <p><strong><%= Number(missingCount || 0).toLocaleString() %></strong> direct <%= Number(missingCount || 0) === 1 ? 'Unit is' : 'Units are' %> currently missing an Amazon Asset Tag.</p>
+
+        <% if (Number(lot.generate_amazon_asset_tag || 0) !== 1) { %>
+          <div class="message warning">Enable <strong>Generate Amazon Asset Tag (AZ)</strong> in Edit Lot before running this action.</div>
+          <div class="form-actions">
+            <button type="button" class="secondary-button" data-modal-close>Close</button>
+          </div>
+        <% } else if (Number(missingCount || 0) > 0) { %>
+          <form class="app-form app-form-clean" method="post" action="/management/lots/<%= lot.lot_id %>/amazon-asset-tags/generate" hx-post="/management/lots/<%= lot.lot_id %>/amazon-asset-tags/generate" hx-target="#modal-root" hx-swap="innerHTML">
+            <fieldset class="form-field form-field-wide lot-choice-fieldset">
+              <legend>Generation Scope</legend>
+              <div class="form-grid single-column lot-choice-list">
+                <label class="checkbox-card" for="amazonAzBulkScopeDirect">
+                  <input id="amazonAzBulkScopeDirect" type="radio" name="scope" value="direct" checked required />
+                  <span>
+                    <strong>Direct Units in this Lot only</strong>
+                    <small>Descendant Lots are excluded.</small>
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+
+            <div class="form-actions">
+              <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+              <button type="submit" class="primary-button">Generate <%= Number(missingCount || 0).toLocaleString() %> AZ <%= Number(missingCount || 0) === 1 ? 'Tag' : 'Tags' %></button>
+            </div>
+          </form>
+        <% } else { %>
+          <div class="message info">All direct Units in this Lot already have an Amazon Asset Tag.</div>
+          <div class="form-actions">
+            <button type="button" class="secondary-button" data-modal-close>Close</button>
+          </div>
+        <% } %>
+      <% } else { %>
+        <div class="form-actions">
+          <button type="button" class="secondary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

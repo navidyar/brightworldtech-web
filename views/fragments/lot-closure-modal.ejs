@@ -7,6 +7,7 @@
   const actionPath = safeLot ? `/management/lots/${safeLot.lot_id}/${isReopen ? 'reopen' : 'close'}` : '#';
   const unitCount = Number(safeSummary.unitCount || 0);
   const childLotCount = Number(safeSummary.childLotCount || 0);
+  const safeReturnTo = typeof returnTo !== 'undefined' && returnTo === 'lot-detail' ? 'lot-detail' : 'lot-browser';
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
@@ -65,6 +66,7 @@
 
         <% if (safeSummary.canChangeClosure) { %>
           <form method="post" action="<%= actionPath %>" hx-post="<%= actionPath %>" hx-target="#modal-root" hx-swap="innerHTML">
+            <input type="hidden" name="returnTo" value="<%= safeReturnTo %>" />
             <div class="form-actions">
               <button type="submit" class="<%= isReopen ? 'primary-button' : 'secondary-button danger-button' %>"><%= actionLabel %></button>
               <button type="button" class="secondary-button" data-modal-close>Cancel</button>

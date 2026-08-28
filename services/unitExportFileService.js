@@ -12,6 +12,9 @@ const BATTERY_HEALTH_COLUMN_KEY = 'batteryHealth';
 const WRAPPED_COLUMN_KEYS = new Set([
   'hardwareRemarks',
   'cosmeticRemarks',
+  'gradeNotes',
+  'outcomeNotes',
+  'generalComment',
   'previousMemoryModules',
   'currentMemoryModules',
   'memoryModuleChanges',
@@ -30,6 +33,7 @@ const XLSX_COLUMN_WIDTHS = Object.freeze({
   manufacturer: 18,
   model: 24,
   cpu: 30,
+  processorSpeedGhz: 20,
   shortForm: 13,
   previousMemorySize: 16,
   currentMemorySize: 16,
@@ -42,11 +46,19 @@ const XLSX_COLUMN_WIDTHS = Object.freeze({
   currentStorageDevices: 36,
   storageDeviceChanges: 42,
   techName: 22,
+  createdDate: 14,
+  createdTime: 14,
+  completedDate: 14,
+  completedTime: 14,
   batteryHealth: 15,
+  skinnedStatus: 16,
   cosmeticGrade: 16,
+  gradeNotes: 36,
   passFail: 12,
+  outcomeNotes: 36,
   hardwareRemarks: 42,
-  cosmeticRemarks: 42
+  cosmeticRemarks: 42,
+  generalComment: 48
 });
 
 let crc32Table = null;
@@ -58,7 +70,13 @@ function normalizeDataset(dataset) {
     throw error;
   }
 
-  const columns = dataset.columns.length > 0 ? dataset.columns : UNIT_EXPORT_COLUMNS;
+  if (dataset.columns.length === 0) {
+    const error = new Error('Select at least one Unit export column.');
+    error.code = 'BWT_UNIT_EXPORT_COLUMNS_REQUIRED';
+    throw error;
+  }
+
+  const columns = dataset.columns;
 
   return {
     ...dataset,

@@ -1,0 +1,163 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeLot = lot || null;
+  const safeEffectiveLayout = effectiveLayout || null;
+  const safeCoreColumns = Array.isArray(coreColumns) ? coreColumns : [];
+  const safeOptionalColumns = Array.isArray(optionalColumns) ? optionalColumns : [];
+  const hasDirectLayout = Boolean(directLayout);
+  const safeMaxVisibleOptionalColumns = Number(maxVisibleOptionalColumns) || 4;
+%>
+
+<div class="modal-backdrop lot-unit-form-rules-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal lot-modal lot-unit-form-rules-modal lot-unit-browser-layout-modal" role="dialog" aria-modal="true" aria-labelledby="lot-unit-browser-layout-modal-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="lot-unit-browser-layout-modal-title">Configure Unit Browser</h2>
+        <% if (safeLot) { %>
+          <p class="lot-unit-form-rules-subtitle"><%= safeLot.lot_name %></p>
+        <% } %>
+      </div>
+
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((errorMessage) => { %>
+            <p><%= errorMessage %></p>
+          <% }) %>
+        </div>
+      <% } %>
+
+      <% if (safeLot && safeEffectiveLayout) { %>
+        <form
+          class="lot-unit-form-rules-form lot-unit-browser-layout-form"
+          method="post"
+          action="/management/lots/<%= safeLot.lot_id %>/unit-browser/modal"
+          hx-post="/management/lots/<%= safeLot.lot_id %>/unit-browser/modal"
+          hx-target="#modal-root"
+          hx-swap="innerHTML"
+          data-lot-unit-browser-layout
+          data-lot-unit-browser-max-visible="<%= safeMaxVisibleOptionalColumns %>"
+        >
+          <div class="lot-unit-form-rules-intro">
+            <div>
+              <strong>Lot-controlled Browser layout</strong>
+              <p>
+                Core columns always remain visible. Optional display groups can be shown, hidden, and reordered between Identifiers and Unit Actions.
+                Up to <%= formatNumber(safeMaxVisibleOptionalColumns) %> optional groups may be visible at one time so the Browser remains practical on smaller workspaces.
+                A Lot with no direct configuration inherits the nearest configured parent, or the application default at the root.
+              </p>
+              <p><strong>Current source:</strong> <%= sourceLabel %></p>
+              <p><strong>Inheritance path:</strong> <%= safeEffectiveLayout.lineage.map((lineageLot) => lineageLot.name).join(' › ') %></p>
+              <p><strong>Export remains independent:</strong> Browser visibility does not add, remove, or combine Export columns.</p>
+            </div>
+
+            <div class="lot-unit-form-rules-summary" aria-label="Current effective Unit Browser layout summary">
+              <span><small>Core columns</small><strong><%= formatNumber(safeCoreColumns.length) %></strong></span>
+              <span><small>Optional groups</small><strong><%= formatNumber(totalOptionalCount) %></strong></span>
+              <span><small>Visible optional</small><strong><%= formatNumber(visibleOptionalCount) %></strong></span>
+              <span><small>This Lot customized</small><strong><%= hasDirectLayout ? 'Yes' : 'No' %></strong></span>
+            </div>
+          </div>
+
+          <div class="message info lot-unit-browser-foundation-note">
+            Browser groups use compact shared spacing with group-specific width rules. Displayed values are not truncated, and copy-sensitive identifiers remain on one line; horizontal scrolling is used when the selected data genuinely needs more room.
+          </div>
+          <% if (Number(visibleOptionalCount || 0) > safeMaxVisibleOptionalColumns) { %>
+            <div class="message warning lot-unit-browser-foundation-note">
+              This Lot currently has <%= formatNumber(visibleOptionalCount) %> optional groups visible from configuration saved before the new limit. Hide at least <%= formatNumber(Number(visibleOptionalCount) - safeMaxVisibleOptionalColumns) %> before saving another customization.
+            </div>
+          <% } %>
+
+          <div class="lot-unit-form-rules-scroll">
+            <section class="lot-unit-form-rule-section">
+              <div class="lot-unit-form-rule-section-heading">
+                <h3>Fixed core columns</h3>
+                <span>Always visible</span>
+              </div>
+
+              <div class="table-card lot-unit-form-rule-table-card lot-unit-browser-layout-table-card">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Core column</th>
+                      <th>Status</th>
+                      <th>Minimum width</th>
+                      <th>Purpose</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% safeCoreColumns.forEach((column) => { %>
+                      <tr>
+                        <td><strong><%= column.label %></strong><small><code><%= column.key %></code></small></td>
+                        <td><span class="pill good">Always shown</span></td>
+                        <td><%= formatNumber(column.minimumWidthPx) %> px</td>
+                        <td><small><%= column.description %></small></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="lot-unit-form-rule-section">
+              <div class="lot-unit-form-rule-section-heading">
+                <h3>Optional display groups</h3>
+                <span>Show up to <%= formatNumber(safeMaxVisibleOptionalColumns) %>, hide, and reorder</span>
+              </div>
+
+              <p class="lot-unit-form-rules-live-note" data-lot-unit-browser-layout-note aria-live="polite">
+                The rows below show the current effective order. Saving creates or replaces this Lot’s direct Browser customization.
+              </p>
+
+              <div class="table-card lot-unit-form-rule-table-card lot-unit-browser-layout-table-card">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Display group</th>
+                      <th>Visibility</th>
+                      <th>Order</th>
+                      <th>Purpose</th>
+                    </tr>
+                  </thead>
+                  <tbody data-lot-unit-browser-layout-rows>
+                    <% safeOptionalColumns.forEach((column) => { %>
+                      <tr data-lot-unit-browser-layout-row data-column-key="<%= column.key %>">
+                        <td>
+                          <strong><%= column.label %></strong>
+                          <small><code><%= column.key %></code> · minimum <%= formatNumber(column.minimumWidthPx) %> px</small>
+                          <input type="hidden" name="columnOrder[]" value="<%= column.key %>" />
+                        </td>
+                        <td>
+                          <label class="lot-unit-browser-visibility-toggle">
+                            <input type="checkbox" name="visibleColumns[]" value="<%= column.key %>" <%= column.isVisible ? 'checked' : '' %> data-lot-unit-browser-visible />
+                            <span>Show</span>
+                          </label>
+                        </td>
+                        <td>
+                          <div class="lot-unit-browser-order-actions" role="group" aria-label="Reorder <%= column.label %>">
+                            <button type="button" class="secondary-button lot-unit-browser-order-button" data-lot-unit-browser-move="up" aria-label="Move <%= column.label %> up" title="Move up"><span aria-hidden="true">↑</span></button>
+                            <button type="button" class="secondary-button lot-unit-browser-order-button" data-lot-unit-browser-move="down" aria-label="Move <%= column.label %> down" title="Move down"><span aria-hidden="true">↓</span></button>
+                          </div>
+                        </td>
+                        <td><small><%= column.description %></small></td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+
+          <div class="form-actions lot-unit-form-rules-actions">
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            <button type="submit" class="secondary-button" name="layoutMode" value="inherit" <%= hasDirectLayout ? '' : 'disabled aria-disabled="true"' %>>Reset This Lot to Inherit</button>
+            <button type="submit" class="primary-button" name="layoutMode" value="customize">Save Unit Browser Configuration</button>
+          </div>
+        </form>
+      <% } %>
+    </div>
+  </section>
+</div>

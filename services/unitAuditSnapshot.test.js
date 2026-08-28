@@ -29,6 +29,7 @@ test('creation snapshot records readable catalog and repeatable values', () => {
       manufacturerId: '2',
       unitModelId: '4',
       processorModelId: '5',
+      outcomeNotes: 'Ready for resale',
       memoryModules: [{ slotLabel: 'A', sizeGb: '16', ramTypeConfigValueId: '6' }],
       storageDevices: [{ slotLabel: 'M.2', sizeGb: '512', storageTypeConfigValueId: '7' }]
     }
@@ -38,6 +39,7 @@ test('creation snapshot records readable catalog and repeatable values', () => {
   assert.equal(event.eventSummary, 'Created unit BWT2300022');
   assert.ok(event.changes.some((change) => change.fieldKey === 'manufacturer' && change.newValueText === 'Dell'));
   assert.ok(event.changes.some((change) => change.fieldKey === 'memory_modules' && change.newValueText.includes('16GB DDR4')));
+  assert.ok(event.changes.some((change) => change.fieldKey === 'outcome_notes' && change.newValueText === 'Ready for resale'));
 });
 
 test('edit snapshots record only changed values', () => {

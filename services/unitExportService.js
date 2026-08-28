@@ -1,6 +1,8 @@
 'use strict';
 
 const { UNIT_EXPORT_COLUMNS, resolveUnitExportColumns } = require('../config/unitExportContract');
+const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
+const { APP_DISPLAY_TIME_ZONE } = require('../utils/timeZone');
 const { formatHardwareCapacityGb } = require('./hardwareCapacity');
 const {
   buildHardwareComponentComparisons,
@@ -39,6 +41,37 @@ function formatSizeGb(value) {
   return formatHardwareCapacityGb(value);
 }
 
+function normalizeDateTime(value) {
+  if (!value) return null;
+
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function formatExportDate(value) {
+  const date = normalizeDateTime(value);
+  if (!date) return '';
+
+  return new Intl.DateTimeFormat('en-US', {
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    timeZone: APP_DISPLAY_TIME_ZONE
+  }).format(date);
+}
+
+function formatExportTime(value) {
+  const date = normalizeDateTime(value);
+  if (!date) return '';
+
+  return new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: APP_DISPLAY_TIME_ZONE
+  }).format(date);
+}
+
 function findIdentifier(details, typeCode) {
   const identifiers = details && Array.isArray(details.identifiers) ? details.identifiers : [];
   const identifier = identifiers.find((item) => normalizeText(item.typeCode).toLowerCase() === typeCode);
@@ -74,6 +107,17 @@ function combineRemarks(legacyRemarks, issues) {
     });
 
   return values.join(' | ');
+}
+
+function formatGeneralComment(details) {
+  const latest = details && details.latestGeneralComment;
+  if (latest && Number(latest.noteTypeSystemId) === SYSTEM_CONFIG_VALUE_IDS.COMMENT_GENERAL) {
+    return normalizeText(latest.commentText);
+  }
+  const comment = (Array.isArray(details && details.comments) ? details.comments : []).find(
+    (entry) => Number(entry && entry.noteTypeSystemId) === SYSTEM_CONFIG_VALUE_IDS.COMMENT_GENERAL
+  );
+  return normalizeText(comment && comment.commentText);
 }
 
 
@@ -120,7 +164,9 @@ function buildUnitExportScope(result = {}) {
     ['Tech Name', findOptionLabel(result.techUserOptions, filters.techUserId)],
     ['Created Start Date', normalizeText(filters.createdStartDate)],
     ['Created End Date', normalizeText(filters.createdEndDate)],
-    ['Created Window', filters.createdWindow === '24h' ? 'Last 24 Hours' : normalizeText(filters.createdWindow)]
+    ['Created Window', filters.createdWindow === '24h' ? 'Last 24 Hours' : normalizeText(filters.createdWindow)],
+    ['Search Match', filters.search ? (filters.searchMode === 'all' ? 'All terms (AND)' : 'Any term (OR)') : ''],
+    ['Pallet Number', normalizeText(filters.palletNumber)]
   ];
 
   activeFilters.forEach(([label, value]) => {
@@ -172,6 +218,7 @@ function buildUnitExportRow(unit, details = null) {
   const latestTech = details && details.latestTech ? details.latestTech : null;
   const specsTests = details && details.specsTests ? details.specsTests : null;
   const specifications = details && details.specifications ? details.specifications : null;
+  const amazonDetails = details && details.amazonDetails ? details.amazonDetails : {};
   const techName = normalizeText(unit.assignedToName)
     || normalizeText(latestTech && (latestTech.fullName || latestTech.displayName || latestTech.name));
   const isApple = normalizeText(unit.manufacturerLabel).toLowerCase() === 'apple';
@@ -180,6 +227,12 @@ function buildUnitExportRow(unit, details = null) {
     assetTag: normalizeText(unit.assetTag),
     unitSerialNumber: findIdentifier(details, 'unit_serial_number'),
     biosSerialNumber: findIdentifier(details, 'bios_serial_number'),
+    amazonAssetTag: normalizeText(amazonDetails.amazonAssetTag) || findIdentifier(details, 'amazon_asset_tag'),
+    fnsku: normalizeText(amazonDetails.fnsku),
+    asin: normalizeText(amazonDetails.asin),
+    trackingNumber: normalizeText(amazonDetails.trackingNumber),
+    palletNumber: normalizeText(amazonDetails.palletNumber),
+    buyerComments: normalizeText(amazonDetails.buyerComments),
     unitType: normalizeText(unit.categoryLabel).replace(/^Unknown$/, ''),
     manufacturer: normalizeText(unit.manufacturerLabel).replace(/^—$/, ''),
     model: normalizeText(unit.modelLabel).replace(/^—$/, ''),
@@ -217,6 +270,7 @@ function buildUnitExportRow(unit, details = null) {
     openBoxStatus: isApple ? getSpecsTestsLabel(specsTests, 'openBoxStatusConfigValueId') : '',
     boxLanguage: isApple ? getSpecsTestsLabel(specsTests, 'boxLanguageConfigValueId') : '',
     cpu: normalizeText(unit.processorLabel).replace(/^—$/, ''),
+    processorSpeedGhz: normalizeText(unit.processorSpeedGhz),
     shortForm: normalizeText(unit.processorShortForm),
     previousMemorySize: formatSizeGb(unit.previousRamGb),
     currentMemorySize: formatSizeGb(memoryTotalGb),
@@ -229,13 +283,21 @@ function buildUnitExportRow(unit, details = null) {
     currentStorageDevices: formatHardwareComponentList(storageDevices, { kind: 'storage' }),
     storageDeviceChanges: formatHardwareComparisonList(storageComparisons),
     techName,
+    createdDate: formatExportDate(unit.createdAt),
+    createdTime: formatExportTime(unit.createdAt),
+    completedDate: formatExportDate(unit.completedAt),
+    completedTime: formatExportTime(unit.completedAt),
     batteryHealth: Number.isFinite(Number(unit.batteryHealthPercent)) && unit.batteryHealthPercent !== null
       ? `${Number(unit.batteryHealthPercent).toFixed(1)}%`
       : '',
+    skinnedStatus: normalizeText(specifications && specifications.skinnedStatusLabel).replace(/^—$/, ''),
     cosmeticGrade: normalizeText(details && details.currentGrade ? details.currentGrade.gradeLabel : '').replace(/^—$/, ''),
+    gradeNotes: normalizeText(details && details.currentGrade ? details.currentGrade.notes : ''),
     passFail: normalizeText(details && details.currentOutcome ? details.currentOutcome.outcomeLabel : '').replace(/^—$/, ''),
+    outcomeNotes: normalizeText(details && details.currentOutcome ? details.currentOutcome.outcomeNotes : ''),
     hardwareRemarks: combineRemarks(unit.hardwareNotes, details ? details.hardwareIssues : []),
-    cosmeticRemarks: combineRemarks(unit.cosmeticNotes, details ? details.cosmeticIssues : [])
+    cosmeticRemarks: combineRemarks(unit.cosmeticNotes, details ? details.cosmeticIssues : []),
+    generalComment: formatGeneralComment(details)
   };
 }
 

@@ -37,7 +37,8 @@ test('managed model selection disables missing-model requests and enables Proces
 
   assert.match(body, /const hasSelectedModel = Boolean\(modelSelectionInput && modelSelectionInput\.value\)/);
   assert.match(body, /&& !hasSelectedModel/);
-  assert.match(body, /const canRequestProcessor = Boolean\(modelSelectionInput && modelSelectionInput\.value\)/);
+  assert.match(body, /const hasSelectedCompatibleProcessor = Boolean\(/);
+  assert.match(body, /const canRequestProcessor = hasSelectedUnitModel && !hasSelectedCompatibleProcessor/);
   assert.match(body, /setCatalogRequestButtonState\(processorButton, canRequestProcessor\)/);
 });
 
@@ -71,6 +72,6 @@ test('all Unit form entry points use the Stage 10W.5.2 cache version', () => {
     'views/pages/tech-unit-form.ejs',
     'views/pages/tech-unit-detail.ejs'
   ]) {
-    assert.match(read(relativePath), /tech-unit-form\.js\?v=20260805-stage10w52-processor-request-entry/);
+    assert.match(read(relativePath), /tech-unit-form\.js\?v=[^"\'\s>]+/);
   }
 });

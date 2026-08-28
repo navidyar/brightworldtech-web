@@ -8,20 +8,20 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-test('QC Portal access policy includes Admin, Management, and QC while reporting remains Management+', () => {
+test('QC Portal access policy includes Admin, Management, Tech Lead, and QC while reporting remains Management+', () => {
   const policy = require('../config/accessPolicy');
 
-  assert.deepEqual([...policy.QC_PORTAL_ROLE_CODES], ['admin', 'management', 'qc']);
-  assert.deepEqual([...policy.QC_REVIEW_ROLE_CODES], ['admin', 'management', 'qc']);
+  assert.deepEqual([...policy.QC_PORTAL_ROLE_CODES], ['admin', 'management', 'tech_lead', 'qc']);
+  assert.deepEqual([...policy.QC_REVIEW_ROLE_CODES], ['admin', 'management', 'tech_lead', 'qc']);
   assert.deepEqual([...policy.QC_REPORTING_ROLE_CODES], ['admin', 'management']);
   assert.equal(policy.canAccessMenuArea(['admin'], 'qc'), true);
   assert.equal(policy.canAccessMenuArea(['management'], 'qc'), true);
   assert.equal(policy.canAccessMenuArea(['qc'], 'qc'), true);
-  assert.equal(policy.canAccessMenuArea(['tech_lead'], 'qc'), false);
+  assert.equal(policy.canAccessMenuArea(['tech_lead'], 'qc'), true);
   assert.equal(policy.canAccessMenuArea(['tech'], 'qc'), false);
 });
 
-test('QC Review routes reuse the Unit Browser and authorize formal QC decisions for Admin, Management, and QC', () => {
+test('QC Review routes reuse the Unit Browser and authorize formal QC decisions for Admin, Management, Tech Lead, and QC', () => {
   const routes = read('routes/management.js');
 
   assert.match(routes, /'\/qc\/review',[\s\S]*?requireRole\(QC_PORTAL_ROLE_CODES\)[\s\S]*?renderQcPortalReviewPage/);
@@ -58,7 +58,7 @@ test('QC Portal forces the same active-only Unit Browser scope used by QC and ke
   assert.match(queue, /return queryString \? `\$\{browserBasePath\}\?\$\{queryString\}` : browserBasePath/);
 });
 
-test('QC Portal gives Admin and Management QC actions while suppressing their unrelated production controls in that mode', () => {
+test('QC Portal gives Admin, Management, and Tech Lead QC actions while suppressing their unrelated production controls in that mode', () => {
   const page = read('views/pages/tech-units.ejs');
   const table = read('views/fragments/tech-units-table.ejs');
 

@@ -31,7 +31,7 @@ test('the later compact-detail rule no longer overrides either semantic header c
 });
 
 test('Unit Browser and standalone detail pages bust the corrected color stylesheet cache', () => {
-  const expectedVersion = 'tech-units-clean.css?v=20260804-stage10w1-responsive-browser';
+  const expectedVersion = 'tech-units-clean.css?v=20260826-stage10w73e-browser-usability';
   assert.match(unitsPage, new RegExp(expectedVersion.replace(/[.?]/g, '\\$&')));
   assert.match(detailPage, new RegExp(expectedVersion.replace(/[.?]/g, '\\$&')));
 });

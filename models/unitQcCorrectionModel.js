@@ -2,6 +2,7 @@
 
 const { pool } = require('./db');
 const unitAuditEventModel = require('./unitAuditEventModel');
+const lotQcRequirementModel = require('./lotQcRequirementModel');
 const {
   assertCurrentQcCompletionCycle,
   canSubmitQcCorrectionForCurrentAssignment
@@ -236,6 +237,8 @@ async function recordCorrectionSubmission({
       error.code = 'BWT_QC_CORRECTION_UNIT_PARKED';
       throw error;
     }
+
+    await lotQcRequirementModel.assertUnitQcRequired({ unitId: safeUnitId, connection });
 
     assertCurrentQcCompletionCycle(state, {
       code: 'BWT_QC_CORRECTION_COMPLETION_STALE',

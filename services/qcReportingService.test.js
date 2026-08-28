@@ -135,23 +135,6 @@ test('management QC reporting reconciles technician, reviewer, and rejection met
     rechecks: 0
   });
 
-  const screenScratch = report.rejectionPatterns.find((item) => item.reason === 'Screen scratch');
-  assert.deepEqual({
-    occurrences: screenScratch.occurrences,
-    technicians: screenScratch.techniciansAffected,
-    resolved: screenScratch.resolvedAfterCorrection,
-    pending: screenScratch.pendingCorrection,
-    ready: screenScratch.readyForRecheck
-  }, {
-    occurrences: 2,
-    technicians: 2,
-    resolved: 1,
-    pending: 1,
-    ready: 0
-  });
-
-  assert.equal(report.rejectionPatterns[1].reason, 'Missing screws');
-  assert.equal(report.rejectionPatterns[1].readyForRecheck, 1);
   assert.equal(assertValidManagementQcReport(report), true);
 });
 
@@ -197,19 +180,6 @@ test('empty reporting data remains ungraded and reconciled', () => {
   assert.equal(report.reviewedTechnicians, 0);
   assert.deepEqual(report.technicianComparisons, []);
   assert.equal(assertValidManagementQcReport(report), true);
-});
-
-test('rejection pattern limit is enforced after frequency sorting', () => {
-  const rows = [
-    review({ unit_qc_check_id: 1, decision_code: 'rejected', review_notes: 'One' }),
-    review({ unit_work_completion_id: 102, unit_qc_check_id: 2, decision_code: 'rejected', review_notes: 'Two' }),
-    review({ unit_work_completion_id: 103, unit_qc_check_id: 3, decision_code: 'rejected', review_notes: 'Two' })
-  ];
-
-  const report = buildManagementQcReport(rows, { rejectionPatternLimit: 1 });
-  assert.equal(report.rejectionPatterns.length, 1);
-  assert.equal(report.rejectionPatterns[0].reason, 'Two');
-  assert.equal(report.rejectionPatterns[0].occurrences, 2);
 });
 
 test('management QC reporting rejects technician totals that do not reconcile to the summary', () => {

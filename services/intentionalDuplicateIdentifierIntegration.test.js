@@ -25,6 +25,15 @@ test('Intentional Duplicate approval creates and validates against the stored re
   assert.match(model, /createIntentionalDuplicateTechUnitWithConnection\(\s*connection,\s*creationFormData,/);
 });
 
+test('Intentional Duplicate approval records the created Unit snapshot in audit history', () => {
+  const model = read('models/unitRequestModel.js');
+
+  assert.match(model, /buildUnitFormAuditEvent\(\{/);
+  assert.match(model, /source: 'intentional_duplicate_approval'/);
+  assert.match(model, /unitRequestId: safeRequestId/);
+  assert.match(model, /unitAuditEventModel\.createUnitAuditEvent\(creationAuditEvent, connection\)/);
+});
+
 test('the identifier migration permits shared serials across Units and repairs earlier approvals', () => {
   const migration = read('sql/2026-07-stage-7d-intentional-duplicate-identifiers.sql');
 

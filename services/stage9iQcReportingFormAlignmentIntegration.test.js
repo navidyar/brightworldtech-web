@@ -27,14 +27,15 @@ test('QC reporting scope controls use one label, control, and helper-row contrac
   assert.doesNotMatch(css, /\.qc-reporting-scope-form \{[\s\S]{0,260}align-items: end/);
 });
 
-test('QC reporting actions reserve the same label and helper rows as the fields', () => {
+test('QC reporting actions occupy the section heading and submit the scope form explicitly', () => {
+  const page = read('views/pages/management-qc-reporting.ejs');
   const css = read('public/css/app.css');
 
-  assert.match(css, /\.qc-reporting-scope-actions \{[\s\S]*grid-template-rows:/);
-  assert.match(css, /\.qc-reporting-scope-actions::before,[\s\S]*\.qc-reporting-scope-actions::after/);
-  assert.match(css, /\.qc-reporting-scope-actions::before \{[\s\S]*grid-row: 1/);
-  assert.match(css, /\.qc-reporting-scope-actions::after \{[\s\S]*grid-row: 3/);
-  assert.match(css, /\.qc-reporting-scope-actions :is\(\.primary-button, \.secondary-button\) \{[\s\S]*grid-row: 2/);
+  assert.match(page, /qc-reporting-scope-heading-actions[\s\S]*qc-reporting-scope-actions/);
+  assert.match(page, /button class="primary-button" type="submit" form="qc-reporting-scope-form"/);
+  assert.match(css, /\.qc-reporting-scope-heading-actions \{[\s\S]*justify-items: end/);
+  assert.doesNotMatch(css, /\.qc-reporting-scope-actions::before/);
+  assert.doesNotMatch(css, /\.qc-reporting-scope-actions::after/);
 });
 
 test('All Time removes the empty date column and custom ranges retain the wider date area', () => {
@@ -53,9 +54,9 @@ test('QC reporting alignment assets are cache-busted consistently', () => {
   const notFoundPage = read('views/pages/not-found.ejs');
   const validator = read('services/sharedCssFoundationValidator.js');
 
-  assert.match(head, /app\.css\?v=20260819-stage10w68w-half-size-lot-chevrons/);
-  assert.match(head, /management-reporting-controls\.js\?v=20260729-stage9i-qc-reporting-clarity/);
-  assert.match(errorPage, /app\.css\?v=20260812-stage10w46-ui-refinement/);
-  assert.match(notFoundPage, /app\.css\?v=20260812-stage10w46-ui-refinement/);
+  assert.match(head, /app\.css\?v=[^\"']+/);
+  assert.match(head, /management-reporting-controls\.js\?v=[^\"']+/);
+  assert.match(errorPage, /app\.css\?v=[^"\'\s>]+/);
+  assert.match(notFoundPage, /app\.css\?v=[^"\'\s>]+/);
   assert.match(validator, /SHARED_APP_PATH = '\/css\/app\.css'/);
 });

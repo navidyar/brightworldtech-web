@@ -29,13 +29,13 @@
     pageTitle,
     stylesheets: [
       '/css/modal.css',
-      '/css/tech-units-clean.css?v=20260819-stage10w68o-toggle-label-cleanup'
+      '/css/tech-units-clean.css?v=20260826-stage10w73e-browser-usability'
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260819-stage10w68p-interaction-refinements"></script>
-  <script defer src="/js/tech-units.js?v=20260819-stage10w68l-filter-toggles&r=20260824-stage10w70d-qc-reversion-request"></script>
+  <script defer src="/js/tech-units.js?v=20260826-stage10w73c-browser-refinement"></script>
   <script defer src="/js/tech-units-date-picker.js?v=20260812-stage10w46-month-year-picker"></script>
-  <script defer src="/js/tech-unit-form.js?v=20260819-stage10w68z-assignable-lot-closed-on-focus"></script>
+  <script defer src="/js/tech-unit-form.js?v=20260828-stage10w74n-request-context-labels"></script>
 
   <body>
     <div class="app-shell">
@@ -109,7 +109,7 @@
                 <div class="tech-units-clean-section-heading tech-units-clean-section-heading--filters">
                   <h2 id="tech-units-filters-heading">Search &amp; Filters</h2>
 
-                  <% if (isLast24HourDrilldown || filters.unitState === 'parked' || filters.categoryId || filters.lotId || filters.gradeFilter || filters.completionFilter || filters.qcReviewFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
+                  <% if (isLast24HourDrilldown || filters.unitState === 'parked' || filters.categoryId || filters.lotId || filters.palletNumber || filters.gradeFilter || filters.completionFilter || filters.qcReviewFilter || filters.techUserId || filters.createdStartDate || filters.createdEndDate || filters.search) { %>
                     <div class="tech-filter-panel-header-actions">
                       <span class="tech-filter-active-pill">Filtered View</span>
                     </div>
@@ -129,10 +129,40 @@
                     <input type="hidden" name="sort" value="<%= filters.sort %>" />
                   <% } %>
                   <div class="tech-filter-layout">
-                  <label class="form-field tech-filter-search-field">
-                    <span>Search Units</span>
-                    <textarea name="search" rows="5" placeholder="Scan or paste asset tags, BIOS serials, or unit serials — one per line"><%= filters.search %></textarea>
-                  </label>
+                  <div class="tech-filter-search-stack">
+                    <label class="form-field tech-filter-search-field">
+                      <span>Search Units</span>
+                      <textarea name="search" rows="5" placeholder="One term per line. Example: Dell, 5400, memory:8 (M:8), storage:512 (S:512). Use All to require every line. GB is assumed; TB is accepted. Search also supports Asset Tags, Recovery Number, BIOS Serial, and Unit Serial."><%= filters.search %></textarea>
+                    </label>
+
+                    <div class="form-field tech-search-match-field">
+                      <span>Search Match</span>
+                      <div class="tech-search-match-toggle" role="radiogroup" aria-label="Search Match">
+                        <label class="tech-search-match-option" title="Match any entered search line (OR)">
+                          <input
+                            type="radio"
+                            name="searchMode"
+                            value="any"
+                            data-tech-filter-auto-submit
+                            aria-label="Any — match any entered search line (OR)"
+                            <%= filters.searchMode !== 'all' ? 'checked' : '' %>
+                          />
+                          <span>Any</span>
+                        </label>
+                        <label class="tech-search-match-option" title="Every entered search line must match the same Unit (AND)">
+                          <input
+                            type="radio"
+                            name="searchMode"
+                            value="all"
+                            data-tech-filter-auto-submit
+                            aria-label="All — every entered search line must match the same Unit (AND)"
+                            <%= filters.searchMode === 'all' ? 'checked' : '' %>
+                          />
+                          <span>All</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
 
                   <div class="tech-filter-grid <%= isRegularTechBrowserUser ? 'tech-filter-grid--regular-tech' : 'tech-filter-grid--tech-lead-plus' %>" aria-label="Unit filters">
                     <label class="form-field">
@@ -145,6 +175,39 @@
                         }) %>
                       </select>
                     </label>
+
+                    <% if (result.palletFilterEnabled) { %>
+                      <label class="form-field tech-pallet-filter-field">
+                        <span>Pallet Number</span>
+                        <div
+                          class="tech-pallet-filter-combobox"
+                          data-tech-pallet-filter
+                          data-lot-id="<%= filters.lotId %>"
+                        >
+                          <input type="hidden" name="palletNumber" value="<%= filters.palletNumber || '' %>" data-tech-pallet-filter-value />
+                          <input
+                            type="text"
+                            class="tech-pallet-filter-input"
+                            value="<%= filters.palletNumber || '' %>"
+                            placeholder="All pallets"
+                            autocomplete="off"
+                            spellcheck="false"
+                            role="combobox"
+                            aria-autocomplete="list"
+                            aria-expanded="false"
+                            aria-controls="tech-pallet-filter-options"
+                            data-tech-pallet-filter-input
+                          />
+                          <div
+                            id="tech-pallet-filter-options"
+                            class="tech-pallet-filter-options"
+                            role="listbox"
+                            data-tech-pallet-filter-options
+                            hidden
+                          ></div>
+                        </div>
+                      </label>
+                    <% } %>
 
                     <label class="form-field">
                       <span>Category</span>

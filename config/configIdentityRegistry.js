@@ -49,7 +49,8 @@ const SYSTEM_CONFIG_CATEGORY_IDS = Object.freeze({
   CAMERA_LOCATIONS: 43,
   BIOMETRIC_HARDWARE: 44,
   PORT_TYPES: 45,
-  BOX_LANGUAGES: 46
+  BOX_LANGUAGES: 46,
+  PRODUCTIVITY_TYPES: 47
 });
 
 const CATEGORY_BINDINGS = Object.freeze([
@@ -98,7 +99,8 @@ const CATEGORY_BINDINGS = Object.freeze([
   [SYSTEM_CONFIG_CATEGORY_IDS.CAMERA_LOCATIONS, 'Camera Locations', []],
   [SYSTEM_CONFIG_CATEGORY_IDS.BIOMETRIC_HARDWARE, 'Biometric Hardware', []],
   [SYSTEM_CONFIG_CATEGORY_IDS.PORT_TYPES, 'Ports / Expansion Types', []],
-  [SYSTEM_CONFIG_CATEGORY_IDS.BOX_LANGUAGES, 'Box Languages', []]
+  [SYSTEM_CONFIG_CATEGORY_IDS.BOX_LANGUAGES, 'Box Languages', []],
+  [SYSTEM_CONFIG_CATEGORY_IDS.PRODUCTIVITY_TYPES, 'Productivity Types', ['productivity_types', 'productivity_type']]
 ].map(([systemId, name, legacyCodes]) => Object.freeze({ systemId, name, legacyCodes: Object.freeze(legacyCodes) })));
 
 const SYSTEM_CONFIG_VALUE_IDS = Object.freeze({
@@ -112,6 +114,7 @@ const SYSTEM_CONFIG_VALUE_IDS = Object.freeze({
   IDENTIFIER_ASSET_TAG: 201,
   IDENTIFIER_UNIT_SERIAL: 202,
   IDENTIFIER_BIOS_SERIAL: 203,
+  IDENTIFIER_AMAZON_ASSET_TAG: 204,
   UNIT_STATUS_RECEIVED: 211,
   LOT_STATUS_DEFAULT: 221,
   COMMENT_GENERAL: 231,
@@ -183,7 +186,11 @@ const SYSTEM_CONFIG_VALUE_IDS = Object.freeze({
   COSMETIC_GRADE_D: 505,
 
   DISPLAY_TYPE_LCD: 601,
-  DISPLAY_TYPE_OLED: 602
+  DISPLAY_TYPE_OLED: 602,
+
+  PRODUCTIVITY_FULL_UNIT: 611,
+  PRODUCTIVITY_SUPPORT: 612,
+  PRODUCTIVITY_QC: 613
 });
 
 const requirementValues = [
@@ -240,6 +247,7 @@ const VALUE_BINDINGS = Object.freeze([
   { systemId: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_ASSET_TAG, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_IDENTIFIER_TYPES, name: 'Asset Tag identifier', legacyCodes: ['asset_tag'], required: true },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_IDENTIFIER_TYPES, name: 'Unit Serial identifier', legacyCodes: ['unit_serial_number', 'unit_serial'], required: true },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_IDENTIFIER_TYPES, name: 'BIOS Serial identifier', legacyCodes: ['bios_serial_number', 'bios_serial'], required: true },
+  { systemId: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_AMAZON_ASSET_TAG, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_IDENTIFIER_TYPES, name: 'Amazon Asset Tag identifier', legacyCodes: ['amazon_asset_tag', 'az_asset_tag'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.UNIT_STATUS_RECEIVED, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_STATUSES, name: 'Received Unit status', legacyCodes: ['received'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.LOT_STATUS_DEFAULT, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.LOT_STATUSES, name: 'Default Lot status', legacyCodes: ['active', 'open', 'created', 'new', 'pending'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.COMMENT_GENERAL, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.COMMENT_TYPES, name: 'General Unit comment', legacyCodes: ['general'], required: false },
@@ -279,7 +287,14 @@ const VALUE_BINDINGS = Object.freeze([
   { systemId: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_AB, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, name: 'Cosmetic Grade AB', legacyCodes: ['ab', 'grade_ab', 'cosmetic_grade_ab'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_B, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, name: 'Cosmetic Grade B', legacyCodes: ['b', 'grade_b', 'cosmetic_grade_b'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_C, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, name: 'Cosmetic Grade C', legacyCodes: ['c', 'grade_c', 'cosmetic_grade_c'], required: false },
-  { systemId: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_D, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, name: 'Cosmetic Grade D', legacyCodes: ['d', 'grade_d', 'cosmetic_grade_d'], required: false }
+  { systemId: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_D, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, name: 'Cosmetic Grade D', legacyCodes: ['d', 'grade_d', 'cosmetic_grade_d'], required: false },
+
+  { systemId: SYSTEM_CONFIG_VALUE_IDS.DISPLAY_TYPE_LCD, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.DISPLAY_TYPES, name: 'LCD display type', legacyCodes: ['lcd'], required: false },
+  { systemId: SYSTEM_CONFIG_VALUE_IDS.DISPLAY_TYPE_OLED, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.DISPLAY_TYPES, name: 'OLED display type', legacyCodes: ['oled'], required: false },
+
+  { systemId: SYSTEM_CONFIG_VALUE_IDS.PRODUCTIVITY_FULL_UNIT, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.PRODUCTIVITY_TYPES, name: 'Full Unit productivity type', legacyCodes: ['full_unit'], required: false },
+  { systemId: SYSTEM_CONFIG_VALUE_IDS.PRODUCTIVITY_SUPPORT, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.PRODUCTIVITY_TYPES, name: 'Support productivity type', legacyCodes: ['support'], required: false },
+  { systemId: SYSTEM_CONFIG_VALUE_IDS.PRODUCTIVITY_QC, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.PRODUCTIVITY_TYPES, name: 'QC productivity type', legacyCodes: ['qc'], required: false }
 ].map((entry) => Object.freeze({ ...entry, legacyCodes: Object.freeze(entry.legacyCodes) })));
 
 
@@ -316,7 +331,8 @@ const COSMETIC_GRADE_BY_SYSTEM_VALUE_ID = Object.freeze({
 const IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID = Object.freeze({
   [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_ASSET_TAG]: 'asset_tag',
   [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL]: 'unit_serial_number',
-  [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL]: 'bios_serial_number'
+  [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL]: 'bios_serial_number',
+  [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_AMAZON_ASSET_TAG]: 'amazon_asset_tag'
 });
 
 const CATEGORY_BY_SYSTEM_ID = new Map(CATEGORY_BINDINGS.map((entry) => [entry.systemId, entry]));

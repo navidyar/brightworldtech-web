@@ -35,13 +35,29 @@ test('Storage comparisons preserve type and wipe status while showing additions'
   const comparisons = buildHardwareComponentComparisons([
     { slotLabel: 'Bay 1', sizeGb: 256, storageTypeLabel: 'SATA SSD' }
   ], [
-    { slotLabel: 'Bay 1', sizeGb: 512, storageTypeLabel: 'NVMe SSD', wipeStatusLabel: 'Passed' },
-    { slotLabel: 'Bay 2', sizeGb: 1000, storageTypeLabel: 'HDD', wipeStatusLabel: 'Pending' }
+    { slotLabel: 'Bay 1', sizeGb: 512, storageTypeLabel: 'NVMe SSD', serialNumber: 'SSD-ABC-123', wipeStatusLabel: 'Passed' },
+    { slotLabel: 'Bay 2', sizeGb: 1000, storageTypeLabel: 'HDD', serialNumber: 'HDD-XYZ-789', wipeStatusLabel: 'Pending' }
   ], { kind: 'storage' });
 
   assert.deepEqual(comparisons.map((comparison) => comparison.statusCode), ['changed', 'added']);
-  assert.equal(comparisons[0].currentText, '512GB · NVMe SSD · Wipe: Passed');
-  assert.equal(comparisons[1].currentText, '1TB · HDD · Wipe: Pending');
+  assert.equal(comparisons[0].currentText, '512GB · NVMe SSD · Serial: SSD-ABC-123 · Wipe: Passed');
+  assert.equal(comparisons[1].currentText, '1TB · HDD · Serial: HDD-XYZ-789 · Wipe: Pending');
+});
+
+test('Storage serial numbers are visible and participate in change detection', () => {
+  const comparisons = buildHardwareComponentComparisons([
+    { slotLabel: 'Bay 1', sizeGb: 512, storageTypeLabel: 'NVMe SSD', serialNumber: 'OLD-SERIAL' }
+  ], [
+    { slotLabel: 'Bay 1', sizeGb: 512, storageTypeLabel: 'NVMe SSD', serialNumber: 'NEW-SERIAL' }
+  ], { kind: 'storage' });
+
+  assert.equal(comparisons[0].statusCode, 'changed');
+  assert.equal(comparisons[0].previousText, '512GB · NVMe SSD · Serial: OLD-SERIAL');
+  assert.equal(comparisons[0].currentText, '512GB · NVMe SSD · Serial: NEW-SERIAL');
+  assert.equal(
+    formatHardwareComponentList([{ slotLabel: 'Bay 1', sizeGb: 512, serialNumber: 'NEW-SERIAL' }], { kind: 'storage' }),
+    'Bay 1: 512GB · Serial: NEW-SERIAL'
+  );
 });
 
 test('zero-capacity component rows are explicit empty slots rather than missing values', () => {

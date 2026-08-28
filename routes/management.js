@@ -271,7 +271,7 @@ router.get(
   Tech routes
 
   Route order note:
-  Keep /tech/units/table, /tech/units/lot-form-profile, /tech/units/lot-requirement-preview,
+  Keep /tech/units/table, /tech/units/pallet-options, /tech/units/lot-form-profile, /tech/units/lot-requirement-preview,
   /tech/units/new/modal, and /tech/units/new
   before parameterized routes like /tech/units/:unitId/edit/modal.
 */
@@ -288,6 +288,13 @@ router.get(
   requireAuth,
   requireRole(unitBrowserRoles),
   techController.renderTechUnitsTable
+);
+
+router.get(
+  '/tech/units/pallet-options',
+  requireAuth,
+  requireRole(unitBrowserRoles),
+  techController.renderTechUnitPalletFilterOptions
 );
 
 router.get(

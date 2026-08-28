@@ -44,7 +44,7 @@
     <div class="modal-body">
       <% if (successRequestId) { %>
         <div class="message success">
-          <p>Intentional Duplicate request #<%= successRequestId %> is pending review. No new Unit or Asset Tag was created.</p>
+          <p>Intentional Duplicate request for <strong><%= unitLabel() %></strong> is pending review. No new Unit or Asset Tag was created.</p>
         </div>
 
         <div class="tech-override-summary">
@@ -65,7 +65,7 @@
         </div>
 
         <div class="form-actions">
-          <a class="primary-button" href="/unit-requests/<%= successRequestId %>">View Unit Request</a>
+          <a class="primary-button" href="/unit-requests/<%= successRequestId %>">View Request Details</a>
           <button type="button" class="secondary-button" data-modal-close>Done</button>
         </div>
       <% } else { %>

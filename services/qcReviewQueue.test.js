@@ -20,7 +20,11 @@ test('QC review filters normalize only published queue states', () => {
   assert.equal(normalizeQcReviewFilter(''), '');
 });
 
-test('QC review state distinguishes first-pass acceptance from correction', () => {
+test('QC review state distinguishes non-required Lots and review workflow states', () => {
+  assert.deepEqual(resolveQcReviewState({ qc_is_required: 0 }), {
+    code: 'not_required',
+    label: 'QC not required for this Lot'
+  });
   assert.deepEqual(resolveQcReviewState({}), {
     code: 'not_completed',
     label: 'Awaiting completion'

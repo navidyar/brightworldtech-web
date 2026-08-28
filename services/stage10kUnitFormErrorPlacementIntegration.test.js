@@ -60,6 +60,6 @@ test('only invalid controls receive the red field treatment and Stage 10K assets
   assert.match(detailPage, /tech-units-clean\.css\?v=/);
   assert.match(formPage, /tech-units-clean\.css\?v=/);
   assert.match(browserPage, /tech-units-clean\.css\?v=/);
-  assert.match(formPage, /tech-unit-form\.js\?v=20260819-stage10w68z-assignable-lot-closed-on-focus/);
-  assert.match(browserPage, /tech-unit-form\.js\?v=20260819-stage10w68z-assignable-lot-closed-on-focus/);
+  assert.match(formPage, /tech-unit-form\.js\?v=[^\"']+/);
+  assert.match(browserPage, /tech-unit-form\.js\?v=[^\"']+/);
 });

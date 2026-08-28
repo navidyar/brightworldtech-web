@@ -9,6 +9,12 @@ const FIELD_DEFINITIONS = Object.freeze([
   ['current_unit_status', 'Unit Status', 'currentUnitStatusConfigValueId', 'unitStatuses'],
   ['unit_serial_number', 'Unit Serial Number', 'unitSerialNumber', null],
   ['bios_serial_number', 'BIOS Serial Number', 'biosSerialNumber', null],
+  ['amazon_asset_tag', 'Amazon Asset Tag', 'amazonAssetTag', null],
+  ['fnsku', 'FNSKU', 'fnsku', null],
+  ['asin', 'ASIN', 'asin', null],
+  ['tracking_number', 'Tracking Number', 'trackingNumber', null],
+  ['pallet_number', 'Pallet Number', 'palletNumber', null],
+  ['buyer_comments', 'Buyer Comments', 'buyerComments', null],
   ['manufacturer', 'Manufacturer', 'manufacturerId', 'manufacturers'],
   ['unit_model', 'Unit Model', 'unitModelId', 'unitModels'],
   ['screen_size', 'Screen Size', 'screenSizeConfigValueId', 'screenSizes'],
@@ -52,7 +58,7 @@ const FIELD_DEFINITIONS = Object.freeze([
   ['overall_grade', 'Overall Grade', 'overallGradeConfigValueId', 'overallGradeOptions'],
   ['overall_grade_notes', 'Grade Notes', 'overallGradeNotes', null],
   ['unit_outcome', 'Unit Outcome', 'outcomeCode', 'outcomeOptions'],
-  ['unit_outcome_notes', 'Outcome Notes', 'outcomeNotes', null],
+  ['outcome_notes', 'Outcome Notes', 'outcomeNotes', null],
   ['hardware_notes', 'Hardware Notes', 'hardwareNotes', null],
   ['cosmetic_notes', 'Cosmetic Notes', 'cosmeticNotes', null]
 ]);
@@ -177,6 +183,7 @@ function formatStorageRows(rows, formOptions) {
       row.sizeGb !== null && row.sizeGb !== undefined && String(row.sizeGb).trim() !== '' ? formatHardwareCapacityGb(row.sizeGb) : '',
       row.type || '',
       row.model || '',
+      row.serialNumber ? `Serial: ${row.serialNumber}` : '',
       row.slot ? `(${row.slot})` : ''
     ].filter(Boolean).join(' ')).join('; ')
   };

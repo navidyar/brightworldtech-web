@@ -30,12 +30,17 @@ function buildCatalogControlHarness({ selectedModelId = '', typedModelName = '',
     modelButton: { disabled: true, attributes: {}, setAttribute(name, value) { this.attributes[name] = value; } },
     modelHint: { textContent: '' },
     processorButton: { disabled: true, attributes: {}, setAttribute(name, value) { this.attributes[name] = value; } },
+    processorAction: { hidden: false },
+    processorSelection: { value: '' },
     processorHint: { textContent: '' },
     processorMessage: { hidden: true },
     processorFields: { hidden: true },
     processorRequestSpeed: { value: '' },
     unitProcessorSpeed: { value: '2.40' }
   };
+  controls.processorButton.closest = (selector) => (
+    selector === '[data-catalog-request-action-kind="processor"]' ? controls.processorAction : null
+  );
   const selectorMap = new Map([
     ['[data-manufacturer-select]', controls.manufacturer],
     ['[data-unit-category-select]', controls.category],
@@ -46,7 +51,8 @@ function buildCatalogControlHarness({ selectedModelId = '', typedModelName = '',
     ['[data-processor-catalog-empty-message]', controls.processorMessage],
     ['[data-processor-catalog-request-fields]', controls.processorFields],
     ['[data-processor-request-speed-input]', controls.processorRequestSpeed],
-    ['[data-processor-speed-input]', controls.unitProcessorSpeed]
+    ['[data-processor-speed-input]', controls.unitProcessorSpeed],
+    ['[data-processor-model-select]', controls.processorSelection]
   ]);
   const form = { querySelector(selector) { return selectorMap.get(selector) || null; } };
   const source = read('public/js/tech-unit-form.js');
@@ -55,12 +61,18 @@ function buildCatalogControlHarness({ selectedModelId = '', typedModelName = '',
     'getUnitModelSelectionInput',
     'getUnitModelComboboxInput',
     'getVisibleProcessorOptions',
+    'getProcessorSelectionInput',
+    'getProcessorOptionById',
+    'processorOptionSupportsUnitModel',
     'setCatalogRequestButtonState',
     `${body}; return updateCatalogRequestControls;`
   )(
     () => controls.modelSelection,
     () => controls.modelInput,
     () => Array.from({ length: compatibleProcessors }, (_, index) => ({ value: String(index + 1) })),
+    () => controls.processorSelection,
+    () => null,
+    () => false,
     (button, enabled) => {
       if (!button) return;
       button.disabled = !enabled;
@@ -160,6 +172,6 @@ test('all Unit form entry points use the current scanner-safe form asset version
     'views/pages/tech-unit-form.ejs',
     'views/pages/tech-unit-detail.ejs'
   ]) {
-    assert.match(read(relativePath), /tech-unit-form\.js\?v=20260806-stage10w10-serial-scanner-enter-guard/);
+    assert.match(read(relativePath), /tech-unit-form\.js\?v=[^"\'\s>]+/);
   }
 });

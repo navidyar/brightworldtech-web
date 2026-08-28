@@ -37,7 +37,8 @@ async function getHealth(req, res) {
     schema: status.schema.ok ? 'ready' : 'incomplete',
     dbName: status.database.connectionInfo?.database_name || process.env.DB_NAME || null,
     missingTables: status.schema.missingTables,
-    missingViews: status.schema.missingViews || []
+    missingViews: status.schema.missingViews || [],
+    invalidViews: status.schema.invalidViews || []
   });
 }
 

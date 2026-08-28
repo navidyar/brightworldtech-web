@@ -542,19 +542,19 @@ async function saveUnitSpecifications(connection, unitId, formData, currentUserI
     },
     {
       fieldKey: 'complete_diagnostics',
-      sourceKey: 'complete_diagnostics_status',
+      sourceKey: 'complete_diagnostics',
       columnName: 'complete_diagnostics_status_config_value_id',
       value: normalizeOptionalInteger(formData.completeDiagnosticsStatusConfigValueId)
     },
     {
       fieldKey: 'virus_check',
-      sourceKey: 'virus_check_status',
+      sourceKey: 'virus_check',
       columnName: 'virus_check_status_config_value_id',
       value: normalizeOptionalInteger(formData.virusCheckStatusConfigValueId)
     },
     {
       fieldKey: 'driver_check',
-      sourceKey: 'driver_check_status',
+      sourceKey: 'driver_check',
       columnName: 'driver_check_status_config_value_id',
       value: normalizeOptionalInteger(formData.driverCheckStatusConfigValueId)
     },

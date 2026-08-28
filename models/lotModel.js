@@ -35,6 +35,7 @@ const {
   assertValidLotParentAssignment,
   auditLotHierarchy
 } = require('../services/lotHierarchyIntegrity');
+const lotUnitBrowserLayoutModel = require('./lotUnitBrowserLayoutModel');
 
 const INSPECTABLE_TABLES = [
   'lots',
@@ -47,6 +48,8 @@ const INSPECTABLE_TABLES = [
 ];
 
 const LOT_OWNED_CONFIGURATION_TABLES = [
+  'lot_unit_browser_columns',
+  'lot_unit_browser_layouts',
   'lot_requirement_inheritance_suppressions',
   'lot_unit_form_field_rules',
   'lot_requirements'
@@ -355,7 +358,9 @@ async function getLotSchemaCapabilities() {
     hasClosedState: hasColumn(lotColumns, 'is_closed'),
     hasAssignableState: hasColumn(lotColumns, 'is_assignable'),
     hasDuplicateUnitAssumption: hasColumn(lotColumns, 'allow_duplicate_unit_assumption'),
-    hasStartNewProductionCycleOnMove: hasColumn(lotColumns, 'start_new_production_cycle_on_move')
+    hasStartNewProductionCycleOnMove: hasColumn(lotColumns, 'start_new_production_cycle_on_move'),
+    hasGenerateAmazonAssetTag: hasColumn(lotColumns, 'generate_amazon_asset_tag'),
+    hasQcRequired: hasColumn(lotColumns, 'qc_required')
   };
 }
 
@@ -547,6 +552,22 @@ async function listLots(options = {}) {
     '0'
   );
 
+  const generateAmazonAssetTagSelect = selectExpression(
+    'l',
+    lotColumns,
+    ['generate_amazon_asset_tag'],
+    'generate_amazon_asset_tag',
+    '0'
+  );
+
+  const qcRequiredSelect = selectExpression(
+    'l',
+    lotColumns,
+    ['qc_required'],
+    'qc_required',
+    '1'
+  );
+
   const createdAtSelect = selectExpression(
     'l',
     lotColumns,
@@ -726,6 +747,8 @@ async function listLots(options = {}) {
       ${isAssignableSelect},
       ${allowDuplicateUnitAssumptionSelect},
       ${startNewProductionCycleOnMoveSelect},
+      ${generateAmazonAssetTagSelect},
+      ${qcRequiredSelect},
       ${createdAtSelect},
       ${updatedAtSelect},
       ${unitCountSelect},
@@ -895,6 +918,8 @@ async function createLot(formData, currentUserId, options = {}) {
   const labelFormat = String(formData.labelFormat || '').trim() || null;
   const allowDuplicateUnitAssumption = formData.allowDuplicateUnitAssumption === '1' ? 1 : 0;
   const startNewProductionCycleOnMove = formData.startNewProductionCycleOnMove === '1' ? 1 : 0;
+  const generateAmazonAssetTag = formData.generateAmazonAssetTag === '1' ? 1 : 0;
+  const qcRequired = formData.qcRequired === '1' ? 1 : 0;
   const isAssignable = formData.isAssignable === '1' ? 1 : 0;
 
   if (hasColumn(lotColumns, 'lot_number')) {
@@ -937,6 +962,8 @@ async function createLot(formData, currentUserId, options = {}) {
   addColumn('label_format', labelFormat);
   addColumn('allow_duplicate_unit_assumption', allowDuplicateUnitAssumption);
   addColumn('start_new_production_cycle_on_move', startNewProductionCycleOnMove);
+  addColumn('generate_amazon_asset_tag', generateAmazonAssetTag);
+  addColumn('qc_required', qcRequired);
   addColumn('is_assignable', isAssignable);
 
   if (!hasColumn(lotColumns, 'is_active')) {
@@ -1014,6 +1041,8 @@ async function updateLot(lotId, formData, currentUserId) {
   const labelFormat = String(formData.labelFormat || '').trim() || null;
   const allowDuplicateUnitAssumption = formData.allowDuplicateUnitAssumption === '1' ? 1 : 0;
   const startNewProductionCycleOnMove = formData.startNewProductionCycleOnMove === '1' ? 1 : 0;
+  const generateAmazonAssetTag = formData.generateAmazonAssetTag === '1' ? 1 : 0;
+  const qcRequired = formData.qcRequired === '1' ? 1 : 0;
   const isAssignable = formData.isAssignable === '1' ? 1 : 0;
 
   addFirstAvailableColumn(['lot_name', 'name', 'title'], lotName);
@@ -1029,6 +1058,8 @@ async function updateLot(lotId, formData, currentUserId) {
   addColumn('label_format', labelFormat);
   addColumn('allow_duplicate_unit_assumption', allowDuplicateUnitAssumption);
   addColumn('start_new_production_cycle_on_move', startNewProductionCycleOnMove);
+  addColumn('generate_amazon_asset_tag', generateAmazonAssetTag);
+  addColumn('qc_required', qcRequired);
   addColumn('is_assignable', isAssignable);
   addColumn('updated_by_user_id', currentUserId || null);
 
@@ -1051,9 +1082,33 @@ async function updateLot(lotId, formData, currentUserId) {
   try {
     await connection.beginTransaction();
 
-    if (hasColumn(lotColumns, 'parent_lot_id') && parentLotId) {
-      const hierarchyRows = await listLotHierarchyRows(connection, { forUpdate: true });
-      assertValidLotParentAssignment(hierarchyRows, Number(lotId), parentLotId);
+    let parentLotChanged = false;
+    let qcRequirementChanged = false;
+    let previousQcRequired = true;
+
+    if (hasColumn(lotColumns, 'parent_lot_id') || hasColumn(lotColumns, 'qc_required')) {
+      const selectColumns = ['lot_id'];
+      if (hasColumn(lotColumns, 'parent_lot_id')) selectColumns.push('parent_lot_id');
+      if (hasColumn(lotColumns, 'qc_required')) selectColumns.push('qc_required');
+      const [currentLotRows] = await connection.query(
+        `SELECT ${selectColumns.join(', ')} FROM lots WHERE lot_id = ? LIMIT 1 FOR UPDATE`,
+        [Number(lotId)]
+      );
+      const currentLot = currentLotRows[0];
+
+      if (currentLot && hasColumn(lotColumns, 'parent_lot_id')) {
+        const currentParentLotId = currentLot.parent_lot_id ? Number(currentLot.parent_lot_id) : null;
+        parentLotChanged = currentParentLotId !== parentLotId;
+      }
+      if (currentLot && hasColumn(lotColumns, 'qc_required')) {
+        previousQcRequired = Number(currentLot.qc_required) !== 0;
+        qcRequirementChanged = previousQcRequired !== Boolean(qcRequired);
+      }
+
+      if (hasColumn(lotColumns, 'parent_lot_id') && parentLotId) {
+        const hierarchyRows = await listLotHierarchyRows(connection, { forUpdate: true });
+        assertValidLotParentAssignment(hierarchyRows, Number(lotId), parentLotId);
+      }
     }
 
     const [result] = await connection.query(
@@ -1067,6 +1122,20 @@ async function updateLot(lotId, formData, currentUserId) {
     );
 
     if (Number(result.affectedRows || 0) > 0) {
+      if (parentLotChanged) {
+        await clearLotRequirementInheritanceSuppressions(Number(lotId), connection);
+      }
+
+      if (qcRequirementChanged) {
+        const lotQcRequirementModel = require('./lotQcRequirementModel');
+        await lotQcRequirementModel.auditLotQcRequirementChange(connection, {
+          lotId: Number(lotId),
+          actorUserId: currentUserId,
+          previousRequired: previousQcRequired,
+          nextRequired: Boolean(qcRequired)
+        });
+      }
+
       await productionWeightSyncModel.syncEffectiveManualCompletionWeights({
         connection,
         lotId: Number(lotId),
@@ -1456,6 +1525,31 @@ async function listLotRequirementInheritanceSuppressions(lotId, connection = nul
     ...row,
     requirement_key: normalizeRequirementKey(REQUIREMENT_KEY_BY_SYSTEM_VALUE_ID[Number(row.requirement_type_system_config_value_id || 0)] || '')
   }));
+}
+
+async function clearLotRequirementInheritanceSuppressions(lotId, connection = null) {
+  const normalizedLotId = Number(lotId);
+
+  if (!Number.isSafeInteger(normalizedLotId) || normalizedLotId <= 0) {
+    return 0;
+  }
+
+  const suppressionColumns = await getColumnSet('lot_requirement_inheritance_suppressions');
+
+  if (!hasColumn(suppressionColumns, 'lot_id')) {
+    return 0;
+  }
+
+  const db = connection || pool;
+  const [result] = await db.query(
+    `
+      DELETE FROM lot_requirement_inheritance_suppressions
+      WHERE lot_id = ?
+    `,
+    [normalizedLotId]
+  );
+
+  return Number(result.affectedRows || 0);
 }
 
 async function clearLotRequirementInheritanceSuppression(lotId, requirementTypeConfigValueId, connection = null) {
@@ -1926,6 +2020,8 @@ function buildDuplicatedLotFormData(sourceLot, { newLotName, parentLotId }) {
     notes: sourceLot.notes || '',
     allowDuplicateUnitAssumption: Number(sourceLot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0',
     startNewProductionCycleOnMove: Number(sourceLot.start_new_production_cycle_on_move || 0) === 1 ? '1' : '0',
+    generateAmazonAssetTag: Number(sourceLot.generate_amazon_asset_tag || 0) === 1 ? '1' : '0',
+    qcRequired: Number(sourceLot.qc_required ?? 1) === 1 ? '1' : '0',
     isAssignable: Number(sourceLot.is_assignable || 0) === 1 ? '1' : '0'
   };
 }
@@ -1996,92 +2092,11 @@ function buildMaterializedUnitFormRules(profile) {
     .filter((rule) => rule.visibilityMode !== 'inherit' || rule.requirementMode !== 'inherit');
 }
 
-function buildRequirementBehaviorSignature(requirements) {
-  return (Array.isArray(requirements) ? requirements : [])
-    .map((requirement) => [
-      normalizeRequirementKey(requirement.requirement_key),
-      normalizeOperatorCode(requirement.operator_code),
-      String(getRequirementValueToken(requirement) || requirement.required_value_token || requirement.required_value || ''),
-      Number(requirement.is_required ?? 1) === 1 ? '1' : '0'
-    ].join('|'))
-    .sort();
-}
-
 function buildUnitFormBehaviorSignature(profile) {
   return (profile && Array.isArray(profile.fields) ? profile.fields : [])
     .filter((field) => field.enabledForLotRules)
     .map((field) => `${field.key}|${field.visible ? 'visible' : 'hidden'}|${field.required ? 'required' : 'optional'}`)
     .sort();
-}
-
-async function copyRequirementInheritanceSuppressionsForPreservedBehavior({
-  connection,
-  targetLotId,
-  targetParentLotId,
-  sourceEffectiveRequirements,
-  currentUserId
-}) {
-  if (!targetParentLotId) {
-    return 0;
-  }
-
-  const suppressionColumns = await getColumnSet('lot_requirement_inheritance_suppressions');
-
-  if (!hasColumn(suppressionColumns, 'lot_id') || !hasColumn(suppressionColumns, 'requirement_type_config_value_id')) {
-    const parentRequirements = await listLotRequirements(targetParentLotId, connection);
-    const effectiveTypeIds = new Set(
-      (Array.isArray(sourceEffectiveRequirements) ? sourceEffectiveRequirements : [])
-        .map((requirement) => Number(requirement.requirement_type_config_value_id))
-        .filter((value) => Number.isSafeInteger(value) && value > 0)
-    );
-    const wouldRequireSuppression = parentRequirements.some(
-      (requirement) => !effectiveTypeIds.has(Number(requirement.requirement_type_config_value_id))
-    );
-
-    if (wouldRequireSuppression) {
-      throw new Error('Preserving source requirement behavior under this Parent Lot requires the requirement inheritance suppression schema.');
-    }
-
-    return 0;
-  }
-
-  const effectiveTypeIds = new Set(
-    (Array.isArray(sourceEffectiveRequirements) ? sourceEffectiveRequirements : [])
-      .map((requirement) => Number(requirement.requirement_type_config_value_id))
-      .filter((value) => Number.isSafeInteger(value) && value > 0)
-  );
-  const [parentRows] = await connection.query(
-    `SELECT DISTINCT requirement_type_config_value_id
-     FROM lot_requirements
-     WHERE lot_id = ?`,
-    [Number(targetParentLotId)]
-  );
-  const suppressedTypeIds = parentRows
-    .map((row) => Number(row.requirement_type_config_value_id))
-    .filter((value) => Number.isSafeInteger(value) && value > 0 && !effectiveTypeIds.has(value));
-
-  if (suppressedTypeIds.length === 0) {
-    return 0;
-  }
-
-  const values = suppressedTypeIds.flatMap((requirementTypeConfigValueId) => [
-    Number(targetLotId),
-    requirementTypeConfigValueId,
-    currentUserId || null,
-    currentUserId || null
-  ]);
-  const placeholders = suppressedTypeIds.map(() => '(?, ?, ?, ?)').join(', ');
-  const [result] = await connection.query(
-    `INSERT INTO lot_requirement_inheritance_suppressions (
-       lot_id,
-       requirement_type_config_value_id,
-       created_by_user_id,
-       updated_by_user_id
-     ) VALUES ${placeholders}`,
-    values
-  );
-
-  return Number(result.affectedRows || 0);
 }
 
 async function getLotDuplicationPreview(sourceLotId) {
@@ -2141,9 +2156,8 @@ async function duplicateLot(sourceLotId, duplicationData, currentUserId) {
       throw new Error('The source Lot could not be loaded for duplication.');
     }
 
-    const [sourceDirectRequirements, sourceEffectiveRequirements, sourceDirectUnitFormRules, sourceEffectiveUnitFormProfile] = await Promise.all([
+    const [sourceDirectRequirements, sourceDirectUnitFormRules, sourceEffectiveUnitFormProfile] = await Promise.all([
       listLotRequirements(normalizedSourceLotId, connection),
-      listEffectiveLotRequirements(normalizedSourceLotId, connection),
       lotUnitFormProfileModel.listRulesForLot(normalizedSourceLotId, connection),
       lotUnitFormProfileModel.getEffectiveUnitFormProfileForLot(normalizedSourceLotId, connection)
     ]);
@@ -2154,25 +2168,12 @@ async function duplicateLot(sourceLotId, duplicationData, currentUserId) {
     const createdLot = await createLot(duplicateFormData, currentUserId, { connection });
     const targetLotId = Number(createdLot.lotId);
 
-    const requirementsToCopy = inheritanceMode === 'preserve_source'
-      ? sourceEffectiveRequirements
-      : sourceDirectRequirements;
     const requirementCount = await insertClonedRequirementRows(
       connection,
       targetLotId,
-      requirementsToCopy,
+      sourceDirectRequirements,
       currentUserId
     );
-
-    if (inheritanceMode === 'preserve_source') {
-      await copyRequirementInheritanceSuppressionsForPreservedBehavior({
-        connection,
-        targetLotId,
-        targetParentLotId,
-        sourceEffectiveRequirements,
-        currentUserId
-      });
-    }
 
     const unitFormRulesToCopy = inheritanceMode === 'preserve_source'
       ? buildMaterializedUnitFormRules(sourceEffectiveUnitFormProfile)
@@ -2189,16 +2190,19 @@ async function duplicateLot(sourceLotId, duplicationData, currentUserId) {
       connection
     );
 
-    if (inheritanceMode === 'preserve_source') {
-      const [targetEffectiveRequirements, targetEffectiveUnitFormProfile] = await Promise.all([
-        listEffectiveLotRequirements(targetLotId, connection),
-        lotUnitFormProfileModel.getEffectiveUnitFormProfileForLot(targetLotId, connection)
-      ]);
+    const unitBrowserLayoutCopy = await lotUnitBrowserLayoutModel.copyLayoutForDuplicate({
+      sourceLotId: normalizedSourceLotId,
+      targetLotId,
+      inheritanceMode,
+      currentUserId,
+      connection
+    });
 
-      if (JSON.stringify(buildRequirementBehaviorSignature(targetEffectiveRequirements))
-        !== JSON.stringify(buildRequirementBehaviorSignature(sourceEffectiveRequirements))) {
-        throw new Error('The duplicate could not preserve the source Lot requirement behavior. No Lot was created.');
-      }
+    if (inheritanceMode === 'preserve_source') {
+      const targetEffectiveUnitFormProfile = await lotUnitFormProfileModel.getEffectiveUnitFormProfileForLot(
+        targetLotId,
+        connection
+      );
 
       if (JSON.stringify(buildUnitFormBehaviorSignature(targetEffectiveUnitFormProfile))
         !== JSON.stringify(buildUnitFormBehaviorSignature(sourceEffectiveUnitFormProfile))) {
@@ -2213,7 +2217,8 @@ async function duplicateLot(sourceLotId, duplicationData, currentUserId) {
       lotCode: createdLot.lotCode,
       inheritanceMode,
       copiedRequirementCount: requirementCount,
-      copiedUnitFormRuleCount: unitFormRulesToCopy.length
+      copiedUnitFormRuleCount: unitFormRulesToCopy.length,
+      copiedUnitBrowserLayout: unitBrowserLayoutCopy.targetHasDirectLayout
     };
   } catch (error) {
     await connection.rollback();

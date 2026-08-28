@@ -62,7 +62,7 @@ test('Unit Browser refresh assets are cache-busted together', () => {
   const detail = read('views/pages/tech-unit-detail.ejs');
 
   [page, detail].forEach((template) => {
-    assert.match(template, /tech-units-clean\.css\?v=20260819-stage10w68o-toggle-label-cleanup/);
-    assert.match(template, /tech-units\.js\?v=20260819-stage10w68l-filter-toggles/);
+    assert.match(template, /tech-units-clean\.css\?v=20260826-stage10w73e-browser-usability/);
+    assert.match(template, /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
   });
 });

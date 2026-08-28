@@ -5,6 +5,8 @@ const { IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID, SYSTEM_CONFIG_CATEGORY_IDS, SYSTEM_CO
 const productionWeightModel = require('./productionWeightModel');
 const productionWeightSyncModel = require('./productionWeightSyncModel');
 const productionCycleModel = require('./productionCycleModel');
+const unitAmazonModel = require('./unitAmazonModel');
+const lotQcRequirementModel = require('./lotQcRequirementModel');
 const operationalOptionRankingModel = require('./operationalOptionRankingModel');
 const {
   attachContextScores,
@@ -41,6 +43,10 @@ const {
   buildLotHierarchyLookup,
   buildLotHierarchyOptions
 } = require('../services/lotHierarchyPresentation');
+const {
+  formatBrowserCapacityGb,
+  parseCapacitySearchTerm
+} = require('../services/unitCapacityPresentation');
 
 const DEFAULT_UNIT_PAGE_SIZE = 50;
 const UNIT_PAGE_SIZE_OPTIONS = [50, 100, 250, 500];
@@ -56,7 +62,11 @@ const UNIT_SORT_OPTIONS = new Set([
   'outcome_pass_first',
   'outcome_fail_first',
   'qc_status_desc',
-  'qc_status_asc'
+  'qc_status_asc',
+  'asset_asc',
+  'asset_desc',
+  'az_asc',
+  'az_desc'
 ]);
 const MAX_SEARCH_TERMS = 100;
 const ASSET_NUMBER_START = 2300000;
@@ -1891,14 +1901,15 @@ function getQcReviewStateJoinSql(
       ${correctionJoinSql}`;
 }
 
-function getQcReviewStateSelectSql(qcReviewSchemaIsReady, correctionSchemaIsReady = false) {
+function getQcReviewStateSelectSql(qcReviewSchemaIsReady, correctionSchemaIsReady = false, qcRequiredSql = '1') {
   if (!qcReviewSchemaIsReady) {
     return `
         NULL AS qc_current_completion_id,
         NULL AS qc_latest_qc_check_id,
         NULL AS qc_latest_decision_code,
         0 AS qc_has_rejection,
-        0 AS qc_has_correction_submission`;
+        0 AS qc_has_correction_submission,
+        ${qcRequiredSql} AS qc_is_required`;
   }
 
   return `
@@ -1906,34 +1917,40 @@ function getQcReviewStateSelectSql(qcReviewSchemaIsReady, correctionSchemaIsRead
         qc_review_state.latest_qc_check_id AS qc_latest_qc_check_id,
         qc_review_state.latest_decision_code AS qc_latest_decision_code,
         COALESCE(qc_review_state.has_rejection, 0) AS qc_has_rejection,
-        ${correctionSchemaIsReady ? 'CASE WHEN qc_correction_state.latest_correction_id IS NULL THEN 0 ELSE 1 END' : '0'} AS qc_has_correction_submission`;
+        ${correctionSchemaIsReady ? 'CASE WHEN qc_correction_state.latest_correction_id IS NULL THEN 0 ELSE 1 END' : '0'} AS qc_has_correction_submission,
+        ${qcRequiredSql} AS qc_is_required`;
 }
 
-function getQcReviewFilterConditionSql(qcReviewFilter, correctionSchemaIsReady = false) {
+function getQcReviewFilterConditionSql(qcReviewFilter, correctionSchemaIsReady = false, qcRequiredSql = '1') {
   if (qcReviewFilter === 'awaiting') {
-    return `qc_current_completion.unit_work_completion_id IS NOT NULL
+    return `${qcRequiredSql} = 1
+      AND qc_current_completion.unit_work_completion_id IS NOT NULL
       AND qc_review_state.latest_decision_code IS NULL`;
   }
 
   if (qcReviewFilter === 'accepted') {
-    return `qc_review_state.latest_decision_code = 'accepted'
+    return `${qcRequiredSql} = 1
+      AND qc_review_state.latest_decision_code = 'accepted'
       AND COALESCE(qc_review_state.has_rejection, 0) = 0`;
   }
 
   if (qcReviewFilter === 'corrected') {
-    return `qc_review_state.latest_decision_code = 'accepted'
+    return `${qcRequiredSql} = 1
+      AND qc_review_state.latest_decision_code = 'accepted'
       AND COALESCE(qc_review_state.has_rejection, 0) = 1`;
   }
 
   if (qcReviewFilter === 'ready_recheck') {
     return correctionSchemaIsReady
-      ? `qc_review_state.latest_decision_code = 'rejected'
+      ? `${qcRequiredSql} = 1
+        AND qc_review_state.latest_decision_code = 'rejected'
         AND qc_correction_state.latest_correction_id IS NOT NULL`
       : '1 = 0';
   }
 
   if (qcReviewFilter === 'rejected') {
-    return `qc_review_state.latest_decision_code = 'rejected'
+    return `${qcRequiredSql} = 1
+      AND qc_review_state.latest_decision_code = 'rejected'
       ${correctionSchemaIsReady ? 'AND qc_correction_state.latest_correction_id IS NULL' : ''}`;
   }
 
@@ -2002,7 +2019,8 @@ function getUnitOrderBySql(
     gradeAssessmentsTableIsReady = false,
     outcomesTableIsReady = false,
     qcReviewSchemaIsReady = false,
-    correctionSchemaIsReady = false
+    correctionSchemaIsReady = false,
+    amazonAssetTagSortReady = false
   } = {}
 ) {
   const normalizedSort = normalizeUnitSort(sort);
@@ -2053,6 +2071,28 @@ function getUnitOrderBySql(
           WHEN 'fail' THEN ${failRank}
           ELSE 90
         END ASC,
+        u.created_at DESC,
+        u.unit_id DESC`;
+  }
+
+  if (normalizedSort === 'asset_asc' || normalizedSort === 'asset_desc') {
+    const assetDirection = normalizedSort === 'asset_desc' ? 'DESC' : 'ASC';
+
+    return `
+      ORDER BY
+        CASE WHEN u.asset_number IS NULL THEN 1 ELSE 0 END ASC,
+        u.asset_number ${assetDirection},
+        u.created_at DESC,
+        u.unit_id DESC`;
+  }
+
+  if ((normalizedSort === 'az_asc' || normalizedSort === 'az_desc') && amazonAssetTagSortReady) {
+    const azDirection = normalizedSort === 'az_desc' ? 'DESC' : 'ASC';
+
+    return `
+      ORDER BY
+        CASE WHEN az_sort.amazon_asset_tag IS NULL OR az_sort.amazon_asset_tag = '' THEN 1 ELSE 0 END ASC,
+        az_sort.amazon_asset_tag ${azDirection},
         u.created_at DESC,
         u.unit_id DESC`;
   }
@@ -2169,6 +2209,14 @@ async function listTechUnits(filters = {}) {
     optionScope: 'unit_category'
   });
   const unitIdentifiersTableIsReady = await tableExists('unit_identifiers');
+  const storageDeviceSearchColumns = filters.search
+    ? await getTableColumns('unit_storage_devices')
+    : new Map();
+  const storageSerialSearchIsReady = [
+    'unit_id',
+    'serial_number',
+    'is_current'
+  ].every((columnName) => hasColumn(storageDeviceSearchColumns, columnName));
 
   const unitCategoryMap = mapById(rankedBrowserUnitCategories);
   const unitStatusMap = mapById(unitStatuses);
@@ -2199,11 +2247,18 @@ async function listTechUnits(filters = {}) {
   const gradeFilter = String(filters.gradeFilter || '').trim();
   const requestedCompletionFilter = String(filters.completionFilter || '').trim();
   const sort = normalizeUnitSort(filters.sort);
+  const wantsAmazonAssetTagSort = sort === 'az_asc' || sort === 'az_desc';
+  const amazonAssetTagIdentifierTypeId = wantsAmazonAssetTagSort && unitIdentifiersTableIsReady
+    ? Number(await getConfigValueIdBySystemId(SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_AMAZON_ASSET_TAG)) || null
+    : null;
   const currentUserId = normalizePositiveFilterId(filters.currentUserId);
   const requestedUnitId = normalizePositiveFilterId(filters.unitId);
   const restrictToCurrentAssignment = filters.restrictToCurrentAssignment === true && Boolean(currentUserId) && searchTerms.length === 0;
   const isParkedUnitState = unitState === 'parked' && !searchIncludesParkedUnits;
   const requestedQcReviewFilter = normalizeQcReviewFilter(filters.qcReviewFilter);
+  const lotColumns = await getTableColumns('lots');
+  const lotQcRequirementSchemaIsReady = hasColumn(lotColumns, 'qc_required');
+  const qcRequiredSql = lotQcRequirementSchemaIsReady ? 'COALESCE(qc_lot.qc_required, 1)' : '1';
   const [completionColumns, qcReviewColumns, qcCorrectionColumns] = isParkedUnitState
     ? [new Map(), new Map(), new Map()]
     : await Promise.all([
@@ -2241,6 +2296,10 @@ async function listTechUnits(filters = {}) {
 
   if (!searchIncludesParkedUnits) {
     where.push(`${getUnitParkedSql(state, 'u')} = ${isParkedUnitState ? '1' : '0'}`);
+  }
+
+  if (filters.qcRequiredOnly === true && lotQcRequirementSchemaIsReady) {
+    where.push(`${qcRequiredSql} = 1`);
   }
 
   if (requestedUnitId) {
@@ -2333,13 +2392,44 @@ async function listTechUnits(filters = {}) {
     }
   }
 
+  const palletNumberFilter = String(filters.palletNumber || '').trim();
+  if (palletNumberFilter) {
+    where.push(`
+      EXISTS (
+        SELECT 1
+        FROM unit_amazon_details ua_pallet_filter
+        WHERE ua_pallet_filter.unit_id = u.unit_id
+          AND ua_pallet_filter.pallet_number = ?
+      )
+    `);
+    params.push(palletNumberFilter);
+  }
+
   if (searchTerms.length > 0) {
-    const isMultiSearch = searchTerms.length > 1;
+    const searchMode = filters.searchMode === 'all' ? 'all' : 'any';
     const searchGroups = [];
 
     searchTerms.forEach((searchTerm) => {
+      const capacitySearch = parseCapacitySearchTerm(searchTerm);
+
+      if (capacitySearch) {
+        const columnSql = capacitySearch.field === 'memory' ? 'u.ram_gb' : 'u.storage_gb';
+        const minGb = Number(capacitySearch.minGb);
+        const maxGb = Number(capacitySearch.maxGb);
+
+        if (minGb === maxGb) {
+          searchGroups.push(`(${columnSql} = ?)`);
+          params.push(minGb);
+        } else {
+          searchGroups.push(`(${columnSql} BETWEEN ? AND ?)`);
+          params.push(minGb, maxGb);
+        }
+        return;
+      }
+
       const normalizedSearchAssetNumber = normalizeAssetTagInput(searchTerm);
       const normalizedIdentifierSearch = compactAssetTagValue(searchTerm);
+      const likeSearch = `%${searchTerm}%`;
       const searchParts = [];
       const searchParams = [];
 
@@ -2363,41 +2453,78 @@ async function listTechUnits(filters = {}) {
               )
           )
         `);
-        searchParams.push(`%${searchTerm}%`, `%${normalizedIdentifierSearch}%`);
+        searchParams.push(likeSearch, `%${normalizedIdentifierSearch}%`);
       }
 
-      if (!isMultiSearch) {
-        searchParts.push(
-          'u.hardware_notes LIKE ?',
-          'u.cosmetic_notes LIKE ?',
-          'm.name LIKE ?',
-          'um.model_name LIKE ?',
-          'pm.model_code LIKE ?',
-          'cv_category.label LIKE ?',
-          'cv_ram_type.label LIKE ?',
-          'cv_storage_type.label LIKE ?',
-          'cv_os.label LIKE ?'
-        );
-
-        searchParams.push(
-          `%${searchTerm}%`,
-          `%${searchTerm}%`,
-          `%${searchTerm}%`,
-          `%${searchTerm}%`,
-          `%${searchTerm}%`,
-          `%${searchTerm}%`,
-          `%${searchTerm}%`,
-          `%${searchTerm}%`,
-          `%${searchTerm}%`
-        );
+      if (storageSerialSearchIsReady) {
+        searchParts.push(`
+          EXISTS (
+            SELECT 1
+            FROM unit_storage_devices usd_search
+            WHERE usd_search.unit_id = u.unit_id
+              AND usd_search.is_current = 1
+              AND usd_search.serial_number LIKE ?
+          )
+        `);
+        searchParams.push(likeSearch);
       }
+
+      searchParts.push(
+        'u.hardware_notes LIKE ?',
+        'u.cosmetic_notes LIKE ?',
+        'm.name LIKE ?',
+        'um.model_name LIKE ?',
+        'pm.model_code LIKE ?',
+        "COALESCE(pm.processor_family, '') LIKE ?",
+        "COALESCE(pm.generation, '') LIKE ?",
+        "CONCAT_WS(' ', COALESCE(pb.name, ''), COALESCE(pm.processor_family, ''), COALESCE(pm.generation, ''), COALESCE(pm.model_code, '')) LIKE ?",
+        "REPLACE(REPLACE(CONCAT_WS('', COALESCE(pm.processor_family, ''), COALESCE(pm.generation, '')), ' ', ''), '-', '') LIKE ?",
+        'cv_category.label LIKE ?',
+        'cv_ram_type.label LIKE ?',
+        'cv_storage_type.label LIKE ?',
+        'cv_os.label LIKE ?'
+      );
+      searchParams.push(...Array(8).fill(likeSearch));
+      searchParams.push(`%${searchTerm.replace(/[^A-Za-z0-9]/g, '')}%`);
+      searchParams.push(...Array(4).fill(likeSearch));
+
+      searchParts.push(`
+        EXISTS (
+          SELECT 1
+          FROM processor_family_members pfm_search
+          JOIN processor_families pf_search
+            ON pf_search.processor_family_id = pfm_search.processor_family_id
+          WHERE pfm_search.processor_model_id = u.processor_model_id
+            AND (
+              pf_search.name LIKE ?
+              OR REPLACE(REPLACE(pf_search.name, ' ', ''), '-', '') LIKE ?
+            )
+        )
+      `);
+      searchParams.push(likeSearch, `%${searchTerm.replace(/[^A-Za-z0-9]/g, '')}%`);
+
+      searchParts.push(`
+        EXISTS (
+          SELECT 1
+          FROM unit_amazon_details ua_search
+          WHERE ua_search.unit_id = u.unit_id
+            AND (
+              ua_search.fnsku LIKE ?
+              OR ua_search.asin LIKE ?
+              OR ua_search.tracking_number LIKE ?
+              OR ua_search.pallet_number LIKE ?
+              OR ua_search.buyer_comments LIKE ?
+            )
+        )
+      `);
+      searchParams.push(...Array(5).fill(likeSearch));
 
       searchGroups.push(`(${searchParts.join(' OR ')})`);
       params.push(...searchParams);
     });
 
     if (searchGroups.length > 0) {
-      where.push(`(${searchGroups.join(' OR ')})`);
+      where.push(`(${searchGroups.join(searchMode === 'all' ? ' AND ' : ' OR ')})`);
     }
   }
 
@@ -2423,6 +2550,15 @@ async function listTechUnits(filters = {}) {
         ON cv_os.config_value_id = u.operating_system_config_value_id
       LEFT JOIN users assigned_user
         ON assigned_user.user_id = ${ownershipUserSql}
+      LEFT JOIN lots qc_lot
+        ON qc_lot.lot_id = u.lot_id
+      ${amazonAssetTagIdentifierTypeId ? `LEFT JOIN (
+        SELECT unit_id, MAX(identifier_value) AS amazon_asset_tag
+        FROM unit_identifiers
+        WHERE identifier_type_config_value_id = ${amazonAssetTagIdentifierTypeId}
+        GROUP BY unit_id
+      ) az_sort
+        ON az_sort.unit_id = u.unit_id` : ''}
       ${getCurrentGradeJoinSql(gradeAssessmentsTableIsReady)}
       ${getCurrentOutcomeJoinSql(outcomesTableIsReady)}
       ${getQcReviewStateJoinSql(qcReviewSchemaIsReady, {
@@ -2442,35 +2578,40 @@ async function listTechUnits(filters = {}) {
           COUNT(*) AS all_units,
           COALESCE(SUM(
             CASE
-              WHEN qc_current_completion.unit_work_completion_id IS NOT NULL
+              WHEN ${qcRequiredSql} = 1
+                AND qc_current_completion.unit_work_completion_id IS NOT NULL
                 AND qc_review_state.latest_decision_code IS NULL THEN 1
               ELSE 0
             END
           ), 0) AS awaiting_units,
           COALESCE(SUM(
             CASE
-              WHEN qc_review_state.latest_decision_code = 'accepted'
+              WHEN ${qcRequiredSql} = 1
+                AND qc_review_state.latest_decision_code = 'accepted'
                 AND COALESCE(qc_review_state.has_rejection, 0) = 0 THEN 1
               ELSE 0
             END
           ), 0) AS accepted_units,
           COALESCE(SUM(
             CASE
-              WHEN qc_review_state.latest_decision_code = 'accepted'
+              WHEN ${qcRequiredSql} = 1
+                AND qc_review_state.latest_decision_code = 'accepted'
                 AND COALESCE(qc_review_state.has_rejection, 0) = 1 THEN 1
               ELSE 0
             END
           ), 0) AS corrected_units,
           COALESCE(SUM(
             CASE
-              WHEN qc_review_state.latest_decision_code = 'rejected'
+              WHEN ${qcRequiredSql} = 1
+                AND qc_review_state.latest_decision_code = 'rejected'
                 AND ${qcCorrectionSchemaIsReady ? 'qc_correction_state.latest_correction_id IS NOT NULL' : '0 = 1'} THEN 1
               ELSE 0
             END
           ), 0) AS ready_for_recheck_units,
           COALESCE(SUM(
             CASE
-              WHEN qc_review_state.latest_decision_code = 'rejected'
+              WHEN ${qcRequiredSql} = 1
+                AND qc_review_state.latest_decision_code = 'rejected'
                 ${qcCorrectionSchemaIsReady ? 'AND qc_correction_state.latest_correction_id IS NULL' : ''} THEN 1
               ELSE 0
             END
@@ -2497,7 +2638,7 @@ async function listTechUnits(filters = {}) {
     where.push('qc_current_completion.unit_work_completion_id IS NULL');
   }
 
-  const qcReviewConditionSql = getQcReviewFilterConditionSql(qcReviewFilter, qcCorrectionSchemaIsReady);
+  const qcReviewConditionSql = getQcReviewFilterConditionSql(qcReviewFilter, qcCorrectionSchemaIsReady, qcRequiredSql);
   if (qcReviewConditionSql) {
     where.push(`(${qcReviewConditionSql})`);
   }
@@ -2523,13 +2664,14 @@ async function listTechUnits(filters = {}) {
         assigned_user.first_name AS assigned_first_name,
         assigned_user.last_name AS assigned_last_name,
         assigned_user.email AS assigned_email,
-        ${getQcReviewStateSelectSql(qcReviewSchemaIsReady, qcCorrectionSchemaIsReady)}
+        ${getQcReviewStateSelectSql(qcReviewSchemaIsReady, qcCorrectionSchemaIsReady, qcRequiredSql)}
       ${unitFromSql}
       ${getUnitOrderBySql(sort, {
         gradeAssessmentsTableIsReady,
         outcomesTableIsReady,
         qcReviewSchemaIsReady,
-        correctionSchemaIsReady: qcCorrectionSchemaIsReady
+        correctionSchemaIsReady: qcCorrectionSchemaIsReady,
+        amazonAssetTagSortReady: Boolean(amazonAssetTagIdentifierTypeId)
       })}
       ${rowLimitSql}
     `,
@@ -2576,13 +2718,15 @@ async function listTechUnits(filters = {}) {
     );
 
     const qcReviewState = resolveQcReviewState(row);
+    const browserRamCapacity = formatBrowserCapacityGb(row.ram_gb);
+    const browserStorageCapacity = formatBrowserCapacityGb(row.storage_gb);
     const specParts = [
       manufacturerLabel,
       modelLabel,
       processorLabel,
-      row.ram_gb !== null && row.ram_gb !== undefined ? `${row.ram_gb}GB Memory` : '',
+      browserRamCapacity ? `${browserRamCapacity} Memory` : '',
       ramTypeLabel,
-      row.storage_gb !== null && row.storage_gb !== undefined ? `${row.storage_gb}GB Storage` : '',
+      browserStorageCapacity ? `${browserStorageCapacity} Storage` : '',
       storageTypeLabel,
       row.battery_health_percent !== null && row.battery_health_percent !== undefined
         ? `${Number(row.battery_health_percent).toFixed(1)}% Battery`
@@ -2643,6 +2787,7 @@ async function listTechUnits(filters = {}) {
       completedAt: row.completed_at,
       qcReviewStateCode: qcReviewState.code,
       qcReviewStateLabel: qcReviewState.label,
+      qcRequired: Number(row.qc_is_required) !== 0,
       assignedToUserId: currentAssignmentUserId,
       assignedToName: [row.assigned_first_name, row.assigned_last_name].filter(Boolean).join(' ').trim() || row.assigned_email || '',
       isUnassigned: state.assignmentCapabilities.hasAssignedToUserId ? !row.assigned_to_user_id : false,
@@ -4188,6 +4333,11 @@ async function createIntentionalDuplicateTechUnitWithConnection(connection, form
   }
   await assertIntentionalDuplicateIdentifiersSaved(connection, unitId, formData);
   await saveUnitModuleRows(connection, unitId, formData, currentUserId);
+  await lotQcRequirementModel.auditUnitCreatedInLot(connection, {
+    unitId,
+    lotId: requestedLotId,
+    actorUserId: currentUserId
+  });
 
   return {
     unitId,
@@ -4240,6 +4390,18 @@ async function createTechUnit(formData, currentUserId, options = {}) {
 
     await saveUnitIdentifiers(connection, unitId, formData, assetNumber);
     await saveUnitModuleRows(connection, unitId, formData, currentUserId);
+    const amazonPolicyResult = await unitAmazonModel.applyDestinationLotAmazonPolicy(connection, {
+      unitId: Number(unitId),
+      destinationLotId: requestedLotId,
+      actorUserId: currentUserId,
+      source: 'tech_unit_create'
+    });
+    formData.amazonAssetTag = amazonPolicyResult.amazonAssetTag || formData.amazonAssetTag || '';
+    await lotQcRequirementModel.auditUnitCreatedInLot(connection, {
+      unitId: Number(unitId),
+      lotId: requestedLotId,
+      actorUserId: currentUserId
+    });
 
     if (typeof options.beforeCommit === 'function') {
       await options.beforeCommit({
@@ -4266,7 +4428,8 @@ async function recordUnitLotHistory(connection, {
   toLotId,
   movedByUserId,
   notes = null,
-  allowNewProductionCycle = true
+  allowNewProductionCycle = true,
+  auditAmazonPalletClear = true
 }) {
   return productionCycleModel.recordLotMove({
     unitId,
@@ -4274,7 +4437,8 @@ async function recordUnitLotHistory(connection, {
     toLotId,
     movedByUserId,
     notes,
-    allowNewProductionCycle
+    allowNewProductionCycle,
+    auditAmazonPalletClear
   }, connection);
 }
 
@@ -4345,6 +4509,15 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
     await saveUnitIdentifiers(connection, unitId, formData, unit.asset_number);
     await saveUnitModuleRows(connection, unitId, formData, currentUserId);
 
+    if (!lotChanged) {
+      await unitAmazonModel.applyDestinationLotAmazonPolicy(connection, {
+        unitId: Number(unitId),
+        destinationLotId: nextLotId,
+        actorUserId: currentUserId,
+        source: 'tech_unit_edit'
+      });
+    }
+
     if (lotChanged && options.recordLotHistory !== false) {
       await recordUnitLotHistory(connection, {
         unitId,
@@ -4352,7 +4525,8 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
         toLotId: nextLotId,
         movedByUserId: currentUserId,
         notes: options.lotMoveNotes || 'Unit moved while updating an existing unit record.',
-        allowNewProductionCycle: options.allowNewProductionCycleOnMove !== false
+        allowNewProductionCycle: options.allowNewProductionCycleOnMove !== false,
+        auditAmazonPalletClear: false
       });
     }
 
@@ -4415,6 +4589,7 @@ async function useExistingTechUnit(unitId, formData, currentUserId, options = {}
 
 const UNIT_RELATED_TABLE_LABELS = {
   unit_identifiers: 'Identifiers',
+  unit_amazon_details: 'Amazon workflow details',
   unit_specifications: 'Specifications',
   unit_field_sources: 'Field-source records',
   unit_grade_assessments: 'Grade records',
@@ -5779,6 +5954,13 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
           }
         ]
       }, connection);
+
+      await lotQcRequirementModel.auditCompletionIfNotRequired(connection, {
+        unitId: safeUnitId,
+        lotId: normalizeOptionalInteger(unit.lot_id),
+        actorUserId: safeRecordedByUserId || safeCompletedByUserId,
+        unitWorkCompletionId: completionId
+      });
     }
 
     await connection.commit();

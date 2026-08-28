@@ -7,6 +7,9 @@
     return select && select.selectedOptions.length > 0 ? select.selectedOptions[0] : null;
   }
 
+  const NON_A_COSMETIC_GRADES = new Set(['AB', 'B', 'C', 'D']);
+  const NON_A_COSMETIC_ISSUE_REQUIRED_MESSAGE = 'Cosmetic Grade AB, B, C, or D requires at least one actual Cosmetic Issue with severity and location.';
+
   const REPEATABLE_REQUIRED_MESSAGES = Object.freeze({
     memory: 'Add at least one complete memory module with a positive size.',
     storage: 'Add at least one complete storage device with a positive size.',
@@ -937,6 +940,56 @@
     getModuleRows(form, 'hardwareIssue').forEach((row) => syncHardwareIssueRowState(row));
   }
 
+  function requiresActualCosmeticIssueForSelectedGrade(form) {
+    if (!form || form.getAttribute('data-require-actual-cosmetic-issue-for-non-a-grade') !== 'true') {
+      return false;
+    }
+
+    const gradeSelect = form.querySelector('[data-cosmetic-grade-select]');
+    const selectedOption = getSelectedOption(gradeSelect);
+    const canonicalGrade = String(selectedOption?.getAttribute('data-cosmetic-grade') || '').trim().toUpperCase();
+
+    return NON_A_COSMETIC_GRADES.has(canonicalGrade);
+  }
+
+  function hasCompleteActualCosmeticIssueRow(wrapper) {
+    if (!wrapper || wrapper.getAttribute('data-unit-form-repeatable-type') !== 'cosmeticIssue') {
+      return false;
+    }
+
+    return Array.from(wrapper.querySelectorAll('[data-module-row="cosmeticIssue"]')).some((row) => (
+      row.getAttribute('data-cosmetic-no-issue') !== 'true'
+      && Boolean(row.querySelector('[name$="[issueTypeConfigValueId]"]')?.value)
+      && Boolean(row.querySelector('[name$="[severityConfigValueId]"]')?.value)
+      && Boolean(row.querySelector('[name$="[locationConfigValueId]"]')?.value)
+    ));
+  }
+
+  function applyRegularTechCosmeticIssuePolicy(form) {
+    if (!form) {
+      return;
+    }
+
+    const wrapper = form.querySelector('[data-unit-form-field-key="cosmetic_issues"]');
+
+    if (!wrapper) {
+      return;
+    }
+
+    const gradeRequired = requiresActualCosmeticIssueForSelectedGrade(form);
+    const lotVisible = wrapper.dataset.lotVisible !== 'false';
+    const lotRequired = wrapper.dataset.lotRequired === 'true';
+    const visible = lotVisible || gradeRequired;
+    const required = lotRequired || gradeRequired;
+
+    wrapper.dataset.gradeCosmeticRequired = gradeRequired ? 'true' : 'false';
+    wrapper.hidden = !visible;
+    applyControlRequirement(wrapper, required);
+    updateProfileManagedSubmissionState(form, wrapper, visible);
+    validateRequiredRepeatableSection(wrapper, false);
+    updateAutoCollapsedSections(form);
+  }
+
   function hasCompleteRepeatableRow(wrapper) {
     const rowType = wrapper ? wrapper.getAttribute('data-unit-form-repeatable-type') : '';
     const rows = wrapper ? Array.from(wrapper.querySelectorAll(`[data-module-row="${rowType}"]`)) : [];
@@ -1010,11 +1063,19 @@
 
     const anchor = getRepeatableValidationAnchor(wrapper);
     const rowType = wrapper.getAttribute('data-unit-form-repeatable-type');
-    const required = wrapper.dataset.lotRequired === 'true' && !wrapper.hidden;
-    const valid = !required || hasCompleteRepeatableRow(wrapper);
+    const gradeCosmeticRequired = wrapper.dataset.gradeCosmeticRequired === 'true';
+    const required = (wrapper.dataset.lotRequired === 'true' || gradeCosmeticRequired) && !wrapper.hidden;
+    const valid = !required || (
+      gradeCosmeticRequired
+        ? hasCompleteActualCosmeticIssueRow(wrapper)
+        : hasCompleteRepeatableRow(wrapper)
+    );
+    const requiredMessage = gradeCosmeticRequired
+      ? NON_A_COSMETIC_ISSUE_REQUIRED_MESSAGE
+      : (REPEATABLE_REQUIRED_MESSAGES[rowType] || 'Complete at least one row.');
 
     if (anchor) {
-      anchor.setCustomValidity(valid ? '' : (REPEATABLE_REQUIRED_MESSAGES[rowType] || 'Complete at least one row.'));
+      anchor.setCustomValidity(valid ? '' : requiredMessage);
 
       if (valid) {
         delete anchor.dataset.unitFormValidationPlacement;
@@ -1135,6 +1196,7 @@
 
     applyFollowerVisibility(form, visibleByKey);
     applyManufacturerFieldApplicability(form);
+    applyRegularTechCosmeticIssuePolicy(form);
     updateAutoCollapsedSections(form);
   }
 
@@ -1369,6 +1431,7 @@
 
     applyFollowerVisibility(form, visibleByKey);
     applyManufacturerFieldApplicability(form);
+    applyRegularTechCosmeticIssuePolicy(form);
     updateAutoCollapsedSections(form);
     restoreSequentialFocusAfterVisibilityChange(form, activeControl, previousFocusTargets);
 
@@ -1387,6 +1450,12 @@
   async function refreshLotUnitFormProfile(form, options = {}) {
     if (!form) {
       return { ok: false, changed: false };
+    }
+
+    const submitPreflight = Boolean(options.submitPreflight);
+
+    if (form.dataset.techUnitSubmitPreflightPending === 'true' && !submitPreflight) {
+      return { ok: true, changed: false, skipped: true };
     }
 
     const background = Boolean(options.background);
@@ -1640,6 +1709,12 @@
   async function refreshLotRequirementWorkflow(form, options = {}) {
     if (!form) {
       return { ok: false, saveAllowed: false };
+    }
+
+    const submitPreflight = Boolean(options.submitPreflight);
+
+    if (form.dataset.techUnitSubmitPreflightPending === 'true' && !submitPreflight) {
+      return { ok: true, saveAllowed: true, skipped: true };
     }
 
     const lotSelect = getAssignableLotCatalog(form);
@@ -3922,7 +3997,7 @@
     }
 
     region.querySelectorAll('[data-intentional-duplicate-request-feedback]').forEach((feedback) => feedback.remove());
-    region.insertAdjacentHTML('afterbegin', `<div class="message success tech-intentional-duplicate-request-feedback" data-intentional-duplicate-request-feedback><p>Intentional Duplicate request #${requestId || '—'} is pending review. No new Unit or Asset Tag was created. <a href="${requestUrl}">View Unit Request</a></p></div>`);
+    region.insertAdjacentHTML('afterbegin', `<div class="message success tech-intentional-duplicate-request-feedback" data-intentional-duplicate-request-feedback><p>Intentional Duplicate request is pending review. No new Unit or Asset Tag was created. <a href="${requestUrl}">View Request Details</a></p></div>`);
   }
 
   function showCatalogRequestOpenError(form, message, requestKind = '') {
@@ -4203,6 +4278,7 @@
     });
     syncAllCosmeticIssueRows(form);
     syncAllHardwareIssueRows(form);
+    applyRegularTechCosmeticIssuePolicy(form);
     updateModuleTotals(form);
     updateProductionWeightPreview(form);
     updateIntentionalDuplicateRequestControls(form);
@@ -4346,6 +4422,14 @@
       if (isLotRequirementWorkflowControl(validationControl)) {
         scheduleLotRequirementWorkflowRefresh(getFormFromElement(validationControl));
       }
+    }
+
+    const cosmeticGradeSelect = event.target.closest('[data-cosmetic-grade-select]');
+
+    if (cosmeticGradeSelect) {
+      const form = getFormFromElement(cosmeticGradeSelect);
+      applyRegularTechCosmeticIssuePolicy(form);
+      refreshValidationSummary(form);
     }
 
     const cosmeticIssueTypeSelect = event.target.closest('[data-cosmetic-issue-type-select]');
@@ -4602,7 +4686,11 @@
       const form = getFormFromElement(assignableLotComboboxInput);
 
       window.setTimeout(() => {
-        const combobox = form ? form.querySelector('[data-assignable-lot-combobox]') : null;
+        if (!form || form.dataset.techUnitSubmitPreflightPending === 'true') {
+          return;
+        }
+
+        const combobox = form.querySelector('[data-assignable-lot-combobox]');
 
         if (!combobox || combobox.contains(document.activeElement)) {
           return;
@@ -4625,7 +4713,11 @@
       const form = getFormFromElement(processorComboboxInput);
 
       window.setTimeout(() => {
-        const combobox = form ? form.querySelector('[data-processor-combobox]') : null;
+        if (!form || form.dataset.techUnitSubmitPreflightPending === 'true') {
+          return;
+        }
+
+        const combobox = form.querySelector('[data-processor-combobox]');
 
         if (!combobox || combobox.contains(document.activeElement)) return;
 
@@ -4640,7 +4732,11 @@
       const form = getFormFromElement(modelComboboxInput);
 
       window.setTimeout(() => {
-        const combobox = form ? form.querySelector('[data-unit-model-combobox]') : null;
+        if (!form || form.dataset.techUnitSubmitPreflightPending === 'true') {
+          return;
+        }
+
+        const combobox = form.querySelector('[data-unit-model-combobox]');
 
         if (!combobox || combobox.contains(document.activeElement)) {
           return;
@@ -4930,7 +5026,7 @@
 
   async function runTechUnitSubmitPreflight(form, selectedLotId) {
     if (!hasCurrentLotProfileSubmitVerification(form, selectedLotId)) {
-      const profileResult = await refreshLotUnitFormProfile(form, { background: true, force: true });
+      const profileResult = await refreshLotUnitFormProfile(form, { background: true, force: true, submitPreflight: true });
       const currentLotId = String(getAssignableLotCatalog(form)?.value || '').trim();
 
       if (!profileResult || !profileResult.ok || currentLotId !== selectedLotId) {
@@ -4956,7 +5052,7 @@
 
     if (!hasCurrentLotRequirementSubmitVerification(form, selectedLotId)) {
       cancelScheduledLotRequirementWorkflowRefresh(form);
-      const requirementResult = await refreshLotRequirementWorkflow(form, { background: true });
+      const requirementResult = await refreshLotRequirementWorkflow(form, { background: true, submitPreflight: true });
       const currentLotId = String(getAssignableLotCatalog(form)?.value || '').trim();
 
       if (!requirementResult || !requirementResult.ok || !requirementResult.saveAllowed || currentLotId !== selectedLotId) {
@@ -4993,8 +5089,59 @@
     return true;
   }
 
+  function setTechUnitSubmitPreflightBusy(form, submitter, isBusy) {
+    if (!form) {
+      return;
+    }
+
+    const submitButton = submitter || form.querySelector('button[type="submit"], input[type="submit"]');
+
+    if (isBusy) {
+      form.setAttribute('aria-busy', 'true');
+
+      if (submitButton) {
+        if (!submitButton.dataset.techUnitSubmitIdleLabel) {
+          submitButton.dataset.techUnitSubmitIdleLabel = submitButton.textContent.trim();
+        }
+        submitButton.disabled = true;
+        submitButton.setAttribute('aria-busy', 'true');
+        submitButton.textContent = submitButton.dataset.techUnitSubmitIdleLabel.startsWith('Update')
+          ? 'Updating Unit...'
+          : 'Creating Unit...';
+      }
+      return;
+    }
+
+    form.removeAttribute('aria-busy');
+
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.removeAttribute('aria-busy');
+      if (submitButton.dataset.techUnitSubmitIdleLabel) {
+        submitButton.textContent = submitButton.dataset.techUnitSubmitIdleLabel;
+        delete submitButton.dataset.techUnitSubmitIdleLabel;
+      }
+    }
+  }
+
   function replayTechUnitFormSubmit(form, submitter) {
     form.dataset.techUnitSubmitPreflightReplay = 'true';
+
+    const clearStaleReplayMarker = () => {
+      if (form.dataset.techUnitSubmitPreflightReplay === 'true') {
+        delete form.dataset.techUnitSubmitPreflightReplay;
+      }
+    };
+
+    // Modal Create/Edit forms are HTMX forms. Replaying the actual submit
+    // button click preserves HTMX's normal clicked-submitter path after the
+    // asynchronous Lot preflight. This is the same path a successful second
+    // user click would take, without requiring that second click.
+    if (submitter && form.hasAttribute('hx-post') && typeof submitter.click === 'function') {
+      submitter.click();
+      window.queueMicrotask(clearStaleReplayMarker);
+      return;
+    }
 
     if (typeof form.requestSubmit === 'function') {
       try {
@@ -5002,11 +5149,12 @@
       } catch (error) {
         form.requestSubmit();
       }
+      window.queueMicrotask(clearStaleReplayMarker);
       return;
     }
 
-    // Legacy fallback. The normal supported browsers use requestSubmit(),
-    // which preserves the form's HTMX submission path and submitter.
+    // Legacy non-HTMX fallback.
+    delete form.dataset.techUnitSubmitPreflightReplay;
     form.noValidate = false;
     form.submit();
   }
@@ -5048,6 +5196,8 @@
     form.dataset.techUnitSubmitPreflightPending = 'true';
     cancelScheduledLotRequirementWorkflowRefresh(form);
     const submitter = event.submitter || null;
+    let replayed = false;
+    setTechUnitSubmitPreflightBusy(form, submitter, true);
 
     runTechUnitSubmitPreflight(form, selectedLotId).then((readyToSubmit) => {
       if (!readyToSubmit) {
@@ -5064,9 +5214,17 @@
         return;
       }
 
+      // Re-enable the submitter immediately before replay so requestSubmit()
+      // can preserve the normal HTMX/browser submission path. HTMX then owns
+      // the disabled state for the real request.
+      setTechUnitSubmitPreflightBusy(form, submitter, false);
+      replayed = true;
       replayTechUnitFormSubmit(form, submitter);
     }).finally(() => {
       delete form.dataset.techUnitSubmitPreflightPending;
+      if (!replayed) {
+        setTechUnitSubmitPreflightBusy(form, submitter, false);
+      }
     });
   }, true);
 

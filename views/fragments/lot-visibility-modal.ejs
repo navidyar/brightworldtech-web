@@ -7,6 +7,7 @@
   const actionLabel = isUnhide ? 'Unhide Lot' : 'Hide Lot';
   const actionPath = safeLot ? `/management/lots/${safeLot.lot_id}/${isUnhide ? 'unhide' : 'hide'}` : '#';
   const lotName = safeLot ? safeLot.lot_name : 'Selected Lot';
+  const safeReturnTo = typeof returnTo !== 'undefined' && returnTo === 'lot-detail' ? 'lot-detail' : 'lot-browser';
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
@@ -61,6 +62,7 @@
           </div>
         <% } else { %>
           <form method="post" action="<%= actionPath %>" hx-post="<%= actionPath %>" hx-target="#modal-root" hx-swap="innerHTML">
+            <input type="hidden" name="returnTo" value="<%= safeReturnTo %>" />
             <div class="form-actions">
               <button type="submit" class="<%= isUnhide ? 'primary-button' : 'secondary-button danger-button' %>"><%= actionLabel %></button>
               <button type="button" class="secondary-button" data-modal-close>Cancel</button>

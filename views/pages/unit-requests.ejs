@@ -5,7 +5,7 @@
     stylesheets: [
       '/css/tech.css',
       '/css/modal.css?v=stage8-config-consistency',
-      '/css/unit-requests.css?v=20260820-stage10w69l-request-modal-performance'
+      '/css/unit-requests.css?v=20260828-stage10w74n-request-context-labels'
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
@@ -96,7 +96,7 @@
                         name="search"
                         value="<%= searchTerm %>"
                         maxlength="150"
-                        placeholder="Request #, requester, Asset Tag, serial, model, processor, lot, or reason"
+                        placeholder="Requester, Asset Tag, serial, model, processor, lot, request type, or reason"
                         autocomplete="off"
                         autofocus
                         data-unit-request-search
@@ -148,8 +148,8 @@
               <div class="unit-request-list-shell">
                 <div class="unit-request-list-heading" aria-hidden="true">
                   <span>Request</span>
-                  <span>Requested Context</span>
-                  <span><%= isArchivedQueue ? 'Archived' : 'Submitted' %></span>
+                  <span>Request From</span>
+                  <span>Request Context</span>
                   <span></span>
                 </div>
 
@@ -167,12 +167,17 @@
                         href="<%= `${request.detailUrl}?${new URLSearchParams({ status: statusFilter, requestType: requestTypeFilter, ...(searchTerm ? { search: searchTerm } : {}) }).toString()}` %>"
                         data-unit-request-detail-link
                         data-modal-trigger
-                        aria-label="Open Request #<%= request.displayRequestId %>: <%= request.requestTypeLabel %>"
+                        aria-label="Open <%= request.requestTypeLabel %>: <%= request.displaySubject %>"
                       >
                         <div class="unit-request-row-request">
-                          <span class="unit-request-number">Request #<%= request.displayRequestId %></span>
-                          <strong><%= request.requestTypeLabel %></strong>
+                          <strong class="unit-request-subject"><%= request.displaySubject %></strong>
+                          <span class="unit-request-type-label"><%= request.requestTypeLabel %></span>
                           <span class="unit-request-status <%= request.statusClass %>"><%= request.statusLabel %></span>
+                        </div>
+
+                        <div class="unit-request-row-requester">
+                          <span class="unit-request-row-requester-label">Request From</span>
+                          <strong><%= request.requestedByName || '—' %></strong>
                         </div>
 
                         <dl class="unit-request-row-summary">
@@ -189,9 +194,9 @@
                             <dd><%= isArchivedQueue
                               ? (request.archivedAt ? formatDateTime(request.archivedAt) : '—')
                               : (request.submittedAt ? formatDateTime(request.submittedAt) : '—') %></dd>
-                            <small><%= isArchivedQueue
-                              ? `Resolved by ${request.reviewedByName || request.requestedByName}`
-                              : `by ${request.requestedByName}` %></small>
+                            <% if (isArchivedQueue) { %>
+                              <small><%= `Resolved by ${request.reviewedByName || request.requestedByName}` %></small>
+                            <% } %>
                           </div>
                         </dl>
                       </a>

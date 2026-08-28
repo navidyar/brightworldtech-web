@@ -4306,3 +4306,52 @@ body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal > .modal-body
   font-weight: 650;
   line-height: 1.25;
 }
+
+/* Stage 10W73A — Lot Unit Browser configuration foundation. Reuse the existing
+   Unit Form configuration modal structure and add only layout-specific controls. */
+.lot-unit-browser-layout-table-card td > strong,
+.lot-unit-browser-layout-table-card td > small {
+  display: block;
+}
+
+.lot-unit-browser-layout-table-card td > small {
+  margin-top: 4px;
+}
+
+.lot-unit-browser-visibility-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 650;
+}
+
+.lot-unit-browser-visibility-toggle input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
+
+.lot-unit-browser-order-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lot-unit-browser-order-actions .secondary-button {
+  min-height: 30px;
+}
+
+.lot-unit-browser-order-actions .lot-unit-browser-order-button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.lot-unit-browser-foundation-note {
+  margin: 0;
+}

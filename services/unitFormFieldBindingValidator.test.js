@@ -16,9 +16,9 @@ test('the live Unit form binds every Lot-configurable field and only repeats rep
   const result = validateUnitFormFieldBindings(markup);
 
   assert.equal(result.valid, true, JSON.stringify(result));
-  assert.equal(result.expectedCount, 60);
-  assert.equal(result.uniqueActualCount, 60);
-  assert.equal(result.actualCount, 69);
+  assert.equal(result.expectedCount, 66);
+  assert.equal(result.uniqueActualCount, 66);
+  assert.equal(result.actualCount, 75);
   assert.deepEqual(result.repeatableDuplicateKeys, [
     'battery_cycle_count', 'battery_health', 'biometric_hardware', 'biometrics_test',
     'camera_location', 'camera_test', 'camera_type', 'port_count', 'port_type'

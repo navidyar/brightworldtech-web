@@ -8,13 +8,13 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 
-test('new optional export columns do not change the established default selection', () => {
+test('all export columns remain available while the modal default selection stays empty', () => {
   const contract = require('../config/unitExportContract');
 
-  assert.equal(contract.UNIT_EXPORT_COLUMNS.length, 57);
-  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
-  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.includes(contract.UNIT_EXPORT_COLUMNS.find((column) => column.key === 'screenSize')), false);
-  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.includes(contract.UNIT_EXPORT_COLUMNS.find((column) => column.key === 'modelYear')), false);
+  assert.equal(contract.UNIT_EXPORT_COLUMNS.length, 72);
+  assert.deepEqual(contract.DEFAULT_UNIT_EXPORT_COLUMNS, []);
+  assert.equal(contract.UNIT_EXPORT_COLUMNS.some((column) => column.key === 'screenSize'), true);
+  assert.equal(contract.UNIT_EXPORT_COLUMNS.some((column) => column.key === 'modelYear'), true);
 });
 
 test('Export Preview renders a second horizontal scrollbar directly below the table headers', () => {
@@ -80,12 +80,12 @@ test('Export Preview uses the shared restrained blue-gray scrollbar contract', (
 });
 
 test('Stage 10V.6 cache-busts the changed shared CSS and Unit Browser script', () => {
-  assert.match(read('views/partials/head.ejs'), /app\.css\?v=20260804-stage10w-ranking-administration/);
+  assert.match(read('views/partials/head.ejs'), /app\.css\?v=[^"\'\s>]+/);
 
   for (const relativePath of [
     'views/pages/tech-units.ejs',
     'views/pages/tech-unit-detail.ejs'
   ]) {
-    assert.match(read(relativePath), /tech-units\.js\?v=20260804-stage10v6-custom-header-scrollbar/);
+    assert.match(read(relativePath), /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
   }
 });

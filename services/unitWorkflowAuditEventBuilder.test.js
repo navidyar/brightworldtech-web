@@ -69,7 +69,22 @@ test('override approval combines assignment, Lot, and credit changes', () => {
     toLotName: 'Repair',
     priorTechCreditWeight: 0.5
   });
-  assert.deepEqual(event.changes.map((change) => change.fieldKey), ['assigned_technician', 'assignable_lot', 'prior_technician_credit']);
+  assert.deepEqual(event.changes.map((change) => change.fieldKey), ['override_approval_status', 'assigned_technician', 'assignable_lot', 'prior_technician_credit']);
+});
+
+test('override approval always records the approval transition even when no assignment or Lot changes', () => {
+  const event = buildOverrideApprovedEvent({
+    unitId: 10,
+    actorUserId: 2,
+    requestId: 31,
+    fromUserId: 4,
+    toUserId: 4,
+    fromLotId: 7,
+    toLotId: 7
+  });
+  assert.deepEqual(event.changes.map((change) => change.fieldKey), ['override_approval_status']);
+  assert.equal(event.changes[0].oldValueText, 'Pending');
+  assert.equal(event.changes[0].newValueText, 'Approved');
 });
 
 test('automatic exception expiration is recorded as a System event with its reason', () => {

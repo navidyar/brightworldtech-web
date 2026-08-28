@@ -37,6 +37,9 @@
   --qc-ready-ink: #76571d;
   --qc-ready-background: #fbf4df;
   --qc-ready-border: #dec98f;
+  --qc-pending-ink: #2563eb;
+  --qc-pending-background: #e8f0ff;
+  --qc-pending-border: #a9c2ff;
   --qc-neutral-ink: #7b899a;
   --qc-neutral-background: #f3f6f9;
   --qc-neutral-border: #d5dee8;
@@ -563,6 +566,49 @@ body :is(input[type="checkbox"], input[type="radio"]) {
 .content-shell tbody tr:hover td,
 .modal-panel tbody tr:hover td {
   background: #fcfdff;
+}
+
+/* Shared compact/fitting table utilities. Use these when a table should favor
+   its actual content over reserved column floors. Keep a fixed compact gutter
+   so neighboring columns remain readable as narrower viewports compress them.
+   Feature tables with tuned density/width contracts keep their existing
+   behavior unless they opt in. */
+.content-shell table.table-density-compact :is(th, td),
+.modal-panel table.table-density-compact :is(th, td) {
+  padding-right: 8px;
+  padding-left: 8px;
+}
+
+.content-shell table.table-layout-auto-fit,
+.modal-panel table.table-layout-auto-fit {
+  width: 100%;
+  min-width: 0;
+  table-layout: auto;
+}
+
+.content-shell table.table-layout-auto-fit col,
+.modal-panel table.table-layout-auto-fit col {
+  width: auto;
+}
+
+/* Shared leading-column floor for compact detail/summary tables. This lets a
+   table keep one important leading summary column readable while the remaining
+   columns continue to auto-fit. The slightly wider first/second-column boundary
+   prevents neighboring content from visually merging at narrow widths. */
+.content-shell table.table-leading-column-floor col:first-child,
+.modal-panel table.table-leading-column-floor col:first-child {
+  width: var(--table-leading-column-min-width, auto);
+}
+
+.content-shell table.table-leading-column-floor :is(th, td):first-child,
+.modal-panel table.table-leading-column-floor :is(th, td):first-child {
+  min-width: var(--table-leading-column-min-width, 0);
+  padding-right: 12px;
+}
+
+.content-shell table.table-leading-column-floor :is(th, td):nth-child(2),
+.modal-panel table.table-leading-column-floor :is(th, td):nth-child(2) {
+  padding-left: 12px;
 }
 
 /* Messages and statuses */
@@ -1835,10 +1881,15 @@ body :is(input[type="checkbox"], input[type="radio"]) {
   --tech-qc-icon-background: var(--qc-ready-background);
 }
 
-.tech-qc-status-indicator--not-reviewed {
+.tech-qc-status-indicator--pending {
+  --tech-qc-icon-ink: var(--qc-pending-ink);
+  --tech-qc-icon-background: var(--qc-pending-background);
+}
+
+.tech-qc-status-indicator--not-required {
   --tech-qc-icon-ink: var(--qc-neutral-ink);
   --tech-qc-icon-background: var(--qc-neutral-background);
-  opacity: 0.72;
+  opacity: 0.68;
 }
 
 .tech-qc-status-indicator__mark--neutral {
@@ -1857,6 +1908,18 @@ body :is(input[type="checkbox"], input[type="radio"]) {
   --tech-qc-tooltip-ink: var(--qc-neutral-ink);
   --tech-qc-tooltip-background: var(--qc-neutral-background);
   position: relative;
+}
+
+.tech-units-clean-page .tech-qc-tooltip--pending {
+  --tech-qc-tooltip-border: var(--qc-pending-border);
+  --tech-qc-tooltip-ink: var(--qc-pending-ink);
+  --tech-qc-tooltip-background: var(--qc-pending-background);
+}
+
+.tech-units-clean-page .tech-qc-tooltip--not-required {
+  --tech-qc-tooltip-border: var(--qc-neutral-border);
+  --tech-qc-tooltip-ink: var(--qc-neutral-ink);
+  --tech-qc-tooltip-background: var(--qc-neutral-background);
 }
 
 .tech-units-clean-page .tech-qc-tooltip--accepted {
@@ -2324,21 +2387,20 @@ body :is(input[type="checkbox"], input[type="radio"]) {
 
 .qc-reporting-scope-form {
   display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(300px, 1.15fr) minmax(300px, 1.2fr) auto;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(300px, 1.15fr) minmax(300px, 1.2fr);
   column-gap: 14px;
   row-gap: 12px;
   align-items: start;
 }
 
 .qc-reporting-scope-form:not(.has-active-date-field) {
-  grid-template-columns: minmax(240px, 0.9fr) minmax(320px, 1.3fr) auto;
+  grid-template-columns: minmax(240px, 0.9fr) minmax(320px, 1.3fr);
 }
 
 .qc-reporting-scope-form > :is(
   .form-field,
   .qc-reporting-period-field,
-  .qc-reporting-team-field,
-  .qc-reporting-scope-actions
+  .qc-reporting-team-field
 ) {
   min-width: 0;
 }
@@ -2505,36 +2567,19 @@ body :is(input[type="checkbox"], input[type="radio"]) {
   white-space: nowrap;
 }
 
-.qc-reporting-scope-actions {
+.qc-reporting-scope-heading-actions {
   display: grid;
-  grid-template-columns: auto auto;
-  grid-template-rows: minmax(1.05rem, auto) minmax(42px, auto) minmax(2.4em, auto);
-  align-content: start;
-  justify-content: end;
-  column-gap: 8px;
-  row-gap: 7px;
+  flex: 0 0 auto;
+  justify-items: end;
+  gap: 8px;
 }
 
-.qc-reporting-scope-actions::before,
-.qc-reporting-scope-actions::after {
-  content: '';
-  grid-column: 1 / -1;
-  pointer-events: none;
-}
-
-.qc-reporting-scope-actions::before {
-  grid-row: 1;
-  min-height: 1.05rem;
-}
-
-.qc-reporting-scope-actions::after {
-  grid-row: 3;
-  min-height: 2.4em;
+.qc-reporting-scope-actions {
+  flex-wrap: nowrap;
 }
 
 .qc-reporting-scope-actions :is(.primary-button, .secondary-button) {
-  grid-row: 2;
-  min-height: 42px;
+  min-height: 38px;
   white-space: nowrap;
 }
 
@@ -2566,8 +2611,7 @@ body :is(input[type="checkbox"], input[type="radio"]) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .qc-reporting-team-field,
-  .qc-reporting-scope-actions {
+  .qc-reporting-team-field {
     grid-column: 1 / -1;
   }
 }
@@ -2579,19 +2623,17 @@ body :is(input[type="checkbox"], input[type="radio"]) {
     grid-template-columns: 1fr;
   }
 
-  .qc-reporting-team-field,
-  .qc-reporting-scope-actions {
+  .qc-reporting-team-field {
     grid-column: auto;
   }
 
-  .qc-reporting-scope-actions {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    justify-content: stretch;
+  .qc-reporting-scope-heading-actions {
+    width: 100%;
+    justify-items: stretch;
   }
 
-  .qc-reporting-scope-actions :is(.primary-button, .secondary-button) {
-    width: 100%;
-    justify-content: center;
+  .qc-reporting-scope-heading-actions > .pill {
+    justify-self: start;
   }
 
   .qc-reporting-team-options {
@@ -4269,4 +4311,85 @@ body :is(.form-field > span:first-child, .form-field > label:first-child, .stack
   margin-right: 8px;
   border-right-width: 1.125px;
   border-bottom-width: 1.125px;
+}
+
+/* Stage 10W74K — sortable QC Reporting table headers. */
+.qc-report-sort-link {
+  max-width: 100%;
+  justify-content: inherit;
+  white-space: nowrap;
+}
+
+.qc-reporting-sort-indicator {
+  display: inline-flex;
+  width: 0.8em;
+  min-width: 0.8em;
+  justify-content: center;
+}
+
+/* Stage 10W74Q — consistent clear action for site-wide search and searchable-select inputs. */
+.site-search-clear-shell {
+  position: relative;
+  display: block;
+  width: 100%;
+  min-width: 0;
+}
+
+.site-search-clear-shell > input {
+  width: 100%;
+  padding-right: 38px !important;
+}
+
+.site-search-clear-shell--reserved-icon > input {
+  padding-right: 64px !important;
+}
+
+.site-search-clear-shell > input[type='search']::-webkit-search-cancel-button {
+  appearance: none;
+  display: none;
+}
+
+.site-search-clear-button {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  right: 8px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #64778d;
+  font: inherit;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.site-search-clear-shell--reserved-icon .site-search-clear-button {
+  right: 34px;
+}
+
+.site-search-clear-button:hover {
+  background: rgba(71, 108, 154, 0.09);
+  color: #315f98;
+}
+
+.site-search-clear-button:focus-visible {
+  outline: 2px solid rgba(49, 95, 152, 0.28);
+  outline-offset: 1px;
+}
+
+.site-search-clear-button[hidden] {
+  display: none !important;
+}
+
+.site-search-clear-button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }

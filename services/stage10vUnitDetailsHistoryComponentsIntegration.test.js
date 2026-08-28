@@ -77,25 +77,21 @@ test('History expands structured component snapshots into per-slot changes', () 
   assert.match(timeline, /comparison\.statusCode === 'previous_only'/);
 });
 
-test('component export columns are selected by default with the complete export contract', () => {
+test('component export columns remain available while the default export selection is empty', () => {
   const contract = require('../config/unitExportContract');
 
-  assert.equal(contract.UNIT_EXPORT_COLUMNS.length, 57);
-  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
-  assert.deepEqual(
-    contract.DEFAULT_UNIT_EXPORT_COLUMNS.slice(12, 18).map((column) => column.key),
-    [
-      'previousMemoryModules',
-      'currentMemoryModules',
-      'memoryModuleChanges',
-      'previousStorageDevices',
-      'currentStorageDevices',
-      'storageDeviceChanges'
-    ]
-  );
-  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.length, 24);
-  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.some((column) => column.key === 'screenSize'), false);
-  assert.equal(contract.DEFAULT_UNIT_EXPORT_COLUMNS.some((column) => column.key === 'modelYear'), false);
+  assert.equal(contract.UNIT_EXPORT_COLUMNS.length, 72);
+  assert.deepEqual(contract.DEFAULT_UNIT_EXPORT_COLUMNS, []);
+  for (const key of [
+    'previousMemoryModules',
+    'currentMemoryModules',
+    'memoryModuleChanges',
+    'previousStorageDevices',
+    'currentStorageDevices',
+    'storageDeviceChanges'
+  ]) {
+    assert.equal(contract.UNIT_EXPORT_COLUMNS.some((column) => column.key === key), true);
+  }
 });
 
 test('CSV and XLSX component columns use multiline text, fixed widths, and wrapping', () => {
@@ -128,8 +124,8 @@ test('Stage 10V assets are cache-busted on Unit Browser and single-Unit entry po
     'views/pages/tech-units.ejs',
     'views/pages/tech-unit-detail.ejs'
   ]) {
-    assert.match(read(relativePath), /stage10v6-custom-header-scrollbar/);
+    assert.match(read(relativePath), /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
   }
 
-  assert.match(read('views/partials/head.ejs'), /app\.css\?v=20260804-stage10w-ranking-administration/);
+  assert.match(read('views/partials/head.ejs'), /app\.css\?v=[^"\'\s>]+/);
 });

@@ -42,7 +42,7 @@ test('repeatable cameras, batteries, biometrics, and ports use compact Add rows 
   assert.match(form, /data-unit-form-repeatable-type="port" data-module-max="30"/);
   const script = read('public/js/tech-unit-form.js');
   assert.match(script, /updateRepeatableAddButtonState/);
-  assert.match(script, /refreshLotUnitFormProfile\(form, \{ background: true, force: true \}\)/);
+  assert.match(script, /refreshLotUnitFormProfile\(form,\s*\{\s*background: true,\s*force: true,\s*applyEvenIfUnchanged: true\s*\}\)/);
 });
 
 test('all newly introduced fields participate in Lot visible-hidden and required-optional configuration', () => {
@@ -123,7 +123,11 @@ test('legacy Physical Camera Lot rules are retired during migration', () => {
 
 test('new fields are available in export column selection', () => {
   const keys = new Set(UNIT_EXPORT_COLUMNS.map((column) => column.key));
-  for (const key of ['appleModelNumber', 'nativeScreenResolution', 'refreshRate', 'cameras', 'batteries', 'biometrics', 'portsExpansion', 'microphoneCheck', 'audioOutputCheck', 'threatProtectionScan', 'mdmLock']) {
+  for (const key of [
+    'appleModelNumber', 'nativeScreenResolution', 'refreshRate', 'cameras', 'batteries', 'biometrics',
+    'portsExpansion', 'microphoneCheck', 'audioOutputCheck', 'threatProtectionScan', 'mdmLock',
+    'processorSpeedGhz', 'skinnedStatus', 'gradeNotes', 'outcomeNotes', 'generalComment'
+  ]) {
     assert.equal(keys.has(key), true, `${key} should be exportable.`);
   }
 });
@@ -253,4 +257,3 @@ test('removing the last compact Specs repeatable row returns the section to its 
   assert.match(script, /if \(rows\.length <= 1 && !COLLAPSIBLE_EMPTY_REPEATABLE_ROW_TYPES\.has\(rowType\)\)/);
   assert.match(script, /else \{\s*row\.remove\(\);\s*\}/);
 });
-

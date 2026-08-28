@@ -259,7 +259,15 @@ function buildOverrideApprovedEvent({
   priorTechCreditWeight = null,
   reviewNotes = ''
 }) {
-  const changes = [];
+  const changes = [changedField({
+    key: 'override_approval_status',
+    label: 'Override Approval',
+    oldText: 'Pending',
+    newText: 'Approved',
+    oldValue: 'pending',
+    newValue: 'approved',
+    sortOrder: 5
+  })];
   if (normalizeInteger(fromUserId) !== normalizeInteger(toUserId)) {
     changes.push(changedField({
       key: 'assigned_technician',

@@ -151,12 +151,12 @@
             class="secondary-button"
             href="/unit-requests/<%= pendingQcReversionRequest.unitRequestId %>"
           >
-            Reversion Request #<%= pendingQcReversionRequest.unitRequestId %> Pending
+            Reversion Request Pending
           </a>
         <% } else if (unit && review && canRequestQcReversion) { %>
           <a
             class="secondary-button"
-            href="/tech/units/<%= unit.unitId %>/qc-review/<%= review.qcCheckId %>/reversion-request/modal"
+            href="/tech/units/<%= unit.unitId %>/qc-review/<%= review.qcCheckId %>/reversion-request/modal<%= qcPortalMode ? '?qcPortal=1' : '' %>"
             data-tech-modal-trigger
           >
             Request Reversion

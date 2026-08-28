@@ -52,8 +52,14 @@ async function main() {
       restrictToCurrentAssignment: false
     });
 
-    if (dataset.columns.length !== 18 || UNIT_EXPORT_COLUMNS.length !== 18) {
-      throw new Error(`Stage 10A export contract contains ${dataset.columns.length} columns; expected 18.`);
+    const requiredKeys = ['assetTag', 'cpu', 'shortForm', 'batteryHealth', 'cosmeticGrade', 'passFail'];
+    const datasetKeys = dataset.columns.map((column) => column.key);
+    const contractKeys = UNIT_EXPORT_COLUMNS.map((column) => column.key);
+    const missingKeys = requiredKeys.filter((key) => !contractKeys.includes(key));
+    if (missingKeys.length > 0 || JSON.stringify(datasetKeys) !== JSON.stringify(contractKeys)) {
+      throw new Error(
+        `Stage 10A export contract is out of sync${missingKeys.length ? `; missing ${missingKeys.join(', ')}` : ''}.`
+      );
     }
     if (dataset.totalRows !== dataset.browserTotalRows) {
       throw new Error(`Stage 10A export count mismatch: ${dataset.totalRows} rows vs ${dataset.browserTotalRows} browser rows.`);

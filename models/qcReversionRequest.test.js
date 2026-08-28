@@ -137,25 +137,32 @@ test('QC reversion request snapshots the exact current QC decision without mutat
   assert.match(snapshotInsert.sql, /SELECT \?, qc\.unit_id, qc\.unit_work_completion_id, qc\.unit_qc_check_id, qc\.decision_code, qc\.reviewed_by_user_id, qc\.reviewed_at, qc\.review_notes FROM unit_qc_checks qc/);
   assert.deepEqual(snapshotInsert.params, [71, 83, 4124]);
   assert.equal(qcCalls.some((call) => call.kind === 'revert-target'), false);
+  const auditEvent = connection.calls.find((call) => /INSERT INTO unit_audit_events/.test(call.sql || ''));
+  assert.ok(auditEvent);
+  assert.equal(auditEvent.params[2], 'unit_qc_reversion_request_submitted');
   assert.ok(connection.calls.some((call) => call.kind === 'commit'));
 });
 
-test('only the QC user who recorded the exact decision can request its reversion', async () => {
+test('a different QC user can request reversion of the exact current decision', async () => {
   qcCalls.length = 0;
   const connection = makeConnection();
   poolStub.getConnection = async () => connection;
 
-  await assert.rejects(
-    unitRequestModel.createQcReversionRequest({
-      unitId: 4124,
-      qcCheckId: 83,
-      requestedByUserId: 27,
-      requesterNote: 'Please revert this'
-    }),
-    (error) => error && error.code === 'BWT_QC_REVERSION_REQUEST_OWNER_REQUIRED'
-  );
-  assert.equal(connection.calls.some((call) => /INSERT INTO unit_requests/.test(call.sql || '')), false);
-  assert.ok(connection.calls.some((call) => call.kind === 'rollback'));
+  const result = await unitRequestModel.createQcReversionRequest({
+    unitId: 4124,
+    qcCheckId: 83,
+    requestedByUserId: 27,
+    requesterNote: 'Please revert this'
+  });
+
+  assert.deepEqual(result, { unitRequestId: 71, unitId: 4124, qcCheckId: 83 });
+  assert.ok(connection.calls.some((call) => /INSERT INTO unit_requests/.test(call.sql || '')));
+  const auditEvent = connection.calls.find((call) => /INSERT INTO unit_audit_events/.test(call.sql || ''));
+  assert.ok(auditEvent);
+  assert.equal(auditEvent.params[0], 4124);
+  assert.equal(auditEvent.params[1], 27);
+  assert.equal(auditEvent.params[2], 'unit_qc_reversion_request_submitted');
+  assert.ok(connection.calls.some((call) => call.kind === 'commit'));
 });
 
 test('a second pending reversion request for the same QC check is rejected', async () => {

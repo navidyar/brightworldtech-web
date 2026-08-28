@@ -4,6 +4,8 @@ const lotEnforcementModel = require('../models/lotEnforcementModel');
 const lotValidationOverrideModel = require('../models/lotValidationOverrideModel');
 const requirementOptionModel = require('../models/requirementOptionModel');
 const lotUnitFormProfileModel = require('../models/lotUnitFormProfileModel');
+const lotUnitBrowserLayoutModel = require('../models/lotUnitBrowserLayoutModel');
+const unitAmazonModel = require('../models/unitAmazonModel');
 const {
   REQUIREMENT,
   UNIT_FORM_SECTIONS,
@@ -16,6 +18,15 @@ const {
   normalizeSubmittedLotFormRules,
   rulesToSelectionMaps
 } = require('../services/lotUnitFormRuleEditor');
+const {
+  LotUnitBrowserLayoutEditorError,
+  normalizeSubmittedLotUnitBrowserLayout
+} = require('../services/lotUnitBrowserLayoutEditor');
+const {
+  MAX_VISIBLE_OPTIONAL_COLUMNS,
+  listUnitBrowserCoreColumns,
+  listUnitBrowserOptionalColumns
+} = require('../config/unitBrowserColumnRegistry');
 const { buildNewLotCreatedRedirect } = require('../services/lotCreationPolicy');
 const {
   findSelectedRequirementPolicy,
@@ -74,6 +85,8 @@ function getBlankLotFormData(formOptions = {}) {
     notes: '',
     allowDuplicateUnitAssumption: '0',
     startNewProductionCycleOnMove: '0',
+    generateAmazonAssetTag: '0',
+    qcRequired: '1',
     isAssignable: '1'
   };
 }
@@ -90,6 +103,8 @@ function getLotFormDataFromRequest(req) {
     hasUnlimitedGoal: req.body.hasUnlimitedGoal === '1' ? '1' : '0',
     allowDuplicateUnitAssumption: req.body.allowDuplicateUnitAssumption === '1' ? '1' : '0',
     startNewProductionCycleOnMove: req.body.startNewProductionCycleOnMove === '1' ? '1' : '0',
+    generateAmazonAssetTag: req.body.generateAmazonAssetTag === '1' ? '1' : '0',
+    qcRequired: req.body.qcRequired === '1' ? '1' : '0',
     isAssignable: req.body.isAssignable === '1' ? '1' : '0',
     unitAmountGoal: String(req.body.unitAmountGoal || '').trim(),
     deadline: String(req.body.deadline || '').trim(),
@@ -152,6 +167,20 @@ function addCacheBuster(redirectUrl) {
   return `${redirectUrl}${separator}refresh=${Date.now()}`;
 }
 
+function getLotActionReturnTo(req = {}) {
+  return String(req?.query?.returnTo || req?.body?.returnTo || '').trim() === 'lot-detail'
+    ? 'lot-detail'
+    : 'lot-browser';
+}
+
+function buildLotActionRedirect(lotId, notice, browserRedirectUrl, returnTo = 'lot-browser') {
+  if (returnTo === 'lot-detail') {
+    return `/management/lots/${Number(lotId)}?${notice}`;
+  }
+
+  return browserRedirectUrl;
+}
+
 function formatDateForInput(value) {
   if (!value) {
     return '';
@@ -176,6 +205,8 @@ function getLotFormDataFromLot(lot) {
     hasUnlimitedGoal: lot.isUnlimited ? '1' : '0',
     allowDuplicateUnitAssumption: Number(lot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0',
     startNewProductionCycleOnMove: Number(lot.start_new_production_cycle_on_move || 0) === 1 ? '1' : '0',
+    generateAmazonAssetTag: Number(lot.generate_amazon_asset_tag || 0) === 1 ? '1' : '0',
+    qcRequired: Number(lot.qc_required ?? 1) === 1 ? '1' : '0',
     isAssignable: Number(lot.is_assignable || 0) === 1 ? '1' : '0',
     unitAmountGoal: lot.isUnlimited ? '' : String(lot.unitGoal || lot.unit_amount_goal || ''),
     deadline: formatDateForInput(lot.deadline),
@@ -194,13 +225,14 @@ function getRequirementFormDataFromRequirement(requirement) {
   };
 }
 
-function renderLotModal(res, { mode, formOptions, formData, lot = null, errorMessages = [] }) {
+function renderLotModal(res, { mode, formOptions, formData, lot = null, errorMessages = [], returnTo = 'lot-browser' }) {
   return res.render('fragments/lot-form-modal', {
     mode,
     lot,
     formOptions,
     formData,
-    errorMessages
+    errorMessages,
+    returnTo
   });
 }
 
@@ -746,15 +778,180 @@ async function updateLotUnitFormRules(req, res, next) {
   }
 }
 
+
+function getUnitBrowserLayoutSourceLabel(layout, selectedLotId) {
+  const source = layout?.source || {};
+
+  if (source.type === 'application_default') {
+    return 'Application default';
+  }
+
+  if (source.type === 'lot_override' && Number(source.lotId) === Number(selectedLotId)) {
+    return 'This Lot';
+  }
+
+  if (source.type === 'lot_override') {
+    return `Inherited from ${source.lotName || `Lot ${source.lotId}`}`;
+  }
+
+  return 'Resolved layout';
+}
+
+async function getLotUnitBrowserLayoutViewData(lotId) {
+  const lot = await lotModel.getLotById(lotId);
+
+  if (!lot) {
+    return null;
+  }
+
+  const effectiveLayout = await lotUnitBrowserLayoutModel.getEffectiveLayoutForLot(lotId);
+  const directLayout = await lotUnitBrowserLayoutModel.getDirectLayoutForLot(lotId);
+  const optionalDefinitions = new Map(
+    listUnitBrowserOptionalColumns().map((definition) => [definition.key, definition])
+  );
+
+  return {
+    lot,
+    effectiveLayout,
+    directLayout,
+    sourceLabel: getUnitBrowserLayoutSourceLabel(effectiveLayout, lotId),
+    coreColumns: listUnitBrowserCoreColumns(),
+    optionalColumns: effectiveLayout.columns.map((column) => ({
+      ...optionalDefinitions.get(column.key),
+      ...column
+    })),
+    visibleOptionalCount: effectiveLayout.columns.filter((column) => column.isVisible).length,
+    totalOptionalCount: effectiveLayout.columns.length,
+    maxVisibleOptionalColumns: MAX_VISIBLE_OPTIONAL_COLUMNS
+  };
+}
+
+function renderLotUnitBrowserLayoutModal(res, viewData, errorMessages = [], statusCode = 200) {
+  return res.status(statusCode).render('fragments/lot-unit-browser-layout-modal', {
+    ...(viewData || {
+      lot: null,
+      effectiveLayout: null,
+      directLayout: null,
+      sourceLabel: '',
+      coreColumns: listUnitBrowserCoreColumns(),
+      optionalColumns: [],
+      visibleOptionalCount: 0,
+      totalOptionalCount: listUnitBrowserOptionalColumns().length,
+      maxVisibleOptionalColumns: MAX_VISIBLE_OPTIONAL_COLUMNS
+    }),
+    errorMessages
+  });
+}
+
+async function renderLotUnitBrowserLayoutModalPage(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return renderLotUnitBrowserLayoutModal(
+        res,
+        null,
+        ['The selected Lot could not be found.'],
+        404
+      );
+    }
+
+    const viewData = await getLotUnitBrowserLayoutViewData(lotId);
+
+    if (!viewData) {
+      return renderLotUnitBrowserLayoutModal(
+        res,
+        null,
+        ['The selected Lot could not be found.'],
+        404
+      );
+    }
+
+    return renderLotUnitBrowserLayoutModal(res, viewData);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateLotUnitBrowserLayout(req, res, next) {
+  const lotId = Number(req.params.lotId);
+
+  try {
+    if (!Number.isInteger(lotId) || lotId <= 0) {
+      return renderLotUnitBrowserLayoutModal(
+        res,
+        null,
+        ['The selected Lot could not be found.'],
+        404
+      );
+    }
+
+    const lot = await lotModel.getLotById(lotId);
+
+    if (!lot) {
+      return renderLotUnitBrowserLayoutModal(
+        res,
+        null,
+        ['The selected Lot could not be found.'],
+        404
+      );
+    }
+
+    if (String(req.body.layoutMode || '').trim() === 'inherit') {
+      await lotUnitBrowserLayoutModel.resetLayoutForLot(lotId);
+
+      return sendHtmxRedirect(
+        req,
+        res,
+        addCacheBuster(`/management/lots/${lotId}?unitBrowserLayoutReset=1`)
+      );
+    }
+
+    let columns;
+    try {
+      columns = normalizeSubmittedLotUnitBrowserLayout({
+        columnOrder: req.body.columnOrder,
+        visibleColumns: req.body.visibleColumns
+      });
+    } catch (error) {
+      if (!(error instanceof LotUnitBrowserLayoutEditorError)) {
+        throw error;
+      }
+
+      const viewData = await getLotUnitBrowserLayoutViewData(lotId);
+      return renderLotUnitBrowserLayoutModal(res, viewData, error.messages, 400);
+    }
+
+    await lotUnitBrowserLayoutModel.replaceLayoutForLot(
+      lotId,
+      columns,
+      req.currentUser.user_id
+    );
+
+    return sendHtmxRedirect(
+      req,
+      res,
+      addCacheBuster(`/management/lots/${lotId}?unitBrowserLayoutUpdated=1`)
+    );
+  } catch (error) {
+    next(error);
+  }
+}
+
 function getLotDetailSuccessMessage(query) {
   if (query.duplicated === '1') return 'Lot duplicated successfully. The new Lot remains hidden until you manually unhide it.';
   if (query.requirementCreated === '1') return 'Requirement added successfully.';
   if (query.updated === '1') return 'Lot updated successfully.';
+  if (query.hidden === '1') return 'Lot hidden successfully.';
+  if (query.unhidden === '1') return 'Lot unhidden successfully.';
   if (query.requirementUpdated === '1') return 'Requirement updated successfully.';
   if (query.requirementDeleted === '1') return 'Requirement deleted successfully.';
   if (query.closed === '1') return 'Lot closed successfully.';
   if (query.reopened === '1') return 'Lot reopened successfully.';
   if (query.unitFormRulesUpdated === '1') return 'Unit form configuration updated successfully.';
+  if (query.unitBrowserLayoutUpdated === '1') return 'Unit Browser configuration updated successfully.';
+  if (query.unitBrowserLayoutReset === '1') return 'Unit Browser configuration reset to inheritance successfully.';
+  if (query.amazonAssetTagsGenerated) return `${Number(query.amazonAssetTagsGenerated || 0).toLocaleString()} missing Amazon Asset Tag${Number(query.amazonAssetTagsGenerated || 0) === 1 ? '' : 's'} generated for direct Units in this Lot.`;
   if (query.validationOverrideAccepted === '1') return 'Unit accepted by Management for this Lot.';
   if (query.validationOverrideRevoked === '1') return 'Management acceptance revoked.';
   return null;
@@ -1403,6 +1600,7 @@ async function renderNewLotModal(req, res, next) {
 async function renderEditLotModal(req, res, next) {
   try {
     const lotId = Number(req.params.lotId);
+    const returnTo = getLotActionReturnTo(req);
 
     if (!Number.isInteger(lotId) || lotId <= 0) {
       const formOptions = await lotModel.getLotFormOptions();
@@ -1412,7 +1610,8 @@ async function renderEditLotModal(req, res, next) {
         lot: null,
         formOptions,
         formData: getBlankLotFormData(formOptions),
-        errorMessages: ['The selected lot could not be found.']
+        errorMessages: ['The selected lot could not be found.'],
+        returnTo
       });
     }
 
@@ -1428,7 +1627,8 @@ async function renderEditLotModal(req, res, next) {
         lot: null,
         formOptions,
         formData: getBlankLotFormData(formOptions),
-        errorMessages: ['The selected lot could not be found.']
+        errorMessages: ['The selected lot could not be found.'],
+        returnTo
       });
     }
 
@@ -1437,7 +1637,8 @@ async function renderEditLotModal(req, res, next) {
       lot,
       formOptions,
       formData: getLotFormDataFromLot(lot),
-      errorMessages: []
+      errorMessages: [],
+      returnTo
     });
   } catch (error) {
     next(error);
@@ -1447,6 +1648,7 @@ async function renderEditLotModal(req, res, next) {
 async function updateLotModal(req, res, next) {
   try {
     const lotId = Number(req.params.lotId);
+    const returnTo = getLotActionReturnTo(req);
     const lot = await lotModel.getLotById(lotId);
     const formOptions = await lotModel.getLotFormOptions({
       currentLotId: lotId,
@@ -1459,7 +1661,8 @@ async function updateLotModal(req, res, next) {
         lot: null,
         formOptions,
         formData: getLotFormDataFromRequest(req),
-        errorMessages: ['The selected lot could not be found.']
+        errorMessages: ['The selected lot could not be found.'],
+        returnTo
       });
     }
 
@@ -1472,16 +1675,22 @@ async function updateLotModal(req, res, next) {
         lot,
         formOptions,
         formData,
-        errorMessages
+        errorMessages,
+        returnTo
       });
     }
 
     await lotModel.updateLot(lotId, formData, req.currentUser.user_id);
 
-    return sendHtmxRedirect(req, res, addCacheBuster('/management/lots?updated=1'));
+    return sendHtmxRedirect(
+      req,
+      res,
+      addCacheBuster(buildLotActionRedirect(lotId, 'updated=1', '/management/lots?updated=1', returnTo))
+    );
   } catch (error) {
     if (error && String(error.code || '').startsWith('LOT_PARENT_')) {
       const lotId = Number(req.params.lotId);
+      const returnTo = getLotActionReturnTo(req);
       const lot = await lotModel.getLotById(lotId);
       const formOptions = await lotModel.getLotFormOptions({
         currentLotId: lotId,
@@ -1493,7 +1702,8 @@ async function updateLotModal(req, res, next) {
         lot,
         formOptions,
         formData: getLotFormDataFromRequest(req),
-        errorMessages: [error.message]
+        errorMessages: [error.message],
+        returnTo
       });
     }
 
@@ -1505,12 +1715,14 @@ async function renderLotVisibilityModal(req, res, next) {
   try {
     const lotId = Number(req.params.lotId);
     const mode = req.path.includes('/unhide') ? 'unhide' : 'hide';
+    const returnTo = getLotActionReturnTo(req);
 
     if (!Number.isInteger(lotId) || lotId <= 0) {
       return res.status(404).render('fragments/lot-visibility-modal', {
         mode,
         visibilitySummary: null,
-        errorMessages: ['The selected lot could not be found.']
+        errorMessages: ['The selected lot could not be found.'],
+        returnTo
       });
     }
 
@@ -1520,14 +1732,16 @@ async function renderLotVisibilityModal(req, res, next) {
       return res.status(404).render('fragments/lot-visibility-modal', {
         mode,
         visibilitySummary: null,
-        errorMessages: ['The selected lot could not be found.']
+        errorMessages: ['The selected lot could not be found.'],
+        returnTo
       });
     }
 
     return res.render('fragments/lot-visibility-modal', {
       mode,
       visibilitySummary,
-      errorMessages: []
+      errorMessages: [],
+      returnTo
     });
   } catch (error) {
     next(error);
@@ -1539,12 +1753,14 @@ async function updateLotVisibility(req, res, next) {
     const lotId = Number(req.params.lotId);
     const shouldUnhide = req.path.includes('/unhide');
     const mode = shouldUnhide ? 'unhide' : 'hide';
+    const returnTo = getLotActionReturnTo(req);
 
     if (!Number.isInteger(lotId) || lotId <= 0) {
       return res.status(404).render('fragments/lot-visibility-modal', {
         mode,
         visibilitySummary: null,
-        errorMessages: ['The selected lot could not be found.']
+        errorMessages: ['The selected lot could not be found.'],
+        returnTo
       });
     }
 
@@ -1554,7 +1770,8 @@ async function updateLotVisibility(req, res, next) {
       return res.status(404).render('fragments/lot-visibility-modal', {
         mode,
         visibilitySummary: null,
-        errorMessages: ['The selected lot could not be found.']
+        errorMessages: ['The selected lot could not be found.'],
+        returnTo
       });
     }
 
@@ -1562,15 +1779,18 @@ async function updateLotVisibility(req, res, next) {
       return res.status(400).render('fragments/lot-visibility-modal', {
         mode,
         visibilitySummary,
-        errorMessages: ['Lot visibility cannot be changed because the lots table does not support hidden lots yet.']
+        errorMessages: ['Lot visibility cannot be changed because the lots table does not support hidden lots yet.'],
+        returnTo
       });
     }
 
     await lotModel.setLotVisibility(lotId, shouldUnhide, req.currentUser.user_id);
 
-    const redirectUrl = shouldUnhide
+    const browserRedirectUrl = shouldUnhide
       ? '/management/lots?showHidden=1&unhidden=1'
       : '/management/lots?hidden=1';
+    const notice = shouldUnhide ? 'unhidden=1' : 'hidden=1';
+    const redirectUrl = buildLotActionRedirect(lotId, notice, browserRedirectUrl, returnTo);
 
     return sendHtmxRedirect(req, res, addCacheBuster(redirectUrl));
   } catch (error) {
@@ -1582,12 +1802,14 @@ async function renderLotClosureModal(req, res, next) {
   try {
     const lotId = Number(req.params.lotId);
     const mode = req.path.includes('/reopen') ? 'reopen' : 'close';
+    const returnTo = getLotActionReturnTo(req);
 
     if (!Number.isInteger(lotId) || lotId <= 0) {
       return res.status(404).render('fragments/lot-closure-modal', {
         mode,
         closureSummary: null,
-        errorMessages: ['The selected lot could not be found.']
+        errorMessages: ['The selected lot could not be found.'],
+        returnTo
       });
     }
 
@@ -1597,7 +1819,8 @@ async function renderLotClosureModal(req, res, next) {
       return res.status(404).render('fragments/lot-closure-modal', {
         mode,
         closureSummary: null,
-        errorMessages: ['The selected lot could not be found.']
+        errorMessages: ['The selected lot could not be found.'],
+        returnTo
       });
     }
 
@@ -1605,14 +1828,16 @@ async function renderLotClosureModal(req, res, next) {
       return res.status(400).render('fragments/lot-closure-modal', {
         mode,
         closureSummary,
-        errorMessages: ['Lot closure is not ready yet. Run the Step 6f.1 closed-lot migration first.']
+        errorMessages: ['Lot closure is not ready yet. Run the Step 6f.1 closed-lot migration first.'],
+        returnTo
       });
     }
 
     return res.render('fragments/lot-closure-modal', {
       mode,
       closureSummary,
-      errorMessages: []
+      errorMessages: [],
+      returnTo
     });
   } catch (error) {
     next(error);
@@ -1624,12 +1849,14 @@ async function updateLotClosure(req, res, next) {
     const lotId = Number(req.params.lotId);
     const shouldReopen = req.path.includes('/reopen');
     const mode = shouldReopen ? 'reopen' : 'close';
+    const returnTo = getLotActionReturnTo(req);
 
     if (!Number.isInteger(lotId) || lotId <= 0) {
       return res.status(404).render('fragments/lot-closure-modal', {
         mode,
         closureSummary: null,
-        errorMessages: ['The selected lot could not be found.']
+        errorMessages: ['The selected lot could not be found.'],
+        returnTo
       });
     }
 
@@ -1639,7 +1866,8 @@ async function updateLotClosure(req, res, next) {
       return res.status(404).render('fragments/lot-closure-modal', {
         mode,
         closureSummary: null,
-        errorMessages: ['The selected lot could not be found.']
+        errorMessages: ['The selected lot could not be found.'],
+        returnTo
       });
     }
 
@@ -1647,15 +1875,18 @@ async function updateLotClosure(req, res, next) {
       return res.status(400).render('fragments/lot-closure-modal', {
         mode,
         closureSummary,
-        errorMessages: ['Lot closure is not ready yet. Run the Step 6f.1 closed-lot migration first.']
+        errorMessages: ['Lot closure is not ready yet. Run the Step 6f.1 closed-lot migration first.'],
+        returnTo
       });
     }
 
     await lotModel.setLotClosed(lotId, !shouldReopen, req.currentUser.user_id);
 
-    const redirectUrl = shouldReopen
+    const browserRedirectUrl = shouldReopen
       ? '/management/lots?reopened=1'
       : '/management/lots?closed=1';
+    const notice = shouldReopen ? 'reopened=1' : 'closed=1';
+    const redirectUrl = buildLotActionRedirect(lotId, notice, browserRedirectUrl, returnTo);
 
     return sendHtmxRedirect(req, res, addCacheBuster(redirectUrl));
   } catch (error) {
@@ -2386,6 +2617,51 @@ async function deleteLotRequirement(req, res, next) {
   }
 }
 
+async function renderAmazonAssetTagBulkModal(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const lot = Number.isInteger(lotId) && lotId > 0 ? await lotModel.getLotById(lotId) : null;
+    if (!lot) {
+      return res.status(404).render('fragments/lot-amazon-asset-tag-bulk-modal', {
+        lot: null, missingCount: 0, errorMessages: ['The selected Lot could not be found.']
+      });
+    }
+    const missingCount = await unitAmazonModel.countDirectLotUnitsMissingAmazonAssetTag(lotId);
+    return res.render('fragments/lot-amazon-asset-tag-bulk-modal', { lot, missingCount, errorMessages: [] });
+  } catch (error) { next(error); }
+}
+
+async function generateAmazonAssetTagsForDirectLot(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    const lot = Number.isInteger(lotId) && lotId > 0 ? await lotModel.getLotById(lotId) : null;
+    if (!lot) {
+      return res.status(404).render('fragments/lot-amazon-asset-tag-bulk-modal', {
+        lot: null, missingCount: 0, errorMessages: ['The selected Lot could not be found.']
+      });
+    }
+    if (String(req.body.scope || '').trim() !== 'direct') {
+      const missingCount = await unitAmazonModel.countDirectLotUnitsMissingAmazonAssetTag(lotId);
+      return res.status(400).render('fragments/lot-amazon-asset-tag-bulk-modal', {
+        lot, missingCount, errorMessages: ['Choose the direct Units in this Lot scope before generating AZ tags.']
+      });
+    }
+    const result = await unitAmazonModel.bulkGenerateDirectLotAmazonAssetTags({
+      lotId, actorUserId: req.currentUser.user_id
+    });
+    return sendHtmxRedirect(req, res, addCacheBuster(`/management/lots/${lotId}?amazonAssetTagsGenerated=${result.generatedCount}`));
+  } catch (error) {
+    if (error?.code === 'BWT_AMAZON_ASSET_TAG_LOT_DISABLED') {
+      const lotId = Number(req.params.lotId);
+      const lot = await lotModel.getLotById(lotId);
+      const missingCount = lot ? await unitAmazonModel.countDirectLotUnitsMissingAmazonAssetTag(lotId) : 0;
+      return res.status(409).render('fragments/lot-amazon-asset-tag-bulk-modal', { lot, missingCount, errorMessages: [error.message] });
+    }
+    next(error);
+  }
+}
+
+
 module.exports = {
   renderLotsPage,
   renderNewLotPage,
@@ -2407,6 +2683,8 @@ module.exports = {
   suppressInheritedLotRequirementField,
   restoreInheritedLotRequirementField,
   renderLotUnitFormRulesModalPage,
+  renderLotUnitBrowserLayoutModalPage,
+  updateLotUnitBrowserLayout,
   renderLotUnitValidationModal,
   acceptLotUnitValidationOverride,
   revokeLotUnitValidationOverride,
@@ -2417,6 +2695,8 @@ module.exports = {
   renderDeleteLotRequirementModal,
   deleteLotRequirement,
   renderLotUnitExportPreview,
+  renderAmazonAssetTagBulkModal,
+  generateAmazonAssetTagsForDirectLot,
   downloadLotUnitsCsv,
   downloadLotUnitsXlsx,
   updateLotUnitFormRules

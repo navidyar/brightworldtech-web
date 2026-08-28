@@ -19,6 +19,21 @@ empty_top_level_artifacts=(
 )
 
 removed=0
+
+# One known non-empty artifact was created by redirected validation output. Remove
+# it only when its contents exactly match the captured output we audited.
+if [[ -e 'bash' ]]; then
+  expected_bash_artifact=$'Host dependencies are not installed; running validation inside the app container.\nLot requirement storage valid: 75 lots, 133 stored requirements, 0 incomplete legacy requirements.'
+
+  if [[ ! -f 'bash' || "$(cat -- 'bash')" != "$expected_bash_artifact" ]]; then
+    echo "Refusing to remove unexpected non-empty artifact: bash" >&2
+    exit 1
+  fi
+
+  rm -- 'bash'
+  removed=$((removed + 1))
+fi
+
 for artifact in "${empty_top_level_artifacts[@]}"; do
   if [[ ! -e "$artifact" ]]; then
     continue

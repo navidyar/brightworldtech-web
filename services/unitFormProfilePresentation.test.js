@@ -25,12 +25,12 @@ test('builds a compact client presentation from the resolved profile', () => {
 
   assert.equal(presentation.lotId, 10);
   assert.equal(presentation.lotName, 'Production Lot');
-  assert.equal(presentation.fields.length, 60);
+  assert.equal(presentation.fields.length, 66);
   assert.equal(bios.visible, true);
   assert.equal(bios.required, true);
   assert.equal(cosmeticIssues.visible, false);
   assert.equal(cosmeticIssues.required, false);
-  assert.equal(presentation.summary.hiddenFields, 1);
+  assert.equal(presentation.summary.hiddenFields, 7);
   assert.equal(presentation.summary.requiredFields, 1);
 });
 
