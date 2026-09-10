@@ -232,6 +232,21 @@ router.post(
   lotController.updateLotUnitBrowserLayout
 );
 
+
+router.get(
+  '/management/lots/:lotId/labels/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.renderLotLabelTemplatesModalPage
+);
+
+router.post(
+  '/management/lots/:lotId/labels/modal',
+  requireAuth,
+  requireRole(lotManagementRoles),
+  lotController.updateLotLabelTemplates
+);
+
 router.get(
   '/management/lots/:lotId/units/:unitId/validation/modal',
   requireAuth,

@@ -92,11 +92,11 @@ function formatIssue(issue) {
   return remark || heading;
 }
 
-function combineRemarks(legacyRemarks, issues) {
+function combineRemarks(issues) {
   const values = [];
   const seen = new Set();
 
-  [normalizeText(legacyRemarks), ...(Array.isArray(issues) ? issues.map(formatIssue) : [])]
+  (Array.isArray(issues) ? issues.map(formatIssue) : [])
     .filter(Boolean)
     .forEach((value) => {
       const key = value.toLowerCase().replace(/\s+/g, ' ');
@@ -295,8 +295,8 @@ function buildUnitExportRow(unit, details = null) {
     gradeNotes: normalizeText(details && details.currentGrade ? details.currentGrade.notes : ''),
     passFail: normalizeText(details && details.currentOutcome ? details.currentOutcome.outcomeLabel : '').replace(/^—$/, ''),
     outcomeNotes: normalizeText(details && details.currentOutcome ? details.currentOutcome.outcomeNotes : ''),
-    hardwareRemarks: combineRemarks(unit.hardwareNotes, details ? details.hardwareIssues : []),
-    cosmeticRemarks: combineRemarks(unit.cosmeticNotes, details ? details.cosmeticIssues : []),
+    hardwareRemarks: combineRemarks(details ? details.hardwareIssues : []),
+    cosmeticRemarks: combineRemarks(details ? details.cosmeticIssues : []),
     generalComment: formatGeneralComment(details)
   };
 }

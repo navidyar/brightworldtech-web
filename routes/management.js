@@ -5,6 +5,9 @@ const techController = require('../controllers/techController');
 const unitRequestController = require('../controllers/unitRequestController');
 const catalogRequestController = require('../controllers/catalogRequestController');
 const qcReportingController = require('../controllers/qcReportingController');
+const labelLibraryController = require('../controllers/labelLibraryController');
+const labelPrintQueueController = require('../controllers/labelPrintQueueController');
+const labelPrinterController = require('../controllers/labelPrinterController');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 const {
   QC_PORTAL_ROLE_CODES,
@@ -25,6 +28,17 @@ const unitLifecycleRoles = ['admin', 'management', 'tech_lead'];
 const techHistoryRoles = ['admin', 'management', 'tech_lead'];
 const completionReversalRoles = ['admin', 'management', 'tech_lead'];
 const overrideReviewRoles = ['admin', 'management', 'tech_lead'];
+
+/*
+  Printer registry live events
+*/
+
+router.get(
+  '/label-printers/events',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrinterController.streamPrinterRegistryEvents
+);
 
 /*
   Management routes
@@ -56,6 +70,195 @@ router.get(
   requireAuth,
   requireRole(managementRoles),
   managementController.renderLoginActivityPage
+);
+
+router.get(
+  '/management/label-library',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderLabelLibraryPage
+);
+
+router.get(
+  '/management/printers',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.renderManagementPrintersPage
+);
+
+router.get(
+  '/management/printers/live',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.renderManagementPrintersLive
+);
+
+router.get(
+  '/management/printers/new/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.renderNewManagedPrinterModal
+);
+
+router.post(
+  '/management/printers/probe',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.probeManagedPrinter
+);
+
+router.post(
+  '/management/printers',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.createManagedPrinter
+);
+
+router.post(
+  '/management/printers/:printerId/sharing',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.updateManagedPrinterSharing
+);
+
+router.get(
+  '/management/printers/:printerId/scope/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.renderConvertPrinterScopeModal
+);
+
+router.post(
+  '/management/printers/:printerId/scope',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.convertPrinterScope
+);
+
+router.get(
+  '/management/printers/:printerId/edit/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.renderEditManagedPrinterModal
+);
+
+router.post(
+  '/management/printers/:printerId/edit/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.updateManagedPrinter
+);
+
+router.get(
+  '/management/printers/:printerId/delete/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.renderDeleteManagedPrinterModal
+);
+
+router.post(
+  '/management/printers/:printerId/delete',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.deleteManagedPrinter
+);
+
+router.get(
+  '/management/printer-groups/new/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.renderNewGroupModal
+);
+
+router.post(
+  '/management/printer-groups',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.createGroup
+);
+
+router.get(
+  '/management/printer-groups/:groupId/members/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.renderGroupMembersModal
+);
+
+router.post(
+  '/management/printer-groups/:groupId/members',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.updateGroupMembers
+);
+
+router.get(
+  '/management/printer-groups/:groupId/delete/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.renderDeleteGroupModal
+);
+
+router.post(
+  '/management/printer-groups/:groupId/delete',
+  requireAuth,
+  requireRole(managementRoles),
+  labelPrinterController.deleteGroup
+);
+
+router.get(
+  '/management/label-library/templates/new/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderNewTemplateModal
+);
+
+router.post(
+  '/management/label-library/templates',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.createTemplate
+);
+
+router.get(
+  '/management/label-library/templates/:labelTemplateId/edit/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderEditTemplateModal
+);
+
+router.post(
+  '/management/label-library/templates/:labelTemplateId/edit/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.updateTemplate
+);
+
+router.post(
+  '/management/label-library/templates/:labelTemplateId/clone',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.cloneTemplate
+);
+
+router.get(
+  '/management/label-library/templates/:labelTemplateId/:action/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderTemplateActionModal
+);
+
+router.post(
+  '/management/label-library/templates/:labelTemplateId/:action',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.applyTemplateAction
+);
+
+router.get(
+  '/management/label-library/assets/:assetId/file',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.serveAssetFile
 );
 
 router.get(
@@ -277,6 +480,69 @@ router.get(
 */
 
 router.get(
+  '/tech/printers',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrinterController.renderMyPrintersPage
+);
+
+router.get(
+  '/tech/printers/live',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrinterController.renderTechPrintersLive
+);
+
+router.get(
+  '/tech/printers/new/modal',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrinterController.renderNewSoloPrinterModal
+);
+
+router.post(
+  '/tech/printers/probe',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrinterController.probeSoloPrinter
+);
+
+router.post(
+  '/tech/printers',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrinterController.createSoloPrinter
+);
+
+router.get(
+  '/tech/printers/:printerId/edit/modal',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrinterController.renderEditSoloPrinterModal
+);
+
+router.post(
+  '/tech/printers/:printerId/edit/modal',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrinterController.updateSoloPrinter
+);
+
+router.get(
+  '/tech/printers/:printerId/delete/modal',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrinterController.renderDeleteSoloPrinterModal
+);
+
+router.post(
+  '/tech/printers/:printerId/delete',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrinterController.deleteSoloPrinter
+);
+
+router.get(
   '/tech/units',
   requireAuth,
   requireRole(unitBrowserRoles),
@@ -352,6 +618,34 @@ router.get(
   requireAuth,
   requireRole(techRoles),
   techController.renderEarlySerialDuplicateCheck
+);
+
+router.get(
+  '/tech/print-queue/summary',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrintQueueController.renderRecentPrintsSummary
+);
+
+router.get(
+  '/tech/print-queue/modal',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrintQueueController.renderRecentPrintsModal
+);
+
+router.get(
+  '/tech/units/print-labels/modal',
+  requireAuth,
+  requireRole(techRoles),
+  techController.renderTechUnitsBulkPrintLabelModal
+);
+
+router.post(
+  '/tech/units/print-labels',
+  requireAuth,
+  requireRole(techRoles),
+  techController.printTechUnitsBulkLabels
 );
 
 router.get(
@@ -511,6 +805,13 @@ router.post(
 );
 
 router.get(
+  '/tech/units/:unitId/tool-details',
+  requireAuth,
+  requireRole(['admin', 'management', 'tech_lead', 'qc', 'tech']),
+  require('../controllers/unitToolDetailsController').renderToolDetails
+);
+
+router.get(
   '/tech/units/:unitId/history',
   requireAuth,
   requireRole(unitHistoryRoles),
@@ -538,6 +839,21 @@ router.post(
   overrideController.createTechOverrideRequest
 );
 
+
+
+router.get(
+  '/tech/units/:unitId/print-label/modal',
+  requireAuth,
+  requireRole(techRoles),
+  techController.renderTechUnitPrintLabelModal
+);
+
+router.post(
+  '/tech/units/:unitId/print-label',
+  requireAuth,
+  requireRole(techRoles),
+  techController.printTechUnitLabel
+);
 
 
 router.get(

@@ -109,7 +109,6 @@ const LOT_REQUIREMENT_FIELDS = Object.freeze([
     exampleValue: '87.5'
   }),
   catalogField('absolute_status', 'Absolute Status', 'A configured Absolute status.', 'config_value', 'absolute_status', { excludedManufacturers: Object.freeze(['Apple']) }),
-  catalogField('physical_camera_status', 'Physical Camera (Legacy)', 'Legacy physical camera status; use repeatable Cameras for new workflows.', 'config_value', 'physical_camera_status', { selectable: false }),
   catalogField('touchscreen_status', 'Touchscreen Test', 'A configured touchscreen test result.', 'config_value', 'touchscreen_status'),
   catalogField('keyboard_language', 'Keyboard Language', 'A configured keyboard language.', 'config_value', 'keyboard_language'),
   catalogField('complete_diagnostics', 'Diagnostics Test', 'A configured diagnostics test result.', 'config_value', 'complete_diagnostics'),

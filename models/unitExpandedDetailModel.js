@@ -218,7 +218,6 @@ async function attachSpecifications(detailsMap, unitIds, existingTables) {
         us.bios_version,
         us.os_build,
         absolute_status.label AS absolute_status_label,
-        camera_status.label AS physical_camera_status_label,
         touchscreen_status.label AS touchscreen_status_label,
         keyboard_language.label AS keyboard_language_label,
         diagnostics_status.label AS complete_diagnostics_status_label,
@@ -236,8 +235,6 @@ async function attachSpecifications(detailsMap, unitIds, existingTables) {
       FROM unit_specifications us
       LEFT JOIN config_values absolute_status
         ON absolute_status.config_value_id = us.absolute_status_config_value_id
-      LEFT JOIN config_values camera_status
-        ON camera_status.config_value_id = us.physical_camera_status_config_value_id
       LEFT JOIN config_values touchscreen_status
         ON touchscreen_status.config_value_id = us.touchscreen_status_config_value_id
       LEFT JOIN config_values keyboard_language
@@ -263,7 +260,6 @@ async function attachSpecifications(detailsMap, unitIds, existingTables) {
       biosVersion: row.bios_version || '',
       osBuild: row.os_build || '',
       absoluteStatusLabel: labelOrDash(row.absolute_status_label),
-      physicalCameraStatusLabel: labelOrDash(row.physical_camera_status_label),
       touchscreenStatusLabel: labelOrDash(row.touchscreen_status_label),
       keyboardLanguageLabel: labelOrDash(row.keyboard_language_label),
       completeDiagnosticsStatusLabel: labelOrDash(row.complete_diagnostics_status_label),

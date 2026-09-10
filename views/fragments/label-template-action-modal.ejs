@@ -1,0 +1,51 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const actionLabels = { activate: 'Activate Template', archive: 'Archive Template', delete: 'Delete Template' };
+  const actionLabel = actionLabels[action] || 'Label Template Action';
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal management-user-modal label-template-action-modal" role="dialog" aria-modal="true" aria-labelledby="label-template-action-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="label-template-action-title"><%= actionLabel %></h2>
+        <% if (template) { %><p><%= template.name %></p><% } %>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <% if (template) { %>
+        <% if (action === 'activate') { %>
+          <p>Activation makes this template eligible for future Lot printing. A saved layout configuration is required.</p>
+        <% } else if (action === 'archive') { %>
+          <p>Archived templates remain in the Library and keep their Lot attachments, but will not be eligible for future printing until reactivated.</p>
+        <% } else if (action === 'delete') { %>
+          <div class="message warning">
+            <p><strong>This permanently deletes the template record.</strong> Current Lot attachments will be detached. Historical print snapshots are preserved.</p>
+          </div>
+          <% if (attachments.length > 0) { %>
+            <div class="label-template-delete-lots">
+              <strong>Affected Lots</strong>
+              <ul>
+                <% attachments.forEach((attachment) => { %><li><%= attachment.lot_name %><% if (attachment.is_inherited) { %> <small>— inherited from <%= attachment.source_lot_name %></small><% } %></li><% }) %>
+              </ul>
+            </div>
+          <% } else { %>
+            <p>This template is not directly attached to any Lot.</p>
+          <% } %>
+        <% } %>
+
+        <form method="post" action="/management/label-library/templates/<%= template.label_template_id %>/<%= action %>" hx-post="/management/label-library/templates/<%= template.label_template_id %>/<%= action %>" hx-target="#modal-root" hx-swap="innerHTML">
+          <div class="form-actions">
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            <button type="submit" class="<%= action === 'delete' ? 'danger-button' : 'primary-button' %>"><%= actionLabel %></button>
+          </div>
+        </form>
+      <% } %>
+    </div>
+  </section>
+</div>

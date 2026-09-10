@@ -1,0 +1,125 @@
+<%
+  const details = toolDetails || {};
+  const specs = details.specifications || {};
+  const wipeRows = Array.isArray(details.wipeCertificates) ? details.wipeCertificates : [];
+  const runRows = Array.isArray(details.toolRuns) ? details.toolRuns : [];
+
+  const clean = (value) => value === null || value === undefined ? '' : String(value).trim();
+  const isKnown = (value) => {
+    const normalized = clean(value).toLowerCase();
+    return Boolean(normalized) && !['unknown', 'unavailable', 'not_available', 'not available'].includes(normalized);
+  };
+  const stateText = (value) => clean(value).replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const stateValue = (value) => isKnown(value) ? stateText(value) : '';
+  const formatDateTime = (value) => {
+    if (!value) return '';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? clean(value) : date.toLocaleString('en-US');
+  };
+  const formatBytes = (value) => {
+    const bytes = Number(value);
+    if (!Number.isFinite(bytes) || bytes <= 0) return '';
+    const gb = bytes / (1024 ** 3);
+    return gb >= 1024 ? `${(gb / 1024).toFixed(gb >= 10240 ? 0 : 2)} TB` : `${gb.toFixed(gb >= 100 ? 0 : 1)} GB`;
+  };
+  const joinKnown = (values, separator = ' · ') => values.filter((value) => isKnown(value)).map(clean).join(separator);
+
+  const toolFields = [];
+  const addField = (label, value, detail = '') => {
+    if (!isKnown(value)) return;
+    toolFields.push({ label, value: clean(value), detail: clean(detail) });
+  };
+
+  addField('Windows Release', specs.windows_display_version);
+  addField('Touchscreen Hardware', stateValue(specs.touchscreen_hardware_state_code));
+
+  const wifiState = stateValue(specs.wifi_hardware_state_code);
+  const wifiDetail = joinKnown([specs.wifi_technology, specs.wifi_adapter_model]);
+  if (isKnown(wifiState) || isKnown(wifiDetail)) {
+    addField('Wi-Fi Hardware', wifiState || wifiDetail, wifiState ? wifiDetail : '');
+  }
+
+  const lteState = stateValue(specs.lte_hardware_state_code);
+  const lteDetail = joinKnown([specs.lte_technology, specs.lte_module_model]);
+  if (isKnown(lteState) || isKnown(lteDetail)) {
+    addField('LTE / WWAN', lteState || lteDetail, lteState ? lteDetail : '');
+  }
+  addField('LTE IMEI', specs.lte_imei);
+
+  addField('Secure Boot', stateValue(specs.secure_boot_state_code));
+  const tpmState = stateValue(specs.tpm_hardware_state_code);
+  const tpmDetail = joinKnown([
+    specs.tpm_version ? `Version ${specs.tpm_version}` : '',
+    stateValue(specs.tpm_enabled_state_code) ? `Enabled: ${stateValue(specs.tpm_enabled_state_code)}` : '',
+    stateValue(specs.tpm_activated_state_code) ? `Activated: ${stateValue(specs.tpm_activated_state_code)}` : ''
+  ]);
+  if (isKnown(tpmState) || isKnown(tpmDetail)) {
+    addField('TPM', tpmState || tpmDetail, tpmState ? tpmDetail : '');
+  }
+
+  addField('Keyboard Backlight', stateValue(specs.keyboard_backlight_state_code));
+  if (specs.ac_adapter_wattage !== null && specs.ac_adapter_wattage !== undefined && Number.isFinite(Number(specs.ac_adapter_wattage))) {
+    addField('Observed AC Adapter', `${Number(specs.ac_adapter_wattage)} W`);
+  }
+
+  const adapterWarningState = stateValue(specs.bios_adapter_warning_state_code);
+  if (isKnown(adapterWarningState) || isKnown(specs.bios_adapter_warning_message)) {
+    addField('BIOS Adapter Warning', adapterWarningState || specs.bios_adapter_warning_message, adapterWarningState ? specs.bios_adapter_warning_message : '');
+  }
+
+  const batteryState = stateValue(specs.battery_hardware_state_code);
+  const batteryHealth = specs.battery_health_percent_observed === null || specs.battery_health_percent_observed === undefined
+    ? ''
+    : `${Number(specs.battery_health_percent_observed).toFixed(1)}% health`;
+  if (isKnown(batteryState) || isKnown(batteryHealth)) {
+    addField('Battery Hardware', batteryState || batteryHealth, batteryState ? batteryHealth : '');
+  }
+
+  addField('Camera Hardware', stateValue(specs.camera_hardware_state_code));
+  addField('Fingerprint Hardware', stateValue(specs.fingerprint_hardware_state_code));
+
+  const hasToolData = toolFields.length > 0 || wipeRows.length > 0 || runRows.length > 0;
+%>
+<% if (hasToolData) { %>
+  <div class="tech-detail-section tech-tool-observed-details">
+    <% if (toolFields.length > 0) { %>
+      <div class="tech-detail-section-heading"><strong>Tool Details</strong></div>
+      <div class="tech-detail-grid">
+        <% toolFields.forEach((field) => { %>
+          <div>
+            <span><%= field.label %></span>
+            <strong><%= field.value %></strong>
+            <% if (field.detail) { %><small><%= field.detail %></small><% } %>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+
+    <% if (wipeRows.length > 0) { %>
+      <div class="tech-detail-section-heading"><strong>Secure-Wipe Evidence</strong></div>
+      <div class="tech-detail-grid">
+        <% wipeRows.forEach((certificate) => { %>
+          <div>
+            <span><%= clean(certificate.certificate_id) %><%= formatDateTime(certificate.completed_at || certificate.created_at) ? ` · ${formatDateTime(certificate.completed_at || certificate.created_at)}` : '' %></span>
+            <strong><%= joinKnown([certificate.wipe_result, certificate.wipe_method]) || clean(certificate.certificate_status) %></strong>
+            <% const driveDetail = joinKnown([certificate.drive_model, certificate.drive_serial, formatBytes(certificate.drive_size_bytes)]); %>
+            <% if (driveDetail) { %><small><%= driveDetail %></small><% } %>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+
+    <% if (runRows.length > 0) { %>
+      <div class="tech-detail-section-heading"><strong>Recent Tool Runs</strong></div>
+      <div class="tech-detail-grid">
+        <% runRows.forEach((run) => { %>
+          <div>
+            <span><%= run.tool_source === 'scantool' ? 'ScanTools' : 'TechTools' %><%= formatDateTime(run.collected_at || run.received_at) ? ` · ${formatDateTime(run.collected_at || run.received_at)}` : '' %></span>
+            <strong><%= clean(run.status) %><%= run.tool_version ? ` · v${run.tool_version}` : '' %></strong>
+            <% if (run.report_id) { %><small>Report: <%= run.report_id %></small><% } %>
+          </div>
+        <% }); %>
+      </div>
+    <% } %>
+  </div>
+<% } %>

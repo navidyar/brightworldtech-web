@@ -284,11 +284,6 @@ function buildSubmittedUnitSnapshot({ formData = {}, formOptions = {}, unitId = 
         labels: [optionLabel(formOptions.absoluteStatusOptions, formData.absoluteStatusConfigValueId)],
         sourceLabel: 'Absolute Status field'
       }),
-      physical_camera_status: createCatalogActual({
-        ids: [formData.physicalCameraStatusConfigValueId],
-        labels: [optionLabel(formOptions.physicalCameraStatusOptions, formData.physicalCameraStatusConfigValueId)],
-        sourceLabel: 'Physical Camera field'
-      }),
       touchscreen_status: createCatalogActual({
         ids: [formData.touchscreenStatusConfigValueId],
         labels: [optionLabel(formOptions.touchscreenStatusOptions, formData.touchscreenStatusConfigValueId)],

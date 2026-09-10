@@ -12,7 +12,6 @@ const SYSTEM_CONFIG_CATEGORY_IDS = Object.freeze({
   OPERATING_SYSTEMS: 6,
   COSMETIC_GRADES: 7,
   ABSOLUTE_STATUSES: 8,
-  CAMERA_STATUSES: 9,
   TOUCHSCREEN_STATUSES: 10,
   KEYBOARD_LANGUAGES: 11,
   DIAGNOSTICS_STATUSES: 12,
@@ -62,7 +61,6 @@ const CATEGORY_BINDINGS = Object.freeze([
   [SYSTEM_CONFIG_CATEGORY_IDS.OPERATING_SYSTEMS, 'Operating Systems', ['operating_systems', 'operating_system']],
   [SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, 'Cosmetic Grades', ['cosmetic_grades', 'overall_unit_grades', 'unit_grades', 'unit_grade', 'grades']],
   [SYSTEM_CONFIG_CATEGORY_IDS.ABSOLUTE_STATUSES, 'Absolute Statuses', ['absolute_statuses', 'absolute_status']],
-  [SYSTEM_CONFIG_CATEGORY_IDS.CAMERA_STATUSES, 'Camera Statuses', ['physical_camera_statuses', 'camera_statuses', 'physical_camera_status']],
   [SYSTEM_CONFIG_CATEGORY_IDS.TOUCHSCREEN_STATUSES, 'Touchscreen Statuses', ['touchscreen_statuses', 'touchscreen_status']],
   [SYSTEM_CONFIG_CATEGORY_IDS.KEYBOARD_LANGUAGES, 'Keyboard Languages', ['keyboard_languages', 'keyboard_language']],
   [SYSTEM_CONFIG_CATEGORY_IDS.DIAGNOSTICS_STATUSES, 'Diagnostics Statuses', ['diagnostics_statuses', 'complete_diagnostics_statuses', 'diagnostics_status']],
@@ -115,6 +113,7 @@ const SYSTEM_CONFIG_VALUE_IDS = Object.freeze({
   IDENTIFIER_UNIT_SERIAL: 202,
   IDENTIFIER_BIOS_SERIAL: 203,
   IDENTIFIER_AMAZON_ASSET_TAG: 204,
+  IDENTIFIER_SYSTEM_UUID: 205,
   UNIT_STATUS_RECEIVED: 211,
   LOT_STATUS_DEFAULT: 221,
   COMMENT_GENERAL: 231,
@@ -144,7 +143,6 @@ const SYSTEM_CONFIG_VALUE_IDS = Object.freeze({
   REQUIREMENT_BIOS_VERSION: 317,
   REQUIREMENT_BATTERY_HEALTH: 318,
   REQUIREMENT_ABSOLUTE_STATUS: 319,
-  REQUIREMENT_PHYSICAL_CAMERA_STATUS: 320,
   REQUIREMENT_TOUCHSCREEN_STATUS: 321,
   REQUIREMENT_KEYBOARD_LANGUAGE: 322,
   REQUIREMENT_COMPLETE_DIAGNOSTICS: 323,
@@ -215,7 +213,6 @@ const requirementValues = [
   ['REQUIREMENT_BIOS_VERSION', 'bios_version'],
   ['REQUIREMENT_BATTERY_HEALTH', 'battery_health'],
   ['REQUIREMENT_ABSOLUTE_STATUS', 'absolute_status'],
-  ['REQUIREMENT_PHYSICAL_CAMERA_STATUS', 'physical_camera_status'],
   ['REQUIREMENT_TOUCHSCREEN_STATUS', 'touchscreen_status'],
   ['REQUIREMENT_KEYBOARD_LANGUAGE', 'keyboard_language'],
   ['REQUIREMENT_COMPLETE_DIAGNOSTICS', 'complete_diagnostics'],
@@ -248,6 +245,7 @@ const VALUE_BINDINGS = Object.freeze([
   { systemId: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_IDENTIFIER_TYPES, name: 'Unit Serial identifier', legacyCodes: ['unit_serial_number', 'unit_serial'], required: true },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_IDENTIFIER_TYPES, name: 'BIOS Serial identifier', legacyCodes: ['bios_serial_number', 'bios_serial'], required: true },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_AMAZON_ASSET_TAG, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_IDENTIFIER_TYPES, name: 'Amazon Asset Tag identifier', legacyCodes: ['amazon_asset_tag', 'az_asset_tag'], required: false },
+  { systemId: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_SYSTEM_UUID, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_IDENTIFIER_TYPES, name: 'System UUID identifier', legacyCodes: ['system_uuid', 'uuid'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.UNIT_STATUS_RECEIVED, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.UNIT_STATUSES, name: 'Received Unit status', legacyCodes: ['received'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.LOT_STATUS_DEFAULT, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.LOT_STATUSES, name: 'Default Lot status', legacyCodes: ['active', 'open', 'created', 'new', 'pending'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.COMMENT_GENERAL, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.COMMENT_TYPES, name: 'General Unit comment', legacyCodes: ['general'], required: false },
@@ -332,7 +330,8 @@ const IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID = Object.freeze({
   [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_ASSET_TAG]: 'asset_tag',
   [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL]: 'unit_serial_number',
   [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL]: 'bios_serial_number',
-  [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_AMAZON_ASSET_TAG]: 'amazon_asset_tag'
+  [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_AMAZON_ASSET_TAG]: 'amazon_asset_tag',
+  [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_SYSTEM_UUID]: 'system_uuid'
 });
 
 const CATEGORY_BY_SYSTEM_ID = new Map(CATEGORY_BINDINGS.map((entry) => [entry.systemId, entry]));

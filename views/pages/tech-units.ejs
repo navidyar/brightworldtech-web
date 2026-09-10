@@ -59,6 +59,14 @@
 
             <div class="tech-units-clean-heading-actions">
               <% if (canCreateTechUnits) { %>
+                <div
+                  id="tech-print-queue-summary"
+                  hx-get="/tech/print-queue/summary"
+                  hx-trigger="load, unit-label-queued from:body"
+                  hx-swap="innerHTML"
+                >
+                  <a class="secondary-button tech-recent-prints-button" href="/tech/print-queue/modal" hx-get="/tech/print-queue/modal" hx-target="#modal-root" hx-swap="innerHTML">Recent Prints</a>
+                </div>
                 <a class="primary-button tech-units-clean-create-button" href="/tech/units/new" hx-get="/tech/units/new/modal" hx-target="#modal-root" hx-swap="innerHTML">
                   Create Unit
                 </a>
@@ -381,10 +389,13 @@
                 <div class="tech-units-clean-section-heading tech-units-clean-section-heading--results">
                   <h2 id="tech-units-results-heading">Units</h2>
 
-                  <p class="tech-units-clean-loaded-count" aria-live="polite">
-                    <strong id="tech-units-loaded-count"><%= result.supported && pagination.totalRows !== undefined ? formatNumber(pagination.totalRows) : '—' %></strong>
-                    <span>matching</span>
-                  </p>
+                  <div class="tech-units-results-heading-actions">
+                    <div id="tech-units-bulk-label-actions" class="tech-units-bulk-label-actions" aria-live="polite"></div>
+                    <p class="tech-units-clean-loaded-count" aria-live="polite">
+                      <strong id="tech-units-loaded-count"><%= result.supported && pagination.totalRows !== undefined ? formatNumber(pagination.totalRows) : '—' %></strong>
+                      <span>matching</span>
+                    </p>
+                  </div>
                 </div>
 
                 <div class="tech-units-clean-results-panel">

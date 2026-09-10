@@ -4355,3 +4355,153 @@ body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal > .modal-body
 .lot-unit-browser-foundation-note {
   margin: 0;
 }
+
+/* Stage 10W83: Lot Label Library assignment */
+.lot-label-templates-modal {
+  width: min(1120px, 96vw);
+}
+
+.lot-label-template-picker-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 260px);
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.lot-label-template-picker-toolbar label,
+.lot-label-template-controls label {
+  display: grid;
+  gap: 4px;
+}
+
+.lot-label-template-picker-toolbar span,
+.lot-label-template-controls span {
+  color: var(--muted);
+  font-size: 0.74rem;
+  font-weight: 800;
+}
+
+.lot-label-template-picker-toolbar input,
+.lot-label-template-picker-toolbar select,
+.lot-label-template-controls input {
+  min-height: 39px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.lot-label-template-picker {
+  display: grid;
+  gap: 8px;
+  max-height: min(56vh, 620px);
+  overflow: auto;
+  padding-right: 3px;
+}
+
+.lot-label-template-option {
+  display: grid;
+  grid-template-columns: 92px minmax(220px, 1fr) minmax(340px, auto);
+  gap: 12px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.lot-label-template-option.is-selected {
+  border-color: color-mix(in srgb, var(--blue) 38%, var(--line) 62%);
+  background: color-mix(in srgb, var(--surface) 94%, var(--blue-soft) 6%);
+}
+
+.lot-label-template-option.is-archived {
+  opacity: 0.78;
+}
+
+.lot-label-template-preview {
+  display: grid;
+  place-items: center;
+  width: 92px;
+  height: 58px;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.lot-label-template-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.lot-label-template-main {
+  min-width: 0;
+}
+
+.lot-label-template-title-row,
+.lot-label-template-use-toggle,
+.lot-label-template-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+
+.lot-label-template-title-row strong {
+  min-width: 0;
+}
+
+.lot-label-template-main > small,
+.lot-label-template-main p {
+  display: block;
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.lot-label-template-use-toggle {
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.lot-label-template-controls {
+  justify-content: flex-end;
+}
+
+.lot-label-template-controls label {
+  min-width: 74px;
+}
+
+.lot-label-template-controls input[type='checkbox'] {
+  min-height: 18px;
+  width: 18px;
+  padding: 0;
+}
+
+.lot-label-template-controls input[type='number'] {
+  width: 82px;
+}
+
+.lot-label-template-warning {
+  color: var(--red) !important;
+}
+
+@media (max-width: 900px) {
+  .lot-label-template-picker-toolbar,
+  .lot-label-template-option {
+    grid-template-columns: 1fr;
+  }
+
+  .lot-label-template-controls {
+    justify-content: flex-start;
+  }
+}

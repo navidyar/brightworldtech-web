@@ -587,3 +587,251 @@
 .management-user-link-status.is-expired {
   color: var(--red);
 }
+
+/* Stage 10W83: Label Template Library */
+.label-library-page {
+  display: grid;
+  gap: 16px;
+}
+
+.label-library-heading,
+.label-library-section-heading,
+.label-library-filters,
+.label-library-filter-actions,
+.label-library-template-title,
+.label-library-storage-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.label-library-heading,
+.label-library-section-heading {
+  justify-content: space-between;
+}
+
+.label-library-heading p,
+.label-library-section-heading p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.label-library-summary {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.label-library-summary article {
+  padding: 12px 14px;
+  border: 1px solid var(--line-soft);
+  border-radius: 14px;
+  background: var(--surface);
+}
+
+.label-library-summary small,
+.label-library-stat-stack small,
+.label-library-status-stack small,
+.label-library-template-cell small,
+.label-library-assets-table-card small {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.label-library-summary strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 1rem;
+}
+
+.label-library-section {
+  display: grid;
+  gap: 12px;
+}
+
+.label-library-filters {
+  align-items: end;
+}
+
+.label-library-filters label {
+  display: grid;
+  gap: 5px;
+  min-width: 180px;
+}
+
+.label-library-filters label:first-child {
+  min-width: min(320px, 100%);
+  flex: 1 1 280px;
+}
+
+.label-library-filters label span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.label-library-filters input,
+.label-library-filters select,
+.label-template-form-modal input,
+.label-template-form-modal select,
+.label-template-form-modal textarea {
+  min-height: 39px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.label-template-form-modal textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.label-library-template-cell {
+  display: grid;
+  grid-template-columns: 76px minmax(180px, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-width: 300px;
+}
+
+.label-library-thumbnail {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 48px;
+  overflow: hidden;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.label-library-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.label-library-template-title {
+  gap: 6px;
+}
+
+.label-library-template-cell p {
+  margin: 3px 0;
+  max-width: 420px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.label-library-status-stack,
+.label-library-stat-stack {
+  display: grid;
+  gap: 4px;
+}
+
+.label-library-stat-stack span {
+  white-space: nowrap;
+}
+
+.label-library-row-actions {
+  min-width: 330px;
+}
+
+.label-library-row-actions form {
+  margin: 0;
+}
+
+.label-library-storage-breakdown {
+  gap: 8px 16px;
+  padding: 10px 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.label-library-storage-breakdown strong {
+  color: var(--text);
+}
+
+.label-library-hash {
+  display: block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.label-template-delete-lots {
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.label-template-delete-lots ul {
+  margin: 8px 0 0;
+  padding-left: 20px;
+}
+
+@media (max-width: 1100px) {
+  .label-library-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .label-library-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .label-library-heading,
+  .label-library-section-heading,
+  .label-library-filter-actions,
+  .label-library-filter-actions > * {
+    width: 100%;
+  }
+}
+
+/* Stage 10W87: shared compact printer-registry controls. */
+.checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.checkbox-row input[type="checkbox"] {
+  margin-top: 2px;
+}
+
+.checkbox-row span {
+  display: grid;
+  gap: 2px;
+}
+
+.checkbox-row small {
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.label-printer-member-list {
+  display: grid;
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+}

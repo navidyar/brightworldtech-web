@@ -114,11 +114,10 @@ test('migration creates ID-bound configurable option categories and repeatable h
   }
 });
 
-test('legacy Physical Camera Lot rules are retired during migration', () => {
-  const migration = read('scripts/migrateSpecsTestsOverhaul.js');
-  assert.match(migration, /removeLegacyPhysicalCameraRules/);
-  assert.match(migration, /physical_camera_status/);
-  assert.equal(require('../config/lotRequirementRegistry').getLotRequirementField('physical_camera_status').selectable, false);
+test('legacy Physical Camera Status is fully retired from current runtime registries', () => {
+  assert.equal(getUnitFormFieldDefinition('physical_camera_status'), null);
+  assert.equal(require('../config/lotRequirementRegistry').getLotRequirementField('physical_camera_status'), null);
+  assert.doesNotMatch(read('models/unitExpandedFormModel.js'), /physicalCameraStatus|physical_camera_status/);
 });
 
 test('new fields are available in export column selection', () => {

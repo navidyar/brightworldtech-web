@@ -1,0 +1,145 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeLot = lot || null;
+  const safeTemplates = Array.isArray(templates) ? templates : [];
+  const hasDirectSet = Boolean(directSet);
+  const categoryLabels = {
+    standard: 'Standard / Generic',
+    dell: 'Dell',
+    lenovo: 'Lenovo',
+    hp: 'HP',
+    custom: 'Custom',
+    other: 'Other'
+  };
+  const categoryCodes = [...new Set(safeTemplates.map((template) => template.category_code).filter(Boolean))];
+  const selectedCount = safeTemplates.filter((template) => template.selection).length;
+%>
+<div class="modal-backdrop lot-unit-form-rules-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal lot-modal lot-label-templates-modal" role="dialog" aria-modal="true" aria-labelledby="lot-label-templates-modal-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="lot-label-templates-modal-title">Configure Labels</h2>
+        <% if (safeLot) { %><p class="lot-unit-form-rules-subtitle"><%= safeLot.lot_name %></p><% } %>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <% if (safeLot && effectiveSet) { %>
+        <form
+          method="post"
+          action="/management/lots/<%= safeLot.lot_id %>/labels/modal"
+          hx-post="/management/lots/<%= safeLot.lot_id %>/labels/modal"
+          hx-target="#modal-root"
+          hx-swap="innerHTML"
+          data-lot-label-template-form
+        >
+          <div class="lot-unit-form-rules-intro">
+            <div>
+              <strong>Lot-controlled label set</strong>
+              <p>A Lot with no direct configuration inherits the nearest configured parent. Saving creates or replaces this Lot's complete label set, including an intentionally empty set.</p>
+              <p><strong>Current source:</strong> <%= sourceLabel %></p>
+              <p><strong>Inheritance path:</strong> <%= effectiveSet.lineage.map((lineageLot) => lineageLot.name).join(' › ') %></p>
+              <p><strong>Required</strong> means part of the Lot's normal print set; it is not a Unit completion prerequisite.</p>
+            </div>
+            <div class="lot-unit-form-rules-summary" aria-label="Current effective label set summary">
+              <span><small>Templates</small><strong data-lot-label-selected-count><%= formatNumber(selectedCount) %></strong></span>
+              <span><small>This Lot customized</small><strong><%= hasDirectSet ? 'Yes' : 'No' %></strong></span>
+            </div>
+          </div>
+
+          <div class="lot-label-template-picker-toolbar">
+            <label>
+              <span>Search</span>
+              <input type="search" placeholder="Template name" data-lot-label-search />
+            </label>
+            <label>
+              <span>Category</span>
+              <select data-lot-label-category>
+                <option value="">All categories</option>
+                <% categoryCodes.forEach((code) => { %><option value="<%= code %>"><%= categoryLabels[code] || code %></option><% }) %>
+              </select>
+            </label>
+          </div>
+
+          <div class="lot-label-template-picker" data-lot-label-template-picker>
+            <% if (safeTemplates.length === 0) { %>
+              <div class="message info"><p>No Label Library templates exist yet. Create a template in Management → Label Library first.</p></div>
+            <% } %>
+
+            <% safeTemplates.forEach((template, index) => { %>
+              <%
+                const selection = template.selection;
+                const selected = Boolean(selection);
+                const isNew = template.new_until && new Date(template.new_until) > new Date();
+                const archived = template.status === 'archived';
+                const requiredChecked = selection ? selection.isRequired : true;
+                const activeChecked = selection ? selection.isActive : template.status === 'active';
+                const quantity = selection ? selection.defaultQuantity : 1;
+                const sortOrder = selection ? selection.sortOrder : (index + 1) * 10;
+              %>
+              <article
+                class="lot-label-template-option <%= selected ? 'is-selected' : '' %> <%= archived ? 'is-archived' : '' %>"
+                data-lot-label-template-row
+                data-search-text="<%= String(`${template.name || ''} ${template.description || ''}`).toLowerCase() %>"
+                data-category="<%= template.category_code %>"
+              >
+                <div class="lot-label-template-preview">
+                  <% if (template.preview_asset_id) { %>
+                    <img src="/management/label-library/assets/<%= template.preview_asset_id %>/file" alt="" loading="lazy" />
+                  <% } else { %>
+                    <span aria-hidden="true">Label</span>
+                  <% } %>
+                </div>
+
+                <div class="lot-label-template-main">
+                  <div class="lot-label-template-title-row">
+                    <label class="lot-label-template-use-toggle">
+                      <input type="checkbox" name="templateId" value="<%= template.label_template_id %>" <%= selected ? 'checked' : '' %> data-lot-label-template-use />
+                      <span>Use</span>
+                    </label>
+                    <strong><%= template.name %></strong>
+                    <% if (isNew) { %><span class="pill good">New</span><% } %>
+                    <span class="pill <%= template.status === 'active' ? 'good' : template.status === 'archived' ? 'bad' : 'slate' %>"><%= template.status %></span>
+                  </div>
+                  <small><%= categoryLabels[template.category_code] || template.category_code %> · <%= formatNumber(template.attached_lot_count) %> Lot<%= Number(template.attached_lot_count) === 1 ? '' : 's' %> · <%= formatNumber(template.print_count) %> prints</small>
+                  <% if (template.description) { %><p><%= template.description %></p><% } %>
+                  <% if (archived) { %><small class="lot-label-template-warning">Archived templates remain visible but are forced inactive for this Lot.</small><% } %>
+                </div>
+
+                <div class="lot-label-template-controls">
+                  <label>
+                    <span>Required</span>
+                    <input type="checkbox" name="requiredTemplateId" value="<%= template.label_template_id %>" <%= requiredChecked ? 'checked' : '' %> />
+                  </label>
+                  <label>
+                    <span>Quantity</span>
+                    <input type="number" name="quantity[<%= template.label_template_id %>]" value="<%= quantity %>" min="1" max="10" inputmode="numeric" />
+                  </label>
+                  <label>
+                    <span>Active in Lot</span>
+                    <input type="checkbox" name="activeTemplateId" value="<%= template.label_template_id %>" <%= activeChecked && !archived ? 'checked' : '' %> <%= archived ? 'disabled' : '' %> />
+                  </label>
+                  <label>
+                    <span>Order</span>
+                    <input type="number" name="sortOrder[<%= template.label_template_id %>]" value="<%= sortOrder %>" min="1" max="100000" inputmode="numeric" />
+                  </label>
+                </div>
+              </article>
+            <% }) %>
+          </div>
+
+          <div class="form-actions lot-unit-form-rules-actions">
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+            <button type="submit" class="secondary-button" name="labelSetMode" value="inherit" <%= hasDirectSet ? '' : 'disabled aria-disabled="true"' %>>Reset This Lot to Inherit</button>
+            <button type="submit" class="primary-button" name="labelSetMode" value="customize">Save Label Configuration</button>
+          </div>
+        </form>
+      <% } %>
+    </div>
+  </section>
+</div>

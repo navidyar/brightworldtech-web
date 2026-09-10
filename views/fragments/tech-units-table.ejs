@@ -232,6 +232,22 @@
 <% if (!isSingleUnitViewPage) { %>
   <strong id="tech-units-loaded-count" hx-swap-oob="true"><%= result && result.pagination ? formatNumber(result.pagination.totalRows) : (result && result.units ? formatNumber(result.units.length) : '—') %></strong>
 
+  <% if (!isQcPortalMode) { %>
+    <% const safeBulkLabelAction = typeof bulkLabelPrintAction !== 'undefined' && bulkLabelPrintAction ? bulkLabelPrintAction : { available: false, eligibleCount: 0, modalUrl: '' }; %>
+    <div id="tech-units-bulk-label-actions" class="tech-units-bulk-label-actions" hx-swap-oob="true">
+      <% if (safeBulkLabelAction.available) { %>
+        <a
+          class="secondary-button tech-units-bulk-label-button"
+          href="<%= safeBulkLabelAction.modalUrl %>"
+          hx-get="<%= safeBulkLabelAction.modalUrl %>"
+          hx-target="#modal-root"
+          hx-swap="innerHTML"
+          data-tech-modal-trigger
+        >Print Labels (<%= safeBulkLabelAction.eligibleCount %>)</a>
+      <% } %>
+    </div>
+  <% } %>
+
   <%- include('../partials/table-pagination', { pagination: result.pagination, filters, basePath: browserBasePath, itemLabel: 'units', pageSizeLabel: 'Units per page', modifierClass: 'table-pagination--top', ariaLabel: 'Top unit pagination' }) %>
 <% } %>
 
@@ -354,6 +370,7 @@
           const amazonAssetTagValue = identifierValue(identifiers, 'amazon_asset_tag');
           const biosSerialValue = identifierValue(identifiers, 'bios_serial_number') || '—';
           const unitSerialValue = identifierValue(identifiers, 'unit_serial_number') || '—';
+          const systemUuidValue = identifierValue(identifiers, 'system_uuid');
           const currentGradeLabel = currentGrade && currentGrade.gradeLabel ? currentGrade.gradeLabel : '—';
           const currentOutcomeLabel = currentOutcome && currentOutcome.outcomeLabel ? currentOutcome.outcomeLabel : '';
           const currentOutcomeClass = currentOutcome && currentOutcome.outcomeCode === 'pass' ? 'pass' : (currentOutcome && currentOutcome.outcomeCode === 'fail' ? 'fail' : '');
@@ -520,6 +537,12 @@
                 <span class="tech-unit-summary-id-label">Unit</span>
                 <span class="tech-unit-summary-id-value"><%= unitSerialValue %></span>
               </span>
+              <% if (systemUuidValue) { %>
+                <span class="tech-unit-summary-id-item tech-unit-summary-id-item--uuid">
+                  <span class="tech-unit-summary-id-label">UUID</span>
+                  <span class="tech-unit-summary-id-value tech-unit-summary-id-value--uuid" tabindex="0" title="<%= systemUuidValue %>" aria-label="System UUID: <%= systemUuidValue %>"><%= systemUuidValue %></span>
+                </span>
+              <% } %>
             </div>
           </td>
           <% } %>
@@ -793,16 +816,17 @@
                 <% if (canCompleteTechUnits && !unit.isParked && !isReadOnlySearchResult) { %>
                   <div class="tech-summary-actions__secondary">
                     <% if (unit.latestWorkCompletion) { %>
-                      <button
-                        type="button"
+                      <a
                         class="secondary-button tech-action-button tech-action-button--print tech-print-label-action-button"
+                        href="/tech/units/<%= unit.unitId %>/print-label/modal"
+                        hx-get="/tech/units/<%= unit.unitId %>/print-label/modal"
+                        hx-target="#modal-root"
+                        hx-swap="innerHTML"
+                        data-tech-modal-trigger
                         data-no-row-toggle
-                        disabled
-                        aria-disabled="true"
-                        title="Label printing will be connected in the label-printing step."
                       >
                         Print Label
-                      </button>
+                      </a>
                       <% if (canReverseTechUnitCompletion && unit.latestWorkCompletion.creditSource === 'manual_completion') { %>
                         <a
                           class="secondary-button tech-action-button tech-action-button--undo tech-delete-action-button"
@@ -847,6 +871,14 @@
                       <span class="tech-detail-completion-at">Completed: <%= formatDateTime(unit.latestWorkCompletion.completedAt) %></span>
                     <% } %>
                   </div>
+
+                  <div
+                    class="tech-tool-details-slot"
+                    hx-get="/tech/units/<%= unit.unitId %>/tool-details"
+                    hx-trigger="revealed once"
+                    hx-swap="innerHTML"
+                    hx-on::after-swap="const row = this.closest('tr'); const sections = row ? Array.from(row.querySelectorAll('.tech-detail-section:not(.tech-tool-observed-details)')) : []; const anchor = sections.length > 0 ? sections[sections.length - 1] : null; if (anchor) anchor.insertAdjacentElement('afterend', this);"
+                  ></div>
 
                   <div class="tech-detail-actions">
                     <div class="tech-detail-status">

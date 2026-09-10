@@ -9,6 +9,7 @@ const FIELD_DEFINITIONS = Object.freeze([
   ['current_unit_status', 'Unit Status', 'currentUnitStatusConfigValueId', 'unitStatuses'],
   ['unit_serial_number', 'Unit Serial Number', 'unitSerialNumber', null],
   ['bios_serial_number', 'BIOS Serial Number', 'biosSerialNumber', null],
+  ['system_uuid', 'System UUID', 'systemUuid', null],
   ['amazon_asset_tag', 'Amazon Asset Tag', 'amazonAssetTag', null],
   ['fnsku', 'FNSKU', 'fnsku', null],
   ['asin', 'ASIN', 'asin', null],
@@ -58,9 +59,7 @@ const FIELD_DEFINITIONS = Object.freeze([
   ['overall_grade', 'Overall Grade', 'overallGradeConfigValueId', 'overallGradeOptions'],
   ['overall_grade_notes', 'Grade Notes', 'overallGradeNotes', null],
   ['unit_outcome', 'Unit Outcome', 'outcomeCode', 'outcomeOptions'],
-  ['outcome_notes', 'Outcome Notes', 'outcomeNotes', null],
-  ['hardware_notes', 'Hardware Notes', 'hardwareNotes', null],
-  ['cosmetic_notes', 'Cosmetic Notes', 'cosmeticNotes', null]
+  ['outcome_notes', 'Outcome Notes', 'outcomeNotes', null]
 ]);
 
 const REPEATABLE_DEFINITIONS = Object.freeze([

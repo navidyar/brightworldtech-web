@@ -12,6 +12,7 @@
   <script defer src="/js/lot-requirements.js?v=20260819-stage10w68y-mouse-focus-continuity"></script>
   <script defer src="/js/lot-unit-form-rules.js"></script>
   <script defer src="/js/lot-unit-browser-layout.js?v=20260826-stage10w73e"></script>
+  <script defer src="/js/lot-label-template-picker.js?v=20260909-stage10w83"></script>
   <script defer src="/js/unit-export.js?v=20260813-stage10w63-multi-lot-export-scope"></script>
 
   <body class="lots-lookup-typography-preview lots-lookup-ui-preview">
@@ -53,6 +54,7 @@
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-target="#modal-root" hx-swap="innerHTML">Requirements</a>
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-get="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Unit Form</a>
               <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unit-browser/modal" hx-get="/management/lots/<%= lot.lot_id %>/unit-browser/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Unit Browser</a>
+              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/labels/modal" hx-get="/management/lots/<%= lot.lot_id %>/labels/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Labels</a>
               <% if (Number(lot.generate_amazon_asset_tag || 0) === 1) { %>
                 <button type="button" class="secondary-button" hx-get="/management/lots/<%= lot.lot_id %>/amazon-asset-tags/modal" hx-target="#modal-root" hx-swap="innerHTML">Generate Missing AZ Tags</button>
               <% } %>

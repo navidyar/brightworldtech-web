@@ -18,6 +18,19 @@ const unitQcCorrectionModel = require('../models/unitQcCorrectionModel');
 const lotQcRequirementModel = require('../models/lotQcRequirementModel');
 const unitExportService = require('../services/unitExportService');
 const unitExportFileService = require('../services/unitExportFileService');
+const labelPrintingService = require('../services/labelPrintingService');
+const labelLibraryPrintingService = require('../services/labelLibraryPrintingService');
+const labelPrintHistoryModel = require('../models/labelPrintHistoryModel');
+const {
+  LabelPrintSelectionError,
+  buildDefaultSelections,
+  normalizeUnitLabelPrintSelection
+} = require('../services/labelPrintSelectionPolicy');
+const {
+  BulkLabelPrintSelectionError,
+  canOfferBulkLabelPrint,
+  normalizeSelectedUnitIds
+} = require('../services/bulkLabelPrintSelectionPolicy');
 const { UNIT_EXPORT_COLUMNS } = require('../config/unitExportContract');
 const { UNIT_FORM_FIELD_REGISTRY } = require('../config/unitFormFieldRegistry');
 const qcGradingModel = require('../models/qcGradingModel');
@@ -51,6 +64,7 @@ const {
   getAllowedCompletionUserIds,
   resolveCompletionUserId
 } = require('../services/completionAttributionPolicy');
+const { canOverrideMissingToolRequirements } = require('../services/completionToolRequirementPolicy');
 const {
   REGULAR_TECH_COSMETIC_ISSUE_MESSAGE,
   hasCompleteActualCosmeticIssue,
@@ -129,6 +143,15 @@ function buildTechUnitsTableUrl(filters, pathname = '/tech/units/table') {
   const queryString = params.toString();
 
   return queryString ? `${pathname}?${queryString}` : pathname;
+}
+
+
+function buildTechUnitsBulkPrintModalUrl(filters = {}) {
+  return buildTechUnitsTableUrl(filters, '/tech/units/print-labels/modal');
+}
+
+function buildTechUnitsBulkPrintPostUrl(filters = {}) {
+  return buildTechUnitsTableUrl(filters, '/tech/units/print-labels');
 }
 
 const TECH_UNIT_EXPORT_FILTER_KEYS = Object.freeze([
@@ -261,6 +284,7 @@ function buildCompleteWorkModalView({
   preview = null,
   req = null,
   selectedCompletedByUserId = null,
+  completionRequirementOverrideReason = '',
   successMessage = null,
   errorMessages = []
 } = {}) {
@@ -295,6 +319,10 @@ function buildCompleteWorkModalView({
     isCurrentUser: userId === currentUserId
   }));
   const selectedOption = completionAttributionOptions.find((option) => option.userId === effectiveCompletedByUserId) || null;
+  const completionToolRequirements = safePreview.completionToolRequirements || { required: false, satisfied: true, requirements: [], missing: [] };
+  const missingCompletionToolRequirements = Array.isArray(completionToolRequirements.missing)
+    ? completionToolRequirements.missing
+    : [];
 
   return {
     preview: safePreview,
@@ -304,6 +332,11 @@ function buildCompleteWorkModalView({
     canChooseCompletionAttribution: canChooseCompletionAttribution(roleCodes) && completionAttributionOptions.length > 1,
     selectedCompletedByUserId: effectiveCompletedByUserId,
     canViewProductionWeight: userCanViewProductionWeight(req),
+    completionToolRequirements,
+    missingCompletionToolRequirements,
+    canOverrideCompletionToolRequirements: missingCompletionToolRequirements.length > 0
+      && canOverrideMissingToolRequirements(roleCodes),
+    completionRequirementOverrideReason: String(completionRequirementOverrideReason || ''),
     successMessage,
     errorMessages: Array.isArray(errorMessages) ? errorMessages : []
   };
@@ -791,7 +824,6 @@ function getExpandedDetailsFromRequest(req) {
     biometrics: specsTestsRows.biometrics,
     ports: specsTestsRows.ports,
     absoluteStatusConfigValueId: normalizeModuleField(req.body.absoluteStatusConfigValueId),
-    physicalCameraStatusConfigValueId: normalizeModuleField(req.body.physicalCameraStatusConfigValueId),
     touchscreenStatusConfigValueId: normalizeModuleField(req.body.touchscreenStatusConfigValueId),
     keyboardLanguageConfigValueId: normalizeModuleField(req.body.keyboardLanguageConfigValueId),
     completeDiagnosticsStatusConfigValueId: normalizeModuleField(req.body.completeDiagnosticsStatusConfigValueId),
@@ -855,6 +887,10 @@ function normalizeSerialInput(value) {
     .toUpperCase();
 }
 
+function normalizeSystemUuidInput(value) {
+  return String(value || '').trim().toUpperCase();
+}
+
 function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
   const previousMemoryModules = getMemoryModulesFromRequest(req, 'previousMemoryModules');
   const memoryModules = getMemoryModulesFromRequest(req);
@@ -872,6 +908,7 @@ function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
     duplicateAssumptionNonce: String(req.body.duplicateAssumptionNonce || '').trim(),
     unitSerialNumber: normalizeSerialInput(req.body.unitSerialNumber),
     biosSerialNumber: normalizeSerialInput(req.body.biosSerialNumber),
+    systemUuid: normalizeSystemUuidInput(req.body.systemUuid),
     amazonAssetTag: String(req.body.amazonAssetTag || '').trim().toUpperCase(),
     fnsku: String(req.body.fnsku || '').trim(),
     asin: String(req.body.asin || '').trim(),
@@ -930,7 +967,6 @@ function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
     openBoxStatusConfigValueId: expandedDetails.openBoxStatusConfigValueId,
     boxLanguageConfigValueId: expandedDetails.boxLanguageConfigValueId,
     absoluteStatusConfigValueId: expandedDetails.absoluteStatusConfigValueId,
-    physicalCameraStatusConfigValueId: expandedDetails.physicalCameraStatusConfigValueId,
     touchscreenStatusConfigValueId: expandedDetails.touchscreenStatusConfigValueId,
     keyboardLanguageConfigValueId: expandedDetails.keyboardLanguageConfigValueId,
     completeDiagnosticsStatusConfigValueId: expandedDetails.completeDiagnosticsStatusConfigValueId,
@@ -943,9 +979,7 @@ function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
     outcomeApprovalRequested: expandedDetails.outcomeApprovalRequested,
     outcomeApprovalRequestNotes: expandedDetails.outcomeApprovalRequestNotes,
     productionWeightOverride: String(req.body.productionWeightOverride || '').trim(),
-    productionWeightNotes: String(req.body.productionWeightNotes || '').trim(),
-    hardwareNotes: String(req.body.hardwareNotes || '').trim(),
-    cosmeticNotes: String(req.body.cosmeticNotes || '').trim()
+    productionWeightNotes: String(req.body.productionWeightNotes || '').trim()
   };
 }
 
@@ -1367,6 +1401,10 @@ async function validateUnitForm(formData, formOptions, mode) {
     errors.push('BIOS serial number must be 150 characters or fewer.');
   }
 
+  if (validationFormData.systemUuid.length > 64) {
+    errors.push('System UUID must be 64 characters or fewer.');
+  }
+
   if (validationFormData.fnsku.length > 100) errors.push('FNSKU must be 100 characters or fewer.');
   if (validationFormData.asin.length > 100) errors.push('ASIN must be 100 characters or fewer.');
   if (validationFormData.trackingNumber.length > 150) errors.push('Tracking Number must be 150 characters or fewer.');
@@ -1437,14 +1475,6 @@ async function validateUnitForm(formData, formOptions, mode) {
 
   if (!isNumberInRangeWithPrecision(validationFormData.batteryHealthPercent, 0, 100, 1)) {
     errors.push('Battery health must be a percentage from 0.0 through 100.0 with no more than one decimal place.');
-  }
-
-  if (validationFormData.hardwareNotes.length > 1000) {
-    errors.push('Hardware notes must be 1000 characters or fewer.');
-  }
-
-  if (validationFormData.cosmeticNotes.length > 1000) {
-    errors.push('Cosmetic notes must be 1000 characters or fewer.');
   }
 
   if (validationFormData.overallGradeConfigValueId) {
@@ -2832,6 +2862,25 @@ async function renderTechUnitsQcSummary(req, res) {
   }
 }
 
+function buildBulkLabelPrintAction(result, filters, req) {
+  const canPrintLabels = getCurrentRoleCodes(req).some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
+  if (!canPrintLabels || !canOfferBulkLabelPrint(filters) || !result || !Array.isArray(result.units)) {
+    return Object.freeze({ available: false, eligibleCount: 0, modalUrl: '' });
+  }
+
+  const eligibleCount = result.units.filter((unit) => Boolean(
+    unit
+    && !unit.isParked
+    && unit.latestWorkCompletion
+  )).length;
+
+  return Object.freeze({
+    available: eligibleCount > 0,
+    eligibleCount,
+    modalUrl: buildTechUnitsBulkPrintModalUrl(filters)
+  });
+}
+
 async function renderTechUnitsTable(req, res, next) {
   try {
     const filters = getFiltersFromRequest(req);
@@ -2840,12 +2889,15 @@ async function renderTechUnitsTable(req, res, next) {
       resolveUnitBrowserPresentation(filters)
     ]);
 
+    const effectiveFilters = result.filters || filters;
+
     return res.render('fragments/tech-units-table', {
       result,
-      filters: result.filters || filters,
+      filters: effectiveFilters,
       unitBrowserBasePath: '/tech/units',
       qcPortalMode: false,
-      unitBrowserPresentation
+      unitBrowserPresentation,
+      bulkLabelPrintAction: buildBulkLabelPrintAction(result, effectiveFilters, req)
     });
   } catch (error) {
     next(error);
@@ -3673,6 +3725,651 @@ async function renderMyUnitWeightPanel(req, res, next) {
   }
 }
 
+
+
+function buildLabelPrintSelectionState(body = {}, options = []) {
+  const rawSelected = Array.isArray(body.templateKey)
+    ? body.templateKey
+    : body.templateKey ? [body.templateKey] : [];
+  const selected = new Set(rawSelected.map((value) => String(value || '').trim()).filter(Boolean));
+  const quantities = body.quantity && typeof body.quantity === 'object' && !Array.isArray(body.quantity)
+    ? body.quantity
+    : {};
+
+  return (Array.isArray(options) ? options : []).map((option) => ({
+    key: option.key,
+    selected: selected.has(option.key),
+    quantity: quantities[option.key] === undefined ? option.defaultQuantity : quantities[option.key]
+  }));
+}
+
+async function getTechUnitPrintLabelContext(req, unitId) {
+  const safeUnitId = normalizePositiveInteger(unitId);
+  const errorMessages = [];
+
+  if (!safeUnitId) {
+    return { unit: null, lot: null, latestCompletion: null, errorMessages: ['The selected Unit ID is invalid.'] };
+  }
+
+  const [unit, latestCompletionMap] = await Promise.all([
+    techUnitModel.getTechUnitLifecycleSummaryById(safeUnitId),
+    techUnitModel.getLatestWorkCompletionMapForUnits([safeUnitId])
+  ]);
+  const latestCompletion = latestCompletionMap.get(safeUnitId) || null;
+  const lot = unit && unit.lotId ? await lotModel.getLotById(unit.lotId) : null;
+
+  if (!unit) {
+    errorMessages.push('The selected Unit could not be found.');
+  } else {
+    if (unit.isParked) {
+      errorMessages.push('Return this Unit to Active before printing its production label.');
+    }
+
+    if (!latestCompletion) {
+      errorMessages.push('Print Label is available only after the current Unit work cycle has been completed.');
+    }
+
+    if (isRegularTechUnitBrowserUser(req)
+      && Number(unit.assignedToUserId) !== Number(req.currentUser && req.currentUser.user_id)) {
+      errorMessages.push('Tech Users may print labels only for Units currently assigned to them.');
+    }
+  }
+
+  return { unit, lot, latestCompletion, errorMessages };
+}
+
+async function buildLabelPrintTemplateOptions({ templateSet, selectionState, unit, lot }) {
+  const resolvedTemplateSet = templateSet || { templates: [] };
+  const baseSelectionState = Array.isArray(selectionState)
+    ? selectionState
+    : buildDefaultSelections(resolvedTemplateSet.templates);
+  const selectionByKey = new Map(baseSelectionState.map((selection) => [String(selection.key), selection]));
+  const templateOptions = [];
+
+  for (const descriptor of resolvedTemplateSet.templates || []) {
+    const selection = selectionByKey.get(String(descriptor.key)) || {
+      selected: false,
+      quantity: descriptor.defaultQuantity
+    };
+    let previewDataUri = '';
+    let previewError = '';
+    if (descriptor.available && unit) {
+      try {
+        previewDataUri = await labelLibraryPrintingService.buildDescriptorPreview({
+          descriptor,
+          unit,
+          lot
+        });
+      } catch (error) {
+        previewError = error.message || 'The label preview could not be rendered.';
+      }
+    }
+    templateOptions.push({
+      ...descriptor,
+      available: Boolean(descriptor.available && !previewError),
+      unavailableReason: descriptor.unavailableReason || previewError,
+      selected: Boolean(selection.selected),
+      quantity: selection.quantity,
+      previewDataUri,
+      previewError
+    });
+  }
+
+  return templateOptions;
+}
+
+function buildLabelTemplateSetNotice(templateSet, lotId) {
+  const resolvedTemplateSet = templateSet || { templates: [], source: { type: 'none' } };
+  if (resolvedTemplateSet.isCompatibilityFallback) {
+    return 'This Lot has no Label Library configuration yet. The existing Standard Unit Label compatibility fallback is being used.';
+  }
+  if (!(resolvedTemplateSet.templates || []).length) {
+    return 'This Lot’s effective Label Library set contains no active labels to print.';
+  }
+  if (resolvedTemplateSet.source?.lotName) {
+    return Number(resolvedTemplateSet.source.lotId) === Number(lotId)
+      ? 'Using this Lot’s configured Label Library set.'
+      : `Using labels inherited from ${resolvedTemplateSet.source.lotName}.`;
+  }
+  return '';
+}
+
+async function buildTechUnitPrintLabelModalView({
+  context,
+  printerId = '',
+  templateSet = null,
+  selectionState = null,
+  successMessage = '',
+  errorMessages = []
+} = {}) {
+  const printers = labelPrintingService.LABEL_PRINTERS;
+  const selectedPrinterId = printers.some((printer) => printer.id === String(printerId || '').trim())
+    ? String(printerId).trim()
+    : (printers[0] ? printers[0].id : '');
+  const resolvedTemplateSet = templateSet || (context && context.unit
+    ? await labelLibraryPrintingService.getUnitPrintTemplateSet(context.unit.lotId)
+    : { source: { type: 'none', lotId: null, lotName: null }, isCompatibilityFallback: false, templates: [] });
+  const templateOptions = await buildLabelPrintTemplateOptions({
+    templateSet: resolvedTemplateSet,
+    selectionState,
+    unit: context ? context.unit : null,
+    lot: context ? context.lot : null
+  });
+  const allErrors = [
+    ...(context && Array.isArray(context.errorMessages) ? context.errorMessages : []),
+    ...(Array.isArray(errorMessages) ? errorMessages : [])
+  ].filter(Boolean);
+
+  return {
+    unit: context ? context.unit : null,
+    lot: context ? context.lot : null,
+    latestCompletion: context ? context.latestCompletion : null,
+    printers,
+    templateOptions,
+    selectedPrinterId,
+    maxCopies: labelPrintingService.MAX_LABEL_COPIES,
+    lotLabelFormat: resolvedTemplateSet.isCompatibilityFallback && context && context.lot
+      ? String(context.lot.label_format || '').trim()
+      : '',
+    templateSetNotice: buildLabelTemplateSetNotice(resolvedTemplateSet, context?.unit?.lotId),
+    isCompatibilityFallback: Boolean(resolvedTemplateSet.isCompatibilityFallback),
+    successMessage: String(successMessage || ''),
+    errorMessages: allErrors
+  };
+}
+
+async function renderTechUnitPrintLabelModal(req, res, next) {
+  try {
+    const context = await getTechUnitPrintLabelContext(req, req.params.unitId);
+    return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({ context }));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function queueLabelSelectionsForUnit({ jobId, context, selections, printerId, printer }) {
+  const content = labelPrintingService.buildUnitLabelContent(context.unit, context.lot);
+  const failures = [];
+  let totalQueued = 0;
+  let successfulTemplates = 0;
+
+  for (const selection of selections) {
+    const descriptor = selection.option;
+    const template = descriptor.template || null;
+    const itemId = await labelPrintHistoryModel.createPrintJobItem({
+      jobId,
+      unitId: context.unit.unitId,
+      lotId: context.unit.lotId,
+      labelTemplateId: descriptor.libraryTemplateId,
+      unitLabel: content.primaryLabel,
+      lotName: content.lotName,
+      templateName: descriptor.name,
+      templateCategoryCode: descriptor.categoryCode,
+      templateRevision: template?.revision || 1,
+      configSha256: descriptor.configSha256,
+      copiesRequested: selection.quantity
+    });
+    const attemptId = await labelPrintHistoryModel.beginPrintAttempt({
+      itemId,
+      attemptNumber: 1,
+      printer
+    });
+
+    try {
+      const result = await labelLibraryPrintingService.printDescriptor({
+        descriptor,
+        unit: context.unit,
+        lot: context.lot,
+        printerId,
+        copies: selection.quantity
+      });
+      totalQueued += result.copies;
+      successfulTemplates += 1;
+      try {
+        await labelPrintHistoryModel.completePrintAttempt({
+          attemptId,
+          status: 'queued',
+          copiesSubmitted: result.copies,
+          requestIds: result.requestIds
+        });
+        await labelPrintHistoryModel.completePrintItem({
+          itemId,
+          labelTemplateId: descriptor.libraryTemplateId,
+          copiesQueued: result.copies,
+          status: 'queued'
+        });
+      } catch (historyError) {
+        console.warn('Label print history completion failed after CUPS accepted the job:', historyError.message);
+      }
+    } catch (error) {
+      const copiesSubmitted = Math.max(0, Number(error.copiesSubmitted) || 0);
+      const requestIds = Array.isArray(error.requestIds) ? error.requestIds : [];
+      totalQueued += copiesSubmitted;
+      const partial = copiesSubmitted > 0;
+      const detail = partial
+        ? `${descriptor.name}: ${copiesSubmitted} of ${selection.quantity} copies queued before an error: ${error.message}`
+        : `${descriptor.name}: ${error.message || 'The label could not be queued.'}`;
+      failures.push(detail);
+      try {
+        await labelPrintHistoryModel.completePrintAttempt({
+          attemptId,
+          status: partial ? 'partial' : 'failed',
+          copiesSubmitted,
+          requestIds,
+          failureMessage: error.message
+        });
+        await labelPrintHistoryModel.completePrintItem({
+          itemId,
+          labelTemplateId: descriptor.libraryTemplateId,
+          copiesQueued: copiesSubmitted,
+          status: partial ? 'partial' : 'failed',
+          failureMessage: error.message
+        });
+      } catch (historyError) {
+        console.warn('Label print history failure recording failed:', historyError.message);
+      }
+    }
+  }
+
+  return Object.freeze({
+    unitId: Number(context.unit.unitId),
+    unitLabel: content.primaryLabel,
+    totalQueued,
+    successfulTemplates,
+    failures: Object.freeze(failures)
+  });
+}
+
+async function printTechUnitLabel(req, res, next) {
+  let context = null;
+  let printJob = null;
+  const printerId = String(req.body && req.body.printerId || '').trim();
+
+  try {
+    context = await getTechUnitPrintLabelContext(req, req.params.unitId);
+    const templateSet = context.unit
+      ? await labelLibraryPrintingService.getUnitPrintTemplateSet(context.unit.lotId)
+      : { templates: [], source: { type: 'none' }, isCompatibilityFallback: false };
+    const selectionState = buildLabelPrintSelectionState(req.body || {}, templateSet.templates);
+    const errors = [...context.errorMessages];
+
+    const printer = labelPrintingService.LABEL_PRINTERS.find((candidate) => candidate.id === printerId) || null;
+    if (!printer) errors.push('Select an available label printer.');
+
+    let selections = [];
+    try {
+      selections = normalizeUnitLabelPrintSelection(
+        req.body || {},
+        templateSet.templates,
+        labelPrintingService.MAX_LABEL_COPIES
+      );
+    } catch (error) {
+      if (error instanceof LabelPrintSelectionError) errors.push(...error.messages);
+      else throw error;
+    }
+
+    if (errors.length > 0) {
+      return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({
+        context,
+        printerId,
+        templateSet,
+        selectionState,
+        errorMessages: errors.filter((message) => !context.errorMessages.includes(message))
+      }));
+    }
+
+    printJob = await labelPrintHistoryModel.beginPrintJob({
+      actorUserId: req.currentUser.user_id,
+      source: 'single'
+    });
+
+    const queueResult = await queueLabelSelectionsForUnit({
+      jobId: printJob.jobId,
+      context,
+      selections,
+      printerId,
+      printer
+    });
+    const failures = [...queueResult.failures];
+    const totalQueued = queueResult.totalQueued;
+    const successfulTemplates = queueResult.successfulTemplates;
+
+    const jobStatus = failures.length === 0 ? 'queued' : totalQueued > 0 ? 'partial' : 'failed';
+    try {
+      await labelPrintHistoryModel.completePrintJob({
+        jobId: printJob.jobId,
+        status: jobStatus,
+        failureMessage: failures.length ? failures.join('\n') : null
+      });
+    } catch (historyError) {
+      console.warn('Label print job finalization failed:', historyError.message);
+    }
+
+    if (isHtmxRequest(req) && totalQueued > 0) res.set('HX-Trigger', 'unit-label-queued');
+
+    const successMessage = totalQueued > 0
+      ? `${totalQueued} label${totalQueued === 1 ? '' : 's'} queued to ${printer.label}${successfulTemplates > 1 ? ` across ${successfulTemplates} templates` : ''}.`
+      : '';
+
+    return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({
+      context,
+      printerId,
+      templateSet,
+      selectionState,
+      successMessage,
+      errorMessages: failures
+    }));
+  } catch (error) {
+    if (printJob) {
+      try {
+        await labelPrintHistoryModel.completePrintJob({
+          jobId: printJob.jobId,
+          status: 'failed',
+          failureMessage: error.message || 'The label print job failed.'
+        });
+      } catch (historyError) {
+        console.warn('Label print job failure finalization failed:', historyError.message);
+      }
+    }
+    if (!context) return next(error);
+
+    try {
+      const templateSet = context.unit
+        ? await labelLibraryPrintingService.getUnitPrintTemplateSet(context.unit.lotId)
+        : { templates: [], source: { type: 'none' }, isCompatibilityFallback: false };
+      return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({
+        context,
+        printerId,
+        templateSet,
+        selectionState: buildLabelPrintSelectionState(req.body || {}, templateSet.templates),
+        errorMessages: [error.message || 'The label could not be queued for printing.']
+      }));
+    } catch (renderError) {
+      return next(renderError);
+    }
+  }
+}
+
+
+function extractRequestedBulkUnitIds(body = {}, allowedUnitIds = []) {
+  const allowed = new Set((Array.isArray(allowedUnitIds) ? allowedUnitIds : []).map(Number));
+  const raw = Array.isArray(body.unitId) ? body.unitId : body.unitId ? [body.unitId] : [];
+  return [...new Set(raw.map(normalizePositiveInteger).filter((unitId) => unitId && allowed.has(unitId)))];
+}
+
+async function getTechUnitsBulkPrintLabelContext(req) {
+  const filters = getFiltersFromRequest(req);
+  const selectedLotId = normalizePositiveInteger(filters.lotId);
+  const errorMessages = [];
+
+  if (!selectedLotId) {
+    errorMessages.push('Select one specific Lot in the Units Browser before using bulk label printing.');
+  }
+  if (filters.lotScope === 'descendants') {
+    errorMessages.push('Turn off Include Descendants before bulk printing so every selected Unit uses the same effective Lot label set.');
+  }
+  if (filters.unitState === 'parked') {
+    errorMessages.push('Bulk label printing is available only for Active Units.');
+  }
+
+  const lot = selectedLotId ? await lotModel.getLotById(selectedLotId) : null;
+  if (selectedLotId && !lot) errorMessages.push('The selected Lot could not be found.');
+
+  const result = errorMessages.length === 0 ? await buildTechUnitsResult(filters) : null;
+  const effectiveFilters = result?.filters || filters;
+  const units = result && Array.isArray(result.units) ? result.units : [];
+  const candidates = units.map((unit) => {
+    let ineligibleReason = '';
+    if (unit.isParked) ineligibleReason = 'Parked';
+    else if (!unit.latestWorkCompletion) ineligibleReason = 'Not completed';
+
+    return Object.freeze({
+      unitId: Number(unit.unitId),
+      assetTag: String(unit.assetTag || '').trim() || `Unit #${unit.unitId}`,
+      lotName: String(unit.lotName || lot?.lot_name || '').trim(),
+      assignedToName: String(unit.assignedToName || '').trim() || 'Unassigned',
+      completedAt: unit.latestWorkCompletion?.completedAt || null,
+      eligible: !ineligibleReason,
+      ineligibleReason,
+      rawUnit: unit
+    });
+  });
+
+  return {
+    filters: effectiveFilters,
+    lot,
+    result,
+    candidates,
+    eligibleUnitIds: candidates.filter((candidate) => candidate.eligible).map((candidate) => candidate.unitId),
+    errorMessages
+  };
+}
+
+async function buildTechUnitsBulkPrintLabelModalView({
+  context,
+  printerId = '',
+  templateSet = null,
+  selectionState = null,
+  selectedUnitIds = null,
+  successMessage = '',
+  errorMessages = [],
+  printResults = []
+} = {}) {
+  const printers = labelPrintingService.LABEL_PRINTERS;
+  const selectedPrinterId = printers.some((printer) => printer.id === String(printerId || '').trim())
+    ? String(printerId).trim()
+    : (printers[0] ? printers[0].id : '');
+  const resolvedTemplateSet = templateSet || (context?.lot
+    ? await labelLibraryPrintingService.getUnitPrintTemplateSet(context.lot.lot_id || context.lot.lotId)
+    : { source: { type: 'none', lotId: null, lotName: null }, isCompatibilityFallback: false, templates: [] });
+  const allowedUnitIds = Array.isArray(context?.eligibleUnitIds) ? context.eligibleUnitIds : [];
+  const effectiveSelectedUnitIds = Array.isArray(selectedUnitIds)
+    ? selectedUnitIds.filter((unitId) => allowedUnitIds.includes(Number(unitId))).map(Number)
+    : allowedUnitIds.slice();
+  const selectedUnitIdSet = new Set(effectiveSelectedUnitIds);
+  const sampleCandidate = (context?.candidates || []).find((candidate) => selectedUnitIdSet.has(candidate.unitId))
+    || (context?.candidates || []).find((candidate) => candidate.eligible)
+    || null;
+  const templateOptions = await buildLabelPrintTemplateOptions({
+    templateSet: resolvedTemplateSet,
+    selectionState,
+    unit: sampleCandidate ? sampleCandidate.rawUnit : null,
+    lot: context?.lot || null
+  });
+  const candidates = (context?.candidates || []).map(({ rawUnit, ...candidate }) => ({
+    ...candidate,
+    selected: candidate.eligible && selectedUnitIdSet.has(candidate.unitId)
+  }));
+  const allErrors = [
+    ...(context && Array.isArray(context.errorMessages) ? context.errorMessages : []),
+    ...(Array.isArray(errorMessages) ? errorMessages : [])
+  ].filter(Boolean);
+  const lotId = context?.lot ? Number(context.lot.lot_id || context.lot.lotId) : null;
+
+  return {
+    lot: context?.lot || null,
+    candidates,
+    eligibleCount: allowedUnitIds.length,
+    selectedCount: effectiveSelectedUnitIds.length,
+    printers,
+    templateOptions,
+    selectedPrinterId,
+    maxCopies: labelPrintingService.MAX_LABEL_COPIES,
+    templateSetNotice: buildLabelTemplateSetNotice(resolvedTemplateSet, lotId),
+    bulkPostUrl: buildTechUnitsBulkPrintPostUrl(context?.filters || {}),
+    pagination: context?.result?.pagination || null,
+    successMessage: String(successMessage || ''),
+    errorMessages: allErrors,
+    printResults: Array.isArray(printResults) ? printResults : []
+  };
+}
+
+async function renderTechUnitsBulkPrintLabelModal(req, res, next) {
+  try {
+    const context = await getTechUnitsBulkPrintLabelContext(req);
+    return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({ context }));
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function printTechUnitsBulkLabels(req, res, next) {
+  let context = null;
+  let printJob = null;
+  const printerId = String(req.body && req.body.printerId || '').trim();
+
+  try {
+    context = await getTechUnitsBulkPrintLabelContext(req);
+    const lotId = context?.lot ? Number(context.lot.lot_id || context.lot.lotId) : null;
+    const templateSet = lotId
+      ? await labelLibraryPrintingService.getUnitPrintTemplateSet(lotId)
+      : { templates: [], source: { type: 'none' }, isCompatibilityFallback: false };
+    const selectionState = buildLabelPrintSelectionState(req.body || {}, templateSet.templates);
+    const errors = [...context.errorMessages];
+    const printer = labelPrintingService.LABEL_PRINTERS.find((candidate) => candidate.id === printerId) || null;
+    if (!printer) errors.push('Select an available label printer.');
+
+    let selectedUnitIds = extractRequestedBulkUnitIds(req.body || {}, context.eligibleUnitIds);
+    try {
+      selectedUnitIds = normalizeSelectedUnitIds(req.body || {}, context.eligibleUnitIds);
+    } catch (error) {
+      if (error instanceof BulkLabelPrintSelectionError) errors.push(...error.messages);
+      else throw error;
+    }
+
+    let selections = [];
+    try {
+      selections = normalizeUnitLabelPrintSelection(
+        req.body || {},
+        templateSet.templates,
+        labelPrintingService.MAX_LABEL_COPIES
+      );
+    } catch (error) {
+      if (error instanceof LabelPrintSelectionError) errors.push(...error.messages);
+      else throw error;
+    }
+
+    const validatedContexts = [];
+    if (errors.length === 0) {
+      for (const unitId of selectedUnitIds) {
+        const unitContext = await getTechUnitPrintLabelContext(req, unitId);
+        const unitErrors = [...unitContext.errorMessages];
+        if (unitContext.unit && Number(unitContext.unit.lotId) !== Number(lotId)) {
+          unitErrors.push('This Unit is no longer in the selected Lot.');
+        }
+        if (unitErrors.length > 0) {
+          const unitLabel = unitContext.unit?.assetTag || `Unit #${unitId}`;
+          errors.push(`${unitLabel}: ${unitErrors.join(' ')}`);
+        } else {
+          validatedContexts.push(unitContext);
+        }
+      }
+    }
+
+    if (errors.length > 0) {
+      return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({
+        context,
+        printerId,
+        templateSet,
+        selectionState,
+        selectedUnitIds,
+        errorMessages: errors.filter((message) => !context.errorMessages.includes(message))
+      }));
+    }
+
+    printJob = await labelPrintHistoryModel.beginPrintJob({
+      actorUserId: req.currentUser.user_id,
+      source: 'bulk'
+    });
+
+    const printResults = [];
+    const failures = [];
+    let totalQueued = 0;
+    let successfulUnits = 0;
+
+    for (const unitContext of validatedContexts) {
+      const unitResult = await queueLabelSelectionsForUnit({
+        jobId: printJob.jobId,
+        context: unitContext,
+        selections,
+        printerId,
+        printer
+      });
+      totalQueued += unitResult.totalQueued;
+      if (unitResult.failures.length === 0) successfulUnits += 1;
+      const status = unitResult.failures.length === 0
+        ? 'queued'
+        : unitResult.totalQueued > 0 ? 'partial' : 'failed';
+      const rowFailures = unitResult.failures.map((message) => `${unitResult.unitLabel}: ${message}`);
+      failures.push(...rowFailures);
+      printResults.push(Object.freeze({
+        unitId: unitResult.unitId,
+        unitLabel: unitResult.unitLabel,
+        status,
+        copiesQueued: unitResult.totalQueued,
+        messages: Object.freeze(rowFailures)
+      }));
+    }
+
+    const jobStatus = failures.length === 0 ? 'queued' : totalQueued > 0 ? 'partial' : 'failed';
+    try {
+      await labelPrintHistoryModel.completePrintJob({
+        jobId: printJob.jobId,
+        status: jobStatus,
+        failureMessage: failures.length ? failures.join('\n') : null
+      });
+    } catch (historyError) {
+      console.warn('Bulk label print job finalization failed:', historyError.message);
+    }
+
+    if (isHtmxRequest(req) && totalQueued > 0) res.set('HX-Trigger', 'unit-label-queued');
+    const successMessage = totalQueued > 0
+      ? `${totalQueued} label${totalQueued === 1 ? '' : 's'} queued to ${printer.label} for ${successfulUnits} of ${validatedContexts.length} selected Unit${validatedContexts.length === 1 ? '' : 's'}.`
+      : '';
+
+    return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({
+      context,
+      printerId,
+      templateSet,
+      selectionState,
+      selectedUnitIds,
+      successMessage,
+      errorMessages: failures,
+      printResults
+    }));
+  } catch (error) {
+    if (printJob) {
+      try {
+        await labelPrintHistoryModel.completePrintJob({
+          jobId: printJob.jobId,
+          status: 'failed',
+          failureMessage: error.message || 'The bulk label print job failed.'
+        });
+      } catch (historyError) {
+        console.warn('Bulk label print job failure finalization failed:', historyError.message);
+      }
+    }
+    if (!context) return next(error);
+
+    try {
+      const lotId = context?.lot ? Number(context.lot.lot_id || context.lot.lotId) : null;
+      const templateSet = lotId
+        ? await labelLibraryPrintingService.getUnitPrintTemplateSet(lotId)
+        : { templates: [], source: { type: 'none' }, isCompatibilityFallback: false };
+      return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({
+        context,
+        printerId,
+        templateSet,
+        selectionState: buildLabelPrintSelectionState(req.body || {}, templateSet.templates),
+        selectedUnitIds: extractRequestedBulkUnitIds(req.body || {}, context.eligibleUnitIds),
+        errorMessages: [error.message || 'The bulk label print job could not be queued.']
+      }));
+    } catch (renderError) {
+      return next(renderError);
+    }
+  }
+}
+
 async function renderCompleteTechUnitWorkModal(req, res, next) {
   try {
     const preview = await techUnitModel.getUnitWorkCompletionPreview(req.params.unitId);
@@ -3724,7 +4421,8 @@ async function completeTechUnitWork(req, res, next) {
         ? 'Unit completion recorded from the Tech Unit Browser.'
         : 'Unit completion recorded by Tech Lead+ for the technician assigned to the Unit.',
       actorRoleCodes: getCurrentRoleCodes(req),
-      actorUserId: req.currentUser ? req.currentUser.user_id : null
+      actorUserId: req.currentUser ? req.currentUser.user_id : null,
+      completionRequirementOverrideReason: req.body ? req.body.completionRequirementOverrideReason : ''
     });
 
     publishUnitBrowserChange({ unitId: preview.unitId, changeType: 'work-completed' });
@@ -3757,6 +4455,7 @@ async function completeTechUnitWork(req, res, next) {
           preview,
           req,
           selectedCompletedByUserId: req.body ? req.body.completedByUserId : null,
+          completionRequirementOverrideReason: req.body ? req.body.completionRequirementOverrideReason : '',
           errorMessages: [error.message || 'Unit completion could not be recorded.']
         })
       );
@@ -4554,7 +5253,6 @@ async function renderEditTechUnitModal(req, res, next) {
           defaultCommentTypeConfigValueId: '',
           overallGradeOptions: [],
           absoluteStatusOptions: [],
-          physicalCameraStatusOptions: [],
           touchscreenStatusOptions: [],
           keyboardLanguageOptions: [],
           diagnosticsStatusOptions: [],
@@ -4733,7 +5431,6 @@ async function updateTechUnitModal(req, res, next) {
           defaultCommentTypeConfigValueId: '',
           overallGradeOptions: [],
           absoluteStatusOptions: [],
-          physicalCameraStatusOptions: [],
           touchscreenStatusOptions: [],
           keyboardLanguageOptions: [],
           diagnosticsStatusOptions: [],
@@ -4858,6 +5555,10 @@ module.exports = {
   revertQcReviewDirectly,
   renderTechUnitHistoryPanel,
   renderMyUnitWeightPanel,
+  renderTechUnitPrintLabelModal,
+  printTechUnitLabel,
+  renderTechUnitsBulkPrintLabelModal,
+  printTechUnitsBulkLabels,
   renderCompleteTechUnitWorkModal,
   completeTechUnitWork,
   renderReverseTechUnitCompletionModal,

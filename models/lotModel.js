@@ -36,6 +36,17 @@ const {
   auditLotHierarchy
 } = require('../services/lotHierarchyIntegrity');
 const lotUnitBrowserLayoutModel = require('./lotUnitBrowserLayoutModel');
+const labelLibraryModel = require('./labelLibraryModel');
+const {
+  TOOL_POLICY_DEFAULTS,
+  TOOL_POLICY_FIELDS,
+  applyDirectPolicy,
+  directPolicyFromFormData,
+  resolveLotToolPolicy,
+  toStoredValue,
+  toFormValue,
+  validateEffectivePolicy
+} = require('../services/lotToolPolicy');
 
 const INSPECTABLE_TABLES = [
   'lots',
@@ -48,6 +59,8 @@ const INSPECTABLE_TABLES = [
 ];
 
 const LOT_OWNED_CONFIGURATION_TABLES = [
+  'lot_label_templates',
+  'lot_label_template_sets',
   'lot_unit_browser_columns',
   'lot_unit_browser_layouts',
   'lot_requirement_inheritance_suppressions',
@@ -360,7 +373,8 @@ async function getLotSchemaCapabilities() {
     hasDuplicateUnitAssumption: hasColumn(lotColumns, 'allow_duplicate_unit_assumption'),
     hasStartNewProductionCycleOnMove: hasColumn(lotColumns, 'start_new_production_cycle_on_move'),
     hasGenerateAmazonAssetTag: hasColumn(lotColumns, 'generate_amazon_asset_tag'),
-    hasQcRequired: hasColumn(lotColumns, 'qc_required')
+    hasQcRequired: hasColumn(lotColumns, 'qc_required'),
+    hasToolPolicy: Object.values(TOOL_POLICY_FIELDS).every((definition) => hasColumn(lotColumns, definition.column))
   };
 }
 
@@ -543,6 +557,11 @@ async function listLots(options = {}) {
     'allow_duplicate_unit_assumption',
     '0'
   );
+
+  const toolPolicySelects = Object.fromEntries(Object.entries(TOOL_POLICY_FIELDS).map(([key, definition]) => [
+    key,
+    selectExpression('l', lotColumns, [definition.column], definition.column, 'NULL')
+  ]));
 
   const startNewProductionCycleOnMoveSelect = selectExpression(
     'l',
@@ -746,6 +765,11 @@ async function listLots(options = {}) {
       ${isClosedSelect},
       ${isAssignableSelect},
       ${allowDuplicateUnitAssumptionSelect},
+      ${toolPolicySelects.allowManualCreateUpdate},
+      ${toolPolicySelects.allowScanTools},
+      ${toolPolicySelects.allowTechTools},
+      ${toolPolicySelects.requireScanToolsBeforeCompletion},
+      ${toolPolicySelects.requireTechToolsBeforeCompletion},
       ${startNewProductionCycleOnMoveSelect},
       ${generateAmazonAssetTagSelect},
       ${qcRequiredSelect},
@@ -867,6 +891,60 @@ async function getLotSummary() {
   };
 }
 
+async function assertValidLotToolPolicy(formData, parentLotId, connection = pool, lotId = null) {
+  const lotColumns = await getColumnSet('lots');
+  if (!Object.values(TOOL_POLICY_FIELDS).every((definition) => hasColumn(lotColumns, definition.column))) return;
+
+  const rows = await listLots({ includeHidden: true, connection });
+  const directPolicy = directPolicyFromFormData(formData);
+  const inheritedPolicy = parentLotId
+    ? resolveLotToolPolicy(rows, parentLotId)
+    : TOOL_POLICY_DEFAULTS;
+  const effectivePolicy = applyDirectPolicy(directPolicy, inheritedPolicy);
+  const directErrors = validateEffectivePolicy(effectivePolicy);
+  if (directErrors.length) {
+    const error = new Error(directErrors.join(' '));
+    error.code = 'BWT_LOT_TOOL_POLICY_INVALID';
+    throw error;
+  }
+
+  const safeLotId = Number(lotId);
+  if (!Number.isSafeInteger(safeLotId) || safeLotId <= 0) return;
+
+  const prospectiveRows = rows.map((row) => Number(row.lot_id) === safeLotId
+    ? {
+      ...row,
+      parent_lot_id: parentLotId || null,
+      ...Object.fromEntries(Object.entries(TOOL_POLICY_FIELDS).map(([key, definition]) => [
+        definition.column,
+        toStoredValue(directPolicy[key])
+      ]))
+    }
+    : row);
+  const rowMap = new Map(prospectiveRows.map((row) => [Number(row.lot_id), row]));
+  const affectedRows = prospectiveRows.filter((row) => {
+    let current = row;
+    const visited = new Set();
+    while (current) {
+      const currentId = Number(current.lot_id);
+      if (!Number.isSafeInteger(currentId) || currentId <= 0 || visited.has(currentId)) return false;
+      if (currentId === safeLotId) return true;
+      visited.add(currentId);
+      const nextParentId = Number(current.parent_lot_id);
+      current = Number.isSafeInteger(nextParentId) && nextParentId > 0 ? rowMap.get(nextParentId) || null : null;
+    }
+    return false;
+  });
+
+  for (const row of affectedRows) {
+    const errors = validateEffectivePolicy(resolveLotToolPolicy(prospectiveRows, row.lot_id));
+    if (!errors.length) continue;
+    const error = new Error(`Tool policy would make Lot ${row.lot_name || row.name || row.lot_id} invalid. ${errors.join(' ')}`);
+    error.code = 'BWT_LOT_TOOL_POLICY_INVALID';
+    throw error;
+  }
+}
+
 async function createLot(formData, currentUserId, options = {}) {
   const db = options.connection || pool;
   const lotColumns = await getColumnSet('lots');
@@ -917,10 +995,16 @@ async function createLot(formData, currentUserId, options = {}) {
   const notes = String(formData.notes || '').trim() || null;
   const labelFormat = String(formData.labelFormat || '').trim() || null;
   const allowDuplicateUnitAssumption = formData.allowDuplicateUnitAssumption === '1' ? 1 : 0;
+  const toolPolicyValues = Object.fromEntries(Object.entries(TOOL_POLICY_FIELDS).map(([key, definition]) => [
+    definition.column,
+    toStoredValue(formData[key])
+  ]));
   const startNewProductionCycleOnMove = formData.startNewProductionCycleOnMove === '1' ? 1 : 0;
   const generateAmazonAssetTag = formData.generateAmazonAssetTag === '1' ? 1 : 0;
   const qcRequired = formData.qcRequired === '1' ? 1 : 0;
   const isAssignable = formData.isAssignable === '1' ? 1 : 0;
+
+  await assertValidLotToolPolicy(formData, parentLotId, db);
 
   if (hasColumn(lotColumns, 'lot_number')) {
     const nextLotNumber = await generateNextLotNumber(db);
@@ -961,6 +1045,7 @@ async function createLot(formData, currentUserId, options = {}) {
   addFirstAvailableColumn(['notes', 'note'], notes);
   addColumn('label_format', labelFormat);
   addColumn('allow_duplicate_unit_assumption', allowDuplicateUnitAssumption);
+  for (const [columnName, value] of Object.entries(toolPolicyValues)) addColumn(columnName, value);
   addColumn('start_new_production_cycle_on_move', startNewProductionCycleOnMove);
   addColumn('generate_amazon_asset_tag', generateAmazonAssetTag);
   addColumn('qc_required', qcRequired);
@@ -1040,10 +1125,16 @@ async function updateLot(lotId, formData, currentUserId) {
   const notes = String(formData.notes || '').trim() || null;
   const labelFormat = String(formData.labelFormat || '').trim() || null;
   const allowDuplicateUnitAssumption = formData.allowDuplicateUnitAssumption === '1' ? 1 : 0;
+  const toolPolicyValues = Object.fromEntries(Object.entries(TOOL_POLICY_FIELDS).map(([key, definition]) => [
+    definition.column,
+    toStoredValue(formData[key])
+  ]));
   const startNewProductionCycleOnMove = formData.startNewProductionCycleOnMove === '1' ? 1 : 0;
   const generateAmazonAssetTag = formData.generateAmazonAssetTag === '1' ? 1 : 0;
   const qcRequired = formData.qcRequired === '1' ? 1 : 0;
   const isAssignable = formData.isAssignable === '1' ? 1 : 0;
+
+  await assertValidLotToolPolicy(formData, parentLotId, pool, lotId);
 
   addFirstAvailableColumn(['lot_name', 'name', 'title'], lotName);
   addColumn('parent_lot_id', parentLotId);
@@ -1057,6 +1148,7 @@ async function updateLot(lotId, formData, currentUserId) {
   addFirstAvailableColumn(['notes', 'note'], notes);
   addColumn('label_format', labelFormat);
   addColumn('allow_duplicate_unit_assumption', allowDuplicateUnitAssumption);
+  for (const [columnName, value] of Object.entries(toolPolicyValues)) addColumn(columnName, value);
   addColumn('start_new_production_cycle_on_move', startNewProductionCycleOnMove);
   addColumn('generate_amazon_asset_tag', generateAmazonAssetTag);
   addColumn('qc_required', qcRequired);
@@ -2019,6 +2111,11 @@ function buildDuplicatedLotFormData(sourceLot, { newLotName, parentLotId }) {
     objectives: sourceLot.objectives || '',
     notes: sourceLot.notes || '',
     allowDuplicateUnitAssumption: Number(sourceLot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0',
+    allowManualCreateUpdate: toFormValue(sourceLot.allow_manual_create_update),
+    allowScanTools: toFormValue(sourceLot.allow_scantools),
+    allowTechTools: toFormValue(sourceLot.allow_techtools),
+    requireScanToolsBeforeCompletion: toFormValue(sourceLot.require_scantools_before_completion),
+    requireTechToolsBeforeCompletion: toFormValue(sourceLot.require_techtools_before_completion),
     startNewProductionCycleOnMove: Number(sourceLot.start_new_production_cycle_on_move || 0) === 1 ? '1' : '0',
     generateAmazonAssetTag: Number(sourceLot.generate_amazon_asset_tag || 0) === 1 ? '1' : '0',
     qcRequired: Number(sourceLot.qc_required ?? 1) === 1 ? '1' : '0',
@@ -2198,6 +2295,15 @@ async function duplicateLot(sourceLotId, duplicationData, currentUserId) {
       connection
     });
 
+
+    const labelTemplateSetCopy = await labelLibraryModel.copyLotTemplateSetForDuplicate({
+      sourceLotId: normalizedSourceLotId,
+      targetLotId,
+      inheritanceMode,
+      currentUserId,
+      connection
+    });
+
     if (inheritanceMode === 'preserve_source') {
       const targetEffectiveUnitFormProfile = await lotUnitFormProfileModel.getEffectiveUnitFormProfileForLot(
         targetLotId,
@@ -2218,7 +2324,8 @@ async function duplicateLot(sourceLotId, duplicationData, currentUserId) {
       inheritanceMode,
       copiedRequirementCount: requirementCount,
       copiedUnitFormRuleCount: unitFormRulesToCopy.length,
-      copiedUnitBrowserLayout: unitBrowserLayoutCopy.targetHasDirectLayout
+      copiedUnitBrowserLayout: unitBrowserLayoutCopy.targetHasDirectLayout,
+      copiedLabelTemplateSet: labelTemplateSetCopy.targetHasDirectSet
     };
   } catch (error) {
     await connection.rollback();

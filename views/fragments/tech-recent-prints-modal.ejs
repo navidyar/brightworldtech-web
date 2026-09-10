@@ -1,0 +1,84 @@
+<%
+  const safeSets = Array.isArray(sets) ? sets : [];
+  const safeSettings = settings || { recentPrintsMinutes: 15 };
+  const statusLabel = (status) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'queued') return 'Queued';
+    if (normalized === 'partial') return 'Partial';
+    if (normalized === 'failed') return 'Failed';
+    if (normalized === 'preparing') return 'Preparing';
+    return status || 'Unknown';
+  };
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel tech-recent-prints-modal" role="dialog" aria-modal="true" aria-labelledby="tech-recent-prints-title">
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">Label Printing</p>
+        <h2 id="tech-recent-prints-title">Recent Prints</h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </div>
+
+    <div class="modal-body">
+      <p class="field-hint">Showing your print activity from the last <%= safeSettings.recentPrintsMinutes %> minute<%= safeSettings.recentPrintsMinutes === 1 ? '' : 's' %>. “Queued” confirms CUPS accepted the job; it does not by itself confirm the label physically exited the printer.</p>
+
+      <% if (safeSets.length === 0) { %>
+        <div class="message info"><p>No recent label prints are in the current display window.</p></div>
+      <% } %>
+
+      <div class="tech-recent-print-set-list">
+        <% safeSets.forEach((set, setIndex) => { %>
+          <% const itemCount = set.jobs.reduce((count, job) => count + job.items.length, 0); %>
+          <section class="tech-recent-print-set <%= setIndex > 0 ? 'tech-recent-print-set--separated' : '' %>">
+            <div class="tech-recent-print-set-heading">
+              <div>
+                <strong><%= set.groupingKind === 'batch' ? 'Bulk Print Set' : 'Print Set' %></strong>
+                <small><%= formatDateTime(set.startedAt) %> · <%= itemCount %> print entr<%= itemCount === 1 ? 'y' : 'ies' %></small>
+              </div>
+            </div>
+
+            <div class="tech-recent-print-items">
+              <% set.jobs.forEach((job) => { %>
+                <% job.items.forEach((item) => { %>
+                  <% const latestAttempt = item.attempts.length ? item.attempts[item.attempts.length - 1] : null; %>
+                  <article class="tech-recent-print-item">
+                    <div class="tech-recent-print-item-main">
+                      <div>
+                        <strong><%= item.unitLabel || 'Unit' %></strong>
+                        <small><%= item.templateName %><% if (item.lotName) { %> · <%= item.lotName %><% } %></small>
+                      </div>
+                      <span class="pill <%= item.status === 'queued' ? 'good' : item.status === 'failed' ? 'danger' : 'slate' %>"><%= statusLabel(item.status) %></span>
+                    </div>
+
+                    <dl class="tech-recent-print-detail-list">
+                      <div><dt>Copies</dt><dd><%= item.copiesQueued %> queued / <%= item.copiesRequested %> requested</dd></div>
+                      <div><dt>Printer</dt><dd><%= latestAttempt?.printerLabel || '—' %><% if (latestAttempt?.printerLocation) { %> · <%= latestAttempt.printerLocation %><% } %></dd></div>
+                      <div><dt>Queue</dt><dd><%= latestAttempt?.cupsQueue || '—' %></dd></div>
+                    </dl>
+
+                    <% if (item.attempts.length > 1) { %>
+                      <div class="tech-recent-print-attempts">
+                        <% item.attempts.forEach((attempt) => { %>
+                          <small>Attempt <%= attempt.attemptNumber %>: <%= attempt.printerLabel || 'Printer' %><% if (attempt.printerLocation) { %> · <%= attempt.printerLocation %><% } %> — <%= statusLabel(attempt.status) %></small>
+                        <% }) %>
+                      </div>
+                    <% } %>
+
+                    <% if (item.failureMessage || latestAttempt?.failureMessage) { %>
+                      <div class="message error tech-recent-print-error"><p><%= item.failureMessage || latestAttempt.failureMessage %></p></div>
+                    <% } %>
+                  </article>
+                <% }) %>
+              <% }) %>
+            </div>
+          </section>
+        <% }) %>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="primary-button" data-modal-close>Close</button>
+      </div>
+    </div>
+  </section>
+</div>

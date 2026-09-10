@@ -513,7 +513,6 @@ function buildUnitSnapshots({
           suffix: '%'
         }),
         absolute_status: createCatalogActual({ ids: [baseRow.absolute_status_config_value_id], labels: [baseRow.absolute_status_label], sourceLabel: 'Absolute status' }),
-        physical_camera_status: createCatalogActual({ ids: [baseRow.physical_camera_status_config_value_id], labels: [baseRow.physical_camera_status_label], sourceLabel: 'Physical camera status' }),
         touchscreen_status: createCatalogActual({ ids: [baseRow.touchscreen_status_config_value_id], labels: [baseRow.touchscreen_status_label], sourceLabel: 'Touchscreen status' }),
         keyboard_language: createCatalogActual({ ids: [baseRow.keyboard_language_config_value_id], labels: [baseRow.keyboard_language_label], sourceLabel: 'Keyboard language' }),
         complete_diagnostics: createCatalogActual({ ids: [baseRow.complete_diagnostics_status_config_value_id], labels: [baseRow.complete_diagnostics_status_label], sourceLabel: 'Complete diagnostics' }),

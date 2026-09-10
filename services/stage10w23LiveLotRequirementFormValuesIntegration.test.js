@@ -86,7 +86,6 @@ function formOptions() {
     manufacturers: [],
     unitModels: [],
     absoluteStatusOptions: [],
-    physicalCameraStatusOptions: [],
     touchscreenStatusOptions: [],
     keyboardLanguageOptions: [],
     diagnosticsStatusOptions: [],

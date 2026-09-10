@@ -47,6 +47,12 @@ const {
   formatBrowserCapacityGb,
   parseCapacitySearchTerm
 } = require('../services/unitCapacityPresentation');
+const { resolveLotToolPolicy } = require('../services/lotToolPolicy');
+const {
+  buildCompletionToolRequirementStatus,
+  evaluateCompletionToolRequirementEnforcement,
+  getMissingToolRequirementMessage
+} = require('../services/completionToolRequirementPolicy');
 
 const DEFAULT_UNIT_PAGE_SIZE = 50;
 const UNIT_PAGE_SIZE_OPTIONS = [50, 100, 250, 500];
@@ -970,6 +976,18 @@ function buildIdentifierEntries(formData, assetNumber = null) {
     });
   }
 
+  const systemUuid = normalizeIdentifierText(formData.systemUuid);
+  const normalizedSystemUuid = normalizeIdentifierComparableValue(systemUuid);
+
+  if (systemUuid && normalizedSystemUuid) {
+    entries.push({
+      typeCode: 'system_uuid',
+      value: systemUuid,
+      normalizedValue: normalizedSystemUuid,
+      isPrimary: false
+    });
+  }
+
   return entries;
 }
 
@@ -1210,6 +1228,7 @@ function getBlankUnitFormData(formOptions = null) {
     assetTag: '',
     unitSerialNumber: '',
     biosSerialNumber: '',
+    systemUuid: '',
     lotId: '',
     unitCategoryConfigValueId: '',
     currentUnitStatusConfigValueId: formOptions ? formOptions.defaultUnitStatusId : '',
@@ -1240,9 +1259,7 @@ function getBlankUnitFormData(formOptions = null) {
     previousMemoryModules: [],
     memoryModules: getBlankMemoryModuleRows(),
     previousStorageDevices: [],
-    storageDevices: getBlankStorageDeviceRows(),
-    hardwareNotes: '',
-    cosmeticNotes: ''
+    storageDevices: getBlankStorageDeviceRows()
   };
 }
 
@@ -1476,7 +1493,8 @@ async function getUnitIdentifierValue(unitId, typeCode) {
   const systemIdByType = {
     asset_tag: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_ASSET_TAG,
     unit_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL,
-    bios_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL
+    bios_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL,
+    system_uuid: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_SYSTEM_UUID
   };
   const configValueId = await getConfigValueIdBySystemId(systemIdByType[typeCode]);
   if (!configValueId) return '';
@@ -1502,6 +1520,7 @@ async function getUnitFormDataById(unitId, formOptions = null) {
   const [
     unitSerialNumber,
     biosSerialNumber,
+    systemUuid,
     previousMemoryModules,
     memoryModules,
     previousStorageDevices,
@@ -1509,6 +1528,7 @@ async function getUnitFormDataById(unitId, formOptions = null) {
   ] = await Promise.all([
     getUnitIdentifierValue(unitId, 'unit_serial_number'),
     getUnitIdentifierValue(unitId, 'bios_serial_number'),
+    getUnitIdentifierValue(unitId, 'system_uuid'),
     listPreviousMemoryModulesForUnit(unitId),
     listCurrentMemoryModulesForUnit(unitId),
     listPreviousStorageDevicesForUnit(unitId),
@@ -1534,6 +1554,7 @@ async function getUnitFormDataById(unitId, formOptions = null) {
     assetTag: unit.asset_number ? getDisplayAssetTag(unit.asset_number) : '',
     unitSerialNumber: normalizeIdentifierText(unitSerialNumber) || '',
     biosSerialNumber: normalizeIdentifierText(biosSerialNumber) || '',
+    systemUuid: normalizeIdentifierText(systemUuid) || '',
     lotId: unit.lot_id ? String(unit.lot_id) : '',
     unitCategoryConfigValueId: unit.unit_category_config_value_id ? String(unit.unit_category_config_value_id) : '',
     currentUnitStatusConfigValueId: unit.current_unit_status_config_value_id
@@ -1564,8 +1585,6 @@ async function getUnitFormDataById(unitId, formOptions = null) {
     memoryModules,
     previousStorageDevices,
     storageDevices,
-    hardwareNotes: unit.hardware_notes || '',
-    cosmeticNotes: unit.cosmetic_notes || ''
   };
 }
 
@@ -2470,8 +2489,6 @@ async function listTechUnits(filters = {}) {
       }
 
       searchParts.push(
-        'u.hardware_notes LIKE ?',
-        'u.cosmetic_notes LIKE ?',
         'm.name LIKE ?',
         'um.model_name LIKE ?',
         'pm.model_code LIKE ?',
@@ -2484,7 +2501,7 @@ async function listTechUnits(filters = {}) {
         'cv_storage_type.label LIKE ?',
         'cv_os.label LIKE ?'
       );
-      searchParams.push(...Array(8).fill(likeSearch));
+      searchParams.push(...Array(6).fill(likeSearch));
       searchParams.push(`%${searchTerm.replace(/[^A-Za-z0-9]/g, '')}%`);
       searchParams.push(...Array(4).fill(likeSearch));
 
@@ -2780,8 +2797,6 @@ async function listTechUnits(filters = {}) {
         ? `${Number(row.battery_health_percent).toFixed(1)}%`
         : '—',
       specSummary: specParts.length > 0 ? specParts.join(' · ') : 'No specs entered yet',
-      hardwareNotes: row.hardware_notes || '',
-      cosmeticNotes: row.cosmetic_notes || '',
       createdAt: row.created_at,
       updatedAt: row.updated_at,
       completedAt: row.completed_at,
@@ -2842,7 +2857,8 @@ async function getIdentifierTypeId(typeCode, connection = pool) {
   const systemIdByType = {
     asset_tag: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_ASSET_TAG,
     unit_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL,
-    bios_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL
+    bios_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL,
+    system_uuid: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_SYSTEM_UUID
   };
   return getConfigValueIdBySystemId(systemIdByType[typeCode], connection);
 }
@@ -2851,7 +2867,8 @@ async function getIdentifierTypeMap(connection = pool) {
   const pairs = await Promise.all([
     ['asset_tag', SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_ASSET_TAG],
     ['unit_serial_number', SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL],
-    ['bios_serial_number', SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL]
+    ['bios_serial_number', SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL],
+    ['system_uuid', SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_SYSTEM_UUID]
   ].map(async ([key, systemId]) => [key, await getConfigValueIdBySystemId(systemId, connection)]));
   return new Map(pairs.filter(([, configValueId]) => configValueId));
 }
@@ -2898,6 +2915,7 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
     .filter(Boolean);
   const unitSerialTypeId = Number(typeMap.get('unit_serial_number') || 0);
   const biosSerialTypeId = Number(typeMap.get('bios_serial_number') || 0);
+  const systemUuidTypeId = Number(typeMap.get('system_uuid') || 0);
   const serialTypeCodes = new Set(['unit_serial_number', 'bios_serial_number']);
   const clauses = [];
   const params = [];
@@ -2941,7 +2959,20 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
         COALESCE(cv.label, cv.value, 'Identifier') AS identifier_type_label,
         u.asset_number,
         u.lot_id,
-        NULL AS lot_name,
+        l.name AS lot_name,
+        u.assigned_to_user_id,
+        assigned_user.username AS assigned_username,
+        assigned_user.first_name AS assigned_first_name,
+        assigned_user.last_name AS assigned_last_name,
+        assigned_user.email AS assigned_email,
+        u.current_unit_status_config_value_id,
+        COALESCE(unit_status.label, unit_status.value, '') AS current_unit_status_label,
+        COALESCE(u.is_parked, 0) AS is_parked,
+        COALESCE(u.is_archived, 0) AS is_archived,
+        u.ram_gb,
+        COALESCE(ram_type.label, ram_type.value, '') AS ram_type_label,
+        u.storage_gb,
+        COALESCE(storage_type.label, storage_type.value, '') AS storage_type_label,
         (
           SELECT ui_unit_serial.identifier_value
           FROM unit_identifiers ui_unit_serial
@@ -2958,6 +2989,14 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
           ORDER BY ui_bios_serial.unit_identifier_id DESC
           LIMIT 1
         ) AS bios_serial_number,
+        (
+          SELECT ui_uuid.identifier_value
+          FROM unit_identifiers ui_uuid
+          WHERE ui_uuid.unit_id = u.unit_id
+            AND ui_uuid.identifier_type_config_value_id = ${systemUuidTypeId}
+          ORDER BY ui_uuid.unit_identifier_id DESC
+          LIMIT 1
+        ) AS system_uuid,
         m.name AS manufacturer_label,
         um.model_name AS model_label,
         pb.name AS processor_brand_label,
@@ -2972,6 +3011,14 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
         ON u.unit_id = ui.unit_id
       LEFT JOIN lots l
         ON l.lot_id = u.lot_id
+      LEFT JOIN users assigned_user
+        ON assigned_user.user_id = u.assigned_to_user_id
+      LEFT JOIN config_values unit_status
+        ON unit_status.config_value_id = u.current_unit_status_config_value_id
+      LEFT JOIN config_values ram_type
+        ON ram_type.config_value_id = u.ram_type_config_value_id
+      LEFT JOIN config_values storage_type
+        ON storage_type.config_value_id = u.storage_type_config_value_id
       LEFT JOIN manufacturers m
         ON m.manufacturer_id = u.manufacturer_id
       LEFT JOIN unit_models um
@@ -2987,10 +3034,10 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
           WHEN 201 THEN 10
           WHEN 203 THEN 20
           WHEN 202 THEN 30
+          WHEN 205 THEN 40
           ELSE 999
         END,
         ui.unit_identifier_id DESC
-      LIMIT 10
     `,
     params
   );
@@ -3024,13 +3071,25 @@ async function findDuplicateUnitsFromIdentifiers(identifierEntries, excludeUnitI
       lotName: row.lot_name || '',
       unitSerialNumber: row.unit_serial_number || '',
       biosSerialNumber: row.bios_serial_number || '',
+      systemUuid: row.system_uuid || '',
       manufacturerLabel: row.manufacturer_label || '',
       modelLabel: row.model_label || '',
       processorBrandLabel: row.processor_brand_label || '',
       processorLabel: row.processor_label || '',
       processorSpeedGhz: row.processor_speed_ghz || '',
       modelSummary: modelParts.length > 0 ? modelParts.join(' · ') : '',
-      cpuSummary
+      cpuSummary,
+      ramGb: row.ram_gb !== null && row.ram_gb !== undefined ? Number(row.ram_gb) : null,
+      ramTypeLabel: row.ram_type_label || '',
+      storageGb: row.storage_gb !== null && row.storage_gb !== undefined ? Number(row.storage_gb) : null,
+      storageTypeLabel: row.storage_type_label || '',
+      assignedToUserId: row.assigned_to_user_id ? Number(row.assigned_to_user_id) : null,
+      assignedToUsername: row.assigned_username || '',
+      assignedToName: [row.assigned_first_name, row.assigned_last_name].filter(Boolean).join(' ').trim() || row.assigned_email || '',
+      currentUnitStatusConfigValueId: row.current_unit_status_config_value_id ? Number(row.current_unit_status_config_value_id) : null,
+      currentUnitStatusLabel: row.current_unit_status_label || '',
+      isParked: Number(row.is_parked || 0) === 1,
+      isArchived: Number(row.is_archived || 0) === 1
     };
   });
 }
@@ -3374,17 +3433,6 @@ function getDuplicateAssumptionEligibility({
     };
   }
 
-  if (sameDestinationLot) {
-    return {
-      allowed: false,
-      requiresOverride: true,
-      actionKind: 'takeover',
-      assignedToCurrentActor: false,
-      code: 'BWT_DUPLICATE_ASSUMPTION_SAME_LOT',
-      message: 'This unit is already Active in the selected work lot and assigned to another Tech. Submit a Move / Takeover request when reassignment or intentional rework needs Tech Lead+ approval.'
-    };
-  }
-
   if (candidate.isClosedLot) {
     return {
       allowed: false,
@@ -3471,7 +3519,120 @@ function getDuplicateMatchNote(candidate) {
     })
     .join('; ');
 
-  return summary || 'A matching Unit Serial or BIOS Serial was confirmed.';
+  if (summary) return summary;
+  if (candidate && candidate.identifierTypeLabel && candidate.identifierValue) {
+    return `${candidate.identifierTypeLabel} matched: ${candidate.identifierValue}.`;
+  }
+  return 'A matching Unit identifier was confirmed.';
+}
+
+async function applyExistingUnitAssignmentMove(connection, {
+  unitId,
+  lockedUnit,
+  originalCandidate,
+  destinationLot,
+  destinationLotId,
+  actorUserId,
+  changeSource = 'duplicate_assumption',
+  notePrefix = 'Assumed through duplicate intake.'
+}) {
+  const wasParked = isUnitParked(lockedUnit);
+  const previousLotId = normalizeOptionalInteger(lockedUnit.lot_id);
+  const previousAssignedToUserId = normalizeOptionalInteger(lockedUnit.assigned_to_user_id);
+  const matchNote = getDuplicateMatchNote(originalCandidate);
+  const actionNote = `${notePrefix} ${matchNote}`.trim();
+  const lotChanged = wasParked || previousLotId !== destinationLotId;
+  const assignmentChanged = wasParked || previousAssignedToUserId !== actorUserId;
+  const updates = ['lot_id = ?', 'assigned_to_user_id = ?'];
+  const values = [destinationLotId, actorUserId];
+  const state = await getUnitTableState();
+
+  if (state.assignmentCapabilities.hasAssignedAt) {
+    updates.push('assigned_at = ?');
+    values.push(new Date());
+  }
+  if (state.assignmentCapabilities.hasAssignmentUpdatedByUserId) {
+    updates.push('assignment_updated_by_user_id = ?');
+    values.push(actorUserId);
+  }
+  if (wasParked) {
+    updates.push('is_parked = 0', 'parked_at = NULL', 'parked_by_user_id = NULL');
+    if (state.legacyArchiveCapabilities.hasIsArchived) updates.push('is_archived = 0');
+    if (state.legacyArchiveCapabilities.hasArchivedAt) updates.push('archived_at = NULL');
+    if (state.legacyArchiveCapabilities.hasArchivedByUserId) updates.push('archived_by_user_id = NULL');
+  }
+
+  await connection.query(
+    `
+      UPDATE units
+      SET ${updates.join(', ')}
+      WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
+      LIMIT 1
+    `,
+    [...values, unitId]
+  );
+
+  if (lotChanged) {
+    await recordUnitLotHistory(connection, {
+      unitId,
+      fromLotId: wasParked ? null : previousLotId,
+      toLotId: destinationLotId,
+      movedByUserId: actorUserId,
+      notes: actionNote,
+      allowNewProductionCycle: !wasParked
+    });
+
+    await productionWeightSyncModel.syncEffectiveManualCompletionWeights({
+      connection,
+      unitIds: [unitId],
+      apply: true
+    });
+  }
+
+  if (!wasParked && previousLotId && previousLotId !== destinationLotId) {
+    await lotValidationOverrideModel.expireMovedUnitOverrides(previousLotId, connection);
+  }
+
+  if (assignmentChanged) {
+    await recordUnitAssignmentHistory(connection, {
+      unitId,
+      fromUserId: wasParked ? null : previousAssignedToUserId,
+      toUserId: actorUserId,
+      changedByUserId: actorUserId,
+      changeSource,
+      notes: actionNote
+    });
+  }
+
+  if (wasParked) {
+    await recordUnitParkHistory(connection, {
+      unitId,
+      eventType: 'returned_to_active',
+      toLotId: destinationLotId,
+      toAssignedToUserId: actorUserId,
+      changedByUserId: actorUserId,
+      notes: `Unit returned to Active. ${matchNote} Historical work and credit records were retained without changes.`
+    });
+  }
+
+  await unitWorkflowAudit.recordExistingUnitAssumed(connection, {
+    unitId,
+    actorUserId,
+    wasParked,
+    fromLotId: wasParked ? null : previousLotId,
+    toLotId: destinationLotId,
+    fromAssignedUserId: wasParked ? null : previousAssignedToUserId,
+    notes: actionNote
+  });
+
+  return {
+    unitId,
+    assetTag: originalCandidate.assetTag || getDisplayAssetTag(lockedUnit.asset_number),
+    destinationLotName: destinationLot.lot_name || '',
+    wasParked,
+    lotChanged,
+    assignmentChanged
+  };
 }
 
 async function assumeExistingTechUnitFromDuplicateMatch({
@@ -3561,109 +3722,166 @@ async function assumeExistingTechUnitFromDuplicateMatch({
       throw createDuplicateAssumptionError(eligibility.code || 'BWT_DUPLICATE_ASSUMPTION_BLOCKED', eligibility.message);
     }
 
-    const wasParked = refreshedCandidate.isParked;
-    const previousLotId = normalizeOptionalInteger(lockedUnit.lot_id);
-    const previousAssignedToUserId = normalizeOptionalInteger(lockedUnit.assigned_to_user_id);
-    const matchNote = getDuplicateMatchNote(originalCandidate);
-    const assumptionNote = `Assumed through duplicate serial intake. ${matchNote}`;
-    const updates = ['lot_id = ?', 'assigned_to_user_id = ?'];
-    const values = [safeDestinationLotId, safeAssumedByUserId];
-
-    if (state.assignmentCapabilities.hasAssignedAt) {
-      updates.push('assigned_at = ?');
-      values.push(new Date());
-    }
-
-    if (state.assignmentCapabilities.hasAssignmentUpdatedByUserId) {
-      updates.push('assignment_updated_by_user_id = ?');
-      values.push(safeAssumedByUserId);
-    }
-
-    if (wasParked) {
-      updates.push('is_parked = 0', 'parked_at = NULL', 'parked_by_user_id = NULL');
-
-      if (state.legacyArchiveCapabilities.hasIsArchived) {
-        updates.push('is_archived = 0');
-      }
-
-      if (state.legacyArchiveCapabilities.hasArchivedAt) {
-        updates.push('archived_at = NULL');
-      }
-
-      if (state.legacyArchiveCapabilities.hasArchivedByUserId) {
-        updates.push('archived_by_user_id = NULL');
-      }
-    }
-
-    await connection.query(
-      `
-        UPDATE units
-        SET ${updates.join(', ')}
-        WHERE ${escapeIdentifier(state.primaryKeyColumn)} = ?
-        LIMIT 1
-      `,
-      [...values, safeUnitId]
-    );
-
-    await recordUnitLotHistory(connection, {
+    const result = await applyExistingUnitAssignmentMove(connection, {
       unitId: safeUnitId,
-      fromLotId: wasParked ? null : previousLotId,
-      toLotId: safeDestinationLotId,
-      movedByUserId: safeAssumedByUserId,
-      notes: assumptionNote,
-      allowNewProductionCycle: !wasParked
-    });
-
-    await productionWeightSyncModel.syncEffectiveManualCompletionWeights({
-      connection,
-      unitIds: [safeUnitId],
-      apply: true
-    });
-
-    if (!wasParked && previousLotId && previousLotId !== safeDestinationLotId) {
-      await lotValidationOverrideModel.expireMovedUnitOverrides(previousLotId, connection);
-    }
-
-    if (wasParked || previousAssignedToUserId !== safeAssumedByUserId) {
-      await recordUnitAssignmentHistory(connection, {
-        unitId: safeUnitId,
-        fromUserId: wasParked ? null : previousAssignedToUserId,
-        toUserId: safeAssumedByUserId,
-        changedByUserId: safeAssumedByUserId,
-        changeSource: 'duplicate_assumption',
-        notes: assumptionNote
-      });
-    }
-
-    if (wasParked) {
-      await recordUnitParkHistory(connection, {
-        unitId: safeUnitId,
-        eventType: 'returned_to_active',
-        toLotId: safeDestinationLotId,
-        toAssignedToUserId: safeAssumedByUserId,
-        changedByUserId: safeAssumedByUserId,
-        notes: `Unit returned to Active through duplicate serial assumption. ${matchNote} Historical work and credit records were retained without changes.`
-      });
-    }
-
-    await unitWorkflowAudit.recordExistingUnitAssumed(connection, {
-      unitId: safeUnitId,
+      lockedUnit,
+      originalCandidate,
+      destinationLot,
+      destinationLotId: safeDestinationLotId,
       actorUserId: safeAssumedByUserId,
-      wasParked,
-      fromLotId: wasParked ? null : previousLotId,
-      toLotId: safeDestinationLotId,
-      fromAssignedUserId: wasParked ? null : previousAssignedToUserId,
-      notes: assumptionNote
+      changeSource: 'duplicate_assumption',
+      notePrefix: 'Assumed through duplicate serial intake.'
     });
 
     await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
 
-    return {
+async function applyApiExplicitUnitAction({
+  unitId,
+  assetTag = '',
+  unitSerialNumber = '',
+  biosSerialNumber = '',
+  systemUuid = '',
+  destinationLotId,
+  actorUserId,
+  actorRoleCodes = [],
+  expectedActionKind = '',
+  expectedCurrentUnit = null
+}) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const safeDestinationLotId = normalizeRequiredInteger(destinationLotId);
+  const safeActorUserId = normalizeRequiredInteger(actorUserId);
+  const actionKind = String(expectedActionKind || '').trim().toLowerCase();
+  const state = await getUnitTableState();
+  const lotColumns = await getTableColumns('lots');
+
+  if (!safeUnitId || !safeDestinationLotId || !safeActorUserId || !['move', 'takeover'].includes(actionKind)) {
+    throw createDuplicateAssumptionError('BWT_API_UNIT_ACTION_INPUT_INVALID', 'A valid Unit, destination Lot, and explicit move/takeover action are required.');
+  }
+  if (!state.exists || !state.primaryKeyColumn || !state.assignmentCapabilities.hasAssignedToUserId || !state.parkingCapabilities.hasIsParked) {
+    throw createDuplicateAssumptionError('BWT_API_UNIT_ACTION_SCHEMA_REQUIRED', 'The required Unit assignment and Parked lifecycle fields are not ready.');
+  }
+
+  const suppliedAssetNumber = assetTag ? normalizeAssetTagInput(assetTag) : null;
+  const identifierEntries = buildIdentifierEntries({
+    assetTag,
+    unitSerialNumber,
+    biosSerialNumber,
+    systemUuid
+  }, suppliedAssetNumber);
+  if (identifierEntries.length === 0) {
+    throw createDuplicateAssumptionError('BWT_API_UNIT_ACTION_IDENTITY_REQUIRED', 'At least one current Unit identifier is required before applying an explicit Unit action.');
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const matches = await findDuplicateUnitsFromIdentifiers(identifierEntries, null, connection);
+    const originalCandidate = matches.find((candidate) => Number(candidate.unitId) === safeUnitId) || null;
+    if (!originalCandidate) {
+      throw createDuplicateAssumptionError('BWT_API_UNIT_ACTION_MATCH_CHANGED', 'The selected Unit no longer matches the supplied physical identifiers. Run Resolve + Preflight again.');
+    }
+
+    const [lockedRows] = await connection.query(
+      `
+        SELECT u.*, COALESCE(l.is_closed, 0) AS current_lot_is_closed
+        FROM units u
+        LEFT JOIN lots l ON l.lot_id = u.lot_id
+        WHERE u.${escapeIdentifier(state.primaryKeyColumn)} = ?
+        LIMIT 1
+        FOR UPDATE
+      `,
+      [safeUnitId]
+    );
+    const lockedUnit = lockedRows[0] || null;
+    if (!lockedUnit) {
+      throw createDuplicateAssumptionError('BWT_API_UNIT_ACTION_NOT_FOUND', 'The selected existing Unit could not be found.');
+    }
+
+    if (expectedCurrentUnit && typeof expectedCurrentUnit === 'object') {
+      const expectedLotId = normalizeOptionalInteger(expectedCurrentUnit.lot_id);
+      const expectedAssignedUserId = normalizeOptionalInteger(expectedCurrentUnit.assigned_to_user_id);
+      const expectedParked = Boolean(expectedCurrentUnit.is_parked);
+      if (normalizeOptionalInteger(lockedUnit.lot_id) !== expectedLotId
+        || normalizeOptionalInteger(lockedUnit.assigned_to_user_id) !== expectedAssignedUserId
+        || isUnitParked(lockedUnit) !== expectedParked) {
+        throw createDuplicateAssumptionError('BWT_API_UNIT_ACTION_STATE_CHANGED', 'The Unit assignment or Lot changed after Preflight. Run Resolve + Preflight again.');
+      }
+    }
+
+    const lotState = await getLotMap();
+    const destinationLot = lotState.lotMap.get(safeDestinationLotId) || null;
+    const destinationIsAssignable = lotState.assignableLots.some((lot) => Number(lot.lot_id) === safeDestinationLotId);
+    if (!destinationLot || !destinationIsAssignable) {
+      throw createDuplicateAssumptionError('BWT_API_UNIT_ACTION_DESTINATION_INVALID', 'The intended Lot is no longer open, visible, and assignable.');
+    }
+
+    const wasParked = isUnitParked(lockedUnit);
+    const previousLotId = normalizeOptionalInteger(lockedUnit.lot_id);
+    const previousAssignedUserId = normalizeOptionalInteger(lockedUnit.assigned_to_user_id);
+    if (!wasParked && !previousLotId) {
+      throw createDuplicateAssumptionError('BWT_API_UNIT_ACTION_SOURCE_INVALID', 'This Active Unit has no current Lot and must be corrected in BWTDallas.');
+    }
+
+    const actualActionKind = wasParked || previousAssignedUserId !== safeActorUserId
+      ? 'takeover'
+      : previousLotId !== safeDestinationLotId
+        ? 'move'
+        : 'none';
+    if (actualActionKind !== actionKind) {
+      throw createDuplicateAssumptionError('BWT_API_UNIT_ACTION_CHANGED', 'The required Unit action changed after Preflight. Run Resolve + Preflight again.');
+    }
+
+    const elevated = hasElevatedLotMoveAuthority(actorRoleCodes);
+    if (!elevated) {
+      if (Number(lockedUnit.current_lot_is_closed || 0) === 1 && !wasParked) {
+        throw createDuplicateAssumptionError('BWT_API_UNIT_ACTION_APPROVAL_REQUIRED', 'This Unit is in a closed Lot. Submit the existing Move / Takeover request in BWTDallas for Tech Lead+ review.');
+      }
+
+      let directMoveAllowed = false;
+      if (actionKind === 'move') {
+        try {
+          await assertLotMovePermission({
+            unit: lockedUnit,
+            nextLotId: safeDestinationLotId,
+            currentUserId: safeActorUserId,
+            actorRoleCodes
+          });
+          directMoveAllowed = true;
+        } catch (error) {
+          if (!['BWT_LOT_MOVE_NOT_ASSIGNED', 'BWT_LOT_MOVE_REQUIRES_APPROVAL'].includes(String(error && error.code || ''))) {
+            throw error;
+          }
+        }
+      }
+
+      const duplicatePermissionEnabled = hasColumn(lotColumns, 'allow_duplicate_unit_assumption')
+        && Number(destinationLot.allow_duplicate_unit_assumption || 0) === 1;
+      if (!directMoveAllowed && !duplicatePermissionEnabled) {
+        throw createDuplicateAssumptionError('BWT_API_UNIT_ACTION_APPROVAL_REQUIRED', 'This Unit requires the existing Move / Takeover request in BWTDallas for Tech Lead+ review.');
+      }
+    }
+
+    const result = await applyExistingUnitAssignmentMove(connection, {
       unitId: safeUnitId,
-      assetTag: originalCandidate.assetTag || getDisplayAssetTag(lockedUnit.asset_number),
-      destinationLotName: destinationLot.lot_name || '',
-      wasParked
-    };
+      lockedUnit,
+      originalCandidate,
+      destinationLot,
+      destinationLotId: safeDestinationLotId,
+      actorUserId: safeActorUserId,
+      changeSource: 'api_explicit_unit_action',
+      notePrefix: `Explicit ${actionKind} confirmed through the Tool API.`
+    });
+
+    await connection.commit();
+    return { ...result, actionKind };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -3714,6 +3932,122 @@ async function saveUnitIdentifier(connection, unitId, typeMap, entry, { strictIn
   );
 }
 
+async function applyToolIdentifierIfUnchangedOrBlank(connection, unitId, {
+  typeCode,
+  value,
+  label,
+  missingConfigCode,
+  conflictCode,
+  rejectOtherUnitMatch = false
+}) {
+  const identifierValue = normalizeIdentifierText(value);
+  const normalizedValue = normalizeIdentifierComparableValue(identifierValue);
+
+  if (!identifierValue || !normalizedValue) {
+    return null;
+  }
+
+  const typeMap = await getIdentifierTypeMap(connection);
+  const identifierTypeId = typeMap.get(typeCode);
+  if (!identifierTypeId) {
+    const error = new Error(`${label} identifier configuration is not installed.`);
+    error.code = missingConfigCode;
+    throw error;
+  }
+
+  const [currentRows] = await connection.query(
+    `SELECT unit_identifier_id, identifier_value, normalized_value
+       FROM unit_identifiers
+      WHERE unit_id = ? AND identifier_type_config_value_id = ?
+      FOR UPDATE`,
+    [unitId, identifierTypeId]
+  );
+
+  const differingCurrent = currentRows.find((row) => String(row.normalized_value || '') !== normalizedValue);
+  if (differingCurrent) {
+    const error = new Error(`The submitted ${label} conflicts with the ${label} already recorded for this Unit.`);
+    error.code = conflictCode;
+    error.currentValue = differingCurrent.identifier_value || null;
+    error.submittedValue = identifierValue;
+    throw error;
+  }
+
+  const matchingCurrent = currentRows.find((row) => String(row.normalized_value || '') === normalizedValue);
+  if (matchingCurrent) {
+    return {
+      status: 'unchanged',
+      value: identifierValue,
+      previousValue: matchingCurrent.identifier_value || identifierValue
+    };
+  }
+
+  if (rejectOtherUnitMatch) {
+    const [otherRows] = await connection.query(
+      `SELECT ui.unit_id, ui.identifier_value
+         FROM unit_identifiers ui
+        WHERE ui.identifier_type_config_value_id = ?
+          AND ui.normalized_value = ?
+          AND ui.unit_id <> ?
+        ORDER BY ui.unit_id
+        FOR UPDATE`,
+      [identifierTypeId, normalizedValue, unitId]
+    );
+    if (otherRows.length > 0) {
+      const error = new Error(`The submitted ${label} is already associated with another Unit and must be resolved before it can be accepted here.`);
+      error.code = conflictCode;
+      error.submittedValue = identifierValue;
+      error.matchedUnitIds = otherRows.map((row) => Number(row.unit_id)).filter(Number.isFinite);
+      throw error;
+    }
+  }
+
+  await saveUnitIdentifier(connection, unitId, typeMap, {
+    typeCode,
+    value: identifierValue,
+    normalizedValue,
+    isPrimary: false
+  });
+
+  return { status: 'applied', value: identifierValue, previousValue: null };
+}
+
+async function applyToolSerialIdentifier(connection, unitId, typeCode, value) {
+  const definitions = {
+    unit_serial_number: {
+      label: 'Unit Serial Number',
+      missingConfigCode: 'BWT_UNIT_SERIAL_IDENTIFIER_NOT_CONFIGURED',
+      conflictCode: 'BWT_UNIT_SERIAL_IDENTITY_CONFLICT'
+    },
+    bios_serial_number: {
+      label: 'BIOS Serial Number',
+      missingConfigCode: 'BWT_BIOS_SERIAL_IDENTIFIER_NOT_CONFIGURED',
+      conflictCode: 'BWT_BIOS_SERIAL_IDENTITY_CONFLICT'
+    }
+  };
+  const definition = definitions[typeCode];
+  if (!definition) {
+    const error = new Error('Unsupported Tool serial identifier type.');
+    error.code = 'BWT_TOOL_SERIAL_IDENTIFIER_TYPE_INVALID';
+    throw error;
+  }
+  return applyToolIdentifierIfUnchangedOrBlank(connection, unitId, {
+    typeCode,
+    value,
+    ...definition
+  });
+}
+
+async function applyToolSystemUuidIdentifier(connection, unitId, systemUuid) {
+  return applyToolIdentifierIfUnchangedOrBlank(connection, unitId, {
+    typeCode: 'system_uuid',
+    value: systemUuid,
+    label: 'System UUID',
+    missingConfigCode: 'BWT_SYSTEM_UUID_IDENTIFIER_NOT_CONFIGURED',
+    conflictCode: 'BWT_SYSTEM_UUID_IDENTITY_CONFLICT',
+    rejectOtherUnitMatch: true
+  });
+}
+
 async function saveUnitIdentifiers(connection, unitId, formData, assetNumber, { strictInsert = false } = {}) {
   const exists = await tableExists('unit_identifiers');
 
@@ -3722,11 +4056,12 @@ async function saveUnitIdentifiers(connection, unitId, formData, assetNumber, { 
   }
 
   const typeMap = await getIdentifierTypeMap(connection);
-  const serialFieldByTypeCode = new Map([
+  const managedIdentifierFieldByTypeCode = new Map([
     ['unit_serial_number', 'unit_serial_number'],
-    ['bios_serial_number', 'bios_serial_number']
+    ['bios_serial_number', 'bios_serial_number'],
+    ['system_uuid', 'system_uuid']
   ]);
-  const managedSerialTypeCodes = [...serialFieldByTypeCode.entries()]
+  const managedSerialTypeCodes = [...managedIdentifierFieldByTypeCode.entries()]
     .filter(([, fieldKey]) => isUnitFormFieldManaged(formData, fieldKey))
     .map(([typeCode]) => typeCode);
   const managedSerialTypeIds = managedSerialTypeCodes
@@ -3746,7 +4081,7 @@ async function saveUnitIdentifiers(connection, unitId, formData, assetNumber, { 
 
   const identifierEntries = buildIdentifierEntries(formData, assetNumber)
     .filter((entry) => {
-      const fieldKey = serialFieldByTypeCode.get(entry.typeCode);
+      const fieldKey = managedIdentifierFieldByTypeCode.get(entry.typeCode);
       return !fieldKey || isUnitFormFieldManaged(formData, fieldKey);
     });
 
@@ -4262,8 +4597,6 @@ function buildWritePayload(formData, currentUserId, mode, assetNumber, unitColum
     const batteryHealthPercent = normalizeOptionalDecimal(formData.batteryHealthPercent);
     addColumn('battery_health_percent', batteryHealthPercent);
   }
-  addColumn('hardware_notes', normalizeText(formData.hardwareNotes));
-  addColumn('cosmetic_notes', normalizeText(formData.cosmeticNotes));
 
   if (formData.canOverrideProductionWeight === true) {
     if (!unitColumns || hasColumn(unitColumns, 'production_weight_override')) {
@@ -4352,27 +4685,36 @@ async function createTechUnit(formData, currentUserId, options = {}) {
     throw new Error('The units table or primary key column was not found.');
   }
 
-  const assetNumber = await generateNextAssetNumber();
-  const duplicateMatches = await findDuplicateUnitsFromIdentifiers(buildIdentifierEntries(formData, assetNumber));
-
-  if (duplicateMatches.length > 0) {
-    throw createDuplicateIdentifierError(duplicateMatches);
-  }
-
-  const { assignableLots } = await getLotMap();
-  const requestedLotId = normalizeRequiredInteger(formData.lotId);
-
-  if (!assignableLots.some((lot) => Number(lot.lot_id) === requestedLotId)) {
-    throw createLotMovePolicyError(
-      'BWT_LOT_DESTINATION_NOT_OPEN',
-      'Closed, hidden, and parent/container lots cannot receive new units. Choose an open child or standalone lot.'
-    );
-  }
-
-  const connection = await pool.getConnection();
+  const externalConnection = options.connection || null;
+  const connection = externalConnection || await pool.getConnection();
+  const managesTransaction = !externalConnection;
 
   try {
-    await connection.beginTransaction();
+    if (managesTransaction) {
+      await connection.beginTransaction();
+    }
+
+    const assetNumber = await generateNextAssetNumber(connection);
+    const allowDuplicateIdentifiers = options.allowDuplicateIdentifiers === true;
+    const duplicateMatches = await findDuplicateUnitsFromIdentifiers(
+      buildIdentifierEntries(formData, assetNumber),
+      null,
+      connection
+    );
+
+    if (duplicateMatches.length > 0 && !allowDuplicateIdentifiers) {
+      throw createDuplicateIdentifierError(duplicateMatches);
+    }
+
+    const { assignableLots } = await getLotMap();
+    const requestedLotId = normalizeRequiredInteger(formData.lotId);
+
+    if (!assignableLots.some((lot) => Number(lot.lot_id) === requestedLotId)) {
+      throw createLotMovePolicyError(
+        'BWT_LOT_DESTINATION_NOT_OPEN',
+        'Closed, hidden, and parent/container lots cannot receive new units. Choose an open child or standalone lot.'
+      );
+    }
 
     const payload = buildWritePayload(formData, currentUserId, 'create', assetNumber, state.columns);
     const placeholders = payload.columns.map(() => '?').join(', ');
@@ -4388,7 +4730,19 @@ async function createTechUnit(formData, currentUserId, options = {}) {
 
     const unitId = result.insertId;
 
-    await saveUnitIdentifiers(connection, unitId, formData, assetNumber);
+    try {
+      await saveUnitIdentifiers(connection, unitId, formData, assetNumber, { strictInsert: allowDuplicateIdentifiers });
+    } catch (error) {
+      if (allowDuplicateIdentifiers && error && error.code === 'ER_DUP_ENTRY') {
+        const identifierError = new Error('This Lot permits duplicate-match Unit creation, but the identifier index still enforces global serial uniqueness. Apply the identifier-index correction before creating the duplicate Unit.');
+        identifierError.code = 'BWT_DUPLICATE_IDENTIFIER_STORAGE_BLOCKED';
+        throw identifierError;
+      }
+      throw error;
+    }
+    if (allowDuplicateIdentifiers) {
+      await assertIntentionalDuplicateIdentifiersSaved(connection, unitId, formData);
+    }
     await saveUnitModuleRows(connection, unitId, formData, currentUserId);
     const amazonPolicyResult = await unitAmazonModel.applyDestinationLotAmazonPolicy(connection, {
       unitId: Number(unitId),
@@ -4411,14 +4765,20 @@ async function createTechUnit(formData, currentUserId, options = {}) {
       });
     }
 
-    await connection.commit();
+    if (managesTransaction) {
+      await connection.commit();
+    }
 
     return unitId;
   } catch (error) {
-    await connection.rollback();
+    if (managesTransaction) {
+      await connection.rollback();
+    }
     throw error;
   } finally {
-    connection.release();
+    if (managesTransaction) {
+      connection.release();
+    }
   }
 }
 
@@ -5079,6 +5439,11 @@ async function getTechUnitLifecycleSummaryById(unitId) {
     assignedToUserId: normalizeOptionalInteger(row.assigned_to_user_id),
     assignedToName: getUserDisplayNameFromRow(row, 'assigned') || '',
     categoryLabel: row.category_label || '',
+    manufacturerName: row.manufacturer_name || '',
+    modelName: row.model_name || '',
+    processorModelCode: row.processor_model_code || '',
+    ramGb: row.ram_gb,
+    storageGb: row.storage_gb,
     specSummary: specParts.length > 0 ? specParts.join(' · ') : 'No specs entered yet',
     isParked: Number(row.is_parked) === 1,
     parkedAt: row.parked_at || null,
@@ -5791,7 +6156,7 @@ async function getResolvedProductionWeightForUnit(unit) {
   return productionWeightModel.normalizeWeightValue(details.effectiveWeight);
 }
 
-async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByUserId, creditSource = 'manual_completion', overrideRequestId = null, weightValue = null, notes = null, actorRoleCodes = [] }) {
+async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByUserId, creditSource = 'manual_completion', overrideRequestId = null, weightValue = null, notes = null, actorRoleCodes = [], completionRequirementOverrideReason = '' }) {
   if (!await tableExists('unit_work_completions')) {
     throw new Error('The unit_work_completions table is not ready yet. Run the required completion migration first.');
   }
@@ -5880,6 +6245,23 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
 
   try {
     await connection.beginTransaction();
+
+    const completionToolRequirements = safeCreditSource === 'manual_completion'
+      ? await getCompletionToolRequirementStatus(safeUnitId, normalizeOptionalInteger(unit.lot_id), connection)
+      : buildCompletionToolRequirementStatus({ effectivePolicy: {}, completedToolSources: [], productionCycleKey: null });
+    const completionToolRequirementDecision = evaluateCompletionToolRequirementEnforcement({
+      status: completionToolRequirements,
+      roleCodes: actorRoleCodes,
+      overrideReason: completionRequirementOverrideReason
+    });
+
+    if (!completionToolRequirementDecision.allowed) {
+      if (completionToolRequirementDecision.code === 'TOOL_COMPLETION_OVERRIDE_REASON_REQUIRED') {
+        throw new Error('A reason is required to override missing required Tool runs.');
+      }
+      throw new Error(getMissingToolRequirementMessage(completionToolRequirements) || 'Required Tool runs are missing for the current production cycle.');
+    }
+
     const [insertResult] = await connection.query(
       `
         INSERT INTO unit_work_completions (${insertColumns.map(escapeIdentifier).join(', ')})
@@ -5955,6 +6337,43 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
         ]
       }, connection);
 
+      if (completionToolRequirementDecision.override_used) {
+        const missingLabels = completionToolRequirements.missing
+          .map((requirement) => requirement.label || requirement.tool_source)
+          .filter(Boolean);
+        await unitAuditEventModel.createUnitAuditEvent({
+          unitId: safeUnitId,
+          actorUserId: safeRecordedByUserId || safeCompletedByUserId,
+          eventType: 'completion_tool_requirement_overridden',
+          eventSource: 'tech_unit_completion',
+          eventSummary: 'Overrode required Tool run before Unit completion',
+          metadata: {
+            completionId,
+            lotId: normalizeOptionalInteger(unit.lot_id),
+            productionCycleKey: completionToolRequirements.production_cycle_key || productionCycleState.productionCycleKey || null,
+            missingToolSources: completionToolRequirements.missing.map((requirement) => requirement.tool_source),
+            reason: completionToolRequirementDecision.override_reason
+          },
+          changes: [
+            {
+              fieldKey: 'completion_tool_requirement_override',
+              fieldLabel: 'Tool Completion Requirement Override',
+              changeType: 'override',
+              oldValueText: missingLabels.length > 0 ? `Missing: ${missingLabels.join(', ')}` : '',
+              newValueText: completionToolRequirementDecision.override_reason,
+              oldValue: {
+                missing_tool_sources: completionToolRequirements.missing.map((requirement) => requirement.tool_source)
+              },
+              newValue: {
+                override_reason: completionToolRequirementDecision.override_reason,
+                completion_id: completionId
+              },
+              sortOrder: 40
+            }
+          ]
+        }, connection);
+      }
+
       await lotQcRequirementModel.auditCompletionIfNotRequired(connection, {
         unitId: safeUnitId,
         lotId: normalizeOptionalInteger(unit.lot_id),
@@ -5970,7 +6389,8 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
       workCycleKey,
       productionCycleKey: productionCycleState.productionCycleKey || null,
       grantsProductionCredit: productionCycleState.grantsProductionCredit !== false,
-      productionWeight: resolvedWeight
+      productionWeight: resolvedWeight,
+      completionToolRequirementOverrideUsed: completionToolRequirementDecision.override_used === true
     };
   } catch (error) {
     await connection.rollback();
@@ -6320,6 +6740,49 @@ async function hasRecordedManualCompletionForCurrentLotCycle(unit) {
 }
 
 
+async function getCompletionToolRequirementStatus(unitId, lotId, connection = pool) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const safeLotId = normalizeRequiredInteger(lotId);
+
+  if (!safeUnitId || !safeLotId) {
+    return buildCompletionToolRequirementStatus({
+      effectivePolicy: {},
+      completedToolSources: [],
+      productionCycleKey: null
+    });
+  }
+
+  const allLots = await lotModel.listLots({ includeHidden: true, connection });
+  const effectivePolicy = resolveLotToolPolicy(allLots, safeLotId);
+  const productionCycleKey = await productionCycleModel.getCurrentProductionCycleKey(safeUnitId, connection);
+  const requiredSources = [];
+
+  if (effectivePolicy.requireScanToolsBeforeCompletion) requiredSources.push('scantool');
+  if (effectivePolicy.requireTechToolsBeforeCompletion) requiredSources.push('techtools');
+
+  let completedToolSources = [];
+  if (requiredSources.length > 0 && productionCycleKey) {
+    const [rows] = await connection.query(
+      `
+        SELECT DISTINCT tool_source
+        FROM unit_tool_runs
+        WHERE unit_id = ?
+          AND production_cycle_key = ?
+          AND status = 'completed'
+          AND tool_source IN (${requiredSources.map(() => '?').join(', ')})
+      `,
+      [safeUnitId, productionCycleKey, ...requiredSources]
+    );
+    completedToolSources = rows.map((row) => String(row.tool_source || '').trim()).filter(Boolean);
+  }
+
+  return buildCompletionToolRequirementStatus({
+    effectivePolicy,
+    completedToolSources,
+    productionCycleKey
+  });
+}
+
 async function getUnitWorkCompletionPreview(unitId) {
   const safeUnitId = normalizeRequiredInteger(unitId);
   const state = await getUnitTableState();
@@ -6415,7 +6878,10 @@ async function getUnitWorkCompletionPreview(unitId) {
     };
   }
 
-  const productionCycleState = await productionCycleModel.getCompletionProductionCycleState(safeUnitId);
+  const [productionCycleState, completionToolRequirements] = await Promise.all([
+    productionCycleModel.getCompletionProductionCycleState(safeUnitId),
+    getCompletionToolRequirementStatus(safeUnitId, lotId)
+  ]);
 
   if (await hasRecordedManualCompletionForCurrentLotCycle(unit)) {
     return {
@@ -6444,6 +6910,7 @@ async function getUnitWorkCompletionPreview(unitId) {
     productionCycleKey: productionCycleState.productionCycleKey || null,
     grantsProductionCredit: productionCycleState.grantsProductionCredit !== false,
     productionCycleSchemaReady: productionCycleState.schemaReady === true,
+    completionToolRequirements,
     errorMessage: ''
   };
 }
@@ -7021,6 +7488,7 @@ module.exports = {
   getDuplicateAssumptionEligibility,
   getDuplicateAssumptionCandidates,
   assumeExistingTechUnitFromDuplicateMatch,
+  applyApiExplicitUnitAction,
   getDuplicateUnitMessage,
   createTechUnit,
   createIntentionalDuplicateTechUnitWithConnection,
@@ -7039,6 +7507,7 @@ module.exports = {
   getUnitOperationalHistory,
   getUnitWorkCompletionsForUser,
   getUnitWorkCompletionPreview,
+  getCompletionToolRequirementStatus,
   getUnitWorkCompletionReversalPreview,
   recordUnitWorkCompletion,
   reverseUnitWorkCompletion,
@@ -7047,6 +7516,9 @@ module.exports = {
   normalizeAssetTagInput,
   isAssignableLot,
   getAssignableLots,
+  assertLotMovePermission,
   getBrowsableLots,
-  getProcessorCompatibilityStatus
+  getProcessorCompatibilityStatus,
+  applyToolSerialIdentifier,
+  applyToolSystemUuidIdentifier
 };

@@ -1,0 +1,60 @@
+<%
+  const editing = Boolean(template);
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal management-user-modal label-template-form-modal" role="dialog" aria-modal="true" aria-labelledby="label-template-form-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="label-template-form-title"><%= editing ? 'Edit Label Template' : 'New Label Template' %></h2>
+        <% if (editing) { %><p><%= template.name %></p><% } %>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <div class="message info">
+        <p>Templates created here start as Draft. Layout/background editing will be added in the next rendering phase; the current production label remains unchanged.</p>
+      </div>
+
+      <form method="post" action="<%= editing ? `/management/label-library/templates/${template.label_template_id}/edit/modal` : '/management/label-library/templates' %>" hx-post="<%= editing ? `/management/label-library/templates/${template.label_template_id}/edit/modal` : '/management/label-library/templates' %>" hx-target="#modal-root" hx-swap="innerHTML">
+        <div class="form-grid">
+          <label class="full-width">
+            <span>Template Name</span>
+            <input type="text" name="name" value="<%= formData.name %>" maxlength="160" required />
+          </label>
+
+          <label>
+            <span>Category</span>
+            <select name="categoryCode" required>
+              <% categories.forEach((category) => { %>
+                <option value="<%= category.code %>" <%= formData.categoryCode === category.code ? 'selected' : '' %>><%= category.label %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <% if (editing) { %>
+            <label>
+              <span>Status</span>
+              <input type="text" value="<%= template.status %>" disabled />
+            </label>
+          <% } %>
+
+          <label class="full-width">
+            <span>Description</span>
+            <textarea name="description" rows="4" maxlength="1000"><%= formData.description %></textarea>
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          <button type="submit" class="primary-button"><%= editing ? 'Save Template' : 'Create Draft Template' %></button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

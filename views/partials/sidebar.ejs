@@ -19,12 +19,12 @@
     'admin-config-database'
   ];
   const adminSectionActive = adminConfigurationNavKeys.includes(currentNav);
-  const managementSectionActive = ['management', 'management-login-activity', 'management-lots'].includes(currentNav);
+  const managementSectionActive = ['management', 'management-login-activity', 'management-lots', 'management-label-library', 'management-printers'].includes(currentNav);
   const sidebarRoleCodes = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
   const isQcOnlyNavigationUser = sidebarRoleCodes.includes('qc')
     && !sidebarRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
   const qcSectionActive = ['qc-review', 'management-qc-reporting'].includes(currentNav) || (isQcOnlyNavigationUser && currentNav === 'unit-requests');
-  const techSectionActive = currentNav === 'tech-units' || currentNav === 'unit-requests';
+  const techSectionActive = ['tech-units', 'tech-printers', 'unit-requests'].includes(currentNav);
 %>
 
 <aside class="sidebar" id="app-sidebar" aria-label="Primary navigation">
@@ -104,6 +104,14 @@
             <span>Lots</span>
           </a>
 
+          <a href="/management/label-library" class="sidebar-sublink <%= currentNav === 'management-label-library' ? 'active' : '' %>" <%= currentNav === 'management-label-library' ? 'aria-current="page"' : '' %>>
+            <span>Label Library</span>
+          </a>
+
+          <a href="/management/printers" class="sidebar-sublink <%= currentNav === 'management-printers' ? 'active' : '' %>" <%= currentNav === 'management-printers' ? 'aria-current="page"' : '' %>>
+            <span>Printers</span>
+          </a>
+
         </div>
       </section>
     <% } %>
@@ -145,6 +153,9 @@
         <div class="sidebar-subnav">
           <a href="/tech/units" class="sidebar-sublink <%= currentNav === 'tech-units' ? 'active' : '' %>" <%= currentNav === 'tech-units' ? 'aria-current="page"' : '' %>>
             <span>Units</span>
+          </a>
+          <a href="/tech/printers" class="sidebar-sublink <%= currentNav === 'tech-printers' ? 'active' : '' %>" <%= currentNav === 'tech-printers' ? 'aria-current="page"' : '' %>>
+            <span>My Printers</span>
           </a>
           <% if (typeof canAccessUnitRequests === 'function' && canAccessUnitRequests()) { %>
             <a href="/unit-requests" class="sidebar-sublink <%= currentNav === 'unit-requests' ? 'active' : '' %>" <%= currentNav === 'unit-requests' ? 'aria-current="page"' : '' %>>

@@ -147,14 +147,29 @@
                 </div>
               </div>
 
+              <% if (formOptions.capabilities.hasToolPolicy) { %>
+                <div class="form-section">
+                  <div class="form-section-header">
+                    <div>
+                      <p class="eyebrow">Source Policy</p>
+                      <h3>Unit Source &amp; Tool Policy</h3>
+                    </div>
+                    <p>Children inherit the nearest parent setting. Root-level Inherit uses Allow = On and Require = Off.</p>
+                  </div>
+                  <div class="form-grid">
+                    <%- include('../partials/lot-tool-policy-fields', { formData }) %>
+                  </div>
+                </div>
+              <% } %>
+
               <% if (formOptions.capabilities.hasDuplicateUnitAssumption) { %>
                 <div class="form-section">
                   <div class="form-section-header">
                     <div>
                       <p class="eyebrow">Intake Controls</p>
-                      <h3>Duplicate Unit Assumption</h3>
+                      <h3>Duplicate Unit Policy</h3>
                     </div>
-                    <p>Choose whether regular Techs may assume a serial-matched Active unit from another open lot or a Parked unit into this work lot.</p>
+                    <p>Choose whether Tech Users may proceed with duplicate-match Units in this Lot without individual Tech Lead+ approval.</p>
                   </div>
 
                   <label class="checkbox-card plain-checkbox-row" for="allowDuplicateUnitAssumption">
@@ -166,8 +181,8 @@
                       <%= formData.allowDuplicateUnitAssumption === '1' ? 'checked' : '' %>
                     />
                     <span>
-                      <strong>Allow duplicate-match unit assumption</strong>
-                      <small>Same-lot matches and units currently in closed lots remain blocked and must use an override. Parked units remain eligible to be assumed into this lot.</small>
+                      <strong>Allow Duplicate Units Without Approval</strong>
+                      <small>Allows Tech Users to proceed with duplicate-match Units in this Lot without individual Tech Lead+ approval. When disabled, a duplicate request is required.</small>
                     </span>
                   </label>
                 </div>

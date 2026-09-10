@@ -44,7 +44,6 @@ function buildFormData(overrides = {}) {
     osBuild: '',
     biosVersion: '',
     absoluteStatusConfigValueId: '',
-    physicalCameraStatusConfigValueId: '',
     touchscreenStatusConfigValueId: '',
     keyboardLanguageConfigValueId: '',
     completeDiagnosticsStatusConfigValueId: '',

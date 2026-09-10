@@ -1,0 +1,33 @@
+<div id="tech-printers-live" hx-get="/tech/printers/live" hx-trigger="label-printer-registry-changed from:body" hx-swap="outerHTML" hx-vals='js:{message: event.detail && event.detail.message ? event.detail.message : ""}'<% if (oob) { %> hx-swap-oob="outerHTML"<% } %>>
+  <% if (successMessage) { %><div class="message success"><%= successMessage %></div><% } %>
+  <% if (errorMessages.length) { %><div class="message error"><% errorMessages.forEach((m) => { %><p><%= m %></p><% }) %></div><% } %>
+
+  <section class="site-clean-section">
+    <div class="site-clean-section-heading"><div><h2>My Solo Printers</h2><p>Sharing is off by default. Enable Share only when everyone should be able to use the printer.</p></div></div>
+    <div class="table-card">
+      <table>
+        <thead><tr><th>Printer</th><% if (showNetworkDetails) { %><th>Connection</th><% } %><th>Sharing</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          <% if (!ownedPrinters.length) { %><tr><td colspan="<%= showNetworkDetails ? 5 : 4 %>">You have not added a solo printer.</td></tr><% } %>
+          <% ownedPrinters.forEach((printer) => { %>
+            <tr>
+              <td><strong><%= printer.display_name %></strong><br/><small><%= printer.location_label || 'No location label' %></small></td>
+              <% if (showNetworkDetails) { %><td><%= printer.host_address %>:<%= printer.port %><br/><small><%= printer.protocol_code %></small></td><% } %>
+              <td><span class="pill <%= Number(printer.is_shared) === 1 ? 'good' : 'slate' %>"><%= Number(printer.is_shared) === 1 ? 'Shared' : 'Private' %></span></td>
+              <td><span class="pill <%= Number(printer.is_enabled) === 1 ? 'good' : 'bad' %>"><%= Number(printer.is_enabled) === 1 ? 'Enabled' : 'Disabled' %></span><br/><small><%= printer.last_probe_status || 'Not probed' %></small></td>
+              <td><div class="management-user-row-actions"><a class="secondary-button" href="/tech/printers/<%= printer.label_printer_id %>/edit/modal" hx-get="/tech/printers/<%= printer.label_printer_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a><a class="secondary-button danger-button" href="/tech/printers/<%= printer.label_printer_id %>/delete/modal" hx-get="/tech/printers/<%= printer.label_printer_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Remove</a></div></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="site-clean-section">
+    <div class="site-clean-section-heading"><div><h2>Available to Me</h2><p>This includes managed printers, shared solo printers, your own printers, and private solo printers available through Tech Lead+ access.</p></div></div>
+    <div class="table-card"><table><thead><tr><th>Printer</th><th>Type</th><th>Location</th><% if (showNetworkDetails) { %><th>Connection</th><% } %></tr></thead><tbody>
+      <% if (!availablePrinters.length) { %><tr><td colspan="<%= showNetworkDetails ? 4 : 3 %>">No printers are currently available.</td></tr><% } %>
+      <% availablePrinters.forEach((printer) => { %><tr><td><strong><%= printer.display_name %></strong></td><td><%= printer.scope_code === 'managed' ? 'Managed' : (Number(printer.is_shared) === 1 ? 'Shared Solo' : 'Private Solo') %></td><td><%= printer.location_label || '—' %></td><% if (showNetworkDetails) { %><td><%= printer.host_address %>:<%= printer.port %> · <%= printer.protocol_code %></td><% } %></tr><% }) %>
+    </tbody></table></div>
+  </section>
+</div>

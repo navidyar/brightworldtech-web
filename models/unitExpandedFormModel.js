@@ -1,4 +1,5 @@
 const { pool } = require('./db');
+const unitFieldSourceModel = require('./unitFieldSourceModel');
 const { listConfigValuesBySystemCategoryIds, getConfigValueBySystemId } = require('./configLookupModel');
 const { SYSTEM_CONFIG_CATEGORY_IDS, SYSTEM_CONFIG_VALUE_IDS, COSMETIC_GRADE_BY_SYSTEM_VALUE_ID } = require('../config/configIdentityRegistry');
 const unitOutcomeModel = require('./unitOutcomeModel');
@@ -99,35 +100,15 @@ async function tableExists(tableName, connection = pool) {
 }
 
 async function upsertFieldSource(connection, unitId, fieldKey, sourceCode, sourceNote, currentUserId) {
-  if (!await tableExists('unit_field_sources', connection)) {
-    return;
+  if (String(sourceCode || 'tech_edit').trim().toLowerCase() !== 'tech_edit') {
+    throw new Error('unitExpandedFormModel only records ordinary Tech form edits.');
   }
-
-  await connection.query(
-    `
-      INSERT INTO unit_field_sources (
-        unit_id,
-        field_key,
-        source_code,
-        source_note,
-        updated_by_user_id,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, NOW())
-      ON DUPLICATE KEY UPDATE
-        source_code = VALUES(source_code),
-        source_note = VALUES(source_note),
-        updated_by_user_id = VALUES(updated_by_user_id),
-        updated_at = NOW()
-    `,
-    [
-      unitId,
-      fieldKey,
-      sourceCode || 'tech_edit',
-      sourceNote || null,
-      normalizeOptionalInteger(currentUserId)
-    ]
-  );
+  await unitFieldSourceModel.recordTechEditSource(connection, {
+    unitId,
+    fieldKey,
+    sourceNote,
+    userId: currentUserId
+  });
 }
 
 async function upsertManualFieldSources(connection, unitId, fieldKeys, currentUserId) {
@@ -161,7 +142,6 @@ function getBlankExpandedFormData() {
     biosVersion: '',
     osBuild: '',
     absoluteStatusConfigValueId: '',
-    physicalCameraStatusConfigValueId: '',
     touchscreenStatusConfigValueId: '',
     keyboardLanguageConfigValueId: '',
     completeDiagnosticsStatusConfigValueId: '',
@@ -179,7 +159,6 @@ async function getExpandedFormOptions() {
   const [
     rawOverallGradeOptions,
     absoluteStatusOptions,
-    physicalCameraStatusOptions,
     touchscreenStatusOptions,
     keyboardLanguageOptions,
     diagnosticsStatusOptions,
@@ -191,7 +170,6 @@ async function getExpandedFormOptions() {
   ] = await Promise.all([
     listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES),
     listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.ABSOLUTE_STATUSES),
-    listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.CAMERA_STATUSES),
     listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.TOUCHSCREEN_STATUSES),
     listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.KEYBOARD_LANGUAGES),
     listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.DIAGNOSTICS_STATUSES),
@@ -216,7 +194,6 @@ async function getExpandedFormOptions() {
     graphicsOptionsSupported: await tableExists('unit_graphics_adapters'),
     overallGradeOptions: normalizeCosmeticGradeOptions(rawOverallGradeOptions),
     absoluteStatusOptions,
-    physicalCameraStatusOptions,
     touchscreenStatusOptions,
     keyboardLanguageOptions: sortOptionsByPopularity(keyboardLanguageOptions, operationalRankingSnapshot, {
       optionScope: 'keyboard_language'
@@ -244,7 +221,6 @@ async function getUnitSpecificationFormData(unitId) {
         bios_version,
         os_build,
         absolute_status_config_value_id,
-        physical_camera_status_config_value_id,
         touchscreen_status_config_value_id,
         keyboard_language_config_value_id,
         complete_diagnostics_status_config_value_id,
@@ -269,7 +245,6 @@ async function getUnitSpecificationFormData(unitId) {
     biosVersion: row.bios_version || '',
     osBuild: row.os_build || '',
     absoluteStatusConfigValueId: row.absolute_status_config_value_id ? String(row.absolute_status_config_value_id) : '',
-    physicalCameraStatusConfigValueId: row.physical_camera_status_config_value_id ? String(row.physical_camera_status_config_value_id) : '',
     touchscreenStatusConfigValueId: row.touchscreen_status_config_value_id ? String(row.touchscreen_status_config_value_id) : '',
     keyboardLanguageConfigValueId: row.keyboard_language_config_value_id ? String(row.keyboard_language_config_value_id) : '',
     completeDiagnosticsStatusConfigValueId: row.complete_diagnostics_status_config_value_id ? String(row.complete_diagnostics_status_config_value_id) : '',
@@ -521,12 +496,6 @@ async function saveUnitSpecifications(connection, unitId, formData, currentUserI
       sourceKey: 'absolute_status',
       columnName: 'absolute_status_config_value_id',
       value: normalizeOptionalInteger(formData.absoluteStatusConfigValueId)
-    },
-    {
-      fieldKey: 'physical_camera_status',
-      sourceKey: 'physical_camera_status',
-      columnName: 'physical_camera_status_config_value_id',
-      value: normalizeOptionalInteger(formData.physicalCameraStatusConfigValueId)
     },
     {
       fieldKey: 'touchscreen_status',

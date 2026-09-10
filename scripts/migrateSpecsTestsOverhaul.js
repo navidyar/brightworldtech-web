@@ -404,46 +404,6 @@ async function ensureRepeatableTables(connection) {
   }
 }
 
-async function removeLegacyPhysicalCameraRules(connection) {
-  let removed = 0;
-  if (await tableExists(connection, 'lot_unit_form_field_rules')) {
-    const [result] = await connection.query(
-      "DELETE FROM lot_unit_form_field_rules WHERE field_key = 'physical_camera_status'"
-    );
-    removed += Number(result.affectedRows || 0);
-  }
-
-  const [[binding]] = await connection.query(
-    'SELECT config_value_id FROM system_config_values WHERE system_config_value_id = ? LIMIT 1',
-    [SYSTEM_CONFIG_VALUE_IDS.REQUIREMENT_PHYSICAL_CAMERA_STATUS]
-  );
-  const requirementTypeId = Number(binding?.config_value_id || 0);
-  if (!requirementTypeId) return removed;
-
-  if (await tableExists(connection, 'lot_requirement_inheritance_suppressions')) {
-    const columns = await getColumnSet(connection, 'lot_requirement_inheritance_suppressions');
-    if (columns.has('requirement_type_config_value_id')) {
-      const [result] = await connection.query(
-        'DELETE FROM lot_requirement_inheritance_suppressions WHERE requirement_type_config_value_id = ?',
-        [requirementTypeId]
-      );
-      removed += Number(result.affectedRows || 0);
-    }
-  }
-
-  if (await tableExists(connection, 'lot_requirements')) {
-    const columns = await getColumnSet(connection, 'lot_requirements');
-    if (columns.has('requirement_type_config_value_id')) {
-      const [result] = await connection.query(
-        'DELETE FROM lot_requirements WHERE requirement_type_config_value_id = ?',
-        [requirementTypeId]
-      );
-      removed += Number(result.affectedRows || 0);
-    }
-  }
-  return removed;
-}
-
 async function migrateLegacyBatteryHealth(connection) {
   const unitColumns = await getColumnSet(connection, 'units');
   if (!unitColumns.has('battery_health_percent') || !await tableExists(connection, 'unit_batteries')) return 0;
@@ -503,10 +463,8 @@ async function main() {
       await ensureSpecificationColumns(connection);
       await ensureRepeatableTables(connection);
       const migratedBatteryRows = await migrateLegacyBatteryHealth(connection);
-      const removedLegacyCameraRules = await removeLegacyPhysicalCameraRules(connection);
       await connection.commit();
       console.log(`Migrated legacy battery rows: ${migratedBatteryRows}`);
-      console.log(`Removed legacy Physical Camera form/requirement rules: ${removedLegacyCameraRules}`);
     } catch (error) {
       await connection.rollback();
       throw error;

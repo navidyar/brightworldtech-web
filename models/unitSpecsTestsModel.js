@@ -1,6 +1,7 @@
 'use strict';
 
 const { pool } = require('./db');
+const unitFieldSourceModel = require('./unitFieldSourceModel');
 const { listConfigValuesBySystemCategoryIds } = require('./configLookupModel');
 const { SYSTEM_CONFIG_CATEGORY_IDS, SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 const { isAnyUnitFormFieldManaged, isUnitFormFieldManaged } = require('../services/unitFormSubmissionPolicy');
@@ -226,13 +227,11 @@ async function getSpecsTestsDataByUnitId(unitId) {
 }
 
 async function upsertSource(connection, unitId, fieldKey, currentUserId) {
-  if (!await tableExists('unit_field_sources', connection)) return;
-  await connection.query(
-    `INSERT INTO unit_field_sources (unit_id, field_key, source_code, source_note, updated_by_user_id, updated_at)
-     VALUES (?, ?, 'tech_edit', 'Saved from Tech Unit form.', ?, NOW())
-     ON DUPLICATE KEY UPDATE source_code = VALUES(source_code), source_note = VALUES(source_note), updated_by_user_id = VALUES(updated_by_user_id), updated_at = NOW()`,
-    [unitId, fieldKey, normalizePositiveInteger(currentUserId)]
-  );
+  await unitFieldSourceModel.recordTechEditSource(connection, {
+    unitId,
+    fieldKey,
+    userId: currentUserId
+  });
 }
 
 async function saveSimpleFields(connection, unitId, formData, currentUserId) {

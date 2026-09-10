@@ -38,7 +38,6 @@ const REQUIREMENT_FIELD_BINDINGS = Object.freeze({
   bios_version: 'bios_version',
   battery_health: 'battery_health',
   absolute_status: 'absolute_status',
-  physical_camera_status: 'physical_camera_status',
   touchscreen_status: 'touchscreen_status',
   keyboard_language: 'keyboard_language',
   complete_diagnostics: 'complete_diagnostics',

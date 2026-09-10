@@ -1,0 +1,39 @@
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="label-printer-scope-title">
+    <div class="modal-header">
+      <div>
+        <p class="eyebrow">Label Printing</p>
+        <h2 id="label-printer-scope-title"><%= targetScope === 'managed' ? 'Convert to Managed Printer' : 'Convert to Solo Printer' %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </div>
+    <div class="modal-body">
+      <% if (errorMessages.length) { %><div class="message error"><% errorMessages.forEach((m) => { %><p><%= m %></p><% }) %></div><% } %>
+      <p><strong><%= printer.display_name %></strong></p>
+      <% if (targetScope === 'managed') { %>
+        <p class="field-hint">This removes the personal-use restriction and makes the printer managed and available to eligible users. Any previous solo owner is retained internally so it can be selected again if the printer is later converted back.</p>
+      <% } else { %>
+        <p class="field-hint">Choose the solo-printer owner. Sharing defaults off. Converting to a private solo printer removes it from shared printer groups.</p>
+      <% } %>
+      <form class="app-form" method="post" action="/management/printers/<%= printer.label_printer_id %>/scope" hx-post="/management/printers/<%= printer.label_printer_id %>/scope" hx-target="#modal-root" hx-swap="innerHTML">
+        <% if (targetScope === 'solo') { %>
+          <label class="form-field">
+            <span>Owner</span>
+            <select name="ownerUserId" required data-modal-initial-focus>
+              <option value="">Select owner</option>
+              <% owners.forEach((owner) => { %><option value="<%= owner.userId %>" <%= Number(selectedOwnerUserId) === Number(owner.userId) ? 'selected' : '' %>><%= owner.label %></option><% }) %>
+            </select>
+          </label>
+          <label class="checkbox-row">
+            <input type="checkbox" name="isShared" value="1" />
+            <span><strong>Share after conversion</strong><small>Leave off to make the converted solo printer private.</small></span>
+          </label>
+        <% } %>
+        <div class="form-actions">
+          <button class="primary-button" type="submit"><%= targetScope === 'managed' ? 'Convert to Managed' : 'Convert to Solo' %></button>
+          <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

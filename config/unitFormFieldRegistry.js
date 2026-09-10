@@ -191,6 +191,7 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
   }),
   configurableField('unit_serial_number', 'Unit Serial Number', 'identity', 'unitSerialNumber', 'unit_identifiers.identifier_value'),
   configurableField('bios_serial_number', 'BIOS Serial Number', 'identity', 'biosSerialNumber', 'unit_identifiers.identifier_value'),
+  configurableField('system_uuid', 'System UUID', 'identity', 'systemUuid', 'unit_identifiers.identifier_value'),
 
   defineField({
     key: 'amazon_asset_tag',
@@ -495,18 +496,6 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
   }),
   configurableField('skinned_status', 'Skinned', 'tests', 'skinnedStatusConfigValueId', 'unit_specifications.skinned_status_config_value_id'),
   protectedControl({
-    key: 'physical_camera_status',
-    label: 'Legacy Physical Camera Status',
-    section: 'legacy_hidden',
-    submissionName: 'physicalCameraStatusConfigValueId',
-    storagePath: 'unit_specifications.physical_camera_status_config_value_id',
-    ruleType: RULE_TYPE.LEGACY_HIDDEN,
-    availability: AVAILABILITY.NOT_RENDERED,
-    defaultVisible: false,
-    protectedReason: 'Superseded by structured Camera rows.',
-    preservationPolicy: PRESERVATION.PRESERVE_WHEN_HIDDEN
-  }),
-  protectedControl({
     key: 'graphics_adapters',
     label: 'Graphics Adapters',
     section: 'specifications',
@@ -613,30 +602,6 @@ const UNIT_FORM_FIELD_REGISTRY = Object.freeze([
     protectedReason: 'Hidden companion value used only when a General Comment is appended.'
   }),
 
-  protectedControl({
-    key: 'hardware_notes',
-    label: 'Hardware Notes',
-    section: 'legacy_hidden',
-    submissionName: 'hardwareNotes',
-    storagePath: 'units.hardware_notes',
-    ruleType: RULE_TYPE.LEGACY_HIDDEN,
-    availability: AVAILABILITY.CREATE_EDIT,
-    defaultVisible: false,
-    protectedReason: 'Legacy hidden field superseded by structured hardware issue rows.',
-    preservationPolicy: PRESERVATION.PRESERVE_WHEN_HIDDEN
-  }),
-  protectedControl({
-    key: 'cosmetic_notes',
-    label: 'Cosmetic Notes',
-    section: 'legacy_hidden',
-    submissionName: 'cosmeticNotes',
-    storagePath: 'units.cosmetic_notes',
-    ruleType: RULE_TYPE.LEGACY_HIDDEN,
-    availability: AVAILABILITY.CREATE_EDIT,
-    defaultVisible: false,
-    protectedReason: 'Legacy hidden field superseded by structured cosmetic issue rows.',
-    preservationPolicy: PRESERVATION.PRESERVE_WHEN_HIDDEN
-  })
 ]);
 
 const FIELD_DEPENDENCY_RULES = Object.freeze([

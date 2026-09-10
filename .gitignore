@@ -63,3 +63,5 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+# Persistent Label Library assets (back up with the application filesystem, not Git)
+storage/label-library/

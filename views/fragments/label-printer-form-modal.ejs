@@ -1,0 +1,45 @@
+<%
+  const isEdit = Boolean(printer && printer.label_printer_id);
+  const isManaged = scope === 'managed';
+  const managementContext = Boolean(management);
+  const basePath = managementContext ? '/management/printers' : '/tech/printers';
+  const submitPath = isEdit ? `${basePath}/${printer.label_printer_id}/edit/modal` : basePath;
+  const onlineRequired = Boolean(requireOnlineForCreate) && !isEdit;
+  const offlineBlocked = onlineRequired && probeResult && !probeResult.reachable;
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="label-printer-form-title">
+    <div class="modal-header"><div><p class="eyebrow">Label Printing</p><h2 id="label-printer-form-title"><%= isEdit ? 'Edit' : 'Add' %> <%= isManaged ? 'Managed' : 'Solo' %> Printer</h2></div><button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button></div>
+    <div class="modal-body">
+      <% if (errorMessages.length) { %><div class="message error"><% errorMessages.forEach((m) => { %><p><%= m %></p><% }) %></div><% } %>
+      <% if (duplicatePrinter) { %><div class="message warning"><p><strong>This printer has already been added to BWTDallas.</strong></p><p>No duplicate registry entry will be created.</p></div><% } %>
+      <% if (probeResult) { %><div class="message <%= probeResult.reachable ? 'success' : 'warning' %>"><p><%= probeResult.reachable ? 'Printer endpoint detected.' : (onlineRequired ? 'No supported printer port responded. Tech Users cannot add this solo printer while it is offline.' : 'No supported printer port responded. You can still save it, but it will be marked offline.') %></p><p>RAW 9100: <%= probeResult.protocols.find((p) => p.code === 'raw_9100')?.reachable ? 'reachable' : 'not detected' %> · LPD 515: <%= probeResult.protocols.find((p) => p.code === 'lpd')?.reachable ? 'reachable' : 'not detected' %> · IPP 631: <%= probeResult.protocols.find((p) => p.code === 'ipp')?.reachable ? 'reachable' : 'not detected' %><% if (probeResult.reverseName) { %> · Hostname: <%= probeResult.reverseName %><% } %></p></div><% } %>
+
+      <form class="app-form" method="post" action="<%= submitPath %>" hx-post="<%= submitPath %>" hx-target="#modal-root" hx-swap="innerHTML">
+        <div class="form-grid">
+          <label class="form-field"><span>Printer Name</span><input name="displayName" maxlength="120" required value="<%= formData.displayName %>" data-modal-initial-focus /></label>
+          <label class="form-field"><span>Location</span><input name="locationLabel" maxlength="160" value="<%= formData.locationLabel %>" placeholder="Tech Area 1" /></label>
+          <label class="form-field"><span>Printer IP</span><input name="hostAddress" maxlength="255" required value="<%= formData.hostAddress %>" placeholder="10.0.2.210" /></label>
+          <label class="form-field"><span>Protocol</span><select name="protocolCode"><% protocols.forEach((protocol) => { %><option value="<%= protocol.code %>" <%= formData.protocolCode === protocol.code ? 'selected' : '' %>><%= protocol.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Port</span><input type="number" name="port" min="1" max="65535" value="<%= formData.port %>" /></label>
+          <label class="form-field"><span>CUPS Queue <small>(optional)</small></span><input name="cupsQueueName" maxlength="128" value="<%= formData.cupsQueueName %>" /></label>
+          <label class="form-field"><span>Manufacturer</span><input name="manufacturer" maxlength="80" value="<%= formData.manufacturer %>" /></label>
+          <label class="form-field"><span>Model</span><input name="model" maxlength="120" value="<%= formData.model %>" /></label>
+          <label class="form-field"><span>Printer Profile</span><input name="printerProfileCode" maxlength="64" value="<%= formData.printerProfileCode %>" placeholder="brother_ql810w_300dpi" /></label>
+          <label class="form-field"><span>Media Profile</span><input name="mediaCode" maxlength="64" value="<%= formData.mediaCode %>" placeholder="62mm_continuous" /></label>
+          <label class="form-field"><span>DPI</span><input type="number" name="dpi" min="100" max="2400" value="<%= formData.dpi %>" /></label>
+        </div>
+        <input type="hidden" name="detectedDescription" value="<%= formData.detectedDescription %>" />
+        <div class="form-grid">
+          <% if (!isManaged) { %><label class="checkbox-row"><input type="checkbox" name="isShared" value="1" <%= formData.isShared ? 'checked' : '' %> /><span><strong>Share this printer</strong><small>Off by default. When enabled, ordinary Tech Users may use it too. Management+ can override this setting.</small></span></label><% } %>
+          <label class="checkbox-row"><input type="checkbox" name="isEnabled" value="1" <%= formData.isEnabled ? 'checked' : '' %> /><span><strong>Enabled</strong><small>Disabled printers remain registered but are not eligible for future printing.</small></span></label>
+        </div>
+        <div class="form-actions">
+          <% if (!isEdit) { %><button class="secondary-button" type="submit" formaction="<%= basePath %>/probe" hx-post="<%= basePath %>/probe" hx-target="#modal-root" hx-swap="innerHTML">Detect</button><% } %>
+          <button class="primary-button" type="submit" <%= (duplicatePrinter && !isEdit) || offlineBlocked ? 'disabled' : '' %>><%= isEdit ? 'Save Printer' : 'Add Printer' %></button>
+          <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

@@ -14,7 +14,7 @@ const {
 } = require('../config/unitFormFieldRegistry');
 
 test('authoritative registry contains every Stage 1A audited control', () => {
-  assert.equal(UNIT_FORM_FIELD_REGISTRY.length, 91);
+  assert.equal(UNIT_FORM_FIELD_REGISTRY.length, 89);
   assert.equal(assertValidUnitFormFieldRegistry(), true);
 });
 
@@ -104,7 +104,6 @@ test('lot-configurable list excludes permission, workflow, system, legacy, and d
     'missing_model_request',
     'outcome_approval',
     'general_comment_type',
-    'hardware_notes',
     'graphics_adapters'
   ]) {
     assert.equal(configurableKeys.has(key), false, `${key} should not be lot-configurable.`);
@@ -145,7 +144,7 @@ test('Configure Unit Form exposes every independently configurable live Add/Edit
   const configurableKeys = listLotConfigurableUnitFormFields().map((field) => field.key);
 
   assert.deepEqual(configurableKeys, [
-    'unit_serial_number', 'bios_serial_number', 'amazon_asset_tag', 'fnsku', 'asin', 'tracking_number', 'pallet_number',
+    'unit_serial_number', 'bios_serial_number', 'system_uuid', 'amazon_asset_tag', 'fnsku', 'asin', 'tracking_number', 'pallet_number',
     'buyer_comments', 'manufacturer', 'unit_model', 'screen_size', 'apple_model_number', 'model_year',
     'processor_model', 'processor_speed_ghz', 'memory_modules', 'previous_memory_size', 'storage_devices',
     'previous_storage_size', 'operating_system', 'os_build', 'bios_version', 'keyboard_language',

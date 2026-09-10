@@ -18,6 +18,9 @@ services:
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - /run/cups:/run/cups:ro
+      - ./storage/label-library:/app/storage/label-library
     networks:
       - proxy
       - app-dbnet

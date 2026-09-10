@@ -31,8 +31,6 @@ function sampleUnit(overrides = {}) {
     createdAt: '2026-08-27T19:34:00.000Z',
     completedAt: '2026-08-28T01:05:00.000Z',
     batteryHealthPercent: 87.5,
-    hardwareNotes: 'Legacy hardware note',
-    cosmeticNotes: '',
     ...overrides
   };
 }
@@ -137,7 +135,7 @@ test('export row preserves established Unit data while adding optional Specs / T
     gradeNotes: 'Light lid wear',
     passFail: 'Pass',
     outcomeNotes: 'Ready for resale',
-    hardwareRemarks: 'Legacy hardware note | Keyboard · Minor · Top: Missing key cap',
+    hardwareRemarks: 'Keyboard · Minor · Top: Missing key cap',
     cosmeticRemarks: 'Scratch · Lid: Two-inch scratch',
     generalComment: 'Latest general comment'
   });
@@ -204,7 +202,7 @@ test('filtered export stops when browser count and loaded row count disagree', a
 });
 
 test('duplicate remark text is exported only once', () => {
-  assert.equal(combineRemarks('Battery failed', [
+  assert.equal(combineRemarks([
     { issueRemark: 'Battery failed' },
     { issueLabel: 'Port', issueRemark: 'Loose USB-C port' }
   ]), 'Battery failed | Port: Loose USB-C port');

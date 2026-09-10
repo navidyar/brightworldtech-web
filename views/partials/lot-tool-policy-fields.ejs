@@ -1,0 +1,44 @@
+<label class="form-field">
+  <span>Allow Manual Create/Update</span>
+  <select name="allowManualCreateUpdate">
+    <option value="inherit" <%= formData.allowManualCreateUpdate === 'inherit' ? 'selected' : '' %>>Inherit (default: On)</option>
+    <option value="1" <%= formData.allowManualCreateUpdate === '1' ? 'selected' : '' %>>On</option>
+    <option value="0" <%= formData.allowManualCreateUpdate === '0' ? 'selected' : '' %>>Off</option>
+  </select>
+</label>
+
+<label class="form-field">
+  <span>Allow ScanTools</span>
+  <select name="allowScanTools">
+    <option value="inherit" <%= formData.allowScanTools === 'inherit' ? 'selected' : '' %>>Inherit (default: On)</option>
+    <option value="1" <%= formData.allowScanTools === '1' ? 'selected' : '' %>>On</option>
+    <option value="0" <%= formData.allowScanTools === '0' ? 'selected' : '' %>>Off</option>
+  </select>
+</label>
+
+<label class="form-field">
+  <span>Allow TechTools</span>
+  <select name="allowTechTools">
+    <option value="inherit" <%= formData.allowTechTools === 'inherit' ? 'selected' : '' %>>Inherit (default: On)</option>
+    <option value="1" <%= formData.allowTechTools === '1' ? 'selected' : '' %>>On</option>
+    <option value="0" <%= formData.allowTechTools === '0' ? 'selected' : '' %>>Off</option>
+  </select>
+</label>
+
+<label class="form-field">
+  <span>Require ScanTools Before Completion</span>
+  <select name="requireScanToolsBeforeCompletion">
+    <option value="inherit" <%= formData.requireScanToolsBeforeCompletion === 'inherit' ? 'selected' : '' %>>Inherit (default: Off)</option>
+    <option value="1" <%= formData.requireScanToolsBeforeCompletion === '1' ? 'selected' : '' %>>Required</option>
+    <option value="0" <%= formData.requireScanToolsBeforeCompletion === '0' ? 'selected' : '' %>>Not Required</option>
+  </select>
+</label>
+
+<label class="form-field">
+  <span>Require TechTools Before Completion</span>
+  <select name="requireTechToolsBeforeCompletion">
+    <option value="inherit" <%= formData.requireTechToolsBeforeCompletion === 'inherit' ? 'selected' : '' %>>Inherit (default: Off)</option>
+    <option value="1" <%= formData.requireTechToolsBeforeCompletion === '1' ? 'selected' : '' %>>Required</option>
+    <option value="0" <%= formData.requireTechToolsBeforeCompletion === '0' ? 'selected' : '' %>>Not Required</option>
+  </select>
+</label>

@@ -52,7 +52,6 @@ test('expanded requirement registry covers the live fields that support meaningf
     'bios_version',
     'battery_health',
     'absolute_status',
-    'physical_camera_status',
     'touchscreen_status',
     'keyboard_language',
     'complete_diagnostics',

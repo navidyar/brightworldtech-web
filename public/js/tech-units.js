@@ -906,7 +906,34 @@
     submitQcReviewForm(qcReviewForm, event.submitter);
   });
 
+  function getBulkLabelPrintModal(element) {
+    return element ? element.closest('.tech-bulk-print-label-modal') : null;
+  }
+
+  function updateBulkLabelSelectedCount(modal) {
+    if (!modal) return;
+    const count = modal.querySelectorAll('[data-bulk-label-unit-checkbox]:checked:not(:disabled)').length;
+    const output = modal.querySelector('[data-bulk-label-selected-count]');
+    if (output) output.textContent = String(count);
+    const submit = modal.querySelector('button[type="submit"]');
+    if (submit && !modal.querySelector('.message.error')) submit.disabled = count === 0;
+  }
+
+  function setAllBulkLabelUnits(modal, checked) {
+    if (!modal) return;
+    modal.querySelectorAll('[data-bulk-label-unit-checkbox]:not(:disabled)').forEach((checkbox) => {
+      checkbox.checked = checked;
+    });
+    updateBulkLabelSelectedCount(modal);
+  }
+
   document.addEventListener('change', (event) => {
+    const bulkUnitCheckbox = event.target.closest('[data-bulk-label-unit-checkbox]');
+    if (bulkUnitCheckbox) {
+      updateBulkLabelSelectedCount(getBulkLabelPrintModal(bulkUnitCheckbox));
+      return;
+    }
+
     const exportColumn = event.target.closest('[data-unit-export-column]');
 
     if (!exportColumn) {
@@ -977,6 +1004,20 @@
     if (clearAllExportColumns) {
       event.preventDefault();
       setAllUnitExportColumns(getUnitExportModal(clearAllExportColumns), false);
+      return;
+    }
+
+    const selectAllBulkUnits = event.target.closest('[data-bulk-label-select-all]');
+    if (selectAllBulkUnits) {
+      event.preventDefault();
+      setAllBulkLabelUnits(getBulkLabelPrintModal(selectAllBulkUnits), true);
+      return;
+    }
+
+    const clearAllBulkUnits = event.target.closest('[data-bulk-label-clear-all]');
+    if (clearAllBulkUnits) {
+      event.preventDefault();
+      setAllBulkLabelUnits(getBulkLabelPrintModal(clearAllBulkUnits), false);
       return;
     }
 
@@ -1797,6 +1838,11 @@
     if (exportModal) {
       updateUnitExportSelection(exportModal);
     }
+
+    const bulkLabelModal = target && typeof target.querySelector === 'function'
+      ? target.querySelector('.tech-bulk-print-label-modal')
+      : null;
+    if (bulkLabelModal) updateBulkLabelSelectedCount(bulkLabelModal);
   });
 
   document.body.addEventListener('htmx:responseError', (event) => {

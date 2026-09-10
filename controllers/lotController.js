@@ -5,6 +5,7 @@ const lotValidationOverrideModel = require('../models/lotValidationOverrideModel
 const requirementOptionModel = require('../models/requirementOptionModel');
 const lotUnitFormProfileModel = require('../models/lotUnitFormProfileModel');
 const lotUnitBrowserLayoutModel = require('../models/lotUnitBrowserLayoutModel');
+const labelLibraryModel = require('../models/labelLibraryModel');
 const unitAmazonModel = require('../models/unitAmazonModel');
 const {
   REQUIREMENT,
@@ -22,6 +23,7 @@ const {
   LotUnitBrowserLayoutEditorError,
   normalizeSubmittedLotUnitBrowserLayout
 } = require('../services/lotUnitBrowserLayoutEditor');
+const { normalizeLotAssignments } = require('../services/labelTemplateInputPolicy');
 const {
   MAX_VISIBLE_OPTIONAL_COLUMNS,
   listUnitBrowserCoreColumns,
@@ -48,6 +50,7 @@ const { buildSelectedLotExportScope } = require('../services/lotExportScope');
 const unitExportFileService = require('../services/unitExportFileService');
 const { UNIT_EXPORT_COLUMNS } = require('../config/unitExportContract');
 const { MIN_LOT_PRODUCTION_WEIGHT, parseRequiredLotProductionWeight } = require('../services/lotProductionWeightPolicy');
+const { toFormValue } = require('../services/lotToolPolicy');
 
 const requirementFieldOptions = listLotRequirementFields().map((field) => ({
   value: field.key,
@@ -84,6 +87,11 @@ function getBlankLotFormData(formOptions = {}) {
     objectives: '',
     notes: '',
     allowDuplicateUnitAssumption: '0',
+    allowManualCreateUpdate: 'inherit',
+    allowScanTools: 'inherit',
+    allowTechTools: 'inherit',
+    requireScanToolsBeforeCompletion: 'inherit',
+    requireTechToolsBeforeCompletion: 'inherit',
     startNewProductionCycleOnMove: '0',
     generateAmazonAssetTag: '0',
     qcRequired: '1',
@@ -102,6 +110,11 @@ function getLotFormDataFromRequest(req) {
     defaultProductionWeight: String(req.body.defaultProductionWeight || '').trim(),
     hasUnlimitedGoal: req.body.hasUnlimitedGoal === '1' ? '1' : '0',
     allowDuplicateUnitAssumption: req.body.allowDuplicateUnitAssumption === '1' ? '1' : '0',
+    allowManualCreateUpdate: toFormValue(req.body.allowManualCreateUpdate),
+    allowScanTools: toFormValue(req.body.allowScanTools),
+    allowTechTools: toFormValue(req.body.allowTechTools),
+    requireScanToolsBeforeCompletion: toFormValue(req.body.requireScanToolsBeforeCompletion),
+    requireTechToolsBeforeCompletion: toFormValue(req.body.requireTechToolsBeforeCompletion),
     startNewProductionCycleOnMove: req.body.startNewProductionCycleOnMove === '1' ? '1' : '0',
     generateAmazonAssetTag: req.body.generateAmazonAssetTag === '1' ? '1' : '0',
     qcRequired: req.body.qcRequired === '1' ? '1' : '0',
@@ -204,6 +217,11 @@ function getLotFormDataFromLot(lot) {
     defaultProductionWeight: lot.default_production_weight !== null && lot.default_production_weight !== undefined ? String(lot.default_production_weight) : '',
     hasUnlimitedGoal: lot.isUnlimited ? '1' : '0',
     allowDuplicateUnitAssumption: Number(lot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0',
+    allowManualCreateUpdate: toFormValue(lot.allow_manual_create_update),
+    allowScanTools: toFormValue(lot.allow_scantools),
+    allowTechTools: toFormValue(lot.allow_techtools),
+    requireScanToolsBeforeCompletion: toFormValue(lot.require_scantools_before_completion),
+    requireTechToolsBeforeCompletion: toFormValue(lot.require_techtools_before_completion),
     startNewProductionCycleOnMove: Number(lot.start_new_production_cycle_on_move || 0) === 1 ? '1' : '0',
     generateAmazonAssetTag: Number(lot.generate_amazon_asset_tag || 0) === 1 ? '1' : '0',
     qcRequired: Number(lot.qc_required ?? 1) === 1 ? '1' : '0',
@@ -265,6 +283,14 @@ function validateLotForm(formData, formOptions, currentLotId = null) {
 
   if (formOptions.capabilities.hasLotType && !formData.lotTypeConfigValueId) {
     errors.push('Lot type is required.');
+  }
+
+  if (formData.allowScanTools === '0' && formData.requireScanToolsBeforeCompletion === '1') {
+    errors.push('ScanTools cannot be required before completion while ScanTools is disallowed for the Lot.');
+  }
+
+  if (formData.allowTechTools === '0' && formData.requireTechToolsBeforeCompletion === '1') {
+    errors.push('TechTools cannot be required before completion while TechTools is disallowed for the Lot.');
   }
 
   if (formData.parentLotId && !Number.isInteger(Number(formData.parentLotId))) {
@@ -938,6 +964,101 @@ async function updateLotUnitBrowserLayout(req, res, next) {
   }
 }
 
+
+function getLotLabelTemplateSourceLabel(effectiveSet, selectedLotId) {
+  const source = effectiveSet?.source || {};
+  if (source.type === 'none') return 'No configured label set';
+  if (source.type === 'lot_override' && Number(source.lotId) === Number(selectedLotId)) return 'This Lot';
+  if (source.type === 'lot_override') return `Inherited from ${source.lotName || `Lot ${source.lotId}`}`;
+  return 'Resolved label set';
+}
+
+async function getLotLabelTemplatesViewData(lotId) {
+  const lot = await lotModel.getLotById(lotId);
+  if (!lot) return null;
+
+  const [effectiveSet, directSet, templates] = await Promise.all([
+    labelLibraryModel.getEffectiveLotTemplateSet(lotId),
+    labelLibraryModel.getDirectLotTemplateSet(lotId),
+    labelLibraryModel.listLabelTemplates({ includeArchived: true })
+  ]);
+  const selectedById = new Map(
+    (effectiveSet.assignments || []).map((assignment) => [Number(assignment.labelTemplateId), assignment])
+  );
+
+  return {
+    lot,
+    effectiveSet,
+    directSet,
+    sourceLabel: getLotLabelTemplateSourceLabel(effectiveSet, lotId),
+    templates: templates.map((template) => ({
+      ...template,
+      selection: selectedById.get(Number(template.label_template_id)) || null
+    }))
+  };
+}
+
+function renderLotLabelTemplatesModal(res, viewData, errorMessages = [], statusCode = 200) {
+  return res.status(statusCode).render('fragments/lot-label-templates-modal', {
+    ...(viewData || {
+      lot: null,
+      effectiveSet: null,
+      directSet: null,
+      sourceLabel: '',
+      templates: []
+    }),
+    errorMessages
+  });
+}
+
+async function renderLotLabelTemplatesModalPage(req, res, next) {
+  try {
+    const lotId = Number(req.params.lotId);
+    if (!Number.isSafeInteger(lotId) || lotId <= 0) {
+      return renderLotLabelTemplatesModal(res, null, ['The selected Lot could not be found.'], 404);
+    }
+    const viewData = await getLotLabelTemplatesViewData(lotId);
+    if (!viewData) return renderLotLabelTemplatesModal(res, null, ['The selected Lot could not be found.'], 404);
+    return renderLotLabelTemplatesModal(res, viewData);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateLotLabelTemplates(req, res, next) {
+  const lotId = Number(req.params.lotId);
+  try {
+    if (!Number.isSafeInteger(lotId) || lotId <= 0) {
+      return renderLotLabelTemplatesModal(res, null, ['The selected Lot could not be found.'], 404);
+    }
+    const lot = await lotModel.getLotById(lotId);
+    if (!lot) return renderLotLabelTemplatesModal(res, null, ['The selected Lot could not be found.'], 404);
+
+    if (String(req.body.labelSetMode || '').trim() === 'inherit') {
+      await labelLibraryModel.resetLotTemplateSet(lotId, req.currentUser.user_id);
+      return sendHtmxRedirect(req, res, addCacheBuster(`/management/lots/${lotId}?labelSetReset=1`));
+    }
+
+    const templates = await labelLibraryModel.listLabelTemplates({ includeArchived: true });
+    const templateById = new Map(templates.map((template) => [Number(template.label_template_id), template]));
+    const assignments = normalizeLotAssignments(req.body, [...templateById.keys()])
+      .map((assignment) => ({
+        ...assignment,
+        isActive: assignment.isActive && templateById.get(assignment.labelTemplateId)?.status !== 'archived'
+      }));
+
+    await labelLibraryModel.replaceLotTemplateSet(lotId, assignments, req.currentUser.user_id);
+    return sendHtmxRedirect(req, res, addCacheBuster(`/management/lots/${lotId}?labelSetUpdated=1`));
+  } catch (error) {
+    try {
+      const viewData = await getLotLabelTemplatesViewData(lotId);
+      return renderLotLabelTemplatesModal(res, viewData, [error.message || 'The Lot label configuration could not be saved.'], 400);
+    } catch (renderError) {
+      next(renderError);
+    }
+  }
+}
+
 function getLotDetailSuccessMessage(query) {
   if (query.duplicated === '1') return 'Lot duplicated successfully. The new Lot remains hidden until you manually unhide it.';
   if (query.requirementCreated === '1') return 'Requirement added successfully.';
@@ -951,6 +1072,8 @@ function getLotDetailSuccessMessage(query) {
   if (query.unitFormRulesUpdated === '1') return 'Unit form configuration updated successfully.';
   if (query.unitBrowserLayoutUpdated === '1') return 'Unit Browser configuration updated successfully.';
   if (query.unitBrowserLayoutReset === '1') return 'Unit Browser configuration reset to inheritance successfully.';
+  if (query.labelSetUpdated === '1') return 'Lot label configuration updated successfully.';
+  if (query.labelSetReset === '1') return 'Lot label configuration reset to inheritance successfully.';
   if (query.amazonAssetTagsGenerated) return `${Number(query.amazonAssetTagsGenerated || 0).toLocaleString()} missing Amazon Asset Tag${Number(query.amazonAssetTagsGenerated || 0) === 1 ? '' : 's'} generated for direct Units in this Lot.`;
   if (query.validationOverrideAccepted === '1') return 'Unit accepted by Management for this Lot.';
   if (query.validationOverrideRevoked === '1') return 'Management acceptance revoked.';
@@ -1064,6 +1187,18 @@ async function createLot(req, res, next) {
       addCacheBuster(buildNewLotCreatedRedirect(createdLot.lotId))
     );
   } catch (error) {
+    if (error && error.code === 'BWT_LOT_TOOL_POLICY_INVALID') {
+      const formOptions = await lotModel.getLotFormOptions();
+      const formData = getLotFormDataFromRequest(req);
+      if (isHtmxRequest(req)) {
+        return res.status(400).render('fragments/lot-form-modal', {
+          mode: 'create', lot: null, formOptions, formData, errorMessages: [error.message]
+        });
+      }
+      return res.status(400).render('pages/management-lot-new', {
+        pageTitle: 'Create Lot', currentNav: 'management-lots', formOptions, formData, errorMessages: [error.message]
+      });
+    }
     next(error);
   }
 }
@@ -1688,7 +1823,7 @@ async function updateLotModal(req, res, next) {
       addCacheBuster(buildLotActionRedirect(lotId, 'updated=1', '/management/lots?updated=1', returnTo))
     );
   } catch (error) {
-    if (error && String(error.code || '').startsWith('LOT_PARENT_')) {
+    if (error && (String(error.code || '').startsWith('LOT_PARENT_') || error.code === 'BWT_LOT_TOOL_POLICY_INVALID')) {
       const lotId = Number(req.params.lotId);
       const returnTo = getLotActionReturnTo(req);
       const lot = await lotModel.getLotById(lotId);
@@ -2685,6 +2820,8 @@ module.exports = {
   renderLotUnitFormRulesModalPage,
   renderLotUnitBrowserLayoutModalPage,
   updateLotUnitBrowserLayout,
+  renderLotLabelTemplatesModalPage,
+  updateLotLabelTemplates,
   renderLotUnitValidationModal,
   acceptLotUnitValidationOverride,
   revokeLotUnitValidationOverride,

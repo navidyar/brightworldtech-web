@@ -1,7 +1,12 @@
 <%
   const safePreview = preview || {};
   const safeErrorMessages = Array.isArray(errorMessages) ? errorMessages.filter(Boolean) : [];
-  const canSubmit = Boolean(safePreview.ready) && !successMessage && safeErrorMessages.length === 0;
+  const safeCompletionToolRequirements = completionToolRequirements || safePreview.completionToolRequirements || { requirements: [], missing: [] };
+  const safeToolRequirements = Array.isArray(safeCompletionToolRequirements.requirements) ? safeCompletionToolRequirements.requirements : [];
+  const safeMissingToolRequirements = Array.isArray(missingCompletionToolRequirements) ? missingCompletionToolRequirements : [];
+  const canOverrideMissingTools = Boolean(canOverrideCompletionToolRequirements);
+  const completionRequirementsBlocking = safeMissingToolRequirements.length > 0 && !canOverrideMissingTools;
+  const canSubmit = Boolean(safePreview.ready) && !successMessage && safeErrorMessages.length === 0 && !completionRequirementsBlocking;
   const showProductionWeight = Boolean(canViewProductionWeight);
   const grantsProductionCredit = safePreview.grantsProductionCredit !== false;
 %>
@@ -61,6 +66,22 @@
             <% safeErrorMessages.forEach((errorMessage) => { %>
               <p><%= errorMessage %></p>
             <% }) %>
+          </div>
+        <% } %>
+
+        <% if (safeToolRequirements.length > 0) { %>
+          <div class="message <%= safeMissingToolRequirements.length > 0 ? 'warning' : 'info' %>">
+            <p><strong>Required Tool runs for this production cycle</strong></p>
+            <% safeToolRequirements.forEach((requirement) => { %>
+              <p><%= requirement.label %>: <%= requirement.completed ? 'Completed' : 'Missing' %></p>
+            <% }) %>
+            <% if (safeMissingToolRequirements.length > 0) { %>
+              <% if (canOverrideMissingTools) { %>
+                <p>Tech Lead+ may complete the Unit without the missing Tool run only by providing an override reason. This will be recorded permanently in Unit History.</p>
+              <% } else { %>
+                <p>Completion is blocked until the missing required Tool run is completed during the current production cycle.</p>
+              <% } %>
+            <% } %>
           </div>
         <% } %>
 
@@ -142,6 +163,28 @@
                       </span>
                     </label>
                   <% }) %>
+                </div>
+              </div>
+            <% } %>
+
+            <% if (safeMissingToolRequirements.length > 0 && canOverrideMissingTools) { %>
+              <div class="form-section">
+                <div class="form-section-header">
+                  <div>
+                    <h3>Required Tool Run Override</h3>
+                    <p class="field-hint">Explain why this Unit is being completed without the required Tool run. The reason is mandatory and will be written to Unit History.</p>
+                  </div>
+                </div>
+                <div class="form-grid single-column">
+                  <label class="field-group">
+                    <span>Override Reason</span>
+                    <textarea
+                      name="completionRequirementOverrideReason"
+                      rows="3"
+                      maxlength="1000"
+                      required
+                    ><%= completionRequirementOverrideReason || '' %></textarea>
+                  </label>
                 </div>
               </div>
             <% } %>

@@ -81,6 +81,17 @@ function formatNumber(value) {
 }
 
 
+
+function formatBytes(value) {
+  const bytes = Number(value);
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const amount = bytes / (1024 ** index);
+  const decimals = index === 0 || amount >= 100 ? 0 : amount >= 10 ? 1 : 2;
+  return `${amount.toFixed(decimals)} ${units[index]}`;
+}
+
 function formatRoleLabel(roleCode) {
   const normalized = String(roleCode || '').trim().toLowerCase();
   const labels = {
@@ -118,6 +129,7 @@ module.exports = {
   formatDate,
   formatTime,
   formatNumber,
+  formatBytes,
   formatRoleLabel,
   formatWeight
 };

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+        <main class="content-shell configuration-page printing-configuration-page">
+          <section class="page-heading configuration-page-heading">
+            <div>
+              <p class="eyebrow">Admin Configuration</p>
+              <h1>Printing Configuration</h1>
+              <p>Control how long recent print status remains visible and how successive individual print actions are grouped.</p>
+            </div>
+          </section>
+
+          <%- include('../partials/configuration-nav', { currentNav }) %>
+
+          <% if (saved) { %><div class="message success"><p>Printing configuration saved.</p></div><% } %>
+          <% if (Array.isArray(errorMessages) && errorMessages.length) { %>
+            <div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div>
+          <% } %>
+
+          <section class="site-clean-section site-clean-surface">
+            <div class="site-clean-section-heading">
+              <div>
+                <h2>Recent Prints</h2>
+                <p>These settings affect the user-facing Recent Prints window only. Historical print records remain stored for audit/reporting.</p>
+              </div>
+            </div>
+
+            <form class="app-form app-form-clean" method="post" action="/management/config/printing">
+              <div class="form-grid">
+                <label class="form-field">
+                  <span>Recent Prints display duration (minutes)</span>
+                  <input type="number" name="recentPrintsMinutes" min="1" max="1440" step="1" inputmode="numeric" value="<%= settings.recentPrintsMinutes %>" required />
+                  <small class="field-hint">Default: 15 minutes. Increase or shorten this as workflow needs change.</small>
+                </label>
+
+                <label class="form-field">
+                  <span>Print Set grouping gap (minutes)</span>
+                  <input type="number" name="printSetGroupingGapMinutes" min="1" max="60" step="1" inputmode="numeric" value="<%= settings.printSetGroupingGapMinutes %>" required />
+                  <small class="field-hint">Default: 3 minutes. Successive individual print actions within this inactivity gap stay in the same visual Print Set. Bulk submissions always remain their own set.</small>
+                </label>
+              </div>
+              <div class="form-actions"><button class="primary-button" type="submit">Save Printing Configuration</button></div>
+            </form>
+          </section>
+        </main>
+      </div>
+    </div>
+    <div id="modal-root"></div>
+  </body>
+</html>

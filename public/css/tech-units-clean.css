@@ -5136,6 +5136,22 @@
   max-width: none;
 }
 
+/* System UUID is the intentional identifier exception: keep the full DOM value for
+   selection/copy/search while truncating only its visual presentation. */
+.tech-units-clean-page .tech-unit-summary-id-item--uuid {
+  grid-template-columns: max-content minmax(0, 10rem);
+  width: auto;
+  max-width: 12.75rem;
+}
+
+.tech-units-clean-page .tech-unit-summary-id-value--uuid {
+  display: inline-block;
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .tech-units-clean-page .tech-unit-browser-comment-links {
   display: grid;
   justify-items: start;
@@ -5209,3 +5225,263 @@
 .tech-units-clean-page .tech-units-browser-header--unit_weight {
   padding-left: calc(var(--tu-cell-inline-padding) + 10px);
 }
+
+/* Label printing — server-rendered preview with CUPS-backed printer selection. */
+#modal-root .tech-print-label-modal {
+  width: min(760px, calc(100vw - 28px));
+}
+
+#modal-root .tech-print-label-modal .modal-body {
+  display: grid;
+  gap: 12px;
+}
+
+#modal-root .tech-label-preview {
+  padding: 12px;
+  overflow-x: auto;
+  border: 1px solid #d3deea;
+  border-radius: 9px;
+  background: #eef3f8;
+}
+
+#modal-root .tech-label-preview-image {
+  display: block;
+  width: 100%;
+  max-width: 620px;
+  height: auto;
+  margin: 0 auto;
+  background: #ffffff;
+  image-rendering: auto;
+}
+
+#modal-root .tech-label-preview-hint {
+  margin: -4px 0 0;
+  text-align: center;
+}
+
+#modal-root .tech-label-print-form {
+  display: grid;
+  gap: 12px;
+}
+
+#modal-root .tech-label-print-form .form-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#modal-root .tech-label-lot-format-hint {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid #dbe5ef;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+@media (max-width: 680px) {
+  #modal-root .tech-label-print-form .form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Stage 10W84 — Label Library printing integration. */
+#modal-root .tech-label-printer-grid {
+  grid-template-columns: minmax(240px, 360px);
+}
+
+#modal-root .tech-label-template-source {
+  margin: 0;
+}
+
+#modal-root .tech-label-template-list {
+  display: grid;
+  gap: 10px;
+}
+
+#modal-root .tech-label-template-choice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px;
+  gap: 10px 14px;
+  padding: 10px;
+  border: 1px solid #d3deea;
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+#modal-root .tech-label-template-choice.is-selected {
+  border-color: #a9bfd6;
+  background: #f8fbff;
+}
+
+#modal-root .tech-label-template-choice.is-unavailable {
+  opacity: 0.72;
+}
+
+#modal-root .tech-label-template-choice-header,
+#modal-root .tech-label-template-badges,
+#modal-root .tech-label-template-choice-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#modal-root .tech-label-template-choice-header {
+  grid-column: 1 / -1;
+  justify-content: space-between;
+}
+
+#modal-root .tech-label-template-choice-toggle {
+  min-width: 0;
+}
+
+#modal-root .tech-label-template-choice-toggle span {
+  min-width: 0;
+}
+
+#modal-root .tech-label-template-choice .tech-label-preview {
+  margin: 0;
+}
+
+#modal-root .tech-label-template-quantity {
+  align-self: start;
+}
+
+#modal-root .tech-label-template-quantity input {
+  width: 100%;
+}
+
+#modal-root .tech-label-template-inline-error {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 680px) {
+  #modal-root .tech-label-template-choice {
+    grid-template-columns: 1fr;
+  }
+
+  #modal-root .tech-label-template-choice-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* Stage 10W85 — Lot-scoped bulk label printing. */
+.tech-units-clean-page .tech-units-results-heading-actions,
+.tech-units-clean-page .tech-units-bulk-label-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tech-units-clean-page .tech-units-results-heading-actions {
+  margin-left: auto;
+}
+
+.tech-units-clean-page .tech-units-bulk-label-button {
+  min-height: 32px;
+  padding: 5px 10px;
+}
+
+#modal-root .tech-bulk-print-label-modal {
+  width: min(940px, calc(100vw - 28px));
+}
+
+#modal-root .tech-bulk-unit-section-header,
+#modal-root .tech-bulk-unit-controls,
+#modal-root .tech-bulk-label-unit-row,
+#modal-root .tech-bulk-print-result-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#modal-root .tech-bulk-unit-section-header {
+  justify-content: space-between;
+}
+
+#modal-root .tech-bulk-unit-controls {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+#modal-root .tech-bulk-label-unit-list,
+#modal-root .tech-bulk-print-results {
+  display: grid;
+  gap: 6px;
+}
+
+#modal-root .tech-bulk-label-unit-list {
+  max-height: 300px;
+  overflow: auto;
+  padding: 2px;
+}
+
+#modal-root .tech-bulk-label-unit-row {
+  display: grid;
+  grid-template-columns: minmax(170px, 1.2fr) minmax(150px, 1fr) minmax(170px, 1fr);
+  padding: 8px 10px;
+  border: 1px solid #dbe5ef;
+  border-radius: 8px;
+  background: #ffffff;
+  font-size: 0.84rem;
+}
+
+#modal-root .tech-bulk-label-unit-row.is-unavailable {
+  opacity: 0.62;
+  background: #f7f9fb;
+}
+
+#modal-root .tech-bulk-label-unit-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+#modal-root .tech-bulk-print-result-row {
+  justify-content: space-between;
+  padding: 7px 9px;
+  border-bottom: 1px solid #e3eaf2;
+}
+
+@media (max-width: 760px) {
+  .tech-units-clean-page .tech-units-clean-section-heading--results,
+  #modal-root .tech-bulk-unit-section-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .tech-units-clean-page .tech-units-results-heading-actions {
+    margin-left: 0;
+  }
+
+  #modal-root .tech-bulk-unit-controls {
+    justify-content: flex-start;
+  }
+
+  #modal-root .tech-bulk-label-unit-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Recent label print status */
+#tech-print-queue-summary { display: inline-flex; }
+.tech-print-success-recent-link { margin: 0.5rem 0 0.75rem; display: flex; justify-content: flex-end; }
+.tech-recent-prints-modal { width: min(760px, calc(100vw - 2rem)); }
+.tech-recent-print-set-list { display: grid; gap: 0; }
+.tech-recent-print-set { padding: 0.25rem 0 0.75rem; }
+.tech-recent-print-set--separated { border-top: 1px solid var(--border-color, #d9e1e8); padding-top: 0.9rem; margin-top: 0.35rem; }
+.tech-recent-print-set-heading { display: flex; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.45rem; }
+.tech-recent-print-set-heading small,
+.tech-recent-print-item-main small,
+.tech-recent-print-attempts small { display: block; color: var(--text-muted, #667085); margin-top: 0.15rem; }
+.tech-recent-print-items { display: grid; gap: 0.45rem; }
+.tech-recent-print-item { border: 1px solid var(--border-color, #d9e1e8); border-radius: 8px; padding: 0.65rem 0.75rem; background: #fff; }
+.tech-recent-print-item-main { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
+.tech-recent-print-detail-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.45rem; margin: 0.55rem 0 0; }
+.tech-recent-print-detail-list div { min-width: 0; }
+.tech-recent-print-detail-list dt { font-size: 0.72rem; color: var(--text-muted, #667085); }
+.tech-recent-print-detail-list dd { margin: 0.1rem 0 0; font-size: 0.82rem; overflow-wrap: anywhere; }
+.tech-recent-print-attempts { margin-top: 0.45rem; }
+.tech-recent-print-error { margin-top: 0.45rem; }
+@media (max-width: 700px) { .tech-recent-print-detail-list { grid-template-columns: 1fr; } }

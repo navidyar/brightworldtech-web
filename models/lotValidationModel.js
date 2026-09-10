@@ -90,8 +90,6 @@ async function listBaseUnitRowsForLot(lotId, connection = pool) {
         unit_specifications.bios_version,
         unit_specifications.absolute_status_config_value_id,
         COALESCE(absolute_status.label, absolute_status.value) AS absolute_status_label,
-        unit_specifications.physical_camera_status_config_value_id,
-        COALESCE(physical_camera_status.label, physical_camera_status.value) AS physical_camera_status_label,
         unit_specifications.touchscreen_status_config_value_id,
         COALESCE(touchscreen_status.label, touchscreen_status.value) AS touchscreen_status_label,
         unit_specifications.keyboard_language_config_value_id,
@@ -143,8 +141,6 @@ async function listBaseUnitRowsForLot(lotId, connection = pool) {
         ON unit_specifications.unit_id = u.unit_id
       LEFT JOIN config_values absolute_status
         ON absolute_status.config_value_id = unit_specifications.absolute_status_config_value_id
-      LEFT JOIN config_values physical_camera_status
-        ON physical_camera_status.config_value_id = unit_specifications.physical_camera_status_config_value_id
       LEFT JOIN config_values touchscreen_status
         ON touchscreen_status.config_value_id = unit_specifications.touchscreen_status_config_value_id
       LEFT JOIN config_values keyboard_language

@@ -100,3 +100,21 @@ test('a Unit assigned to another Tech keeps the takeover workflow', () => {
   assert.equal(result.actionKind, 'takeover');
   assert.equal(result.assignedToCurrentActor, false);
 });
+
+
+test('same-Lot duplicate takeover is direct when the single Lot duplicate permission is enabled', () => {
+  const result = getDuplicateAssumptionEligibility({
+    ...baseInput,
+    candidate: {
+      unitId: 91,
+      lotId: 20,
+      assignedToUserId: 8,
+      isParked: false,
+      isClosedLot: false
+    }
+  });
+
+  assert.equal(result.allowed, true);
+  assert.equal(result.requiresOverride, false);
+  assert.equal(result.actionKind, 'takeover');
+});

@@ -4,6 +4,7 @@ const unitModelCatalogController = require('../controllers/unitModelCatalogContr
 const processorFamilyController = require('../controllers/processorFamilyController');
 const processorCatalogController = require('../controllers/processorCatalogController');
 const systemController = require('../controllers/systemController');
+const labelPrintConfigController = require('../controllers/labelPrintConfigController');
 const { requireAuth, requireRole } = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -15,6 +16,20 @@ router.get(
   requireAuth,
   requireRole(configRoles),
   configController.renderConfigPage
+);
+
+router.get(
+  '/management/config/printing',
+  requireAuth,
+  requireRole(configRoles),
+  labelPrintConfigController.renderPrintingConfigPage
+);
+
+router.post(
+  '/management/config/printing',
+  requireAuth,
+  requireRole(configRoles),
+  labelPrintConfigController.updatePrintingConfig
 );
 
 router.post(

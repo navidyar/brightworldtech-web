@@ -1,0 +1,63 @@
+<div id="management-printers-live" hx-get="/management/printers/live" hx-trigger="label-printer-registry-changed from:body" hx-swap="outerHTML" hx-vals='js:{message: event.detail && event.detail.message ? event.detail.message : ""}'<% if (oob) { %> hx-swap-oob="outerHTML"<% } %>>
+  <% if (successMessage) { %><div class="message success"><%= successMessage %></div><% } %>
+  <% if (errorMessages.length) { %><div class="message error"><% errorMessages.forEach((m) => { %><p><%= m %></p><% }) %></div><% } %>
+
+  <section class="site-clean-section">
+    <div class="site-clean-section-heading"><div><h2>Printer Registry</h2><p>Managed printers are globally available. Shared solo printers are also eligible for groups; private solo printers are not.</p></div></div>
+    <div class="table-card">
+      <table>
+        <thead><tr><th>Printer</th><th>Connection</th><th>Ownership</th><th>Status</th><th>Groups</th><th>Actions</th></tr></thead>
+        <tbody>
+          <% if (!printers.length) { %><tr><td colspan="6">No printers are registered.</td></tr><% } %>
+          <% printers.forEach((printer) => { %>
+            <tr>
+              <td><strong><%= printer.display_name %></strong><br/><small><%= printer.location_label || 'No location label' %></small><% if (printer.manufacturer || printer.model) { %><br/><small><%= [printer.manufacturer, printer.model].filter(Boolean).join(' ') %></small><% } %></td>
+              <td><%= printer.host_address %>:<%= printer.port %><br/><small><%= printer.protocol_code %><% if (printer.cups_queue_name) { %> · <%= printer.cups_queue_name %><% } %></small></td>
+              <td><span class="pill <%= printer.scope_code === 'managed' ? 'good' : 'slate' %>"><%= printer.scope_code === 'managed' ? 'Managed' : 'Solo' %></span><% if (printer.scope_code === 'solo') { %><br/><small><%= printer.ownerLabel %> · <%= Number(printer.is_shared) === 1 ? 'Shared' : 'Private' %></small><% } %></td>
+              <td><span class="pill <%= Number(printer.is_enabled) === 1 ? 'good' : 'bad' %>"><%= Number(printer.is_enabled) === 1 ? 'Enabled' : 'Disabled' %></span><br/><small>Last probe: <%= printer.last_probe_status || '—' %></small></td>
+              <td><%= formatNumber(printer.group_count) %></td>
+              <td>
+                <div class="management-user-row-actions">
+                  <a class="secondary-button" href="/management/printers/<%= printer.label_printer_id %>/edit/modal" hx-get="/management/printers/<%= printer.label_printer_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                  <a class="secondary-button" href="/management/printers/<%= printer.label_printer_id %>/scope/modal" hx-get="/management/printers/<%= printer.label_printer_id %>/scope/modal" hx-target="#modal-root" hx-swap="innerHTML"><%= printer.scope_code === 'solo' ? 'Convert to Managed' : 'Convert to Solo' %></a>
+                  <a class="secondary-button danger-button" href="/management/printers/<%= printer.label_printer_id %>/delete/modal" hx-get="/management/printers/<%= printer.label_printer_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Remove</a>
+                  <% if (printer.scope_code === 'solo') { %>
+                    <form method="post" action="/management/printers/<%= printer.label_printer_id %>/sharing" hx-post="/management/printers/<%= printer.label_printer_id %>/sharing" hx-target="#modal-root" hx-swap="innerHTML">
+                      <input type="hidden" name="isShared" value="<%= Number(printer.is_shared) === 1 ? '0' : '1' %>" />
+                      <button class="secondary-button" type="submit"><%= Number(printer.is_shared) === 1 ? 'Make Private' : 'Force Share' %></button>
+                    </form>
+                  <% } %>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="site-clean-section">
+    <div class="site-clean-section-heading"><div><h2>Printer Groups</h2><p>Groups are the foundation for future automatic availability/load routing.</p></div></div>
+    <div class="table-card">
+      <table>
+        <thead><tr><th>Group</th><th>Printers</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          <% if (!groups.length) { %><tr><td colspan="4">No printer groups are configured.</td></tr><% } %>
+          <% groups.forEach((group) => { %>
+            <tr>
+              <td><strong><%= group.name %></strong><% if (group.description) { %><br/><small><%= group.description %></small><% } %></td>
+              <td><%= formatNumber(group.member_count) %></td>
+              <td><span class="pill <%= Number(group.is_active) === 1 ? 'good' : 'slate' %>"><%= Number(group.is_active) === 1 ? 'Active' : 'Inactive' %></span></td>
+              <td>
+                <div class="management-user-row-actions">
+                  <a class="secondary-button" href="/management/printer-groups/<%= group.label_printer_group_id %>/members/modal" hx-get="/management/printer-groups/<%= group.label_printer_group_id %>/members/modal" hx-target="#modal-root" hx-swap="innerHTML">Manage Members</a>
+                  <a class="secondary-button danger-button" href="/management/printer-groups/<%= group.label_printer_group_id %>/delete/modal" hx-get="/management/printer-groups/<%= group.label_printer_group_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Group</a>
+                </div>
+              </td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>

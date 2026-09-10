@@ -11,6 +11,7 @@ const POLICY_METADATA_KEY = '_unitFormSubmissionPolicy';
 const FIELD_BINDINGS = Object.freeze({
   unit_serial_number: Object.freeze({ properties: ['unitSerialNumber'] }),
   bios_serial_number: Object.freeze({ properties: ['biosSerialNumber'] }),
+  system_uuid: Object.freeze({ properties: ['systemUuid'] }),
   amazon_asset_tag: Object.freeze({ properties: ['amazonAssetTag'] }),
   fnsku: Object.freeze({ properties: ['fnsku'] }),
   asin: Object.freeze({ properties: ['asin'] }),
