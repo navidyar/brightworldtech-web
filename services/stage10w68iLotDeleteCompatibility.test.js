@@ -69,7 +69,7 @@ test('legacy Lot cleanup removes only known configuration tables that actually e
 });
 
 test('Unit Browser keeps the approved ceiling while slightly increasing Unit / Weight floor', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /--tu-table-base-width:\s*1220px;/);
   assert.match(css, /--tu-unit-base-width:\s*445px;/);

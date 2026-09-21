@@ -190,7 +190,7 @@ test('Cosmetic and Hardware Add buttons sit inside their section headers', () =>
 });
 
 test('Add and Remove controls use compact low-saturation green and red treatments', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /button\.secondary-button\[data-add-module-row\][\s\S]*?min-height:\s*30px[\s\S]*?border:\s*1px solid #6f9f7c[\s\S]*?background:\s*#edf7f0/);
   assert.match(css, /button\.secondary-button\[data-remove-module-row\][\s\S]*?min-height:\s*30px[\s\S]*?background:\s*#fff2f2/);
@@ -204,7 +204,7 @@ test('Unit form assets remain cache-busted on modal and full-page entry points',
   const browserPage = read('views/pages/tech-units.ejs');
 
   [detailPage, formPage, browserPage].forEach((page) => {
-    assert.match(page, /tech-units-clean\.css\?v=/);
+    assert.match(page, /<body class="css-scope-tech-units">/);
     assert.match(page, /tech-(?:units|unit-form)\.js\?v=/);
   });
 });

@@ -3,16 +3,13 @@
 %>
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', {
-    pageTitle,
-    stylesheets: ['/css/modal.css?v=stage8-config-consistency', '/css/processor-catalog-associations.css?v=20260810-stage10w30-processor-catalog-integrity']
-  }) %>
+  <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   <script defer src="/js/processor-families.js?v=stage8-config-consistency"></script>
   <script defer src="/js/processor-catalog-actions.js?v=20260810-stage10w30-processor-catalog-integrity"></script>
   <script defer src="/js/catalog-association-filter.js?v=20260810-stage10w30-processor-catalog-integrity"></script>
 
-  <body class="configuration-clean-page">
+  <body class="configuration-clean-page css-scope-catalog-associations">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 

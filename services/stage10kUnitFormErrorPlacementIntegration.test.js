@@ -37,7 +37,7 @@ test('validation messages move to module-row or section strips instead of field 
 
 test('Memory and Storage selection errors share the affected row strip without shifting controls independently', () => {
   const client = read('public/js/tech-unit-form.js');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(client, /const invalidSelections = \[\]/);
   assert.match(client, /invalidSelections\.push\(\[control, message\]\)/);
@@ -49,7 +49,7 @@ test('Memory and Storage selection errors share the affected row strip without s
 });
 
 test('only invalid controls receive the red field treatment and Stage 10K assets are cache-busted', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   const detailPage = read('views/pages/tech-unit-detail.ejs');
   const formPage = read('views/pages/tech-unit-form.ejs');
   const browserPage = read('views/pages/tech-units.ejs');
@@ -57,9 +57,9 @@ test('only invalid controls receive the red field treatment and Stage 10K assets
   assert.match(css, /\[aria-invalid="true"\]\s*\{/);
   assert.doesNotMatch(css, /\.has-unit-form-validation-error :is\(/);
   assert.match(css, /\.tech-unit-form-validation-summary/);
-  assert.match(detailPage, /tech-units-clean\.css\?v=/);
-  assert.match(formPage, /tech-units-clean\.css\?v=/);
-  assert.match(browserPage, /tech-units-clean\.css\?v=/);
+  assert.match(detailPage, /<body class="css-scope-tech-units">/);
+  assert.match(formPage, /<body class="css-scope-tech-units">/);
+  assert.match(browserPage, /<body class="css-scope-tech-units">/);
   assert.match(formPage, /tech-unit-form\.js\?v=[^\"']+/);
   assert.match(browserPage, /tech-unit-form\.js\?v=[^\"']+/);
 });

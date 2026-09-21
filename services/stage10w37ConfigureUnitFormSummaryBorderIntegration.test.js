@@ -7,7 +7,7 @@ const ROOT = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 
 test('Configure Unit Form summary has no outer border while individual metric cells retain their borders', () => {
-  const css = read('public/css/lots.css');
+  const css = read('public/css/app.css');
 
   assert.match(
     css,
@@ -19,12 +19,14 @@ test('Configure Unit Form summary has no outer border while individual metric ce
   );
 });
 
-test('Lots pages load the Stage 10W37 cache-busted stylesheet', () => {
-  for (const page of [
+test('Lots pages keep the consolidated Lots CSS scope', () => {
+  for (const pagePath of [
     'views/pages/management-lot-new.ejs',
     'views/pages/management-lots.ejs',
     'views/pages/management-lot-detail.ejs'
   ]) {
-    assert.match(read(page), /\/css\/lots\.css\?v=[^'\"]+/);
+    const page = read(pagePath);
+    assert.match(page, /css-scope-lots/);
+    assert.doesNotMatch(page, /\/css\/lots\.css/);
   }
 });

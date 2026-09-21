@@ -17,7 +17,7 @@
               <td><span class="pill <%= Number(printer.is_enabled) === 1 ? 'good' : 'bad' %>"><%= Number(printer.is_enabled) === 1 ? 'Enabled' : 'Disabled' %></span><br/><small>Last probe: <%= printer.last_probe_status || '—' %></small></td>
               <td><%= formatNumber(printer.group_count) %></td>
               <td>
-                <div class="management-user-row-actions">
+                <div class="management-user-row-actions site-inline-actions">
                   <a class="secondary-button" href="/management/printers/<%= printer.label_printer_id %>/edit/modal" hx-get="/management/printers/<%= printer.label_printer_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
                   <a class="secondary-button" href="/management/printers/<%= printer.label_printer_id %>/scope/modal" hx-get="/management/printers/<%= printer.label_printer_id %>/scope/modal" hx-target="#modal-root" hx-swap="innerHTML"><%= printer.scope_code === 'solo' ? 'Convert to Managed' : 'Convert to Solo' %></a>
                   <a class="secondary-button danger-button" href="/management/printers/<%= printer.label_printer_id %>/delete/modal" hx-get="/management/printers/<%= printer.label_printer_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Remove</a>
@@ -49,7 +49,7 @@
               <td><%= formatNumber(group.member_count) %></td>
               <td><span class="pill <%= Number(group.is_active) === 1 ? 'good' : 'slate' %>"><%= Number(group.is_active) === 1 ? 'Active' : 'Inactive' %></span></td>
               <td>
-                <div class="management-user-row-actions">
+                <div class="management-user-row-actions site-inline-actions">
                   <a class="secondary-button" href="/management/printer-groups/<%= group.label_printer_group_id %>/members/modal" hx-get="/management/printer-groups/<%= group.label_printer_group_id %>/members/modal" hx-target="#modal-root" hx-swap="innerHTML">Manage Members</a>
                   <a class="secondary-button danger-button" href="/management/printer-groups/<%= group.label_printer_group_id %>/delete/modal" hx-get="/management/printer-groups/<%= group.label_printer_group_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Group</a>
                 </div>

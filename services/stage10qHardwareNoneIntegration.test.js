@@ -33,7 +33,7 @@ test('Stage 10Q migration adds or reactivates an explicit Hardware None option',
 test('Hardware None disables and clears custom issue and location in the browser', () => {
   const markup = read('views/fragments/tech-unit-form.ejs');
   const client = read('public/js/tech-unit-form.js');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(markup, /data-hardware-issue-type-select/);
   assert.match(markup, /data-hardware-no-issue-flag/);
@@ -73,9 +73,9 @@ test('Stage 10Q assets are cache-busted on all Unit form entry points', () => {
   const formPage = read('views/pages/tech-unit-form.ejs');
   const browserPage = read('views/pages/tech-units.ejs');
 
-  assert.match(detailPage, /tech-units-clean\.css\?v=/);
-  assert.match(formPage, /tech-units-clean\.css\?v=/);
-  assert.match(browserPage, /tech-units-clean\.css\?v=/);
+  assert.match(detailPage, /<body class="css-scope-tech-units">/);
+  assert.match(formPage, /<body class="css-scope-tech-units">/);
+  assert.match(browserPage, /<body class="css-scope-tech-units">/);
   assert.match(formPage, /tech-unit-form\.js\?v=[^"\'\s>]+/);
   assert.match(browserPage, /tech-unit-form\.js\?v=[^"\'\s>]+/);
 });

@@ -43,7 +43,7 @@ test('Lot parent options receive hierarchy depth from one shared model lookup', 
 
 test('Unit Browser replaces the two-option Lot Scope select with inline toggles and adds completion toggles', () => {
   const page = read('views/pages/tech-units.ejs');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   const script = read('public/js/tech-units.js');
 
   assert.doesNotMatch(page, /<select name="lotScope"/);

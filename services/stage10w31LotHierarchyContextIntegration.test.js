@@ -118,7 +118,7 @@ test('operational and Management Lot selectors expose the shared hierarchy prese
   assert.match(dashboardFilters, /hierarchical-lot-options/);
   assert.match(unitTable, /data-lot-hierarchy-help/);
   assert.match(unitTable, /Lot Hierarchy/);
-  assert.match(read('views/pages/tech-unit-detail.ejs'), /tech-units\.js\?v=20260819-stage10w68l-filter-toggles/);
+  assert.match(read('views/pages/tech-unit-detail.ejs'), /tech-units\.js\?v=[^"]+/);
   assert.match(lotNew, /<select name="parentLotId" data-hierarchical-lot-select>/);
   assert.match(lotNew, /parent-lot-options/);
   assert.match(lotEdit, /<select name="parentLotId" data-hierarchical-lot-select>/);

@@ -1,4 +1,770 @@
 /*
+ * Label Builder behavior-critical mechanics. Canvas geometry, object positioning, resize handles,
+ * editor grid/guides, preview object layers, and drag handles remain protected from visual restyling.
+ */
+
+
+:where(body.css-scope-label-builder) .label-builder-canvas {
+  --label-grid-size: 5px;
+  position: relative;
+  flex: 0 0 auto;
+  box-sizing: content-box;
+  overflow: hidden;
+  border: 1px solid #9aa8bb;
+  background-color: #fff;
+  box-shadow: 0 2px 10px rgba(15, 35, 58, 0.08);
+  outline: none;
+  touch-action: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-canvas.show-grid {
+  background-image:
+    linear-gradient(to right, rgba(42, 73, 112, 0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(42, 73, 112, 0.12) 1px, transparent 1px);
+  background-size: var(--label-grid-size) var(--label-grid-size);
+}
+
+:where(body.css-scope-label-builder) .label-builder-canvas:focus-visible {
+  box-shadow: 0 0 0 3px var(--form-field-focus-ring), 0 2px 10px rgba(15, 35, 58, 0.08);
+}
+
+:where(body.css-scope-label-builder) .label-builder-canvas.show-vertical-center-guide::before,
+:where(body.css-scope-label-builder) .label-builder-canvas.show-horizontal-center-guide::after {
+  content: "";
+  position: absolute;
+  z-index: 10000;
+  pointer-events: none;
+  background: #d12d2d;
+}
+
+:where(body.css-scope-label-builder) .label-builder-canvas.show-vertical-center-guide::before {
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-0.5px);
+}
+
+:where(body.css-scope-label-builder) .label-builder-canvas.show-horizontal-center-guide::after {
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 1px;
+  transform: translateY(-0.5px);
+}
+
+:where(body.css-scope-label-builder) .label-builder-region {
+  position: absolute;
+  box-sizing: border-box;
+  min-width: 2px;
+  min-height: 2px;
+  border: 0;
+  background: rgba(213, 229, 247, 0.38);
+  cursor: move;
+  user-select: none;
+  touch-action: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region:hover,
+:where(body.css-scope-label-builder) .label-builder-region.selected {
+  background: rgba(197, 221, 249, 0.48);
+}
+
+:where(body.css-scope-label-builder) .label-builder-region[data-builder-type="unconfigured"]::after,
+:where(body.css-scope-label-builder) .label-builder-region:hover::after,
+:where(body.css-scope-label-builder) .label-builder-region.selected::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  box-sizing: border-box;
+  border: 1px dashed #58789f;
+  pointer-events: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region:hover::after,
+:where(body.css-scope-label-builder) .label-builder-region.selected::after {
+  border-style: solid;
+  border-color: #285f9f;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region.selected {
+  box-shadow: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region:not([data-builder-type="unconfigured"]):not(.selected):not(:hover) {
+  background: transparent;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region-label {
+  position: absolute;
+  top: 3px;
+  left: 4px;
+  max-width: calc(100% - 8px);
+  overflow: hidden;
+  color: #214c7d;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-resize-handle {
+  position: absolute;
+  z-index: 3;
+  width: 10px;
+  height: 10px;
+  border: 1px solid #285f9f;
+  border-radius: 2px;
+  background: #fff;
+}
+
+:where(body.css-scope-label-builder) .label-builder-resize-handle.nw { top: -6px; left: -6px; cursor: nwse-resize; }
+
+:where(body.css-scope-label-builder) .label-builder-resize-handle.ne { top: -6px; right: -6px; cursor: nesw-resize; }
+
+:where(body.css-scope-label-builder) .label-builder-resize-handle.sw { bottom: -6px; left: -6px; cursor: nesw-resize; }
+
+:where(body.css-scope-label-builder) .label-builder-resize-handle.se { right: -6px; bottom: -6px; cursor: nwse-resize; }
+
+:where(body.css-scope-label-builder) .label-builder-region:not(.selected) .label-builder-resize-handle {
+  display: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region-content {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  line-height: 1.05;
+  white-space: nowrap;
+  transform-origin: center center;
+  pointer-events: none;
+  color: #000;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region-content[hidden] {
+  display: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region-image {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  object-fit: contain;
+  transform-origin: center center;
+  pointer-events: none;
+  user-select: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region-image[hidden] {
+  display: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region-barcode,
+:where(body.css-scope-label-builder) .label-builder-region-qr {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  transform-origin: center center;
+  pointer-events: none;
+  user-select: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region-barcode[hidden],
+:where(body.css-scope-label-builder) .label-builder-region-qr[hidden] {
+  display: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region-qr {
+  object-fit: contain;
+  image-rendering: auto;
+}
+
+:where(body.css-scope-label-builder) .label-builder-composed-part.dragging {
+  opacity: 0.55;
+}
+
+:where(body.css-scope-label-builder) .label-builder-composed-grip {
+  display: grid;
+  place-items: center;
+  align-self: stretch;
+  color: var(--muted);
+  font-size: 1rem;
+  cursor: grab;
+  user-select: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-composed-grip:active {
+  cursor: grabbing;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region-shape {
+  position: absolute;
+  display: block;
+  box-sizing: border-box;
+  overflow: visible;
+  transform-origin: center center;
+  pointer-events: none;
+  user-select: none;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region-shape[hidden] {
+  display: none;
+}
+
+/*
+ * Tech / Units behavior-critical mechanics. Lot-controlled Unit Form visibility remains protected
+ * from presentation rules.
+ */
+:where(body.css-scope-tech-units) .tech-unit-form [data-unit-form-field-key][hidden],
+:where(body.css-scope-tech-units) .tech-unit-form [data-unit-form-follows-key][hidden],
+:where(body.css-scope-tech-units) .tech-unit-form [data-unit-form-auto-collapse][hidden] {
+  display: none !important;
+}
+
+/*
+ * Management / Lots behavior-critical mechanics. Hierarchy and interaction selectors remain isolated
+ * from presentation so visual restyling cannot alter workflow behavior.
+ */
+
+/* Lot hierarchy mechanics. */
+:where(body.css-scope-lots) .lot-hierarchy-cell {
+  min-width: 280px;
+}
+
+:where(body.css-scope-lots) .lot-hierarchy-wrap {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  padding-left: calc(var(--lot-level, 0) * 20px);
+}
+
+:where(body.css-scope-lots) .lot-hierarchy-arrow {
+  color: var(--muted);
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+:where(body.css-scope-lots) .lot-hierarchy-parent-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: var(--blue);
+  box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.08);
+}
+
+:where(body.css-scope-lots) .lot-hierarchy-spacer {
+  display: inline-block;
+  width: 8px;
+}
+
+:where(body.css-scope-lots) .lot-hierarchy-main {
+  min-width: 0;
+}
+
+:where(body.css-scope-lots) .lot-hierarchy-main strong {
+  display: inline-block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: bottom;
+  white-space: nowrap;
+}
+
+@media (max-width: 980px) {
+:where(body.css-scope-lots) .lot-hierarchy-main strong {
+    max-width: 220px;
+  }
+}
+
+@media (max-width: 720px) {
+:where(body.css-scope-lots) .lot-hierarchy-wrap {
+    padding-left: calc(var(--lot-level, 0) * 14px);
+  }
+
+:where(body.css-scope-lots) .lot-hierarchy-main strong {
+    max-width: 190px;
+  }
+}
+
+:where(body.css-scope-lots) .lot-display-name,
+:where(body.css-scope-lots) .lot-hierarchy-main .lot-display-name,
+:where(body.css-scope-lots) .compact-lot-item .lot-display-name {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 850;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+:where(body.css-scope-lots) .lot-hierarchy-main .lot-display-name {
+  max-width: 320px;
+}
+
+:where(body.css-scope-lots) .lot-hierarchy-main .unit-link {
+  text-decoration: none;
+}
+
+:where(body.css-scope-lots) .lot-hierarchy-main .unit-link:hover .lot-display-name,
+:where(body.css-scope-lots) .compact-lot-item:hover .lot-display-name {
+  color: var(--blue-dark);
+  text-decoration: underline;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-name,
+:where(body.css-scope-lots) .lot-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+:where(body.css-scope-lots) table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name {
+  display: inline-block;
+  color: var(--text);
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link:hover .lot-display-name,
+:where(body.css-scope-lots) .lot-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link:hover .lot-display-name,
+:where(body.css-scope-lots) table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link:hover .lot-display-name {
+  color: var(--blue-dark);
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-name,
+:where(body.css-scope-lots) .lot-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+:where(body.css-scope-lots) .lot-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-name,
+:where(body.css-scope-lots) table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+:where(body.css-scope-lots) table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-name {
+  display: block;
+  max-width: 320px;
+  overflow: hidden;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 0.92rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.28 !important;
+  text-overflow: ellipsis;
+  vertical-align: baseline;
+  white-space: nowrap;
+}
+
+:where(body.css-scope-lots) .lot-hierarchy-wrap {
+  gap: 6px;
+  padding-left: calc(var(--lot-level, 0) * 16px);
+}
+
+:where(body.css-scope-lots) .lot-hierarchy-main {
+  line-height: 1.2;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell {
+  min-width: 250px;
+  padding-top: 8px !important;
+  padding-bottom: 8px !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
+  align-items: start;
+  gap: 7px;
+  padding-left: calc(var(--lot-level, 0) * 84px);
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-arrow,
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-parent-dot,
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-spacer {
+  margin-top: 3px;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-main {
+  display: grid;
+  gap: 4px;
+  line-height: 1.18;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-main br {
+  display: none;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-main > a.unit-link .lot-display-name,
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-main > a.unit-link strong.lot-display-name {
+  font-size: 0.9rem !important;
+  line-height: 1.15 !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
+  position: relative;
+  grid-template-columns: 10px 18px minmax(0, 1fr);
+  gap: 8px;
+  padding-left: calc(var(--lot-level, 0) * 168px);
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap::before {
+  content: "";
+  display: block;
+  width: 10px;
+  min-height: 32px;
+  align-self: stretch;
+  border-radius: 6px;
+  background: var(--lot-level-marker, #6d28d9);
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell {
+  padding-left: calc(10px + (var(--lot-level, 0) * 84px)) !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
+  grid-template-columns: 10px 18px minmax(0, 1fr);
+  gap: 8px;
+  padding-left: 0;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap::before {
+  width: 10px;
+  min-height: 32px;
+  border-radius: 0;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell {
+  --lot-indent-step: 84px;
+  --lot-marker-width: 10px;
+  --lot-marker-gap: 10px;
+  position: relative;
+  padding-left: calc(10px + (var(--lot-level, 0) * var(--lot-indent-step)) + var(--lot-marker-width) + var(--lot-marker-gap)) !important;
+  background-image: linear-gradient(var(--lot-level-marker, #6d28d9), var(--lot-level-marker, #6d28d9));
+  background-position: calc(10px + (var(--lot-level, 0) * var(--lot-indent-step))) 0;
+  background-repeat: no-repeat;
+  background-size: var(--lot-marker-width) 100%;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  padding-left: 0;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap::before {
+  display: none;
+  content: none;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell {
+  --lot-indent-step: 84px;
+  --lot-group-rail-width: 10px;
+  --lot-group-rail-offset: 10px;
+  --lot-group-rail-gap: 14px;
+  --lot-group-rail-color: #7c3aed;
+  position: relative;
+  padding-left: calc(var(--lot-group-rail-offset) + var(--lot-group-rail-width) + var(--lot-group-rail-gap) + (var(--lot-level, 0) * var(--lot-indent-step))) !important;
+  background-image: linear-gradient(var(--lot-group-rail-color), var(--lot-group-rail-color)) !important;
+  background-position: var(--lot-group-rail-offset) 0 !important;
+  background-repeat: no-repeat !important;
+  background-size: var(--lot-group-rail-width) 100% !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  padding-left: 0 !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell {
+  --lot-indent-step: 84px;
+  --lot-group-rail-color: #15803d;
+  border-left: 6px solid var(--lot-group-rail-color) !important;
+  padding-left: calc(14px + (var(--lot-level, 0) * var(--lot-indent-step))) !important;
+  background-image: none !important;
+  background-position: initial !important;
+  background-repeat: initial !important;
+  background-size: initial !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
+  padding-left: 0 !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap::before {
+  display: none !important;
+  content: none !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table tr.lot-tree-row-hidden {
+  display: none;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell {
+  border-left: 0 !important;
+  background-image: none !important;
+  padding-left: 10px !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: start;
+  gap: 8px;
+  padding-left: calc(var(--lot-level, 0) * 42px) !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle,
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-spacer {
+  width: 24px;
+  height: 24px;
+  margin-top: -2px;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  cursor: pointer;
+  font-size: 0.82rem;
+  font-weight: 900;
+  line-height: 1;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:hover {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  transform: translateY(-1px);
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 2px;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-spacer {
+  display: inline-block;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-arrow,
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-parent-dot,
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-spacer {
+  display: none !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-main {
+  gap: 4px;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-row-actions,
+:where(body.css-scope-lots) .management-lots-table .lot-row-actions a,
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle,
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-spacer,
+:where(body.css-scope-lots) .management-lots-table .table-muted-line a {
+  cursor: auto;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle,
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-spacer {
+  width: 38px;
+  height: 32px;
+  margin-top: -5px;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle {
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-visual {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:hover .lot-tree-toggle-visual {
+  border-color: var(--line);
+  background: var(--surface-soft);
+  transform: translateY(-1px);
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.18);
+  outline-offset: 1px;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
+  grid-template-columns: 50px minmax(0, 1fr);
+  align-items: stretch;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle,
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-spacer {
+  align-self: stretch;
+  width: 50px;
+  min-height: 44px;
+  height: auto;
+  margin-top: 0;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 15px 0 6px;
+  cursor: pointer;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-spacer {
+  display: block;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-visual {
+  flex: 0 0 auto;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-main {
+  align-self: center;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-row-actions,
+:where(body.css-scope-lots) .management-lots-table .lot-row-actions a,
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle,
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-spacer,
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-visual,
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-icon,
+:where(body.css-scope-lots) .management-lots-table .table-muted-line a {
+  cursor: auto;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle {
+  cursor: pointer;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle,
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-spacer {
+  align-self: stretch;
+  width: 44px;
+  min-height: 44px;
+  height: auto;
+  margin-top: 0;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle {
+  justify-content: flex-start;
+  padding: 0 10px 0 6px;
+  border: 0 !important;
+  background: transparent !important;
+  transform: none !important;
+  cursor: pointer;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:hover {
+  border-color: transparent !important;
+  background: transparent !important;
+  transform: none !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:hover .lot-tree-toggle-visual {
+  border-color: var(--line-soft) !important;
+  background: var(--surface) !important;
+  transform: none !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-visual {
+  pointer-events: none;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link .lot-display-name,
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link strong.lot-display-name,
+:where(body.css-scope-lots) .management-lots-table .lot-display-name {
+  color: var(--text) !important;
+  font-size: 0.92rem !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.28 !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell .lot-hierarchy-main > a.unit-link:hover .lot-display-name,
+:where(body.css-scope-lots) .management-lots-table tr.lot-clickable-row:hover .lot-display-name {
+  color: var(--text) !important;
+  text-decoration: none !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-visual {
+  border-color: #1d4ed8 !important;
+  background: #1d4ed8 !important;
+  color: #ffffff !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:hover .lot-tree-toggle-visual {
+  border-color: #1e40af !important;
+  background: #1e40af !important;
+  color: #ffffff !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:focus-visible .lot-tree-toggle-visual {
+  border-color: #1e40af !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-visual {
+  box-sizing: border-box;
+  border: 1px solid #6b7280 !important;
+  background: #e5e7eb !important;
+  color: #111827 !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:hover .lot-tree-toggle-visual {
+  border-color: #6b7280 !important;
+  background: #e5e7eb !important;
+  color: #111827 !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:focus-visible .lot-tree-toggle-visual {
+  border-color: #4b5563 !important;
+}
+
+:where(body.css-scope-lots) .management-lots-table tr.lot-hierarchy-error-row > td {
+  background: #fffaf2;
+}
+
+:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-error-note {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 2px 7px;
+  border: 1px solid #e4b66b;
+  border-radius: 999px;
+  color: #704116;
+  background: #fff3d7;
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+/* Label Library reordering mechanics. */
+html.label-library-reordering,
+html.label-library-reordering * {
+  cursor: grabbing !important;
+}
+
+/*
  * BWTDallas feature-safety layer.
  *
  * Only cross-feature behavior that must survive visual restyling belongs here.
@@ -10,15 +776,32 @@
 [hidden] {
   display: none !important;
 }
+/* Shared state mechanics. Keep JS-driven visibility helpers and visually-hidden
+   native controls out of presentation CSS. */
+.is-hidden {
+  display: none !important;
+}
 
-/* Protected Lots hierarchy behavior. Do not add visual rules for the caret,
-   indentation, row hit areas, or navigation here. Those remain in lots.css. */
+.site-date-picker-native {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Protected Lots hierarchy behavior keeps tree visibility, indentation, controls, and hit areas
+   isolated from general shared presentation. */
 .management-lots-table tr.lot-tree-row-hidden {
   display: none !important;
 }
 
-/* Protected Lot-controlled Unit-form behavior. Hidden fields and automatically
-   empty sections must remain collapsed even when older form CSS sets display. */
+/* Protected Lot-controlled Unit-form behavior. Hidden fields and automatically empty sections must
+   remain collapsed even when presentation rules set display. */
 .tech-unit-form [data-unit-form-field-key][hidden],
 .tech-unit-form [data-unit-form-follows-key][hidden],
 .tech-unit-form [data-unit-form-auto-collapse][hidden] {
@@ -30,14 +813,88 @@
   display: none !important;
 }
 
-/* Keep Unit form error summaries visually separate from the first form section.
-   The page/modal scope is intentionally more specific than legacy message rules. */
+/* Shared modal mechanics. Generic defaults use :where() so feature-specific
+   modal geometry can override them without specificity escalation. */
+:where(.modal-backdrop) {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  align-items: start;
+  justify-items: center;
+  padding: 42px 18px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+html.modal-open,
+body.modal-open {
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.modal-open {
+  scrollbar-gutter: stable;
+}
+
+:where(.modal-panel) {
+  width: min(980px, 100%);
+}
+
+:where(.modal-header) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+}
+
+.tech-unit-modal {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+}
+
+.tech-unit-modal .modal-header {
+  position: static;
+  flex: 0 0 auto;
+}
+
+.tech-unit-modal .modal-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tech-unit-modal .app-form {
+  gap: 14px;
+}
+
+.tech-unit-modal .form-section {
+  padding: 14px;
+}
+
+@media (max-width: 720px) {
+  :where(.modal-backdrop) {
+    padding: 18px 10px;
+  }
+
+  .tech-unit-modal {
+    max-height: calc(100dvh - 36px);
+  }
+}
+
+/* Keep Unit form error summaries visually separate from the first form section. The page/modal scope
+   is intentionally more specific than generic message rules. */
 :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form-error-summary {
   margin-bottom: 16px;
 }
 
-/* Tech Unit Lot-requirement workflow. This is feature-specific presentation;
-   the shared visual tokens continue to come from theme.css and app.css. */
+/* Tech Unit Lot-requirement workflow structure. Shared visual tokens continue to come from
+   theme.css and app.css. */
 .tech-unit-form [data-lot-requirement-workflow-region] {
   grid-column: 1 / -1;
   min-width: 0;
@@ -80,7 +937,7 @@
 
 .tech-lot-requirement-workflow__header strong {
   display: block;
-  color: var(--color-heading, #28384c);
+  color: var(--color-heading, var(--ui-heading));
   font-size: 0.9rem;
   font-weight: 650;
 }
@@ -90,7 +947,7 @@
 .tech-lot-requirement-workflow__blocked-note,
 .tech-lot-requirement-workflow__acceptance {
   margin: 3px 0 0;
-  color: var(--color-text-muted, #5f6c7c);
+  color: var(--color-text-muted, var(--ui-muted));
   font-size: 0.82rem;
   line-height: 1.45;
 }
@@ -99,7 +956,7 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px 12px;
-  color: var(--color-text-muted, #5f6c7c);
+  color: var(--color-text-muted, var(--ui-muted));
   font-size: 0.8rem;
 }
 
@@ -112,7 +969,7 @@
 }
 
 .tech-lot-requirement-workflow__issues li {
-  color: var(--color-text, #243043);
+  color: var(--color-text, var(--ui-ink));
   font-size: 0.82rem;
   line-height: 1.4;
 }

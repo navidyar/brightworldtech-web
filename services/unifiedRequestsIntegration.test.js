@@ -85,7 +85,7 @@ test('dashboard and Unit workflow links point to the unified Requests queue', ()
 });
 
 test('review decision forms stay side by side with slim neutral controls', () => {
-  const css = read('public/css/unit-requests.css');
+  const css = read('public/css/app.css');
   const detail = read('views/pages/override-request-detail.ejs');
   assert.match(css, /\.unit-request-review-actions \{[\s\S]*grid-template-columns: minmax\(0, 1\.15fr\) minmax\(210px, 0\.85fr\)/);
   assert.match(css, /\.unit-request-review-actions form \+ form \{[\s\S]*border-left: 1px solid var\(--line-soft\)/);

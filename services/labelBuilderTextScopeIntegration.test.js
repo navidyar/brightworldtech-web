@@ -76,7 +76,7 @@ test('print availability migration defaults existing templates to Lot Selection'
 
 
 test('configured text regions are preview-clean while idle', () => {
-  const css = source('public/css/label-builder.css');
+  const css = `${source('public/css/app.css')}\n${source('public/css/features.css')}`;
   assert.match(css, /label-builder-region:not\(\[data-builder-type="unconfigured"\]\):not\(\.selected\):not\(:hover\)/);
   assert.match(css, /\.label-builder-region \{[\s\S]{0,400}border: 0;/);
   assert.match(css, /background: transparent/);

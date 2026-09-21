@@ -1,11 +1,8 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', {
-    pageTitle,
-    stylesheets: ['/css/lots.css?v=20260826-stage10w73c-browser-config-refinement']
-  }) %>
+  <%- include('../partials/head', { pageTitle }) %>
 
-  <body class="lots-lookup-typography-preview lots-lookup-ui-preview">
+  <body class="lots-lookup-typography-preview lots-lookup-ui-preview css-scope-lots">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 

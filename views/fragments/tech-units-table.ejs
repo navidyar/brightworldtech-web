@@ -252,7 +252,7 @@
 <% } %>
 
 <div class="table-card tech-table-card">
-  <table class="tech-units-table<%= isSingleUnitViewPage ? ' table-density-compact table-layout-auto-fit table-leading-column-floor' : '' %>" data-unit-browser-layout-signature="<%= browserPresentation.layoutSignature || '' %>" style="--tu-table-base-width: <%= browserPresentation.tableMinimumWidthPx %>px; --tu-unit-base-width: <%= browserPresentation.unitColumnMinimumWidthPx %>px; --table-leading-column-min-width: <%= browserPresentation.unitColumnMinimumWidthPx %>px; --tu-rendered-column-count: <%= browserColumnCount %>; --tu-secondary-column-count: <%= browserPresentation.secondaryColumnCount %>; --tu-secondary-growth-unit-count: <%= browserPresentation.secondaryGrowthUnitCount %>;">
+  <table class="tech-units-table<%= isSingleUnitViewPage ? ' table-density-compact table-layout-auto-fit table-leading-column-floor' : '' %>" data-unit-browser-layout-signature="<%= browserPresentation.layoutSignature || '' %>" style="--tu-table-base-width: <%= browserPresentation.tableMinimumWidthPx %>px; --tu-unit-base-width: <%= browserPresentation.unitColumnMinimumWidthPx %>px; --table-leading-column-min-width: <%= browserPresentation.unitColumnMinimumWidthPx %>px; --tu-rendered-column-count: <%= browserColumnCount %>; --tu-secondary-growth-unit-count: <%= browserPresentation.secondaryGrowthUnitCount %>;">
     <colgroup>
       <% browserColumns.forEach((column) => { %>
         <col class="tech-units-col tech-units-col--<%= column.key %> tech-units-col--grow-<%= column.growthUnits %>" style="--tu-column-base-width: <%= column.minimumWidthPx %>px;">

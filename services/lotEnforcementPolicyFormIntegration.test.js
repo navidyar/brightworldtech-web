@@ -39,3 +39,11 @@ test('Lot Details displays the selected enforcement policy', () => {
   assert.match(detailPage, /Requirement policy:/);
   assert.match(detailPage, /lot\.requirement_policy_label/);
 });
+
+test('Lot Details labels the Unit requirement summary as Requirements Validation Check', () => {
+  const detailPage = read('views/pages/management-lot-detail.ejs');
+
+  assert.match(detailPage, /aria-label="Requirements validation check"/);
+  assert.match(detailPage, />Requirements Validation Check</);
+  assert.doesNotMatch(detailPage, />Validation Check</);
+});

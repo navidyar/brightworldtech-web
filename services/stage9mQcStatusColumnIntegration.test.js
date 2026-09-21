@@ -35,7 +35,7 @@ test('QC indicator is no longer embedded in the Grade / Pass-Fail stack', () => 
 });
 
 test('QC header and symbol share one centered width while actions share one right edge', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   const page = read('views/pages/tech-units.ejs');
 
   assert.match(css, /\.tech-units-clean-page \.tech-units-table thead th \{[\s\S]*?vertical-align: middle;/);
@@ -48,12 +48,13 @@ test('QC header and symbol share one centered width while actions share one righ
   assert.match(css, /\.tech-units-clean-page \.tech-units-qc-column-label,[\s\S]*?width: 34px;[\s\S]*?margin-inline: auto;/);
   assert.match(css, /\.tech-units-clean-page \.tech-units-actions-column,[\s\S]*?min-width: 0;[\s\S]*?text-align: right;/);
   assert.match(css, /\.tech-units-clean-page \.tech-units-actions-column-label \{[\s\S]*?justify-content: flex-end;[\s\S]*?width: 100%;/);
-  assert.match(page, /tech-units-clean\.css\?v=20260826-stage10w73e-browser-usability/);
+  assert.match(page, /<body class="css-scope-tech-units">/);
 });
 
 test('pending Units use the shared blue QC symbol while not-required remains neutral', () => {
   const table = read('views/fragments/tech-units-table.ejs');
   const icon = read('views/fragments/tech-unit-qc-status-icon.ejs');
+  const themeCss = read('public/css/theme.css');
   const appCss = read('public/css/app.css');
   const head = read('views/partials/head.ejs');
 
@@ -63,7 +64,7 @@ test('pending Units use the shared blue QC symbol while not-required remains neu
   assert.match(icon, /'not_required'[\s\S]*?'not-required'/);
   assert.match(icon, /'not_completed'[\s\S]*?'pending'/);
   assert.match(icon, /tech-qc-status-indicator__mark--neutral[\s\S]*?M7\.8 11h6\.4/);
-  assert.match(appCss, /--qc-pending-ink: #2563eb/);
+  assert.match(themeCss, /--qc-pending-ink: #2563eb/);
   assert.match(appCss, /\.tech-qc-status-indicator--pending \{[\s\S]*?--tech-qc-icon-ink: var\(--qc-pending-ink\);/);
   assert.match(appCss, /\.tech-qc-status-indicator--not-required \{[\s\S]*?--tech-qc-icon-ink: var\(--qc-neutral-ink\);/);
   assert.match(head, /app\.css\?v=[^"'\s]+/);

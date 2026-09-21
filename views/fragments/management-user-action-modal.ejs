@@ -74,7 +74,7 @@
             <p><%= user.email %></p>
           </div>
 
-          <div class="management-user-modal-pills">
+          <div class="management-user-modal-pills site-inline-actions">
             <span class="pill <%= user.is_active ? 'good' : 'bad' %>"><%= user.is_active ? 'Active Employee' : 'Inactive Employee' %></span>
             <span class="pill <%= user.account_status_code === 'active' ? 'good' : 'bad' %>"><%= user.account_status_label || user.account_status_code || 'Unknown Account Status' %></span>
           </div>

@@ -244,7 +244,7 @@
               </div>
               <span><%= statValue(item.count) %> · <%= percentOfTotal(item.count, categoryTotal) %>%</span>
               <div class="dashboard-chart-bar" aria-hidden="true">
-                <i style="width: <%= percentOfTotal(item.count, categoryMax) %>%; --chart-bar-color: <%= item.color %>;"></i>
+                <i style="--chart-bar-width: <%= percentOfTotal(item.count, categoryMax) %>%; --chart-bar-color: <%= item.color %>;"></i>
               </div>
             </a>
           <% }) %>
@@ -282,7 +282,7 @@
               </div>
               <span><%= statValue(item.count) %> · <%= percentOfTotal(item.count, gradeTotal) %>%</span>
               <div class="dashboard-chart-bar" aria-hidden="true">
-                <i style="width: <%= percentOfTotal(item.count, gradeMax) %>%; --chart-bar-color: <%= item.color %>;"></i>
+                <i style="--chart-bar-width: <%= percentOfTotal(item.count, gradeMax) %>%; --chart-bar-color: <%= item.color %>;"></i>
               </div>
             </a>
           <% }) %>
@@ -319,7 +319,7 @@
               </div>
               <span><%= statValue(item.count) %> · <%= percentOfTotal(item.count, lotChartTotal) %>%</span>
               <div class="dashboard-chart-bar" aria-hidden="true">
-                <i style="width: <%= percentOfTotal(item.count, lotMax) %>%; --chart-bar-color: <%= item.color %>;"></i>
+                <i style="--chart-bar-width: <%= percentOfTotal(item.count, lotMax) %>%; --chart-bar-color: <%= item.color %>;"></i>
               </div>
             </a>
           <% }) %>
@@ -349,7 +349,7 @@
               <span><%= statValue(item.count) %></span>
             </div>
             <div class="dashboard-meter" aria-hidden="true">
-              <span style="width: <%= percentOfTotal(item.count, categoryTotal) %>%;"></span>
+              <span style="--dashboard-meter-width: <%= percentOfTotal(item.count, categoryTotal) %>%;"></span>
             </div>
           </a>
         <% }) %>
@@ -377,7 +377,7 @@
               <span><%= statValue(item.count) %></span>
             </div>
             <div class="dashboard-meter" aria-hidden="true">
-              <span style="width: <%= percentOfTotal(item.count, gradeTotal) %>%;"></span>
+              <span style="--dashboard-meter-width: <%= percentOfTotal(item.count, gradeTotal) %>%;"></span>
             </div>
           </a>
         <% }) %>
@@ -404,7 +404,7 @@
               <span><%= statValue(item.count) %></span>
             </div>
             <div class="dashboard-meter" aria-hidden="true">
-              <span style="width: <%= percentOfTotal(item.count, lotChartTotal) %>%;"></span>
+              <span style="--dashboard-meter-width: <%= percentOfTotal(item.count, lotChartTotal) %>%;"></span>
             </div>
           </a>
         <% }) %>
@@ -431,7 +431,7 @@
               <span><%= statValue(item.count) %></span>
             </div>
             <div class="dashboard-meter" aria-hidden="true">
-              <span style="width: <%= percentOfTotal(item.count, techActivityTotal) %>%;"></span>
+              <span style="--dashboard-meter-width: <%= percentOfTotal(item.count, techActivityTotal) %>%;"></span>
             </div>
           </a>
         <% }) %>

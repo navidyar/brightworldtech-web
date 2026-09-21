@@ -10,7 +10,7 @@ function read(relativePath) {
 }
 
 test('Lot detail title preserves whole words and receives the full heading row at narrower desktop widths', () => {
-  const css = read('public/css/lots.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /\.lot-detail-page-heading > div:first-child\s*\{[\s\S]*?flex:\s*1 1 auto[\s\S]*?min-width:\s*0[\s\S]*?max-width:\s*100%/);
   assert.match(css, /\.lot-detail-page-heading h1\s*\{[\s\S]*?overflow-wrap:\s*normal[\s\S]*?word-break:\s*normal[\s\S]*?hyphens:\s*none/);
@@ -39,7 +39,7 @@ test('client unlocks Intentional Duplicate after Lot selection and server still 
   assert.match(controller, /createIntentionalDuplicateRequest[\s\S]*?const validationErrors = await validateUnitForm\(formData, formOptions, 'create'\)/);
 });
 
-test('updated page assets force browsers to load the refined Lot and Unit form behavior', () => {
+test('updated page assets keep consolidated Lots styling and Unit form behavior', () => {
   const lotDetail = read('views/pages/management-lot-detail.ejs');
   const lotBrowser = read('views/pages/management-lots.ejs');
   const lotNew = read('views/pages/management-lot-new.ejs');
@@ -47,9 +47,10 @@ test('updated page assets force browsers to load the refined Lot and Unit form b
   const unitForm = read('views/pages/tech-unit-form.ejs');
 
   [lotDetail, lotBrowser, lotNew].forEach((markup) => {
-    assert.match(markup, /lots\.css\?v=[^\"\'\s>]+/);
+    assert.match(markup, /css-scope-lots/);
+    assert.doesNotMatch(markup, /lots\.css/);
   });
   [unitBrowser, unitForm].forEach((markup) => {
-    assert.match(markup, /tech-unit-form\.js\?v=[^"\'\s>]+/);
+    assert.match(markup, /tech-unit-form\.js\?v=[^"'\s>]+/);
   });
 });

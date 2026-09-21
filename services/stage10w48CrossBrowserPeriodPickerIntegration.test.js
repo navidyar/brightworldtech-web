@@ -22,7 +22,7 @@ test('shared period picker owns date, week, and month inputs instead of relying 
 
 test('week picker uses ISO Monday-through-Sunday values and a custom rounded week list', () => {
   const js = read('public/js/date-picker-only.js');
-  const css = read('public/css/work-area.css');
+  const css = read('public/css/app.css');
 
   assert.match(js, /function isoWeekStart/);
   assert.match(js, /function getIsoWeekInfo/);
@@ -37,7 +37,7 @@ test('week picker uses ISO Monday-through-Sunday values and a custom rounded wee
 
 test('month picker provides a custom year-scoped month grid', () => {
   const js = read('public/js/date-picker-only.js');
-  const css = read('public/css/work-area.css');
+  const css = read('public/css/app.css');
 
   assert.match(js, /site-date-picker-month-grid/);
   assert.match(js, /site-date-picker-month-option/);
@@ -45,11 +45,13 @@ test('month picker provides a custom year-scoped month grid', () => {
   assert.match(css, /\.site-date-picker-month-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3/);
 });
 
-test('the entire visible period field is the shared clickable trigger', () => {
-  const css = read('public/css/work-area.css');
+test('the entire visible period field is the shared clickable trigger while native-input mechanics stay protected', () => {
+  const appCss = read('public/css/app.css');
+  const featureCss = read('public/css/features.css');
 
-  assert.match(css, /\.site-date-picker-trigger\s*\{[\s\S]*?width:\s*100%[\s\S]*?cursor:\s*pointer/);
-  assert.match(css, /\.site-date-picker-native\s*\{[\s\S]*?pointer-events:\s*none !important/);
+  assert.match(appCss, /\.site-date-picker-trigger\s*\{[\s\S]*?width:\s*100%[\s\S]*?cursor:\s*pointer/);
+  assert.match(featureCss, /\.site-date-picker-native\s*\{[\s\S]*?pointer-events:\s*none !important/);
+  assert.doesNotMatch(appCss, /\.site-date-picker-native\s*\{/);
 });
 
 test('reporting week/month inputs on management dashboards are covered by the shared picker', () => {

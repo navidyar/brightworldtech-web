@@ -157,7 +157,7 @@
           <% safeMatches.forEach((match) => { %>
             <article class="workflow-item warning">
               <span></span>
-              <div style="width: 100%;">
+              <div class="site-width-full">
                 <strong><%= getMatchUnitLabel(match) %></strong>
                 <p>
                   Matched by <%= match.identifierTypeLabel || 'identifier' %>:
@@ -165,7 +165,7 @@
                 </p>
                 <p><%= getMatchLotLabel(match) %></p>
 
-                <div class="tech-override-summary" style="margin-top: 12px;">
+                <div class="tech-override-summary site-space-top-sm">
                   <dl>
                     <div>
                       <dt>Unit Serial</dt>
@@ -188,10 +188,10 @@
                     </div>
                   </dl>
                 </div>
-                <div class="message info" style="margin-top: 12px;">
+                <div class="message info site-space-top-sm">
                   <p>Creating a second unit with these matching serials remains blocked unless an Intentional Duplicate request is approved. Use the early serial-match panel to choose the correct controlled action.</p>
                 </div>
-                <button type="button" class="secondary-button" data-modal-close style="margin-top: 12px;">Close</button>
+                <button type="button" class="secondary-button site-space-top-sm" data-modal-close>Close</button>
               </div>
             </article>
           <% }) %>

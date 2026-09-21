@@ -11,7 +11,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'u
 
 test('Requests queue presents meaningful subjects instead of database request numbers', () => {
   const page = read('views/pages/unit-requests.ejs');
-  const css = read('public/css/unit-requests.css');
+  const css = read('public/css/app.css');
 
   assert.match(page, /request\.displaySubject/);
   assert.match(page, /unit-request-subject/);

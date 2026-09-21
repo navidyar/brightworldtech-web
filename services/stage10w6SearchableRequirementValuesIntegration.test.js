@@ -44,7 +44,7 @@ test('numeric requirements continue to use their existing numeric Required Value
 });
 
 test('the Requirement modal lets the searchable results list extend beyond the rounded modal shell', () => {
-  const styles = read('public/css/lots.css');
+  const styles = read('public/css/app.css');
 
   assert.match(
     styles,
@@ -53,9 +53,15 @@ test('the Requirement modal lets the searchable results list extend beyond the r
   assert.match(styles, /\.lot-requirement-value-options\s*\{[\s\S]*?position:\s*absolute;/);
 });
 
-test('Lots pages load the current requirement assets while preserving searchable requirement support', () => {
-  assert.match(read('views/pages/management-lot-new.ejs'), /\/css\/lots\.css\?v=[^\"'\s]+/);
-  assert.match(read('views/pages/management-lots.ejs'), /\/css\/lots\.css\?v=[^\"'\s]+/);
-  assert.match(read('views/pages/management-lot-detail.ejs'), /\/css\/lots\.css\?v=[^\"'\s]+/);
-  assert.match(read('views/pages/management-lot-detail.ejs'), /lot-requirements\.js\?v=[^\"'\s]+/);
+test('Lots pages use the consolidated CSS scope while preserving searchable requirement support', () => {
+  for (const pagePath of [
+    'views/pages/management-lot-new.ejs',
+    'views/pages/management-lots.ejs',
+    'views/pages/management-lot-detail.ejs'
+  ]) {
+    const page = read(pagePath);
+    assert.match(page, /css-scope-lots/);
+    assert.doesNotMatch(page, /\/css\/lots\.css/);
+  }
+  assert.match(read('views/pages/management-lot-detail.ejs'), /lot-requirements\.js\?v=[^"'\s]+/);
 });

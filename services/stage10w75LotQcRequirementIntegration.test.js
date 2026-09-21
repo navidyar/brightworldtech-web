@@ -71,6 +71,7 @@ test('Unit History records Lot QC eligibility changes without rewriting QC check
 test('QC icons use active blue pending and neutral not-required palettes', () => {
   const icon = read('views/fragments/tech-unit-qc-status-icon.ejs');
   const table = read('views/fragments/tech-units-table.ejs');
+  const theme = read('public/css/theme.css');
   const css = read('public/css/app.css');
 
   assert.match(icon, /'not-required'/);
@@ -78,8 +79,8 @@ test('QC icons use active blue pending and neutral not-required palettes', () =>
   assert.match(icon, /M7\.5 14\.5 14\.5 7\.5/);
   assert.match(table, /tech-qc-tooltip--not-required/);
   assert.match(table, /tech-qc-tooltip--pending/);
-  assert.match(css, /--qc-pending-ink: #2563eb/);
-  assert.match(css, /--qc-pending-background: #e8f0ff/);
+  assert.match(theme, /--qc-pending-ink: #2563eb/);
+  assert.match(theme, /--qc-pending-background: #e8f0ff/);
   assert.match(css, /\.tech-qc-status-indicator--not-required \{[\s\S]*?opacity: 0\.68;/);
 });
 

@@ -1,17 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', {
-    pageTitle,
-    stylesheets: [
-      '/css/modal.css?v=20260909-stage10w83-label-library-management',
-      '/css/management.css?v=20260911-label-builder-images',
-      '/css/label-builder.css?v=20260912-live-unit-preview-refine'
-    ]
-  }) %>
+  <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260909-stage10w83-label-library-management"></script>
   <script defer src="/js/label-builder.js?v=20260918-barcode-width-fit-v2"></script>
 
-  <body>
+  <body class="css-scope-management css-scope-label-builder">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 

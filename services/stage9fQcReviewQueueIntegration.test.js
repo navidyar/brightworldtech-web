@@ -39,7 +39,7 @@ test('Stage 9F applies QC queue filtering before pagination and preserves it in 
 test('Stage 9F renders a compact queue strip without introducing card records', () => {
   const page = read('views/pages/tech-units.ejs');
   const fragment = read('views/fragments/tech-units-qc-review-queue.ejs');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(page, /include\('\.\.\/fragments\/tech-units-qc-review-queue'/);
   assert.match(fragment, /QC Review Queue/);
@@ -72,7 +72,7 @@ test('Stage 9F cache versions and validation command are wired', () => {
 
   assert.equal(packageJson.scripts['validate:qc-queue'], 'node --test services/qcReviewQueue.test.js services/stage9fQcReviewQueueIntegration.test.js services/stage9fQcAwaitingCompletionConsistency.test.js');
   for (const template of [page, detail]) {
-    assert.match(template, /tech-units-clean\.css\?v=20260826-stage10w73e-browser-usability/);
+    assert.match(template, /<body class="css-scope-tech-units">/);
     assert.match(template, /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
   }
 });

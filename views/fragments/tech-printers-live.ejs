@@ -15,7 +15,7 @@
               <% if (showNetworkDetails) { %><td><%= printer.host_address %>:<%= printer.port %><br/><small><%= printer.protocol_code %></small></td><% } %>
               <td><span class="pill <%= Number(printer.is_shared) === 1 ? 'good' : 'slate' %>"><%= Number(printer.is_shared) === 1 ? 'Shared' : 'Private' %></span></td>
               <td><span class="pill <%= Number(printer.is_enabled) === 1 ? 'good' : 'bad' %>"><%= Number(printer.is_enabled) === 1 ? 'Enabled' : 'Disabled' %></span><br/><small><%= printer.last_probe_status || 'Not probed' %></small></td>
-              <td><div class="management-user-row-actions"><a class="secondary-button" href="/tech/printers/<%= printer.label_printer_id %>/edit/modal" hx-get="/tech/printers/<%= printer.label_printer_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a><a class="secondary-button danger-button" href="/tech/printers/<%= printer.label_printer_id %>/delete/modal" hx-get="/tech/printers/<%= printer.label_printer_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Remove</a></div></td>
+              <td><div class="management-user-row-actions site-inline-actions"><a class="secondary-button" href="/tech/printers/<%= printer.label_printer_id %>/edit/modal" hx-get="/tech/printers/<%= printer.label_printer_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a><a class="secondary-button danger-button" href="/tech/printers/<%= printer.label_printer_id %>/delete/modal" hx-get="/tech/printers/<%= printer.label_printer_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Remove</a></div></td>
             </tr>
           <% }) %>
         </tbody>

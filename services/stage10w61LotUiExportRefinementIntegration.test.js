@@ -11,7 +11,7 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'u
 test('Duplicate Lot reuses rounded choice cards and hides the Parent Lot control for Top-Level placement', () => {
   const modal = read('views/fragments/lot-duplicate-modal.ejs');
   const lotScript = read('public/js/lot-form.js');
-  const lotCss = read('public/css/lots.css');
+  const lotCss = read('public/css/app.css');
 
   assert.match(modal, /data-lot-duplicate-form/);
   assert.match(modal, /lot-choice-fieldset/);
@@ -44,7 +44,7 @@ test('Lot Details uses one Export Units action and the shared export modal owns 
   const detailPage = read('views/pages/management-lot-detail.ejs');
   const modal = read('views/fragments/tech-unit-export-preview-modal.ejs');
   const exportScript = read('public/js/unit-export.js');
-  const lotCss = read('public/css/lots.css');
+  const lotCss = read('public/css/app.css');
 
   assert.match(detailPage, />Export Units<\/button>/);
   assert.doesNotMatch(detailPage, />Export Direct Units<\/button>/);

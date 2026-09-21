@@ -76,7 +76,7 @@
             <td><%= formatNumber(asset.template_count) %> template<%= Number(asset.template_count) === 1 ? '' : 's' %></td>
             <td><%= formatDateTime(asset.created_at) %></td>
             <td>
-              <div class="management-user-row-actions label-library-asset-actions">
+              <div class="management-user-row-actions label-library-asset-actions site-inline-actions">
                 <a class="secondary-button compact-button" href="/management/label-library/assets/<%= asset.asset_id %>/preview/modal" hx-get="/management/label-library/assets/<%= asset.asset_id %>/preview/modal" hx-target="#modal-root" hx-swap="innerHTML">Preview</a>
                 <% if (['image/png', 'image/svg+xml'].includes(String(asset.mime_type || ''))) { %>
                   <a class="secondary-button compact-button" href="/management/label-library/assets/<%= asset.asset_id %>/rename/modal" hx-get="/management/label-library/assets/<%= asset.asset_id %>/rename/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>

@@ -152,7 +152,7 @@ test('Create and Edit save preflight cannot be interrupted by blur/background Lo
 test('Pallet Number filter uses a capped searchable select-style typeahead instead of an unbounded select', () => {
   const techUnitsPage = read('views/pages/tech-units.ejs');
   const techUnitsJs = read('public/js/tech-units.js');
-  const techUnitsCss = read('public/css/tech-units-clean.css');
+  const techUnitsCss = read('public/css/app.css');
   const amazonModel = read('models/unitAmazonModel.js');
   const controller = read('controllers/techController.js');
   const routes = read('routes/management.js');

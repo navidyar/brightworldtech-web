@@ -22,8 +22,8 @@ test('label and destructive Unit modals reuse the clean Unit modal shell without
   const bulkModal = read('views/fragments/tech-units-bulk-print-label-modal.ejs');
   const recentModal = read('views/fragments/tech-recent-prints-modal.ejs');
   const deleteModal = read('views/fragments/tech-unit-permanent-delete-modal.ejs');
-  const sharedCss = read('public/css/work-area.css');
-  const techCss = read('public/css/tech.css');
+  const sharedCss = read('public/css/app.css');
+  const techCss = read('public/css/app.css');
 
   for (const modal of [printModal, bulkModal, recentModal, deleteModal]) {
     assert.match(modal, /modal-panel site-clean-modal/);

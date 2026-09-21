@@ -1,18 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', {
-    pageTitle,
-    stylesheets: [
-      '/css/modal.css?v=step5c-ui-hotfix',
-      '/css/management.css?v=20260819-stage10w68p-interaction-refinements',
-      '/css/copy-link.css?v=20260811-stage10w32'
-    ]
-  }) %>
+  <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260819-stage10w68p-interaction-refinements"></script>
   <script defer src="/js/password-link-status.js?v=20260811-stage10w32"></script>
   <script defer src="/js/copy-link.js?v=20260811-stage10w32"></script>
 
-  <body>
+  <body class="css-scope-management css-scope-copy-link">
     <%
       const userListBasePath = isInactiveView ? '/management/users/inactive' : '/management/users';
       const normalizedActiveSort = activeSort || 'user_az';
@@ -76,7 +69,7 @@
                 <h2><%= isInactiveView ? 'Inactive Application Users' : 'Application Users' %></h2>
               </div>
 
-              <div class="management-user-actions">
+              <div class="management-user-actions site-inline-actions">
                 <% if (isInactiveView) { %>
                   <a class="secondary-button" href="/management/users">Active Users (<%= userCounts.activeCount %>)</a>
                 <% } else { %>
@@ -108,7 +101,7 @@
               <p><strong>Role assignment rule:</strong> each user receives one primary access role. Admin users can assign Admin to other users, but cannot demote their own Admin account. Management users can assign Management, Tech Lead, QC, or Tech to other users, but cannot change their own Management role. QC is a restricted review role; packing and task activity remain operational records rather than account roles.</p>
             </div>
 
-            <div class="table-card management-users-table-card" style="margin-top: 20px;">
+            <div class="table-card management-users-table-card site-space-top-lg">
               <table>
                 <thead>
                   <tr>
@@ -224,7 +217,7 @@
                       </td>
                       <td><%= formatDateTime(user.last_login_at) %></td>
                       <td>
-                        <div class="management-user-row-actions">
+                        <div class="management-user-row-actions site-inline-actions">
                           <a class="secondary-button" href="/management/users/<%= user.user_id %>/edit/modal?returnPath=<%= isInactiveView ? 'inactive' : 'active' %>" hx-get="/management/users/<%= user.user_id %>/edit/modal?returnPath=<%= isInactiveView ? 'inactive' : 'active' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
 
                           <% if (isInactiveView) { %>

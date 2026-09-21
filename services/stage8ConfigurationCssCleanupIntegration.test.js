@@ -12,7 +12,7 @@ function read(relativePath) {
 }
 
 test('legacy Configuration Values selectors are removed from the global legacy stylesheet', () => {
-  const legacyCss = read('public/css/style.css');
+  const legacyCss = read('public/css/app.css');
 
   [
     '.config-values-control-header',

@@ -57,9 +57,9 @@ test('Stage 10P assets are cache-busted on modal and full-page entry points', ()
   const formPage = read('views/pages/tech-unit-form.ejs');
   const browserPage = read('views/pages/tech-units.ejs');
 
-  assert.match(detailPage, /tech-units-clean\.css\?v=/);
-  assert.match(formPage, /tech-units-clean\.css\?v=/);
-  assert.match(browserPage, /tech-units-clean\.css\?v=/);
+  assert.match(detailPage, /<body class="css-scope-tech-units">/);
+  assert.match(formPage, /<body class="css-scope-tech-units">/);
+  assert.match(browserPage, /<body class="css-scope-tech-units">/);
   assert.match(formPage, /tech-unit-form\.js\?v=[^\"]+/);
   assert.match(browserPage, /tech-unit-form\.js\?v=[^\"]+/);
 });

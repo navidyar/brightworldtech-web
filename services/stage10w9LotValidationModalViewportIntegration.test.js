@@ -25,7 +25,7 @@ test('Unit Requirement Details uses a dedicated viewport-aware backdrop', () => 
 });
 
 test('strict-Lot validation modal constrains the shell and scrolls the body', () => {
-  const css = read('public/css/lots.css');
+  const css = read('public/css/app.css');
 
   assert.match(
     css,
@@ -39,9 +39,13 @@ test('strict-Lot validation modal constrains the shell and scrolls the body', ()
   assert.match(css, /@media \(max-width:\s*720px\)[\s\S]*?max-height:\s*calc\(100dvh - 20px\);/);
 });
 
-test('both Lots pages use the viewport-scroll cache-busted stylesheet', () => {
-  const expected = '/css/lots.css?v=20260807-stage10w20-lot-hierarchy-integrity';
-
-  assert.match(read('views/pages/management-lots.ejs'), new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  assert.match(read('views/pages/management-lot-detail.ejs'), new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+test('Lots pages use the shared CSS scope after standalone lots.css retirement', () => {
+  for (const relativePath of [
+    'views/pages/management-lots.ejs',
+    'views/pages/management-lot-detail.ejs'
+  ]) {
+    const page = read(relativePath);
+    assert.match(page, /css-scope-lots/);
+    assert.doesNotMatch(page, /\/css\/lots\.css/);
+  }
 });

@@ -1,12 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', {
-    pageTitle,
-    stylesheets: ['/css/modal.css?v=20260910-stage10w87b-printer-registry-refine','/css/management.css?v=20260910-stage10w87b-printer-registry-refine']
-  }) %>
+  <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260910-stage10w87b-printer-registry-refine"></script>
   <script defer src="/js/label-printer-registry-live.js?v=20260910-stage10w87c-printer-registry-realtime"></script>
-  <body>
+  <body class="css-scope-management">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
       <div class="app-main">
@@ -17,7 +14,7 @@
               <h1>Label Printers</h1>
               <p>Register managed printers and organize shared printers into routing groups. Production printing still uses the existing validated queue until registry cutover.</p>
             </div>
-            <div class="management-user-row-actions">
+            <div class="management-user-row-actions site-inline-actions">
               <a class="secondary-button" href="/management/printer-groups/new/modal" hx-get="/management/printer-groups/new/modal" hx-target="#modal-root" hx-swap="innerHTML">New Group</a>
               <a class="primary-button" href="/management/printers/new/modal" hx-get="/management/printers/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Add Printer</a>
             </div>

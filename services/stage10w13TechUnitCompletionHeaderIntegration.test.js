@@ -36,7 +36,7 @@ test('the at-a-glance timestamp uses the current non-reversed work completion in
 });
 
 test('the completion timestamp is emphasized as text without adding a boxed status control', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   const selector = '.tech-units-clean-page .tech-detail-header--details .tech-detail-title .tech-detail-completion-at';
   const start = css.indexOf(selector);
 
@@ -49,14 +49,15 @@ test('the completion timestamp is emphasized as text without adding a boxed stat
   assert.doesNotMatch(block, /box-shadow:/);
 });
 
-test('all Tech Unit entry points use the completion-header stylesheet version', () => {
-  const expected = '/css/tech-units-clean.css?v=20260806-stage10w162-matched-weight-pill-styles';
-
+test('all Tech Unit entry points use the shared Tech Units CSS scope', () => {
+  assert.match(read('views/partials/head.ejs'), /\/css\/app\.css\?v=/);
   for (const relativePath of [
     'views/pages/tech-units.ejs',
     'views/pages/tech-unit-form.ejs',
     'views/pages/tech-unit-detail.ejs',
   ]) {
-    assert.match(read(relativePath), new RegExp(escapeRegExp(expected)));
+    const page = read(relativePath);
+    assert.match(page, /<body class="css-scope-tech-units">/);
+    assert.doesNotMatch(page, /tech-units-clean\.css/);
   }
 });

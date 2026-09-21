@@ -24,6 +24,32 @@ sql/           Database migrations
 scripts/       Validation and migration helpers
 ```
 
+## CSS architecture
+
+BWTDallas uses exactly three authored stylesheets:
+
+- `public/css/theme.css` — global design tokens and theme-state values only.
+- `public/css/app.css` — shared presentation and reusable component contracts.
+- `public/css/features.css` — structure/interaction rules whose removal can change application behavior.
+
+New UI work should reuse the shared component contracts in `app.css` before adding feature-specific selectors. In particular, reuse the existing button, form-field, table, clean-modal, pagination/date-picker, summary-panel, and action-layout classes rather than creating parallel page-specific versions. New standalone CSS files and static inline presentation are not part of the application architecture. Template `style` attributes are reserved only for runtime CSS custom properties (`--...`) whose values come from data or JavaScript; ordinary layout and presentation must use shared classes in the three CSS files.
+
+Feature-specific selectors are appropriate when a feature genuinely needs a unique visual or structural rule, but they belong in `app.css` or `features.css` according to responsibility and should build on the shared tokens/components where practical. Canonical colors, fonts, shadows, spacing, radii, and similar shared values must be referenced through `theme.css` custom properties instead of repeating their literal values in component CSS; feature-only geometry may remain local when it does not represent a shared design decision. Prefer normal cascade order and appropriately scoped selectors over `!important`; reserve `!important` for browser/behavior safeguards or cases where a lower-specificity shared contract must intentionally defeat legacy/native behavior. Do not stack successive override blocks for the same component—replace the obsolete rule with the final effective contract once it is safe to do so.
+
+The CSS boundary is enforced by `npm run validate:shared-css`: templates may load stylesheets only through the shared head (with the standalone error pages loading the same three files directly), CSS `@import` is prohibited, runtime inline custom properties must be consumed by the shared stylesheets, and the current `!important` counts are non-growth ceilings. Lowering those ceilings through cleanup is encouraged; raising them should require an intentional architecture review rather than becoming routine feature work.
+
+CSS comments should document the current functional purpose, ownership boundary, or reason for a non-obvious safeguard. Do not preserve Stage/Step rollout chronology, migration notes, or retired stylesheet names in the authored CSS.
+
+### CSS consolidation baseline
+
+The CSS consolidation is complete. Future UI work should maintain the three-file architecture rather than introduce another consolidation layer or page-owned stylesheet. The enforced `!important` non-growth ceilings are `theme.css: 0`, `app.css: 305`, and `features.css: 82`; cleanup may lower these counts, but feature work should not raise them without an explicit architecture review.
+
+Treat behavior-sensitive CSS as application logic during maintenance. In particular, preserve Lot hierarchy expansion/indentation, conditional Unit Form visibility and `[hidden]` behavior, native date-input mechanics, modal/root overflow behavior, searchable-combobox positioning, Unit Browser geometry and single-line identifier behavior, Label Builder canvas/object/resize/rotation/grid/guide/layer mechanics, sidebar pinned/collapsed state, and Virtual Huddle blocking behavior. Visual presentation for those features belongs in `app.css`; mechanics that participate in behavior belong in `features.css`.
+
+Use the shared vertical-rhythm contracts in `app.css` for heading/note-to-content spacing instead of adding page-specific margin overrides. The current shared spacing baseline is 12px at the direct-sibling boundaries covered by those contracts.
+
+Before merging CSS changes, run `npm run validate:shared-css` and the focused integration tests for the affected surface. The validator is the source of truth for stylesheet ownership, inline-style restrictions, canonical token usage, runtime custom-property consumption, and the current debt ceilings.
+
 ## Environment
 
 Create a `.env` file in the application directory. At minimum, configure:
@@ -186,16 +212,6 @@ patch --batch --forward -p0 < handoff/example.patch
 ```
 
 Rebuild separately after the patch applies successfully. Run only the tests and manual checks relevant to the changed feature unless a full regression check is requested.
-
-## CSS organization
-
-The shared UI is organized into three files:
-
-- `public/css/theme.css` — colors, typography, spacing, borders, and design tokens
-- `public/css/app.css` — shared visual components and page styling
-- `public/css/features.css` — protected behavior such as hidden states and feature-specific interaction safeguards
-
-Page-specific CSS should be limited to genuinely unique layout or behavior. Shared scrollbar colors and geometry are defined by tokens in `theme.css` and presentation rules in `app.css`; feature-specific overflow behavior stays in the relevant feature stylesheet. Functional selectors must be tested before older declarations are removed, especially the Lots hierarchy, caret controls, modal behavior, responsive layouts, and repeatable Unit-form sections.
 
 ## Important application behavior
 

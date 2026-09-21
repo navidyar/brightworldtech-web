@@ -16,7 +16,7 @@ function escapeRegExp(value) {
 }
 
 test('Pass and Fail use a circular field-style focus halo on the native radio only', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   const marker = '/* Stage 10W.12.1 — circular keyboard-focus halo for Pass/Fail radios. */';
   const markerIndex = css.indexOf(marker);
 
@@ -33,7 +33,7 @@ test('Pass and Fail use a circular field-style focus halo on the native radio on
 
 
 test('sitewide checkbox/radio rows do not receive a containing-label focus aura', () => {
-  const css = read('public/css/work-area.css');
+  const css = read('public/css/app.css');
 
   assert.match(
     css,
@@ -45,9 +45,10 @@ test('sitewide checkbox/radio rows do not receive a containing-label focus aura'
   );
 });
 
-test('the shared work-area stylesheet version is bumped so the sitewide focus cleanup is not cached', () => {
+test('the shared app stylesheet carries the sitewide focus cleanup after work-area retirement', () => {
   const head = read('views/partials/head.ejs');
-  assert.match(head, /\/css\/work-area\.css\?v=20260911-sitewide-choice-focus-cleanup/);
+  assert.match(head, /\/css\/app\.css\?v=/);
+  assert.doesNotMatch(head, /work-area\.css/);
 });
 
 test('the outcome controls retain explicit Pass and Fail keyboard tab stops', () => {
@@ -59,14 +60,15 @@ test('the outcome controls retain explicit Pass and Fail keyboard tab stops', ()
   assert.match(markup, /outcomeOptions\.forEach/);
 });
 
-test('all Add/Edit Unit entry points use the outcome-radio-focus stylesheet version', () => {
-  const expected = '/css/tech-units-clean.css?v=20260826-stage10w73e-browser-usability';
-
+test('all Add/Edit Unit entry points use the shared Tech Units CSS scope', () => {
+  assert.match(read('views/partials/head.ejs'), /\/css\/app\.css\?v=/);
   for (const relativePath of [
     'views/pages/tech-units.ejs',
     'views/pages/tech-unit-form.ejs',
     'views/pages/tech-unit-detail.ejs',
   ]) {
-    assert.match(read(relativePath), new RegExp(escapeRegExp(expected)));
+    const page = read(relativePath);
+    assert.match(page, /<body class="css-scope-tech-units">/);
+    assert.doesNotMatch(page, /tech-units-clean\.css/);
   }
 });

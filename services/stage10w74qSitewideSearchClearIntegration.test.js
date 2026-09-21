@@ -43,15 +43,17 @@ test('clear action is accessible, keeps combobox focus stable, and emits normal 
   assert.match(script, /input\.focus\(\{ preventScroll: true \}\)/);
 });
 
-test('clear control styling reserves existing trailing icons and suppresses inconsistent native search cancel buttons', () => {
-  const css = read('public/css/app.css');
+test('clear control styling reserves existing trailing icons and uses the shared hidden-state contract', () => {
+  const appCss = read('public/css/app.css');
+  const featureCss = read('public/css/features.css');
 
-  assert.match(css, /\.site-search-clear-shell--reserved-icon > input/);
+  assert.match(appCss, /\.site-search-clear-shell--reserved-icon > input/);
   const script = read('public/js/search-clear-controls.js');
   assert.match(script, /\.tech-pallet-filter-input/);
   assert.match(script, /\.lot-requirement-value-search/);
-  assert.match(css, /::-webkit-search-cancel-button/);
-  assert.match(css, /\.site-search-clear-button\[hidden\]/);
+  assert.match(appCss, /::-webkit-search-cancel-button/);
+  assert.match(featureCss, /\[hidden\]\s*\{[\s\S]*?display:\s*none !important/);
+  assert.doesNotMatch(appCss, /\.site-search-clear-button\[hidden\]\s*\{/);
 });
 
 test('every current searchable-select style input is covered by the shared selector', () => {

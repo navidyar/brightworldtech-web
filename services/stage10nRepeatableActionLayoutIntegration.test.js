@@ -15,14 +15,14 @@ test('Cosmetic and Hardware Add actions live in their compact section headings',
 });
 
 test('Add controls retain a restrained fill with a stronger green border', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /button\.secondary-button\[data-add-module-row\][\s\S]*?border:\s*1px solid #6f9f7c[\s\S]*?background:\s*#edf7f0/);
   assert.match(css, /button\.secondary-button\[data-add-module-row\]:hover[\s\S]*?border-color:\s*#568762/);
 });
 
 test('Memory and Storage Remove controls align with the 39px form controls', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   const markup = read('views/fragments/tech-unit-form.ejs');
 
   assert.match(css, /\.tech-memory-edit-row > \.tech-memory-remove-button[\s\S]*?align-self:\s*end[\s\S]*?height:\s*39px[\s\S]*?min-height:\s*39px/);
@@ -35,9 +35,9 @@ test('Stage 10N assets are cache-busted on modal and full-page entry points', ()
   const formPage = read('views/pages/tech-unit-form.ejs');
   const browserPage = read('views/pages/tech-units.ejs');
 
-  assert.match(detailPage, /tech-units-clean\.css\?v=/);
-  assert.match(formPage, /tech-units-clean\.css\?v=/);
-  assert.match(browserPage, /tech-units-clean\.css\?v=/);
+  assert.match(detailPage, /<body class="css-scope-tech-units">/);
+  assert.match(formPage, /<body class="css-scope-tech-units">/);
+  assert.match(browserPage, /<body class="css-scope-tech-units">/);
   assert.match(formPage, /tech-unit-form\.js\?v=[^"']+/);
   assert.match(browserPage, /tech-unit-form\.js\?v=[^"']+/);
 });

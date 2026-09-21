@@ -14,7 +14,7 @@ const qcCorrectionModal = read('views/fragments/tech-unit-qc-correction-modal.ej
 const modalScript = read('public/js/modal.js');
 const techUnitsScript = read('public/js/tech-units.js');
 const appCss = read('public/css/app.css');
-const techUnitsCss = read('public/css/tech-units-clean.css');
+const techUnitsCss = read('public/css/app.css');
 
 function countMatches(value, pattern) {
   return (value.match(pattern) || []).length;
@@ -120,7 +120,7 @@ test('Stage 9K cache-busts the common modal manager and QC Unit Browser assets',
 
   [techUnitsPage, techUnitDetailPage].forEach((markup) => {
     assert.match(markup, /\/js\/modal\.js\?v=20260819-stage10w68p-interaction-refinements/);
-    assert.match(markup, /tech-units-clean\.css\?v=20260826-stage10w73e-browser-usability/);
+    assert.match(markup, /<body class="css-scope-tech-units">/);
     assert.match(markup, /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
   });
 

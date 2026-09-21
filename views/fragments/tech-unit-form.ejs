@@ -1120,8 +1120,8 @@
         <% const cosmeticIssueIsNone = noCosmeticIssueTypeIds.has(String(issueRow.issueTypeConfigValueId || '')); %>
         <article class="workflow-item slate" data-module-row="cosmeticIssue" data-cosmetic-no-issue="<%= cosmeticIssueIsNone ? 'true' : 'false' %>">
           <span></span>
-          <div style="width: 100%;">
-            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+          <div class="site-width-full">
+            <div class="content-header">
               <div>
                 <strong>Cosmetic Issue <span data-module-display-number><%= index + 1 %></span></strong>
                 <p>Severity and location apply only to an actual cosmetic issue.</p>
@@ -1198,8 +1198,8 @@
         <% const hardwareIssueIsNone = noHardwareIssueTypeIds.has(String(issueRow.issueTypeConfigValueId || '')); %>
         <article class="workflow-item slate" data-module-row="hardwareIssue" data-hardware-no-issue="<%= hardwareIssueIsNone ? 'true' : 'false' %>">
           <span></span>
-          <div style="width: 100%;">
-            <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+          <div class="site-width-full">
+            <div class="content-header">
               <div>
                 <strong>Hardware Issue <span data-module-display-number><%= index + 1 %></span></strong>
                 <p>Custom issue and location apply only to an actual hardware issue.</p>
@@ -1348,8 +1348,8 @@
   <template data-module-template="cosmeticIssue">
     <article class="workflow-item slate" data-module-row="cosmeticIssue" data-cosmetic-no-issue="false">
       <span></span>
-      <div style="width: 100%;">
-        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+      <div class="site-width-full">
+        <div class="content-header">
           <div>
             <strong>Cosmetic Issue <span data-module-display-number>__DISPLAY__</span></strong>
             <p>Severity and location apply only to an actual cosmetic issue.</p>
@@ -1369,8 +1369,8 @@
   <template data-module-template="hardwareIssue">
     <article class="workflow-item slate" data-module-row="hardwareIssue" data-hardware-no-issue="false">
       <span></span>
-      <div style="width: 100%;">
-        <div class="content-header" style="align-items: center; margin-bottom: 12px;">
+      <div class="site-width-full">
+        <div class="content-header">
           <div>
             <strong>Hardware Issue <span data-module-display-number>__DISPLAY__</span></strong>
             <p>Custom issue and location apply only to an actual hardware issue.</p>

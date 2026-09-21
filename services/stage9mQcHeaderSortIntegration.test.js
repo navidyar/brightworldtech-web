@@ -51,9 +51,9 @@ test('QC sort values and semantic state ranking are implemented in the Unit quer
 });
 
 test('all Units headers inherit the common table-header typography instead of page-specific values', () => {
-  const pageCss = read('public/css/tech-units-clean.css');
+  const pageCss = read('public/css/app.css');
   const commonCss = read('public/css/app.css');
-  const workAreaCss = read('public/css/work-area.css');
+  const workAreaCss = read('public/css/app.css');
 
   const headerRuleStart = pageCss.indexOf('.tech-units-clean-page .tech-units-table thead th {');
   const headerRuleEnd = pageCss.indexOf('}', headerRuleStart);
@@ -73,8 +73,9 @@ test('shared and Units table styles are cache-busted together', () => {
   const page = read('views/pages/tech-units.ejs');
   const detail = read('views/pages/tech-unit-detail.ejs');
 
-  assert.match(head, /work-area\.css\?v=20260812-stage10w48-cross-browser-period-picker/);
+  assert.match(head, /app\.css\?v=/);
+  assert.doesNotMatch(head, /work-area\.css/);
   for (const template of [page, detail]) {
-    assert.match(template, /tech-units-clean\.css\?v=20260826-stage10w73e-browser-usability/);
+    assert.match(template, /<body class="css-scope-tech-units">/);
   }
 });

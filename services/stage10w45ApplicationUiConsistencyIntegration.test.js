@@ -41,9 +41,10 @@ test('all action-modal close icons use the shared close-button class', () => {
 });
 
 test('shared modal visual contract normalizes corners and typography without taking over scrolling', () => {
+  const theme = read('public/css/theme.css');
   const css = stageSection(read('public/css/app.css'));
 
-  assert.match(css, /--ui-modal-radius:\s*12px/);
+  assert.match(theme, /--ui-modal-radius:\s*12px/);
   assert.match(css, /\.modal-panel\s*\{[\s\S]*?border-radius:\s*var\(--ui-modal-radius\)/);
   assert.match(css, /\.modal-panel\s*>\s*:first-child\s*\{[\s\S]*?border-top-left-radius:\s*inherit[\s\S]*?border-top-right-radius:\s*inherit/);
   assert.match(css, /\.modal-panel\s*>\s*:last-child\s*\{[\s\S]*?border-bottom-right-radius:\s*inherit[\s\S]*?border-bottom-left-radius:\s*inherit/);
@@ -63,9 +64,32 @@ test('dashboard surfaces and forms use the shared restrained presentation contra
   assert.match(css, /\.dashboard-hero\s*\{[\s\S]*?border:\s*1px solid #c8d8ea[\s\S]*?border-radius:\s*var\(--ui-radius-panel\)/);
   assert.match(css, /\.dashboard-metric-card\s*\{[\s\S]*?border-top-width:\s*1px[\s\S]*?border-left:\s*3px solid/);
   assert.match(css, /\.role-dashboard-card\s*\{[\s\S]*?border:\s*1px solid var\(--ui-line\)[\s\S]*?border-radius:\s*var\(--ui-radius-panel\)/);
-  assert.match(css, /\.dashboard-filter-form,\s*\n\.dashboard-period-form\s*\{[\s\S]*?align-items:\s*end !important/);
+  assert.match(css, /\.dashboard-filter-form,\s*\n\.dashboard-period-form\s*\{[\s\S]*?align-items:\s*end;/);
   assert.match(css, /\.dashboard-period-form[\s\S]*?border-radius:\s*var\(--ui-radius-panel\)/);
-  assert.match(css, /\.dashboard-period-form\s*>\s*:is\(\.primary-button, button\.primary-button\)[\s\S]*?margin-top:\s*0 !important/);
+  assert.match(css, /\.dashboard-period-form\s*>\s*:is\(\.primary-button, button\.primary-button\)[\s\S]*?margin-top:\s*0;/);
+  const dashboardFormStart = css.indexOf('/* Dashboard forms previously accumulated multiple one-off alignment patches.');
+  const managementSupportStart = css.indexOf('/* Management and supporting pages that still carry older high-weight rules.');
+  const dashboardFormContract = css.slice(dashboardFormStart, managementSupportStart);
+  assert.doesNotMatch(dashboardFormContract, /!important/,
+    'canonical dashboard alignment should not need important declarations');
+});
+
+test('historical dashboard alignment override chain and retired reporting selectors stay removed', () => {
+  const css = read('public/css/app.css');
+
+  assert.doesNotMatch(css, /Step 4j\.5\.[456]/);
+  assert.match(css, /Dashboard reporting action compatibility\./);
+  assert.match(css, /\.dashboard-role-metrics \.dashboard-period-form > button\.primary-button,[\s\S]*?min-width:\s*0;[\s\S]*?white-space:\s*nowrap;/);
+  for (const retiredSelector of [
+    'management-reporting-controls',
+    'management-reporting-controls--simplified',
+    'management-reporting-main-field',
+    'management-period-panel',
+    'management-period-note',
+    'management-reporting-actions'
+  ]) {
+    assert.equal(css.includes(retiredSelector), false, `${retiredSelector} should not return as dead CSS`);
+  }
 });
 
 test('Stage 10W45 visual layer does not style protected Lot or Unit workflow mechanics', () => {

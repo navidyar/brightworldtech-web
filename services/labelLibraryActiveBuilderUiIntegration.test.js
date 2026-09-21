@@ -30,13 +30,15 @@ test('Active layout saves reject incomplete live layouts while archived layouts 
 test('Label Library summary uses the established modern summary-panel pattern and Edit modal stays aligned', () => {
   const library = source('views/pages/management-label-library.ejs');
   const form = source('views/fragments/label-template-form-modal.ejs');
-  const css = source('public/css/management.css');
+  const css = source('public/css/app.css');
   assert.match(library, /label-library-summary-panel/);
   assert.match(library, /label-library-summary-primary/);
   assert.match(library, /label-library-summary-stats/);
   assert.doesNotMatch(library, /label-library-summary-line/);
-  assert.match(css, /label-library-summary-panel/);
-  assert.match(css, /grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
+  assert.match(library, /site-summary-panel site-summary-panel--expanded/);
+  assert.match(library, /site-summary-stats site-summary-stats--five/);
+  assert.match(css, /\.site-summary-panel--expanded/);
+  assert.match(css, /\.site-summary-stats--five[\s\S]*grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
   assert.match(form, /label-template-form-grid/);
   assert.match(css, /label-template-form-grid > label/);
   assert.match(css, /label-template-form-grid \.full-width/);

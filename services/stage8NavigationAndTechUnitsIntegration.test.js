@@ -73,7 +73,7 @@ test('Lot Details can open direct or descendant-inclusive Lot scope in the Tech 
 
 test('Tech Units use compact semantic actions and a prominent restrained Lot name', () => {
   const table = read('views/fragments/tech-units-table.ejs');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(table, /tech-unit-summary-lot/);
   assert.match(table, /tech-action-button--complete/);

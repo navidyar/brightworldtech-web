@@ -49,7 +49,7 @@ test('structured Current rows determine submitted totals while valid summary-onl
 });
 
 test('the two comparison sides use equal width and stack responsively', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /\.tech-memory-editor--compare[\s\S]*?grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /@media \(max-width: 980px\)[\s\S]*?\.tech-memory-editor--compare[\s\S]*?grid-template-columns: 1fr/);

@@ -3,12 +3,18 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const templatePath = path.join(__dirname, '..', 'views', 'pages', 'tech-unit-form.ejs');
+const root = path.join(__dirname, '..');
+const templatePath = path.join(root, 'views', 'pages', 'tech-unit-form.ejs');
 const template = fs.readFileSync(templatePath, 'utf8');
+const head = fs.readFileSync(path.join(root, 'views', 'partials', 'head.ejs'), 'utf8');
 
 test('full-page Unit form loads the shared modal assets', () => {
-  assert.match(template, /['"]\/css\/modal\.css['"]/);
-  assert.match(template, /<script defer src="\/js\/modal\.js\?v=20260729-stage9k-modal-accessibility"><\/script>/);
+  assert.match(template, /include\('\.\.\/partials\/head'/);
+  assert.doesNotMatch(template, /\/css\/modal\.css/);
+  assert.match(head, /\/css\/theme\.css\?v=/);
+  assert.match(head, /\/css\/app\.css\?v=/);
+  assert.match(head, /\/css\/features\.css\?v=/);
+  assert.match(template, /<script defer src="\/js\/modal\.js\?v=[^"]+"><\/script>/);
 });
 
 test('full-page Unit form provides the modal target used by override and catalog actions', () => {

@@ -235,7 +235,7 @@ test('an Edit submission updates an existing legacy-migrated battery row instead
 test('repeatable Specs rows stay compact and show a recorded state when all child controls are hidden', () => {
   const form = read('views/fragments/tech-unit-form.ejs');
   const script = read('public/js/tech-unit-form.js');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(form, /data-repeatable-recorded-state hidden>Battery recorded</);
   assert.match(form, /data-repeatable-recorded-state hidden>Camera recorded</);

@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
 test('Configure Unit Form assigns vertical scrolling to the modal body only', () => {
-  const css = read('public/css/lots.css');
+  const css = read('public/css/app.css');
   const modal = read('views/fragments/lot-unit-form-rules-modal.ejs');
 
   assert.match(modal, /modal-backdrop lot-unit-form-rules-backdrop/);
@@ -20,9 +20,9 @@ test('Configure Unit Form assigns vertical scrolling to the modal body only', ()
 });
 
 test('Configure Unit Form remains bounded to short viewports without a sticky action footer', () => {
-  const css = read('public/css/lots.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /lot-unit-form-rules-modal\.modal-panel\.site-clean-modal \{[\s\S]*?max-height:\s*calc\(100dvh - 24px\)/);
   assert.match(css, /@media \(max-width: 700px\)[\s\S]*?lot-unit-form-rules-modal\.modal-panel\.site-clean-modal \{[\s\S]*?max-height:\s*calc\(100dvh - 16px\)/);
-  assert.doesNotMatch(css, /\.lot-unit-form-rules-actions\s*\{[\s\S]*?position:\s*(?:sticky|fixed)/);
+  assert.doesNotMatch(css, /\.lot-unit-form-rules-actions\s*\{[^}]*position:\s*(?:sticky|fixed)/);
 });

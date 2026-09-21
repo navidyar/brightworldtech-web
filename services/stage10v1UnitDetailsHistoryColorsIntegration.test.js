@@ -6,7 +6,7 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 
-const css = read('public/css/tech-units-clean.css');
+const css = read('public/css/app.css');
 const unitsPage = read('views/pages/tech-units.ejs');
 const detailPage = read('views/pages/tech-unit-detail.ejs');
 
@@ -30,8 +30,10 @@ test('the later compact-detail rule no longer overrides either semantic header c
   assert.doesNotMatch(compactRule[1], /background:|border-bottom-color:/);
 });
 
-test('Unit Browser and standalone detail pages bust the corrected color stylesheet cache', () => {
-  const expectedVersion = 'tech-units-clean.css?v=20260826-stage10w73e-browser-usability';
-  assert.match(unitsPage, new RegExp(expectedVersion.replace(/[.?]/g, '\\$&')));
-  assert.match(detailPage, new RegExp(expectedVersion.replace(/[.?]/g, '\\$&')));
+test('Unit Browser and standalone detail pages use the shared Tech Units CSS scope', () => {
+  assert.match(read('views/partials/head.ejs'), /\/css\/app\.css\?v=/);
+  assert.match(unitsPage, /<body class="css-scope-tech-units">/);
+  assert.match(detailPage, /<body class="css-scope-tech-units">/);
+  assert.doesNotMatch(unitsPage, /tech-units-clean\.css/);
+  assert.doesNotMatch(detailPage, /tech-units-clean\.css/);
 });

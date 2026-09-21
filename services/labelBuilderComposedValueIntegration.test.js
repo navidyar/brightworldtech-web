@@ -82,7 +82,7 @@ test('Composed Text normalization and readiness use the same structured parts co
 
 
 test('composed-value parts stay on one row and use the drag handle instead of arrow buttons', () => {
-  const css = source('public/css/label-builder.css');
+  const css = `${source('public/css/app.css')}\n${source('public/css/features.css')}`;
   const js = source('public/js/label-builder.js');
   assert.match(css, /grid-template-columns: 18px 48px minmax\(0, 1fr\) 36px/);
   assert.match(css, /\.label-builder-composed-part-editor\.is-static[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);

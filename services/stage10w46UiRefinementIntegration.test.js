@@ -9,10 +9,11 @@ const root = path.join(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
 test('select values use one lighter shared typography contract', () => {
+  const theme = read('public/css/theme.css');
   const css = read('public/css/app.css');
 
-  assert.match(css, /--form-select-value-ink:\s*#40566e/);
-  assert.match(css, /--form-select-value-font-weight:\s*400/);
+  assert.match(theme, /--form-select-value-ink:\s*#40566e/);
+  assert.match(theme, /--form-select-value-font-weight:\s*400/);
   assert.match(css, /body select:not\(\[multiple\]\):not\(\[hidden\]\)[\s\S]*?font-weight:\s*var\(--form-select-value-font-weight\) !important/);
   assert.match(css, /body :is\(\.site-date-picker-trigger, \.tech-created-date-picker-trigger\)[\s\S]*?font-weight:\s*var\(--form-select-value-font-weight\) !important/);
 });
@@ -61,11 +62,10 @@ test('Lot checkbox and Requirement presentation removes unnecessary framing/text
 
 test('modal close buttons use one centered Add/Edit Unit style and legacy CSS duplicates are removed', () => {
   const appCss = read('public/css/app.css');
-  const legacyCssFiles = [
-    'public/css/modal.css',
+  const retiredCssFiles = [
+    'public/css/style.css',
     'public/css/work-area.css',
-    'public/css/lots.css',
-    'public/css/tech-units-clean.css'
+    'public/css/lots.css'
   ];
   const techModal = read('views/fragments/tech-unit-modal.ejs');
 
@@ -74,8 +74,8 @@ test('modal close buttons use one centered Add/Edit Unit style and legacy CSS du
   assert.match(appCss, /\.modal-panel :is\(\.modal-close-button, \.modal-close\)::after/);
   assert.doesNotMatch(techModal, /tech-unit-modal-close-icon/);
 
-  legacyCssFiles.forEach((relativePath) => {
-    assert.doesNotMatch(read(relativePath), /modal-close-button/, `${relativePath} should no longer own modal close-button presentation`);
+  retiredCssFiles.forEach((relativePath) => {
+    assert.equal(fs.existsSync(path.join(root, relativePath)), false, `${relativePath} should remain retired`);
   });
 });
 
@@ -84,7 +84,10 @@ test('shared UI assets remain cache-busted without pinning later visual revision
   const techUnits = read('views/pages/tech-units.ejs');
 
   assert.match(head, /app\.css\?v=[^\"'\s>]+/);
-  assert.match(head, /work-area\.css\?v=[^\"'\s>]+/);
+  assert.match(head, /theme\.css\?v=/);
+  assert.match(head, /app\.css\?v=/);
+  assert.match(head, /features\.css\?v=/);
+  assert.doesNotMatch(head, /work-area\.css/);
   assert.match(head, /date-picker-only\.js\?v=20260812-stage10w48-cross-browser-period-picker/);
   assert.match(techUnits, /tech-units-date-picker\.js\?v=20260812-stage10w46-month-year-picker/);
 });

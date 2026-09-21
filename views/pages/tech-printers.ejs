@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=20260910-stage10w87b-printer-registry-refine','/css/management.css?v=20260910-stage10w87b-printer-registry-refine'] }) %>
+  <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260910-stage10w87b-printer-registry-refine"></script>
   <script defer src="/js/label-printer-registry-live.js?v=20260910-stage10w87c-printer-registry-realtime"></script>
-  <body>
+  <body class="css-scope-management">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
       <div class="app-main">

@@ -1,12 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', {
-    pageTitle,
-    stylesheets: [
-      '/css/lots.css?v=20260826-stage10w73c-browser-config-refinement',
-      '/css/modal.css'
-    ]
-  }) %>
+  <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   <script defer src="/js/lot-form.js?v=20260828-stage10w74p-automatic-requirement-inheritance"></script>
   <script defer src="/js/lot-requirements.js?v=20260819-stage10w68y-mouse-focus-continuity"></script>
@@ -15,7 +9,7 @@
   <script defer src="/js/lot-label-template-picker.js?v=20260909-stage10w83"></script>
   <script defer src="/js/unit-export.js?v=20260813-stage10w63-multi-lot-export-scope"></script>
 
-  <body class="lots-lookup-typography-preview lots-lookup-ui-preview">
+  <body class="lots-lookup-typography-preview lots-lookup-ui-preview css-scope-lots">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 
@@ -42,7 +36,7 @@
               <h1><%= lot.lot_name %></h1>
             </div>
 
-            <div class="lot-detail-action-bar site-clean-actions">
+            <div class="lot-detail-action-bar site-clean-actions site-inline-actions">
               <a class="secondary-button" href="/management/lots<%= Number(lot.is_active) === 1 ? '' : '?showHidden=1' %>">Back to Lots</a>
               <a class="secondary-button" href="/tech/units?lotId=<%= lot.lot_id %>&amp;lotScope=direct&amp;perPage=all">Open Direct Units</a>
               <% if (lotRelationships.directChildLots.length > 0) { %>
@@ -106,40 +100,40 @@
             </div>
           <% } %>
 
-          <section class="lot-summary-panel lot-detail-summary-panel lot-state-context-panel" aria-label="Lot detail totals">
+          <section class="lot-summary-panel lot-detail-summary-panel lot-state-context-panel site-summary-panel site-summary-panel--expanded" aria-label="Lot detail totals">
             <div class="lot-state-main">
               <div class="lot-state-overview">
-                <div class="lot-summary-primary">
+                <div class="lot-summary-primary site-summary-primary">
                   <span>Lot state</span>
                   <strong><%= Number(lot.is_closed) === 1 ? 'Closed' : 'Open' %></strong>
                   <small>Requirement policy: <%= lot.requirement_policy_label || 'Strict' %></small>
                 </div>
 
-                <div class="lot-summary-stats">
+                <div class="lot-summary-stats site-summary-stats site-summary-stats--five site-summary-stats--truncate">
                   <article>
-                    <span class="lot-summary-icon" aria-hidden="true">◉</span>
+                    <span class="lot-summary-icon site-summary-icon" aria-hidden="true">◉</span>
                     <span><small>Visibility</small><strong><%= Number(lot.is_active) === 1 ? 'Visible' : 'Hidden' %></strong></span>
                   </article>
 
                   <article>
-                    <span class="lot-summary-icon" aria-hidden="true">▤</span>
+                    <span class="lot-summary-icon site-summary-icon" aria-hidden="true">▤</span>
                     <span><small>Lot type</small><strong><%= lot.lot_type_label || '—' %></strong></span>
                   </article>
 
                   <article>
-                    <span class="lot-summary-icon" aria-hidden="true">#</span>
+                    <span class="lot-summary-icon site-summary-icon" aria-hidden="true">#</span>
                     <span><small>Direct Units</small><strong><%= formatNumber(lot.directUnitCount) %></strong></span>
                   </article>
 
                   <% if (lotRelationships.directChildLots.length > 0) { %>
                     <article>
-                      <span class="lot-summary-icon" aria-hidden="true">Σ</span>
+                      <span class="lot-summary-icon site-summary-icon" aria-hidden="true">Σ</span>
                       <span><small>Incl. Descendants</small><strong><%= formatNumber(lot.descendantUnitCount) %></strong></span>
                     </article>
                   <% } %>
 
                   <article>
-                    <span class="lot-summary-icon" aria-hidden="true">%</span>
+                    <span class="lot-summary-icon site-summary-icon" aria-hidden="true">%</span>
                     <span>
                       <small>Progress</small>
                       <strong>
@@ -153,7 +147,7 @@
                   </article>
 
                   <article>
-                    <span class="lot-summary-icon" aria-hidden="true">×</span>
+                    <span class="lot-summary-icon site-summary-icon" aria-hidden="true">×</span>
                     <span>
                       <small>Default weight</small>
                       <strong>
@@ -167,15 +161,15 @@
                   </article>
 
                   <article>
-                    <span class="lot-summary-icon" aria-hidden="true">＋</span>
+                    <span class="lot-summary-icon site-summary-icon" aria-hidden="true">＋</span>
                     <span><small>Created</small><strong><%= formatDate(lot.created_at) %></strong></span>
                   </article>
                 </div>
               </div>
 
-              <div class="lot-validation-check-row" aria-label="Validation check">
+              <div class="lot-validation-check-row" aria-label="Requirements validation check">
                 <div class="lot-validation-check-label">
-                  <span>Validation Check</span>
+                  <span>Requirements Validation Check</span>
                   <small>
                     <%= formatNumber(validationReport.requirementCount) %> active requirements ·
                     <%= formatNumber(validationReport.unitsChecked) %> units checked

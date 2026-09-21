@@ -90,7 +90,7 @@ test('account setup and last-login sorting use the visible account state and log
 
 test('management users view exposes only the requested sortable headers and reuses shared header styling', () => {
   const view = fs.readFileSync(path.join(projectRoot, 'views/pages/management-users.ejs'), 'utf8');
-  const css = fs.readFileSync(path.join(projectRoot, 'public/css/work-area.css'), 'utf8');
+  const css = fs.readFileSync(path.join(projectRoot, 'public/css/app.css'), 'utf8');
 
   ['User', 'Primary Role', 'Employee', 'Account Setup', 'Last Login'].forEach((label) => {
     assert.match(view, new RegExp(`\\b${label.replace(' ', '\\s+')}\\b`));

@@ -10,7 +10,7 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'u
 
 test('unpin immediately overrides sidebar hover and focus-within during the hide transition', () => {
   const script = read('public/js/sidebar.js');
-  const css = read('public/css/style.css');
+  const css = read('public/css/app.css');
 
   assert.match(script, /sidebar\.classList\.add\('is-desktop-unpinning'\)/);
   assert.match(script, /document\.activeElement === pinButton[\s\S]*pinButton\.blur\(\)/);
@@ -22,7 +22,7 @@ test('Create and Edit User use a non-sticky modal header without changing other 
   const createModal = read('views/fragments/management-user-create-modal.ejs');
   const editModal = read('views/fragments/management-user-edit-modal.ejs');
   const actionModal = read('views/fragments/management-user-action-modal.ejs');
-  const css = read('public/css/management.css');
+  const css = read('public/css/app.css');
 
   assert.match(createModal, /management-user-modal management-user-form-modal/);
   assert.match(editModal, /management-user-modal management-user-form-modal/);
@@ -80,9 +80,13 @@ test('modified interaction assets are cache-busted at their entry points', () =>
     read('views/pages/tech-unit-detail.ejs'),
   ];
 
-  assert.match(head, /style\.css\?v=20260819-stage10w68p-interaction-refinements/);
+  assert.match(head, /theme\.css\?v=/);
+  assert.match(head, /app\.css\?v=/);
+  assert.match(head, /features\.css\?v=/);
+  assert.doesNotMatch(head, /style\.css|work-area\.css/);
   assert.match(head, /sidebar\.js\?v=20260819-stage10w68p-interaction-refinements/);
-  assert.match(users, /management\.css\?v=20260819-stage10w68p-interaction-refinements/);
+  assert.match(users, /css-scope-management/);
+  assert.doesNotMatch(users, /management\.css/);
   assert.match(users, /modal\.js\?v=20260819-stage10w68p-interaction-refinements/);
   techPages.forEach((page) => {
     assert.match(page, /modal\.js\?v=20260819-stage10w68p-interaction-refinements/);

@@ -9,8 +9,9 @@ const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
 const modal = read('views/fragments/tech-unit-qc-review-details-modal.ejs');
+const themeCss = read('public/css/theme.css');
 const appCss = read('public/css/app.css');
-const techUnitsCss = read('public/css/tech-units-clean.css');
+const techUnitsCss = read('public/css/app.css');
 const techUnitsScript = read('public/js/tech-units.js');
 const controller = read('controllers/techController.js');
 const qcCheckModel = read('models/unitQcCheckModel.js');
@@ -48,9 +49,9 @@ test('Stage 9M reads complete review and correction history for accurate status 
 });
 
 test('Stage 9M consolidates QC status colors and icon geometry into shared CSS', () => {
-  assert.match(appCss, /--qc-accepted-ink:/);
-  assert.match(appCss, /--qc-rejected-ink:/);
-  assert.match(appCss, /--qc-ready-ink:/);
+  assert.match(themeCss, /--qc-accepted-ink:/);
+  assert.match(themeCss, /--qc-rejected-ink:/);
+  assert.match(themeCss, /--qc-ready-ink:/);
   assert.match(appCss, /\.tech-qc-status-indicator__mark/);
   assert.match(appCss, /\.tech-qc-status-modal__body/);
   assert.match(appCss, /border-radius: 11px/);
@@ -81,7 +82,7 @@ test('Stage 9M cache-busts common and Unit Browser assets', () => {
 
   assert.match(head, /app\.css\?v=[^"\'\s>]+/);
   [techUnitsPage, detailPage].forEach((markup) => {
-    assert.match(markup, /tech-units-clean\.css\?v=20260826-stage10w73e-browser-usability/);
+    assert.match(markup, /<body class="css-scope-tech-units">/);
     assert.match(markup, /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
     assert.match(markup, /modal\.js\?v=20260819-stage10w68p-interaction-refinements/);
   });

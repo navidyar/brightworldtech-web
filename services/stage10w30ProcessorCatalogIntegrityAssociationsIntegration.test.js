@@ -194,7 +194,7 @@ test('technician missing-processor request identifies a global processor as an a
 
 test('Admin processor approval fields use an aligned two-column grid with paired label and control rows', () => {
   const page = read('views/pages/unit-request-detail.ejs');
-  const css = read('public/css/unit-requests.css');
+  const css = read('public/css/app.css');
 
   assert.match(page, /class="processor-request-approval-grid"/);
   for (const label of ['Processor Type', 'Canonical Processor Type Name', 'Canonical Processor', 'Processor Family', 'Generation', 'Base Speed GHz']) {

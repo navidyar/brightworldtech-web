@@ -66,7 +66,7 @@ test('Recent Prints modal separates automatic and explicit bulk print sets', () 
 
 test('Recent Prints exposes the origin of each print job without relying on set grouping', () => {
   const live = read('views/fragments/tech-recent-prints-live.ejs');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(live, /builder_test[\s\S]*Builder Test Print[\s\S]*Layout Builder test/);
   assert.match(live, /library_direct[\s\S]*Standalone Direct Print[\s\S]*Label Template Library/);

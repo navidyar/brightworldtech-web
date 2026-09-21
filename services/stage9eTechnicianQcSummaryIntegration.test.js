@@ -73,7 +73,7 @@ test('QC summary refresh is targeted and participates in Unit update events with
 });
 
 test('QC summary uses a compact shared panel and responsive inline statistics', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   const page = read('views/pages/tech-units.ejs');
   const detail = read('views/pages/tech-unit-detail.ejs');
 
@@ -82,7 +82,7 @@ test('QC summary uses a compact shared panel and responsive inline statistics', 
   assert.match(css, /\.tech-qc-summary-stats \{[\s\S]*grid-template-columns: repeat\(4/);
   assert.match(css, /@media \(max-width: 620px\)[\s\S]*\.tech-qc-summary-stats \{[\s\S]*grid-template-columns: 1fr/);
   [page, detail].forEach((template) => {
-    assert.match(template, /tech-units-clean\.css\?v=20260826-stage10w73e-browser-usability/);
+    assert.match(template, /<body class="css-scope-tech-units">/);
     assert.match(template, /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
   });
 });

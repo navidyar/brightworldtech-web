@@ -207,14 +207,16 @@ test('the outcome Tab handler runs in capture phase before native radio-group sk
   assert.match(script, /const nextIsOutcome = outcomeRadios\.includes\(nextTarget\);/);
 });
 
-test('all Add/Edit Unit entry points use the current Unit form asset version', () => {
-  const expected = '/js/tech-unit-form.js?v=20260813-stage10w50-unit-save-preflight';
-
-  for (const relativePath of [
+test('all Add/Edit Unit entry points use one current Unit form asset version', () => {
+  const sources = [
     'views/pages/tech-units.ejs',
     'views/pages/tech-unit-form.ejs',
     'views/pages/tech-unit-detail.ejs',
-  ]) {
-    assert.match(read(relativePath), new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
-  }
+  ].map((relativePath) => {
+    const match = read(relativePath).match(/\/js\/tech-unit-form\.js\?v=([^"]+)/);
+    assert.ok(match, `${relativePath} must load the cache-busted Unit form asset`);
+    return match[1];
+  });
+
+  assert.equal(new Set(sources).size, 1, 'all Unit entry points must load the same tech-unit-form.js version');
 });

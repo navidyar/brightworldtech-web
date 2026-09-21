@@ -35,7 +35,7 @@ test('asset preview route is Management-only and controller supports images and 
 
 test('asset preview modal contains a contained image viewer and readable JSON viewer', () => {
   const modal = read('views/fragments/label-library-asset-preview-modal.ejs');
-  const css = read('public/css/management.css');
+  const css = read('public/css/app.css');
 
   assert.match(modal, /label-library-asset-preview-image-shell/);
   assert.match(modal, /label-library-asset-json-preview/);

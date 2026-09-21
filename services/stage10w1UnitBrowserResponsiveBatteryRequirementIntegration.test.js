@@ -11,17 +11,16 @@ const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
 test('Unit Browser uses stable minimum column widths instead of compressing summary values together', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
-  assert.match(css, /Stage 10W\.1: responsive Unit Browser readability/);
-  assert.match(css, /\.tech-units-clean-page \.tech-units-table \{[\s\S]*?min-width:\s*1370px;[\s\S]*?table-layout:\s*auto;/);
-  assert.match(css, /:is\(th, td\):nth-child\(1\)[\s\S]*?min-width:\s*340px;/);
-  assert.match(css, /:is\(th, td\):nth-child\(2\)[\s\S]*?min-width:\s*145px;/);
-  assert.match(css, /:is\(th, td\):nth-child\(4\)[\s\S]*?min-width:\s*265px;/);
+  assert.match(css, /\.tech-units-clean-results-panel \{[\s\S]*?--tu-table-base-width:\s*1220px;[\s\S]*?--tu-unit-base-width:\s*445px;[\s\S]*?--tu-unit-max-width:\s*480px;/);
+  assert.match(css, /\.tech-units-table \{[\s\S]*?min-width:\s*var\(--tu-table-base-width, 1220px\);[\s\S]*?table-layout:\s*fixed;/);
+  assert.match(css, /\.tech-units-col--unit_weight \{[\s\S]*?width:\s*var\(--tu-unit-column-width\);/);
+  assert.match(css, /\.tech-units-col--grow-1 \{[\s\S]*?var\(--tu-secondary-growth-unit\)/);
 });
 
 test('Unit summary values wrap fully without ellipsis truncation', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   const table = read('views/fragments/tech-units-table.ejs');
 
   assert.match(css, /\.tech-unit-summary-spec > strong,[\s\S]*?\.tech-unit-summary-id-value \{[\s\S]*?overflow:\s*visible;[\s\S]*?text-overflow:\s*clip;[\s\S]*?white-space:\s*normal;[\s\S]*?overflow-wrap:\s*anywhere;/);
@@ -29,12 +28,13 @@ test('Unit summary values wrap fully without ellipsis truncation', () => {
   assert.match(css, /\.tech-unit-summary-weight-value \{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto;/);
 });
 
-test('all Unit Browser entry points use the responsive cache-busted stylesheet', () => {
-  const expected = 'tech-units-clean.css?v=20260804-stage10w1-responsive-browser';
-
-  assert.match(read('views/pages/tech-units.ejs'), new RegExp(expected.replace(/[?.]/g, '\\$&')));
-  assert.match(read('views/pages/tech-unit-detail.ejs'), new RegExp(expected.replace(/[?.]/g, '\\$&')));
-  assert.match(read('views/pages/tech-unit-form.ejs'), new RegExp(expected.replace(/[?.]/g, '\\$&')));
+test('all Unit Browser entry points use the shared responsive CSS scope', () => {
+  assert.match(read('views/partials/head.ejs'), /\/css\/app\.css\?v=/);
+  for (const file of ['views/pages/tech-units.ejs', 'views/pages/tech-unit-detail.ejs', 'views/pages/tech-unit-form.ejs']) {
+    const page = read(file);
+    assert.match(page, /<body class="css-scope-tech-units">/);
+    assert.doesNotMatch(page, /tech-units-clean\.css/);
+  }
 });
 
 test('Battery Health accepts 60 for every supported Lot requirement comparison', () => {

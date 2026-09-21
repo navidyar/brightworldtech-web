@@ -20,7 +20,7 @@ test('Builder exposes Line and Rectangle content types with vector properties', 
 
 test('Builder previews Line and Rectangle objects as SVG without flattening the canvas', () => {
   const js = source('public/js/label-builder.js');
-  const css = source('public/css/label-builder.css');
+  const css = `${source('public/css/app.css')}\n${source('public/css/features.css')}`;
   assert.match(js, /SHAPE_TYPES = new Set\(\['line', 'rectangle'\]\)/);
   assert.match(js, /renderShapePreview/);
   assert.match(js, /data-builder-region-shape/);

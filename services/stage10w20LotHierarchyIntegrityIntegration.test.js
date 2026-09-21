@@ -49,7 +49,7 @@ test('controller returns hierarchy race/bypass failures to the Edit Lot modal', 
 test('Lot Browser keeps corrupted hierarchy rows visible and identifies them for repair', () => {
   const page = read('views/pages/management-lots.ejs');
   const browserScript = read('public/js/lot-browser-tree.js');
-  const css = read('public/css/lots.css');
+  const css = read('public/css/features.css');
 
   assert.match(page, /hierarchyIssue/);
   assert.match(page, /data-hierarchy-error="<%= lot\.hierarchyIssue \? '1' : '0' %>"/);
@@ -70,14 +70,14 @@ test('a read-only Lot hierarchy audit and focused validation commands are availa
   assert.match(auditScript, /Hierarchy cycles/);
 });
 
-test('all Lots pages use the hierarchy-integrity cache-busted stylesheet', () => {
-  const expected = '/css/lots.css?v=20260826-stage10w73c-browser-config-refinement';
-
+test('all Lots pages use the shared scoped hierarchy CSS after standalone lots.css retirement', () => {
   for (const relativePath of [
     'views/pages/management-lots.ejs',
     'views/pages/management-lot-detail.ejs',
     'views/pages/management-lot-new.ejs'
   ]) {
-    assert.match(read(relativePath), new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    const page = read(relativePath);
+    assert.match(page, /css-scope-lots/);
+    assert.doesNotMatch(page, /\/css\/lots\.css/);
   }
 });

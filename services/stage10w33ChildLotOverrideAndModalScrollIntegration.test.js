@@ -58,12 +58,12 @@ test('Requirements UI exposes reversible child-only Stop Inheriting controls', (
 });
 
 test('Configure Unit Form uses one full modal-body scrollbar and keeps actions in normal document flow', () => {
-  const css = read('public/css/lots.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /lot-unit-form-rules-modal\.modal-panel\.site-clean-modal > \.modal-body \{[\s\S]*?overflow-y:\s*auto;/);
   assert.match(css, /lot-unit-form-rules-modal\.modal-panel\.site-clean-modal \{[\s\S]*?overflow:\s*hidden;/);
   assert.match(css, /lot-unit-form-rules-scroll \{[\s\S]*?overflow:\s*visible;/);
-  assert.doesNotMatch(css, /\.lot-unit-form-rules-actions \{[\s\S]*?position:\s*(?:sticky|fixed)/);
+  assert.doesNotMatch(css, /\.lot-unit-form-rules-actions\s*\{[^}]*position:\s*(?:sticky|fixed)/);
 });
 
 test('Stage 10W33 migration preflights incompatible placeholder tables before creating suppression storage', () => {

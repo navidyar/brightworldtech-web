@@ -29,9 +29,9 @@ test('requester is not redundantly repeated under Submitted while archived resol
 
 test('Request From uses a dedicated responsive queue column without changing the request detail model', () => {
   const page = read('views/pages/unit-requests.ejs');
-  const css = read('public/css/unit-requests.css');
+  const css = read('public/css/app.css');
 
-  assert.match(page, /unit-requests\.css\?v=20260828-stage10w74n-request-context-labels/);
+  assert.match(page, /<body class="css-scope-unit-requests">/);
   assert.match(css, /grid-template-columns:\s*minmax\(185px, 1\.1fr\)\s+minmax\(135px, 0\.72fr\)\s+minmax\(340px, 2\.35fr\)\s+auto/);
   assert.match(css, /\.unit-request-row-main-link\s*\{[\s\S]*?grid-column:\s*1 \/ 4;[\s\S]*?minmax\(135px, 0\.72fr\)/);
   assert.match(css, /\.unit-request-row-actions\s*\{\s*grid-column:\s*4;/);

@@ -55,7 +55,7 @@ test('Request details open and review inside the queue modal while remaining dir
   const script = read('public/js/unit-requests.js');
   const processorReview = read('public/js/processor-request-review.js');
   const navigation = read('public/js/navigation-policy.js');
-  const css = read('public/css/unit-requests.css');
+  const css = read('public/css/app.css');
 
   assert.match(page, /id="modal-root"/);
   assert.match(page, /\/js\/modal\.js/);

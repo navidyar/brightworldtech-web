@@ -1,13 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', {
-    pageTitle,
-    stylesheets: [
-      '/css/tech.css',
-      '/css/modal.css?v=stage8-config-consistency',
-      '/css/unit-requests.css?v=20260828-stage10w74n-request-context-labels'
-    ]
-  }) %>
+  <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   <script defer src="/js/processor-request-review.js?v=20260820-stage10w69l-request-modal-performance"></script>
   <script defer src="/js/unit-requests.js?v=20260820-stage10w69n-request-detail-performance"></script>
@@ -42,7 +35,7 @@
     const isArchivedQueue = statusFilter === 'archived';
   %>
 
-  <body>
+  <body class="css-scope-unit-requests">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 

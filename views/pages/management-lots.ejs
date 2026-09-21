@@ -1,17 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', {
-    pageTitle,
-    stylesheets: [
-      '/css/lots.css?v=20260826-stage10w73c-browser-config-refinement',
-      '/css/modal.css'
-    ]
-  }) %>
+  <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   <script defer src="/js/lot-form.js?v=20260828-stage10w74p-automatic-requirement-inheritance"></script>
   <script defer src="/js/lot-browser-tree.js"></script>
 
-  <body class="lots-lookup-typography-preview lots-lookup-ui-preview">
+  <body class="lots-lookup-typography-preview lots-lookup-ui-preview css-scope-lots">
     <%
       const lotsById = new Map();
       const childLotsByParentId = new Map();
@@ -109,36 +103,36 @@
             <h1>Lot Management</h1>
           </section>
 
-          <section class="lot-summary-panel" aria-label="Lot totals">
-            <div class="lot-summary-primary">
+          <section class="lot-summary-panel site-summary-panel site-summary-panel--expanded" aria-label="Lot totals">
+            <div class="lot-summary-primary site-summary-primary">
               <span>Total lots</span>
               <strong><%= formatNumber(summary.lotCount) %></strong>
               <small>All lot records currently available to Management</small>
             </div>
 
-            <div class="lot-summary-stats">
+            <div class="lot-summary-stats site-summary-stats site-summary-stats--five site-summary-stats--truncate">
               <article>
-                <span class="lot-summary-icon" aria-hidden="true">◉</span>
+                <span class="lot-summary-icon site-summary-icon" aria-hidden="true">◉</span>
                 <span><small>Visible lots</small><strong><%= formatNumber(summary.activeLotCount) %></strong></span>
               </article>
 
               <article>
-                <span class="lot-summary-icon" aria-hidden="true">◌</span>
+                <span class="lot-summary-icon site-summary-icon" aria-hidden="true">◌</span>
                 <span><small>Closed lots</small><strong><%= formatNumber(summary.closedLotCount || 0) %></strong></span>
               </article>
 
               <article>
-                <span class="lot-summary-icon" aria-hidden="true">◒</span>
+                <span class="lot-summary-icon site-summary-icon" aria-hidden="true">◒</span>
                 <span><small>Hidden lots</small><strong><%= formatNumber(summary.hiddenLotCount || 0) %></strong></span>
               </article>
 
               <article>
-                <span class="lot-summary-icon" aria-hidden="true">▤</span>
+                <span class="lot-summary-icon site-summary-icon" aria-hidden="true">▤</span>
                 <span><small>Units in lots</small><strong><%= formatNumber(summary.totalUnits) %></strong></span>
               </article>
 
               <article>
-                <span class="lot-summary-icon" aria-hidden="true">✓</span>
+                <span class="lot-summary-icon site-summary-icon" aria-hidden="true">✓</span>
                 <span><small>Requirements</small><strong><%= formatNumber(summary.totalRequirements) %></strong></span>
               </article>
             </div>
@@ -312,7 +306,7 @@
                       <td><%= lot.label_format || '—' %></td>
 
                       <td>
-                        <div class="lot-row-actions">
+                        <div class="lot-row-actions site-inline-actions">
                           <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
                           <% if (Number(lot.is_closed) === 1) { %>
                             <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-target="#modal-root" hx-swap="innerHTML">Reopen</a>

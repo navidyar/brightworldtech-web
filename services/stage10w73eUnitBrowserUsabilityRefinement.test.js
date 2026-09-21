@@ -20,7 +20,7 @@ test('Unit Browser allows up to four optional display groups consistently', () =
 
 test('Created timestamp keeps time beside the date', () => {
   const table = read('views/fragments/tech-units-table.ejs');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(table, /tech-unit-summary-created-time/);
   assert.match(css, /\.tech-unit-summary-created \{[\s\S]*?display: flex;[\s\S]*?white-space: nowrap;/);
@@ -49,16 +49,18 @@ test('existing broad identifier search supports the documented identifier famili
 
 test('Unit Weight header receives only the requested additional left offset', () => {
   const table = read('views/fragments/tech-units-table.ejs');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(table, /tech-units-browser-header--unit_weight/);
   assert.match(css, /\.tech-units-browser-header--unit_weight \{[\s\S]*?padding-left: calc\(var\(--tu-cell-inline-padding\) \+ 10px\);/);
 });
 
-test('changed Browser CSS and configuration script are cache-busted on their consumers', () => {
-  const cssVersion = '/css/tech-units-clean.css?v=20260826-stage10w73e-browser-usability';
+test('changed Browser CSS uses the shared scope and configuration script stays cache-busted', () => {
+  assert.match(read('views/partials/head.ejs'), /\/css\/app\.css\?v=/);
   for (const file of ['views/pages/tech-units.ejs', 'views/pages/tech-unit-detail.ejs', 'views/pages/tech-unit-form.ejs']) {
-    assert.match(read(file), new RegExp(cssVersion.replace(/[?.]/g, '\\$&')));
+    const page = read(file);
+    assert.match(page, /<body class="css-scope-tech-units">/);
+    assert.doesNotMatch(page, /tech-units-clean\.css/);
   }
   assert.match(read('views/pages/management-lot-detail.ejs'), /lot-unit-browser-layout\.js\?v=20260826-stage10w73e/);
 });

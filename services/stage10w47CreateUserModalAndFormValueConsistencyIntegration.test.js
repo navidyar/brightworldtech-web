@@ -36,20 +36,21 @@ test('Create User result modal reuses the existing setup-link controls', () => {
   assert.match(createdModal, /data-copy-button/);
   assert.match(createdModal, /data-generated-link-expiry/);
   assert.match(createdModal, /class="modal-close-button"/);
-  assert.match(usersPage, /copy-link\.css/);
+  assert.match(usersPage, /css-scope-copy-link/);
+  assert.doesNotMatch(usersPage, /copy-link\.css/);
   assert.match(usersPage, /copy-link\.js/);
 });
 
 test('shared select and date values use one light typography contract without legacy descendant span pollution', () => {
   const appCss = read('public/css/app.css');
-  const styleCss = read('public/css/style.css');
+  const styleCss = read('public/css/app.css');
   const themeCss = read('public/css/theme.css');
-  const techUnitsCss = read('public/css/tech-units-clean.css');
-  const workAreaCss = read('public/css/work-area.css');
+  const techUnitsCss = read('public/css/app.css');
+  const workAreaCss = read('public/css/app.css');
 
-  assert.match(appCss, /--form-select-value-ink:\s*#40566e/);
-  assert.match(appCss, /--form-select-value-font-size:\s*0\.86rem/);
-  assert.match(appCss, /--form-select-value-font-weight:\s*400/);
+  assert.match(themeCss, /--form-select-value-ink:\s*#40566e/);
+  assert.match(themeCss, /--form-select-value-font-size:\s*0\.86rem/);
+  assert.match(themeCss, /--form-select-value-font-weight:\s*400/);
   assert.match(appCss, /body select:not\(\[multiple\]\):not\(\[hidden\]\)[\s\S]*?font-weight:\s*var\(--form-select-value-font-weight\) !important/);
   assert.match(appCss, /data-site-date-picker-label[\s\S]*?data-tech-created-date-picker-label[\s\S]*?font:\s*inherit !important/);
   assert.doesNotMatch(styleCss, /\.form-field span\s*\{/);

@@ -25,7 +25,7 @@ test('Builder exposes Barcode and QR content types with payload controls', () =>
 
 test('Builder renders Barcode and QR previews without flattening the label canvas', () => {
   const js = source('public/js/label-builder.js');
-  const css = source('public/css/label-builder.css');
+  const css = `${source('public/css/app.css')}\n${source('public/css/features.css')}`;
   assert.match(js, /buildCode39Bars/);
   assert.match(js, /renderBarcodePreview/);
   assert.match(js, /humanReadableFontSize/);

@@ -1,18 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', {
-    pageTitle,
-    stylesheets: [
-      '/css/modal.css?v=20260909-stage10w83-label-library-management',
-      '/css/management.css?v=20260918-label-library-rootfix'
-    ]
-  }) %>
+  <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260909-stage10w83-label-library-management"></script>
   <script defer src="/js/label-library-assets.js?v=20260918-assets-rename-refresh-cleanup"></script>
   <script defer src="/js/label-library-lot-usage.js?v=20260917-label-lot-usage"></script>
   <script defer src="/js/label-library-order.js?v=20260918-label-library-order"></script>
 
-  <body>
+  <body class="css-scope-management">
     <%
       const categoryLabelByCode = new Map(categories.map((category) => [category.code, category.label]));
       const statusLabel = (status) => String(status || '').charAt(0).toUpperCase() + String(status || '').slice(1);
@@ -45,32 +39,32 @@
             </div>
           <% } %>
 
-          <section class="label-library-summary-panel" aria-label="Label Library summary">
-            <div class="label-library-summary-primary">
+          <section class="label-library-summary-panel site-summary-panel site-summary-panel--expanded" aria-label="Label Library summary">
+            <div class="label-library-summary-primary site-summary-primary">
               <span>Templates</span>
               <strong><%= formatNumber(summary.total) %></strong>
               <small>Reusable label templates currently available in the Library</small>
             </div>
 
-            <div class="label-library-summary-stats">
+            <div class="label-library-summary-stats site-summary-stats site-summary-stats--five site-summary-stats--truncate">
               <article>
-                <span class="label-library-summary-icon" aria-hidden="true">✓</span>
+                <span class="label-library-summary-icon site-summary-icon" aria-hidden="true">✓</span>
                 <span><small>Active</small><strong><%= formatNumber(summary.active) %></strong></span>
               </article>
               <article>
-                <span class="label-library-summary-icon" aria-hidden="true">✎</span>
+                <span class="label-library-summary-icon site-summary-icon" aria-hidden="true">✎</span>
                 <span><small>Draft</small><strong><%= formatNumber(summary.draft) %></strong></span>
               </article>
               <article>
-                <span class="label-library-summary-icon" aria-hidden="true">◌</span>
+                <span class="label-library-summary-icon site-summary-icon" aria-hidden="true">◌</span>
                 <span><small>Archived</small><strong><%= formatNumber(summary.archived) %></strong></span>
               </article>
               <article>
-                <span class="label-library-summary-icon" aria-hidden="true">✦</span>
+                <span class="label-library-summary-icon site-summary-icon" aria-hidden="true">✦</span>
                 <span><small>New · 14 days</small><strong><%= formatNumber(summary.newCount) %></strong></span>
               </article>
               <article>
-                <span class="label-library-summary-icon" aria-hidden="true">▤</span>
+                <span class="label-library-summary-icon site-summary-icon" aria-hidden="true">▤</span>
                 <span><small>Repository storage</small><strong data-label-library-repository-storage><%= formatBytes(storage.total_bytes) %></strong></span>
               </article>
             </div>
@@ -191,7 +185,7 @@
                       </td>
                       <td><%= formatDateTime(template.updated_at) %></td>
                       <td>
-                        <div class="management-user-row-actions label-library-row-actions">
+                        <div class="management-user-row-actions label-library-row-actions site-inline-actions">
                           <% if (String(template.print_scope || 'lot') === 'standalone' && template.status === 'active' && Number(template.layout_ready || 0) === 1) { %>
                             <a class="primary-button" href="/management/label-library/templates/<%= template.label_template_id %>/print/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/print/modal" hx-target="#modal-root" hx-swap="innerHTML">Print</a>
                           <% } %>

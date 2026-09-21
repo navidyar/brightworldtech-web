@@ -49,7 +49,7 @@ test('browser disables only Current Memory/Storage while leaving Previous hardwa
 });
 
 test('Tool-controlled Current sections have explicit gray/read-only presentation', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   assert.match(css, /tech-memory-state--current\.is-tool-controlled/);
   assert.match(css, /tech-current-hardware-authority-message/);
 });

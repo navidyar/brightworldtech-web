@@ -7,7 +7,7 @@ const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
 test('desktop sidebar defaults to overlay auto-hide while pinning restores the embedded shell', () => {
-  const css = read('public/css/style.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /\.app-shell\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\)/);
   assert.match(css, /\.sidebar\s*\{[\s\S]*?position:\s*fixed[\s\S]*?translateX\(calc\(-100% \+ var\(--sidebar-edge-trigger\)\)\)/);
@@ -32,7 +32,7 @@ test('sidebar pin preference uses localStorage and remains keyboard accessible',
 });
 
 test('mobile drawer behavior remains independent of desktop pinning', () => {
-  const css = read('public/css/style.css');
+  const css = read('public/css/app.css');
   const js = read('public/js/sidebar.js');
 
   assert.match(css, /@media \(max-width: 980px\)[\s\S]*?\.sidebar\.is-mobile-open\s*\{[\s\S]*?translateX\(0\)/);

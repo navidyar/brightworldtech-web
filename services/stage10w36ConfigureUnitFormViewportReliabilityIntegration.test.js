@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
 test('Configure Unit Form keeps the panel fixed and gives the full modal body the only vertical scrollbar', () => {
-  const css = read('public/css/lots.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /body\.lots-lookup-ui-preview #modal-root \.lot-unit-form-rules-backdrop\.modal-backdrop \{[\s\S]*?align-items:\s*center;[\s\S]*?overflow:\s*hidden;/);
   assert.match(css, /body\.lots-lookup-ui-preview #modal-root \.lot-unit-form-rules-modal\.modal-panel\.site-clean-modal \{[\s\S]*?display:\s*flex;[\s\S]*?overflow:\s*hidden;[\s\S]*?border-radius:\s*10px;/);
@@ -17,26 +17,28 @@ test('Configure Unit Form keeps the panel fixed and gives the full modal body th
 });
 
 test('Configure Unit Form prevents a second vertical scrollbar inside the field tables', () => {
-  const css = read('public/css/lots.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /body\.lots-lookup-ui-preview #modal-root \.lot-unit-form-rule-table-card \{[\s\S]*?overflow-x:\s*auto;[\s\S]*?overflow-y:\s*hidden;/);
   assert.match(css, /body\.lots-lookup-ui-preview #modal-root \.lot-unit-form-rules-scroll \{[\s\S]*?overflow:\s*visible;/);
-  assert.doesNotMatch(css, /\.lot-unit-form-rules-actions\s*\{[\s\S]*?position:\s*(?:sticky|fixed)/);
+  assert.doesNotMatch(css, /\.lot-unit-form-rules-actions\s*\{[^}]*position:\s*(?:sticky|fixed)/);
 });
 
-test('Configure Unit Form stylesheet is cache-busted consistently on every Lots management page', () => {
-  for (const page of [
+test('Configure Unit Form uses the consolidated Lots CSS scope on every Lots management page', () => {
+  for (const pagePath of [
     'views/pages/management-lots.ejs',
     'views/pages/management-lot-detail.ejs',
     'views/pages/management-lot-new.ejs'
   ]) {
-    assert.match(read(page), /\/css\/lots\.css\?v=[^'\"]+/);
+    const page = read(pagePath);
+    assert.match(page, /css-scope-lots/);
+    assert.doesNotMatch(page, /\/css\/lots\.css/);
   }
 });
 
 test('Configure Unit Form uses a short-height viewport rule without moving actions into a sticky footer', () => {
-  const css = read('public/css/lots.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /@media \(max-height: 620px\)[\s\S]*?lot-unit-form-rules-modal\.modal-panel\.site-clean-modal \{[\s\S]*?max-height:\s*calc\(100dvh - 16px\)/);
-  assert.doesNotMatch(css, /lot-unit-form-rules-actions[\s\S]{0,180}position:\s*(?:sticky|fixed)/);
+  assert.doesNotMatch(css, /lot-unit-form-rules-actions\s*\{[^}]*position:\s*(?:sticky|fixed)/);
 });

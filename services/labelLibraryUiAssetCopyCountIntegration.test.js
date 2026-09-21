@@ -8,7 +8,7 @@ function read(file) { return fs.readFileSync(file, 'utf8'); }
 
 test('Label Library rows use the compact blue drag target and vertically centered blue-tinted records', () => {
   const page = read('views/pages/management-label-library.ejs');
-  const css = read('public/css/management.css');
+  const css = read('public/css/app.css');
   assert.match(css, /\.label-library-order-handle[\s\S]*?min-height:\s*2\.25rem/);
   assert.match(css, /\.label-library-table-card tbody td[\s\S]*?vertical-align:\s*middle/);
   assert.match(css, /\.label-library-table-card tbody tr[\s\S]*?var\(--blue-soft\)/);
@@ -18,7 +18,7 @@ test('Label Library rows use the compact blue drag target and vertically centere
 
 test('Configure Labels keeps the normal print-set option compact and description emphasized', () => {
   const modal = read('views/fragments/lot-label-templates-modal.ejs');
-  const css = read('public/css/lots.css');
+  const css = read('public/css/app.css');
   assert.match(modal, /lot-label-template-normal-print-option/);
   assert.match(modal, /lot-label-template-description/);
   assert.match(css, /grid-template-columns:\s*18px minmax\(0, 1fr\)/);

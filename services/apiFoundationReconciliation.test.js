@@ -20,7 +20,7 @@ test('System UUID is a first-class protected identifier and configurable Unit Fo
 
 test('UUID browser display is compact while retaining the full underlying value', () => {
   const table = read('views/fragments/tech-units-table.ejs');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   assert.match(table, /tech-unit-summary-id-item--uuid/);
   assert.match(table, /title="<%= systemUuidValue %>"/);
   assert.match(css, /tech-unit-summary-id-value--uuid[\s\S]*text-overflow:\s*ellipsis/);

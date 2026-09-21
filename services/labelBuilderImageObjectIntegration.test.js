@@ -23,7 +23,7 @@ test('Builder exposes reusable Image objects and Shared Asset selection', () => 
 
 test('Builder displays PNG or SVG assets live without flattening them into the config', () => {
   const js = source('public/js/label-builder.js');
-  const css = source('public/css/label-builder.css');
+  const css = `${source('public/css/app.css')}\n${source('public/css/features.css')}`;
   assert.match(js, /label-builder-assets-json/);
   assert.match(js, /image\.src = asset\.fileUrl/);
   assert.match(js, /fitRegionToImageAspect/);

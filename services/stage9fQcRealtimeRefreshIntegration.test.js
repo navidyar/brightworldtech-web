@@ -42,7 +42,8 @@ test('QC status symbols use one SVG canvas for the circle and centered mark', ()
   const icon = read('views/fragments/tech-unit-qc-status-icon.ejs');
   const css = read('public/css/app.css');
 
-  assert.equal((table.match(/include\('tech-unit-qc-status-icon'/g) || []).length, 3);
+  assert.equal((table.match(/include\('tech-unit-qc-status-icon'/g) || []).length, 4);
+  assert.match(table, /statusCode: 'not_required'/);
   assert.match(details, /include\('tech-unit-qc-status-icon'/);
   assert.doesNotMatch(table, /tech-qc-status-indicator[^\n]*>[✓×]</);
   assert.doesNotMatch(details, /tech-qc-status-indicator[^\n]*>[✓×]</);
@@ -56,7 +57,7 @@ test('QC status symbols use one SVG canvas for the circle and centered mark', ()
 test('Unit Browser assets are cache-busted for the realtime and icon changes', () => {
   for (const page of ['views/pages/tech-units.ejs', 'views/pages/tech-unit-detail.ejs']) {
     const source = read(page);
-    assert.match(source, /tech-units-clean\.css\?v=20260826-stage10w73e-browser-usability/);
+    assert.match(source, /<body class="css-scope-tech-units">/);
     assert.match(source, /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
   }
 });

@@ -60,7 +60,7 @@ test('Comments group exposes compact links backed by existing Buyer, general, ha
 
 test('comment tooltip is a body-level fixed overlay with hover and keyboard-focus behavior', () => {
   const script = read('public/js/tech-units.js');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(script, /document\.body\.appendChild\(tooltip\)/);
   assert.match(script, /document\.body\.addEventListener\('mouseover'/);
@@ -78,7 +78,7 @@ test('comment tooltip is a body-level fixed overlay with hover and keyboard-focu
 
 test('Browser spacing is compact globally but supports per-group spacing profiles', () => {
   const table = read('views/fragments/tech-units-table.ejs');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(table, /tech-units-browser-cell--<%= column\.spacingProfile %>/);
   assert.match(table, /tech-units-browser-header--<%= column\.spacingProfile %>/);
@@ -95,7 +95,7 @@ test('Browser spacing is compact globally but supports per-group spacing profile
 });
 
 test('copy-sensitive Browser identifiers remain single-line and are never ellipsized by the Stage 10W73C override', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /\.tech-unit-summary-id-value,[\s\S]*?tech-units-browser-cell--wrap-copy_single_line[\s\S]*?white-space: nowrap;/);
   assert.match(read('views/fragments/tech-units-table.ejs'), /tech-units-browser-cell--wrap-<%= column\.valueWrapMode %>/);

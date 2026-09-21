@@ -80,12 +80,12 @@
       <% const assumption = match.duplicateAssumption || {}; %>
       <article class="workflow-item warning tech-duplicate-candidate-card">
         <span></span>
-        <div style="width: 100%;">
+        <div class="site-width-full">
           <strong><%= displayAssetTag(match) %> — <%= statusLabel(match) %></strong>
           <p><%= matchedByLabel(match) %></p>
           <p>Current lot: <strong><%= lotLabel(match) %></strong></p>
 
-          <div class="tech-override-summary" style="margin-top: 12px;">
+          <div class="tech-override-summary site-space-top-sm">
             <dl>
               <div>
                 <dt>Unit Serial</dt>
@@ -115,7 +115,7 @@
           </div>
 
           <% if (!editDuplicateCheck) { %>
-            <div class="message <%= assumption.allowed ? 'success' : (assumption.requiresOverride ? 'warning' : 'info') %> tech-duplicate-candidate-decision" style="margin-top: 12px;">
+            <div class="message <%= assumption.allowed ? 'success' : (assumption.requiresOverride ? 'warning' : 'info') %> tech-duplicate-candidate-decision site-space-top-sm">
               <p><%= assumption.message || 'This existing unit cannot be moved through the current Create Unit workflow.' %></p>
             </div>
           <% } %>

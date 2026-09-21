@@ -8,6 +8,17 @@ function source(path) {
   return fs.readFileSync(path, 'utf8');
 }
 
+test('Label Builder uses the shared CSS contract and explicit page scope', () => {
+  const view = source('views/pages/management-label-builder.ejs');
+  const appCss = source('public/css/app.css');
+  const featuresCss = source('public/css/features.css');
+  assert.match(view, /css-scope-label-builder/);
+  assert.doesNotMatch(view, /label-builder\.css/);
+  assert.match(appCss, /css-scope-label-builder/);
+  assert.match(featuresCss, /label-builder-canvas/);
+  assert.match(featuresCss, /label-builder-resize-handle/);
+});
+
 test('Label Library exposes the visual Layout Builder for Draft and Active templates', () => {
   const view = source('views/pages/management-label-library.ejs');
   assert.match(view, /Layout Builder/);
@@ -87,7 +98,7 @@ test('Builder returns keyboard focus to a clicked region after form editing', ()
 
 test('Builder keeps controls compact and uses local border-only form focus styling', () => {
   const view = source('views/pages/management-label-builder.ejs');
-  const css = source('public/css/label-builder.css');
+  const css = `${source('public/css/app.css')}\n${source('public/css/features.css')}`;
   assert.doesNotMatch(view, /label-builder-foundation-note/);
   assert.match(css, /grid-template-columns: max-content max-content minmax\(280px, 1fr\) max-content/);
   assert.match(css, /label-builder-check input:focus-visible/);
@@ -97,7 +108,7 @@ test('Builder keeps controls compact and uses local border-only form focus styli
 
 test('Builder provides drag-only center alignment guides without persisting guide state', () => {
   const js = source('public/js/label-builder.js');
-  const css = source('public/css/label-builder.css');
+  const css = `${source('public/css/app.css')}\n${source('public/css/features.css')}`;
   assert.match(js, /CENTER_GUIDE_SNAP_PX = 5/);
   assert.match(js, /show-vertical-center-guide/);
   assert.match(js, /show-horizontal-center-guide/);

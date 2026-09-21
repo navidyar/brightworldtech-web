@@ -38,7 +38,7 @@ test('related user-facing errors use the same move/takeover terminology', () => 
 });
 
 test('the heading and status message retain a compact two-line treatment', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /\.tech-lot-assumption-status-title\s*\{[\s\S]*?display:\s*block[\s\S]*?margin:\s*0 0 3px/);
   assert.match(css, /\.tech-lot-assumption-status \[data-assignable-lot-assumption-status-state\]\s*\{[\s\S]*?display:\s*block/);
@@ -49,9 +49,9 @@ test('Stage 10O assets are cache-busted on modal and full-page entry points', ()
   const formPage = read('views/pages/tech-unit-form.ejs');
   const browserPage = read('views/pages/tech-units.ejs');
 
-  assert.match(detailPage, /tech-units-clean\.css\?v=/);
-  assert.match(formPage, /tech-units-clean\.css\?v=/);
-  assert.match(browserPage, /tech-units-clean\.css\?v=/);
+  assert.match(detailPage, /<body class="css-scope-tech-units">/);
+  assert.match(formPage, /<body class="css-scope-tech-units">/);
+  assert.match(browserPage, /<body class="css-scope-tech-units">/);
   assert.match(formPage, /tech-unit-form\.js\?v=[^"\'\s>]+/);
   assert.match(browserPage, /tech-unit-form\.js\?v=[^"\'\s>]+/);
 });

@@ -32,7 +32,7 @@ test('History replaces the Details header inside the same pop-under instead of n
 });
 
 test('Unit Details uses warm orange while History keeps the established purple treatment', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(css, /\.tech-units-clean-page \.tech-detail-header--details\s*\{[\s\S]*?border-bottom-color:\s*#dcae78;[\s\S]*?background:\s*#fff2e2;/);
   assert.match(css, /\.tech-units-clean-page \.tech-detail-header--details \.tech-detail-title strong\s*\{[\s\S]*?color:\s*#704116;/);

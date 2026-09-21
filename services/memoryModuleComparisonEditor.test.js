@@ -106,7 +106,7 @@ test('Previous components use dedicated persistence while Lot requirements remai
 });
 
 test('hardware comparison uses equal flat columns and responsive storage rows', () => {
-  const css = readProjectFile('public/css/tech-units-clean.css');
+  const css = readProjectFile('public/css/app.css');
 
   assert.match(css, /\.tech-memory-editor--compare/);
   assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);

@@ -56,7 +56,7 @@ test('sort, pagination, and QC queue links retain Amazon search mode and pallet 
 
 test('responsive width math derives table width and rendered column count from the presentation', () => {
   const table = read('views/fragments/tech-units-table.ejs');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(table, /--tu-table-base-width: <%= browserPresentation\.tableMinimumWidthPx %>px/);
   assert.match(table, /--tu-rendered-column-count: <%= browserColumnCount %>/);
@@ -94,15 +94,18 @@ test('Export remains independent while Comments rendering is handled only by the
   assert.match(table, /data-unit-browser-comment-link/);
 });
 
-test('modified Browser assets are cache-busted consistently', () => {
-  const expectedCss = '/css/tech-units-clean.css?v=20260826-stage10w73e-browser-usability';
+test('modified Browser assets use the shared CSS scope and cache-busted script', () => {
   const expectedJs = '/js/tech-units.js?v=20260826-stage10w73c-browser-refinement';
+  assert.match(read('views/partials/head.ejs'), /\/css\/app\.css\?v=/);
 
   for (const file of ['views/pages/tech-units.ejs', 'views/pages/tech-unit-detail.ejs']) {
     const page = read(file);
-    assert.match(page, new RegExp(expectedCss.replace(/[?.]/g, '\\$&')));
+    assert.match(page, /<body class="css-scope-tech-units">/);
+    assert.doesNotMatch(page, /tech-units-clean\.css/);
     assert.match(page, new RegExp(expectedJs.replace(/[?.]/g, '\\$&')));
   }
 
-  assert.match(read('views/pages/tech-unit-form.ejs'), new RegExp(expectedCss.replace(/[?.]/g, '\\$&')));
+  const formPage = read('views/pages/tech-unit-form.ejs');
+  assert.match(formPage, /<body class="css-scope-tech-units">/);
+  assert.doesNotMatch(formPage, /tech-units-clean\.css/);
 });

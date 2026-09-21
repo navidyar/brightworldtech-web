@@ -48,7 +48,7 @@ test('weight synchronization updates only active manual completions and preserve
 
 test('Unit Browser shows adjacent blue Lot and individual override pills', () => {
   const table = read('views/fragments/tech-units-table.ejs');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
   assert.match(table, /tech-unit-summary-weight-strip[\s\S]*?Current lot weight[\s\S]*?unit\.formattedCurrentLotWeight/);
   assert.match(table, /if \(unit\.showIndividualWeightPill\)[\s\S]*?tech-unit-summary-weight-value--override[\s\S]*?Individual weight[\s\S]*?unit\.formattedIndividualWeightPill/);
@@ -62,7 +62,7 @@ test('Lot and Unit forms explain live inheritance and persistent individual over
   const unitForm = read('views/fragments/tech-unit-form.ejs');
 
   assert.match(lotForm, /immediately becomes the effective weight for every Unit currently in this Lot unless that Unit has an individual override/);
-  assert.match(lotForm, /There is no application maximum/);
+  assert.match(lotForm, /no application maximum/);
   assert.match(unitForm, /An individual Unit override stays with the Unit and continues to take precedence after it moves to another Lot/);
   assert.doesNotMatch(lotForm, /name="defaultProductionWeight"[^>]*max=/);
   assert.doesNotMatch(unitForm, /name="productionWeightOverride"[^>]*max=/);
@@ -93,14 +93,15 @@ test('weight storage capacity is widened without shrinking already-larger decima
   assert.match(lotModel, /DECIMAL\(20,2\)/);
 });
 
-test('all Add/Edit Unit entry points use the matched-weight-pill stylesheet version', () => {
-  const expected = '/css/tech-units-clean.css?v=20260806-stage10w162-matched-weight-pill-styles';
-
+test('all Add/Edit Unit entry points use the shared Tech Units CSS scope', () => {
+  assert.match(read('views/partials/head.ejs'), /\/css\/app\.css\?v=/);
   for (const relativePath of [
     'views/pages/tech-units.ejs',
     'views/pages/tech-unit-form.ejs',
     'views/pages/tech-unit-detail.ejs'
   ]) {
-    assert.match(read(relativePath), new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    const page = read(relativePath);
+    assert.match(page, /<body class="css-scope-tech-units">/);
+    assert.doesNotMatch(page, /tech-units-clean\.css/);
   }
 });

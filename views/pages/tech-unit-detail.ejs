@@ -1,17 +1,11 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', {
-    pageTitle,
-    stylesheets: [
-      '/css/modal.css',
-      '/css/tech-units-clean.css?v=20260826-stage10w73e-browser-usability'
-    ]
-  }) %>
+  <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260819-stage10w68p-interaction-refinements"></script>
   <script defer src="/js/tech-units.js?v=20260826-stage10w73c-browser-refinement"></script>
   <script defer src="/js/tech-unit-form.js?v=20260828-stage10w74n-request-context-labels"></script>
 
-  <body>
+  <body class="css-scope-tech-units">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 

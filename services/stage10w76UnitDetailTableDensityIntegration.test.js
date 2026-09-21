@@ -38,7 +38,7 @@ test('Unit Details preserves the Unit / Weight floor and a readable leading-colu
 });
 
 test('Unit Browser tuned spacing and width contracts remain unchanged', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   const table = read('views/fragments/tech-units-table.ejs');
 
   assert.match(css, /--tu-cell-inline-padding: clamp\(5px, 0\.42cqi, 8px\)/);
@@ -50,10 +50,11 @@ test('Unit Browser tuned spacing and width contracts remain unchanged', () => {
   assert.match(table, /--tu-column-base-width: <%= column\.minimumWidthPx %>px/);
 });
 
-test('shared app stylesheet cache key advances without changing page-specific Units stylesheet key', () => {
+test('shared app stylesheet owns the migrated Units CSS and the detail page activates its scope', () => {
   const head = read('views/partials/head.ejs');
   const detailPage = read('views/pages/tech-unit-detail.ejs');
 
-  assert.match(head, /\/css\/app\.css\?v=[^"\'\s>]+/);
-  assert.match(detailPage, /\/css\/tech-units-clean\.css\?v=20260826-stage10w73e-browser-usability/);
+  assert.match(head, /\/css\/app\.css\?v=/);
+  assert.match(detailPage, /<body class="css-scope-tech-units">/);
+  assert.doesNotMatch(detailPage, /tech-units-clean\.css/);
 });

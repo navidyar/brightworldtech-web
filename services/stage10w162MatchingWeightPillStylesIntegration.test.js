@@ -12,7 +12,7 @@ function read(relativePath) {
 }
 
 test('Lot and individual Unit weight pills share the same blue background and border', () => {
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
   const table = read('views/fragments/tech-units-table.ejs');
 
   assert.match(
@@ -24,14 +24,15 @@ test('Lot and individual Unit weight pills share the same blue background and bo
   assert.match(table, /class="tech-unit-summary-weight-value tech-unit-summary-weight-value--override"[\s\S]*?Individual weight/);
 });
 
-test('all Unit Browser entry points use the matched-weight-pill stylesheet version', () => {
-  const expected = '/css/tech-units-clean.css?v=20260806-stage10w162-matched-weight-pill-styles';
-
+test('all Unit Browser entry points use the shared Tech Units CSS scope', () => {
+  assert.match(read('views/partials/head.ejs'), /\/css\/app\.css\?v=/);
   for (const relativePath of [
     'views/pages/tech-units.ejs',
     'views/pages/tech-unit-form.ejs',
     'views/pages/tech-unit-detail.ejs',
   ]) {
-    assert.match(read(relativePath), new RegExp(expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+    const page = read(relativePath);
+    assert.match(page, /<body class="css-scope-tech-units">/);
+    assert.doesNotMatch(page, /tech-units-clean\.css/);
   }
 });

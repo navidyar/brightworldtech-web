@@ -1,12 +1,9 @@
 <!DOCTYPE html>
 <html lang="en">
-  <%- include('../partials/head', {
-    pageTitle,
-    stylesheets: ['/css/copy-link.css']
-  }) %>
+  <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/copy-link.js?v=20260811-stage10w32"></script>
 
-  <body>
+  <body class="css-scope-copy-link">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 

@@ -36,14 +36,14 @@ test('modal form prevents duplicate Create or Update requests while HTMX is savi
   assert.match(form, /hx-disabled-elt="find button\[type=\'submit\'\]"/);
 });
 
-test('Unit Browser centers a selectable 30-second confirmation with a raised shadow and responsive reflow', () => {
+test('Unit Browser centers a selectable 10-second confirmation with a raised shadow and responsive reflow', () => {
   const page = read('views/pages/tech-units.ejs');
   const browser = read('public/js/tech-units.js');
-  const css = read('public/css/tech-units-clean.css');
+  const css = read('public/css/app.css');
 
-  assert.match(page, /class="tech-units-clean-page-heading tech-units-clean-page-heading--save-status"[\s\S]*?<h1><%= isQcUnitBrowserUser \? 'QC Unit Browser' : 'Tech Units Browser' %><\/h1>[\s\S]*?id="tech-unit-save-notification"[\s\S]*?class="message success tech-unit-save-notification"[\s\S]*?role="status"[\s\S]*?aria-live="polite"[\s\S]*?aria-atomic="true"[\s\S]*?hidden[\s\S]*?class="tech-units-clean-heading-actions"/);
+  assert.match(page, /class="tech-units-clean-page-heading tech-units-clean-page-heading--save-status"[\s\S]*?<h1><%= isQcPortalMode \? 'QC Review' : \(isQcUnitBrowserUser \? 'QC Unit Browser' : 'Tech Units Browser'\) %><\/h1>[\s\S]*?id="tech-unit-save-notification"[\s\S]*?class="message success tech-unit-save-notification"[\s\S]*?role="status"[\s\S]*?aria-live="polite"[\s\S]*?aria-atomic="true"[\s\S]*?hidden[\s\S]*?class="tech-units-clean-heading-actions"/);
   assert.doesNotMatch(page, /class="tech-filter-actions"[\s\S]*?id="tech-unit-save-notification"/);
-  assert.match(browser, /const UNIT_SAVE_CONFIRMATION_TIMEOUT_MS = 30000;/);
+  assert.match(browser, /const UNIT_SAVE_CONFIRMATION_TIMEOUT_MS = 10000;/);
   assert.match(browser, /detail\.source !== 'tech-unit-form'/);
   assert.match(browser, /\['Asset Tag',[\s\S]*?\['Unit Serial',[\s\S]*?\['BIOS Serial'/);
   assert.match(browser, /document\.body\.addEventListener\('unit-saved',[\s\S]*?showUnitSaveConfirmation\(event\.detail \|\| null\)/);

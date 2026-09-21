@@ -12,7 +12,8 @@ test('Label Library Lot count opens a compact Lot usage modal', () => {
   const library = read('views/pages/management-label-library.ejs');
   assert.match(library, /label-library-lot-usage-trigger/);
   assert.match(library, /\/templates\/<%= template\.label_template_id %>\/lots\/modal/);
-  assert.match(library, /active Lot/);
+  assert.match(library, /aria-label="View Lots using <%= template\.name %>"/);
+  assert.match(library, /> Lot<%= Number\(template\.attached_lot_count\) === 1 \? '' : 's' %><\/a>/);
 });
 
 test('Lot usage route is management-only and precedes generic action modal', () => {
