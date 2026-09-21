@@ -92,7 +92,7 @@ async function main() {
     console.log(`Required tables: ${missingTables.length ? `missing ${missingTables.join(', ')}` : 'present'}`);
     console.log(`Required units columns: ${missingColumns.length ? `missing ${missingColumns.join(', ')}` : 'present'}`);
     console.log(`Required system config bindings: ${missingSystemValues.length ? `missing ${missingSystemValues.join(', ')}` : 'present'}`);
-    console.log(`Unit Category may be omitted at database insert: ${categoryCanBeOmitted ? 'yes' : 'no (API caller must supply unit_category_config_value_id)'}`);
+    console.log(`Unit Category may be omitted at database insert: ${categoryCanBeOmitted ? 'yes' : 'no (new Tool-created Units require unit_category_config_value_id as a processing prerequisite)'}`);
 
     if (missingTables.length || missingColumns.length || missingSystemValues.length) {
       throw new Error('Stage 10W79B prerequisites are incomplete. No database changes were made.');

@@ -4403,7 +4403,7 @@ body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal > .modal-body
 
 .lot-label-template-option {
   display: grid;
-  grid-template-columns: 92px minmax(220px, 1fr) minmax(340px, auto);
+  grid-template-columns: 92px minmax(220px, 1fr) minmax(300px, auto);
   gap: 12px;
   align-items: center;
   padding: 10px;
@@ -4504,4 +4504,62 @@ body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal > .modal-body
   .lot-label-template-controls {
     justify-content: flex-start;
   }
+}
+
+
+/* Simplified Lot label assignment: attachment + copies + normal print-set default. */
+.lot-label-template-controls-simplified {
+  display: grid;
+  grid-template-columns: minmax(110px, auto) minmax(190px, 1fr);
+  align-items: end;
+  gap: 10px 16px;
+}
+
+.lot-label-template-controls-simplified .lot-label-template-normal-print-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 39px;
+}
+
+.lot-label-template-controls-simplified .lot-label-template-normal-print-option span {
+  color: var(--text);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 900px) {
+  .lot-label-template-controls-simplified { grid-template-columns: 1fr; }
+}
+
+/* Configure Labels: compact two-line normal-set control and clearer descriptions. */
+.lot-label-template-controls-simplified {
+  grid-template-columns: minmax(92px, 104px) minmax(164px, 178px);
+  align-items: center;
+  justify-content: end;
+}
+
+.lot-label-template-controls-simplified .lot-label-template-normal-print-option {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  max-width: 178px;
+}
+
+.lot-label-template-controls-simplified .lot-label-template-normal-print-option span {
+  padding-left: 4px;
+  line-height: 1.18;
+  white-space: normal;
+}
+
+.lot-label-template-description {
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px 6px;
+  border-left: 3px solid color-mix(in srgb, var(--blue) 65%, #ffffff 35%);
+  border-radius: 4px;
+  background: color-mix(in srgb, #ffffff 76%, var(--blue-soft) 24%);
+  color: #315f91 !important;
+  font-weight: 650;
 }

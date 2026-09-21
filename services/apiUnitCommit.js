@@ -8,6 +8,8 @@ const TEST_FIELD_KEYS = new Set([
   'keyboard_test',
   'microphone_check',
   'audio_output_check',
+  'bios_lock',
+  'mdm_lock',
   'driver_check',
   'virus_check',
   'camera_test',
@@ -152,7 +154,7 @@ async function buildReplayResponse({ submission, resolution, requestedUnitId, us
   };
 }
 
-async function createAndIngestUnit({ body, userId, toolSource, submissionId, resolution }) {
+async function createAndIngestUnit({ body, userId, roleCodes = [], toolSource, submissionId, resolution, requestedUnitId = null, intentionalDuplicate = false }) {
   const connection = await pool.getConnection();
   try {
     await connection.beginTransaction();
@@ -201,16 +203,18 @@ async function createAndIngestUnit({ body, userId, toolSource, submissionId, res
         toolSource,
         reportId: submissionId
       });
-      if (concurrentSubmission && Number(concurrentSubmission.submitted_by_user_id || 0) === Number(userId)) {
-        const unit = await apiUnitIntake.serializeUnit(concurrentSubmission.unit_id);
-        return {
-          status: 'REPLAYED',
-          replayed: true,
-          submission_id: submissionId,
-          unit,
-          tool_run: concurrentSubmission,
-          ...summarizeInventory(concurrentSubmission, resolution.preflight.warnings)
-        };
+      if (concurrentSubmission) {
+        const replayResolution = await apiUnitIntake.resolveUnit(body, {
+          preflightContext: { userId, roleCodes, toolSource }
+        });
+        assertPreflightCanProceed(replayResolution);
+        return await buildReplayResponse({
+          submission: concurrentSubmission,
+          resolution: replayResolution,
+          requestedUnitId,
+          userId,
+          intentionalDuplicate
+        });
       }
       throw new ApiUnitCommitError(
         409,
@@ -261,7 +265,16 @@ async function commitUnit({ body = {}, userId, roleCodes = [], toolSource }) {
       if (requestedUnitId) {
         throw new ApiUnitCommitError(409, 'INTENTIONAL_DUPLICATE_UNIT_ID_NOT_ALLOWED', 'Do not supply unit_id when explicitly creating an Intentional Duplicate Unit.');
       }
-      return await createAndIngestUnit({ body, userId, toolSource, submissionId, resolution });
+      return await createAndIngestUnit({
+        body,
+        userId,
+        roleCodes,
+        toolSource,
+        submissionId,
+        resolution,
+        requestedUnitId,
+        intentionalDuplicate
+      });
     }
 
     if (resolution.status === 'MATCHED') {
@@ -309,7 +322,15 @@ async function commitUnit({ body = {}, userId, roleCodes = [], toolSource }) {
       );
     }
 
-    return await createAndIngestUnit({ body, userId, toolSource, submissionId, resolution });
+    return await createAndIngestUnit({
+      body,
+      userId,
+      roleCodes,
+      toolSource,
+      submissionId,
+      resolution,
+      requestedUnitId
+    });
   } catch (error) {
     throw asCommitError(error);
   }

@@ -128,14 +128,16 @@ async function beginPrintAttempt({ itemId, attemptNumber = 1, printer }) {
       (label_print_job_item_id, attempt_number, printer_key_snapshot,
        printer_label_snapshot, printer_location_snapshot, cups_queue_snapshot,
        protocol_snapshot, endpoint_snapshot, status)
-     VALUES (?, ?, ?, ?, ?, ?, 'cups_raw_9100', NULL, 'preparing')`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'preparing')`,
     [
       safeItemId,
       safeAttempt,
       printer?.id ? String(printer.id).slice(0, 100) : null,
       printer?.label ? String(printer.label).slice(0, 160) : null,
       printer?.location ? String(printer.location).slice(0, 160) : null,
-      printer?.queue ? String(printer.queue).slice(0, 160) : null
+      printer?.queue ? String(printer.queue).slice(0, 160) : null,
+      printer?.protocolCode ? `cups_${String(printer.protocolCode).slice(0, 27)}` : 'cups',
+      printer?.endpoint ? String(printer.endpoint).slice(0, 255) : null
     ]
   );
   return Number(result.insertId);
@@ -157,7 +159,7 @@ async function completePrintAttempt({ attemptId, status, copiesSubmitted = 0, re
   );
 }
 
-async function completePrintItem({ itemId, labelTemplateId = null, copiesQueued = 0, status, failureMessage = null }) {
+async function completePrintItem({ itemId, labelTemplateId = null, copiesQueued = 0, status, failureMessage = null, updateTemplateUsage = true }) {
   const safeItemId = positiveInteger(itemId, 'Print job item ID');
   const queued = Math.max(0, Number(copiesQueued) || 0);
   const templateId = nullablePositiveInteger(labelTemplateId);
@@ -170,7 +172,7 @@ async function completePrintItem({ itemId, labelTemplateId = null, copiesQueued 
        WHERE label_print_job_item_id = ?`,
       [queued, String(status || 'failed').slice(0, 24), failureMessage ? String(failureMessage).slice(0, 5000) : null, safeItemId]
     );
-    if (templateId && queued > 0) {
+    if (templateId && queued > 0 && updateTemplateUsage !== false) {
       await connection.query(
         `UPDATE label_templates
          SET print_count = print_count + ?, last_used_at = CURRENT_TIMESTAMP(6)
@@ -198,12 +200,98 @@ async function completePrintJob({ jobId, status, failureMessage = null }) {
 }
 
 
+
+async function listRecentQueuedAttempts({ actorUserId, minutes }) {
+  const actorId = positiveInteger(actorUserId, 'User ID');
+  const safeMinutes = positiveInteger(minutes, 'Recent Prints duration');
+  const [rows] = await pool.query(
+    `SELECT
+       a.label_print_attempt_id, a.label_print_job_item_id, i.label_print_job_id,
+       a.cups_queue_snapshot, a.cups_job_ids_json
+     FROM label_print_sets s
+     JOIN label_print_jobs j ON j.label_print_set_id = s.label_print_set_id
+     JOIN label_print_job_items i ON i.label_print_job_id = j.label_print_job_id
+     JOIN label_print_attempts a ON a.label_print_job_item_id = i.label_print_job_item_id
+     WHERE s.actor_user_id = ?
+       AND s.last_activity_at >= DATE_SUB(CURRENT_TIMESTAMP(6), INTERVAL ? MINUTE)
+       AND a.status = 'queued'
+       AND a.copies_submitted > 0
+     ORDER BY a.label_print_attempt_id`,
+    [actorId, safeMinutes]
+  );
+  return rows.map((row) => Object.freeze({
+    attemptId: Number(row.label_print_attempt_id),
+    itemId: Number(row.label_print_job_item_id),
+    jobId: Number(row.label_print_job_id),
+    cupsQueue: String(row.cups_queue_snapshot || ''),
+    cupsJobIdsJson: row.cups_job_ids_json
+  }));
+}
+
+async function reconcilePrintAttemptStatus({ attemptId, itemId, jobId, status, failureMessage = null }) {
+  const safeAttemptId = positiveInteger(attemptId, 'Print attempt ID');
+  const safeItemId = positiveInteger(itemId, 'Print item ID');
+  const safeJobId = positiveInteger(jobId, 'Print job ID');
+  const safeStatus = String(status || '').trim();
+  if (!['sent', 'failed', 'partial'].includes(safeStatus)) throw new Error('Unsupported reconciled print status.');
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    await connection.query(
+      `UPDATE label_print_attempts
+       SET status = ?, finished_at = CURRENT_TIMESTAMP(6), failure_message = ?
+       WHERE label_print_attempt_id = ? AND status = 'queued'`,
+      [safeStatus, failureMessage ? String(failureMessage).slice(0, 5000) : null, safeAttemptId]
+    );
+
+    const [attemptRows] = await connection.query(
+      `SELECT status FROM label_print_attempts
+       WHERE label_print_job_item_id = ?
+       ORDER BY attempt_number DESC
+       LIMIT 1`,
+      [safeItemId]
+    );
+    const itemStatus = String(attemptRows[0]?.status || 'queued');
+
+    await connection.query(
+      `UPDATE label_print_job_items
+       SET status = ?, failure_message = CASE WHEN ? IN ('failed', 'partial') THEN COALESCE(?, failure_message) ELSE failure_message END
+       WHERE label_print_job_item_id = ?`,
+      [itemStatus, itemStatus, failureMessage ? String(failureMessage).slice(0, 5000) : null, safeItemId]
+    );
+
+    const [itemRows] = await connection.query(
+      'SELECT status FROM label_print_job_items WHERE label_print_job_id = ?',
+      [safeJobId]
+    );
+    const itemStatuses = itemRows.map((row) => String(row.status || ''));
+    let jobStatus = 'queued';
+    if (itemStatuses.some((value) => value === 'queued' || value === 'preparing')) jobStatus = 'queued';
+    else if (itemStatuses.every((value) => value === 'sent')) jobStatus = 'sent';
+    else if (itemStatuses.every((value) => value === 'failed')) jobStatus = 'failed';
+    else jobStatus = 'partial';
+    await connection.query(
+      `UPDATE label_print_jobs
+       SET status = ?, finished_at = CASE WHEN ? = 'queued' THEN finished_at ELSE CURRENT_TIMESTAMP(6) END
+       WHERE label_print_job_id = ?`,
+      [jobStatus, jobStatus, safeJobId]
+    );
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function getRecentPrintSummary({ actorUserId, minutes }) {
   const actorId = positiveInteger(actorUserId, 'User ID');
   const safeMinutes = positiveInteger(minutes, 'Recent Prints duration');
   const [rows] = await pool.query(
     `SELECT
-       COALESCE(SUM(i.copies_queued), 0) AS queued_copies,
+       COALESCE(SUM(CASE WHEN i.status = 'queued' THEN i.copies_queued ELSE 0 END), 0) AS queued_copies,
+       COUNT(DISTINCT i.label_print_job_item_id) AS recent_items,
        SUM(CASE WHEN i.status IN ('failed', 'partial') THEN 1 ELSE 0 END) AS issue_items,
        COUNT(DISTINCT s.label_print_set_id) AS set_count
      FROM label_print_sets s
@@ -216,6 +304,7 @@ async function getRecentPrintSummary({ actorUserId, minutes }) {
   const row = rows[0] || {};
   return Object.freeze({
     queuedCopies: Number(row.queued_copies || 0),
+    recentItems: Number(row.recent_items || 0),
     issueItems: Number(row.issue_items || 0),
     setCount: Number(row.set_count || 0)
   });
@@ -322,6 +411,8 @@ module.exports = {
   completePrintAttempt,
   completePrintItem,
   completePrintJob,
+  listRecentQueuedAttempts,
+  reconcilePrintAttemptStatus,
   getRecentPrintSummary,
   listRecentPrintSets
 };

@@ -39,7 +39,7 @@ test('structured Current rows determine submitted totals while valid summary-onl
   const controller = read('controllers/techController.js');
   const model = read('models/techUnitModel.js');
 
-  assert.match(controller, /function getComponentCapacityTotalGb\(rows, submittedLegacyTotal\)/);
+  assert.match(controller, /function getComponentCapacityTotalGb\(rows, submittedLegacyTotal, \{ allowZero = false \} = \{\}\)/);
   assert.match(controller, /ramGb: getComponentCapacityTotalGb\(memoryModules, req\.body\.ramGb\)/);
   assert.match(controller, /storageGb: getComponentCapacityTotalGb\(storageDevices, req\.body\.storageGb\)/);
   assert.match(model, /submittedMemoryTotalGb = normalizeOptionalNonNegativeInteger\(formData\.ramGb\)/);

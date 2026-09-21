@@ -1,5 +1,22 @@
 'use strict';
 
+const LABEL_PRINTER_PROFILES = Object.freeze([
+  Object.freeze({
+    code: 'brother_ql810w_300dpi',
+    label: 'Brother QL-810W · 300 dpi',
+    manufacturer: 'Brother',
+    model: 'QL-810W',
+    mediaCode: '62mm_continuous',
+    mediaLabel: '62 mm continuous',
+    dpi: 300,
+    deviceWidthDots: 720,
+    printableWidthDots: 696,
+    horizontalOffsetDots: 12,
+    feedMarginDots: 35,
+    modelAliases: Object.freeze(['ql-810w', 'ql810w'])
+  })
+]);
+
 const LABEL_PRINTERS = Object.freeze([
   Object.freeze({
     id: 'navid-printer',
@@ -18,33 +35,25 @@ const LABEL_PRINTERS = Object.freeze([
   })
 ]);
 
-const LABEL_TEMPLATES = Object.freeze([
-  Object.freeze({
-    id: 'standard-unit-62',
-    label: 'Standard Unit Label · 62 mm',
-    mediaLabel: '62 mm continuous',
-    printableWidthDots: 696,
-    deviceWidthDots: 720,
-    heightDots: 360,
-    offsetDots: 12,
-    feedMarginDots: 35
-  })
-]);
-
 const MAX_LABEL_COPIES = 10;
 
-function findLabelPrinter(printerId) {
-  return LABEL_PRINTERS.find((printer) => printer.id === String(printerId || '').trim()) || null;
+function findLabelPrinterProfile(profileCode) {
+  return LABEL_PRINTER_PROFILES.find((profile) => profile.code === String(profileCode || '').trim()) || null;
 }
 
-function findLabelTemplate(templateId) {
-  return LABEL_TEMPLATES.find((template) => template.id === String(templateId || '').trim()) || null;
+function inferLabelPrinterProfile({ manufacturer = '', model = '' } = {}) {
+  const maker = String(manufacturer || '').trim().toLowerCase();
+  const modelText = String(model || '').trim().toLowerCase();
+  return LABEL_PRINTER_PROFILES.find((profile) => {
+    const makerMatches = !maker || maker === String(profile.manufacturer || '').toLowerCase();
+    return makerMatches && profile.modelAliases.some((alias) => modelText.includes(alias));
+  }) || null;
 }
 
 module.exports = {
+  LABEL_PRINTER_PROFILES,
   LABEL_PRINTERS,
-  LABEL_TEMPLATES,
   MAX_LABEL_COPIES,
-  findLabelPrinter,
-  findLabelTemplate
+  findLabelPrinterProfile,
+  inferLabelPrinterProfile
 };

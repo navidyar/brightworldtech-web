@@ -27,14 +27,16 @@ test('Recent Prints is user-scoped and reads retained print history without chan
   const history = read('models/labelPrintHistoryModel.js');
   const queueController = read('controllers/labelPrintQueueController.js');
   const modal = read('views/fragments/tech-recent-prints-modal.ejs');
+  const live = read('views/fragments/tech-recent-prints-live.ejs');
 
   assert.match(history, /WHERE s\.actor_user_id = \?/);
   assert.match(history, /listRecentPrintSets/);
   assert.match(history, /labelPrintSettingsModel\.getLabelPrintSettings/);
   assert.match(queueController, /req\.currentUser\?\.user_id/);
-  assert.match(modal, /Queued.*confirms CUPS accepted/);
-  assert.match(modal, /printerLocation/);
-  assert.match(modal, /attempts\.length > 1/);
+  assert.match(live, /Queued.*CUPS still has the job/);
+  assert.match(live, /Sent to Printer/);
+  assert.match(live, /printerLocation/);
+  assert.match(live, /attempts\.length > 1/);
 });
 
 test('Units Browser keeps a persistent Recent Prints control that refreshes after print activity', () => {
@@ -44,6 +46,7 @@ test('Units Browser keeps a persistent Recent Prints control that refreshes afte
   const bulkModal = read('views/fragments/tech-units-bulk-print-label-modal.ejs');
 
   assert.match(page, /id="tech-print-queue-summary"/);
+  assert.match(page, /every 30s/);
   assert.match(page, /unit-label-queued from:body/);
   assert.match(routes, /\/tech\/print-queue\/summary/);
   assert.match(routes, /\/tech\/print-queue\/modal/);
@@ -53,9 +56,23 @@ test('Units Browser keeps a persistent Recent Prints control that refreshes afte
 
 test('Recent Prints modal separates automatic and explicit bulk print sets', () => {
   const modal = read('views/fragments/tech-recent-prints-modal.ejs');
-  assert.match(modal, /Bulk Print Set/);
-  assert.match(modal, /Print Set/);
-  assert.match(modal, /tech-recent-print-set--separated/);
-  assert.match(modal, /copiesQueued/);
-  assert.match(modal, /copiesRequested/);
+  const live = read('views/fragments/tech-recent-prints-live.ejs');
+  assert.match(live, /Bulk Print Set/);
+  assert.match(live, /Print Set/);
+  assert.match(live, /tech-recent-print-set--separated/);
+  assert.match(live, /copiesQueued/);
+  assert.match(live, /copiesRequested/);
+});
+
+test('Recent Prints exposes the origin of each print job without relying on set grouping', () => {
+  const live = read('views/fragments/tech-recent-prints-live.ejs');
+  const css = read('public/css/tech-units-clean.css');
+
+  assert.match(live, /builder_test[\s\S]*Builder Test Print[\s\S]*Layout Builder test/);
+  assert.match(live, /library_direct[\s\S]*Standalone Direct Print[\s\S]*Label Template Library/);
+  assert.match(live, /bulk[\s\S]*Bulk Production[\s\S]*Units Browser bulk action/);
+  assert.match(live, /single[\s\S]*Unit Production[\s\S]*Unit print action/);
+  assert.match(live, /sourcePresentation\(job\.source\)/);
+  assert.match(live, /tech-recent-print-job-heading/);
+  assert.match(css, /\.tech-recent-print-job \+ \.tech-recent-print-job/);
 });

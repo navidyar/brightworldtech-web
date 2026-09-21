@@ -12,10 +12,10 @@ const CATEGORY_DEFINITIONS = Object.freeze([
     ['Yes', true], ['No', true]
   ] },
   { systemId: SYSTEM_CONFIG_CATEGORY_IDS.TEST_RESULTS, label: 'Test Results', description: 'Shared Unit test result values.', values: [
-    ['Pass', true], ['Fail', true]
+    ['Pass', true], ['Fail', true], ['Physically Not Present', true]
   ] },
-  { systemId: SYSTEM_CONFIG_CATEGORY_IDS.AVAILABILITY_TEST_RESULTS, label: 'Availability Test Results', description: 'Test results that can also indicate hardware is unavailable.', values: [
-    ['Pass', true], ['Fail', true], ['Not Available', true]
+  { systemId: SYSTEM_CONFIG_CATEGORY_IDS.COMPONENT_TEST_RESULTS, label: 'Component Test Results', description: 'Pass/fail results for configured physical component rows.', values: [
+    ['Pass', true], ['Fail', true]
   ] },
   { systemId: SYSTEM_CONFIG_CATEGORY_IDS.LOCK_STATUSES, label: 'Lock Statuses', description: 'Locked/unlocked device security state values.', values: [
     ['Locked', true], ['Unlocked', true]

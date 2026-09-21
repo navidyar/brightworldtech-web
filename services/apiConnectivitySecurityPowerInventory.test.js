@@ -53,6 +53,22 @@ test('unknown Wi-Fi or cellular does not pretend hardware is absent', () => {
   assert.equal(observation.value.cellular.state, 'unknown');
 });
 
+
+test('negative discovery evidence does not become physical absence without confirmed_absent', () => {
+  const connectivity = normalizeConnectivityObservation({
+    wifi: { present: false, status: 'not_detected' },
+    cellular: { detected: false }
+  });
+  assert.equal(connectivity.value.wifi.presence, 'unknown');
+  assert.equal(connectivity.value.cellular.presence, 'unknown');
+
+  const security = normalizeSecurityObservation({ tpm: { present: false, status: 'not_detected' } });
+  assert.equal(security.value.tpm.presence, 'unknown');
+
+  const power = normalizePowerObservation({ keyboard_backlight: { present: false } });
+  assert.equal(power, null);
+});
+
 test('confirmed absent cellular clears identity details in the desired current state', () => {
   const connectivity = normalizeConnectivityObservation({ cellular: { state: 'confirmed_absent' } });
   const resolved = { connectivity, security: null, power: null, wifiResolution: null, absoluteResolution: null };
@@ -126,7 +142,7 @@ test('manual Wi-Fi form choice blocks a tool from changing the existing form-bac
 test('latest tool can replace a Wi-Fi form value previously proven tool-owned', () => {
   const plan = buildConnectivitySecurityPowerPlan({
     resolved: {
-      connectivity: normalizeConnectivityObservation({ wifi: { present: false } }), security: null, power: null,
+      connectivity: normalizeConnectivityObservation({ wifi: { state: 'confirmed_absent' } }), security: null, power: null,
       wifiResolution: { status: 'resolved', submitted: 'No', resolvedId: 20, resolvedLabel: 'No' }, absoluteResolution: null
     },
     currentState: current({ wifi_card_present_config_value_id: 10 }),
@@ -174,4 +190,25 @@ test('collector nulls are Unknown and do not erase prior IMEI, TPM state, or wat
   assert.equal(plan.desiredState.tpm_enabled_state_code, 'enabled');
   assert.equal(plan.desiredState.ac_adapter_wattage, 65);
   assert.equal(plan.desiredState.keyboard_backlight_state_code, 'present');
+});
+
+test('Absolute status canonicalizes confirmed unavailability while omitting uncertainty', () => {
+  assert.equal(
+    normalizeSecurityObservation({ absolute_status: 'Not Detected' }).value.absolute_status,
+    'Unavailable'
+  );
+  assert.equal(
+    normalizeSecurityObservation({ absolute_status: 'not_present' }).value.absolute_status,
+    'Unavailable'
+  );
+  assert.equal(
+    normalizeSecurityObservation({ absolute_status: 'Unavailable' }).value.absolute_status,
+    'Unavailable'
+  );
+  assert.equal(
+    normalizeSecurityObservation({ absolute_status: 'Not Available' }).value.absolute_status,
+    'Unavailable'
+  );
+  assert.equal(normalizeSecurityObservation({ absolute_status: 'Unknown' }), null);
+  assert.equal(normalizeSecurityObservation({ absolute_status: 'Not Applicable' }), null);
 });

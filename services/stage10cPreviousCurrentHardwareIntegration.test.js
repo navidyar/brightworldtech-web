@@ -20,8 +20,8 @@ test('previous hardware fields are persisted, validated, audited, and visible in
   const details = read('views/fragments/tech-units-table.ejs');
   const duplicateModal = read('views/fragments/tech-unit-duplicate-modal.ejs');
 
-  assert.match(controller, /previousRamGb: getComponentCapacityTotalGb\(previousMemoryModules, req\.body\.previousRamGb\)/);
-  assert.match(controller, /previousStorageGb: getComponentCapacityTotalGb\(previousStorageDevices, req\.body\.previousStorageGb\)/);
+  assert.match(controller, /previousRamGb: getComponentCapacityTotalGb\(previousMemoryModules, req\.body\.previousRamGb, \{ allowZero: true \}\)/);
+  assert.match(controller, /previousStorageGb: getComponentCapacityTotalGb\(previousStorageDevices, req\.body\.previousStorageGb, \{ allowZero: true \}\)/);
   assert.match(controller, /Previous memory size must be a non-negative whole number/);
   assert.match(controller, /Previous storage size must be a non-negative whole number/);
   assert.match(model, /addColumn\('previous_ram_gb'/);

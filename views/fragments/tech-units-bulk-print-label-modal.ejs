@@ -5,19 +5,16 @@
   const safeCandidates = Array.isArray(candidates) ? candidates : [];
   const safeResults = Array.isArray(printResults) ? printResults : [];
   const lotName = lot ? (lot.lot_name || lot.name || 'Selected Lot') : 'Selected Lot';
-  const canSubmit = safeErrors.length === 0
+  const canSubmit = !Boolean(submitBlocked)
     && selectedCount > 0
     && safePrinters.length > 0
     && safeTemplates.some((template) => template.available);
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel tech-print-label-modal tech-bulk-print-label-modal" role="dialog" aria-modal="true" aria-labelledby="tech-bulk-print-label-title">
+  <section class="modal-panel site-clean-modal tech-print-label-modal tech-bulk-print-label-modal" role="dialog" aria-modal="true" aria-labelledby="tech-bulk-print-label-title">
     <div class="modal-header">
-      <div>
-        <p class="eyebrow">Bulk Label Printing</p>
-        <h2 id="tech-bulk-print-label-title">Print Labels · <%= lotName %></h2>
-      </div>
+      <h2 id="tech-bulk-print-label-title">Print Labels · <%= lotName %></h2>
       <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
     </div>
 
@@ -60,7 +57,7 @@
             <div class="form-section-header tech-bulk-unit-section-header">
               <div>
                 <h3>Units</h3>
-                <p class="field-hint">Completed Units on the current browser page are selected by default. Deselect any labels you do not need, or reselect them before printing.</p>
+                <p class="field-hint">Completed Units on the current browser page are selected by default. Deselect any Units you do not need, or reselect them before printing.</p>
               </div>
               <div class="tech-bulk-unit-controls">
                 <span class="tech-chip"><strong data-bulk-label-selected-count><%= selectedCount %></strong>&nbsp;selected</span>
@@ -93,13 +90,13 @@
           <div class="form-section tech-label-printer-section">
             <div class="form-section-header">
               <div>
-                <h3>Printer</h3>
-                <p class="field-hint">All selected Unit labels use the existing CUPS → RAW print path. Automatic printer routing will be added separately.</p>
+                <h3>Printer or Group</h3>
+                <p class="field-hint">Choose a printer directly or a printer group. For a bulk submission, a group selects one available compatible printer and keeps the entire batch together at that pickup location.</p>
               </div>
             </div>
             <div class="form-grid tech-label-printer-grid">
               <label class="form-field">
-                <span>Printer</span>
+                <span>Printer or Group</span>
                 <select name="printerId" required data-modal-initial-focus>
                   <% safePrinters.forEach((printer) => { %>
                     <option value="<%= printer.id %>" <%= printer.id === selectedPrinterId ? 'selected' : '' %>><%= printer.label %></option>
@@ -113,7 +110,7 @@
             <div class="form-section-header">
               <div>
                 <h3>Labels</h3>
-                <p class="field-hint">The same effective Lot template selection and quantities are rendered separately with each selected Unit's data.</p>
+                <p class="field-hint">Each selected Unit prints with its own current data.<% if (previewUnitLabel) { %> The previews below use <strong><%= previewUnitLabel %></strong> as the sample Unit so the preview follows the same hydrated data path as physical printing.<% } %></p>
               </div>
             </div>
 
@@ -132,8 +129,7 @@
                       <span><strong><%= template.name %></strong></span>
                     </label>
                     <div class="tech-label-template-badges">
-                      <% if (template.isRequired) { %><span class="pill good">Required</span><% } else { %><span class="pill slate">Optional</span><% } %>
-                      <% if (template.mode === 'legacy_fallback') { %><span class="pill slate">Compatibility</span><% } %>
+                      <% if (template.isRequired) { %><span class="pill good">Normal set</span><% } else { %><span class="pill slate">Optional</span><% } %>
                     </div>
                   </div>
 
@@ -172,7 +168,7 @@
                   <div class="tech-bulk-print-result-row">
                     <strong><%= result.unitLabel %></strong>
                     <span class="pill <%= result.status === 'queued' ? 'good' : 'slate' %>"><%= result.status === 'queued' ? 'Queued' : result.status === 'partial' ? 'Partial' : 'Failed' %></span>
-                    <span><%= result.copiesQueued %> queued</span>
+                    <span><%= result.copiesQueued %> queued<% if (result.printerLabels && result.printerLabels.length) { %> · <%= result.printerLabels.join(', ') %><% } %></span>
                   </div>
                 <% }) %>
               </div>

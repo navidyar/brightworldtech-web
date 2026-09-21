@@ -47,9 +47,12 @@ test('display only treats an explicitly confirmed internal panel as eligible for
   assert.equal(unconfirmed.value.built_in_panel.confidence, 'unknown');
 });
 
-test('touchscreen possible remains distinct from confirmed present and confirmed absent', () => {
+test('touchscreen absence requires explicit confirmation while uncertainty remains non-destructive', () => {
   assert.equal(normalizeTouchscreen({ detected: false, possible: true }), 'possible');
-  assert.equal(normalizeTouchscreen({ detected: false, possible: false }), 'absent');
+  assert.equal(normalizeTouchscreen({ detected: false, possible: false }), 'unknown');
+  assert.equal(normalizeTouchscreen(false), 'unknown');
+  assert.equal(normalizeTouchscreen('not_detected'), 'unknown');
+  assert.equal(normalizeTouchscreen({ state: 'confirmed_absent' }), 'absent');
   assert.equal(normalizeTouchscreen({ detected: true }), 'present');
 });
 
@@ -62,6 +65,21 @@ test('screen size and native resolution resolve only exact-compatible configured
 test('Unknown graphics never erases current graphics', () => {
   const plan = buildGraphicsPlan({ observation: { state: 'unknown', value: null }, currentRows: [{ gpu_model: 'Old' }] });
   assert.equal(plan.status, 'ignored_unknown');
+});
+
+test('empty graphics discovery is unknown, while confirmed absence explicitly requests zero adapters', () => {
+  assert.deepEqual(normalizeGraphicsObservation({ state: 'known', adapters: [] }), {
+    fieldKey: 'graphics_adapters', state: 'unknown', value: null
+  });
+  assert.deepEqual(normalizeGraphicsObservation({ state: 'confirmed_absent' }), {
+    fieldKey: 'graphics_adapters', state: 'confirmed_absent', value: { adapters: [] }
+  });
+  const plan = buildGraphicsPlan({
+    observation: normalizeGraphicsObservation({ state: 'confirmed_absent' }),
+    currentRows: [{ unit_graphics_adapter_id: 1, gpu_model: 'Old' }]
+  });
+  assert.equal(plan.status, 'applied');
+  assert.equal(plan.mode, 'replace');
 });
 
 test('manual screen size and native resolution block tool replacement while touchscreen hardware remains independent', () => {

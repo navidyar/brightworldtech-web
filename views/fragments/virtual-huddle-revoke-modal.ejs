@@ -1,0 +1,26 @@
+<div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close>
+  <section class="modal-panel site-clean-modal" role="dialog" aria-modal="true" aria-labelledby="virtual-huddle-revoke-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Virtual Huddle</p>
+        <h2 id="virtual-huddle-revoke-title"><%= revokeAll ? 'Revoke All Awaiting Confirmations' : 'Revoke Awaiting Confirmation' %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <div class="message warning"><p>This keeps the Huddle in history but removes the acknowledgment requirement<%= revokeAll ? ` for ${awaitingCount} waiting recipient${awaitingCount === 1 ? '' : 's'}` : ` for ${recipient.user_name_snapshot}` %>.</p></div>
+      <form class="app-form app-form-clean" method="post" action="<%= revokeAll ? `/management/virtual-huddle/${message.virtual_huddle_message_id}/revoke-all` : `/management/virtual-huddle/${message.virtual_huddle_message_id}/recipients/${recipient.virtual_huddle_recipient_id}/revoke` %>" hx-post="<%= revokeAll ? `/management/virtual-huddle/${message.virtual_huddle_message_id}/revoke-all` : `/management/virtual-huddle/${message.virtual_huddle_message_id}/recipients/${recipient.virtual_huddle_recipient_id}/revoke` %>" hx-target="#modal-root" hx-swap="innerHTML">
+        <section class="form-section">
+          <div class="form-section-header"><h3>Revocation Reason</h3></div>
+          <div class="form-grid single-column">
+            <label class="form-field"><span>Reason</span><textarea name="reason" rows="3" maxlength="1000" required autofocus></textarea></label>
+          </div>
+        </section>
+        <div class="form-actions">
+          <button type="submit" class="danger-button">Revoke Requirement</button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

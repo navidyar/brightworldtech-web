@@ -19,15 +19,14 @@ test('Threat Protection Scan keeps the existing field identity and system catego
   assert.match(expandedModel, /virusCheckStatusOptions/);
 });
 
-test('canonical Threat Protection migration merges Passed into Pass and Failed into Fail only', () => {
+test('canonical Threat Protection migration keeps only Pass and Fail active', () => {
   const script = read('scripts/migrateCanonicalThreatProtectionResults.js');
 
-  assert.match(script, /Canonical Threat Protection Scan policy: Pass, Fail; preserve all other distinct results\./);
+  assert.match(script, /Canonical Threat Protection Scan policy: Pass and Fail only\./);
   assert.match(script, /aliases: Object\.freeze\(\['pass', 'passed'\]\)/);
   assert.match(script, /aliases: Object\.freeze\(\['fail', 'failed'\]\)/);
-  assert.match(script, /Other distinct results preserved/);
-  assert.doesNotMatch(script, /not run.*deactiv/i);
-  assert.doesNotMatch(script, /unknown.*deactiv/i);
+  assert.match(script, /Other results to deactivate/);
+  assert.match(script, /const deactivationIds = plan\.retiredRows/);
 });
 
 test('canonical Threat Protection migration is audit-first and remaps live Unit and Lot Requirement references', () => {

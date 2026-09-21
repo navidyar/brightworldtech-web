@@ -157,3 +157,62 @@
     align-self: flex-start;
   }
 }
+
+/* Virtual Huddle behavior: global delivery layer, mandatory blocking, and bounded pickers. */
+#virtual-huddle-root:empty {
+  display: none !important;
+}
+
+.virtual-huddle-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+}
+
+.virtual-huddle-backdrop {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  background: rgba(15, 29, 48, 0.66);
+  backdrop-filter: blur(2px);
+}
+
+.virtual-huddle-layer .virtual-huddle-panel {
+  max-height: calc(100vh - 44px);
+  overflow: auto;
+}
+
+html.virtual-huddle-blocked,
+body.virtual-huddle-blocked {
+  overflow: hidden !important;
+}
+
+.virtual-huddle-layer.is-blocking {
+  cursor: default;
+}
+
+.virtual-huddle-recipient-picker,
+.virtual-huddle-preview-recipients {
+  max-height: min(40vh, 430px);
+  overflow: auto;
+}
+
+.virtual-huddle-required-page {
+  position: fixed;
+  inset: 0;
+  background: var(--ui-page);
+}
+
+@media (max-width: 720px) {
+  .virtual-huddle-backdrop {
+    align-items: flex-start;
+    padding: 10px;
+  }
+
+  .virtual-huddle-layer .virtual-huddle-panel {
+    max-height: calc(100vh - 20px);
+  }
+}

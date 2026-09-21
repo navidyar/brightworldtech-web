@@ -29,6 +29,18 @@ const techHistoryRoles = ['admin', 'management', 'tech_lead'];
 const completionReversalRoles = ['admin', 'management', 'tech_lead'];
 const overrideReviewRoles = ['admin', 'management', 'tech_lead'];
 
+const labelAssetUploadBody = express.raw({ type: '*/*', limit: '5mb' });
+
+function parseLabelAssetUploadBody(req, res, next) {
+  return labelAssetUploadBody(req, res, (error) => {
+    if (!error) return next();
+    if (error.type === 'entity.too.large' || Number(error.status || error.statusCode) === 413) {
+      return res.status(413).json({ ok: false, errors: ['Label Assets cannot exceed 5 MB.'] });
+    }
+    return res.status(400).json({ ok: false, errors: ['The Label Asset upload could not be read.'] });
+  });
+}
+
 /*
   Printer registry live events
 */
@@ -240,6 +252,76 @@ router.post(
   labelLibraryController.cloneTemplate
 );
 
+router.post(
+  '/management/label-library/builder/qr-preview',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderBuilderQrPreview
+);
+
+router.get(
+  '/management/label-library/builder/units',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.searchBuilderPreviewUnits
+);
+
+router.get(
+  '/management/label-library/builder/units/:unitId',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.getBuilderUnitPreview
+);
+
+router.get(
+  '/management/label-library/templates/:labelTemplateId/builder/test-print/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderBuilderTestPrintModal
+);
+
+router.post(
+  '/management/label-library/templates/:labelTemplateId/builder/test-print',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.printBuilderTestTemplate
+);
+
+router.get(
+  '/management/label-library/templates/:labelTemplateId/builder',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderTemplateBuilder
+);
+
+router.post(
+  '/management/label-library/templates/:labelTemplateId/builder',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.saveTemplateBuilder
+);
+
+router.get(
+  '/management/label-library/templates/:labelTemplateId/print/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderStandaloneDirectPrintModal
+);
+
+router.post(
+  '/management/label-library/templates/:labelTemplateId/print',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.printStandaloneTemplate
+);
+
+router.get(
+  '/management/label-library/templates/:labelTemplateId/lots/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderTemplateLotUsageModal
+);
+
 router.get(
   '/management/label-library/templates/:labelTemplateId/:action/modal',
   requireAuth,
@@ -252,6 +334,70 @@ router.post(
   requireAuth,
   requireRole(managementRoles),
   labelLibraryController.applyTemplateAction
+);
+
+router.post(
+  '/management/label-library/templates/reorder',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.reorderTemplates
+);
+
+router.get(
+  '/management/label-library/assets/fragment',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderAssetListFragment
+);
+
+router.get(
+  '/management/label-library/assets/:assetId/rename/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderAssetRenameModal
+);
+
+router.post(
+  '/management/label-library/assets/:assetId/rename',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renameAsset
+);
+
+router.get(
+  '/management/label-library/assets/:assetId/delete/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderAssetDeleteModal
+);
+
+router.post(
+  '/management/label-library/assets/:assetId/delete',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.deleteAsset
+);
+
+router.get(
+  '/management/label-library/assets/upload/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderAssetUploadModal
+);
+
+router.post(
+  '/management/label-library/assets/upload',
+  requireAuth,
+  requireRole(managementRoles),
+  parseLabelAssetUploadBody,
+  labelLibraryController.uploadLabelAsset
+);
+
+router.get(
+  '/management/label-library/assets/:assetId/preview/modal',
+  requireAuth,
+  requireRole(managementRoles),
+  labelLibraryController.renderAssetPreviewModal
 );
 
 router.get(
@@ -632,6 +778,13 @@ router.get(
   requireAuth,
   requireRole(techRoles),
   labelPrintQueueController.renderRecentPrintsModal
+);
+
+router.get(
+  '/tech/print-queue/live',
+  requireAuth,
+  requireRole(techRoles),
+  labelPrintQueueController.renderRecentPrintsLive
 );
 
 router.get(

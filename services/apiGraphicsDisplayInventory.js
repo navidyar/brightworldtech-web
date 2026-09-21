@@ -81,10 +81,12 @@ function normalizeGraphicsObservation(rawGraphics) {
   if (rawGraphics === undefined) return null;
   if (!rawGraphics || typeof rawGraphics !== 'object' || Array.isArray(rawGraphics)) throw new Error('graphics must be an object.');
   const state = normalizeText(rawGraphics.state || 'known', 40).toLowerCase();
-  if (!['known', 'unknown'].includes(state)) throw new Error('graphics.state must be known or unknown.');
+  if (!['known', 'unknown', 'confirmed_absent'].includes(state)) throw new Error('graphics.state must be known, confirmed_absent, or unknown.');
   if (state === 'unknown') return { fieldKey: GRAPHICS_FIELD_KEY, state, value: null };
+  if (state === 'confirmed_absent') return { fieldKey: GRAPHICS_FIELD_KEY, state, value: { adapters: [] } };
   const rawAdapters = Array.isArray(rawGraphics.adapters) ? rawGraphics.adapters : null;
-  if (!rawAdapters || rawAdapters.length === 0) throw new Error('graphics.adapters must contain at least one adapter when graphics.state is known.');
+  if (!rawAdapters) throw new Error('graphics.adapters must be an array when graphics.state is known.');
+  if (rawAdapters.length === 0) return { fieldKey: GRAPHICS_FIELD_KEY, state: 'unknown', value: null };
   if (rawAdapters.length > 16) throw new Error('graphics.adapters cannot contain more than 16 adapters.');
   return {
     fieldKey: GRAPHICS_FIELD_KEY,
@@ -95,19 +97,21 @@ function normalizeGraphicsObservation(rawGraphics) {
 
 function normalizeTouchscreen(rawValue) {
   if (rawValue === undefined || rawValue === null) return 'unknown';
-  if (typeof rawValue === 'boolean') return rawValue ? 'present' : 'absent';
+  if (typeof rawValue === 'boolean') return rawValue ? 'present' : 'unknown';
   if (typeof rawValue === 'object' && !Array.isArray(rawValue)) {
-    if (rawValue.detected === true) return 'present';
+    const state = normalizeText(rawValue.state, 40).toLowerCase().replace(/[\s-]+/g, '_');
+    if (state === 'confirmed_absent') return 'absent';
+    if (state === 'unknown') return 'unknown';
+    if (rawValue.detected === true || rawValue.present === true) return 'present';
     if (rawValue.detected === false && rawValue.possible === true) return 'possible';
-    if (rawValue.detected === false && rawValue.possible === false) return 'absent';
-    return normalizeTouchscreen(rawValue.state ?? rawValue.status);
+    return normalizeTouchscreen(rawValue.status ?? rawValue.value ?? rawValue.state);
   }
   const value = normalizeText(rawValue, 40).toLowerCase().replace(/[\s-]+/g, '_');
   const aliases = new Map([
     ['yes', 'present'], ['present', 'present'], ['detected', 'present'], ['confirmed', 'present'],
-    ['no', 'absent'], ['absent', 'absent'], ['not_detected', 'absent'],
     ['possible', 'possible'], ['uncertain', 'possible'],
-    ['unknown', 'unknown'], ['unavailable', 'unknown']
+    ['unknown', 'unknown'], ['unavailable', 'unknown'], ['unsupported', 'unknown'],
+    ['no', 'unknown'], ['absent', 'unknown'], ['not_detected', 'unknown'], ['not_present', 'unknown'], ['none', 'unknown']
   ]);
   return TOUCH_STATES.has(aliases.get(value)) ? aliases.get(value) : 'unknown';
 }

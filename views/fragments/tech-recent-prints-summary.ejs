@@ -1,6 +1,6 @@
 <%
   const safeSummary = summary || {};
-  const queuedCopies = Number(safeSummary.queuedCopies || 0);
+  const recentItems = Number(safeSummary.recentItems || 0);
   const issueItems = Number(safeSummary.issueItems || 0);
 %>
 <a
@@ -11,5 +11,5 @@
   hx-swap="innerHTML"
   data-tech-modal-trigger
 >
-  Recent Prints<% if (queuedCopies > 0) { %> · <%= queuedCopies %> queued<% } %><% if (issueItems > 0) { %> · <%= issueItems %> issue<%= issueItems === 1 ? '' : 's' %><% } %>
+  Recent Prints<% if (recentItems > 0) { %> · <%= recentItems %> recent<% } %><% if (issueItems > 0) { %> · <%= issueItems %> issue<%= issueItems === 1 ? '' : 's' %><% } %>
 </a>

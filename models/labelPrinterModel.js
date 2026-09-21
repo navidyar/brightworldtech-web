@@ -47,6 +47,21 @@ async function getPrinterById(printerId, connection = pool) {
 }
 
 
+
+async function getPrintersByIds(printerIds, connection = pool) {
+  const ids = [...new Set((Array.isArray(printerIds) ? printerIds : [printerIds])
+    .map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
+  if (!ids.length) return [];
+  const [rows] = await connection.query(
+    `SELECT printer.*, owner.username AS owner_username
+     FROM label_printers printer
+     LEFT JOIN users owner ON owner.user_id = printer.owner_user_id
+     WHERE printer.label_printer_id IN (${ids.map(() => '?').join(',')})`,
+    ids
+  );
+  return rows;
+}
+
 async function findPrinterRegistrationConflict({ hostAddress, cupsQueueName = null, excludePrinterId = null }, connection = pool) {
   const host = String(hostAddress || '').trim();
   const queue = String(cupsQueueName || '').trim() || null;
@@ -339,6 +354,39 @@ async function deletePrinter(printerId, { actorUserId }, connection = null) {
   }
 }
 
+
+async function setPrinterCupsQueue(printerId, cupsQueueName, connection = pool) {
+  const id = positiveInteger(printerId, 'Printer ID');
+  const queue = String(cupsQueueName || '').trim().slice(0, 128) || null;
+  await connection.query(
+    'UPDATE label_printers SET cups_queue_name = ? WHERE label_printer_id = ?',
+    [queue, id]
+  );
+  return getPrinterById(id, connection);
+}
+
+async function recordPrinterProbe(printerId, { status, details = null }, connection = pool) {
+  const id = positiveInteger(printerId, 'Printer ID');
+  await connection.query(
+    `UPDATE label_printers
+     SET last_probe_at = CURRENT_TIMESTAMP(6), last_probe_status = ?, last_probe_details_json = ?
+     WHERE label_printer_id = ?`,
+    [String(status || '').trim().slice(0, 20) || null, details ? JSON.stringify(details) : null, id]
+  );
+}
+
+async function recordPrinterQueuedCopies(printerId, copies, connection = pool) {
+  const id = positiveInteger(printerId, 'Printer ID');
+  const safeCopies = Math.max(0, Number(copies) || 0);
+  if (!safeCopies) return;
+  await connection.query(
+    `UPDATE label_printers
+     SET lifetime_print_count = lifetime_print_count + ?, last_used_at = CURRENT_TIMESTAMP(6)
+     WHERE label_printer_id = ?`,
+    [safeCopies, id]
+  );
+}
+
 async function listGroups(connection = pool) {
   const [rows] = await connection.query(`
     SELECT groupRow.*,
@@ -349,6 +397,25 @@ async function listGroups(connection = pool) {
       FROM label_printer_group_members WHERE is_active = 1 GROUP BY group_id
     ) members ON members.group_id = groupRow.label_printer_group_id
     ORDER BY groupRow.is_active DESC, groupRow.name, groupRow.label_printer_group_id
+  `);
+  return rows;
+}
+
+
+async function listRoutingGroupRows(connection = pool) {
+  const [rows] = await connection.query(`
+    SELECT
+      groupRow.label_printer_group_id, groupRow.name AS group_name,
+      groupRow.description AS group_description, member.sort_order AS group_sort_order,
+      printer.*, owner.username AS owner_username
+    FROM label_printer_groups groupRow
+    INNER JOIN label_printer_group_members member
+      ON member.group_id = groupRow.label_printer_group_id AND member.is_active = 1
+    INNER JOIN label_printers printer
+      ON printer.label_printer_id = member.printer_id AND printer.is_enabled = 1
+    LEFT JOIN users owner ON owner.user_id = printer.owner_user_id
+    WHERE groupRow.is_active = 1
+    ORDER BY groupRow.name, groupRow.label_printer_group_id, member.sort_order, printer.display_name
   `);
   return rows;
 }
@@ -473,6 +540,7 @@ async function listGroupMembers(groupId, connection = pool) {
 module.exports = {
   listPrinters,
   getPrinterById,
+  getPrintersByIds,
   findPrinterRegistrationConflict,
   listAvailablePrintersForUser,
   listOwnedSoloPrinters,
@@ -481,7 +549,11 @@ module.exports = {
   setSoloPrinterSharing,
   convertPrinterScope,
   deletePrinter,
+  setPrinterCupsQueue,
+  recordPrinterProbe,
+  recordPrinterQueuedCopies,
   listGroups,
+  listRoutingGroupRows,
   getGroupById,
   createGroup,
   deleteGroup,

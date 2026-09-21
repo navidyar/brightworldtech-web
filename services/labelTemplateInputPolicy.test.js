@@ -25,14 +25,36 @@ test('invalid template metadata is rejected', () => {
 test('Lot assignment normalization only keeps selected allowed templates', () => {
   const assignments = normalizeLotAssignments({
     templateId: ['10', '20', '999'],
-    requiredTemplateId: ['10'],
-    activeTemplateId: ['10', '20'],
-    quantity: { 10: '2', 20: '99' },
-    sortOrder: { 10: '40', 20: '10' }
+    normalPrintTemplateId: ['10'],
+    quantity: { 10: '2', 20: '99' }
   }, [10, 20]);
 
   assert.deepEqual(assignments, [
-    { labelTemplateId: 20, isRequired: false, defaultQuantity: 1, sortOrder: 10, isActive: true },
-    { labelTemplateId: 10, isRequired: true, defaultQuantity: 2, sortOrder: 20, isActive: true }
+    { labelTemplateId: 10, isRequired: true, defaultQuantity: 2, sortOrder: 10, isActive: true },
+    { labelTemplateId: 20, isRequired: false, defaultQuantity: 1, sortOrder: 20, isActive: true }
+  ]);
+});
+
+test('Lot assignment quantity accepts literal bracket-form request keys as a defensive fallback', () => {
+  const assignments = normalizeLotAssignments({
+    templateId: '10',
+    normalPrintTemplateId: '10',
+    'quantity[10]': '4'
+  }, [10]);
+
+  assert.deepEqual(assignments, [
+    { labelTemplateId: 10, isRequired: true, defaultQuantity: 4, sortOrder: 10, isActive: true }
+  ]);
+});
+
+test('Lot assignment quantity accepts stable template-specific request keys without numeric bracket compaction', () => {
+  const assignments = normalizeLotAssignments({
+    templateId: '10',
+    normalPrintTemplateId: '10',
+    quantity_10: '3'
+  }, [10]);
+
+  assert.deepEqual(assignments, [
+    { labelTemplateId: 10, isRequired: true, defaultQuantity: 3, sortOrder: 10, isActive: true }
   ]);
 });

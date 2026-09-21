@@ -224,6 +224,10 @@ async function attachSpecifications(detailsMap, unitIds, existingTables) {
         virus_status.label AS virus_check_status_label,
         driver_status.label AS driver_check_status_label,
         skinned_status.label AS skinned_status_label,
+        us.skinned_at,
+        skinned_by.first_name AS skinned_by_first_name,
+        skinned_by.last_name AS skinned_by_last_name,
+        skinned_by.email AS skinned_by_email,
         created_by.first_name AS created_by_first_name,
         created_by.last_name AS created_by_last_name,
         created_by.email AS created_by_email,
@@ -247,6 +251,8 @@ async function attachSpecifications(detailsMap, unitIds, existingTables) {
         ON driver_status.config_value_id = us.driver_check_status_config_value_id
       LEFT JOIN config_values skinned_status
         ON skinned_status.config_value_id = us.skinned_status_config_value_id
+      LEFT JOIN users skinned_by
+        ON skinned_by.user_id = us.skinned_by_user_id
       LEFT JOIN users created_by
         ON created_by.user_id = us.created_by_user_id
       LEFT JOIN users updated_by
@@ -266,6 +272,8 @@ async function attachSpecifications(detailsMap, unitIds, existingTables) {
       virusCheckStatusLabel: labelOrDash(row.virus_check_status_label),
       driverCheckStatusLabel: labelOrDash(row.driver_check_status_label),
       skinnedStatusLabel: labelOrDash(row.skinned_status_label),
+      skinnedByName: getPersonName(row, 'skinned_by'),
+      skinnedAt: row.skinned_at,
       createdByName: getPersonName(row, 'created_by'),
       updatedByName: getPersonName(row, 'updated_by'),
       createdAt: row.created_at,

@@ -51,19 +51,18 @@ test('print modal exposes label selections, printer, per-template copies, previe
 });
 
 
-test('visual-fidelity renderer uses Sharp, a deterministic container font, and a high-resolution shared-layout PNG preview', () => {
-  const service = read('services/labelPrintingService.js');
+test('visual-fidelity renderer uses Sharp and produces the structured-layout PNG preview', () => {
+  const renderer = read('services/labelTemplateLayoutRenderer.js');
   const dockerfile = read('Dockerfile');
   const packageJson = read('package.json');
   const modal = read('views/fragments/tech-unit-print-label-modal.ejs');
 
   assert.match(packageJson, /\"sharp\": \"0\.35\.4\"/);
   assert.match(dockerfile, /fonts-dejavu-core/);
-  assert.match(service, /require\('sharp'\)/);
-  assert.match(service, /font-family=\"DejaVu Sans\"/);
-  assert.match(service, /threshold\(176\)/);
-  assert.match(service, /data:image\/png;base64/);
+  assert.match(renderer, /require\('sharp'\)/);
+  assert.match(renderer, /threshold\(176\)/);
+  assert.match(renderer, /previewDataUri: `data:image\/png;base64,/);
   assert.match(modal, /src=\"<%= template\.previewDataUri %>\"/);
-  assert.match(service, /buildUnitLabelSvg\(content, template, \{ outputScale: 2 \}\)/);
-  assert.match(modal, /existing CUPS → RAW print path/);
+  assert.match(renderer, /buildLayoutSvg\(\{ layout, template, fieldValues, assetDataUris, qrDataUris, outputScale: 2 \}\)/);
+  assert.match(modal, /existing CUPS print path/);
 });

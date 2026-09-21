@@ -47,12 +47,15 @@ test('built-in screen values update existing form-backed fields only when the pa
   assert.match(graphics, /manual_native_resolution_override/);
 });
 
-test('touchscreen hardware detection is stored separately and never writes the existing Touchscreen Test field', () => {
+test('touchscreen hardware presence stays separate from the functional test while confirmed absence may map to Physically Not Present', () => {
   const graphics = read('services/apiGraphicsDisplayInventory.js');
+  const diagnostics = read('services/apiHardwareDiagnosticsInventory.js');
   const migration = read('scripts/migrateApiGraphicsDisplayInventory.js');
   assert.match(graphics, /touchscreen_hardware_state_code/);
   assert.match(migration, /touchscreen_hardware_state_code/);
   assert.doesNotMatch(graphics, /touchscreen_status_config_value_id/);
+  assert.match(diagnostics, /touchscreen_status_config_value_id/);
+  assert.match(diagnostics, /confirmed_touchscreen_hardware_absent/);
 });
 
 test('possible touchscreen evidence stays possible instead of becoming Pass, Fail, Yes, or No', () => {

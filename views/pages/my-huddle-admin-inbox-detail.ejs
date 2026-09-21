@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=20260919-virtual-huddle'] }) %>
+  <script defer src="/js/modal.js?v=20260919-virtual-huddle"></script>
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+        <main class="content-shell">
+          <section class="page-heading"><div><h1><%= recipient.subject %></h1><p>Optional Admin acknowledgment from a lower-role sender.</p></div><a class="secondary-button" href="/my-huddles">Back to My Huddles</a></section>
+          <section class="content-card">
+            <div class="content-header"><div><p class="eyebrow"><%= messageTypeLabel(recipient.message_type_code) %> Huddle</p><h2>Management Message</h2></div></div>
+            <% if (recipient.parent_subject) { %><div class="message info"><p><strong>Related to:</strong> <%= recipient.parent_subject %></p></div><% } %>
+            <div class="virtual-huddle-message-copy"><%= recipient.message_body %></div>
+            <dl class="virtual-huddle-message-meta"><div><dt>Sent by</dt><dd><%= recipient.sender_name_snapshot %> (<%= formatRoleLabel(recipient.sender_role_code_snapshot) %>)</dd></div><div><dt>Sent</dt><dd><%= formatDateTime(recipient.sent_at) %></dd></div></dl>
+          </section>
+
+          <% if (Array.isArray(errorMessages) && errorMessages.length > 0) { %><div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div><% } %>
+
+          <section class="content-card">
+            <div class="content-header"><div><p class="eyebrow">Optional</p><h2>Save an Acknowledgment Record</h2></div></div>
+            <form class="app-form app-form-clean" method="post" action="/virtual-huddle/recipients/<%= recipient.virtual_huddle_recipient_id %>/acknowledge" autocomplete="off">
+              <section class="form-section"><div class="form-section-header"><h3>Acknowledgment</h3></div><div class="form-grid single-column">
+                <label class="form-field"><span>Type <strong><%= confirmationPhrase %></strong></span><input type="text" name="confirmationPhrase" required /></label>
+                <label class="form-field"><span>Optional context</span><textarea name="note" rows="3" maxlength="2000"></textarea><small class="field-hint">Optional context only. Do not post questions here.</small></label>
+              </div></section>
+              <div class="form-actions"><button type="submit" class="primary-button">Acknowledge &amp; Save</button></div>
+            </form>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header"><div><p class="eyebrow">Admin Inbox</p><h2>Remove This Unacknowledged Copy</h2></div></div>
+            <p>Deleting your optional inbox copy creates no acceptance history. This does not delete the Huddle for other recipients.</p>
+            <a class="danger-button" href="/my-huddles/inbox/<%= recipient.virtual_huddle_recipient_id %>/delete/modal" hx-get="/my-huddles/inbox/<%= recipient.virtual_huddle_recipient_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete My Inbox Copy</a>
+          </section>
+        </main>
+      </div>
+    </div>
+    <div id="modal-root"></div>
+  </body>
+</html>

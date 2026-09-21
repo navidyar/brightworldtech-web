@@ -11,8 +11,12 @@ const {
   normalizeDiagnosticState,
   buildHardwareDiagnosticsPlan,
   KEYBOARD_TEST_FIELD_KEY,
+  BIOS_LOCK_FIELD_KEY,
+  MDM_LOCK_FIELD_KEY,
   CAMERA_TEST_FIELD_KEY,
-  BATTERY_HEALTH_FIELD_KEY
+  BATTERY_HEALTH_FIELD_KEY,
+  TOUCHSCREEN_TEST_FIELD_KEY,
+  COMPLETE_DIAGNOSTICS_FIELD_KEY
 } = require('./apiHardwareDiagnosticsInventory');
 
 function configRows(categoryId) {
@@ -20,13 +24,24 @@ function configRows(categoryId) {
     [Number(SYSTEM_CONFIG_CATEGORY_IDS.TEST_RESULTS), [
       { id: 301, label: 'Pass', code: 'pass', value: 'Pass' },
       { id: 302, label: 'Fail', code: 'fail', value: 'Fail' },
-      { id: 303, label: 'Warning', code: 'warning', value: 'Warning' },
-      { id: 304, label: 'Not Applicable', code: 'not_applicable', value: 'N/A' }
+      { id: 303, label: 'Physically Not Present', code: 'physically_not_present', value: 'Physically Not Present' }
     ]],
-    [Number(SYSTEM_CONFIG_CATEGORY_IDS.AVAILABILITY_TEST_RESULTS), [
-      { id: 401, label: 'Available', code: 'available', value: 'Available' },
-      { id: 402, label: 'Unavailable', code: 'unavailable', value: 'Unavailable' },
-      { id: 403, label: 'Not Applicable', code: 'not_applicable', value: 'N/A' }
+    [Number(SYSTEM_CONFIG_CATEGORY_IDS.TOUCHSCREEN_STATUSES), [
+      { id: 901, label: 'Pass', code: 'pass', value: 'Pass' },
+      { id: 902, label: 'Fail', code: 'fail', value: 'Fail' },
+      { id: 903, label: 'Physically Not Present', code: 'physically_not_present', value: 'Physically Not Present' }
+    ]],
+    [Number(SYSTEM_CONFIG_CATEGORY_IDS.DIAGNOSTICS_STATUSES), [
+      { id: 911, label: 'Pass', code: 'pass', value: 'Pass' },
+      { id: 912, label: 'Fail', code: 'fail', value: 'Fail' }
+    ]],
+    [Number(SYSTEM_CONFIG_CATEGORY_IDS.COMPONENT_TEST_RESULTS), [
+      { id: 401, label: 'Pass', code: 'pass', value: 'Pass' },
+      { id: 402, label: 'Fail', code: 'fail', value: 'Fail' }
+    ]],
+    [Number(SYSTEM_CONFIG_CATEGORY_IDS.LOCK_STATUSES), [
+      { id: 601, label: 'Locked', code: 'locked', value: 'Locked' },
+      { id: 602, label: 'Unlocked', code: 'unlocked', value: 'Unlocked' }
     ]],
     [Number(SYSTEM_CONFIG_CATEGORY_IDS.BIOMETRIC_HARDWARE), [
       { id: 501, label: 'Fingerprint Reader', code: 'fingerprint', value: 'Fingerprint Reader' }
@@ -37,8 +52,7 @@ function configRows(categoryId) {
     ]],
     [Number(SYSTEM_CONFIG_CATEGORY_IDS.DRIVER_CHECK_STATUSES), [
       { id: 801, label: 'Pass', code: 'pass', value: 'Pass' },
-      { id: 802, label: 'Fail', code: 'fail', value: 'Fail' },
-      { id: 803, label: 'Warning', code: 'warning', value: 'Warning' }
+      { id: 802, label: 'Fail', code: 'fail', value: 'Fail' }
     ]]
   ]);
   return rows.get(Number(categoryId)) || [];
@@ -59,8 +73,12 @@ function currentState(overrides = {}) {
       keyboard_test_result_config_value_id: null,
       microphone_check_result_config_value_id: null,
       audio_output_check_result_config_value_id: null,
+      bios_lock_config_value_id: null,
+      mdm_lock_config_value_id: null,
       driver_check_status_config_value_id: null,
       virus_check_status_config_value_id: null,
+      touchscreen_status_config_value_id: null,
+      complete_diagnostics_status_config_value_id: null,
       battery_hardware_state_code: 'unknown',
       battery_health_percent_observed: null,
       camera_hardware_state_code: 'unknown',
@@ -85,31 +103,34 @@ test('unknown battery does not pretend a desktop has no battery', () => {
 
 test('camera and fingerprint hardware presence stay separate from functional tests', () => {
   assert.equal(normalizeCameraHardwareObservation([{ name: 'Camera' }]).value.presence, 'present');
-  assert.equal(normalizeFingerprintHardwareObservation([]).value.presence, 'absent');
+  assert.equal(normalizeFingerprintHardwareObservation([]).state, 'unknown');
 });
 
-test('TechTools diagnostic states preserve all approved final results plus legacy in-progress states distinctly', () => {
+test('hardware absence requires explicit confirmation instead of false or not-detected evidence', () => {
+  assert.equal(normalizeBatteryObservation({ detected: false }).value.presence, 'unknown');
+  assert.equal(normalizeCameraHardwareObservation({ detected: false }).value.presence, 'unknown');
+  assert.equal(normalizeFingerprintHardwareObservation({ state: 'known', status: 'not_detected' }).value.presence, 'unknown');
+  assert.equal(normalizeCameraHardwareObservation({ state: 'confirmed_absent' }).value.presence, 'absent');
+  assert.equal(normalizeFingerprintHardwareObservation({ state: 'confirmed_absent' }).value.presence, 'absent');
+});
+
+test('TechTools final diagnostic states are Pass, Fail, or confirmed physical absence', () => {
   assert.equal(normalizeDiagnosticState('Pass'), 'pass');
   assert.equal(normalizeDiagnosticState('Fail'), 'fail');
-  assert.equal(normalizeDiagnosticState('CouldNotDetermine'), 'could_not_determine');
-  assert.equal(normalizeDiagnosticState('Not Tested'), 'not_tested');
-  assert.equal(normalizeDiagnosticState('NotApplicable'), 'not_applicable');
-  assert.equal(normalizeDiagnosticState('TestNotAvailable'), 'test_not_available');
+  assert.equal(normalizeDiagnosticState('Physically Not Present'), 'physically_not_present');
   assert.equal(normalizeDiagnosticState('Ready'), 'ready');
   assert.equal(normalizeDiagnosticState('Running'), 'running');
+  assert.equal(normalizeDiagnosticState('Locked'), 'locked');
+  assert.equal(normalizeDiagnosticState('Unlocked'), 'unlocked');
 });
 
-test('non-Pass/Fail final diagnostics remain factual Tool evidence without fabrication', () => {
-  const observation = normalizeDiagnosticsObservation({
-    items: [
-      { key: 'camera', state: 'could_not_determine' },
-      { key: 'fingerprint', state: 'not_tested' },
-      { key: 'touchpad', state: 'test_not_available' }
-    ]
-  });
-  assert.deepEqual(
-    observation.value.items.map((item) => item.state),
-    ['could_not_determine', 'not_tested', 'test_not_available']
+test('retired uncertainty and non-applicability states are rejected so Tools omit them instead', () => {
+  for (const state of ['Could Not Determine', 'Not Tested', 'Not Applicable', 'Test Not Available', 'Not Available']) {
+    assert.equal(normalizeDiagnosticState(state), '');
+  }
+  assert.throws(
+    () => normalizeDiagnosticsObservation({ items: [{ key: 'keyboard', state: 'Not Tested' }] }),
+    /unsupported state/
   );
 });
 
@@ -125,6 +146,24 @@ test('diagnostics preserve individual results and override-used flag but never r
   assert.equal('override_code' in observation.value, false);
 });
 
+test('BIOS and MDM lock diagnostics store only explicit Locked and Unlocked states', async () => {
+  const diagnostics = normalizeDiagnosticsObservation({
+    items: [
+      { key: 'bios-lock', state: 'Locked' },
+      { key: 'mdm_lock', state: 'Unlocked' }
+    ]
+  });
+  const plan = await buildHardwareDiagnosticsPlan(connection(), {
+    battery: null, camera: null, fingerprint: null, diagnostics,
+    currentState: currentState(), manualSources: new Map(), latestToolValues: new Map()
+  });
+  const byField = new Map(plan.formPlans.map((entry) => [entry.fieldKey, entry]));
+  assert.equal(byField.get(BIOS_LOCK_FIELD_KEY).status, 'applied');
+  assert.equal(byField.get(BIOS_LOCK_FIELD_KEY).desiredValue, 601);
+  assert.equal(byField.get(MDM_LOCK_FIELD_KEY).status, 'applied');
+  assert.equal(byField.get(MDM_LOCK_FIELD_KEY).desiredValue, 602);
+});
+
 test('final keyboard diagnostic can populate the existing test field when it is not manually owned', async () => {
   const diagnostics = normalizeDiagnosticsObservation({ items: [{ key: 'keyboard', state: 'Pass' }] });
   const plan = await buildHardwareDiagnosticsPlan(connection(), {
@@ -134,6 +173,17 @@ test('final keyboard diagnostic can populate the existing test field when it is 
   const keyboard = plan.formPlans.find((entry) => entry.fieldKey === KEYBOARD_TEST_FIELD_KEY);
   assert.equal(keyboard.status, 'applied');
   assert.equal(keyboard.desiredValue, 301);
+});
+
+test('confirmed physical absence can populate the shared test result without fabricating a failure', async () => {
+  const diagnostics = normalizeDiagnosticsObservation({ items: [{ key: 'keyboard', state: 'Physically Not Present' }] });
+  const plan = await buildHardwareDiagnosticsPlan(connection(), {
+    battery: null, camera: null, fingerprint: null, diagnostics,
+    currentState: currentState(), manualSources: new Map(), latestToolValues: new Map()
+  });
+  const keyboard = plan.formPlans.find((entry) => entry.fieldKey === KEYBOARD_TEST_FIELD_KEY);
+  assert.equal(keyboard.status, 'applied');
+  assert.equal(keyboard.desiredValue, 303);
 });
 
 test('manual keyboard result blocks a later TechTools result', async () => {
@@ -154,6 +204,65 @@ test('Ready and Running diagnostics remain historical only and do not populate f
     currentState: currentState(), manualSources: new Map(), latestToolValues: new Map()
   });
   assert.equal(plan.formPlans.length, 0);
+});
+
+
+
+test('explicit touchscreen diagnostics populate Pass, Fail, or Physically Not Present', async () => {
+  for (const [state, expectedId] of [['Pass', 901], ['Fail', 902], ['Physically Not Present', 903]]) {
+    const diagnostics = normalizeDiagnosticsObservation({ items: [{ key: 'touchscreen', state }] });
+    const plan = await buildHardwareDiagnosticsPlan(connection(), {
+      battery: null, camera: null, fingerprint: null, diagnostics,
+      currentState: currentState(), manualSources: new Map(), latestToolValues: new Map()
+    });
+    const touchscreen = plan.formPlans.find((entry) => entry.fieldKey === TOUCHSCREEN_TEST_FIELD_KEY);
+    assert.equal(touchscreen.status, 'applied');
+    assert.equal(touchscreen.desiredValue, expectedId);
+  }
+});
+
+test('confirmed touchscreen hardware absence populates Physically Not Present when no functional result was submitted', async () => {
+  const plan = await buildHardwareDiagnosticsPlan(connection(), {
+    battery: null, camera: null, fingerprint: null, diagnostics: null,
+    display: { state: 'known', value: { touchscreen_hardware_state_code: 'absent' } },
+    currentState: currentState(), manualSources: new Map(), latestToolValues: new Map()
+  });
+  const touchscreen = plan.formPlans.find((entry) => entry.fieldKey === TOUCHSCREEN_TEST_FIELD_KEY);
+  assert.equal(touchscreen.status, 'applied');
+  assert.equal(touchscreen.desiredValue, 903);
+  assert.equal(touchscreen.reason, 'confirmed_touchscreen_hardware_absent');
+});
+
+test('touchscreen hardware presence never fabricates a passing functional test', async () => {
+  const plan = await buildHardwareDiagnosticsPlan(connection(), {
+    battery: null, camera: null, fingerprint: null, diagnostics: null,
+    display: { state: 'known', value: { touchscreen_hardware_state_code: 'present' } },
+    currentState: currentState(), manualSources: new Map(), latestToolValues: new Map()
+  });
+  assert.equal(plan.formPlans.some((entry) => entry.fieldKey === TOUCHSCREEN_TEST_FIELD_KEY), false);
+});
+
+test('final overall diagnostics Pass or Fail populates Diagnostics Test while review states remain evidence only', async () => {
+  for (const [unitResult, expectedId] of [['Pass', 911], ['Fail', 912]]) {
+    const diagnostics = normalizeDiagnosticsObservation({ unit_result: unitResult });
+    const plan = await buildHardwareDiagnosticsPlan(connection(), {
+      battery: null, camera: null, fingerprint: null, diagnostics,
+      currentState: currentState(), manualSources: new Map(), latestToolValues: new Map()
+    });
+    const overall = plan.formPlans.find((entry) => entry.fieldKey === COMPLETE_DIAGNOSTICS_FIELD_KEY);
+    assert.equal(overall.status, 'applied');
+    assert.equal(overall.desiredValue, expectedId);
+  }
+
+  const camelCase = normalizeDiagnosticsObservation({ unitResult: 'Pass' });
+  assert.equal(camelCase.value.unit_result, 'Pass');
+
+  const review = normalizeDiagnosticsObservation({ unit_result: 'REVIEW REQUIRED' });
+  const reviewPlan = await buildHardwareDiagnosticsPlan(connection(), {
+    battery: null, camera: null, fingerprint: null, diagnostics: review,
+    currentState: currentState(), manualSources: new Map(), latestToolValues: new Map()
+  });
+  assert.equal(reviewPlan.formPlans.some((entry) => entry.fieldKey === COMPLETE_DIAGNOSTICS_FIELD_KEY), false);
 });
 
 test('camera diagnostic updates only one unambiguous configured camera row', async () => {

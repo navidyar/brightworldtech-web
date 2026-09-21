@@ -19,6 +19,7 @@ const lotQcRequirementModel = require('../models/lotQcRequirementModel');
 const unitExportService = require('../services/unitExportService');
 const unitExportFileService = require('../services/unitExportFileService');
 const labelPrintingService = require('../services/labelPrintingService');
+const labelPrinterRuntimeService = require('../services/labelPrinterRuntimeService');
 const labelLibraryPrintingService = require('../services/labelLibraryPrintingService');
 const labelPrintHistoryModel = require('../models/labelPrintHistoryModel');
 const {
@@ -65,6 +66,7 @@ const {
   resolveCompletionUserId
 } = require('../services/completionAttributionPolicy');
 const { canOverrideMissingToolRequirements } = require('../services/completionToolRequirementPolicy');
+const { applyCurrentHardwareAuthorityToSubmission } = require('../services/currentHardwareFormAuthority');
 const {
   REGULAR_TECH_COSMETIC_ISSUE_MESSAGE,
   hasCompleteActualCosmeticIssue,
@@ -851,6 +853,18 @@ function getPositiveIntegerOrBlank(value) {
   return Number.isInteger(parsed) && parsed > 0 ? String(parsed) : '';
 }
 
+function getNonNegativeIntegerOrBlank(value) {
+  const trimmed = value === null || value === undefined ? '' : String(value).trim();
+
+  if (!trimmed) {
+    return '';
+  }
+
+  const parsed = Number(trimmed);
+
+  return Number.isInteger(parsed) && parsed >= 0 ? String(parsed) : '';
+}
+
 function getModuleTotalGb(rows) {
   return rows.reduce((sum, row) => {
     const parsed = parseHardwareCapacityToGb(row.sizeGb);
@@ -867,17 +881,19 @@ function hasStructuredCapacityEntry(rows) {
   });
 }
 
-function getComponentCapacityTotalGb(rows, submittedLegacyTotal) {
+function getComponentCapacityTotalGb(rows, submittedLegacyTotal, { allowZero = false } = {}) {
   const componentTotal = getModuleTotalGb(rows);
 
   if (hasStructuredCapacityEntry(rows)) {
     return String(componentTotal);
   }
 
-  // The visible total fields were removed in Stage 10E. Preserve a valid
-  // summary-only legacy value when no structured rows exist, but never allow
-  // stale zero/negative/non-integer hidden values to block form submission.
-  return getPositiveIntegerOrBlank(submittedLegacyTotal);
+  // Previous hardware may explicitly record a known zero total even when no
+  // component rows exist. Current hardware keeps the Stage 10E behavior that
+  // rejects stale summary-only zero values unless represented by a row.
+  return allowZero
+    ? getNonNegativeIntegerOrBlank(submittedLegacyTotal)
+    : getPositiveIntegerOrBlank(submittedLegacyTotal);
 }
 
 function normalizeSerialInput(value) {
@@ -924,10 +940,10 @@ function getUnitFormDataFromRequest(req, { allowAssetTag = true } = {}) {
     modelYear: String(req.body.modelYear || '').trim(),
     processorModelId: String(req.body.processorModelId || '').trim(),
     processorSpeedGhz: String(req.body.processorSpeedGhz || '').trim(),
-    previousRamGb: getComponentCapacityTotalGb(previousMemoryModules, req.body.previousRamGb),
+    previousRamGb: getComponentCapacityTotalGb(previousMemoryModules, req.body.previousRamGb, { allowZero: true }),
     ramGb: getComponentCapacityTotalGb(memoryModules, req.body.ramGb),
     ramTypeConfigValueId: String(req.body.ramTypeConfigValueId || '').trim(),
-    previousStorageGb: getComponentCapacityTotalGb(previousStorageDevices, req.body.previousStorageGb),
+    previousStorageGb: getComponentCapacityTotalGb(previousStorageDevices, req.body.previousStorageGb, { allowZero: true }),
     storageGb: getComponentCapacityTotalGb(storageDevices, req.body.storageGb),
     storageTypeConfigValueId: String(req.body.storageTypeConfigValueId || '').trim(),
     operatingSystemConfigValueId: String(req.body.operatingSystemConfigValueId || '').trim(),
@@ -2166,12 +2182,17 @@ async function getTechUnitFormOptionsWithIssues(req = null, options = {}) {
 
 async function getEditTechUnitFormOptionsWithIssues(req, unitId) {
   const unit = await techUnitModel.getUnitById(unitId);
-
-  return getTechUnitFormOptionsWithIssues(req, {
+  const formOptions = await getTechUnitFormOptionsWithIssues(req, {
     includeCurrentLotId: unit && unit.lot_id ? unit.lot_id : null,
     includeCurrentUnitModelId: unit && unit.unit_model_id ? unit.unit_model_id : null,
     includeCurrentProcessorModelId: unit && unit.processor_model_id ? unit.processor_model_id : null
   });
+
+  if (unit) {
+    formOptions.currentHardwareAuthority = await techUnitModel.getCurrentHardwareFormAuthorityStatus(unitId, unit.lot_id);
+  }
+
+  return formOptions;
 }
 
 async function buildEditFormData(unitId, formOptions) {
@@ -2438,6 +2459,7 @@ async function applyLatestLotUnitFormSubmissionPolicy({
   }
 }
 
+
 async function prepareTechUnitFormSubmission({
   mode,
   formData,
@@ -2458,12 +2480,24 @@ async function prepareTechUnitFormSubmission({
     };
   }
 
-  normalizeCosmeticIssueRowsForSubmission(formData, formOptions);
-  normalizeHardwareIssueRowsForSubmission(formData, formOptions);
+  const currentHardwareAuthority = await techUnitModel.getCurrentHardwareFormAuthorityStatus(
+    mode === 'edit' ? unitId : null,
+    formData.lotId
+  );
+  formOptions.currentHardwareAuthority = currentHardwareAuthority;
+  const authorityManagedFormData = applyCurrentHardwareAuthorityToSubmission({
+    formData,
+    existingFormData,
+    authority: currentHardwareAuthority,
+    mode
+  });
+
+  normalizeCosmeticIssueRowsForSubmission(authorityManagedFormData, formOptions);
+  normalizeHardwareIssueRowsForSubmission(authorityManagedFormData, formOptions);
 
   const submissionPolicy = await applyLatestLotUnitFormSubmissionPolicy({
     mode,
-    formData,
+    formData: authorityManagedFormData,
     formOptions,
     existingFormData
   });
@@ -3820,11 +3854,10 @@ async function buildLabelPrintTemplateOptions({ templateSet, selectionState, uni
 
 function buildLabelTemplateSetNotice(templateSet, lotId) {
   const resolvedTemplateSet = templateSet || { templates: [], source: { type: 'none' } };
-  if (resolvedTemplateSet.isCompatibilityFallback) {
-    return 'This Lot has no Label Library configuration yet. The existing Standard Unit Label compatibility fallback is being used.';
-  }
   if (!(resolvedTemplateSet.templates || []).length) {
-    return 'This Lot’s effective Label Library set contains no active labels to print.';
+    return resolvedTemplateSet.source?.type === 'none'
+      ? 'No Label Library templates are assigned to this Lot.'
+      : 'This Lot’s effective Label Library set contains no active labels to print.';
   }
   if (resolvedTemplateSet.source?.lotName) {
     return Number(resolvedTemplateSet.source.lotId) === Number(lotId)
@@ -3834,18 +3867,41 @@ function buildLabelTemplateSetNotice(templateSet, lotId) {
   return '';
 }
 
+function buildNoPrintableLabelTemplateMessage(templateSet, lotId) {
+  const resolvedTemplateSet = templateSet || { templates: [], source: { type: 'none' } };
+  const templates = Array.isArray(resolvedTemplateSet.templates) ? resolvedTemplateSet.templates : [];
+  if (templates.some((template) => template.available)) return '';
+  if (templates.length === 0) return buildLabelTemplateSetNotice(resolvedTemplateSet, lotId);
+  return 'This Lot’s effective Label Library set has no printable Active labels. Review the assigned template status and saved layout in the Label Template Library.';
+}
+
+function selectPreferredPrintDestination(printers, requestedPrinterId, currentUser) {
+  const options = Array.isArray(printers) ? printers : [];
+  const requestedId = String(requestedPrinterId || '').trim();
+  if (requestedId && options.some((printer) => printer.id === requestedId)) return requestedId;
+
+  const userId = Number(currentUser?.user_id);
+  const ownedSolo = options.find((printer) => (
+    printer.kind === 'printer'
+    && printer.scopeCode === 'solo'
+    && Number(printer.ownerUserId) === userId
+  ));
+  return ownedSolo?.id || options[0]?.id || '';
+}
+
 async function buildTechUnitPrintLabelModalView({
   context,
+  currentUser = null,
   printerId = '',
   templateSet = null,
   selectionState = null,
   successMessage = '',
-  errorMessages = []
+  errorMessages = [],
+  retryableError = false
 } = {}) {
-  const printers = labelPrintingService.LABEL_PRINTERS;
-  const selectedPrinterId = printers.some((printer) => printer.id === String(printerId || '').trim())
-    ? String(printerId).trim()
-    : (printers[0] ? printers[0].id : '');
+  const availablePrinters = currentUser
+    ? await labelPrinterRuntimeService.listPrintDestinationsForUser({ userId: currentUser.user_id, roleCodes: currentUser.roles })
+    : [];
   const resolvedTemplateSet = templateSet || (context && context.unit
     ? await labelLibraryPrintingService.getUnitPrintTemplateSet(context.unit.lotId)
     : { source: { type: 'none', lotId: null, lotName: null }, isCompatibilityFallback: false, templates: [] });
@@ -3855,10 +3911,18 @@ async function buildTechUnitPrintLabelModalView({
     unit: context ? context.unit : null,
     lot: context ? context.lot : null
   });
-  const allErrors = [
-    ...(context && Array.isArray(context.errorMessages) ? context.errorMessages : []),
-    ...(Array.isArray(errorMessages) ? errorMessages : [])
-  ].filter(Boolean);
+  const selectedTemplateOptions = templateOptions.filter((template) => template.available && template.selected);
+  const printers = availablePrinters.filter((destination) => (
+    labelLibraryPrintingService.destinationSupportsTemplates(destination, selectedTemplateOptions)
+  ));
+  const selectedPrinterId = selectPreferredPrintDestination(printers, printerId, currentUser);
+  const contextErrors = context && Array.isArray(context.errorMessages) ? context.errorMessages.filter(Boolean) : [];
+  const actionErrors = Array.isArray(errorMessages) ? errorMessages.filter(Boolean) : [];
+  const availabilityErrors = [
+    ...(currentUser && availablePrinters.length === 0 ? ['No label printers or printer groups are currently available to your account.'] : []),
+    ...(currentUser && availablePrinters.length > 0 && printers.length === 0 ? ['No available printer or printer group supports the selected label profile. Update the printer profile in My Printers or ask Management+.'] : [])
+  ];
+  const allErrors = [...contextErrors, ...actionErrors, ...availabilityErrors].filter(Boolean);
 
   return {
     unit: context ? context.unit : null,
@@ -3868,28 +3932,29 @@ async function buildTechUnitPrintLabelModalView({
     templateOptions,
     selectedPrinterId,
     maxCopies: labelPrintingService.MAX_LABEL_COPIES,
-    lotLabelFormat: resolvedTemplateSet.isCompatibilityFallback && context && context.lot
-      ? String(context.lot.label_format || '').trim()
-      : '',
+    lotLabelFormat: '',
     templateSetNotice: buildLabelTemplateSetNotice(resolvedTemplateSet, context?.unit?.lotId),
-    isCompatibilityFallback: Boolean(resolvedTemplateSet.isCompatibilityFallback),
     successMessage: String(successMessage || ''),
-    errorMessages: allErrors
+    errorMessages: allErrors,
+    submitBlocked: contextErrors.length > 0
+      || availabilityErrors.length > 0
+      || (actionErrors.length > 0 && !retryableError)
   };
 }
 
 async function renderTechUnitPrintLabelModal(req, res, next) {
   try {
     const context = await getTechUnitPrintLabelContext(req, req.params.unitId);
-    return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({ context }));
+    return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({ context, currentUser: req.currentUser }));
   } catch (error) {
     next(error);
   }
 }
 
-async function queueLabelSelectionsForUnit({ jobId, context, selections, printerId, printer }) {
+async function queueLabelSelectionsForUnit({ jobId, context, selections, printer: destination, submissionLockHeld = false, printerPreflightComplete = false }) {
   const content = labelPrintingService.buildUnitLabelContent(context.unit, context.lot);
   const failures = [];
+  const actualPrinterLabels = new Set();
   let totalQueued = 0;
   let successfulTemplates = 0;
 
@@ -3909,61 +3974,137 @@ async function queueLabelSelectionsForUnit({ jobId, context, selections, printer
       configSha256: descriptor.configSha256,
       copiesRequested: selection.quantity
     });
-    const attemptId = await labelPrintHistoryModel.beginPrintAttempt({
-      itemId,
-      attemptNumber: 1,
-      printer
-    });
 
+    let candidates = [];
     try {
-      const result = await labelLibraryPrintingService.printDescriptor({
-        descriptor,
-        unit: context.unit,
-        lot: context.lot,
-        printerId,
-        copies: selection.quantity
-      });
-      totalQueued += result.copies;
-      successfulTemplates += 1;
+      candidates = await labelLibraryPrintingService.getRankedDestinationPrinters(destination, descriptor);
+    } catch (error) {
+      candidates = [];
+    }
+
+    if (!candidates.length) {
+      const message = `${descriptor.name}: ${destination?.label || 'The selected destination'} has no compatible printer online right now.`;
+      failures.push(message);
       try {
-        await labelPrintHistoryModel.completePrintAttempt({
-          attemptId,
-          status: 'queued',
-          copiesSubmitted: result.copies,
-          requestIds: result.requestIds
-        });
         await labelPrintHistoryModel.completePrintItem({
           itemId,
           labelTemplateId: descriptor.libraryTemplateId,
-          copiesQueued: result.copies,
-          status: 'queued'
+          copiesQueued: 0,
+          status: 'failed',
+          failureMessage: message
         });
       } catch (historyError) {
-        console.warn('Label print history completion failed after CUPS accepted the job:', historyError.message);
+        console.warn('Label print history failure recording failed:', historyError.message);
       }
-    } catch (error) {
-      const copiesSubmitted = Math.max(0, Number(error.copiesSubmitted) || 0);
-      const requestIds = Array.isArray(error.requestIds) ? error.requestIds : [];
-      totalQueued += copiesSubmitted;
-      const partial = copiesSubmitted > 0;
-      const detail = partial
-        ? `${descriptor.name}: ${copiesSubmitted} of ${selection.quantity} copies queued before an error: ${error.message}`
-        : `${descriptor.name}: ${error.message || 'The label could not be queued.'}`;
-      failures.push(detail);
+      continue;
+    }
+
+    let completed = false;
+    for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex += 1) {
+      let candidate = candidates[candidateIndex];
+      const attemptId = await labelPrintHistoryModel.beginPrintAttempt({
+        itemId,
+        attemptNumber: candidateIndex + 1,
+        printer: candidate
+      });
+
       try {
-        await labelPrintHistoryModel.completePrintAttempt({
-          attemptId,
-          status: partial ? 'partial' : 'failed',
-          copiesSubmitted,
-          requestIds,
-          failureMessage: error.message
+        if (destination?.kind === 'group') {
+          candidate = await labelPrinterRuntimeService.preparePrinterForSubmission(candidate);
+        }
+        const result = await labelLibraryPrintingService.printDescriptor({
+          descriptor,
+          unit: context.unit,
+          lot: context.lot,
+          printer: candidate,
+          copies: selection.quantity,
+          submissionLockHeld,
+          skipOnlineProbe: printerPreflightComplete
         });
+        totalQueued += result.copies;
+        successfulTemplates += 1;
+        actualPrinterLabels.add(candidate.label);
+        try {
+          await labelPrinterRuntimeService.recordQueuedCopies(candidate, result.copies);
+        } catch (printerUsageError) {
+          console.warn('Printer lifetime usage could not be updated:', printerUsageError.message);
+        }
+        try {
+          await labelPrintHistoryModel.completePrintAttempt({
+            attemptId,
+            status: 'queued',
+            copiesSubmitted: result.copies,
+            requestIds: result.requestIds
+          });
+          await labelPrintHistoryModel.completePrintItem({
+            itemId,
+            labelTemplateId: descriptor.libraryTemplateId,
+            copiesQueued: result.copies,
+            status: 'queued'
+          });
+        } catch (historyError) {
+          console.warn('Label print history completion failed after CUPS accepted the job:', historyError.message);
+        }
+        completed = true;
+        break;
+      } catch (error) {
+        const copiesSubmitted = Math.max(0, Number(error.copiesSubmitted) || 0);
+        const requestIds = Array.isArray(error.requestIds) ? error.requestIds : [];
+        totalQueued += copiesSubmitted;
+        if (copiesSubmitted > 0) {
+          actualPrinterLabels.add(candidate.label);
+          try {
+            await labelPrinterRuntimeService.recordQueuedCopies(candidate, copiesSubmitted);
+          } catch (printerUsageError) {
+            console.warn('Partial printer lifetime usage could not be updated:', printerUsageError.message);
+          }
+        }
+        const partial = copiesSubmitted > 0;
+        try {
+          await labelPrintHistoryModel.completePrintAttempt({
+            attemptId,
+            status: partial ? 'partial' : 'failed',
+            copiesSubmitted,
+            requestIds,
+            failureMessage: error.message
+          });
+        } catch (historyError) {
+          console.warn('Label print attempt failure recording failed:', historyError.message);
+        }
+
+        const mayFailOver = destination?.kind === 'group' && !partial && candidateIndex < candidates.length - 1;
+        if (mayFailOver) continue;
+
+        const detail = partial
+          ? `${descriptor.name}: ${copiesSubmitted} of ${selection.quantity} copies queued to ${candidate.label} before an error: ${error.message}`
+          : `${descriptor.name}: ${error.message || 'The label could not be queued.'}`;
+        failures.push(detail);
+        try {
+          await labelPrintHistoryModel.completePrintItem({
+            itemId,
+            labelTemplateId: descriptor.libraryTemplateId,
+            copiesQueued: copiesSubmitted,
+            status: partial ? 'partial' : 'failed',
+            failureMessage: error.message
+          });
+        } catch (historyError) {
+          console.warn('Label print history failure recording failed:', historyError.message);
+        }
+        completed = true;
+        break;
+      }
+    }
+
+    if (!completed && destination?.kind === 'group') {
+      const message = `${descriptor.name}: every available printer in ${destination.label} failed before CUPS accepted the job.`;
+      failures.push(message);
+      try {
         await labelPrintHistoryModel.completePrintItem({
           itemId,
           labelTemplateId: descriptor.libraryTemplateId,
-          copiesQueued: copiesSubmitted,
-          status: partial ? 'partial' : 'failed',
-          failureMessage: error.message
+          copiesQueued: 0,
+          status: 'failed',
+          failureMessage: message
         });
       } catch (historyError) {
         console.warn('Label print history failure recording failed:', historyError.message);
@@ -3976,7 +4117,8 @@ async function queueLabelSelectionsForUnit({ jobId, context, selections, printer
     unitLabel: content.primaryLabel,
     totalQueued,
     successfulTemplates,
-    failures: Object.freeze(failures)
+    failures: Object.freeze(failures),
+    actualPrinterLabels: Object.freeze([...actualPrinterLabels])
   });
 }
 
@@ -3993,10 +4135,15 @@ async function printTechUnitLabel(req, res, next) {
     const selectionState = buildLabelPrintSelectionState(req.body || {}, templateSet.templates);
     const errors = [...context.errorMessages];
 
-    const printer = labelPrintingService.LABEL_PRINTERS.find((candidate) => candidate.id === printerId) || null;
-    if (!printer) errors.push('Select an available label printer.');
+    let printer = await labelPrinterRuntimeService.resolvePrintDestinationForUser({
+      destinationId: printerId,
+      userId: req.currentUser.user_id,
+      roleCodes: req.currentUser.roles
+    });
+    if (!printer) errors.push('Select an available label printer or printer group.');
 
     let selections = [];
+    let retryableDestinationError = false;
     try {
       selections = normalizeUnitLabelPrintSelection(
         req.body || {},
@@ -4008,13 +4155,24 @@ async function printTechUnitLabel(req, res, next) {
       else throw error;
     }
 
+    if (errors.length === 0 && printer) {
+      try {
+        printer = await labelLibraryPrintingService.preflightPrintDestination(printer, selections.map((selection) => selection.option));
+      } catch (error) {
+        errors.push(error.message || 'The selected printer is offline or unavailable.');
+        retryableDestinationError = true;
+      }
+    }
+
     if (errors.length > 0) {
       return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({
         context,
+        currentUser: req.currentUser,
         printerId,
         templateSet,
         selectionState,
-        errorMessages: errors.filter((message) => !context.errorMessages.includes(message))
+        errorMessages: errors.filter((message) => !context.errorMessages.includes(message)),
+        retryableError: retryableDestinationError
       }));
     }
 
@@ -4027,7 +4185,6 @@ async function printTechUnitLabel(req, res, next) {
       jobId: printJob.jobId,
       context,
       selections,
-      printerId,
       printer
     });
     const failures = [...queueResult.failures];
@@ -4047,17 +4204,23 @@ async function printTechUnitLabel(req, res, next) {
 
     if (isHtmxRequest(req) && totalQueued > 0) res.set('HX-Trigger', 'unit-label-queued');
 
+    const routedLabels = queueResult.actualPrinterLabels || [];
+    const routeDetail = printer.kind === 'group'
+      ? (routedLabels.length === 1 ? ` to ${routedLabels[0]}` : routedLabels.length > 1 ? ` across ${routedLabels.length} printers` : '')
+      : '';
     const successMessage = totalQueued > 0
-      ? `${totalQueued} label${totalQueued === 1 ? '' : 's'} queued to ${printer.label}${successfulTemplates > 1 ? ` across ${successfulTemplates} templates` : ''}.`
+      ? `${totalQueued} label${totalQueued === 1 ? '' : 's'} queued ${printer.kind === 'group' ? `via ${printer.label}${routeDetail}` : `to ${printer.label}`}${successfulTemplates > 1 ? ` across ${successfulTemplates} templates` : ''}.`
       : '';
 
     return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({
       context,
+      currentUser: req.currentUser,
       printerId,
       templateSet,
       selectionState,
       successMessage,
-      errorMessages: failures
+      errorMessages: failures,
+      retryableError: failures.length > 0 && totalQueued === 0
     }));
   } catch (error) {
     if (printJob) {
@@ -4079,6 +4242,7 @@ async function printTechUnitLabel(req, res, next) {
         : { templates: [], source: { type: 'none' }, isCompatibilityFallback: false };
       return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({
         context,
+        currentUser: req.currentUser,
         printerId,
         templateSet,
         selectionState: buildLabelPrintSelectionState(req.body || {}, templateSet.templates),
@@ -4147,18 +4311,19 @@ async function getTechUnitsBulkPrintLabelContext(req) {
 
 async function buildTechUnitsBulkPrintLabelModalView({
   context,
+  currentUser = null,
   printerId = '',
   templateSet = null,
   selectionState = null,
   selectedUnitIds = null,
   successMessage = '',
   errorMessages = [],
+  retryableError = false,
   printResults = []
 } = {}) {
-  const printers = labelPrintingService.LABEL_PRINTERS;
-  const selectedPrinterId = printers.some((printer) => printer.id === String(printerId || '').trim())
-    ? String(printerId).trim()
-    : (printers[0] ? printers[0].id : '');
+  const availablePrinters = currentUser
+    ? await labelPrinterRuntimeService.listPrintDestinationsForUser({ userId: currentUser.user_id, roleCodes: currentUser.roles })
+    : [];
   const resolvedTemplateSet = templateSet || (context?.lot
     ? await labelLibraryPrintingService.getUnitPrintTemplateSet(context.lot.lot_id || context.lot.lotId)
     : { source: { type: 'none', lotId: null, lotName: null }, isCompatibilityFallback: false, templates: [] });
@@ -4170,20 +4335,36 @@ async function buildTechUnitsBulkPrintLabelModalView({
   const sampleCandidate = (context?.candidates || []).find((candidate) => selectedUnitIdSet.has(candidate.unitId))
     || (context?.candidates || []).find((candidate) => candidate.eligible)
     || null;
+  // Bulk preview must use the same fully hydrated Unit shape as the physical print path.
+  // Browser table rows intentionally omit many label fields and can otherwise produce a misleading preview.
+  const previewUnit = sampleCandidate
+    ? await techUnitModel.getTechUnitLifecycleSummaryById(sampleCandidate.unitId)
+    : null;
+  const previewLot = previewUnit?.lotId
+    ? await lotModel.getLotById(previewUnit.lotId)
+    : (context?.lot || null);
   const templateOptions = await buildLabelPrintTemplateOptions({
     templateSet: resolvedTemplateSet,
     selectionState,
-    unit: sampleCandidate ? sampleCandidate.rawUnit : null,
-    lot: context?.lot || null
+    unit: previewUnit,
+    lot: previewLot
   });
+  const selectedTemplateOptions = templateOptions.filter((template) => template.available && template.selected);
+  const printers = availablePrinters.filter((destination) => (
+    labelLibraryPrintingService.bulkDestinationSupportsTemplates(destination, selectedTemplateOptions)
+  ));
+  const selectedPrinterId = selectPreferredPrintDestination(printers, printerId, currentUser);
   const candidates = (context?.candidates || []).map(({ rawUnit, ...candidate }) => ({
     ...candidate,
     selected: candidate.eligible && selectedUnitIdSet.has(candidate.unitId)
   }));
-  const allErrors = [
-    ...(context && Array.isArray(context.errorMessages) ? context.errorMessages : []),
-    ...(Array.isArray(errorMessages) ? errorMessages : [])
-  ].filter(Boolean);
+  const contextErrors = context && Array.isArray(context.errorMessages) ? context.errorMessages.filter(Boolean) : [];
+  const actionErrors = Array.isArray(errorMessages) ? errorMessages.filter(Boolean) : [];
+  const availabilityErrors = [
+    ...(currentUser && availablePrinters.length === 0 ? ['No label printers or printer groups are currently available to your account.'] : []),
+    ...(currentUser && availablePrinters.length > 0 && printers.length === 0 ? ['No available printer or printer group supports the selected label profile. Update the printer profile in My Printers or ask Management+.'] : [])
+  ];
+  const allErrors = [...contextErrors, ...actionErrors, ...availabilityErrors].filter(Boolean);
   const lotId = context?.lot ? Number(context.lot.lot_id || context.lot.lotId) : null;
 
   return {
@@ -4193,6 +4374,7 @@ async function buildTechUnitsBulkPrintLabelModalView({
     selectedCount: effectiveSelectedUnitIds.length,
     printers,
     templateOptions,
+    previewUnitLabel: previewUnit ? (String(previewUnit.assetTag || '').trim() || `Unit #${previewUnit.unitId}`) : '',
     selectedPrinterId,
     maxCopies: labelPrintingService.MAX_LABEL_COPIES,
     templateSetNotice: buildLabelTemplateSetNotice(resolvedTemplateSet, lotId),
@@ -4200,6 +4382,9 @@ async function buildTechUnitsBulkPrintLabelModalView({
     pagination: context?.result?.pagination || null,
     successMessage: String(successMessage || ''),
     errorMessages: allErrors,
+    submitBlocked: contextErrors.length > 0
+      || availabilityErrors.length > 0
+      || (actionErrors.length > 0 && !retryableError),
     printResults: Array.isArray(printResults) ? printResults : []
   };
 }
@@ -4207,7 +4392,7 @@ async function buildTechUnitsBulkPrintLabelModalView({
 async function renderTechUnitsBulkPrintLabelModal(req, res, next) {
   try {
     const context = await getTechUnitsBulkPrintLabelContext(req);
-    return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({ context }));
+    return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({ context, currentUser: req.currentUser }));
   } catch (error) {
     next(error);
   }
@@ -4226,8 +4411,15 @@ async function printTechUnitsBulkLabels(req, res, next) {
       : { templates: [], source: { type: 'none' }, isCompatibilityFallback: false };
     const selectionState = buildLabelPrintSelectionState(req.body || {}, templateSet.templates);
     const errors = [...context.errorMessages];
-    const printer = labelPrintingService.LABEL_PRINTERS.find((candidate) => candidate.id === printerId) || null;
-    if (!printer) errors.push('Select an available label printer.');
+    const noPrintableTemplateMessage = buildNoPrintableLabelTemplateMessage(templateSet, lotId);
+    if (noPrintableTemplateMessage) errors.push(noPrintableTemplateMessage);
+    let printer = await labelPrinterRuntimeService.resolvePrintDestinationForUser({
+      destinationId: printerId,
+      userId: req.currentUser.user_id,
+      roleCodes: req.currentUser.roles
+    });
+    let batchPrinter = printer;
+    if (!printer) errors.push('Select an available label printer or printer group.');
 
     let selectedUnitIds = extractRequestedBulkUnitIds(req.body || {}, context.eligibleUnitIds);
     try {
@@ -4238,15 +4430,18 @@ async function printTechUnitsBulkLabels(req, res, next) {
     }
 
     let selections = [];
-    try {
-      selections = normalizeUnitLabelPrintSelection(
-        req.body || {},
-        templateSet.templates,
-        labelPrintingService.MAX_LABEL_COPIES
-      );
-    } catch (error) {
-      if (error instanceof LabelPrintSelectionError) errors.push(...error.messages);
-      else throw error;
+    let retryableDestinationError = false;
+    if (!noPrintableTemplateMessage) {
+      try {
+        selections = normalizeUnitLabelPrintSelection(
+          req.body || {},
+          templateSet.templates,
+          labelPrintingService.MAX_LABEL_COPIES
+        );
+      } catch (error) {
+        if (error instanceof LabelPrintSelectionError) errors.push(...error.messages);
+        else throw error;
+      }
     }
 
     const validatedContexts = [];
@@ -4266,14 +4461,25 @@ async function printTechUnitsBulkLabels(req, res, next) {
       }
     }
 
+    if (errors.length === 0 && printer) {
+      try {
+        batchPrinter = await labelLibraryPrintingService.prepareBulkPrintDestination(printer, selections.map((selection) => selection.option));
+      } catch (error) {
+        errors.push(error.message || 'The selected printer is offline or unavailable.');
+        retryableDestinationError = true;
+      }
+    }
+
     if (errors.length > 0) {
       return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({
         context,
+        currentUser: req.currentUser,
         printerId,
         templateSet,
         selectionState,
         selectedUnitIds,
-        errorMessages: errors.filter((message) => !context.errorMessages.includes(message))
+        errorMessages: errors.filter((message) => !context.errorMessages.includes(message)),
+        retryableError: retryableDestinationError
       }));
     }
 
@@ -4287,29 +4493,33 @@ async function printTechUnitsBulkLabels(req, res, next) {
     let totalQueued = 0;
     let successfulUnits = 0;
 
-    for (const unitContext of validatedContexts) {
-      const unitResult = await queueLabelSelectionsForUnit({
-        jobId: printJob.jobId,
-        context: unitContext,
-        selections,
-        printerId,
-        printer
-      });
-      totalQueued += unitResult.totalQueued;
-      if (unitResult.failures.length === 0) successfulUnits += 1;
-      const status = unitResult.failures.length === 0
-        ? 'queued'
-        : unitResult.totalQueued > 0 ? 'partial' : 'failed';
-      const rowFailures = unitResult.failures.map((message) => `${unitResult.unitLabel}: ${message}`);
-      failures.push(...rowFailures);
-      printResults.push(Object.freeze({
-        unitId: unitResult.unitId,
-        unitLabel: unitResult.unitLabel,
-        status,
-        copiesQueued: unitResult.totalQueued,
-        messages: Object.freeze(rowFailures)
-      }));
-    }
+    await labelPrinterRuntimeService.withPrinterSubmissionLock(batchPrinter, async () => {
+      for (const unitContext of validatedContexts) {
+        const unitResult = await queueLabelSelectionsForUnit({
+          jobId: printJob.jobId,
+          context: unitContext,
+          selections,
+          printer: batchPrinter,
+          submissionLockHeld: true,
+          printerPreflightComplete: true
+        });
+        totalQueued += unitResult.totalQueued;
+        if (unitResult.failures.length === 0) successfulUnits += 1;
+        const status = unitResult.failures.length === 0
+          ? 'queued'
+          : unitResult.totalQueued > 0 ? 'partial' : 'failed';
+        const rowFailures = unitResult.failures.map((message) => `${unitResult.unitLabel}: ${message}`);
+        failures.push(...rowFailures);
+        printResults.push(Object.freeze({
+          unitId: unitResult.unitId,
+          unitLabel: unitResult.unitLabel,
+          status,
+          copiesQueued: unitResult.totalQueued,
+          printerLabels: unitResult.actualPrinterLabels,
+          messages: Object.freeze(rowFailures)
+        }));
+      }
+    });
 
     const jobStatus = failures.length === 0 ? 'queued' : totalQueued > 0 ? 'partial' : 'failed';
     try {
@@ -4323,18 +4533,23 @@ async function printTechUnitsBulkLabels(req, res, next) {
     }
 
     if (isHtmxRequest(req) && totalQueued > 0) res.set('HX-Trigger', 'unit-label-queued');
+    const routeDetail = printer.kind === 'group'
+      ? ` via ${printer.label} to ${batchPrinter.label}`
+      : ` to ${batchPrinter.label}`;
     const successMessage = totalQueued > 0
-      ? `${totalQueued} label${totalQueued === 1 ? '' : 's'} queued to ${printer.label} for ${successfulUnits} of ${validatedContexts.length} selected Unit${validatedContexts.length === 1 ? '' : 's'}.`
+      ? `${totalQueued} label${totalQueued === 1 ? '' : 's'} queued${routeDetail} for ${successfulUnits} of ${validatedContexts.length} selected Unit${validatedContexts.length === 1 ? '' : 's'}.`
       : '';
 
     return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({
       context,
+      currentUser: req.currentUser,
       printerId,
       templateSet,
       selectionState,
       selectedUnitIds,
       successMessage,
       errorMessages: failures,
+      retryableError: failures.length > 0 && totalQueued === 0,
       printResults
     }));
   } catch (error) {
@@ -4358,6 +4573,7 @@ async function printTechUnitsBulkLabels(req, res, next) {
         : { templates: [], source: { type: 'none' }, isCompatibilityFallback: false };
       return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({
         context,
+        currentUser: req.currentUser,
         printerId,
         templateSet,
         selectionState: buildLabelPrintSelectionState(req.body || {}, templateSet.templates),

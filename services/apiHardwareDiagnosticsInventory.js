@@ -13,13 +13,17 @@ const DIAGNOSTICS_FIELD_KEY = 'techtools_diagnostics';
 const KEYBOARD_TEST_FIELD_KEY = 'keyboard_test';
 const MICROPHONE_TEST_FIELD_KEY = 'microphone_check';
 const AUDIO_TEST_FIELD_KEY = 'audio_output_check';
+const BIOS_LOCK_FIELD_KEY = 'bios_lock';
+const MDM_LOCK_FIELD_KEY = 'mdm_lock';
 const DRIVER_CHECK_FIELD_KEY = 'driver_check';
 const THREAT_PROTECTION_FIELD_KEY = 'virus_check';
 const CAMERA_TEST_FIELD_KEY = 'camera_test';
 const BIOMETRIC_HARDWARE_FIELD_KEY = 'biometric_hardware';
 const BIOMETRICS_TEST_FIELD_KEY = 'biometrics_test';
+const TOUCHSCREEN_TEST_FIELD_KEY = 'touchscreen_status';
+const COMPLETE_DIAGNOSTICS_FIELD_KEY = 'complete_diagnostics';
 
-const DIAGNOSTIC_STATES = new Set(['ready', 'running', 'pass', 'fail', 'warning', 'could_not_determine', 'not_tested', 'not_applicable', 'test_not_available']);
+const DIAGNOSTIC_STATES = new Set(['ready', 'running', 'pass', 'fail', 'warning', 'physically_not_present', 'locked', 'unlocked']);
 const PRESENCE_STATES = new Set(['present', 'absent', 'unknown']);
 
 function normalizeText(value, maxLength = 1000) {
@@ -28,18 +32,17 @@ function normalizeText(value, maxLength = 1000) {
 
 function normalizePresence(value) {
   if (value === null || value === undefined || value === '') return 'unknown';
-  if (typeof value === 'boolean') return value ? 'present' : 'absent';
+  if (typeof value === 'boolean') return value ? 'present' : 'unknown';
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const explicit = normalizeText(value.state, 40).toLowerCase().replace(/[\s-]+/g, '_');
     if (explicit === 'unknown') return 'unknown';
     if (explicit === 'confirmed_absent') return 'absent';
-    if (value.present !== undefined) return normalizePresence(value.present);
-    if (value.detected !== undefined) return normalizePresence(value.detected);
+    if (value.present === true || value.detected === true) return 'present';
+    if (value.present === false || value.detected === false) return 'unknown';
     return normalizePresence(value.status ?? value.value ?? value.state);
   }
   const token = normalizeText(value, 80).toLowerCase().replace(/[\s-]+/g, '_');
   if (['present', 'yes', 'detected', 'installed', 'available', 'healthy'].includes(token)) return 'present';
-  if (['absent', 'no', 'not_detected', 'not_present', 'none'].includes(token)) return 'absent';
   return 'unknown';
 }
 
@@ -65,7 +68,9 @@ function normalizeBatteryObservation(rawBattery) {
 function normalizeHardwarePresenceObservation(raw, fieldKey, label) {
   if (raw === undefined) return null;
   if (Array.isArray(raw)) {
-    return { fieldKey, state: 'known', value: { presence: raw.length ? 'present' : 'absent' } };
+    return raw.length
+      ? { fieldKey, state: 'known', value: { presence: 'present' } }
+      : { fieldKey, state: 'unknown', value: null };
   }
   if (!raw || typeof raw !== 'object') {
     const presence = normalizePresence(raw);
@@ -90,14 +95,7 @@ function normalizeDiagnosticState(value) {
   const token = normalizeText(value, 80).toLowerCase().replace(/([a-z])([A-Z])/g, '$1_$2').replace(/[\s-]+/g, '_');
   const aliases = {
     passed: 'pass',
-    failed: 'fail',
-    couldnotdetermine: 'could_not_determine',
-    inconclusive: 'could_not_determine',
-    nottested: 'not_tested',
-    notapplicable: 'not_applicable',
-    na: 'not_applicable',
-    n_a: 'not_applicable',
-    testnotavailable: 'test_not_available'
+    failed: 'fail'
   };
   const mapped = aliases[token] || token;
   return DIAGNOSTIC_STATES.has(mapped) ? mapped : '';
@@ -126,13 +124,15 @@ function normalizeDiagnosticsObservation(rawDiagnostics) {
   if (!['known', 'unknown'].includes(state)) throw new Error('diagnostics.state must be known or unknown.');
   if (state === 'unknown') return { fieldKey: DIAGNOSTICS_FIELD_KEY, state, value: null };
   const items = Array.isArray(envelope.items) ? envelope.items.map(normalizeDiagnosticItem) : [];
-  if (!items.length && !envelope.unit_result && envelope.override_used === undefined) return null;
+  const unitResult = envelope.unit_result ?? envelope.unitResult;
+  const overrideUsed = envelope.override_used ?? envelope.overrideUsed;
+  if (!items.length && !unitResult && overrideUsed === undefined) return null;
   return {
     fieldKey: DIAGNOSTICS_FIELD_KEY,
     state: 'known',
     value: {
-      unit_result: normalizeText(envelope.unit_result ?? envelope.unitResult, 120) || null,
-      override_used: Boolean(envelope.override_used ?? envelope.overrideUsed),
+      unit_result: normalizeText(unitResult, 120) || null,
+      override_used: Boolean(overrideUsed),
       items
     }
   };
@@ -140,22 +140,19 @@ function normalizeDiagnosticsObservation(rawDiagnostics) {
 
 function diagnosticCandidates(state, semantic) {
   if (state === 'pass') {
-    if (semantic === 'availability') return ['Available', 'Pass', 'Passed', 'Yes'];
     if (semantic === 'driver') return ['Pass', 'Passed', 'No Issues', 'Clear', 'Good'];
     if (semantic === 'threat') return ['Pass', 'Passed', 'Clean', 'No Threats Found', 'Completed'];
     return ['Pass', 'Passed', 'Working', 'Good'];
   }
   if (state === 'fail') {
-    if (semantic === 'availability') return ['Unavailable', 'Not Available', 'Fail', 'Failed', 'No'];
     if (semantic === 'driver') return ['Fail', 'Failed', 'Issues Found', 'Problems Found', 'Attention Required'];
     if (semantic === 'threat') return ['Fail', 'Failed', 'Threat Found', 'Threats Found'];
     return ['Fail', 'Failed', 'Not Working'];
   }
+  if (semantic === 'lock' && state === 'locked') return ['Locked'];
+  if (semantic === 'lock' && state === 'unlocked') return ['Unlocked'];
+  if (state === 'physically_not_present') return ['Physically Not Present'];
   if (state === 'warning') return ['Warning'];
-  if (state === 'could_not_determine') return ['Could Not Determine'];
-  if (state === 'not_tested') return ['Not Tested'];
-  if (state === 'not_applicable') return ['Not Applicable', 'N/A'];
-  if (state === 'test_not_available') return ['Test Not Available'];
   return [];
 }
 
@@ -193,8 +190,12 @@ async function loadCurrentHardwareDiagnosticsState(connection, unitId, { lock = 
             us.keyboard_test_result_config_value_id,
             us.microphone_check_result_config_value_id,
             us.audio_output_check_result_config_value_id,
+            us.bios_lock_config_value_id,
+            us.mdm_lock_config_value_id,
             us.driver_check_status_config_value_id,
             us.virus_check_status_config_value_id,
+            us.touchscreen_status_config_value_id,
+            us.complete_diagnostics_status_config_value_id,
             us.battery_hardware_state_code,
             us.battery_health_percent_observed,
             us.camera_hardware_state_code,
@@ -291,7 +292,7 @@ async function resolveFingerprintHardware(connection) {
 }
 
 async function buildHardwareDiagnosticsPlan(connection, {
-  battery, camera, fingerprint, diagnostics, currentState, manualSources, latestToolValues
+  battery, camera, fingerprint, diagnostics, display = null, currentState, manualSources, latestToolValues
 }) {
   const desiredSpec = toolOnlyDesired(currentState.specifications, { battery, camera, fingerprint });
   const formPlans = [];
@@ -300,15 +301,72 @@ async function buildHardwareDiagnosticsPlan(connection, {
     ['keyboard', KEYBOARD_TEST_FIELD_KEY, 'keyboard_test_result_config_value_id', SYSTEM_CONFIG_CATEGORY_IDS.TEST_RESULTS, 'test'],
     ['sound', AUDIO_TEST_FIELD_KEY, 'audio_output_check_result_config_value_id', SYSTEM_CONFIG_CATEGORY_IDS.TEST_RESULTS, 'test'],
     ['microphone', MICROPHONE_TEST_FIELD_KEY, 'microphone_check_result_config_value_id', SYSTEM_CONFIG_CATEGORY_IDS.TEST_RESULTS, 'test'],
+    ['bios-lock', BIOS_LOCK_FIELD_KEY, 'bios_lock_config_value_id', SYSTEM_CONFIG_CATEGORY_IDS.LOCK_STATUSES, 'lock'],
+    ['mdm-lock', MDM_LOCK_FIELD_KEY, 'mdm_lock_config_value_id', SYSTEM_CONFIG_CATEGORY_IDS.LOCK_STATUSES, 'lock'],
     ['device-manager', DRIVER_CHECK_FIELD_KEY, 'driver_check_status_config_value_id', SYSTEM_CONFIG_CATEGORY_IDS.DRIVER_CHECK_STATUSES, 'driver'],
-    ['antivirus', THREAT_PROTECTION_FIELD_KEY, 'virus_check_status_config_value_id', SYSTEM_CONFIG_CATEGORY_IDS.VIRUS_CHECK_STATUSES, 'threat']
+    ['antivirus', THREAT_PROTECTION_FIELD_KEY, 'virus_check_status_config_value_id', SYSTEM_CONFIG_CATEGORY_IDS.VIRUS_CHECK_STATUSES, 'threat'],
+    ['touchscreen', TOUCHSCREEN_TEST_FIELD_KEY, 'touchscreen_status_config_value_id', SYSTEM_CONFIG_CATEGORY_IDS.TOUCHSCREEN_STATUSES, 'test']
   ];
   for (const [diagnosticKey, fieldKey, columnName, categoryId, semantic] of simple) {
-    const item = diagnosticByKey.get(diagnosticKey);
+    const item = diagnosticByKey.get(diagnosticKey) || diagnosticByKey.get(diagnosticKey.replace(/-/g, '_'));
     if (!item) continue;
     const resolution = await resolveDiagnosticState(connection, item, categoryId, semantic);
     const plan = formPlan({ fieldKey, currentValue: currentState.specifications[columnName], resolution, manualSources, latestToolValues });
     if (plan) formPlans.push({ ...plan, columnName, diagnosticKey, diagnosticState: item.state });
+  }
+
+  const touchscreenDiagnostic = diagnosticByKey.get('touchscreen') || diagnosticByKey.get('touch_screen');
+  const touchHardwareState = display?.state === 'known'
+    ? display.value?.touchscreen_hardware_state_code
+    : 'unknown';
+  if (!touchscreenDiagnostic && touchHardwareState === 'absent') {
+    const resolution = await resolveDiagnosticState(
+      connection,
+      { state: 'physically_not_present' },
+      SYSTEM_CONFIG_CATEGORY_IDS.TOUCHSCREEN_STATUSES,
+      'test'
+    );
+    const plan = formPlan({
+      fieldKey: TOUCHSCREEN_TEST_FIELD_KEY,
+      currentValue: currentState.specifications.touchscreen_status_config_value_id,
+      resolution,
+      manualSources,
+      latestToolValues
+    });
+    if (plan) {
+      formPlans.push({
+        ...plan,
+        columnName: 'touchscreen_status_config_value_id',
+        diagnosticKey: 'touchscreen',
+        diagnosticState: 'physically_not_present',
+        reason: plan.status === 'applied' ? 'confirmed_touchscreen_hardware_absent' : plan.reason
+      });
+    }
+  }
+
+  const overallDiagnosticState = normalizeDiagnosticState(diagnostics?.value?.unit_result);
+  if (['pass', 'fail'].includes(overallDiagnosticState)) {
+    const resolution = await resolveDiagnosticState(
+      connection,
+      { state: overallDiagnosticState },
+      SYSTEM_CONFIG_CATEGORY_IDS.DIAGNOSTICS_STATUSES,
+      'test'
+    );
+    const plan = formPlan({
+      fieldKey: COMPLETE_DIAGNOSTICS_FIELD_KEY,
+      currentValue: currentState.specifications.complete_diagnostics_status_config_value_id,
+      resolution,
+      manualSources,
+      latestToolValues
+    });
+    if (plan) {
+      formPlans.push({
+        ...plan,
+        columnName: 'complete_diagnostics_status_config_value_id',
+        diagnosticKey: 'unit_result',
+        diagnosticState: overallDiagnosticState
+      });
+    }
   }
 
   let fingerprintResolution = null;
@@ -350,7 +408,7 @@ async function buildHardwareDiagnosticsPlan(connection, {
   const cameraDiagnostic = diagnosticByKey.get('camera');
   if (cameraDiagnostic) {
     if (currentState.cameras.length === 1) {
-      const resolution = await resolveDiagnosticState(connection, cameraDiagnostic, SYSTEM_CONFIG_CATEGORY_IDS.TEST_RESULTS, 'test');
+      const resolution = await resolveDiagnosticState(connection, cameraDiagnostic, SYSTEM_CONFIG_CATEGORY_IDS.COMPONENT_TEST_RESULTS, 'component');
       cameraTestPlan = formPlan({ fieldKey: CAMERA_TEST_FIELD_KEY, currentValue: currentState.cameras[0].test_result_config_value_id, resolution, manualSources, latestToolValues });
       if (cameraTestPlan) cameraTestPlan.rowId = Number(currentState.cameras[0].unit_camera_id);
     } else {
@@ -362,7 +420,7 @@ async function buildHardwareDiagnosticsPlan(connection, {
   if (fingerprintDiagnostic && fingerprintResolution?.status === 'resolved') {
     const matching = currentState.biometrics.filter((row) => Number(row.hardware_config_value_id) === Number(fingerprintResolution.resolvedId));
     if (matching.length === 1 || (matching.length === 0 && fingerprintHardwarePlan.status === 'insert')) {
-      const resolution = await resolveDiagnosticState(connection, fingerprintDiagnostic, SYSTEM_CONFIG_CATEGORY_IDS.AVAILABILITY_TEST_RESULTS, 'availability');
+      const resolution = await resolveDiagnosticState(connection, fingerprintDiagnostic, SYSTEM_CONFIG_CATEGORY_IDS.COMPONENT_TEST_RESULTS, 'component');
       const currentValue = matching.length === 1 ? matching[0].test_result_config_value_id : null;
       fingerprintTestPlan = formPlan({ fieldKey: BIOMETRICS_TEST_FIELD_KEY, currentValue, resolution, manualSources, latestToolValues });
       if (fingerprintTestPlan) {
@@ -482,11 +540,15 @@ module.exports = {
   KEYBOARD_TEST_FIELD_KEY,
   MICROPHONE_TEST_FIELD_KEY,
   AUDIO_TEST_FIELD_KEY,
+  BIOS_LOCK_FIELD_KEY,
+  MDM_LOCK_FIELD_KEY,
   DRIVER_CHECK_FIELD_KEY,
   THREAT_PROTECTION_FIELD_KEY,
   CAMERA_TEST_FIELD_KEY,
   BIOMETRIC_HARDWARE_FIELD_KEY,
   BIOMETRICS_TEST_FIELD_KEY,
+  TOUCHSCREEN_TEST_FIELD_KEY,
+  COMPLETE_DIAGNOSTICS_FIELD_KEY,
   normalizeBatteryObservation,
   normalizeCameraHardwareObservation,
   normalizeFingerprintHardwareObservation,

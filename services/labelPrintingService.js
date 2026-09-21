@@ -1,14 +1,8 @@
 'use strict';
 
 const { spawn } = require('node:child_process');
-const sharp = require('sharp');
-const {
-  LABEL_PRINTERS,
-  LABEL_TEMPLATES,
-  MAX_LABEL_COPIES,
-  findLabelPrinter,
-  findLabelTemplate
-} = require('../config/labelPrinting');
+const { LABEL_PRINTERS, MAX_LABEL_COPIES } = require('../config/labelPrinting');
+const { findQl810wContinuousMedia } = require('../config/labelMedia');
 
 const CODE39_PATTERNS = Object.freeze({
   '0':'nnnwwnwnn','1':'wnnwnnnnw','2':'nnwwnnnnw','3':'wnwwnnnnn','4':'nnnwwnnnw',
@@ -97,102 +91,33 @@ function buildCode39Bars(value, narrow = 2, wide = 5, gap = 2) {
   return { bars, width: x, value: safeValue };
 }
 
-function fitSvgText(value, maxWidth, fontSize) {
-  const safeText = normalizeText(value, 120);
-  if (!safeText) return '';
-  const approximateCharacterWidth = Math.max(1, fontSize * 0.59);
-  const maxChars = Math.max(1, Math.floor(maxWidth / approximateCharacterWidth));
-  if (safeText.length <= maxChars) return safeText;
-  if (maxChars <= 3) return safeText.slice(0, maxChars);
-  return `${safeText.slice(0, maxChars - 3)}...`;
-}
+function buildCode39BarsToFit(value, maxWidth) {
+  const availableWidth = Math.max(1, Math.floor(Number(maxWidth) || 0));
+  let best = null;
 
-function svgText(text, x, y, size, weight = 500, anchor = 'start', maxWidth = null) {
-  const renderedText = maxWidth ? fitSvgText(text, maxWidth, size) : normalizeText(text, 120);
-  return `<text x="${x}" y="${y}" font-family="DejaVu Sans" font-size="${size}" font-weight="${weight}" text-anchor="${anchor}" fill="#000000">${escapeXml(renderedText)}</text>`;
-}
-
-function buildBarcodeSvg(value, left, top, maxWidth, height) {
-  if (!value) return '';
-  let barcode = buildCode39Bars(value, 3, 7, 3);
-  if (!barcode || barcode.width > maxWidth) barcode = buildCode39Bars(value, 2, 5, 2);
-  if (!barcode || barcode.width > maxWidth) barcode = buildCode39Bars(value, 1, 3, 1);
-  if (!barcode || barcode.width > maxWidth) return '';
-
-  const startX = Math.floor(left + ((maxWidth - barcode.width) / 2));
-  return barcode.bars
-    .map((bar) => `<rect x="${startX + bar.x}" y="${top}" width="${bar.width}" height="${height}" fill="#000000"/>`)
-    .join('');
-}
-
-function buildUnitLabelSvg(content, template, { outputScale = 1 } = {}) {
-  const width = template.deviceWidthDots;
-  const height = template.heightDots;
-  const safeOutputScale = Number.isFinite(Number(outputScale)) && Number(outputScale) > 0
-    ? Number(outputScale)
-    : 1;
-  const outputWidth = Math.round(width * safeOutputScale);
-  const outputHeight = Math.round(height * safeOutputScale);
-  const left = template.offsetDots + 22;
-  const right = width - template.offsetDots - 22;
-  const usableWidth = right - left;
-  const center = Math.round(left + (usableWidth / 2));
-  const barcodeSvg = content.barcodeValue
-    ? buildBarcodeSvg(content.barcodeValue, left, 232, usableWidth, 72)
-    : '';
-
-  return [
-    `<svg width="${outputWidth}" height="${outputHeight}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">`,
-    '<rect x="0" y="0" width="100%" height="100%" fill="#ffffff"/>',
-    '<g text-rendering="geometricPrecision">',
-    svgText('BWT DALLAS', center, 31, 24, 700, 'middle'),
-    svgText(content.primaryLabel, center, 82, 48, 700, 'middle', usableWidth),
-    svgText(content.model, left, 126, 28, 700, 'start', usableWidth),
-    svgText(content.serial ? `SN: ${content.serial}` : 'SN: -', left, 160, 24, 500, 'start', usableWidth),
-    svgText(content.specLine || 'Specifications recorded in BWTDallas', left, 190, 21, 500, 'start', usableWidth),
-    svgText(content.lotName ? `Lot: ${content.lotName}` : 'Lot: -', left, 217, 21, 500, 'start', usableWidth),
-    '</g>',
-    `<g shape-rendering="crispEdges">${barcodeSvg}</g>`,
-    content.barcodeValue
-      ? svgText(content.barcodeValue, center, 338, 20, 700, 'middle', usableWidth)
-      : svgText('No Asset Tag', center, 280, 28, 700, 'middle'),
-    '</svg>'
-  ].join('');
-}
-
-function createBitmap(width, height, monochromeBytes) {
-  const pixels = new Uint8Array(width * height);
-  for (let index = 0; index < pixels.length; index += 1) {
-    pixels[index] = monochromeBytes[index] < 128 ? 1 : 0;
-  }
-  return { width, height, pixels };
-}
-
-async function renderUnitLabelBitmap(content, template) {
-  const svg = buildUnitLabelSvg(content, template);
-  const rendered = await sharp(Buffer.from(svg))
-    .flatten({ background: '#ffffff' })
-    .greyscale()
-    .threshold(176)
-    .raw()
-    .toBuffer({ resolveWithObject: true });
-
-  if (rendered.info.width !== template.deviceWidthDots || rendered.info.height !== template.heightDots) {
-    throw new Error('The rendered label dimensions do not match the selected printer template.');
+  // Code 39 allows a 2:1 through 3:1 wide:narrow ratio. Search every valid
+  // whole-dot geometry instead of fixing one ratio first. This lets a wider
+  // region actually produce a wider barcode while still reserving ten narrow
+  // modules of quiet space on both sides.
+  for (let narrow = 1; narrow <= 64; narrow += 1) {
+    const gap = narrow;
+    const quietZone = narrow * 10;
+    for (let wide = narrow * 2; wide <= narrow * 3; wide += 1) {
+      const barcode = buildCode39Bars(value, narrow, wide, gap);
+      if (!barcode) return null;
+      if (barcode.width + (quietZone * 2) > availableWidth) break;
+      if (!best || barcode.width > best.width) {
+        best = { ...barcode, narrow, wide, gap, quietZone };
+      }
+    }
   }
 
-  const bitmap = createBitmap(rendered.info.width, rendered.info.height, rendered.data);
-  return { bitmap, monochromeBytes: rendered.data, svg };
-}
+  if (best) return best;
 
-async function buildPreviewPngDataUri(content, template) {
-  const previewSvg = buildUnitLabelSvg(content, template, { outputScale: 2 });
-  const png = await sharp(Buffer.from(previewSvg))
-    .flatten({ background: '#ffffff' })
-    .png({ compressionLevel: 9 })
-    .toBuffer();
-
-  return `data:image/png;base64,${png.toString('base64')}`;
+  // Preserve the previous minimum-size behavior for very tight regions.
+  const fallback = buildCode39Bars(value, 1, 3, 1);
+  if (!fallback || fallback.width > availableWidth) return null;
+  return { ...fallback, narrow: 1, wide: 3, gap: 1, quietZone: 0 };
 }
 
 function uint16le(value) {
@@ -217,10 +142,14 @@ function packRasterRow(bitmap, y) {
   return row;
 }
 
-function buildBrotherQl810wRaster(bitmap, template) {
+function buildBrotherQl810wRaster(bitmap, template = {}) {
   if (bitmap.width !== 720 || bitmap.width % 8 !== 0) {
     throw new Error('QL-810W raster width must be 720 dots.');
   }
+
+  const mediaCode = String(template.mediaCode || template.media_code || '62mm_continuous').trim();
+  const media = findQl810wContinuousMedia(mediaCode);
+  if (!media) throw new Error(`Unsupported QL-810W continuous media width: ${mediaCode || '(blank)'}.`);
 
   const chunks = [];
   chunks.push(Buffer.from([0x1B, 0x69, 0x61, 0x01]));
@@ -230,7 +159,7 @@ function buildBrotherQl810wRaster(bitmap, template) {
   chunks.push(Buffer.from([0x1B, 0x69, 0x53]));
 
   const mediaFlags = 0x80 | 0x02 | 0x04 | 0x08 | 0x40;
-  chunks.push(Buffer.from([0x1B, 0x69, 0x7A, mediaFlags, 0x0A, 0x3E, 0x00]));
+  chunks.push(Buffer.from([0x1B, 0x69, 0x7A, mediaFlags, 0x0A, media.widthMm, 0x00]));
   chunks.push(uint32le(bitmap.height));
   chunks.push(Buffer.from([0x00, 0x00]));
   chunks.push(Buffer.from([0x1B, 0x69, 0x4D, 0x40]));
@@ -247,29 +176,6 @@ function buildBrotherQl810wRaster(bitmap, template) {
 
   chunks.push(Buffer.from([0x1A]));
   return Buffer.concat(chunks);
-}
-
-async function buildUnitLabelRender(unit, lot, templateId = LABEL_TEMPLATES[0].id) {
-  const template = findLabelTemplate(templateId);
-  if (!template) throw new Error('The selected label template is not available.');
-  const content = buildUnitLabelContent(unit, lot);
-  const rendered = await renderUnitLabelBitmap(content, template);
-  return {
-    content,
-    template,
-    raster: buildBrotherQl810wRaster(rendered.bitmap, template),
-    previewDataUri: await buildPreviewPngDataUri(content, template),
-    svg: rendered.svg
-  };
-}
-
-async function buildUnitLabelRaster(unit, lot, templateId = LABEL_TEMPLATES[0].id) {
-  return buildUnitLabelRender(unit, lot, templateId);
-}
-
-async function buildUnitLabelPreviewDataUri(unit, lot, templateId = LABEL_TEMPLATES[0].id) {
-  const rendered = await buildUnitLabelRender(unit, lot, templateId);
-  return rendered.previewDataUri;
 }
 
 function submitRasterToCups(raster, { queue, title }) {
@@ -312,46 +218,12 @@ function submitRasterToCups(raster, { queue, title }) {
   });
 }
 
-async function printUnitLabels({ unit, lot = null, printerId, templateId, copies = 1 }) {
-  const printer = findLabelPrinter(printerId);
-  const template = findLabelTemplate(templateId);
-  const safeCopies = Number(copies);
-
-  if (!printer) throw new Error('The selected printer is not available.');
-  if (!template) throw new Error('The selected label template is not available.');
-  if (!Number.isSafeInteger(safeCopies) || safeCopies < 1 || safeCopies > MAX_LABEL_COPIES) {
-    throw new Error(`Copies must be between 1 and ${MAX_LABEL_COPIES}.`);
-  }
-
-  const { raster, content } = await buildUnitLabelRender(unit, lot, template.id);
-  const requestIds = [];
-
-  for (let copy = 1; copy <= safeCopies; copy += 1) {
-    const title = `BWTDallas ${content.primaryLabel} ${copy}/${safeCopies}`;
-    requestIds.push(await submitRasterToCups(raster, { queue: printer.queue, title }));
-  }
-
-  return {
-    printer,
-    template,
-    copies: safeCopies,
-    requestIds,
-    content
-  };
-}
-
 module.exports = {
   LABEL_PRINTERS,
-  LABEL_TEMPLATES,
   MAX_LABEL_COPIES,
   buildUnitLabelContent,
-  buildUnitLabelSvg,
-  buildUnitLabelPreviewDataUri,
-  buildUnitLabelRaster,
-  buildUnitLabelRender,
   buildBrotherQl810wRaster,
   buildCode39Bars,
-  renderUnitLabelBitmap,
-  printUnitLabels,
+  buildCode39BarsToFit,
   submitRasterToCups
 };

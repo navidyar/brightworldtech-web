@@ -8,21 +8,26 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 
-test('v1 diagnostics accept all approved final functional-test states without reducing them to Pass/Fail', () => {
+test('v1 functional diagnostics use only Pass, Fail, and confirmed physical absence while lock diagnostics use explicit Locked/Unlocked', () => {
   const diagnostics = read('services/apiHardwareDiagnosticsInventory.js');
-  for (const state of ['pass', 'fail', 'could_not_determine', 'not_tested', 'not_applicable', 'test_not_available']) {
+  for (const state of ['pass', 'fail', 'physically_not_present']) {
     assert.match(diagnostics, new RegExp(`['\"]${state}['\"]`));
   }
-  assert.match(diagnostics, /if \(state === 'could_not_determine'\) return \['Could Not Determine'\]/);
-  assert.match(diagnostics, /if \(state === 'not_tested'\) return \['Not Tested'\]/);
-  assert.match(diagnostics, /if \(state === 'test_not_available'\) return \['Test Not Available'\]/);
+  for (const retired of ['could_not_determine', 'not_tested', 'not_applicable', 'test_not_available', 'not_available']) {
+    assert.doesNotMatch(diagnostics, new RegExp(`['\"]${retired}['\"]`));
+  }
+  assert.match(diagnostics, /if \(state === 'physically_not_present'\) return \['Physically Not Present'\]/);
+  assert.match(diagnostics, /semantic === 'lock' && state === 'locked'/);
+  assert.match(diagnostics, /semantic === 'lock' && state === 'unlocked'/);
 });
 
 test('Preflight derives unit_type requirements from the canonical top-level Unit Category', () => {
   const preflight = read('services/apiUnitPreflight.js');
   const values = read('services/apiUnitPreflightValues.js');
-  assert.match(preflight, /addTopLevelRequirementContext\(body, normalizeDetectedValues\(body\)\)/);
+  assert.match(preflight, /buildCanonicalRequirementObservations\(body, \{/);
+  assert.match(preflight, /includeUnitCategory: creatingNewUnit/);
   assert.match(values, /body\.unit_category_config_value_id \?\? body\.unitCategoryConfigValueId/);
+  assert.match(values, /if \(includeUnitCategory\) addTopLevelRequirementContext\(body, observations\)/);
   assert.match(values, /observations\.set\('unit_type', normalizeObservation\(unitCategory\)\)/);
 });
 
@@ -55,4 +60,26 @@ test('accepted identity enrichments are retained as Tool observations in the sam
   assert.match(inventory, /identityResult\.fieldKey/);
   assert.match(inventory, /latest_valid_tool_identity_observation/);
   assert.match(inventory, /INSERT INTO unit_tool_observations/);
+});
+
+
+test('Test and Lock configuration expose only the settled canonical choices', () => {
+  const migration = read('scripts/migrateSpecsTestsOverhaul.js');
+  const diagnostics = read('services/apiHardwareDiagnosticsInventory.js');
+  assert.match(migration, /TEST_RESULTS[\s\S]*\['Pass', true\], \['Fail', true\], \['Physically Not Present', true\]/);
+  assert.match(migration, /COMPONENT_TEST_RESULTS[\s\S]*\['Pass', true\], \['Fail', true\]/);
+  assert.match(migration, /LOCK_STATUSES[\s\S]*\['Locked', true\], \['Unlocked', true\]/);
+  for (const retired of ['Could Not Determine', 'Not Tested', 'Not Applicable', 'Test Not Available', 'Not Available']) {
+    assert.equal(migration.includes(`['${retired}', true]`), false);
+  }
+  assert.match(diagnostics, /physically_not_present/);
+});
+
+test('missing Model and Processor values block Commit with the existing catalog-request path rather than being silently ignored', () => {
+  const inventory = read('services/apiScalarInventory.js');
+  assert.match(inventory, /MODEL_CATALOG_REQUEST_REQUIRED/);
+  assert.match(inventory, /PROCESSOR_CATALOG_REQUEST_REQUIRED/);
+  assert.match(inventory, /PROCESSOR_CONTEXT_UNRESOLVED/);
+  assert.match(inventory, /\/api\/v1\/units\/catalog-requests\/model/);
+  assert.match(inventory, /\/api\/v1\/units\/catalog-requests\/processor/);
 });

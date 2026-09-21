@@ -18,12 +18,20 @@
       <% } %>
 
       <div class="message info">
-        <p>Templates created here start as Draft. Layout/background editing will be added in the next rendering phase; the current production label remains unchanged.</p>
+        <% if (!editing) { %>
+          <p>New templates start as Draft. Build the printable layout in Layout Builder, then activate it when ready.</p>
+        <% } else if (template.status === 'active') { %>
+          <p>This template is Active. Metadata can be updated here; use Layout Builder to edit the live printable layout.</p>
+        <% } else if (template.status === 'archived') { %>
+          <p>This template is Archived and unavailable for future printing. Unarchive it to Draft before changing its printable layout or Print Availability.</p>
+        <% } else { %>
+          <p>This template is a Draft. Metadata changes remain non-production until the template is activated.</p>
+        <% } %>
       </div>
 
       <form method="post" action="<%= editing ? `/management/label-library/templates/${template.label_template_id}/edit/modal` : '/management/label-library/templates' %>" hx-post="<%= editing ? `/management/label-library/templates/${template.label_template_id}/edit/modal` : '/management/label-library/templates' %>" hx-target="#modal-root" hx-swap="innerHTML">
-        <div class="form-grid">
-          <label class="full-width">
+        <div class="form-grid label-template-form-grid">
+          <label>
             <span>Template Name</span>
             <input type="text" name="name" value="<%= formData.name %>" maxlength="160" required />
           </label>
@@ -36,6 +44,40 @@
               <% }) %>
             </select>
           </label>
+
+          <label>
+            <span>Print Availability</span>
+            <% if (!editing || template.status === 'draft') { %>
+              <select name="printScope" required>
+                <% printScopes.forEach((scope) => { %>
+                  <option value="<%= scope.code %>" <%= formData.printScope === scope.code ? 'selected' : '' %>><%= scope.label %></option>
+                <% }) %>
+              </select>
+              <small><%= formData.printScope === 'standalone' ? 'Standalone templates print from the Label Library and do not appear in Lot configuration.' : 'Lot Selection templates are available to Lot configuration and Unit/Lot print workflows.' %></small>
+            <% } else { %>
+              <input type="hidden" name="printScope" value="<%= formData.printScope %>" />
+              <input type="text" value="<%= printScopes.find((scope) => scope.code === formData.printScope)?.label || formData.printScope %>" disabled />
+              <small>Unarchive to Draft before changing Print Availability.</small>
+            <% } %>
+          </label>
+
+          <% if (!editing) { %>
+            <label>
+              <span>Continuous Roll Width</span>
+              <select name="mediaWidthCode" required>
+                <% mediaWidths.forEach((media) => { %>
+                  <option value="<%= media.code %>" <%= formData.mediaWidthCode === media.code ? 'selected' : '' %>><%= media.label %></option>
+                <% }) %>
+              </select>
+              <small>Label length is variable and is set directly in the Layout Builder.</small>
+            </label>
+          <% } else { %>
+            <label>
+              <span>Continuous Roll Width</span>
+              <input type="text" value="<%= mediaWidths.find((media) => media.code === formData.mediaWidthCode)?.label || 'Set in Label Builder' %>" disabled />
+              <small>Change roll width or label length from the Layout Builder so geometry stays consistent.</small>
+            </label>
+          <% } %>
 
           <% if (editing) { %>
             <label>

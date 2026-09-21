@@ -49,6 +49,11 @@ const {
 } = require('../services/unitCapacityPresentation');
 const { resolveLotToolPolicy } = require('../services/lotToolPolicy');
 const {
+  CURRENT_MEMORY_FIELD_KEY,
+  CURRENT_STORAGE_FIELD_KEY,
+  buildCurrentHardwareFormAuthority
+} = require('../services/currentHardwareFormAuthority');
+const {
   buildCompletionToolRequirementStatus,
   evaluateCompletionToolRequirementEnforcement,
   getMissingToolRequirementMessage
@@ -1077,6 +1082,10 @@ async function getTechUnitFormOptions(options = {}) {
     ])
     : assignableLots;
   const lotHierarchyOptions = buildLotHierarchyOptions(allLots, lots);
+  const lotToolPolicies = Object.fromEntries(allLots.map((lot) => [
+    String(lot.lot_id),
+    resolveLotToolPolicy(allLots, lot.lot_id)
+  ]));
 
   const [
     unitCategories,
@@ -1201,6 +1210,7 @@ async function getTechUnitFormOptions(options = {}) {
     state,
     lots,
     lotHierarchyOptions,
+    lotToolPolicies,
     currentLotIsClosed: Boolean(currentLot && Number(currentLot.is_closed || 0) === 1),
     unitCategories: unitCategoriesWithProductionWeights,
     unitStatuses,
@@ -1219,7 +1229,8 @@ async function getTechUnitFormOptions(options = {}) {
     productionWeightCapabilities: state.productionWeightCapabilities,
     batteryHealthSupported: hasColumn(state.columns, 'battery_health_percent'),
     previousMemorySupported: hasColumn(state.columns, 'previous_ram_gb'),
-    previousStorageSupported: hasColumn(state.columns, 'previous_storage_gb')
+    previousStorageSupported: hasColumn(state.columns, 'previous_storage_gb'),
+    currentHardwareAuthority: buildCurrentHardwareFormAuthority()
   };
 }
 
@@ -1281,6 +1292,24 @@ async function getUnitById(unitId) {
   );
 
   return rows[0] || null;
+}
+
+async function getUnitIdByAssetTag(assetTag) {
+  const assetNumber = normalizeAssetTagInput(assetTag);
+  const state = await getUnitTableState();
+  if (!assetNumber || !state.exists || !state.primaryKeyColumn) return null;
+
+  const [rows] = await pool.query(
+    `
+      SELECT ${escapeIdentifier(state.primaryKeyColumn)} AS unit_id
+      FROM units
+      WHERE asset_number = ?
+      LIMIT 1
+    `,
+    [assetNumber]
+  );
+
+  return rows[0]?.unit_id ? Number(rows[0].unit_id) : null;
 }
 
 function mapMemoryModuleRows(rows = []) {
@@ -4789,7 +4818,9 @@ async function recordUnitLotHistory(connection, {
   movedByUserId,
   notes = null,
   allowNewProductionCycle = true,
-  auditAmazonPalletClear = true
+  auditAmazonPalletClear = true,
+  productionCyclePlan = null,
+  hardwareRolloverPrepared = false
 }) {
   return productionCycleModel.recordLotMove({
     unitId,
@@ -4798,7 +4829,9 @@ async function recordUnitLotHistory(connection, {
     movedByUserId,
     notes,
     allowNewProductionCycle,
-    auditAmazonPalletClear
+    auditAmazonPalletClear,
+    productionCyclePlan,
+    hardwareRolloverPrepared
   }, connection);
 }
 
@@ -4853,7 +4886,42 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
   try {
     await connection.beginTransaction();
 
-    const payload = buildWritePayload(formData, currentUserId, 'update', null, state.columns);
+    let productionCyclePlan = null;
+    let hardwareRolloverPrepared = false;
+    if (lotChanged && options.recordLotHistory !== false) {
+      productionCyclePlan = await productionCycleModel.planLotMoveProductionCycle({
+        unitId,
+        fromLotId: previousLotId,
+        toLotId: nextLotId,
+        allowNewProductionCycle: options.allowNewProductionCycleOnMove !== false
+      }, connection);
+      if (productionCyclePlan.startsNewProductionCycle) {
+        await productionCycleModel.rolloverCurrentHardwareToPrevious({
+          unitId,
+          actorUserId: currentUserId
+        }, connection);
+        hardwareRolloverPrepared = true;
+      }
+    }
+
+    let persistedFormData = formData;
+    if (hardwareRolloverPrepared) {
+      const policy = formData?._unitFormSubmissionPolicy;
+      const excludedCycleHardwareFields = new Set([
+        'previous_memory_size', 'memory_modules', 'previous_storage_size', 'storage_devices'
+      ]);
+      persistedFormData = {
+        ...formData,
+        _unitFormSubmissionPolicy: policy && Array.isArray(policy.managedFieldKeys)
+          ? {
+              ...policy,
+              managedFieldKeys: policy.managedFieldKeys.filter((fieldKey) => !excludedCycleHardwareFields.has(fieldKey))
+            }
+          : policy
+      };
+    }
+
+    const payload = buildWritePayload(persistedFormData, currentUserId, 'update', null, state.columns);
     const setSql = payload.columns.map((columnName) => `${escapeIdentifier(columnName)} = ?`).join(', ');
 
     await connection.query(
@@ -4867,7 +4935,7 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
     );
 
     await saveUnitIdentifiers(connection, unitId, formData, unit.asset_number);
-    await saveUnitModuleRows(connection, unitId, formData, currentUserId);
+    await saveUnitModuleRows(connection, unitId, persistedFormData, currentUserId);
 
     if (!lotChanged) {
       await unitAmazonModel.applyDestinationLotAmazonPolicy(connection, {
@@ -4886,7 +4954,9 @@ async function updateExistingTechUnit(unitId, formData, currentUserId, options =
         movedByUserId: currentUserId,
         notes: options.lotMoveNotes || 'Unit moved while updating an existing unit record.',
         allowNewProductionCycle: options.allowNewProductionCycleOnMove !== false,
-        auditAmazonPalletClear: false
+        auditAmazonPalletClear: false,
+        productionCyclePlan,
+        hardwareRolloverPrepared
       });
     }
 
@@ -5363,6 +5433,82 @@ async function getLatestUnitParkHistory(unitId) {
   };
 }
 
+async function searchUnitsByIdentity(search, limit = 12) {
+  const state = await getUnitTableState();
+  const term = String(search || '').trim().slice(0, 120);
+  const safeLimit = Math.max(1, Math.min(20, Number(limit) || 12));
+
+  if (!term || !state.exists || !state.primaryKeyColumn) {
+    return [];
+  }
+
+  const identifiersReady = await tableExists('unit_identifiers');
+  const normalizedAssetNumber = normalizeAssetTagInput(term);
+  const compactIdentifier = compactAssetTagValue(term);
+  const likeTerm = `%${term}%`;
+  const likeAsset = `%${normalizedAssetNumber || term}%`;
+  const where = [
+    'CAST(u.unit_id AS CHAR) LIKE ?',
+    'CAST(u.asset_number AS CHAR) LIKE ?'
+  ];
+  const params = [`%${term}%`, likeAsset];
+
+  if (identifiersReady) {
+    const identifierConditions = ['ui_preview.identifier_value LIKE ?'];
+    const identifierParams = [likeTerm];
+    if (compactIdentifier) {
+      identifierConditions.push('ui_preview.normalized_value LIKE ?');
+      identifierParams.push(`%${compactIdentifier}%`);
+    }
+    where.push(`
+      EXISTS (
+        SELECT 1
+        FROM unit_identifiers ui_preview
+        WHERE ui_preview.unit_id = u.unit_id
+          AND (${identifierConditions.join(' OR ')})
+      )
+    `);
+    params.push(...identifierParams);
+  }
+
+  const numericUnitId = /^\d+$/.test(term) ? Number(term) : 0;
+  const exactAssetNumber = normalizedAssetNumber || 0;
+  const parkedSql = getUnitParkedSql(state, 'u');
+  const [rows] = await pool.query(
+    `
+      SELECT
+        u.unit_id,
+        u.asset_number,
+        u.lot_id,
+        l.name AS lot_name,
+        m.name AS manufacturer_name,
+        um.model_name,
+        ${parkedSql} AS is_parked
+      FROM units u
+      LEFT JOIN lots l ON l.lot_id = u.lot_id
+      LEFT JOIN manufacturers m ON m.manufacturer_id = u.manufacturer_id
+      LEFT JOIN unit_models um ON um.unit_model_id = u.unit_model_id
+      WHERE (${where.join(' OR ')})
+      ORDER BY
+        CASE WHEN ? > 0 AND u.unit_id = ? THEN 0
+             WHEN ? > 0 AND u.asset_number = ? THEN 1
+             ELSE 2 END,
+        u.unit_id DESC
+      LIMIT ?
+    `,
+    [...params, numericUnitId, numericUnitId, exactAssetNumber, exactAssetNumber, safeLimit]
+  );
+
+  return rows.map((row) => ({
+    unitId: Number(row.unit_id),
+    assetTag: row.asset_number ? getDisplayAssetTag(row.asset_number) : '',
+    lotId: normalizeOptionalInteger(row.lot_id),
+    lotName: row.lot_name || '',
+    modelDisplay: [row.manufacturer_name, row.model_name].filter(Boolean).join(' ').trim(),
+    isParked: Number(row.is_parked) === 1
+  }));
+}
+
 async function getTechUnitLifecycleSummaryById(unitId) {
   const safeUnitId = normalizeRequiredInteger(unitId);
 
@@ -5392,8 +5538,21 @@ async function getTechUnitLifecycleSummaryById(unitId) {
         m.name AS manufacturer_name,
         um.model_name,
         pm.model_code AS processor_model_code,
+        pm.processor_family,
+        (
+          SELECT NULLIF(TRIM(pf_preview.export_short_form), '')
+          FROM processor_family_members pfm_preview
+          INNER JOIN processor_families pf_preview
+            ON pf_preview.processor_family_id = pfm_preview.processor_family_id
+           AND pf_preview.is_active = 1
+          WHERE pfm_preview.processor_model_id = u.processor_model_id
+          ORDER BY pf_preview.sort_order, pf_preview.processor_family_id
+          LIMIT 1
+        ) AS processor_short_form,
+        pb.name AS processor_brand_name,
         u.ram_gb,
         u.storage_gb,
+        COALESCE(cv_os.label, cv_os.value, '') AS operating_system_label,
         ${parkedSql} AS is_parked,
         ${state.parkingCapabilities.hasParkedAt ? 'u.parked_at' : (state.legacyArchiveCapabilities.hasArchivedAt ? 'u.archived_at' : 'NULL')} AS parked_at
       FROM units u
@@ -5403,6 +5562,8 @@ async function getTechUnitLifecycleSummaryById(unitId) {
       LEFT JOIN manufacturers m ON m.manufacturer_id = u.manufacturer_id
       LEFT JOIN unit_models um ON um.unit_model_id = u.unit_model_id
       LEFT JOIN processor_models pm ON pm.processor_model_id = u.processor_model_id
+      LEFT JOIN processor_brands pb ON pb.processor_brand_id = pm.processor_brand_id
+      LEFT JOIN config_values cv_os ON cv_os.config_value_id = u.operating_system_config_value_id
       WHERE u.${escapeIdentifier(state.primaryKeyColumn)} = ?
       LIMIT 1
     `,
@@ -5415,9 +5576,10 @@ async function getTechUnitLifecycleSummaryById(unitId) {
     return null;
   }
 
-  const [unitSerialNumber, biosSerialNumber, latestParkHistory] = await Promise.all([
+  const [unitSerialNumber, biosSerialNumber, systemUuid, latestParkHistory] = await Promise.all([
     getUnitIdentifierValue(safeUnitId, 'unit_serial_number'),
     getUnitIdentifierValue(safeUnitId, 'bios_serial_number'),
+    getUnitIdentifierValue(safeUnitId, 'system_uuid'),
     getLatestUnitParkHistory(safeUnitId)
   ]);
 
@@ -5434,6 +5596,7 @@ async function getTechUnitLifecycleSummaryById(unitId) {
     assetTag: row.asset_number ? getDisplayAssetTag(row.asset_number) : '',
     unitSerialNumber: unitSerialNumber || '',
     biosSerialNumber: biosSerialNumber || '',
+    systemUuid: systemUuid || '',
     lotId: normalizeOptionalInteger(row.lot_id),
     lotName: row.lot_name || '',
     assignedToUserId: normalizeOptionalInteger(row.assigned_to_user_id),
@@ -5442,6 +5605,10 @@ async function getTechUnitLifecycleSummaryById(unitId) {
     manufacturerName: row.manufacturer_name || '',
     modelName: row.model_name || '',
     processorModelCode: row.processor_model_code || '',
+    processorBrandName: row.processor_brand_name || '',
+    processorFamily: row.processor_family || '',
+    processorShortForm: row.processor_short_form || '',
+    operatingSystemLabel: row.operating_system_label || '',
     ramGb: row.ram_gb,
     storageGb: row.storage_gb,
     specSummary: specParts.length > 0 ? specParts.join(' · ') : 'No specs entered yet',
@@ -6740,6 +6907,48 @@ async function hasRecordedManualCompletionForCurrentLotCycle(unit) {
 }
 
 
+
+async function getCurrentHardwareFormAuthorityStatus(unitId, lotId, connection = pool) {
+  const safeUnitId = normalizeRequiredInteger(unitId);
+  const safeLotId = normalizeRequiredInteger(lotId);
+  const allLots = safeLotId
+    ? await lotModel.listLots({ includeHidden: true, connection })
+    : [];
+  const effectiveToolPolicy = safeLotId
+    ? resolveLotToolPolicy(allLots, safeLotId)
+    : {};
+
+  if (!safeUnitId) {
+    return buildCurrentHardwareFormAuthority({ effectiveToolPolicy });
+  }
+
+  const productionCycleKey = await productionCycleModel.getCurrentProductionCycleKey(safeUnitId, connection);
+  if (!productionCycleKey) {
+    return buildCurrentHardwareFormAuthority({ effectiveToolPolicy });
+  }
+
+  const [rows] = await connection.query(
+    `SELECT DISTINCT observation.field_key
+       FROM unit_tool_observations observation
+       INNER JOIN unit_tool_runs run
+         ON run.tool_run_id = observation.tool_run_id
+      WHERE run.unit_id = ?
+        AND run.production_cycle_key = ?
+        AND run.status = 'completed'
+        AND run.tool_source IN ('scantool', 'techtools')
+        AND observation.field_key IN (?, ?)
+        AND observation.observation_state IN ('known', 'confirmed_absent')
+        AND observation.application_status IN ('applied', 'unchanged')`,
+    [safeUnitId, productionCycleKey, CURRENT_MEMORY_FIELD_KEY, CURRENT_STORAGE_FIELD_KEY]
+  );
+
+  return buildCurrentHardwareFormAuthority({
+    effectiveToolPolicy,
+    productionCycleKey,
+    toolOwnedFieldKeys: rows.map((row) => row.field_key)
+  });
+}
+
 async function getCompletionToolRequirementStatus(unitId, lotId, connection = pool) {
   const safeUnitId = normalizeRequiredInteger(unitId);
   const safeLotId = normalizeRequiredInteger(lotId);
@@ -7495,6 +7704,8 @@ module.exports = {
   updateTechUnit,
   useExistingTechUnit,
   getUnitById,
+  getUnitIdByAssetTag,
+  searchUnitsByIdentity,
   getTechUnitLifecycleSummaryById,
   getTechUnitPermanentDeletionPreviewById,
   getReturnToActiveOptions,
@@ -7507,6 +7718,7 @@ module.exports = {
   getUnitOperationalHistory,
   getUnitWorkCompletionsForUser,
   getUnitWorkCompletionPreview,
+  getCurrentHardwareFormAuthorityStatus,
   getCompletionToolRequirementStatus,
   getUnitWorkCompletionReversalPreview,
   recordUnitWorkCompletion,

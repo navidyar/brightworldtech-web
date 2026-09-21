@@ -24,7 +24,7 @@ test('nearest configured Lot label set wins across the hierarchy', () => {
 
   assert.equal(resolved.source.lotId, 2);
   assert.equal(resolved.hasDirectCustomization, false);
-  assert.deepEqual(buildLotLabelTemplateBehaviorSignature(resolved), ['20|0|1|1']);
+  assert.deepEqual(buildLotLabelTemplateBehaviorSignature(resolved), ['20|0|1']);
 });
 
 test('an explicit empty direct set blocks inheritance', () => {

@@ -11,7 +11,8 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'u
 test('Stage 10W79F extends the existing inventory transaction with storage instead of adding another endpoint', () => {
   const routes = read('routes/api.js');
   const service = read('services/apiScalarInventory.js');
-  assert.match(routes, /\/units\/:unitId\/inventory\/:reportId/);
+  assert.match(routes, /router\.post\('\/units\/commit'/);
+  assert.doesNotMatch(routes, /\/units\/:unitId\/inventory\/:reportId/);
   assert.match(service, /normalizeStorageObservation/);
   assert.match(service, /resolveStorageObservation/);
   assert.match(service, /storageObservation/);
@@ -33,12 +34,12 @@ test('storage accepts only the selected top-level device evidence and excludes p
   assert.doesNotMatch(storage, /partitions|volumes|free_bytes|mac_address|pnp_device_id/i);
 });
 
-test('manual capacity/type remains authoritative while compatible tool details can refresh', () => {
+test('current storage is Tool-authoritative and TechTools has final authority over ScanTools', () => {
   const storage = read('services/apiStorageInventory.js');
-  assert.match(storage, /manual_storage_configuration_conflict/);
-  assert.match(storage, /manual_storage_configuration_preserved/);
+  assert.match(storage, /tool_authoritative_storage_configuration/);
+  assert.match(storage, /techtools_current_storage_is_final/);
+  assert.match(storage, /unchanged/);
   assert.match(storage, /details_only/);
-  assert.match(storage, /blocked_manual/);
 });
 
 test('physical drive identity change preserves the old row as history and does not carry wipe status to the replacement', () => {

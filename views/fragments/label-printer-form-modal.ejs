@@ -25,8 +25,8 @@
           <label class="form-field"><span>CUPS Queue <small>(optional)</small></span><input name="cupsQueueName" maxlength="128" value="<%= formData.cupsQueueName %>" /></label>
           <label class="form-field"><span>Manufacturer</span><input name="manufacturer" maxlength="80" value="<%= formData.manufacturer %>" /></label>
           <label class="form-field"><span>Model</span><input name="model" maxlength="120" value="<%= formData.model %>" /></label>
-          <label class="form-field"><span>Printer Profile</span><input name="printerProfileCode" maxlength="64" value="<%= formData.printerProfileCode %>" placeholder="brother_ql810w_300dpi" /></label>
-          <label class="form-field"><span>Media Profile</span><input name="mediaCode" maxlength="64" value="<%= formData.mediaCode %>" placeholder="62mm_continuous" /></label>
+          <label class="form-field"><span>Printer Profile</span><select name="printerProfileCode"><option value="">Not configured / Other</option><% printerProfiles.forEach((profile) => { %><option value="<%= profile.code %>" <%= formData.printerProfileCode === profile.code ? 'selected' : '' %>><%= profile.label %></option><% }) %></select><small>Select the matching supported printer so BWTDallas can safely render the label for it. Printers without a supported profile remain registered but do not appear in print destinations.</small></label>
+          <label class="form-field"><span>Loaded Roll Width</span><select name="mediaCode"><option value="">Not configured</option><% continuousMediaWidths.forEach((media) => { %><option value="<%= media.code %>" <%= formData.mediaCode === media.code ? 'selected' : '' %>><%= media.label %> continuous</option><% }) %></select><small>Update this when the physical continuous roll width changes so BWTDallas routes only compatible labels.</small></label>
           <label class="form-field"><span>DPI</span><input type="number" name="dpi" min="100" max="2400" value="<%= formData.dpi %>" /></label>
         </div>
         <input type="hidden" name="detectedDescription" value="<%= formData.detectedDescription %>" />

@@ -56,7 +56,9 @@ body :is(
 
 /* Reset Design Stage F.5.10 — whole-site form field focus.
    Replace double borders/native outlines with one clean blue border and a soft
-   outer glow for normal fields, custom field triggers, and radio/checkbox rows. */
+   outer glow for normal fields/custom field triggers. Checkbox/radio controls
+   themselves stay halo-free; the Unit Outcome Pass/Fail radios opt back into
+   their intentional circular keyboard-focus halo in tech-units-clean.css. */
 body :is(
   input:not([type]),
   input[type="text"],
@@ -86,14 +88,7 @@ body :is(input[type="radio"], input[type="checkbox"]):is(:focus, :focus-visible)
   box-shadow: none !important;
 }
 
-body label:has(input[type="checkbox"]:is(:focus, :focus-visible)) {
-  border-color: var(--form-field-focus-border) !important;
-  border-radius: 8px;
-  outline: none !important;
-  box-shadow: var(--form-field-focus-shadow) !important;
-}
-
-body label:has(input[type="radio"]:is(:focus, :focus-visible)) {
+body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focus-visible)) {
   outline: none !important;
   box-shadow: none !important;
 }

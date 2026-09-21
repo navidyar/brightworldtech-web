@@ -32,16 +32,18 @@ function normalizeState(value, allowed, aliases = new Map()) {
 
 function normalizePresence(value) {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
-    if (value.state === 'unknown') return 'unknown';
-    if (value.present !== undefined) return normalizePresence(value.present);
-    if (value.detected !== undefined) return normalizePresence(value.detected);
-    return normalizePresence(value.state ?? value.status);
+    const explicit = normalizeText(value.state, 40).toLowerCase().replace(/[\s-]+/g, '_');
+    if (explicit === 'unknown') return 'unknown';
+    if (explicit === 'confirmed_absent') return 'absent';
+    if (value.present === true || value.detected === true) return 'present';
+    if (value.present === false || value.detected === false) return 'unknown';
+    return normalizePresence(value.status ?? value.value ?? value.state);
   }
-  return normalizeState(value, PRESENCE_STATES, new Map([
-    ['yes', 'present'], ['detected', 'present'], ['installed', 'present'], ['available', 'present'],
-    ['no', 'absent'], ['not_detected', 'absent'], ['not_present', 'absent'], ['none', 'absent'],
-    ['unavailable', 'unknown'], ['unsupported', 'unknown']
-  ]));
+  if (value === true) return 'present';
+  if (value === false || value === null || value === undefined || value === '') return 'unknown';
+  const token = normalizeText(value, 80).toLowerCase().replace(/[\s-]+/g, '_');
+  if (['present', 'yes', 'detected', 'installed', 'available'].includes(token)) return 'present';
+  return 'unknown';
 }
 
 function normalizeBooleanState(value) {
@@ -81,6 +83,15 @@ function normalizeObservedText(value, maxLength) {
   if (value === null) return undefined;
   const text = normalizeText(value, maxLength);
   return text || null;
+}
+
+function normalizeAbsoluteStatus(value) {
+  const text = normalizeObservedText(value, 160);
+  if (text === undefined || text === null) return text;
+  const token = text.toLowerCase().replace(/[\s-]+/g, '_');
+  if (['unknown', 'not_tested', 'not_run', 'unsupported', 'not_applicable', 'n/a', 'could_not_determine'].includes(token)) return undefined;
+  if (['unavailable', 'not_available', 'not_detected', 'not_present'].includes(token)) return 'Unavailable';
+  return text;
 }
 
 function normalizeObservedInteger(value, { minimum = 1, maximum = 2000 } = {}) {
@@ -171,7 +182,7 @@ function normalizeSecurityObservation(rawSecurity) {
   const rawSecureBootState = hasSecureBoot ? normalizeBooleanState(rawSecurity.secure_boot ?? rawSecurity.secureBoot) : undefined;
   const secureBoot = rawSecureBootState === 'unknown' ? undefined : rawSecureBootState;
   const tpm = normalizeTpm(rawSecurity.tpm);
-  const absoluteStatus = normalizeObservedText(rawSecurity.absolute_status ?? rawSecurity.absoluteStatus ?? rawSecurity.absolute, 160);
+  const absoluteStatus = normalizeAbsoluteStatus(rawSecurity.absolute_status ?? rawSecurity.absoluteStatus ?? rawSecurity.absolute);
   if (systemUuid === undefined && secureBoot === undefined && !tpm && absoluteStatus === undefined) return null;
   return {
     fieldKey: SECURITY_FIELD_KEY,

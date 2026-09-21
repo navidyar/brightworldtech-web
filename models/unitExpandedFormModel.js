@@ -128,7 +128,58 @@ async function listConfigValuesBySystemCategories(systemCategoryIds, connection 
   return listConfigValuesBySystemCategoryIds(systemCategoryIds, {}, connection);
 }
 
+async function buildSkinningAttributionPlan(connection, unitId, selectedConfigValueId, currentUserId) {
+  const selectedId = normalizeOptionalInteger(selectedConfigValueId);
+  const options = await listConfigValuesBySystemCategories(SYSTEM_CONFIG_CATEGORY_IDS.SKINNED_STATUSES, connection);
+  const selected = options.find((option) => Number(option.id) === selectedId) || null;
+  const isSkinnedByBwt = String(selected?.label || '').trim().toLowerCase() === 'skinned by bwt';
 
+  if (!isSkinnedByBwt) {
+    return { action: 'clear' };
+  }
+
+  const userId = normalizeOptionalInteger(currentUserId);
+  if (!userId) {
+    throw new Error('Skinned by BWT requires an authenticated BWTDallas user.');
+  }
+
+  const [rows] = await connection.query(
+    `SELECT skinned_status_config_value_id, skinned_by_user_id, skinned_at
+       FROM unit_specifications
+      WHERE unit_id = ?
+      LIMIT 1`,
+    [unitId]
+  );
+  const current = rows[0] || null;
+  if (
+    Number(current?.skinned_status_config_value_id || 0) === selectedId
+    && Number(current?.skinned_by_user_id || 0) > 0
+    && current?.skinned_at
+  ) {
+    return { action: 'preserve' };
+  }
+
+  return { action: 'stamp', userId };
+}
+
+async function applySkinningAttributionPlan(connection, unitId, plan) {
+  if (!plan || plan.action === 'preserve') return;
+  if (plan.action === 'stamp') {
+    await connection.query(
+      `UPDATE unit_specifications
+          SET skinned_by_user_id = ?, skinned_at = CURRENT_TIMESTAMP
+        WHERE unit_id = ?`,
+      [plan.userId, unitId]
+    );
+    return;
+  }
+  await connection.query(
+    `UPDATE unit_specifications
+        SET skinned_by_user_id = NULL, skinned_at = NULL
+      WHERE unit_id = ?`,
+    [unitId]
+  );
+}
 
 function getBlankExpandedFormData() {
   return {
@@ -542,6 +593,15 @@ async function saveUnitSpecifications(connection, unitId, formData, currentUserI
     return;
   }
 
+  const skinningAttributionPlan = isUnitFormFieldManaged(formData, 'skinned_status')
+    ? await buildSkinningAttributionPlan(
+      connection,
+      unitId,
+      formData.skinnedStatusConfigValueId,
+      currentUserId
+    )
+    : null;
+
   const insertColumns = [
     'unit_id',
     ...managedFields.map((field) => field.columnName),
@@ -568,6 +628,8 @@ async function saveUnitSpecifications(connection, unitId, formData, currentUserI
     `,
     values
   );
+
+  await applySkinningAttributionPlan(connection, unitId, skinningAttributionPlan);
 
   await upsertManualFieldSources(
     connection,

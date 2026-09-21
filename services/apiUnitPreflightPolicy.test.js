@@ -6,6 +6,8 @@ const {
   buildSourcePolicyDecision,
   buildExistingUnitActionDecision,
   buildRequirementEvaluationState,
+  hasFailedToolRequirementChecks,
+  hasIncompleteToolRequirementChecks,
   summarizeRequirementStates
 } = require('./apiUnitPreflightPolicy');
 
@@ -110,6 +112,19 @@ test('requirement evaluation distinguishes pass, fail, unknown, and not-evaluabl
   assert.equal(buildRequirementEvaluationState({ check: { status: 'rejected' }, observationState: 'unknown' }), 'UNKNOWN');
   assert.equal(buildRequirementEvaluationState({ check: { status: 'rejected' }, observationState: 'not_evaluable', hasStoredValue: false }), 'NOT_EVALUATABLE_BY_THIS_TOOL');
   assert.equal(summarizeRequirementStates([{ evaluation_state: 'PASS' }, { evaluation_state: 'UNKNOWN' }]), 'UNKNOWN');
+});
+
+
+test('Lot requirement results are informational to Tools rather than Tool blockers', () => {
+  const checks = [
+    { evaluation_state: 'FAIL' },
+    { evaluation_state: 'NOT_EVALUATABLE_BY_THIS_TOOL' },
+    { evaluation_state: 'UNKNOWN' }
+  ];
+  assert.equal(hasFailedToolRequirementChecks(checks), true);
+  assert.equal(hasIncompleteToolRequirementChecks(checks), true);
+  assert.equal(hasFailedToolRequirementChecks([{ evaluation_state: 'PASS' }]), false);
+  assert.equal(hasIncompleteToolRequirementChecks([{ evaluation_state: 'PASS' }]), false);
 });
 
 test('source policy rejects an unknown Tool source rather than guessing an allowance', () => {

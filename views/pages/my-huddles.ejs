@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+        <main class="content-shell">
+          <section class="page-heading"><div><h1>My Huddles</h1><p>Your permanent record of Virtual Huddles you personally acknowledged.</p></div></section>
+          <% if (successMessage) { %><div class="message success" data-auto-dismiss-success><p><%= successMessage %></p></div><% } %>
+
+          <% if (isAdminUser && adminInbox.length > 0) { %>
+            <section class="content-card">
+              <div class="content-header"><div><p class="eyebrow">Admin Inbox</p><h2>Optional Management Messages</h2></div></div>
+              <div class="message info"><p>These lower-role messages do not require Admin acknowledgment. You may review them, voluntarily acknowledge them for the permanent record, or delete your unacknowledged inbox copy.</p></div>
+              <div class="table-card"><table><thead><tr><th>Sent</th><th>Type</th><th>Subject</th><th>From</th><th></th></tr></thead><tbody>
+                <% adminInbox.forEach((item) => { %>
+                  <tr><td><%= formatDateTime(item.sent_at) %></td><td><%= messageTypeLabel(item.message_type_code) %></td><td><strong><%= item.subject %></strong></td><td><%= item.sender_name_snapshot %></td><td><a class="secondary-button button-small" href="/my-huddles/inbox/<%= item.virtual_huddle_recipient_id %>">Open</a></td></tr>
+                <% }) %>
+              </tbody></table></div>
+            </section>
+          <% } %>
+
+          <section class="content-card">
+            <div class="content-header"><div><p class="eyebrow">Accepted</p><h2>Acknowledged Huddles</h2></div></div>
+            <div class="table-card"><table><thead><tr><th>Confirmed</th><th>Type</th><th>Subject</th><th>Sent By</th><th>Originally Sent</th><th></th></tr></thead><tbody>
+              <% if (accepted.length === 0) { %><tr><td colspan="6">You have not acknowledged any Virtual Huddles yet.</td></tr><% } %>
+              <% accepted.forEach((item) => { %>
+                <tr><td><%= formatDateTime(item.acknowledged_at) %></td><td><%= messageTypeLabel(item.message_type_code) %></td><td><strong><%= item.subject %></strong></td><td><%= item.sender_name_snapshot %></td><td><%= formatDateTime(item.sent_at) %></td><td><a class="secondary-button button-small" href="/my-huddles/accepted/<%= item.virtual_huddle_recipient_id %>">Open Record</a></td></tr>
+              <% }) %>
+            </tbody></table></div>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

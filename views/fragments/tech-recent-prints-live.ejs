@@ -1,0 +1,91 @@
+<%
+  const safeSets = Array.isArray(sets) ? sets : [];
+  const safeSettings = settings || { recentPrintsMinutes: 15 };
+  const statusLabel = (status) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'sent') return 'Sent to Printer';
+    if (normalized === 'queued') return 'Queued';
+    if (normalized === 'partial') return 'Partial';
+    if (normalized === 'failed') return 'Failed';
+    if (normalized === 'preparing') return 'Preparing';
+    return status || 'Unknown';
+  };
+  const statusClass = (status) => {
+    const normalized = String(status || '').toLowerCase();
+    if (normalized === 'sent') return 'good';
+    if (normalized === 'failed') return 'danger';
+    return 'slate';
+  };
+  const sourcePresentation = (source) => {
+    const normalized = String(source || '').toLowerCase();
+    if (normalized === 'builder_test') return { label: 'Builder Test Print', context: 'Layout Builder test' };
+    if (normalized === 'library_direct') return { label: 'Standalone Direct Print', context: 'Label Template Library' };
+    if (normalized === 'bulk') return { label: 'Bulk Production', context: 'Units Browser bulk action' };
+    if (normalized === 'single') return { label: 'Unit Production', context: 'Unit print action' };
+    return { label: 'Label Print', context: 'Label printing' };
+  };
+%>
+<p class="field-hint">Showing your print activity from the last <%= safeSettings.recentPrintsMinutes %> minute<%= safeSettings.recentPrintsMinutes === 1 ? '' : 's' %>. “Queued” means CUPS still has the job pending or active. “Sent to Printer” means CUPS finished transmitting the job; it does not by itself confirm the label physically exited the printer.</p>
+
+<% if (safeSets.length === 0) { %>
+  <div class="message info"><p>No recent label prints are in the current display window.</p></div>
+<% } %>
+
+<div class="tech-recent-print-set-list">
+  <% safeSets.forEach((set, setIndex) => { %>
+    <% const itemCount = set.jobs.reduce((count, job) => count + job.items.length, 0); %>
+    <section class="tech-recent-print-set <%= setIndex > 0 ? 'tech-recent-print-set--separated' : '' %>">
+      <div class="tech-recent-print-set-heading">
+        <div>
+          <strong><%= set.groupingKind === 'batch' ? 'Bulk Print Set' : 'Print Set' %></strong>
+          <small><%= formatDateTime(set.startedAt) %> · <%= itemCount %> print entr<%= itemCount === 1 ? 'y' : 'ies' %></small>
+        </div>
+      </div>
+
+      <div class="tech-recent-print-jobs">
+        <% set.jobs.forEach((job) => { %>
+          <% const sourceInfo = sourcePresentation(job.source); %>
+          <div class="tech-recent-print-job">
+            <div class="tech-recent-print-job-heading">
+              <strong><%= sourceInfo.label %></strong>
+              <small><%= sourceInfo.context %><% if (job.requestedAt) { %> · <%= formatDateTime(job.requestedAt) %><% } %></small>
+            </div>
+
+            <div class="tech-recent-print-items">
+              <% job.items.forEach((item) => { %>
+                <% const latestAttempt = item.attempts.length ? item.attempts[item.attempts.length - 1] : null; %>
+                <article class="tech-recent-print-item">
+                  <div class="tech-recent-print-item-main">
+                    <div>
+                      <strong><%= item.unitLabel || 'Unit' %></strong>
+                      <small><%= item.templateName %><% if (item.lotName) { %> · <%= item.lotName %><% } %></small>
+                    </div>
+                    <span class="pill <%= statusClass(item.status) %>"><%= statusLabel(item.status) %></span>
+                  </div>
+
+                  <dl class="tech-recent-print-detail-list">
+                    <div><dt>Copies</dt><dd><%= item.copiesQueued %> submitted / <%= item.copiesRequested %> requested</dd></div>
+                    <div><dt>Printer</dt><dd><%= latestAttempt?.printerLabel || '—' %><% if (latestAttempt?.printerLocation) { %> · <%= latestAttempt.printerLocation %><% } %></dd></div>
+                    <div><dt>Queue</dt><dd><%= latestAttempt?.cupsQueue || '—' %></dd></div>
+                  </dl>
+
+                  <% if (item.attempts.length > 1) { %>
+                    <div class="tech-recent-print-attempts">
+                      <% item.attempts.forEach((attempt) => { %>
+                        <small>Attempt <%= attempt.attemptNumber %>: <%= attempt.printerLabel || 'Printer' %><% if (attempt.printerLocation) { %> · <%= attempt.printerLocation %><% } %> — <%= statusLabel(attempt.status) %></small>
+                      <% }) %>
+                    </div>
+                  <% } %>
+
+                  <% if (item.failureMessage || latestAttempt?.failureMessage) { %>
+                    <div class="message error tech-recent-print-error"><p><%= item.failureMessage || latestAttempt.failureMessage %></p></div>
+                  <% } %>
+                </article>
+              <% }) %>
+            </div>
+          </div>
+        <% }) %>
+      </div>
+    </section>
+  <% }) %>
+</div>

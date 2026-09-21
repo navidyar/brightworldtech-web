@@ -111,8 +111,8 @@ function buildPlan(rows) {
   });
 
   const recognizedIds = new Set(entries.flatMap((entry) => entry.matchingRows.map((row) => row.config_value_id)));
-  const preservedRows = rows.filter((row) => !recognizedIds.has(row.config_value_id));
-  return { entries, preservedRows };
+  const retiredRows = rows.filter((row) => !recognizedIds.has(row.config_value_id));
+  return { entries, retiredRows };
 }
 
 async function insertCanonicalValue(connection, categoryId, definition) {
@@ -247,7 +247,7 @@ async function main() {
     const rows = await loadValues(connection, categoryId);
     const plan = buildPlan(rows);
 
-    console.log('Canonical Threat Protection Scan policy: Pass, Fail; preserve all other distinct results.');
+    console.log('Canonical Threat Protection Scan policy: Pass and Fail only.');
     console.log(`Threat Protection Scan Results category ID: ${categoryId}`);
     console.log(`Category values found: ${rows.length}`);
     for (const entry of plan.entries) {
@@ -256,7 +256,7 @@ async function main() {
         console.log(`    duplicates to merge/deactivate: ${entry.duplicateRows.map((row) => `${row.config_value_id}:${row.label || row.value}`).join(', ')}`);
       }
     }
-    console.log(`Other distinct results preserved: ${plan.preservedRows.map((row) => row.label || row.value || `Value #${row.config_value_id}`).join(', ') || '(none)'}`);
+    console.log(`Other results to deactivate: ${plan.retiredRows.map((row) => row.label || row.value || `Value #${row.config_value_id}`).join(', ') || '(none)'}`);
 
     const duplicateIds = plan.entries.flatMap((entry) => entry.duplicateRows.map((row) => row.config_value_id));
     console.log(`unit_specifications.virus_check_status_config_value_id duplicate references: ${await countReferences(connection, 'unit_specifications', 'virus_check_status_config_value_id', duplicateIds)}`);
@@ -276,7 +276,7 @@ async function main() {
     await connection.beginTransaction();
     let unitReferencesRemapped = 0;
     let requirementReferencesRemapped = 0;
-    const deactivationIds = [];
+    const deactivationIds = plan.retiredRows.map((row) => row.config_value_id);
 
     for (const entry of plan.entries) {
       const targetId = entry.targetRow?.config_value_id
@@ -307,7 +307,7 @@ async function main() {
     console.log('Canonical Threat Protection Scan migration applied.');
     console.log(`Unit specification references remapped: ${unitReferencesRemapped}`);
     console.log(`Lot requirement references remapped: ${requirementReferencesRemapped}`);
-    console.log(`Duplicate Pass/Fail aliases deactivated: ${deactivated}`);
+    console.log(`Non-canonical Threat Protection results deactivated: ${deactivated}`);
     console.log(`Threat Protection ranking-cache rows cleared for safe refresh: ${rankingRowsCleared}`);
   } catch (error) {
     try { await connection.rollback(); } catch (_) { /* no active transaction */ }

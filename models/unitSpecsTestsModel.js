@@ -86,7 +86,7 @@ async function getSpecsTestsOptions() {
   const [
     yesNoOptions,
     testResultOptions,
-    availabilityTestResultOptions,
+    componentTestResultOptions,
     lockStatusOptions,
     displayTypeOptions,
     screenResolutionOptions,
@@ -100,7 +100,7 @@ async function getSpecsTestsOptions() {
   ] = await Promise.all([
     listCategory(SYSTEM_CONFIG_CATEGORY_IDS.YES_NO_OPTIONS),
     listCategory(SYSTEM_CONFIG_CATEGORY_IDS.TEST_RESULTS),
-    listCategory(SYSTEM_CONFIG_CATEGORY_IDS.AVAILABILITY_TEST_RESULTS),
+    listCategory(SYSTEM_CONFIG_CATEGORY_IDS.COMPONENT_TEST_RESULTS),
     listCategory(SYSTEM_CONFIG_CATEGORY_IDS.LOCK_STATUSES),
     listCategory(SYSTEM_CONFIG_CATEGORY_IDS.DISPLAY_TYPES),
     listCategory(SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_RESOLUTIONS),
@@ -120,7 +120,7 @@ async function getSpecsTestsOptions() {
       && await tableExists('unit_ports'),
     yesNoOptions,
     testResultOptions,
-    availabilityTestResultOptions,
+    componentTestResultOptions,
     lockStatusOptions,
     displayTypeOptions: displayTypeOptions.map((option) => ({
       ...option,

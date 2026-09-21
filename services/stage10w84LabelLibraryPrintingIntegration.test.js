@@ -8,29 +8,30 @@ function read(file) {
   return fs.readFileSync(file, 'utf8');
 }
 
-test('Phase C resolves effective Lot labels and only uses compatibility fallback when no Lot set exists', () => {
+test('Phase C resolves only effective Lot labels and does not invent a default label for unconfigured Lots', () => {
   const source = read('services/labelLibraryPrintingService.js');
   assert.match(source, /getEffectiveLotTemplateSet\(lotId\)/);
   assert.match(source, /effectiveSet\.source\.type === 'none'/);
-  assert.match(source, /isCompatibilityFallback: true/);
-  assert.match(source, /isCompatibilityFallback: false/);
-  assert.match(source, /if \(!normalized\.isActive\) return null/);
+  assert.match(source, /templates: Object\.freeze\(\[\]\)/);
+  assert.doesNotMatch(source, /buildFallbackDescriptor/);
+  assert.doesNotMatch(source, /mode: 'legacy_fallback'/);
+  assert.doesNotMatch(source, /if \(!normalized\.isActive\) return null/);
   assert.match(source, /template\.status !== 'active'/);
 });
 
-test('current standard Library template retains the exact proven legacy renderer and CUPS submission path', () => {
+test('current Library printing uses structured layouts while retaining the proven CUPS submission path', () => {
   const source = read('services/labelLibraryPrintingService.js');
-  const legacyService = read('services/labelPrintingService.js');
-  assert.match(source, /legacyRendererId === LEGACY_RENDERER_ID/);
-  assert.match(source, /buildUnitLabelRender\(unit, lot, LEGACY_RENDERER_ID\)/);
+  const printingService = read('services/labelPrintingService.js');
+  assert.doesNotMatch(source, /legacyRendererId|LEGACY_RENDERER_ID/);
+  assert.match(source, /renderLayout/);
   assert.match(source, /labelPrintingService\.submitRasterToCups/);
-  assert.match(legacyService, /spawn\('\/usr\/bin\/lp'/);
-  assert.match(legacyService, /'-o', 'raw'/);
+  assert.match(printingService, /spawn\('\/usr\/bin\/lp'/);
+  assert.match(printingService, /'-o', 'raw'/);
 });
 
 test('generic schema-v1 renderer supports text, composed fields, Code 39, QR and reusable images without arbitrary expressions', () => {
   const source = read('services/labelTemplateLayoutRenderer.js');
-  for (const elementType of ['static_text', 'dynamic_text', 'composed_text', 'barcode', 'image', 'qr']) {
+  for (const elementType of ['static_text', 'dynamic_text', 'composed_text', 'barcode', 'image', 'qr', 'line', 'rectangle']) {
     assert.match(source, new RegExp(`case '${elementType}'`));
   }
   assert.match(source, /schemaVersion\) !== 1/);
@@ -48,7 +49,7 @@ test('single-Unit Print Label modal uses the effective multi-template set with r
   assert.match(controller, /normalizeUnitLabelPrintSelection/);
   assert.match(modal, /name="templateKey"/);
   assert.match(modal, /name="quantity\[<%= template\.key %>\]"/);
-  assert.match(modal, />Required</);
+  assert.match(modal, />Normal set</);
   assert.match(modal, />Optional</);
   assert.doesNotMatch(modal, /name="templateId"/);
 });

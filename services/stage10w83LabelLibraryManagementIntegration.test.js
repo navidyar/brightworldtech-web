@@ -32,17 +32,12 @@ test('Label Library supports draft metadata CRUD, clone, lifecycle and hard dele
   assert.match(model, /template_deleted/);
 });
 
-test('Phase B seed registers the current standard-unit-62 design without changing Tech printing', () => {
-  const seed = read('scripts/seedLabelLibraryPhaseB.js');
-  const printingConfig = read('config/labelPrinting.js');
+test('obsolete Phase B legacy seed is retired without changing the physical print transport', () => {
+  const packageJson = read('package.json');
   const printingService = read('services/labelPrintingService.js');
-  assert.match(seed, /legacyRendererId: 'standard-unit-62'/);
-  assert.match(seed, /const previewBuffer = Buffer\.from/);
-  assert.match(seed, /const previewSha256 = crypto\.createHash/);
-  assert.match(seed, /const \[\[previewAsset\]\] = await pool\.query/);
-  assert.match(seed, /status, printer_profile_code/);
-  assert.match(seed, /'active'/);
-  assert.match(printingConfig, /standard-unit-62/);
+
+  assert.equal(fs.existsSync(path.join(root, 'scripts/seedLabelLibraryPhaseB.js')), false);
+  assert.doesNotMatch(packageJson, /label-library-phase-b|seedLabelLibraryPhaseB/);
   assert.match(printingService, /\/usr\/bin\/lp/);
   assert.doesNotMatch(printingService, /labelLibraryModel|lot_label_templates|label_templates/);
 });
@@ -59,15 +54,17 @@ test('Lot Details exposes Configure Labels with whole-set inheritance and explic
   assert.match(controller, /resetLotTemplateSet/);
 });
 
-test('Lot label picker keeps search, category, popularity ordering, New badge and lazy preview hooks', () => {
+test('Lot label picker keeps search, category, global Library ordering and New badge', () => {
   const modal = read('views/fragments/lot-label-templates-modal.ejs');
   const model = read('models/labelLibraryModel.js');
   assert.match(modal, /data-lot-label-search/);
   assert.match(modal, /data-lot-label-category/);
-  assert.match(modal, /loading="lazy"/);
+  assert.match(modal, /lot-unit-form-rules-modal/, 'Configure Labels should reuse the viewport-bounded Lot modal shell so the body remains scrollable on short screens');
   assert.match(modal, />New</);
-  assert.match(model, /attached_lot_count, 0\) DESC/);
-  assert.match(model, /template\.print_count DESC/);
+  assert.match(model, /template\.library_sort_order ASC/);
+  assert.match(modal, /Include in normal print set/);
+  assert.doesNotMatch(modal, /Active in Lot/);
+  assert.doesNotMatch(modal, />Order</);
 });
 
 test('Lot duplication preserves or re-inherits Label Library behavior with the existing inheritance choice', () => {
@@ -80,6 +77,33 @@ test('Lot duplication preserves or re-inherits Label Library behavior with the e
 
 test('shared reusable assets are not deleted merely because a template is removed', () => {
   const model = read('models/labelLibraryModel.js');
-  assert.match(model, /\['config_json', 'preview', 'original_sample'\]\.includes/);
+  assert.match(model, /String\(asset\.role\) !== 'config_json'/);
   assert.doesNotMatch(model, /\['logo', 'image', 'background'\]\.includes\(String\(asset\.role\)\)/);
+});
+
+
+test('Archived Label Library templates expose an explicit unarchive-to-Draft lifecycle action', () => {
+  const controller = read('controllers/labelLibraryController.js');
+  const model = read('models/labelLibraryModel.js');
+  const library = read('views/pages/management-label-library.ejs');
+  const modal = read('views/fragments/label-template-action-modal.ejs');
+  assert.match(controller, /\['activate', 'archive', 'unarchive', 'delete'\]/);
+  assert.match(controller, /action === 'archive' \? 'archived' : 'draft'/);
+  assert.match(controller, /unarchived=1|noticeKey/);
+  assert.match(model, /template_unarchived/);
+  assert.match(library, /template\.status === 'archived'/);
+  assert.match(library, />Unarchive</);
+  assert.match(library, /template\.status === 'draft'/);
+  assert.match(modal, /unarchive: 'Unarchive Template'/);
+  assert.match(modal, /restores the template to Draft/);
+});
+
+test('Lot assignment relies on global template lifecycle instead of a second Active-in-Lot toggle', () => {
+  const modal = read('views/fragments/lot-label-templates-modal.ejs');
+  const controller = read('controllers/lotController.js');
+  const policy = read('services/labelTemplateInputPolicy.js');
+  assert.match(modal, /Draft templates may be attached for staging and become printable automatically after global activation/);
+  assert.doesNotMatch(modal, /Active in Lot/);
+  assert.doesNotMatch(controller, /Only globally Active label templates can be active in a Lot/);
+  assert.match(policy, /isActive: true/);
 });

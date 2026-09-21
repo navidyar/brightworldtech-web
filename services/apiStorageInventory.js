@@ -124,21 +124,27 @@ function normalizeStorageObservation(rawStorage) {
     throw new Error('storage must be an object.');
   }
   const state = normalizeText(rawStorage.state || 'known', 40).toLowerCase();
-  if (!['known', 'unknown'].includes(state)) {
-    throw new Error('storage.state must be known or unknown.');
+  if (!['known', 'unknown', 'confirmed_absent'].includes(state)) {
+    throw new Error('storage.state must be known, confirmed_absent, or unknown.');
   }
   if (state === 'unknown') return { fieldKey: STORAGE_FIELD_KEY, state, value: null };
+  if (state === 'confirmed_absent') {
+    return { fieldKey: STORAGE_FIELD_KEY, state, value: { total_gb: 0, devices: [] } };
+  }
 
   const rawDevices = Array.isArray(rawStorage.devices) ? rawStorage.devices : null;
-  if (!rawDevices || rawDevices.length === 0) {
-    throw new Error('storage.devices must contain at least one internal drive when storage.state is known.');
+  if (!rawDevices) {
+    throw new Error('storage.devices must be an array when storage.state is known.');
+  }
+  if (rawDevices.length === 0) {
+    return { fieldKey: STORAGE_FIELD_KEY, state: 'unknown', value: null };
   }
   if (rawDevices.length > 32) throw new Error('storage.devices cannot contain more than 32 devices.');
 
   const devices = rawDevices
     .filter((device) => device?.internal !== false && device?.is_internal !== false && device?.isInternal !== false)
     .map(normalizeStorageDevice);
-  if (!devices.length) throw new Error('storage.devices does not contain an internal drive.');
+  if (!devices.length) return { fieldKey: STORAGE_FIELD_KEY, state: 'unknown', value: null };
 
   return {
     fieldKey: STORAGE_FIELD_KEY,
@@ -317,32 +323,26 @@ function toolDetailsDiffer(current, incoming) {
   });
 }
 
-function buildStoragePlan({ observation, currentRows, sourceCode = '', latestAppliedValue = null }) {
+function buildStoragePlan({ observation, currentRows, sourceCode = '', latestAppliedValue = null, latestAppliedToolSource = '', incomingToolSource = '' }) {
   if (!observation) return null;
   if (observation.state === 'unknown') {
     return { status: 'ignored_unknown', reason: 'unknown_does_not_overwrite', mode: 'none', pairs: [], observation };
   }
 
   const ownership = determineStorageOwnership({ currentRows, sourceCode, latestAppliedValue });
-  const pairs = pairCompatibleDevices(currentRows, observation.value.devices);
-
-  if (ownership === 'manual' || ownership === 'protected_legacy') {
-    if (!pairs) {
-      return {
-        status: 'blocked_manual',
-        reason: ownership === 'manual' ? 'manual_storage_configuration_conflict' : 'existing_storage_not_tool_owned',
-        mode: 'none', pairs: [], observation, ownership
-      };
-    }
-    const replacementNeeded = pairs.some(({ current, incoming }) => physicalIdentityChanged(current, incoming));
-    const hasDetailChange = pairs.some(({ current, incoming }) => toolDetailsDiffer(current, incoming));
+  const existingToolSource = String(latestAppliedToolSource || '').trim().toLowerCase();
+  const incomingSource = String(incomingToolSource || '').trim().toLowerCase();
+  if (ownership === 'tool' && existingToolSource === 'techtools' && incomingSource === 'scantools') {
     return {
-      status: replacementNeeded || hasDetailChange ? 'applied' : 'unchanged',
-      reason: ownership === 'manual' ? 'manual_storage_configuration_preserved' : 'existing_storage_configuration_confirmed',
-      mode: replacementNeeded ? 'replace_compatible' : 'details_only',
-      pairs, observation, ownership
+      status: 'unchanged',
+      reason: 'techtools_current_storage_is_final',
+      mode: 'none',
+      pairs: [],
+      observation,
+      ownership
     };
   }
+  const pairs = pairCompatibleDevices(currentRows, observation.value.devices);
 
   if (pairs) {
     const replacementNeeded = pairs.some(({ current, incoming }) => physicalIdentityChanged(current, incoming));
@@ -357,7 +357,7 @@ function buildStoragePlan({ observation, currentRows, sourceCode = '', latestApp
 
   return {
     status: 'applied',
-    reason: ownership === 'blank' ? 'storage_populated_from_tool' : 'latest_tool_storage_configuration',
+    reason: ownership === 'blank' ? 'storage_populated_from_tool' : 'tool_authoritative_storage_configuration',
     mode: 'replace', pairs: [], observation, ownership
   };
 }

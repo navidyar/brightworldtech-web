@@ -115,3 +115,31 @@ test('Management editing a solo printer stays on Management routes', () => {
   assert.match(form, /managementContext \? '\/management\/printers' : '\/tech\/printers'/);
   assert.match(controller, /renderPrinterForm\(res, \{ printer, scope: printer\.scope_code, management \}\)/);
 });
+
+test('printer profiles use friendly allowlisted choices instead of raw internal codes', () => {
+  const config = read('config/labelPrinting.js');
+  const controller = read('controllers/labelPrinterController.js');
+  const policy = read('services/labelPrinterPolicy.js');
+  const form = read('views/fragments/label-printer-form-modal.ejs');
+  assert.match(config, /LABEL_PRINTER_PROFILES/);
+  assert.match(config, /Brother QL-810W · 300 dpi/);
+  assert.match(controller, /printerProfiles: LABEL_PRINTER_PROFILES/);
+  assert.match(form, /<select name="printerProfileCode">/);
+  assert.match(form, /Loaded Roll Width/);
+  assert.match(form, /continuousMediaWidths/);
+  assert.doesNotMatch(form, /placeholder="brother_ql810w_300dpi"/);
+  assert.match(policy, /findLabelPrinterProfile/);
+  assert.match(policy, /inferLabelPrinterProfile/);
+  assert.match(policy, /mediaCode: explicitMediaCode \|\| inferredProfile\?\.mediaCode/);
+  assert.match(policy, /dpi: inferredProfile\?\.dpi/);
+});
+
+test('new printer forms default to the supported print profile without changing existing unconfigured printers', () => {
+  const controller = read('controllers/labelPrinterController.js');
+  const form = read('views/fragments/label-printer-form-modal.ejs');
+  assert.match(controller, /const defaultProfile = printer \? null : \(LABEL_PRINTER_PROFILES\[0\] \|\| null\)/);
+  assert.match(controller, /printerProfileCode: printer \? \(printer\.printer_profile_code \|\| ''\) : \(defaultProfile\?\.code \|\| ''\)/);
+  assert.match(controller, /mediaCode: printer \? \(printer\.media_code \|\| ''\) : \(defaultProfile\?\.mediaCode \|\| ''\)/);
+  assert.match(controller, /dpi: printer \? \(printer\.dpi \|\| ''\) : \(defaultProfile\?\.dpi \|\| ''\)/);
+  assert.match(form, /Printers without a supported profile remain registered but do not appear in print destinations/);
+});

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+        <main class="content-shell">
+          <section class="page-heading"><div><h1><%= recipient.subject %></h1><p>Your saved acknowledgment record.</p></div><a class="secondary-button" href="/my-huddles">Back to My Huddles</a></section>
+          <section class="content-card">
+            <div class="content-header"><div><p class="eyebrow"><%= messageTypeLabel(recipient.message_type_code) %> Huddle</p><h2>Message Accepted</h2></div></div>
+            <% if (recipient.parent_subject) { %><div class="message info"><p><strong>Related to:</strong> <%= recipient.parent_subject %></p></div><% } %>
+            <div class="virtual-huddle-message-copy"><%= recipient.message_body %></div>
+            <dl class="virtual-huddle-message-meta">
+              <div><dt>Sent by</dt><dd><%= recipient.sender_name_snapshot %> (<%= formatRoleLabel(recipient.sender_role_code_snapshot) %>)</dd></div>
+              <div><dt>Originally sent</dt><dd><%= formatDateTime(recipient.sent_at) %></dd></div>
+              <div><dt>You confirmed</dt><dd><%= formatDateTime(recipient.acknowledged_at) %></dd></div>
+              <div><dt>Confirmation</dt><dd><%= recipient.acknowledgment_phrase_snapshot %></dd></div>
+            </dl>
+            <% if (recipient.acknowledgment_note) { %><div class="message info"><p><strong>Your optional context:</strong> <%= recipient.acknowledgment_note %></p></div><% } %>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

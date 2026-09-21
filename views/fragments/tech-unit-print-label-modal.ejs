@@ -3,7 +3,7 @@
   const safeErrors = Array.isArray(errorMessages) ? errorMessages.filter(Boolean) : [];
   const safePrinters = Array.isArray(printers) ? printers : [];
   const safeTemplates = Array.isArray(templateOptions) ? templateOptions : [];
-  const canSubmit = safeErrors.length === 0
+  const canSubmit = !Boolean(submitBlocked)
     && safeUnit.unitId
     && safePrinters.length > 0
     && safeTemplates.some((template) => template.available);
@@ -13,12 +13,9 @@
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel tech-print-label-modal" role="dialog" aria-modal="true" aria-labelledby="tech-print-label-title">
+  <section class="modal-panel site-clean-modal tech-print-label-modal" role="dialog" aria-modal="true" aria-labelledby="tech-print-label-title">
     <div class="modal-header">
-      <div>
-        <p class="eyebrow">Label Printing</p>
-        <h2 id="tech-print-label-title">Print Unit Label</h2>
-      </div>
+      <h2 id="tech-print-label-title">Print Unit Label</h2>
       <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
     </div>
 
@@ -50,12 +47,6 @@
         <div class="message info tech-label-template-source"><p><%= templateSetNotice %></p></div>
       <% } %>
 
-      <% if (lotLabelFormat) { %>
-        <p class="field-hint tech-label-lot-format-hint">
-          Legacy Lot label format: <strong><%= lotLabelFormat %></strong>. This remains informational while the compatibility fallback is active.
-        </p>
-      <% } %>
-
       <% if (safeTemplates.length > 0) { %>
         <form
           class="app-form tech-unit-form tech-label-print-form"
@@ -68,13 +59,13 @@
           <div class="form-section tech-label-printer-section">
             <div class="form-section-header">
               <div>
-                <h3>Printer</h3>
-                <p class="field-hint">All labels selected below are submitted through the existing CUPS → RAW print path.</p>
+                <h3>Printer or Group</h3>
+                <p class="field-hint">All labels selected below are submitted through the existing CUPS print path.</p>
               </div>
             </div>
             <div class="form-grid tech-label-printer-grid">
               <label class="form-field">
-                <span>Printer</span>
+                <span>Printer or Group</span>
                 <select name="printerId" required data-modal-initial-focus>
                   <% safePrinters.forEach((printer) => { %>
                     <option value="<%= printer.id %>" <%= printer.id === selectedPrinterId ? 'selected' : '' %>><%= printer.label %></option>
@@ -88,7 +79,7 @@
             <div class="form-section-header">
               <div>
                 <h3>Labels</h3>
-                <p class="field-hint">Required labels are preselected. Optional labels can be selected when needed. Quantities come from the effective Lot configuration.</p>
+                <p class="field-hint">Labels in the normal print set are preselected. Optional labels can be selected when needed. Quantities come from the effective Lot configuration.</p>
               </div>
             </div>
 
@@ -107,8 +98,7 @@
                       <span><strong><%= template.name %></strong></span>
                     </label>
                     <div class="tech-label-template-badges">
-                      <% if (template.isRequired) { %><span class="pill good">Required</span><% } else { %><span class="pill slate">Optional</span><% } %>
-                      <% if (template.mode === 'legacy_fallback') { %><span class="pill slate">Compatibility</span><% } %>
+                      <% if (template.isRequired) { %><span class="pill good">Normal set</span><% } else { %><span class="pill slate">Optional</span><% } %>
                     </div>
                   </div>
 

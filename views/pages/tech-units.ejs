@@ -54,6 +54,7 @@
               role="status"
               aria-live="polite"
               aria-atomic="true"
+              data-auto-dismiss-success
               hidden
             ></div>
 
@@ -62,7 +63,7 @@
                 <div
                   id="tech-print-queue-summary"
                   hx-get="/tech/print-queue/summary"
-                  hx-trigger="load, unit-label-queued from:body"
+                  hx-trigger="load, every 30s, unit-label-queued from:body, unit-label-status-changed from:body"
                   hx-swap="innerHTML"
                 >
                   <a class="secondary-button tech-recent-prints-button" href="/tech/print-queue/modal" hx-get="/tech/print-queue/modal" hx-target="#modal-root" hx-swap="innerHTML">Recent Prints</a>
@@ -75,7 +76,7 @@
           </section>
 
           <% if (successMessage) { %>
-            <div class="message success tech-units-clean-message"><%= successMessage %></div>
+            <div class="message success tech-units-clean-message" data-auto-dismiss-success><%= successMessage %></div>
           <% } %>
 
           <% if (typeof warningMessage !== 'undefined' && warningMessage) { %>

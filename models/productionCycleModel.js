@@ -364,6 +364,113 @@ async function getLotNameSnapshots(lotIds, connection = pool) {
   return new Map(rows.map((row) => [Number(row.lot_id), String(row.name || '').trim()]));
 }
 
+async function rolloverCurrentHardwareToPrevious({ unitId, actorUserId = null }, connection = pool) {
+  const safeUnitId = normalizePositiveInteger(unitId);
+  const safeActorUserId = normalizePositiveInteger(actorUserId);
+  if (!safeUnitId) return { memoryRowsMoved: 0, storageRowsMoved: 0 };
+
+  const [hasMemory, hasPreviousMemory, hasStorage, hasPreviousStorage] = await Promise.all([
+    tableExists(connection, 'unit_memory_modules'),
+    tableExists(connection, 'unit_previous_memory_modules'),
+    tableExists(connection, 'unit_storage_devices'),
+    tableExists(connection, 'unit_previous_storage_devices')
+  ]);
+
+  let memoryRowsMoved = 0;
+  let storageRowsMoved = 0;
+
+  if (hasMemory && hasPreviousMemory) {
+    const [currentRows] = await connection.query(
+      `SELECT slot_label, size_gb, ram_type_config_value_id, memory_install_type_code,
+              speed_mhz, manufacturer_name, part_number, serial_number, change_notes
+         FROM unit_memory_modules
+        WHERE unit_id = ? AND is_current = 1
+        ORDER BY slot_label, unit_memory_module_id`,
+      [safeUnitId]
+    );
+    await connection.query('DELETE FROM unit_previous_memory_modules WHERE unit_id = ?', [safeUnitId]);
+    for (const [index, row] of currentRows.entries()) {
+      await connection.query(
+        `INSERT INTO unit_previous_memory_modules (
+           unit_id, sort_order, slot_label, size_gb, ram_type_config_value_id,
+           memory_install_type_code, speed_mhz, manufacturer_name, part_number,
+           serial_number, change_notes, changed_by_user_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          safeUnitId, index + 1, row.slot_label, row.size_gb, row.ram_type_config_value_id,
+          row.memory_install_type_code, row.speed_mhz, row.manufacturer_name, row.part_number,
+          row.serial_number, row.change_notes, safeActorUserId
+        ]
+      );
+    }
+    memoryRowsMoved = currentRows.length;
+    const memoryColumns = await getColumnSet(connection, 'unit_memory_modules');
+    const memoryReset = ['is_current = 0'];
+    if (memoryColumns.has('removed_at')) memoryReset.push('removed_at = NOW()');
+    if (memoryColumns.has('changed_by_user_id')) memoryReset.push('changed_by_user_id = ?');
+    await connection.query(
+      `UPDATE unit_memory_modules SET ${memoryReset.join(', ')} WHERE unit_id = ? AND is_current = 1`,
+      memoryColumns.has('changed_by_user_id') ? [safeActorUserId, safeUnitId] : [safeUnitId]
+    );
+  }
+
+  if (hasStorage && hasPreviousStorage) {
+    const [currentRows] = await connection.query(
+      `SELECT slot_label, storage_type_config_value_id, size_gb, manufacturer_name,
+              model_number, serial_number, firmware_version, wipe_status_config_value_id, change_notes
+         FROM unit_storage_devices
+        WHERE unit_id = ? AND is_current = 1
+        ORDER BY slot_label, unit_storage_device_id`,
+      [safeUnitId]
+    );
+    await connection.query('DELETE FROM unit_previous_storage_devices WHERE unit_id = ?', [safeUnitId]);
+    for (const [index, row] of currentRows.entries()) {
+      await connection.query(
+        `INSERT INTO unit_previous_storage_devices (
+           unit_id, sort_order, slot_label, storage_type_config_value_id, size_gb,
+           manufacturer_name, model_number, serial_number, firmware_version,
+           wipe_status_config_value_id, change_notes, changed_by_user_id
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          safeUnitId, index + 1, row.slot_label, row.storage_type_config_value_id, row.size_gb,
+          row.manufacturer_name, row.model_number, row.serial_number, row.firmware_version,
+          row.wipe_status_config_value_id, row.change_notes, safeActorUserId
+        ]
+      );
+    }
+    storageRowsMoved = currentRows.length;
+    const storageColumns = await getColumnSet(connection, 'unit_storage_devices');
+    const storageReset = ['is_current = 0'];
+    if (storageColumns.has('removed_at')) storageReset.push('removed_at = NOW()');
+    if (storageColumns.has('changed_by_user_id')) storageReset.push('changed_by_user_id = ?');
+    await connection.query(
+      `UPDATE unit_storage_devices SET ${storageReset.join(', ')} WHERE unit_id = ? AND is_current = 1`,
+      storageColumns.has('changed_by_user_id') ? [safeActorUserId, safeUnitId] : [safeUnitId]
+    );
+  }
+
+  const unitColumns = await getColumnSet(connection, 'units');
+  const assignments = [];
+  if (unitColumns.has('previous_ram_gb') && unitColumns.has('ram_gb')) assignments.push('previous_ram_gb = ram_gb');
+  if (unitColumns.has('ram_gb')) assignments.push('ram_gb = NULL');
+  if (unitColumns.has('ram_type_config_value_id')) assignments.push('ram_type_config_value_id = NULL');
+  if (unitColumns.has('previous_storage_gb') && unitColumns.has('storage_gb')) assignments.push('previous_storage_gb = storage_gb');
+  if (unitColumns.has('storage_gb')) assignments.push('storage_gb = NULL');
+  if (unitColumns.has('storage_type_config_value_id')) assignments.push('storage_type_config_value_id = NULL');
+  if (assignments.length) {
+    await connection.query(`UPDATE units SET ${assignments.join(', ')} WHERE unit_id = ? LIMIT 1`, [safeUnitId]);
+  }
+
+  if (await tableExists(connection, 'unit_field_sources')) {
+    await connection.query(
+      `DELETE FROM unit_field_sources WHERE unit_id = ? AND field_key IN ('memory_modules', 'storage_devices')`,
+      [safeUnitId]
+    );
+  }
+
+  return { memoryRowsMoved, storageRowsMoved };
+}
+
 async function recordLotMove({
   unitId,
   fromLotId,
@@ -371,7 +478,9 @@ async function recordLotMove({
   movedByUserId,
   notes = null,
   allowNewProductionCycle = true,
-  auditAmazonPalletClear = true
+  auditAmazonPalletClear = true,
+  productionCyclePlan = null,
+  hardwareRolloverPrepared = false
 }, connection = pool) {
   const safeUnitId = normalizePositiveInteger(unitId);
   const safeToLotId = normalizePositiveInteger(toLotId);
@@ -403,12 +512,19 @@ async function recordLotMove({
   }
 
   const capabilities = await getProductionCycleSchemaCapabilities(connection);
-  const plan = await planLotMoveProductionCycle({
+  const plan = productionCyclePlan || await planLotMoveProductionCycle({
     unitId: safeUnitId,
     fromLotId,
     toLotId: safeToLotId,
     allowNewProductionCycle
   }, connection);
+
+  if (plan.startsNewProductionCycle && !hardwareRolloverPrepared) {
+    await rolloverCurrentHardwareToPrevious({
+      unitId: safeUnitId,
+      actorUserId: safeMovedByUserId
+    }, connection);
+  }
 
   const productionCycleNote = plan.startsNewProductionCycle
     ? 'Destination Lot started a new production cycle. Another production unit and weight are earned only after the Unit is completed again.'
@@ -540,6 +656,7 @@ module.exports = {
   hasActiveProductionCreditForCycle,
   hasCurrentLotOperationalCompletion,
   planLotMoveProductionCycle,
+  rolloverCurrentHardwareToPrevious,
   recordLotMove,
   getCompletionProductionCycleState
 };

@@ -1,5 +1,5 @@
 <div id="tech-printers-live" hx-get="/tech/printers/live" hx-trigger="label-printer-registry-changed from:body" hx-swap="outerHTML" hx-vals='js:{message: event.detail && event.detail.message ? event.detail.message : ""}'<% if (oob) { %> hx-swap-oob="outerHTML"<% } %>>
-  <% if (successMessage) { %><div class="message success"><%= successMessage %></div><% } %>
+  <% if (successMessage) { %><div class="message success" data-auto-dismiss-success><%= successMessage %></div><% } %>
   <% if (errorMessages.length) { %><div class="message error"><% errorMessages.forEach((m) => { %><p><%= m %></p><% }) %></div><% } %>
 
   <section class="site-clean-section">
@@ -11,7 +11,7 @@
           <% if (!ownedPrinters.length) { %><tr><td colspan="<%= showNetworkDetails ? 5 : 4 %>">You have not added a solo printer.</td></tr><% } %>
           <% ownedPrinters.forEach((printer) => { %>
             <tr>
-              <td><strong><%= printer.display_name %></strong><br/><small><%= printer.location_label || 'No location label' %></small></td>
+              <td><strong><%= printer.display_name %></strong><br/><small><%= printer.location_label || 'No location label' %></small><br/><small><%= printer.printer_profile_code ? 'Print profile configured' : 'Print profile not configured' %></small></td>
               <% if (showNetworkDetails) { %><td><%= printer.host_address %>:<%= printer.port %><br/><small><%= printer.protocol_code %></small></td><% } %>
               <td><span class="pill <%= Number(printer.is_shared) === 1 ? 'good' : 'slate' %>"><%= Number(printer.is_shared) === 1 ? 'Shared' : 'Private' %></span></td>
               <td><span class="pill <%= Number(printer.is_enabled) === 1 ? 'good' : 'bad' %>"><%= Number(printer.is_enabled) === 1 ? 'Enabled' : 'Disabled' %></span><br/><small><%= printer.last_probe_status || 'Not probed' %></small></td>

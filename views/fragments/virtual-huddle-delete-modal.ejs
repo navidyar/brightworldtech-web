@@ -1,0 +1,17 @@
+<div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close>
+  <section class="modal-panel site-clean-modal" role="dialog" aria-modal="true" aria-labelledby="virtual-huddle-delete-title">
+    <header class="modal-header">
+      <div><p class="eyebrow">Admin Only</p><h2 id="virtual-huddle-delete-title">Permanently Delete Huddle</h2></div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <div class="message error"><p><strong><%= message.subject %></strong> and every recipient/acknowledgment record for it will be permanently removed. After deletion, the system will behave as if this Huddle was never sent.</p></div>
+      <form method="post" action="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/delete" hx-post="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/delete" hx-target="#modal-root" hx-swap="innerHTML">
+        <div class="form-actions">
+          <button type="submit" class="danger-button">Delete Permanently</button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

@@ -24,6 +24,9 @@ test('Label Library policy keeps the agreed 14-day New window and reusable asset
   assert.ok(labelLibraryConfig.LABEL_ASSET_KINDS.includes('logo'));
   assert.ok(labelLibraryConfig.LABEL_ASSET_KINDS.includes('background'));
   assert.ok(labelLibraryConfig.LABEL_ASSET_KINDS.includes('config_json'));
+  assert.ok(!labelLibraryConfig.LABEL_ASSET_KINDS.includes('preview'));
+  assert.ok(!labelLibraryConfig.LABEL_ASSET_KINDS.includes('analysis_json'));
+  assert.ok(!labelLibraryConfig.LABEL_ASSET_KINDS.includes('original_sample'));
 });
 
 test('Docker keeps Label Library assets on the host filesystem rather than in the image', () => {
@@ -54,6 +57,7 @@ test('foundation migration is dry-run by default and prepares all agreed reposit
   assert.match(migration, /getColumnType\(connection, 'lots', 'lot_id'\)/);
   assert.match(migration, /getColumnType\(connection, 'units', 'unit_id'\)/);
   assert.match(migration, /ensureLabelLibraryStorage\(\)/);
+  assert.doesNotMatch(migration, /imported_at/);
 
   for (const tableName of tableNames) {
     assert.match(migration, new RegExp(`\\b${tableName}\\b`));
@@ -99,6 +103,7 @@ test('content-addressed storage deduplicates files and prevents repository path 
     assert.match(first.relativePath, /^assets\/sha256\/[a-f0-9]{2}\/[a-f0-9]{64}\.svg$/);
     assert.equal(fs.existsSync(storage.resolveAssetAbsolutePath(first.relativePath, tempRoot)), true);
     assert.throws(() => storage.resolveAssetAbsolutePath('../outside', tempRoot), /escapes the repository root/);
+    assert.throws(() => storage.normalizeMimeType('image/jpeg'), /Unsupported label asset MIME type/);
   } finally {
     await fs.promises.rm(tempRoot, { recursive: true, force: true });
   }

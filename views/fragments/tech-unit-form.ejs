@@ -10,15 +10,16 @@
       ];
   const blankMemoryRow = { slotLabel: 'Slot 1', sizeGb: '', ramTypeConfigValueId: '', memoryInstallTypeCode: '', speedMhz: '', manufacturerName: '', partNumber: '', serialNumber: '', changeNotes: '' };
   const blankStorageRow = { slotLabel: 'Drive 1', sizeGb: '', storageTypeConfigValueId: '', manufacturerName: '', modelNumber: '', serialNumber: '', firmwareVersion: '', wipeStatusConfigValueId: '', changeNotes: '' };
+  const hasCapacityValue = (value) => value !== null && value !== undefined && String(value).trim() !== '';
   const previousMemoryRows = Array.isArray(formData.previousMemoryModules) && formData.previousMemoryModules.length > 0
     ? formData.previousMemoryModules
-    : [blankMemoryRow];
+    : [];
   const memoryRows = Array.isArray(formData.memoryModules) && formData.memoryModules.length > 0
     ? formData.memoryModules
     : [blankMemoryRow];
   const previousStorageRows = Array.isArray(formData.previousStorageDevices) && formData.previousStorageDevices.length > 0
     ? formData.previousStorageDevices
-    : [blankStorageRow];
+    : [];
   const storageRows = Array.isArray(formData.storageDevices) && formData.storageDevices.length > 0
     ? formData.storageDevices
     : [blankStorageRow];
@@ -61,7 +62,7 @@
   const skinnedStatusOptions = Array.isArray(formOptions.skinnedStatusOptions) ? formOptions.skinnedStatusOptions : [];
   const yesNoOptions = Array.isArray(formOptions.yesNoOptions) ? formOptions.yesNoOptions : [];
   const testResultOptions = Array.isArray(formOptions.testResultOptions) ? formOptions.testResultOptions : [];
-  const availabilityTestResultOptions = Array.isArray(formOptions.availabilityTestResultOptions) ? formOptions.availabilityTestResultOptions : [];
+  const componentTestResultOptions = Array.isArray(formOptions.componentTestResultOptions) ? formOptions.componentTestResultOptions : [];
   const lockStatusOptions = Array.isArray(formOptions.lockStatusOptions) ? formOptions.lockStatusOptions : [];
   const displayTypeOptions = Array.isArray(formOptions.displayTypeOptions) ? formOptions.displayTypeOptions : [];
   const screenResolutionOptions = Array.isArray(formOptions.screenResolutionOptions) ? formOptions.screenResolutionOptions : [];
@@ -144,7 +145,7 @@
 
 
   function formatCapacity(value) {
-    const rawValue = String(value || '').trim();
+    const rawValue = value === null || value === undefined ? '' : String(value).trim();
     const numeric = Number(rawValue);
 
     if (!rawValue) {
@@ -232,7 +233,7 @@
   </div>
 <% } %>
 
-<form class="app-form tech-unit-form" method="post" action="<%= formAction %>" data-tech-unit-form data-unit-form-mode="<%= mode %>" data-lot-unit-form-profile-url="/tech/units/lot-form-profile" data-lot-requirement-preview-url="/tech/units/lot-requirement-preview" data-require-actual-cosmetic-issue-for-non-a-grade="<%= requiresActualCosmeticIssueForNonAGrade ? 'true' : 'false' %>" <%- htmxAttrs %>>
+<form class="app-form tech-unit-form" method="post" action="<%= formAction %>" data-tech-unit-form data-unit-form-mode="<%= mode %>" data-original-lot-id="<%= formData.lotId || '' %>" data-current-memory-tool-owned="<%= formOptions.currentHardwareAuthority?.memory?.toolOwned ? 'true' : 'false' %>" data-current-storage-tool-owned="<%= formOptions.currentHardwareAuthority?.storage?.toolOwned ? 'true' : 'false' %>" data-lot-unit-form-profile-url="/tech/units/lot-form-profile" data-lot-requirement-preview-url="/tech/units/lot-requirement-preview" data-require-actual-cosmetic-issue-for-non-a-grade="<%= requiresActualCosmeticIssueForNonAGrade ? 'true' : 'false' %>" <%- htmxAttrs %>>
   <input type="hidden" name="currentUnitStatusConfigValueId" value="<%= formData.currentUnitStatusConfigValueId || formOptions.defaultUnitStatusId || '' %>" />
   <input type="hidden" name="lotRequirementMode" value="<%= mode %>" />
   <% if (isEditMode) { %>
@@ -324,6 +325,7 @@
                 const lotOptionCompactLabel = lot.isCurrentLotClosed
                   ? `${lotOptionName} (Closed — current lot)`
                   : lotOptionName;
+                const lotToolPolicy = (formOptions.lotToolPolicies || {})[String(hierarchyLot.lotId)] || {};
               %>
               <option
                 value="<%= hierarchyLot.lotId %>"
@@ -336,6 +338,8 @@
                 data-lot-search-text="<%= hierarchyLot.searchText || hierarchyLot.fullPath || lotOptionName %>"
                 data-production-weight="<%= hierarchyLot.selectable && canViewProductionWeight ? lotProductionWeightValue : '' %>"
                 data-allow-duplicate-unit-assumption="<%= hierarchyLot.selectable && Number(lot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0' %>"
+                data-require-scantools="<%= lotToolPolicy.requireScanToolsBeforeCompletion ? '1' : '0' %>"
+                data-require-techtools="<%= lotToolPolicy.requireTechToolsBeforeCompletion ? '1' : '0' %>"
                 <%= hierarchyLot.selectable ? '' : 'disabled' %>
                 <%= hierarchyLot.selectable ? selected(formData.lotId, hierarchyLot.lotId) : '' %>
               ><%= lotOptionName %></option>
@@ -801,7 +805,7 @@
       <input data-unit-form-companion-key="previous_memory_size"
         type="hidden"
         name="previousRamGb"
-        value="<%= hasExplicitCapacityRows(previousMemoryRows) ? memoryRowsTotalGb(previousMemoryRows) : (formData.previousRamGb || '') %>"
+        value="<%= hasExplicitCapacityRows(previousMemoryRows) ? memoryRowsTotalGb(previousMemoryRows) : (hasCapacityValue(formData.previousRamGb) ? formData.previousRamGb : '') %>"
         data-previous-memory-total-input
         data-auto-from-components="<%= hasExplicitCapacityRows(previousMemoryRows) ? 'true' : 'false' %>"
       />
@@ -818,7 +822,7 @@
       <input data-unit-form-companion-key="previous_storage_size"
         type="hidden"
         name="previousStorageGb"
-        value="<%= hasExplicitCapacityRows(previousStorageRows) ? storageRowsTotalGb(previousStorageRows) : (formData.previousStorageGb || '') %>"
+        value="<%= hasExplicitCapacityRows(previousStorageRows) ? storageRowsTotalGb(previousStorageRows) : (hasCapacityValue(formData.previousStorageGb) ? formData.previousStorageGb : '') %>"
         data-previous-storage-total-input
         data-auto-from-components="<%= hasExplicitCapacityRows(previousStorageRows) ? 'true' : 'false' %>"
       />
@@ -847,7 +851,7 @@
         <div class="tech-memory-state-bar">
           <div class="tech-memory-state-title">
             <strong>Previous</strong>
-            <span><strong data-previous-memory-total-display><%= formatCapacity(hasExplicitCapacityRows(previousMemoryRows) ? memoryRowsTotalGb(previousMemoryRows) : formData.previousRamGb) || "0GB" %></strong> total</span>
+            <span><strong data-previous-memory-total-display><%= hasExplicitCapacityRows(previousMemoryRows) ? formatCapacity(memoryRowsTotalGb(previousMemoryRows)) : (hasCapacityValue(formData.previousRamGb) ? formatCapacity(formData.previousRamGb) : "Not recorded") %></strong><span data-previous-memory-total-suffix <%= !hasExplicitCapacityRows(previousMemoryRows) && !hasCapacityValue(formData.previousRamGb) ? "hidden" : "" %>> total</span></span>
           </div>
           <div class="tech-memory-state-actions">
             <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="previousMemory">+ Add</button>
@@ -870,7 +874,7 @@
         </div>
       </section>
 
-      <section class="tech-memory-state tech-memory-state--current" data-unit-form-field-key="memory_modules" data-unit-form-repeatable-type="memory" aria-label="Current memory modules">
+      <section class="tech-memory-state tech-memory-state--current" data-unit-form-field-key="memory_modules" data-unit-form-repeatable-type="memory" data-current-hardware-field="memory" aria-label="Current memory modules">
         <div class="tech-memory-state-bar">
           <div class="tech-memory-state-title">
             <strong>Current</strong>
@@ -878,6 +882,7 @@
           </div>
           <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="memory">+ Add</button>
         </div>
+        <p class="field-hint tech-current-hardware-authority-message" data-current-hardware-authority-message="memory" hidden></p>
 
         <div class="tech-memory-row-list" data-module-list="memory">
           <% memoryRows.forEach((moduleRow, index) => { %>
@@ -910,7 +915,7 @@
         <div class="tech-memory-state-bar">
           <div class="tech-memory-state-title">
             <strong>Previous</strong>
-            <span><strong data-previous-storage-total-display><%= formatCapacity(hasExplicitCapacityRows(previousStorageRows) ? storageRowsTotalGb(previousStorageRows) : formData.previousStorageGb) || "0GB" %></strong> total</span>
+            <span><strong data-previous-storage-total-display><%= hasExplicitCapacityRows(previousStorageRows) ? formatCapacity(storageRowsTotalGb(previousStorageRows)) : (hasCapacityValue(formData.previousStorageGb) ? formatCapacity(formData.previousStorageGb) : "Not recorded") %></strong><span data-previous-storage-total-suffix <%= !hasExplicitCapacityRows(previousStorageRows) && !hasCapacityValue(formData.previousStorageGb) ? "hidden" : "" %>> total</span></span>
           </div>
           <div class="tech-memory-state-actions">
             <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="previousStorage">+ Add</button>
@@ -933,7 +938,7 @@
         </div>
       </section>
 
-      <section class="tech-memory-state tech-memory-state--current" data-unit-form-field-key="storage_devices" data-unit-form-repeatable-type="storage" aria-label="Current storage devices">
+      <section class="tech-memory-state tech-memory-state--current" data-unit-form-field-key="storage_devices" data-unit-form-repeatable-type="storage" data-current-hardware-field="storage" aria-label="Current storage devices">
         <div class="tech-memory-state-bar">
           <div class="tech-memory-state-title">
             <strong>Current</strong>
@@ -941,6 +946,7 @@
           </div>
           <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="storage">+ Add</button>
         </div>
+        <p class="field-hint tech-current-hardware-authority-message" data-current-hardware-authority-message="storage" hidden></p>
 
         <div class="tech-memory-row-list" data-module-list="storage">
           <% storageRows.forEach((deviceRow, index) => { %>
@@ -1028,12 +1034,12 @@
               <span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Camera recorded</span>
               <label class="form-field" data-unit-form-field-key="camera_type"><span>Type</span><select name="cameras[<%= index %>][cameraTypeConfigValueId]" data-module-field><option value="">Choose an option</option><% cameraTypeOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.cameraTypeConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
               <label class="form-field" data-unit-form-field-key="camera_location"><span>Location</span><select name="cameras[<%= index %>][cameraLocationConfigValueId]" data-module-field><option value="">Choose an option</option><% cameraLocationOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.cameraLocationConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
-              <label class="form-field" data-unit-form-field-key="camera_test"><span>Test</span><select name="cameras[<%= index %>][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% testResultOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.testResultConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+              <label class="form-field" data-unit-form-field-key="camera_test"><span>Test</span><select name="cameras[<%= index %>][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% componentTestResultOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.testResultConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
               <button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button>
             </div>
           <% }) %>
         </div>
-        <template data-module-template="camera"><div class="tech-spec-repeatable-row tech-spec-repeatable-row--camera" data-module-row="camera"><span class="tech-memory-row-number" data-module-display-number>__DISPLAY__</span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Camera recorded</span><label class="form-field" data-unit-form-field-key="camera_type"><span>Type</span><select name="cameras[__INDEX__][cameraTypeConfigValueId]" data-module-field><option value="">Choose an option</option><% cameraTypeOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="camera_location"><span>Location</span><select name="cameras[__INDEX__][cameraLocationConfigValueId]" data-module-field><option value="">Choose an option</option><% cameraLocationOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="camera_test"><span>Test</span><select name="cameras[__INDEX__][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% testResultOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div></template>
+        <template data-module-template="camera"><div class="tech-spec-repeatable-row tech-spec-repeatable-row--camera" data-module-row="camera"><span class="tech-memory-row-number" data-module-display-number>__DISPLAY__</span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Camera recorded</span><label class="form-field" data-unit-form-field-key="camera_type"><span>Type</span><select name="cameras[__INDEX__][cameraTypeConfigValueId]" data-module-field><option value="">Choose an option</option><% cameraTypeOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="camera_location"><span>Location</span><select name="cameras[__INDEX__][cameraLocationConfigValueId]" data-module-field><option value="">Choose an option</option><% cameraLocationOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="camera_test"><span>Test</span><select name="cameras[__INDEX__][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% componentTestResultOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div></template>
       </section>
 
       <section class="tech-spec-repeatable" data-unit-form-field-key="batteries" data-unit-form-repeatable-type="battery" data-module-max="2">
@@ -1047,9 +1053,9 @@
       <section class="tech-spec-repeatable" data-unit-form-field-key="biometrics" data-unit-form-repeatable-type="biometric" data-module-max="6">
         <div class="tech-spec-repeatable-header"><strong>Biometrics</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="biometric">+ Add</button></div>
         <div class="tech-spec-repeatable-list" data-module-list="biometric">
-          <% biometricRows.forEach((row, index) => { %><div class="tech-spec-repeatable-row tech-spec-repeatable-row--biometric" data-module-row="biometric"><input type="hidden" name="biometrics[<%= index %>][rowId]" value="<%= row.rowId || '' %>" data-module-field /><span class="tech-memory-row-number" data-module-display-number><%= index + 1 %></span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Biometric hardware recorded</span><label class="form-field" data-unit-form-field-key="biometric_hardware"><span>Hardware</span><select name="biometrics[<%= index %>][hardwareConfigValueId]" data-module-field><option value="">Choose an option</option><% biometricHardwareOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.hardwareConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="biometrics_test"><span>Test</span><select name="biometrics[<%= index %>][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% availabilityTestResultOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.testResultConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div><% }) %>
+          <% biometricRows.forEach((row, index) => { %><div class="tech-spec-repeatable-row tech-spec-repeatable-row--biometric" data-module-row="biometric"><input type="hidden" name="biometrics[<%= index %>][rowId]" value="<%= row.rowId || '' %>" data-module-field /><span class="tech-memory-row-number" data-module-display-number><%= index + 1 %></span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Biometric hardware recorded</span><label class="form-field" data-unit-form-field-key="biometric_hardware"><span>Hardware</span><select name="biometrics[<%= index %>][hardwareConfigValueId]" data-module-field><option value="">Choose an option</option><% biometricHardwareOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.hardwareConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="biometrics_test"><span>Test</span><select name="biometrics[<%= index %>][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% componentTestResultOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.testResultConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div><% }) %>
         </div>
-        <template data-module-template="biometric"><div class="tech-spec-repeatable-row tech-spec-repeatable-row--biometric" data-module-row="biometric"><span class="tech-memory-row-number" data-module-display-number>__DISPLAY__</span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Biometric hardware recorded</span><label class="form-field" data-unit-form-field-key="biometric_hardware"><span>Hardware</span><select name="biometrics[__INDEX__][hardwareConfigValueId]" data-module-field><option value="">Choose an option</option><% biometricHardwareOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="biometrics_test"><span>Test</span><select name="biometrics[__INDEX__][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% availabilityTestResultOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div></template>
+        <template data-module-template="biometric"><div class="tech-spec-repeatable-row tech-spec-repeatable-row--biometric" data-module-row="biometric"><span class="tech-memory-row-number" data-module-display-number>__DISPLAY__</span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Biometric hardware recorded</span><label class="form-field" data-unit-form-field-key="biometric_hardware"><span>Hardware</span><select name="biometrics[__INDEX__][hardwareConfigValueId]" data-module-field><option value="">Choose an option</option><% biometricHardwareOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="biometrics_test"><span>Test</span><select name="biometrics[__INDEX__][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% componentTestResultOptions.forEach((option) => { %><option value="<%= option.id %>"><%= option.label %></option><% }) %></select></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div></template>
       </section>
 
       <section class="tech-spec-repeatable" data-unit-form-field-key="ports" data-unit-form-repeatable-type="port" data-module-max="30">
@@ -1084,7 +1090,7 @@
       <label class="form-field" data-unit-form-field-key="ce_certification" data-apple-only-field><span>CE Certification</span><select name="ceCertificationConfigValueId"><option value="">Choose an option</option><% yesNoOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.ceCertificationConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
       <label class="form-field" data-unit-form-field-key="open_box_status" data-apple-only-field><span>Open-Box Status</span><select name="openBoxStatusConfigValueId"><option value="">Choose an option</option><% yesNoOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.openBoxStatusConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
       <label class="form-field" data-unit-form-field-key="box_language" data-apple-only-field><span>Box Language</span><select name="boxLanguageConfigValueId"><option value="">Choose an option</option><% boxLanguageOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.boxLanguageConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
-      <label class="form-field" data-unit-form-field-key="skinned_status"><span>Skinned</span><select name="skinnedStatusConfigValueId"><option value="">Choose an option</option><% skinnedStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.skinnedStatusConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
+      <label class="form-field" data-unit-form-field-key="skinned_status"><span>Skinning Status</span><select name="skinnedStatusConfigValueId"><option value="">Choose an option</option><% skinnedStatusOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(formData.skinnedStatusConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label>
     </div>
   </div>
 

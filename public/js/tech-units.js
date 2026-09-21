@@ -1,6 +1,6 @@
 (function () {
   const TECH_UNIT_REFRESH_INTERVAL_MS = 30000;
-  const UNIT_SAVE_CONFIRMATION_TIMEOUT_MS = 30000;
+  const UNIT_SAVE_CONFIRMATION_TIMEOUT_MS = 10000;
   let techUnitSaveConfirmationTimer = null;
   let techUnitRefreshInFlight = false;
   let techUnitRefreshQueued = false;

@@ -8,7 +8,8 @@ function normalizeAssignment(row = {}) {
     isRequired: Number(row.isRequired ?? row.is_required ?? 0) === 1,
     defaultQuantity: Math.max(1, Math.min(10, Number(row.defaultQuantity ?? row.default_quantity ?? 1) || 1)),
     sortOrder: Number(row.sortOrder ?? row.sort_order ?? 10) || 10,
-    isActive: Number(row.isActive ?? row.is_active ?? 0) === 1,
+    // Per-Lot enable/disable is retired; global template lifecycle now controls printability.
+    isActive: true,
     templateName: String(row.templateName ?? row.template_name ?? ''),
     templateCategoryCode: String(row.templateCategoryCode ?? row.template_category_code ?? ''),
     templateStatus: String(row.templateStatus ?? row.template_status ?? '')
@@ -64,8 +65,7 @@ function buildLotLabelTemplateBehaviorSignature(set) {
     .map((assignment) => [
       Number(assignment.labelTemplateId),
       assignment.isRequired ? 1 : 0,
-      Number(assignment.defaultQuantity),
-      assignment.isActive ? 1 : 0
+      Number(assignment.defaultQuantity)
     ].join('|'));
 }
 

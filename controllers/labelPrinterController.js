@@ -2,6 +2,8 @@
 
 const labelPrinterModel = require('../models/labelPrinterModel');
 const managementModel = require('../models/managementModel');
+const { LABEL_PRINTER_PROFILES } = require('../config/labelPrinting');
+const { QL810W_CONTINUOUS_MEDIA_WIDTHS } = require('../config/labelMedia');
 const {
   streamPrinterRegistryEvents,
   broadcastPrinterRegistryChange
@@ -139,6 +141,7 @@ async function renderMyPrintersPage(req, res, next) {
 }
 
 function defaultFormData(printer = null, scope = 'solo') {
+  const defaultProfile = printer ? null : (LABEL_PRINTER_PROFILES[0] || null);
   return {
     displayName: printer?.display_name || '',
     locationLabel: printer?.location_label || '',
@@ -149,9 +152,9 @@ function defaultFormData(printer = null, scope = 'solo') {
     manufacturer: printer?.manufacturer || '',
     model: printer?.model || '',
     detectedDescription: printer?.detected_description || '',
-    printerProfileCode: printer?.printer_profile_code || '',
-    mediaCode: printer?.media_code || '',
-    dpi: printer?.dpi || '',
+    printerProfileCode: printer ? (printer.printer_profile_code || '') : (defaultProfile?.code || ''),
+    mediaCode: printer ? (printer.media_code || '') : (defaultProfile?.mediaCode || ''),
+    dpi: printer ? (printer.dpi || '') : (defaultProfile?.dpi || ''),
     isShared: scope === 'managed' ? true : Number(printer?.is_shared || 0) === 1,
     isEnabled: printer ? Number(printer.is_enabled) === 1 : true
   };
@@ -177,6 +180,8 @@ function renderPrinterForm(res, {
     probeResult,
     duplicatePrinter,
     protocols: LABEL_PRINTER_PROTOCOLS,
+    printerProfiles: LABEL_PRINTER_PROFILES,
+    continuousMediaWidths: QL810W_CONTINUOUS_MEDIA_WIDTHS,
     errorMessages
   });
 }

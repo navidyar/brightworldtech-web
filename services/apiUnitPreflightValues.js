@@ -10,6 +10,12 @@ const {
   resolveProcessorCandidate,
   resolveOperatingSystemCandidate
 } = require('./apiCatalogInventory');
+const { normalizeScalarObservations } = require('./apiScalarInventoryPolicy');
+const { normalizeMemoryObservation } = require('./apiMemoryInventory');
+const { normalizeStorageObservation } = require('./apiStorageInventory');
+const { normalizeDisplayObservation } = require('./apiGraphicsDisplayInventory');
+const { normalizeSecurityObservation } = require('./apiConnectivitySecurityPowerInventory');
+const { normalizeBatteryObservation, normalizeDiagnosticsObservation } = require('./apiHardwareDiagnosticsInventory');
 
 const OBSERVATION_STATES = new Set(['known', 'unknown']);
 
@@ -101,6 +107,88 @@ function addTopLevelRequirementContext(body = {}, observations = new Map()) {
   if (unitCategory !== undefined && unitCategory !== null && String(unitCategory).trim() !== '') {
     observations.set('unit_type', normalizeObservation(unitCategory));
   }
+  return observations;
+}
+
+const SCALAR_REQUIREMENT_KEYS = Object.freeze({
+  manufacturer: 'manufacturer',
+  unit_model: 'model',
+  processor_model: 'processor',
+  processor_speed_ghz: 'processor_speed_ghz',
+  operating_system: 'operating_system',
+  bios_version: 'bios_version',
+  os_build: 'os_build',
+  keyboard_language: 'keyboard_language'
+});
+
+function addKnownObservation(observations, requirementKey, value) {
+  if (value === undefined || value === null || String(value).trim() === '') return;
+  observations.set(requirementKey, { state: 'known', value });
+}
+
+function uniqueNonBlank(values = []) {
+  return [...new Set(values.map((value) => String(value ?? '').trim()).filter(Boolean))];
+}
+
+function buildCanonicalRequirementObservations(body = {}, { includeUnitCategory = true } = {}) {
+  const observations = new Map();
+
+  // Resolve/Preflight consumes the same canonical Tool payload that Commit ingests.
+  // Legacy detected_values/detectedValues is intentionally not consulted here.
+  // This prevents generic Tool input from impersonating manual/business fields.
+  for (const observation of normalizeScalarObservations(body.fields || {})) {
+    const requirementKey = SCALAR_REQUIREMENT_KEYS[observation.fieldKey];
+    if (!requirementKey || observation.state !== 'known') continue;
+    addKnownObservation(observations, requirementKey, observation.value);
+  }
+
+  const memory = normalizeMemoryObservation(body.memory);
+  if (memory?.state === 'known') {
+    addKnownObservation(observations, 'ram_gb', memory.value.total_gb);
+    const ramTypes = uniqueNonBlank(memory.value.modules.map((module) => module.ram_type_submitted));
+    if (ramTypes.length === 1) addKnownObservation(observations, 'ram_type', ramTypes[0]);
+    const installTypes = uniqueNonBlank(memory.value.modules.map((module) => module.memory_install_type_code));
+    if (installTypes.length === 1 && installTypes[0] !== 'unknown') addKnownObservation(observations, 'memory_install_type', installTypes[0]);
+  }
+
+  const storage = normalizeStorageObservation(body.storage);
+  if (storage?.state === 'confirmed_absent') {
+    observations.set('storage_gb', { state: 'known', value: 0 });
+  } else if (storage?.state === 'known') {
+    addKnownObservation(observations, 'storage_gb', storage.value.total_gb);
+    const storageTypes = uniqueNonBlank(storage.value.devices.map((device) => device.storage_type_submitted));
+    if (storageTypes.length === 1) addKnownObservation(observations, 'storage_type', storageTypes[0]);
+  }
+
+  const display = normalizeDisplayObservation(body.display);
+  const panel = display?.state === 'known' ? display.value?.built_in_panel : null;
+  if (panel?.confidence === 'confirmed' && panel.screen_size_submitted !== null && panel.screen_size_submitted !== undefined) {
+    addKnownObservation(observations, 'screen_size', `${panel.screen_size_submitted}-inch`);
+  }
+
+  const security = normalizeSecurityObservation(body.security);
+  if (security?.state === 'known' && security.value?.absolute_status !== undefined) {
+    addKnownObservation(observations, 'absolute_status', security.value.absolute_status);
+  }
+
+  const battery = normalizeBatteryObservation(body.battery);
+  if (battery?.state === 'known' && battery.value?.health_percent !== undefined && battery.value?.health_percent !== null) {
+    addKnownObservation(observations, 'battery_health', battery.value.health_percent);
+  }
+
+  const diagnostics = normalizeDiagnosticsObservation(body.diagnostics);
+  if (diagnostics?.state === 'known') {
+    for (const item of diagnostics.value?.items || []) {
+      if (!['pass', 'fail'].includes(item.state)) continue;
+      if (item.key === 'device-manager') addKnownObservation(observations, 'driver_check', item.state === 'pass' ? 'Pass' : 'Fail');
+      if (item.key === 'antivirus') addKnownObservation(observations, 'virus_check', item.state === 'pass' ? 'Pass' : 'Fail');
+    }
+  }
+
+  if (includeUnitCategory) addTopLevelRequirementContext(body, observations);
+  addKnownObservation(observations, 'unit_serial_number', body.unit_serial_number ?? body.unitSerialNumber ?? body.unit_serial);
+  addKnownObservation(observations, 'bios_serial_number', body.bios_serial_number ?? body.biosSerialNumber ?? body.bios_serial);
+
   return observations;
 }
 
@@ -328,12 +416,60 @@ function applyDetectedValues({ formData, observations, formOptions }) {
   delete formData.preflightStorageWipeStatusConfigValueId;
   return effectiveStates;
 }
+
+function buildDetectedCatalogIssues({ observations, effectiveStates, formData }) {
+  const issues = [];
+  const modelObservation = observations.get('model');
+  if (modelObservation?.state === 'known' && effectiveStates.get('model') !== 'known') {
+    const manufacturerId = normalizePositiveInteger(formData.manufacturerId);
+    const unitCategoryConfigValueId = normalizePositiveInteger(formData.unitCategoryConfigValueId);
+    issues.push({
+      field_key: 'model',
+      code: 'MODEL_NOT_AVAILABLE',
+      submitted_value: String(modelObservation.value ?? '').trim(),
+      request_supported: Boolean(manufacturerId && unitCategoryConfigValueId),
+      request_kind: 'model',
+      request_endpoint: '/api/v1/units/catalog-requests/model',
+      request_context: {
+        manufacturer_id: manufacturerId,
+        unit_category_config_value_id: unitCategoryConfigValueId
+      },
+      message: manufacturerId && unitCategoryConfigValueId
+        ? 'The observed Unit Model is not currently available in BWTDallas. Submit a Model Catalog request and wait for approval before continuing.'
+        : 'The observed Unit Model could not be resolved because its Manufacturer or Unit Category context is unavailable.'
+    });
+  }
+
+  const processorObservation = observations.get('processor');
+  if (processorObservation?.state === 'known' && effectiveStates.get('processor') !== 'known') {
+    const unitModelId = normalizePositiveInteger(formData.unitModelId);
+    const modelIssue = issues.some((issue) => issue.field_key === 'model');
+    issues.push({
+      field_key: 'processor',
+      code: unitModelId ? 'PROCESSOR_NOT_AVAILABLE' : 'PROCESSOR_CONTEXT_UNRESOLVED',
+      submitted_value: String(processorObservation.value ?? '').trim(),
+      request_supported: Boolean(unitModelId),
+      request_kind: 'processor',
+      request_endpoint: '/api/v1/units/catalog-requests/processor',
+      request_context: { unit_model_id: unitModelId },
+      dependent_on_model_request: modelIssue,
+      message: unitModelId
+        ? 'The observed Processor is not currently available for this Unit Model in BWTDallas. Submit a Processor Catalog request and wait for approval before continuing.'
+        : 'The observed Processor cannot be resolved until the Unit Model is available in BWTDallas.'
+    });
+  }
+
+  return issues;
+}
+
 module.exports = {
   normalizePositiveInteger,
   normalizeObservation,
   normalizeDetectedValues,
   addTopLevelRequirementContext,
+  buildCanonicalRequirementObservations,
   resolveGenericOption,
   applyKnownRequirementValue,
-  applyDetectedValues
+  applyDetectedValues,
+  buildDetectedCatalogIssues
 };

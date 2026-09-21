@@ -11,6 +11,7 @@ const systemRoutes = require('./routes/system');
 const managementRoutes = require('./routes/management');
 const configRoutes = require('./routes/config');
 const lotRoutes = require('./routes/lots');
+const virtualHuddleRoutes = require('./routes/virtualHuddle');
 const { createSessionStore } = require('./models/sessionStore');
 const unitRequestModel = require('./models/unitRequestModel');
 const {
@@ -21,6 +22,7 @@ const { applyConfiguredSessionTimeout } = require('./middleware/sessionTimeoutMi
 const { DEFAULT_SESSION_INACTIVITY_TIMEOUT_MINUTES } = require('./services/sessionInactivityTimeoutPolicy');
 const { applyAuthenticatedNavigationPolicy } = require('./middleware/navigationPolicyMiddleware');
 const { attachAccessLocals } = require('./middleware/accessMiddleware');
+const { enforceVirtualHuddleAcknowledgment } = require('./middleware/virtualHuddleMiddleware');
 const { escapeHtml, formatDateTime, formatDate, formatTime, formatNumber, formatBytes, formatRoleLabel, formatWeight } = require('./views/partials/helpers');
 
 const app = express();
@@ -70,7 +72,9 @@ app.use(applyConfiguredSessionTimeout);
 app.use(loadCurrentUser);
 app.use(applyAuthenticatedNavigationPolicy);
 app.use(attachAccessLocals);
+app.use(enforceVirtualHuddleAcknowledgment);
 
+app.use(virtualHuddleRoutes);
 app.use('/api/v1', apiRoutes);
 app.use(authRoutes);
 app.use(dashboardRoutes);

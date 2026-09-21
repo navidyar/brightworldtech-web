@@ -252,7 +252,13 @@ test('repeatable Specs rows stay compact and show a recorded state when all chil
 
 test('removing the last compact Specs repeatable row returns the section to its initial Add-only state', () => {
   const script = read('public/js/tech-unit-form.js');
-  assert.match(script, /COLLAPSIBLE_EMPTY_REPEATABLE_ROW_TYPES = new Set\(\['camera', 'battery', 'biometric', 'port'\]\)/);
+  const collapsibleTypesMatch = script.match(/COLLAPSIBLE_EMPTY_REPEATABLE_ROW_TYPES = new Set\(\[([^\]]+)\]\)/);
+
+  assert.ok(collapsibleTypesMatch);
+  for (const rowType of ['camera', 'battery', 'biometric', 'port']) {
+    assert.match(collapsibleTypesMatch[1], new RegExp(`['\"]${rowType}['\"]`));
+  }
+
   assert.match(script, /if \(rows\.length <= 1 && !COLLAPSIBLE_EMPTY_REPEATABLE_ROW_TYPES\.has\(rowType\)\)/);
   assert.match(script, /else \{\s*row\.remove\(\);\s*\}/);
 });

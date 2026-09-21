@@ -4536,19 +4536,20 @@ textarea {
 
 .tech-permanent-delete-card {
   display: grid;
-  gap: 14px;
-  border: 1px solid color-mix(in srgb, var(--red) 42%, var(--line) 58%);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--surface) 70%, var(--red-bg) 30%);
-  padding: 18px;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--red) 34%, #c8d4e2 66%);
+  border-radius: 7px;
+  background: #ffffff;
+  box-shadow: none;
 }
 
 .tech-permanent-delete-warning {
   margin: 0;
-  color: color-mix(in srgb, var(--text) 62%, var(--red) 38%);
-  font-size: 0.92rem;
-  font-weight: 800;
-  line-height: 1.5;
+  color: color-mix(in srgb, var(--text) 72%, var(--red) 28%);
+  font-size: 0.84rem;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .tech-permanent-delete-impact-list {

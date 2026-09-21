@@ -46,7 +46,7 @@
           </section>
 
           <% if (notice && noticeMessages[notice]) { %>
-            <div class="message <%= notice === 'not-found' ? 'error' : 'success' %>"><p><%= noticeMessages[notice] %></p></div>
+            <div class="message <%= notice === 'not-found' ? 'error' : 'success' %>" <%= notice === 'not-found' ? '' : 'data-auto-dismiss-success' %>><p><%= noticeMessages[notice] %></p></div>
           <% } %>
 
           <section class="site-summary-panel processor-catalog-summary-panel" aria-label="Visible processor totals">
@@ -80,10 +80,10 @@
               </div>
             </div>
 
-            <form class="app-form model-catalog-filter-form" method="get" action="/management/config/processors">
+            <form class="app-form model-catalog-filter-form" method="get" action="/management/config/processors" data-auto-submit-filter-form data-auto-submit-delay="300">
               <label class="form-field">
                 <span>Processor Type</span>
-                <select name="processorBrandId">
+                <select data-auto-submit-filter="immediate" name="processorBrandId">
                   <option value="">All Processor Types</option>
                   <% brands.filter((brand) => brand.isActive).forEach((brand) => { %>
                     <option value="<%= brand.id %>" <%= selected(filters.processorBrandId, brand.id) %>><%= brand.label %></option>
@@ -93,7 +93,7 @@
 
               <label class="form-field">
                 <span>Review State</span>
-                <select name="needsReview">
+                <select data-auto-submit-filter="immediate" name="needsReview">
                   <option value="0" <%= !filters.needsReview ? 'selected' : '' %>>All processors</option>
                   <option value="1" <%= filters.needsReview ? 'selected' : '' %>>Processors needing review</option>
                 </select>
@@ -101,19 +101,18 @@
 
               <label class="form-field">
                 <span>Search</span>
-                <input type="search" name="search" value="<%= filters.search || '' %>" placeholder="Example: i5-9500T" />
+                <input type="search" data-auto-submit-filter="debounced" name="search" value="<%= filters.search || '' %>" placeholder="Example: i5-9500T" />
               </label>
 
               <label class="form-field">
                 <span>Status</span>
-                <select name="includeInactive">
+                <select data-auto-submit-filter="immediate" name="includeInactive">
                   <option value="0" <%= !filters.includeInactive ? 'selected' : '' %>>Active only</option>
                   <option value="1" <%= filters.includeInactive ? 'selected' : '' %>>Active and inactive</option>
                 </select>
               </label>
 
               <div class="model-catalog-filter-actions">
-                <button class="primary-button" type="submit">Apply Filters</button>
                 <a class="secondary-button" href="/management/config/processors">Reset</a>
               </div>
             </form>

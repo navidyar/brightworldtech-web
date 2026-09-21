@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <body>
+    <div class="virtual-huddle-required-page" aria-hidden="true"></div>
+    <div id="virtual-huddle-root">
+      <%- include('../fragments/virtual-huddle-recipient-dialog', { presentation, confirmationPhrase, messageTypeLabel }) %>
+    </div>
+  </body>
+</html>

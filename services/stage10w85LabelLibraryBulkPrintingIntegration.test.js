@@ -40,10 +40,21 @@ test('bulk modal supports deselect, reselect, Select All, Clear All, and shared 
   assert.match(modal, /name="templateKey"/);
   assert.match(modal, /name="quantity\[<%= template\.key %>\]"/);
   assert.match(modal, /Copies per Unit/);
+  assert.match(modal, /Deselect any Units you do not need/);
   assert.match(client, /setAllBulkLabelUnits/);
   assert.match(client, /updateBulkLabelSelectedCount/);
 });
 
+
+
+test('bulk printing reports missing printable templates instead of confusing Unit selection with label selection', () => {
+  const controller = read('controllers/techController.js');
+  const bulkIndex = controller.indexOf('async function printTechUnitsBulkLabels');
+  const bulk = controller.slice(bulkIndex);
+  assert.match(controller, /function buildNoPrintableLabelTemplateMessage/);
+  assert.match(bulk, /const noPrintableTemplateMessage = buildNoPrintableLabelTemplateMessage\(templateSet, lotId\)/);
+  assert.match(bulk, /if \(!noPrintableTemplateMessage\) \{[\s\S]*normalizeUnitLabelPrintSelection/);
+});
 test('bulk submission rebuilds the current filtered page and prevalidates every selected Unit before starting CUPS work', () => {
   const controller = read('controllers/techController.js');
   const contextIndex = controller.indexOf('async function getTechUnitsBulkPrintLabelContext');

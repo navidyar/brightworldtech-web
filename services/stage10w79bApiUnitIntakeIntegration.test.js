@@ -51,3 +51,39 @@ test('Unit creation remains an internal Commit primitive rather than a standalon
   assert.doesNotMatch(intake, /ingestScalarInventory/);
   assert.doesNotMatch(intake, /unit_tool_observations/);
 });
+
+
+test('Tool-created Units can retain technician-entered Previous Memory and Previous Storage without inventing new component storage', () => {
+  const intake = read('services/apiUnitIntake.js');
+  assert.match(intake, /previous_memory/);
+  assert.match(intake, /previous_storage/);
+  assert.match(intake, /previousRamGb: previousMemory\.totalGb/);
+  assert.match(intake, /previousMemoryModules: previousMemory\.modules/);
+  assert.match(intake, /previousStorageGb: previousStorage\.totalGb/);
+  assert.match(intake, /previousStorageDevices: previousStorage\.devices/);
+  assert.match(intake, /tech_user_input_via_tool/);
+  assert.match(intake, /previous_component_options/);
+  assert.match(intake, /memory_install_types/);
+  assert.match(intake, /storage_types/);
+});
+
+test('manual Previous Storage input remains limited to fields exposed by the normal technician form', () => {
+  const intake = read('services/apiUnitIntake.js');
+  const previousStorageBlock = intake.match(/function normalizePreviousStorage[\s\S]*?\n}\n\nfunction normalizeIdentity/)?.[0] || '';
+  assert.match(previousStorageBlock, /storage_type_config_value_id/);
+  assert.doesNotMatch(previousStorageBlock, /manufacturer_name|model_number|firmware_version|wipe_status_config_value_id/);
+  assert.match(previousStorageBlock, /serialNumber: ''/);
+});
+
+test('new Tool-created Units keep Unit Category as a processing prerequisite rather than weakening the schema', () => {
+  const intake = read('services/apiUnitIntake.js');
+  const audit = read('scripts/auditApiUnitIntake.js');
+  const preflight = read('services/apiUnitPreflight.js');
+
+  assert.match(preflight, /UNIT_CATEGORY_REQUIRED/);
+  assert.match(preflight, /Tool processing prerequisite/);
+  assert.match(intake, /UNIT_CATEGORY_REQUIRED/);
+  assert.match(audit, /new Tool-created Units require unit_category_config_value_id as a processing prerequisite/);
+  assert.doesNotMatch(audit, /ALTER TABLE units MODIFY COLUMN unit_category_config_value_id/);
+});
+

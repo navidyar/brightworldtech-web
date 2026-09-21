@@ -1,6 +1,6 @@
 <%
   const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
-  const actionLabels = { activate: 'Activate Template', archive: 'Archive Template', delete: 'Delete Template' };
+  const actionLabels = { activate: 'Activate Template', archive: 'Archive Template', unarchive: 'Unarchive Template', delete: 'Delete Template' };
   const actionLabel = actionLabels[action] || 'Label Template Action';
 %>
 <div class="modal-backdrop" data-modal-backdrop>
@@ -20,9 +20,12 @@
 
       <% if (template) { %>
         <% if (action === 'activate') { %>
-          <p>Activation makes this template eligible for future Lot printing. A saved layout configuration is required.</p>
+          <p>Activation makes this template eligible for printing. BWTDallas verifies the saved layout, media geometry, Shared Assets, dynamic fields, barcode/QR configuration, and a representative render before activation.</p>
         <% } else if (action === 'archive') { %>
-          <p>Archived templates remain in the Library and keep their Lot attachments, but will not be eligible for future printing until reactivated.</p>
+          <p>Archive retires this template without deleting it. It remains in the Library, keeps its Lot attachments and historical records/assets, but is excluded from future printing.</p>
+          <p>Unarchiving later restores it to Draft, so it must be activated again before production printing resumes.</p>
+        <% } else if (action === 'unarchive') { %>
+          <p>This restores the template to Draft. It will remain unavailable for Lot printing until you activate it again.</p>
         <% } else if (action === 'delete') { %>
           <div class="message warning">
             <p><strong>This permanently deletes the template record.</strong> Current Lot attachments will be detached. Historical print snapshots are preserved.</p>
@@ -39,10 +42,13 @@
           <% } %>
         <% } %>
 
+        <% const activationBlocked = action === 'activate' && safeErrors.length > 0; %>
         <form method="post" action="/management/label-library/templates/<%= template.label_template_id %>/<%= action %>" hx-post="/management/label-library/templates/<%= template.label_template_id %>/<%= action %>" hx-target="#modal-root" hx-swap="innerHTML">
           <div class="form-actions">
-            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
-            <button type="submit" class="<%= action === 'delete' ? 'danger-button' : 'primary-button' %>"><%= actionLabel %></button>
+            <button type="button" class="secondary-button" data-modal-close><%= activationBlocked ? 'Close' : 'Cancel' %></button>
+            <% if (!activationBlocked) { %>
+              <button type="submit" class="<%= action === 'delete' ? 'danger-button' : 'primary-button' %>"><%= actionLabel %></button>
+            <% } %>
           </div>
         </form>
       <% } %>

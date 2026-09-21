@@ -4,15 +4,19 @@
     pageTitle,
     stylesheets: [
       '/css/modal.css?v=20260909-stage10w83-label-library-management',
-      '/css/management.css?v=20260909-stage10w83-label-library-management'
+      '/css/management.css?v=20260918-label-library-rootfix'
     ]
   }) %>
   <script defer src="/js/modal.js?v=20260909-stage10w83-label-library-management"></script>
+  <script defer src="/js/label-library-assets.js?v=20260918-assets-rename-refresh-cleanup"></script>
+  <script defer src="/js/label-library-lot-usage.js?v=20260917-label-lot-usage"></script>
+  <script defer src="/js/label-library-order.js?v=20260918-label-library-order"></script>
 
   <body>
     <%
       const categoryLabelByCode = new Map(categories.map((category) => [category.code, category.label]));
       const statusLabel = (status) => String(status || '').charAt(0).toUpperCase() + String(status || '').slice(1);
+      const printScopeLabelByCode = new Map(printScopes.map((scope) => [scope.code, scope.label]));
     %>
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
@@ -26,11 +30,13 @@
               <h1>Label Template Library</h1>
               <p>Manage reusable label templates and shared assets. Lot assignments are configured from each Lot.</p>
             </div>
-            <a class="primary-button" href="/management/label-library/templates/new/modal" hx-get="/management/label-library/templates/new/modal" hx-target="#modal-root" hx-swap="innerHTML">New Template</a>
+            <div class="label-library-heading-actions">
+              <a class="primary-button" href="/management/label-library/templates/new/modal" hx-get="/management/label-library/templates/new/modal" hx-target="#modal-root" hx-swap="innerHTML">New Template</a>
+            </div>
           </section>
 
           <% if (successMessage) { %>
-            <div class="message success"><%= successMessage %></div>
+            <div class="message success" data-auto-dismiss-success><%= successMessage %></div>
           <% } %>
 
           <% if (errorMessages.length > 0) { %>
@@ -39,31 +45,56 @@
             </div>
           <% } %>
 
-          <section class="label-library-summary" aria-label="Label Library summary">
-            <article><small>Templates</small><strong><%= formatNumber(summary.total) %></strong></article>
-            <article><small>Active</small><strong><%= formatNumber(summary.active) %></strong></article>
-            <article><small>Draft</small><strong><%= formatNumber(summary.draft) %></strong></article>
-            <article><small>Archived</small><strong><%= formatNumber(summary.archived) %></strong></article>
-            <article><small>New · 14 days</small><strong><%= formatNumber(summary.newCount) %></strong></article>
-            <article><small>Repository storage</small><strong><%= formatBytes(storage.total_bytes) %></strong></article>
+          <section class="label-library-summary-panel" aria-label="Label Library summary">
+            <div class="label-library-summary-primary">
+              <span>Templates</span>
+              <strong><%= formatNumber(summary.total) %></strong>
+              <small>Reusable label templates currently available in the Library</small>
+            </div>
+
+            <div class="label-library-summary-stats">
+              <article>
+                <span class="label-library-summary-icon" aria-hidden="true">✓</span>
+                <span><small>Active</small><strong><%= formatNumber(summary.active) %></strong></span>
+              </article>
+              <article>
+                <span class="label-library-summary-icon" aria-hidden="true">✎</span>
+                <span><small>Draft</small><strong><%= formatNumber(summary.draft) %></strong></span>
+              </article>
+              <article>
+                <span class="label-library-summary-icon" aria-hidden="true">◌</span>
+                <span><small>Archived</small><strong><%= formatNumber(summary.archived) %></strong></span>
+              </article>
+              <article>
+                <span class="label-library-summary-icon" aria-hidden="true">✦</span>
+                <span><small>New · 14 days</small><strong><%= formatNumber(summary.newCount) %></strong></span>
+              </article>
+              <article>
+                <span class="label-library-summary-icon" aria-hidden="true">▤</span>
+                <span><small>Repository storage</small><strong data-label-library-repository-storage><%= formatBytes(storage.total_bytes) %></strong></span>
+              </article>
+            </div>
           </section>
 
           <section class="site-clean-section label-library-section">
             <div class="site-clean-section-heading label-library-section-heading">
               <div>
                 <h2>Templates</h2>
-                <p>New templates start as Draft. Activation requires a saved layout configuration.</p>
+                <p>New templates start as Draft. Drag the order handle to set the shared Library, Lot picker, and multi-label print order.</p>
+              </div>
+              <div class="label-library-heading-actions">
+                <span data-label-template-order-status><%= canReorderTemplates ? 'Drag to reorder' : 'Clear filters to reorder' %></span>
               </div>
             </div>
 
-            <form class="label-library-filters" method="get" action="/management/label-library">
+            <form class="label-library-filters" method="get" action="/management/label-library" data-auto-submit-filter-form data-auto-submit-delay="300" data-auto-submit-filter-target=".label-library-table-card" data-auto-submit-filter-sync="[data-label-template-order-status]">
               <label>
                 <span>Search</span>
-                <input type="search" name="search" value="<%= filters.search %>" placeholder="Template name or description" />
+                <input type="search" name="search" value="<%= filters.search %>" placeholder="Template name or description" autocomplete="off" data-auto-submit-filter="debounced" />
               </label>
               <label>
                 <span>Category</span>
-                <select name="category">
+                <select name="category" data-auto-submit-filter="immediate">
                   <option value="">All categories</option>
                   <% categories.forEach((category) => { %>
                     <option value="<%= category.code %>" <%= filters.category === category.code ? 'selected' : '' %>><%= category.label %></option>
@@ -71,8 +102,17 @@
                 </select>
               </label>
               <label>
+                <span>Print Availability</span>
+                <select name="printScope" data-auto-submit-filter="immediate">
+                  <option value="">All print areas</option>
+                  <% printScopes.forEach((scope) => { %>
+                    <option value="<%= scope.code %>" <%= filters.printScope === scope.code ? 'selected' : '' %>><%= scope.label %></option>
+                  <% }) %>
+                </select>
+              </label>
+              <label>
                 <span>Status</span>
-                <select name="status">
+                <select name="status" data-auto-submit-filter="immediate">
                   <option value="">All statuses</option>
                   <% statuses.forEach((status) => { %>
                     <option value="<%= status %>" <%= filters.status === status ? 'selected' : '' %>><%= statusLabel(status) %></option>
@@ -80,7 +120,6 @@
                 </select>
               </label>
               <div class="label-library-filter-actions">
-                <button class="secondary-button" type="submit">Apply</button>
                 <a class="secondary-button" href="/management/label-library">Clear</a>
               </div>
             </form>
@@ -89,6 +128,7 @@
               <table>
                 <thead>
                   <tr>
+                    <th class="label-library-order-column">Order</th>
                     <th>Template</th>
                     <th>Status</th>
                     <th>Usage</th>
@@ -97,48 +137,48 @@
                     <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody data-label-template-order-list data-reorder-url="/management/label-library/templates/reorder" data-reorder-enabled="<%= canReorderTemplates ? '1' : '0' %>">
                   <% if (templates.length === 0) { %>
-                    <tr><td colspan="6">No label templates match the selected filters.</td></tr>
+                    <tr><td colspan="7">No label templates match the selected filters.</td></tr>
                   <% } %>
 
                   <% templates.forEach((template) => { %>
                     <%
                       const isNew = template.new_until && new Date(template.new_until) > new Date();
-                      const staleReference = template.last_used_at || template.imported_at || template.created_at;
+                      const staleReference = template.last_used_at || template.created_at;
                       const isStale = staleReference && (Date.now() - new Date(staleReference).getTime()) >= (365 * 24 * 60 * 60 * 1000);
                     %>
-                    <tr>
+                    <tr data-label-template-order-row data-template-id="<%= template.label_template_id %>">
+                      <td class="label-library-order-column">
+                        <% if (canReorderTemplates) { %>
+                          <button type="button" class="label-library-order-handle" draggable="true" data-label-template-order-handle aria-label="Drag <%= template.name %> to reorder" title="Drag to reorder">⋮⋮</button>
+                        <% } else { %><span class="label-library-order-disabled">—</span><% } %>
+                      </td>
                       <td>
                         <div class="label-library-template-cell">
-                          <div class="label-library-thumbnail">
-                            <% if (template.preview_asset_id) { %>
-                              <img src="/management/label-library/assets/<%= template.preview_asset_id %>/file" alt="" loading="lazy" />
-                            <% } else { %>
-                              <span aria-hidden="true">Label</span>
-                            <% } %>
-                          </div>
+                          <div class="label-library-thumbnail"><span aria-hidden="true">Label</span></div>
                           <div>
                             <div class="label-library-template-title">
                               <strong><%= template.name %></strong>
                               <% if (isNew) { %><span class="pill good">New</span><% } %>
                               <% if (isStale) { %><span class="pill slate">Stale</span><% } %>
                             </div>
-                            <small><%= categoryLabelByCode.get(template.category_code) || template.category_code %></small>
-                            <% if (template.description) { %><p><%= template.description %></p><% } %>
+                            <small><%= categoryLabelByCode.get(template.category_code) || template.category_code %> · <%= printScopeLabelByCode.get(template.print_scope || 'lot') || template.print_scope || 'Lot Selection' %></small>
+                            <% if (template.description) { %><p class="label-library-template-description"><%= template.description %></p><% } %>
                             <% if (template.printer_profile_code) { %><small><%= template.media_code || 'Media profile pending' %> · <%= template.dpi || '—' %> dpi</small><% } %>
+                            <% if (template.canvas_width_dots && template.canvas_height_dots) { %><small>Canvas <%= template.canvas_width_dots %> × <%= template.canvas_height_dots %> dots</small><% } %>
                           </div>
                         </div>
                       </td>
                       <td>
                         <div class="label-library-status-stack">
                           <span class="pill <%= template.status === 'active' ? 'good' : template.status === 'archived' ? 'bad' : 'slate' %>"><%= statusLabel(template.status) %></span>
-                          <small><%= Number(template.has_config || 0) === 1 ? 'Layout configured' : 'Layout not configured' %></small>
+                          <small><%= Number(template.layout_ready || 0) === 1 ? 'Print-ready layout' : Number(template.has_config || 0) === 1 ? 'Layout needs attention' : 'Layout not configured' %></small>
                         </div>
                       </td>
                       <td>
                         <div class="label-library-stat-stack">
-                          <span><strong><%= formatNumber(template.attached_lot_count) %></strong> Lot<%= Number(template.attached_lot_count) === 1 ? '' : 's' %></span>
+                          <a class="label-library-lot-usage-trigger" href="/management/label-library/templates/<%= template.label_template_id %>/lots/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/lots/modal" hx-target="#modal-root" hx-swap="innerHTML" aria-label="View Lots using <%= template.name %>"><strong><%= formatNumber(template.attached_lot_count) %></strong> Lot<%= Number(template.attached_lot_count) === 1 ? '' : 's' %></a>
                           <span><strong><%= formatNumber(template.print_count) %></strong> lifetime print<%= Number(template.print_count) === 1 ? '' : 's' %></span>
                           <small>Last used: <%= formatDateTime(template.last_used_at) %></small>
                         </div>
@@ -146,20 +186,32 @@
                       <td>
                         <div class="label-library-stat-stack">
                           <span>Total <strong><%= formatBytes(template.total_bytes) %></strong></span>
-                          <small>Images <%= formatBytes(template.image_bytes) %> · JSON <%= formatBytes(template.json_bytes) %> · Preview <%= formatBytes(template.preview_bytes) %></small>
+                          <small>Images <%= formatBytes(template.image_bytes) %> · JSON <%= formatBytes(template.json_bytes) %></small>
                         </div>
                       </td>
                       <td><%= formatDateTime(template.updated_at) %></td>
                       <td>
                         <div class="management-user-row-actions label-library-row-actions">
+                          <% if (String(template.print_scope || 'lot') === 'standalone' && template.status === 'active' && Number(template.layout_ready || 0) === 1) { %>
+                            <a class="primary-button" href="/management/label-library/templates/<%= template.label_template_id %>/print/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/print/modal" hx-target="#modal-root" hx-swap="innerHTML">Print</a>
+                          <% } %>
                           <a class="secondary-button" href="/management/label-library/templates/<%= template.label_template_id %>/edit/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
                           <form method="post" action="/management/label-library/templates/<%= template.label_template_id %>/clone">
                             <button class="secondary-button" type="submit">Clone</button>
                           </form>
-                          <% if (template.status !== 'active') { %>
-                            <a class="secondary-button" href="/management/label-library/templates/<%= template.label_template_id %>/activate/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/activate/modal" hx-target="#modal-root" hx-swap="innerHTML">Activate</a>
-                          <% } %>
                           <% if (template.status !== 'archived') { %>
+                            <a class="secondary-button" href="/management/label-library/templates/<%= template.label_template_id %>/builder">Layout Builder</a>
+                          <% } %>
+                          <% if (template.status === 'draft') { %>
+                            <% if (Number(template.layout_ready || 0) === 1) { %>
+                              <a class="secondary-button" href="/management/label-library/templates/<%= template.label_template_id %>/activate/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/activate/modal" hx-target="#modal-root" hx-swap="innerHTML">Activate</a>
+                            <% } else { %>
+                              <button class="secondary-button" type="button" disabled aria-disabled="true" title="Finish the saved layout and resolve any media, asset, field, barcode, or QR validation issues before activation.">Needs Layout</button>
+                            <% } %>
+                          <% } %>
+                          <% if (template.status === 'archived') { %>
+                            <a class="secondary-button" href="/management/label-library/templates/<%= template.label_template_id %>/unarchive/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/unarchive/modal" hx-target="#modal-root" hx-swap="innerHTML">Unarchive</a>
+                          <% } else { %>
                             <a class="secondary-button" href="/management/label-library/templates/<%= template.label_template_id %>/archive/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/archive/modal" hx-target="#modal-root" hx-swap="innerHTML">Archive</a>
                           <% } %>
                           <a class="secondary-button danger-button" href="/management/label-library/templates/<%= template.label_template_id %>/delete/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete</a>
@@ -172,40 +224,8 @@
             </div>
           </section>
 
-          <section class="site-clean-section label-library-section">
-            <div class="site-clean-section-heading label-library-section-heading">
-              <div>
-                <h2>Shared Assets</h2>
-                <p>Reusable logos, images, backgrounds, previews, and JSON configuration are deduplicated by SHA-256.</p>
-              </div>
-              <span><%= formatNumber(storage.asset_count) %> asset<%= Number(storage.asset_count) === 1 ? '' : 's' %></span>
-            </div>
+          <%- include('../fragments/label-library-assets-section', { assets, storage }) %>
 
-            <div class="label-library-storage-breakdown">
-              <span>Images <strong><%= formatBytes(storage.image_bytes) %></strong></span>
-              <span>JSON <strong><%= formatBytes(storage.json_bytes) %></strong></span>
-              <span>Previews <strong><%= formatBytes(storage.preview_bytes) %></strong></span>
-              <span>Total <strong><%= formatBytes(storage.total_bytes) %></strong></span>
-            </div>
-
-            <div class="table-card label-library-assets-table-card">
-              <table>
-                <thead><tr><th>Asset</th><th>Type</th><th>Size</th><th>Used by</th><th>Created</th></tr></thead>
-                <tbody>
-                  <% if (assets.length === 0) { %><tr><td colspan="5">No shared assets have been stored yet.</td></tr><% } %>
-                  <% assets.forEach((asset) => { %>
-                    <tr>
-                      <td><strong><%= asset.name || asset.source_filename || `Asset ${asset.asset_id}` %></strong><small class="label-library-hash"><%= asset.sha256 %></small></td>
-                      <td><span class="pill slate"><%= String(asset.asset_kind || '').replaceAll('_', ' ') %></span></td>
-                      <td><%= formatBytes(asset.byte_size) %></td>
-                      <td><%= formatNumber(asset.template_count) %> template<%= Number(asset.template_count) === 1 ? '' : 's' %></td>
-                      <td><%= formatDateTime(asset.created_at) %></td>
-                    </tr>
-                  <% }) %>
-                </tbody>
-              </table>
-            </div>
-          </section>
         </main>
       </div>
     </div>

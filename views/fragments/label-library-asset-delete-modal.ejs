@@ -1,0 +1,55 @@
+<%
+  const assetLabel = asset?.name || asset?.source_filename || `Asset ${asset?.asset_id || ''}`;
+  const safeUsage = Array.isArray(usage) ? usage : [];
+  const safeActiveUsage = Array.isArray(activeUsage) ? activeUsage : [];
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages.filter(Boolean) : [];
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal label-library-asset-delete-modal" role="dialog" aria-modal="true" aria-labelledby="label-library-asset-delete-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="label-library-asset-delete-title">Delete Shared Asset</h2>
+        <p><%= assetLabel %></p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <% if (safeErrors.length) { %><div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div><% } %>
+
+      <% if (safeActiveUsage.length) { %>
+        <div class="message warning">
+          <p><strong>This asset is used by <%= safeActiveUsage.length %> Active label template<%= safeActiveUsage.length === 1 ? '' : 's' %>.</strong></p>
+          <p>Deleting it removes the asset link immediately. Those templates will stop being print-ready until their layouts are repaired.</p>
+        </div>
+      <% } else if (safeUsage.length) { %>
+        <div class="message warning">
+          <p>This asset is referenced by <%= safeUsage.length %> Draft/Archived template<%= safeUsage.length === 1 ? '' : 's' %>. Deleting it will leave those layouts needing attention.</p>
+        </div>
+      <% } else { %>
+        <div class="message info"><p>This asset is not referenced by any label template.</p></div>
+      <% } %>
+
+      <% if (safeUsage.length) { %>
+        <div class="label-library-asset-delete-usage">
+          <strong>Referenced by</strong>
+          <ul>
+            <% safeUsage.forEach((row) => { %><li><%= row.template_name %> · <%= row.template_status %></li><% }) %>
+          </ul>
+        </div>
+      <% } %>
+
+      <form method="post" action="/management/label-library/assets/<%= asset.asset_id %>/delete">
+        <% if (safeActiveUsage.length) { %>
+          <label class="form-field">
+            <span>Type DELETE to confirm</span>
+            <input type="text" name="confirmation" autocomplete="off" spellcheck="false" required />
+          </label>
+        <% } %>
+        <div class="form-actions">
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          <button type="submit" class="primary-button danger-button">Delete Asset</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

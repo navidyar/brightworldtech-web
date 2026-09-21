@@ -3,6 +3,7 @@
 const express = require('express');
 const apiAuthController = require('../controllers/apiAuthController');
 const apiUnitController = require('../controllers/apiUnitController');
+const apiCatalogRequestController = require('../controllers/apiCatalogRequestController');
 const { requireApiAuth } = require('../middleware/apiAuthMiddleware');
 const { requireUnitApiAccess } = require('../middleware/apiUnitAccessMiddleware');
 
@@ -20,6 +21,9 @@ router.get('/auth/me', requireApiAuth, apiAuthController.me);
 router.post('/auth/logout', requireApiAuth, apiAuthController.logout);
 
 router.get('/units/creation-options', requireApiAuth, requireUnitApiAccess, apiUnitController.listCreationOptions);
+router.post('/units/catalog-requests/model', requireApiAuth, requireUnitApiAccess, apiCatalogRequestController.createModel);
+router.post('/units/catalog-requests/processor', requireApiAuth, requireUnitApiAccess, apiCatalogRequestController.createProcessor);
+router.get('/units/catalog-requests/:requestId', requireApiAuth, requireUnitApiAccess, apiCatalogRequestController.getStatus);
 router.post('/units/resolve', requireApiAuth, requireUnitApiAccess, apiUnitController.resolveUnit);
 router.post('/units/commit', requireApiAuth, requireUnitApiAccess, apiUnitController.commitUnit);
 router.post('/units/action', requireApiAuth, requireUnitApiAccess, apiUnitController.applyUnitAction);

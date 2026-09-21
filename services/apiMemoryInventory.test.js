@@ -65,18 +65,33 @@ test('RAM type resolution is exact after normalization and never fuzzy', () => {
   assert.equal(resolveRamTypeCandidate('DDR', candidates).status, 'unmapped');
 });
 
-test('manual memory configuration blocks conflicting tool configuration', () => {
+test('current memory is Tool-authoritative even when a legacy manual override source exists', () => {
   const observation = { fieldKey: 'memory_modules', state: 'known', value: { modules: [incoming({ size_gb: 32 })] } };
-  const plan = buildMemoryPlan({ observation, currentRows: [current()], sourceCode: 'manual_override' });
-  assert.equal(plan.status, 'blocked_manual');
-  assert.equal(plan.reason, 'manual_memory_configuration_conflict');
+  const plan = buildMemoryPlan({ observation, currentRows: [current()], sourceCode: 'manual_override', incomingToolSource: 'techtools' });
+  assert.equal(plan.status, 'applied');
+  assert.equal(plan.mode, 'replace');
+  assert.equal(plan.reason, 'tool_authoritative_memory_configuration');
 });
 
-test('manual memory configuration accepts speed only when tool configuration is coherent', () => {
+test('matching manual memory configuration can still accept coherent Tool detail refreshes', () => {
   const observation = { fieldKey: 'memory_modules', state: 'known', value: { modules: [incoming({ speed_mhz: 2666 })] } };
   const plan = buildMemoryPlan({ observation, currentRows: [current()], sourceCode: 'manual_override' });
   assert.equal(plan.status, 'applied');
   assert.equal(plan.mode, 'details_only');
+});
+
+test('TechTools current memory has final Tool authority over later ScanTools data', () => {
+  const latest = { modules: [incoming()] };
+  const observation = { fieldKey: 'memory_modules', state: 'known', value: { modules: [incoming({ size_gb: 32 })] } };
+  const plan = buildMemoryPlan({
+    observation,
+    currentRows: [current()],
+    latestAppliedValue: latest,
+    latestAppliedToolSource: 'techtools',
+    incomingToolSource: 'scantools'
+  });
+  assert.equal(plan.status, 'unchanged');
+  assert.equal(plan.reason, 'techtools_current_memory_is_final');
 });
 
 test('tool-owned configuration can be replaced by a later different tool configuration', () => {

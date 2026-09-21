@@ -34,6 +34,19 @@ test('solo printers are private by default while Tech Lead+ retains access', () 
   assert.equal(canEditSoloPrinter(printer, 20, ['management']), true);
 });
 
+
+test('explicit loaded media width overrides the printer profile default', () => {
+  const input = normalizePrinterInput({
+    displayName: 'Bench Printer',
+    hostAddress: '10.0.2.211',
+    protocolCode: 'raw_9100',
+    printerProfileCode: 'brother_ql810w_300dpi',
+    mediaCode: '38mm_continuous'
+  }, { scope: 'solo' });
+  assert.equal(input.mediaCode, '38mm_continuous');
+  assert.equal(input.dpi, 300);
+});
+
 test('printer probing is restricted to private/local IPv4 addresses', () => {
   assert.equal(normalizeHostAddress('10.0.2.210'), '10.0.2.210');
   assert.throws(() => normalizeHostAddress('8.8.8.8'), /private\/local IPv4/);

@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', {
+    pageTitle,
+    stylesheets: [
+      '/css/modal.css?v=20260909-stage10w83-label-library-management',
+      '/css/management.css?v=20260911-label-builder-images',
+      '/css/label-builder.css?v=20260912-live-unit-preview-refine'
+    ]
+  }) %>
+  <script defer src="/js/modal.js?v=20260909-stage10w83-label-library-management"></script>
+  <script defer src="/js/label-builder.js?v=20260918-barcode-width-fit-v2"></script>
+
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell label-builder-page" data-label-builder-root data-template-id="<%= template.label_template_id %>" data-template-status="<%= template.status %>" data-template-revision="<%= Number(template.revision || 0) %>" data-builder-saved-ready="<%= builderTestPrintReady ? '1' : '0' %>">
+          <section class="page-heading label-builder-heading">
+            <div>
+              <a class="label-builder-back-link" href="/management/label-library">← Label Template Library</a>
+              <div class="label-builder-title-row">
+                <h1><%= template.name %></h1>
+                <span class="pill slate"><%= template.print_scope === 'standalone' ? 'Standalone' : 'Lot Selection' %></span>
+                <span class="pill <%= template.status === 'active' ? 'good' : 'slate' %>"><%= template.status === 'active' ? 'Active' : 'Draft' %></span>
+              </div>
+              <p><%= template.status === 'active' ? 'Active layout editor' : 'Draft layout editor' %> · geometry is stored as printer dots and rendered from JSON at print time.</p>
+            </div>
+            <div class="label-builder-heading-actions">
+              <div class="label-builder-history-actions" aria-label="Edit history">
+                <button class="secondary-button compact-button" type="button" data-builder-undo disabled title="Undo (Ctrl+Z)">↶ Undo</button>
+                <button class="secondary-button compact-button" type="button" data-builder-redo disabled title="Redo (Ctrl+Y)">↷ Redo</button>
+              </div>
+              <span class="pill slate" data-builder-save-state>Not saved this session</span>
+              <input type="hidden" name="unitId" value="" data-builder-test-print-unit />
+              <button class="secondary-button" type="button" data-builder-test-print data-builder-test-print-base="/management/label-library/templates/<%= template.label_template_id %>/builder/test-print/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/builder/test-print/modal" hx-include="[data-builder-test-print-unit]" hx-target="#modal-root" hx-swap="innerHTML" <%= builderTestPrintReady ? '' : 'disabled' %>>Test Print</button>
+              <button class="primary-button" type="button" data-builder-save><%= template.status === 'active' ? 'Save Live Layout' : 'Save Draft Layout' %></button>
+            </div>
+          </section>
+
+          <% if (template.status === 'active') { %>
+            <div class="message warning label-builder-active-warning">
+              <p><strong>This template is Active.</strong> Saving layout changes updates future label output immediately.<% if (template.print_scope === 'lot') { %> It is currently used by <strong><%= formatNumber(affectedActiveLotCount) %></strong> active Lot<%= Number(affectedActiveLotCount) === 1 ? '' : 's' %>.<% } else { %> Future Standalone prints will use the updated layout immediately.<% } %></p>
+              <p>Active templates must remain print-ready; BWTDallas will reject a live save if the edited layout is incomplete.</p>
+            </div>
+          <% } %>
+
+          <section class="label-builder-toolbar site-clean-section" aria-label="Label Builder controls">
+            <div class="label-builder-live-preview" data-builder-live-preview>
+              <div class="label-builder-live-preview-heading">
+                <div>
+                  <strong>Live Unit Preview</strong>
+                  <small data-builder-preview-summary>Representative values are shown until you select a Unit.</small>
+                </div>
+                <span class="pill slate" data-builder-preview-status>Representative data</span>
+              </div>
+              <div class="label-builder-live-preview-controls">
+                <label class="label-builder-live-preview-search">
+                  <span>Search Unit</span>
+                  <input type="search" autocomplete="off" placeholder="Asset Tag, Unit ID, serial, or UUID" data-builder-unit-search />
+                </label>
+                <button class="secondary-button compact-button" type="button" data-builder-unit-search-button>Find Unit</button>
+                <button class="secondary-button compact-button" type="button" data-builder-unit-clear hidden>Use Representative Data</button>
+              </div>
+              <div class="label-builder-live-preview-results" data-builder-unit-results hidden></div>
+            </div>
+
+            <label class="label-builder-media-control">
+              <span>Continuous Roll Width</span>
+              <select data-builder-media-width>
+                <% mediaWidths.forEach((media) => { %>
+                  <option value="<%= media.code %>" <%= activeMedia.code === media.code ? 'selected' : '' %>><%= media.label %></option>
+                <% }) %>
+              </select>
+            </label>
+
+            <div class="label-builder-length-control">
+              <label>
+                <span>Label Length (mm)</span>
+                <input type="number" min="12.7" max="1000" step="0.1" value="<%= activeGeometry.lengthMm %>" data-builder-length-mm />
+              </label>
+              <div class="label-builder-length-actions" aria-label="Adjust label length">
+                <button class="secondary-button compact-button" type="button" data-builder-length-delta="-10">− 10 mm</button>
+                <button class="secondary-button compact-button" type="button" data-builder-length-delta="10">+ 10 mm</button>
+              </div>
+            </div>
+
+            <div class="label-builder-toggle-group" aria-label="Grid controls">
+              <label class="label-builder-check"><input type="checkbox" data-builder-grid-visible /> <span>Show Grid</span></label>
+              <label class="label-builder-check"><input type="checkbox" data-builder-snap /> <span>Snap to Grid</span></label>
+              <label>
+                <span>Grid</span>
+                <select data-builder-grid-size>
+                  <option value="1">1 dot</option>
+                  <option value="5" selected>5 dots</option>
+                  <option value="10">10 dots</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="label-builder-toolbar-actions">
+              <button class="secondary-button" type="button" data-builder-add-region>+ Add Region</button>
+              <button class="secondary-button danger-button" type="button" data-builder-delete disabled>Remove Region</button>
+            </div>
+
+          </section>
+
+          <section class="label-builder-main">
+            <div class="label-builder-workspace-card site-clean-section">
+              <div class="label-builder-workspace-heading">
+                <div>
+                  <strong>Canvas</strong>
+                  <small><span data-builder-canvas-size><%= activeGeometry.canvasWidthDots %> × <%= activeGeometry.canvasHeightDots %></span> printer dots · <%= activeGeometry.dpi %> dpi · <span data-builder-media-summary><%= activeMedia.widthMm %> mm roll × <%= activeGeometry.lengthMm %> mm length</span></small>
+                </div>
+                <small>Arrow = 1 dot · Shift + Arrow = 10 dots</small>
+              </div>
+
+              <div class="label-builder-workspace" data-builder-workspace>
+                <div
+                  class="label-builder-canvas"
+                  data-builder-canvas
+                  tabindex="0"
+                  aria-label="Label layout canvas"
+                ></div>
+              </div>
+            </div>
+
+            <aside class="label-builder-inspector site-clean-section" data-builder-inspector>
+              <div class="label-builder-inspector-heading">
+                <div>
+                  <h2>Region Properties</h2>
+                  <p data-builder-selection-label>Select a region on the canvas.</p>
+                </div>
+              </div>
+
+              <div class="label-builder-empty-inspector" data-builder-empty-inspector>
+                <p>Add or select a region to configure its content and geometry.</p>
+              </div>
+
+              <div class="label-builder-geometry" data-builder-geometry hidden>
+                <div class="label-builder-property-section">
+                  <label class="label-builder-property-field">
+                    <span>Content Type</span>
+                    <select data-builder-content-type>
+                      <option value="unconfigured">Choose content…</option>
+                      <option value="static_text">Static Text</option>
+                      <option value="dynamic_text">Dynamic Text</option>
+                      <option value="composed_text">Composed Text</option>
+                      <option value="image">Image</option>
+                      <option value="barcode">Barcode</option>
+                      <option value="qr">QR Code</option>
+                      <option value="line">Line</option>
+                      <option value="rectangle">Rectangle</option>
+                    </select>
+                  </label>
+
+                  <label class="label-builder-property-field" data-builder-static-text hidden>
+                    <span>Static Text</span>
+                    <textarea rows="3" maxlength="500" data-builder-static-value placeholder="Type the text to print"></textarea>
+                  </label>
+
+                  <label class="label-builder-property-field" data-builder-dynamic-text hidden>
+                    <span>BWTDallas Data Source</span>
+                    <select data-builder-dynamic-field>
+                      <option value="">Choose a field…</option>
+                      <% fieldGroups.forEach((group) => { %>
+                        <optgroup label="<%= group.label %>">
+                          <% group.fields.forEach((field) => { %>
+                            <option value="<%= field.key %>"><%= field.label %></option>
+                          <% }) %>
+                        </optgroup>
+                      <% }) %>
+                    </select>
+                  </label>
+
+                  <div class="label-builder-image-properties" data-builder-image-properties hidden>
+                    <label class="label-builder-property-field">
+                      <span>Shared Asset</span>
+                      <select data-builder-image-asset>
+                        <option value="">Choose an image…</option>
+                        <% sharedImageAssets.forEach((asset) => { %>
+                          <option value="<%= asset.assetKey %>"><%= asset.name %> · <%= asset.mimeType === 'image/svg+xml' ? 'SVG' : 'PNG' %></option>
+                        <% }) %>
+                      </select>
+                    </label>
+                    <div class="label-builder-image-preview" data-builder-image-preview hidden>
+                      <img alt="Selected Shared Asset preview" data-builder-image-preview-img />
+                      <div>
+                        <strong data-builder-image-preview-name></strong>
+                        <small data-builder-image-preview-meta></small>
+                      </div>
+                    </div>
+                    <label class="label-builder-check label-builder-image-lock">
+                      <input type="checkbox" data-builder-image-lock checked />
+                      <span>Lock aspect ratio while resizing</span>
+                    </label>
+                    <small>Images reference one reusable Shared Asset. PNG and SVG source files are not copied into this template.</small>
+                  </div>
+
+                  <div class="label-builder-code-properties" data-builder-code-properties hidden>
+                    <label class="label-builder-property-field">
+                      <span>Payload Source</span>
+                      <select data-builder-code-payload-type>
+                        <option value="field">BWTDallas Field</option>
+                        <option value="static">Static Value</option>
+                        <option value="composed">Composed Value</option>
+                      </select>
+                    </label>
+
+                    <label class="label-builder-property-field" data-builder-code-field-wrap>
+                      <span>BWTDallas Data Source</span>
+                      <select data-builder-code-field>
+                        <option value="">Choose a field…</option>
+                        <% fieldGroups.forEach((group) => { %>
+                          <optgroup label="<%= group.label %>">
+                            <% group.fields.forEach((field) => { %>
+                              <option value="<%= field.key %>"><%= field.label %></option>
+                            <% }) %>
+                          </optgroup>
+                        <% }) %>
+                      </select>
+                    </label>
+
+                    <label class="label-builder-property-field" data-builder-code-static-wrap hidden>
+                      <span>Static Value</span>
+                      <input type="text" maxlength="500" data-builder-code-static placeholder="Value to encode" />
+                    </label>
+
+                    <label class="label-builder-property-field" data-builder-code-case-wrap>
+                      <span>Dynamic Field Case</span>
+                      <select data-builder-code-case>
+                        <option value="plain">As Stored</option>
+                        <option value="upper">UPPERCASE</option>
+                        <option value="lower">lowercase</option>
+                        <option value="camel">Camel Case</option>
+                      </select>
+                    </label>
+
+                    <div data-builder-barcode-properties hidden>
+                      <label class="label-builder-property-field">
+                        <span>Symbology</span>
+                        <select data-builder-barcode-symbology>
+                          <option value="code39">Code 39</option>
+                        </select>
+                      </label>
+                      <label class="label-builder-check label-builder-code-check">
+                        <input type="checkbox" data-builder-barcode-show-text />
+                        <span>Print payload text below bars</span>
+                      </label>
+                      <label class="label-builder-property-field" data-builder-barcode-text-size-wrap hidden>
+                        <span>Payload Text Size (dots)</span>
+                        <input type="number" min="8" max="48" step="1" value="24" data-builder-barcode-text-size />
+                      </label>
+                      <small>Code 39 supports A–Z, 0–9, space, and <code>.-$/+%</code>. Dynamic values are normalized at print time.</small>
+                    </div>
+
+                    <label class="label-builder-property-field" data-builder-qr-properties hidden>
+                      <span>QR Error Correction</span>
+                      <select data-builder-qr-error-correction>
+                        <option value="L">L · Low</option>
+                        <option value="M">M · Medium</option>
+                        <option value="Q">Q · Quartile</option>
+                        <option value="H">H · High</option>
+                      </select>
+                    </label>
+                  </div>
+
+                  <div class="label-builder-shape-properties" data-builder-shape-properties hidden>
+                    <label class="label-builder-property-field" data-builder-shape-thickness-wrap>
+                      <span data-builder-shape-thickness-label>Thickness (dots)</span>
+                      <input type="number" min="1" max="40" step="1" value="2" data-builder-shape-thickness />
+                    </label>
+                    <label class="label-builder-property-field" data-builder-rectangle-fill-wrap hidden>
+                      <span>Rectangle Style</span>
+                      <select data-builder-rectangle-fill>
+                        <option value="outline">Outline</option>
+                        <option value="filled">Filled</option>
+                      </select>
+                    </label>
+                    <small>Line and Rectangle objects are rendered as black vector instructions. No image asset is stored.</small>
+                  </div>
+                </div>
+
+                <div class="label-builder-property-section label-builder-composed-editor" data-builder-composed-editor hidden>
+                  <div class="label-builder-composed-heading">
+                    <div>
+                      <strong class="label-builder-property-title">Composed Value</strong>
+                    </div>
+                  </div>
+
+                  <div class="label-builder-composed-presets" data-builder-composed-presets>
+                    <% if (composedValuePresets.common.length) { %>
+                      <div>
+                        <span>Common</span>
+                        <div class="label-builder-composed-preset-list">
+                          <% composedValuePresets.common.forEach((preset) => { %>
+                            <button type="button" class="secondary-button compact-button" data-builder-composed-preset="<%= preset.id %>"><%= preset.label %></button>
+                          <% }) %>
+                        </div>
+                      </div>
+                    <% } %>
+                    <% if (composedValuePresets.recent.length) { %>
+                      <div>
+                        <span>Recent</span>
+                        <div class="label-builder-composed-preset-list">
+                          <% composedValuePresets.recent.forEach((preset) => { %>
+                            <button type="button" class="secondary-button compact-button" data-builder-composed-preset="<%= preset.id %>"><%= preset.label %></button>
+                          <% }) %>
+                        </div>
+                      </div>
+                    <% } %>
+                    <% if (composedValuePresets.starter.length) { %>
+                      <div>
+                        <span>Starter</span>
+                        <div class="label-builder-composed-preset-list">
+                          <% composedValuePresets.starter.forEach((preset) => { %>
+                            <button type="button" class="secondary-button compact-button" data-builder-composed-preset="<%= preset.id %>"><%= preset.label %></button>
+                          <% }) %>
+                        </div>
+                      </div>
+                    <% } %>
+                  </div>
+
+                  <div class="label-builder-composed-parts" data-builder-composed-parts></div>
+                  <div class="label-builder-composed-actions">
+                    <button type="button" class="secondary-button compact-button" data-builder-composed-add="field">+ Field</button>
+                    <button type="button" class="secondary-button compact-button" data-builder-composed-add="static">+ Text</button>
+                  </div>
+
+                  <div class="label-builder-composed-preview">
+                    <span>Preview</span>
+                    <strong data-builder-composed-preview>—</strong>
+                  </div>
+
+                  <details class="label-builder-composed-advanced">
+                    <summary>Advanced expression</summary>
+                    <label class="label-builder-property-field">
+                      <span>Expression</span>
+                      <textarea rows="3" maxlength="1000" data-builder-composed-expression></textarea>
+                    </label>
+                    <div class="label-builder-composed-actions">
+                      <button type="button" class="secondary-button compact-button" data-builder-composed-apply-expression>Apply Expression</button>
+                    </div>
+                    <small>Advanced editing uses internal <code>{{unit.field}}</code> tokens. Applying an expression rebuilds field parts with As Stored case.</small>
+                  </details>
+                </div>
+
+                <div class="label-builder-property-section" data-builder-text-style hidden>
+                  <strong class="label-builder-property-title">Typography</strong>
+                  <div class="label-builder-typography-grid">
+                    <label class="label-builder-property-field full-width">
+                      <span>Font Family</span>
+                      <select data-builder-font-family>
+                        <% fontFamilies.forEach((font) => { %>
+                          <option value="<%= font.code %>"><%= font.label %></option>
+                        <% }) %>
+                      </select>
+                    </label>
+                    <label class="label-builder-property-field">
+                      <span>Font Size (dots)</span>
+                      <input type="number" min="6" max="300" step="1" data-builder-font-size />
+                    </label>
+                    <label class="label-builder-property-field">
+                      <span>Weight</span>
+                      <select data-builder-font-weight>
+                        <% fontWeights.forEach((weight) => { %>
+                          <option value="<%= weight %>"><%= weight === 700 ? 'Bold' : weight === 500 ? 'Medium' : 'Regular' %></option>
+                        <% }) %>
+                      </select>
+                    </label>
+                    <label class="label-builder-property-field">
+                      <span>Justification</span>
+                      <select data-builder-text-align>
+                        <% textAligns.forEach((align) => { %>
+                          <option value="<%= align %>"><%= align.charAt(0).toUpperCase() + align.slice(1) %></option>
+                        <% }) %>
+                      </select>
+                    </label>
+                    <label class="label-builder-property-field">
+                      <span>Case</span>
+                      <select data-builder-text-case>
+                        <% textCases.forEach((textCase) => { %>
+                          <option value="<%= textCase %>"><%= textCase === 'upper' ? 'UPPERCASE' : textCase === 'lower' ? 'lowercase' : textCase === 'camel' ? 'Camel Case' : 'As Stored' %></option>
+                        <% }) %>
+                      </select>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="label-builder-property-section">
+                  <div class="label-builder-layer-heading">
+                    <strong class="label-builder-property-title">Layer</strong>
+                    <span class="label-builder-layer-position" data-builder-layer-position>—</span>
+                  </div>
+                  <div class="label-builder-layer-actions">
+                    <button type="button" class="secondary-button compact-button" data-builder-layer="-1">Send Backward</button>
+                    <button type="button" class="secondary-button compact-button" data-builder-layer="1">Bring Forward</button>
+                  </div>
+                  <small>Layer 1 is the back of the label. Higher layers print above lower layers.</small>
+                </div>
+
+                <div class="label-builder-property-section">
+                  <div class="label-builder-rotation-heading">
+                    <strong class="label-builder-property-title">Rotation</strong>
+                    <div class="label-builder-rotation-actions">
+                      <button type="button" class="secondary-button compact-button" data-builder-rotate="-90" title="Rotate counter-clockwise">↶</button>
+                      <button type="button" class="secondary-button compact-button" data-builder-rotate="90" title="Rotate clockwise">↷</button>
+                    </div>
+                  </div>
+                  <label class="label-builder-property-field">
+                    <span>Orientation</span>
+                    <select data-builder-rotation>
+                      <% rotations.forEach((rotation) => { %>
+                        <option value="<%= rotation %>"><%= rotation === 0 ? '0° · Normal' : rotation === 90 ? '90° · Clockwise' : rotation === 180 ? '180°' : '270° · Counter-clockwise' %></option>
+                      <% }) %>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="label-builder-property-section">
+                  <strong class="label-builder-property-title">Geometry</strong>
+                  <div class="label-builder-geometry-grid">
+                    <% ['x', 'y', 'width', 'height'].forEach((field) => { %>
+                      <label>
+                        <span><%= field === 'width' ? 'Width' : field === 'height' ? 'Height' : field.toUpperCase() %> (dots)</span>
+                        <input type="number" min="0" step="1" data-builder-geometry-field="<%= field %>" />
+                      </label>
+                    <% }) %>
+                  </div>
+                  <small>Drag to move. Drag a corner to resize. Rotation uses quarter turns and remains editable JSON, never a flattened image.</small>
+                </div>
+              </div>
+            </aside>
+          </section>
+
+          <div class="message error" data-builder-errors hidden></div>
+        </main>
+      </div>
+    </div>
+
+    <div id="modal-root"></div>
+
+    <script type="application/json" id="label-builder-layout-json"><%- JSON.stringify(layout).replace(/</g, '\\u003c') %></script>
+    <script type="application/json" id="label-builder-media-widths-json"><%- JSON.stringify(mediaWidths).replace(/</g, '\\u003c') %></script>
+    <script type="application/json" id="label-builder-fonts-json"><%- JSON.stringify(fontFamilies).replace(/</g, '\\u003c') %></script>
+    <script type="application/json" id="label-builder-field-groups-json"><%- JSON.stringify(fieldGroups).replace(/</g, '\\u003c') %></script>
+    <script type="application/json" id="label-builder-assets-json"><%- JSON.stringify(sharedImageAssets).replace(/</g, '\\u003c') %></script>
+    <script type="application/json" id="label-builder-composed-presets-json"><%- JSON.stringify(composedValuePresets).replace(/</g, '\\u003c') %></script>
+  </body>
+</html>

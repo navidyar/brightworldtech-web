@@ -1,0 +1,104 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeActiveUsage = Array.isArray(activeUsage) ? activeUsage : [];
+  const safeDirectAttachments = Array.isArray(directAttachments) ? directAttachments : [];
+  const activeCount = safeActiveUsage.length;
+  const directCount = safeDirectAttachments.length;
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal label-template-lot-usage-modal" role="dialog" aria-modal="true" aria-labelledby="label-template-lot-usage-title" data-label-lot-usage-modal>
+    <header class="modal-header">
+      <div>
+        <h2 id="label-template-lot-usage-title">Lot Usage</h2>
+        <% if (template) { %><p><%= template.name %></p><% } %>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <% if (template) { %>
+        <div class="label-template-lot-usage-summary">
+          <span><strong><%= activeCount.toLocaleString('en-US') %></strong> active effective Lot<%= activeCount === 1 ? '' : 's' %></span>
+          <span><strong><%= directCount.toLocaleString('en-US') %></strong> direct configuration<%= directCount === 1 ? '' : 's' %></span>
+        </div>
+
+        <label class="form-field label-template-lot-usage-search">
+          <span>Find Lot</span>
+          <input type="search" autocomplete="off" placeholder="Search Lot name, ID, or inheritance source" data-label-lot-usage-search />
+        </label>
+
+        <div class="label-template-lot-usage-scroll">
+          <section class="label-template-lot-usage-section" data-label-lot-usage-section>
+            <div class="label-template-lot-usage-section-heading">
+              <div>
+                <strong>Active Effective Use</strong>
+                <small>Includes Lots that inherit this label from a configured parent Lot.</small>
+              </div>
+            </div>
+
+            <% if (safeActiveUsage.length > 0) { %>
+              <div class="label-template-lot-usage-list">
+                <% safeActiveUsage.forEach((usage) => { %>
+                  <div class="label-template-lot-usage-row" data-label-lot-usage-row data-search-text="<%= `${usage.lot_name || ''} ${usage.lot_id || ''} ${usage.source_lot_name || ''} ${usage.source_lot_id || ''}`.toLowerCase() %>">
+                    <div>
+                      <a href="/management/lots/<%= usage.lot_id %>"><strong><%= usage.lot_name %></strong></a>
+                      <small>Lot #<%= usage.lot_id %></small>
+                    </div>
+                    <div class="label-template-lot-usage-state">
+                      <% if (usage.is_inherited) { %>
+                        <span class="pill slate">Inherited</span>
+                        <small>from <%= usage.source_lot_name %> · Lot #<%= usage.source_lot_id %></small>
+                      <% } else { %>
+                        <span class="pill good">Direct</span>
+                      <% } %>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <p class="label-template-lot-usage-empty">No active effective Lot currently uses this template.</p>
+            <% } %>
+          </section>
+
+          <section class="label-template-lot-usage-section" data-label-lot-usage-section>
+            <div class="label-template-lot-usage-section-heading">
+              <div>
+                <strong>Direct Lot Configurations</strong>
+                <small>Shows where this template is explicitly attached, including inactive staging assignments.</small>
+              </div>
+            </div>
+
+            <% if (safeDirectAttachments.length > 0) { %>
+              <div class="label-template-lot-usage-list">
+                <% safeDirectAttachments.forEach((attachment) => { %>
+                  <div class="label-template-lot-usage-row" data-label-lot-usage-row data-search-text="<%= `${attachment.lot_name || ''} ${attachment.lot_id || ''}`.toLowerCase() %>">
+                    <div>
+                      <a href="/management/lots/<%= attachment.lot_id %>"><strong><%= attachment.lot_name %></strong></a>
+                      <small>Lot #<%= attachment.lot_id %></small>
+                    </div>
+                    <div class="label-template-lot-usage-state">
+                      <span class="pill <%= Number(attachment.is_active) === 1 ? 'good' : 'slate' %>"><%= Number(attachment.is_active) === 1 ? 'Active' : 'Inactive' %></span>
+                      <small><%= Number(attachment.is_required) === 1 ? 'Required' : 'Optional' %> · Qty <%= Number(attachment.default_quantity || 1) %></small>
+                    </div>
+                  </div>
+                <% }) %>
+              </div>
+            <% } else { %>
+              <p class="label-template-lot-usage-empty">This template is not directly configured on any Lot.</p>
+            <% } %>
+          </section>
+
+          <p class="label-template-lot-usage-no-match" data-label-lot-usage-no-match hidden>No Lots match the current search.</p>
+        </div>
+      <% } %>
+
+      <div class="form-actions">
+        <button type="button" class="secondary-button" data-modal-close>Close</button>
+      </div>
+    </div>
+  </section>
+</div>

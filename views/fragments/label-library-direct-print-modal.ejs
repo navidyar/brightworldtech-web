@@ -1,0 +1,164 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages.filter(Boolean) : [];
+  const safePrinters = Array.isArray(printers) ? printers : [];
+  const safeResults = Array.isArray(searchResults) ? searchResults : [];
+  const templateId = Number(template?.label_template_id || 0);
+  const selectedUnitId = Number(unit?.unitId || 0);
+  const canSubmit = !Boolean(submitBlocked)
+    && Boolean(selectedPrinterId)
+    && safePrinters.length > 0
+    && Number(copies) >= 1
+    && Number(copies) <= Number(maxCopies);
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal label-library-direct-print-modal" role="dialog" aria-modal="true" aria-labelledby="label-library-direct-print-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="label-library-direct-print-title">Print Standalone Label</h2>
+        <p><%= template?.name || 'Label Template' %></p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (successMessage) { %>
+        <div class="message success"><p><%= successMessage %></p></div>
+        <div class="label-library-direct-print-recent-link">
+          <a class="secondary-button" href="/tech/print-queue/modal" hx-get="/tech/print-queue/modal" hx-target="#modal-root" hx-swap="innerHTML">View Recent Prints</a>
+        </div>
+      <% } %>
+
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error">
+          <% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %>
+        </div>
+      <% } %>
+
+      <div class="label-library-direct-print-summary">
+        <div><small>Template</small><strong><%= template?.name || '—' %></strong></div>
+        <div><small>Print Availability</small><strong>Standalone</strong></div>
+        <div><small>Media</small><strong><%= template?.media_code || '—' %></strong></div>
+      </div>
+
+      <% if (requiresUnitContext) { %>
+        <section class="label-library-direct-print-section">
+          <div class="label-library-direct-print-section-heading">
+            <div>
+              <h3>Unit Context</h3>
+              <p>This layout uses BWTDallas Unit/Lot fields. Select the Unit whose current values should be rendered.</p>
+            </div>
+          </div>
+
+          <% if (unit) { %>
+            <div class="label-library-direct-print-unit-selected">
+              <div>
+                <small>Selected Unit</small>
+                <strong><%= unitFieldValues?.['unit.primary_label'] || `Unit #${unit.unitId}` %></strong>
+                <span><%= unitFieldValues?.['unit.model_display'] || 'Model not recorded' %><% if (unitFieldValues?.['lot.name']) { %> · <%= unitFieldValues['lot.name'] %><% } %></span>
+              </div>
+              <% if (unit.isParked) { %><span class="pill slate">Parked</span><% } %>
+            </div>
+          <% } else { %>
+            <div class="message info"><p>Select a Unit before printing. Representative Builder data is never used for a production direct print.</p></div>
+          <% } %>
+
+          <form
+            class="label-library-direct-print-unit-search"
+            method="get"
+            action="/management/label-library/templates/<%= templateId %>/print/modal"
+            hx-get="/management/label-library/templates/<%= templateId %>/print/modal"
+            hx-target="#modal-root"
+            hx-swap="innerHTML"
+          >
+            <label class="form-field">
+              <span>Find Unit</span>
+              <input
+                type="search"
+                name="q"
+                value="<%= searchTerm %>"
+                autocomplete="off"
+                placeholder="Asset Tag, Unit ID, serial, or UUID"
+                <%= unit ? '' : 'data-modal-initial-focus' %>
+              />
+            </label>
+            <button class="secondary-button" type="submit">Find Unit</button>
+          </form>
+
+          <% if (searchTerm) { %>
+            <div class="label-library-direct-print-unit-results">
+              <% if (safeResults.length === 0) { %>
+                <div class="message info"><p>No Units matched “<%= searchTerm %>”.</p></div>
+              <% } %>
+              <% safeResults.forEach((result) => { %>
+                <article>
+                  <div>
+                    <strong><%= result.assetTag || `Unit #${result.unitId}` %></strong>
+                    <small><%= result.modelDisplay || 'Model not recorded' %><% if (result.lotName) { %> · <%= result.lotName %><% } %></small>
+                  </div>
+                  <div class="label-library-direct-print-result-actions">
+                    <% if (result.isParked) { %><span class="pill slate">Parked</span><% } %>
+                    <a
+                      class="secondary-button compact-button"
+                      href="/management/label-library/templates/<%= templateId %>/print/modal?unitId=<%= result.unitId %>"
+                      hx-get="/management/label-library/templates/<%= templateId %>/print/modal?unitId=<%= result.unitId %>"
+                      hx-target="#modal-root"
+                      hx-swap="innerHTML"
+                    >Use Unit</a>
+                  </div>
+                </article>
+              <% }) %>
+            </div>
+          <% } %>
+        </section>
+      <% } else { %>
+        <div class="message info label-library-direct-print-static-note"><p>This layout contains no BWTDallas Unit/Lot fields, so no Unit context is required.</p></div>
+      <% } %>
+
+      <section class="label-library-direct-print-section">
+        <div class="label-library-direct-print-section-heading">
+          <div>
+            <h3>Preview</h3>
+            <p>The image below is rendered from the same structured layout and reusable assets used for printing.</p>
+          </div>
+        </div>
+        <% if (previewDataUri) { %>
+          <div class="label-library-direct-print-preview">
+            <img src="<%= previewDataUri %>" alt="Print preview for <%= template?.name || 'Standalone label' %>" />
+          </div>
+        <% } else if (requiresUnitContext && !unit) { %>
+          <div class="label-library-direct-print-preview-empty">Select a Unit to render the final preview.</div>
+        <% } %>
+      </section>
+
+      <form
+        class="app-form label-library-direct-print-form"
+        method="post"
+        action="/management/label-library/templates/<%= templateId %>/print"
+        hx-post="/management/label-library/templates/<%= templateId %>/print"
+        hx-target="#modal-root"
+        hx-swap="innerHTML"
+      >
+        <% if (selectedUnitId) { %><input type="hidden" name="unitId" value="<%= selectedUnitId %>" /><% } %>
+        <div class="form-grid label-library-direct-print-controls">
+          <label class="form-field">
+            <span>Printer or Group</span>
+            <select name="printerId" required <%= requiresUnitContext && !unit ? '' : 'data-modal-initial-focus' %>>
+              <% safePrinters.forEach((printer) => { %>
+                <option value="<%= printer.id %>" <%= printer.id === selectedPrinterId ? 'selected' : '' %>><%= printer.label %></option>
+              <% }) %>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Copies</span>
+            <input type="number" name="copies" min="1" max="<%= maxCopies %>" step="1" value="<%= copies %>" required />
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <button class="primary-button" type="submit" <%= canSubmit ? '' : 'disabled' %>>Print Label</button>
+          <button class="secondary-button" type="button" data-modal-close>Close</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

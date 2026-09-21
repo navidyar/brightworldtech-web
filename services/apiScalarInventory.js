@@ -29,7 +29,6 @@ const {
   normalizeMemoryObservation,
   resolveMemoryObservation,
   loadCurrentMemoryRows,
-  loadLatestAppliedMemoryValue,
   buildMemoryPlan,
   applyMemoryPlan,
   toFormMemoryModules,
@@ -40,7 +39,6 @@ const {
   normalizeStorageObservation,
   resolveStorageObservation,
   loadCurrentStorageRows,
-  loadLatestAppliedStorageValue,
   buildStoragePlan,
   applyStoragePlan,
   toFormStorageDevices,
@@ -96,6 +94,8 @@ const {
   CAMERA_TEST_FIELD_KEY,
   BIOMETRIC_HARDWARE_FIELD_KEY,
   BIOMETRICS_TEST_FIELD_KEY,
+  TOUCHSCREEN_TEST_FIELD_KEY,
+  COMPLETE_DIAGNOSTICS_FIELD_KEY,
   normalizeBatteryObservation,
   normalizeCameraHardwareObservation,
   normalizeFingerprintHardwareObservation,
@@ -319,6 +319,26 @@ async function loadLatestAppliedToolValues(connection, unitId, fieldKeys) {
     const storedValue = parseStoredJson(row.observed_value_json);
     return [fieldKey, extractAppliedToolValue(fieldKey, storedValue)];
   }));
+}
+
+async function loadLatestAppliedCompositeToolObservation(connection, unitId, fieldKey, productionCycleKey) {
+  const [rows] = await connection.query(
+    `SELECT observation.observed_value_json, run.tool_source
+       FROM unit_tool_observations observation
+       JOIN unit_tool_runs run ON run.tool_run_id = observation.tool_run_id
+      WHERE observation.unit_id = ?
+        AND observation.field_key = ?
+        AND observation.application_status IN ('applied', 'unchanged')
+        AND run.production_cycle_key = ?
+      ORDER BY observation.unit_tool_observation_id DESC
+      LIMIT 1`,
+    [unitId, fieldKey, productionCycleKey]
+  );
+  if (!rows.length) return { value: null, toolSource: '' };
+  return {
+    value: parseStoredJson(rows[0].observed_value_json),
+    toolSource: String(rows[0].tool_source || '').trim().toLowerCase()
+  };
 }
 
 async function lockUnitState(connection, unitId) {
@@ -554,6 +574,58 @@ function blockPlan(plan, reason) {
 function ignorePlan(plan, reason) {
   if (!plan || ['blocked_manual', 'ignored_unknown'].includes(plan.decision.status)) return;
   plan.decision = { status: 'ignored_unknown', reason, desiredValue: plan.currentValue };
+}
+
+
+function assertModelProcessorCatalogResolved(plans, unitState) {
+  const modelPlan = plans.get('unit_model');
+  if (modelPlan?.observation?.state === 'known' && modelPlan.resolution?.status !== 'resolved') {
+    const manufacturerPlan = plans.get('manufacturer');
+    const manufacturerId = normalizePositiveInteger(manufacturerPlan ? effectiveValue(manufacturerPlan) : unitState.manufacturer_id);
+    const unitCategoryConfigValueId = normalizePositiveInteger(unitState.unit_category_config_value_id);
+    const ambiguous = modelPlan.resolution?.status === 'ambiguous';
+    throw new ApiScalarInventoryError(
+      409,
+      ambiguous ? 'MODEL_CATALOG_VALUE_AMBIGUOUS' : 'MODEL_CATALOG_REQUEST_REQUIRED',
+      ambiguous
+        ? 'The observed Unit Model matches more than one BWTDallas catalog value. Resolve the catalog ambiguity before continuing.'
+        : 'The observed Unit Model is not available in BWTDallas. Submit a Model Catalog request and wait for approval before continuing.',
+      {
+        field_key: 'unit_model',
+        submitted_value: modelPlan.observation.value,
+        manufacturer_id: manufacturerId,
+        unit_category_config_value_id: unitCategoryConfigValueId,
+        request_supported: Boolean(!ambiguous && manufacturerId && unitCategoryConfigValueId),
+        request_endpoint: '/api/v1/units/catalog-requests/model',
+        candidates: modelPlan.resolution?.candidates || []
+      }
+    );
+  }
+
+  const processorPlan = plans.get('processor_model');
+  if (processorPlan?.observation?.state === 'known' && processorPlan.resolution?.status !== 'resolved') {
+    const modelPlanValue = plans.get('unit_model');
+    const unitModelId = normalizePositiveInteger(modelPlanValue ? effectiveValue(modelPlanValue) : unitState.unit_model_id);
+    const ambiguous = processorPlan.resolution?.status === 'ambiguous';
+    const contextMissing = processorPlan.resolution?.reason === 'processor_context_missing' || !unitModelId;
+    throw new ApiScalarInventoryError(
+      409,
+      ambiguous ? 'PROCESSOR_CATALOG_VALUE_AMBIGUOUS' : contextMissing ? 'PROCESSOR_CONTEXT_UNRESOLVED' : 'PROCESSOR_CATALOG_REQUEST_REQUIRED',
+      ambiguous
+        ? 'The observed Processor matches more than one BWTDallas catalog value. Resolve the catalog ambiguity before continuing.'
+        : contextMissing
+          ? 'The observed Processor cannot be resolved until the Unit Model is available in BWTDallas.'
+          : 'The observed Processor is not available for this Unit Model in BWTDallas. Submit a Processor Catalog request and wait for approval before continuing.',
+      {
+        field_key: 'processor_model',
+        submitted_value: processorPlan.observation.value,
+        unit_model_id: unitModelId,
+        request_supported: Boolean(!ambiguous && !contextMissing && unitModelId),
+        request_endpoint: '/api/v1/units/catalog-requests/processor',
+        candidates: processorPlan.resolution?.candidates || []
+      }
+    );
+  }
 }
 
 async function buildApplicationPlans(connection, observations, unitState, manualSources, latestToolValues) {
@@ -814,6 +886,8 @@ async function ingestScalarInventory({
     if (!unitState) throw new ApiScalarInventoryError(404, 'UNIT_NOT_FOUND', 'The selected Unit was not found.');
     assertExpectedUnitState(unitState, expectedUnitState);
 
+    const productionCycleKey = await productionCycleModel.getCurrentProductionCycleKey(safeUnitId, connection);
+
     if (observations.some((entry) => SUPPORTED_SCALAR_FIELDS[entry.fieldKey].storage === 'unit_specifications')
       && !unitState.specifications_unit_id) {
       throw new ApiScalarInventoryError(
@@ -848,7 +922,10 @@ async function ingestScalarInventory({
       );
     }
 
-    if ((batteryObservation || cameraHardwareObservation || fingerprintHardwareObservation || diagnosticsObservation) && !unitState.specifications_unit_id) {
+    const touchscreenHardwareAbsenceObserved = displayObservation?.state === 'known'
+      && displayObservation.value?.touchscreen_hardware_state_code === 'absent';
+
+    if ((batteryObservation || cameraHardwareObservation || fingerprintHardwareObservation || diagnosticsObservation || touchscreenHardwareAbsenceObserved) && !unitState.specifications_unit_id) {
       throw new ApiScalarInventoryError(
         409,
         'UNIT_SPECIFICATIONS_MISSING',
@@ -864,14 +941,14 @@ async function ingestScalarInventory({
       ...(memoryObservation ? [MEMORY_FIELD_KEY] : []),
       ...(storageObservation ? [STORAGE_FIELD_KEY] : []),
       ...(graphicsObservation ? [GRAPHICS_FIELD_KEY] : []),
-      ...(displayObservation ? [DISPLAY_FIELD_KEY, SCREEN_SIZE_FIELD_KEY, NATIVE_RESOLUTION_FIELD_KEY] : []),
+      ...(displayObservation ? [DISPLAY_FIELD_KEY, SCREEN_SIZE_FIELD_KEY, NATIVE_RESOLUTION_FIELD_KEY, TOUCHSCREEN_TEST_FIELD_KEY] : []),
       ...((connectivityObservation || securityObservation || powerObservation)
         ? [CONNECTIVITY_FIELD_KEY, SECURITY_FIELD_KEY, POWER_FIELD_KEY, WIFI_FORM_FIELD_KEY, ABSOLUTE_FORM_FIELD_KEY]
         : []),
       ...((batteryObservation || cameraHardwareObservation || fingerprintHardwareObservation || diagnosticsObservation)
         ? [BATTERY_FIELD_KEY, BATTERY_HEALTH_FIELD_KEY, CAMERA_HARDWARE_FIELD_KEY, FINGERPRINT_HARDWARE_FIELD_KEY, DIAGNOSTICS_FIELD_KEY,
           KEYBOARD_TEST_FIELD_KEY, MICROPHONE_TEST_FIELD_KEY, AUDIO_TEST_FIELD_KEY, DRIVER_CHECK_FIELD_KEY, THREAT_PROTECTION_FIELD_KEY,
-          CAMERA_TEST_FIELD_KEY, BIOMETRIC_HARDWARE_FIELD_KEY, BIOMETRICS_TEST_FIELD_KEY]
+          CAMERA_TEST_FIELD_KEY, BIOMETRIC_HARDWARE_FIELD_KEY, BIOMETRICS_TEST_FIELD_KEY, TOUCHSCREEN_TEST_FIELD_KEY, COMPLETE_DIAGNOSTICS_FIELD_KEY]
         : [])
     ])];
     const manualSources = await loadManualSources(connection, safeUnitId, sourceFieldKeys);
@@ -883,6 +960,7 @@ async function ingestScalarInventory({
       manualSources,
       latestToolValues
     );
+    assertModelProcessorCatalogResolved(plans, unitState);
 
     let resolvedMemoryObservation = null;
     let currentMemoryRows = [];
@@ -890,12 +968,16 @@ async function ingestScalarInventory({
     if (memoryObservation) {
       currentMemoryRows = await loadCurrentMemoryRows(connection, safeUnitId, { lock: true });
       resolvedMemoryObservation = await resolveMemoryObservation(connection, memoryObservation);
-      const latestMemoryValue = await loadLatestAppliedMemoryValue(connection, safeUnitId);
+      const latestMemory = await loadLatestAppliedCompositeToolObservation(
+        connection, safeUnitId, MEMORY_FIELD_KEY, productionCycleKey
+      );
       memoryPlan = buildMemoryPlan({
         observation: resolvedMemoryObservation,
         currentRows: currentMemoryRows,
         sourceCode: manualSources.get(MEMORY_FIELD_KEY) || '',
-        latestAppliedValue: latestMemoryValue
+        latestAppliedValue: latestMemory.value,
+        latestAppliedToolSource: latestMemory.toolSource,
+        incomingToolSource: toolSource
       });
     }
 
@@ -905,12 +987,16 @@ async function ingestScalarInventory({
     if (storageObservation) {
       currentStorageRows = await loadCurrentStorageRows(connection, safeUnitId, { lock: true });
       resolvedStorageObservation = await resolveStorageObservation(connection, storageObservation);
-      const latestStorageValue = await loadLatestAppliedStorageValue(connection, safeUnitId);
+      const latestStorage = await loadLatestAppliedCompositeToolObservation(
+        connection, safeUnitId, STORAGE_FIELD_KEY, productionCycleKey
+      );
       storagePlan = buildStoragePlan({
         observation: resolvedStorageObservation,
         currentRows: currentStorageRows,
         sourceCode: manualSources.get(STORAGE_FIELD_KEY) || '',
-        latestAppliedValue: latestStorageValue
+        latestAppliedValue: latestStorage.value,
+        latestAppliedToolSource: latestStorage.toolSource,
+        incomingToolSource: toolSource
       });
     }
 
@@ -965,7 +1051,7 @@ async function ingestScalarInventory({
 
     let currentHardwareDiagnosticsState = null;
     let hardwareDiagnosticsPlan = null;
-    if (batteryObservation || cameraHardwareObservation || fingerprintHardwareObservation || diagnosticsObservation) {
+    if (batteryObservation || cameraHardwareObservation || fingerprintHardwareObservation || diagnosticsObservation || touchscreenHardwareAbsenceObserved) {
       currentHardwareDiagnosticsState = await loadCurrentHardwareDiagnosticsState(connection, safeUnitId, { lock: true });
       if (!currentHardwareDiagnosticsState) {
         throw new ApiScalarInventoryError(409, 'UNIT_SPECIFICATIONS_MISSING', 'This Unit does not have its expected Specifications row.');
@@ -975,6 +1061,7 @@ async function ingestScalarInventory({
         camera: cameraHardwareObservation,
         fingerprint: fingerprintHardwareObservation,
         diagnostics: diagnosticsObservation,
+        display: resolvedDisplayObservation || displayObservation,
         currentState: currentHardwareDiagnosticsState,
         manualSources,
         latestToolValues
@@ -987,7 +1074,6 @@ async function ingestScalarInventory({
       setAuditFormValue(auditBeforeFormData, fieldKey, getCurrentValue(unitState, fieldKey));
     }
 
-    const productionCycleKey = await productionCycleModel.getCurrentProductionCycleKey(safeUnitId, connection);
     const [runResult] = await connection.query(
       `INSERT INTO unit_tool_runs (
          unit_id, tool_source, user_id, report_id, report_schema,

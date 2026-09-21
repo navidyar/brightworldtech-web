@@ -1,0 +1,17 @@
+<div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close>
+  <section class="modal-panel site-clean-modal" role="dialog" aria-modal="true" aria-labelledby="virtual-huddle-delete-own-title">
+    <header class="modal-header">
+      <div><p class="eyebrow">Admin Inbox</p><h2 id="virtual-huddle-delete-own-title">Delete My Inbox Copy</h2></div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <div class="message warning"><p>This removes your unacknowledged optional copy of <strong><%= recipient.subject %></strong>. It creates no acceptance history and does not remove the Huddle for other recipients.</p></div>
+      <form method="post" action="/virtual-huddle/recipients/<%= recipient.virtual_huddle_recipient_id %>/delete-own">
+        <div class="form-actions">
+          <button type="submit" class="danger-button">Delete My Inbox Copy</button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

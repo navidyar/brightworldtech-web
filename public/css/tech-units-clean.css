@@ -5473,8 +5473,13 @@
 .tech-recent-print-set--separated { border-top: 1px solid var(--border-color, #d9e1e8); padding-top: 0.9rem; margin-top: 0.35rem; }
 .tech-recent-print-set-heading { display: flex; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.45rem; }
 .tech-recent-print-set-heading small,
+.tech-recent-print-job-heading small,
 .tech-recent-print-item-main small,
 .tech-recent-print-attempts small { display: block; color: var(--text-muted, #667085); margin-top: 0.15rem; }
+.tech-recent-print-jobs { display: grid; gap: 0.65rem; }
+.tech-recent-print-job + .tech-recent-print-job { border-top: 1px dashed var(--border-color, #d9e1e8); padding-top: 0.65rem; }
+.tech-recent-print-job-heading { margin-bottom: 0.4rem; }
+.tech-recent-print-job-heading > strong { color: var(--text-color, #24364b); font-size: 0.82rem; }
 .tech-recent-print-items { display: grid; gap: 0.45rem; }
 .tech-recent-print-item { border: 1px solid var(--border-color, #d9e1e8); border-radius: 8px; padding: 0.65rem 0.75rem; background: #fff; }
 .tech-recent-print-item-main { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.75rem; }
@@ -5485,3 +5490,24 @@
 .tech-recent-print-attempts { margin-top: 0.45rem; }
 .tech-recent-print-error { margin-top: 0.45rem; }
 @media (max-width: 700px) { .tech-recent-print-detail-list { grid-template-columns: 1fr; } }
+
+/* Tool-authoritative Current Memory / Storage. Previous hardware remains manually editable. */
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-memory-state--current.is-tool-controlled {
+  background: #f4f6f8;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-memory-state--current.is-tool-controlled .tech-memory-state-bar,
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-memory-state--current.is-tool-controlled .tech-memory-edit-row {
+  background: #f4f6f8;
+}
+
+:is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-current-hardware-authority-message {
+  display: block;
+  margin: 0;
+  padding: 7px 9px;
+  border-bottom: 1px solid #dfe7ef;
+  background: #eef2f6;
+  color: #596b7f;
+  font-size: 0.68rem;
+  line-height: 1.35;
+}

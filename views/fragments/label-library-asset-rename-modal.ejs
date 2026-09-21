@@ -1,0 +1,39 @@
+<%
+  const assetLabel = asset?.name || asset?.source_filename || `Asset ${asset?.asset_id || ''}`;
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages.filter(Boolean) : [];
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal label-library-asset-rename-modal" role="dialog" aria-modal="true" aria-labelledby="label-library-asset-rename-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="label-library-asset-rename-title">Edit Shared Asset</h2>
+        <p><%= assetLabel %></p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <div class="message error" data-label-asset-rename-errors <%= safeErrors.length ? '' : 'hidden' %>><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <form method="post" action="/management/label-library/assets/<%= asset.asset_id %>/rename" data-label-asset-rename-form>
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Asset Name</span>
+            <input type="text" name="name" value="<%= asset.name || asset.source_filename || '' %>" maxlength="160" required autofocus />
+          </label>
+          <label class="form-field">
+            <span>Asset Type</span>
+            <select name="assetKind" required>
+              <% (assetKinds || ['logo', 'image', 'background']).forEach((kind) => { %>
+                <option value="<%= kind %>" <%= String(asset.asset_kind || '') === kind ? 'selected' : '' %>><%= kind.charAt(0).toUpperCase() + kind.slice(1) %></option>
+              <% }) %>
+            </select>
+          </label>
+        </div>
+        <p class="field-hint">Changing the type only reorganizes how this asset appears in Shared Assets; existing label references remain intact.</p>
+        <div class="form-actions">
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          <button type="submit" class="primary-button" data-label-asset-rename-submit>Save Asset</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

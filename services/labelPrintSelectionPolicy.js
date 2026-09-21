@@ -24,7 +24,7 @@ function getQuantityMap(body = {}) {
 function buildDefaultSelections(options = []) {
   return (Array.isArray(options) ? options : []).map((option) => ({
     key: option.key,
-    selected: Boolean(option.available && (option.isRequired || option.mode === 'legacy_fallback')),
+    selected: Boolean(option.available && option.isRequired),
     quantity: Math.max(1, Math.min(10, Number(option.defaultQuantity) || 1))
   }));
 }

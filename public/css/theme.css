@@ -419,3 +419,11 @@ html[data-theme="hybrid"] .error-page-body {
 .theme-toggle {
   display: none !important;
 }
+
+/* Virtual Huddle severity tokens. */
+:root {
+  --virtual-huddle-notice-header: #536477;
+  --virtual-huddle-standard-header: var(--ui-blue);
+  --virtual-huddle-priority-header: #a94f0e;
+  --virtual-huddle-urgent-header: #7b1f2c;
+}

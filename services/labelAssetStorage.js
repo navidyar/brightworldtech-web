@@ -7,7 +7,6 @@ const { LABEL_LIBRARY_STORAGE_RELATIVE_PATH } = require('../config/labelLibrary'
 
 const MIME_EXTENSIONS = Object.freeze({
   'application/json': '.json',
-  'image/jpeg': '.jpg',
   'image/png': '.png',
   'image/svg+xml': '.svg'
 });

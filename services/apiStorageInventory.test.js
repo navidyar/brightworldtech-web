@@ -85,6 +85,29 @@ test('unknown storage is retained as a no-overwrite observation', () => {
   });
 });
 
+test('empty storage discovery is unknown, while confirmed absence explicitly represents zero internal drives', () => {
+  assert.deepEqual(normalizeStorageObservation({ state: 'known', devices: [] }), {
+    fieldKey: 'storage_devices', state: 'unknown', value: null
+  });
+  assert.deepEqual(normalizeStorageObservation({ state: 'known', devices: [{ internal: false, size_gb: 512 }] }), {
+    fieldKey: 'storage_devices', state: 'unknown', value: null
+  });
+  assert.deepEqual(normalizeStorageObservation({ state: 'confirmed_absent' }), {
+    fieldKey: 'storage_devices', state: 'confirmed_absent', value: { total_gb: 0, devices: [] }
+  });
+});
+
+test('confirmed zero storage can clear current storage while unknown cannot', () => {
+  const plan = buildStoragePlan({
+    observation: normalizeStorageObservation({ state: 'confirmed_absent' }),
+    currentRows: [current()],
+    sourceCode: 'tech_edit'
+  });
+  assert.equal(plan.status, 'applied');
+  assert.equal(plan.mode, 'replace');
+  assert.deepEqual(plan.observation.value.devices, []);
+});
+
 test('storage type resolution accepts common SSD and HDD aliases without fuzzy substring matching', () => {
   const candidates = [
     { id: 10, label: 'SSD', value: 'SSD' },
@@ -96,7 +119,7 @@ test('storage type resolution accepts common SSD and HDD aliases without fuzzy s
   assert.equal(resolveStorageTypeCandidate('mystery disk', candidates).status, 'unmapped');
 });
 
-test('manual compatible storage configuration accepts tool-only detail refreshes', () => {
+test('matching manual storage configuration can still accept Tool-only detail refreshes', () => {
   const plan = buildStoragePlan({
     observation: { state: 'known', value: { devices: [incoming({ health_status: 'Warning' })] } },
     currentRows: [current()],
@@ -104,17 +127,19 @@ test('manual compatible storage configuration accepts tool-only detail refreshes
   });
   assert.equal(plan.status, 'applied');
   assert.equal(plan.mode, 'details_only');
-  assert.equal(plan.reason, 'manual_storage_configuration_preserved');
+  assert.equal(plan.reason, 'storage_configuration_unchanged');
 });
 
-test('manual storage configuration conflict blocks tool replacement', () => {
+test('current storage is Tool-authoritative even when a legacy manual override source exists', () => {
   const plan = buildStoragePlan({
     observation: { state: 'known', value: { devices: [incoming({ size_gb: 1024 })] } },
     currentRows: [current()],
-    sourceCode: 'manual_override'
+    sourceCode: 'manual_override',
+    incomingToolSource: 'techtools'
   });
-  assert.equal(plan.status, 'blocked_manual');
-  assert.equal(plan.reason, 'manual_storage_configuration_conflict');
+  assert.equal(plan.status, 'applied');
+  assert.equal(plan.mode, 'replace');
+  assert.equal(plan.reason, 'tool_authoritative_storage_configuration');
 });
 
 test('changed serial or model is a physical drive replacement even at the same capacity', () => {
@@ -129,6 +154,20 @@ test('changed serial or model is a physical drive replacement even at the same c
   assert.equal(plan.mode, 'replace_compatible');
 });
 
+
+test('TechTools current storage has final Tool authority over later ScanTools data', () => {
+  const oldObservation = { devices: [incoming()] };
+  const plan = buildStoragePlan({
+    observation: { state: 'known', value: { devices: [incoming({ size_gb: 1024 })] } },
+    currentRows: [current()],
+    latestAppliedValue: oldObservation,
+    latestAppliedToolSource: 'techtools',
+    incomingToolSource: 'scantools'
+  });
+  assert.equal(plan.status, 'unchanged');
+  assert.equal(plan.reason, 'techtools_current_storage_is_final');
+});
+
 test('tool-owned storage can be replaced by the latest valid tool configuration', () => {
   const oldObservation = { devices: [incoming()] };
   const plan = buildStoragePlan({
@@ -139,7 +178,7 @@ test('tool-owned storage can be replaced by the latest valid tool configuration'
   assert.equal(determineStorageOwnership({ currentRows: [current()], latestAppliedValue: oldObservation }), 'tool');
   assert.equal(plan.status, 'applied');
   assert.equal(plan.mode, 'replace');
-  assert.equal(plan.reason, 'latest_tool_storage_configuration');
+  assert.equal(plan.reason, 'tool_authoritative_storage_configuration');
 });
 
 test('latest applied observation proves tool ownership only when stored drive identity still matches', () => {

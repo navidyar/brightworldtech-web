@@ -980,7 +980,7 @@ async function getLotLabelTemplatesViewData(lotId) {
   const [effectiveSet, directSet, templates] = await Promise.all([
     labelLibraryModel.getEffectiveLotTemplateSet(lotId),
     labelLibraryModel.getDirectLotTemplateSet(lotId),
-    labelLibraryModel.listLabelTemplates({ includeArchived: true })
+    labelLibraryModel.listLabelTemplates({ includeArchived: true, printScope: 'lot' })
   ]);
   const selectedById = new Map(
     (effectiveSet.assignments || []).map((assignment) => [Number(assignment.labelTemplateId), assignment])
@@ -1039,14 +1039,9 @@ async function updateLotLabelTemplates(req, res, next) {
       return sendHtmxRedirect(req, res, addCacheBuster(`/management/lots/${lotId}?labelSetReset=1`));
     }
 
-    const templates = await labelLibraryModel.listLabelTemplates({ includeArchived: true });
+    const templates = await labelLibraryModel.listLabelTemplates({ includeArchived: true, printScope: 'lot' });
     const templateById = new Map(templates.map((template) => [Number(template.label_template_id), template]));
-    const assignments = normalizeLotAssignments(req.body, [...templateById.keys()])
-      .map((assignment) => ({
-        ...assignment,
-        isActive: assignment.isActive && templateById.get(assignment.labelTemplateId)?.status !== 'archived'
-      }));
-
+    const assignments = normalizeLotAssignments(req.body, [...templateById.keys()]);
     await labelLibraryModel.replaceLotTemplateSet(lotId, assignments, req.currentUser.user_id);
     return sendHtmxRedirect(req, res, addCacheBuster(`/management/lots/${lotId}?labelSetUpdated=1`));
   } catch (error) {

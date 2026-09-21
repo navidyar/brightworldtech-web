@@ -31,6 +31,25 @@ test('Pass and Fail use a circular field-style focus halo on the native radio on
   assert.doesNotMatch(block, /border:\s*[1-9]/);
 });
 
+
+test('sitewide checkbox/radio rows do not receive a containing-label focus aura', () => {
+  const css = read('public/css/work-area.css');
+
+  assert.match(
+    css,
+    /body label:has\(:is\(input\[type="checkbox"\], input\[type="radio"\]\):is\(:focus, :focus-visible\)\) \{[\s\S]*?box-shadow:\s*none\s*!important;[\s\S]*?\}/
+  );
+  assert.doesNotMatch(
+    css,
+    /label:has\(input\[type="checkbox"\]:is\(:focus, :focus-visible\)\)[^{]*\{[\s\S]{0,250}?box-shadow:\s*var\(--form-field-focus-shadow\)/
+  );
+});
+
+test('the shared work-area stylesheet version is bumped so the sitewide focus cleanup is not cached', () => {
+  const head = read('views/partials/head.ejs');
+  assert.match(head, /\/css\/work-area\.css\?v=20260911-sitewide-choice-focus-cleanup/);
+});
+
 test('the outcome controls retain explicit Pass and Fail keyboard tab stops', () => {
   const markup = read('views/fragments/tech-unit-form.ejs');
   const outcomeInputLine = markup.split('\n').find((line) => line.includes('name="outcomeCode"')) || '';
@@ -41,7 +60,7 @@ test('the outcome controls retain explicit Pass and Fail keyboard tab stops', ()
 });
 
 test('all Add/Edit Unit entry points use the outcome-radio-focus stylesheet version', () => {
-  const expected = '/css/tech-units-clean.css?v=20260806-stage10w162-matched-weight-pill-styles';
+  const expected = '/css/tech-units-clean.css?v=20260826-stage10w73e-browser-usability';
 
   for (const relativePath of [
     'views/pages/tech-units.ejs',

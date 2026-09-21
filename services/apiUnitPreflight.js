@@ -7,15 +7,17 @@ const techLotRequirementModel = require('../models/techLotRequirementModel');
 const { normalizeRequirementKey } = require('../config/lotRequirementRegistry');
 const {
   normalizePositiveInteger,
-  normalizeDetectedValues,
-  addTopLevelRequirementContext,
-  applyDetectedValues
+  buildCanonicalRequirementObservations,
+  applyDetectedValues,
+  buildDetectedCatalogIssues
 } = require('./apiUnitPreflightValues');
 const { resolveLotToolPolicy } = require('./lotToolPolicy');
 const {
   buildSourcePolicyDecision,
   buildExistingUnitActionDecision,
   buildRequirementEvaluationState,
+  hasFailedToolRequirementChecks,
+  hasIncompleteToolRequirementChecks,
   summarizeRequirementStates
 } = require('./apiUnitPreflightPolicy');
 
@@ -58,6 +60,7 @@ function serializeRequirementChecks(workflow, effectiveStates) {
 function normalizeRows(rows) {
   return (Array.isArray(rows) ? rows : []).filter((row) => row && typeof row === 'object');
 }
+
 
 function summarizeMemory(formData, formOptions) {
   const rows = normalizeRows(formData.memoryModules).filter((row) => Number(row.sizeGb) > 0);
@@ -165,10 +168,8 @@ async function buildPreflight({ body = {}, resolution = {}, userId, roleCodes = 
     : null;
   const matchedUnit = matchedUnitId ? await techUnitModel.getUnitById(matchedUnitId) : null;
   const intendedLotId = normalizePositiveInteger(body.lot_id ?? body.lotId);
-  const [allLots, assignableLots] = await Promise.all([
-    lotModel.listLots({ includeHidden: true }),
-    techUnitModel.getAssignableLots()
-  ]);
+  const allLots = await lotModel.listLots({ includeHidden: true });
+  const assignableLots = techUnitModel.getAssignableLots(allLots);
   const intendedLot = intendedLotId ? allLots.find((lot) => Number(lot.lot_id) === intendedLotId) || null : null;
   const intendedLotAssignable = Boolean(intendedLot && assignableLots.some((lot) => Number(lot.lot_id) === intendedLotId));
   const effectiveToolPolicy = intendedLot ? resolveLotToolPolicy(allLots, intendedLotId) : null;
@@ -222,18 +223,22 @@ async function buildPreflight({ body = {}, resolution = {}, userId, roleCodes = 
   const formData = { ...baseFormData, lotId: intendedLotId ? String(intendedLotId) : '' };
   formData.memoryModules = normalizeRows(baseFormData.memoryModules).map((row) => ({ ...row }));
   formData.storageDevices = normalizeRows(baseFormData.storageDevices).map((row) => ({ ...row }));
-  const observations = addTopLevelRequirementContext(body, normalizeDetectedValues(body));
 
-  // Identity fields are already authenticated inputs to Resolve and can also satisfy
-  // legacy serial requirements without duplicating them inside detected_values.
-  if (body.unit_serial_number ?? body.unitSerialNumber ?? body.unit_serial) {
-    observations.set('unit_serial_number', { state: 'known', value: body.unit_serial_number ?? body.unitSerialNumber ?? body.unit_serial });
-  }
-  if (body.bios_serial_number ?? body.biosSerialNumber ?? body.bios_serial) {
-    observations.set('bios_serial_number', { state: 'known', value: body.bios_serial_number ?? body.biosSerialNumber ?? body.bios_serial });
-  }
+  const creatingNewUnit = intentionalDuplicateRequested || !matchedUnit;
+  const observations = buildCanonicalRequirementObservations(body, {
+    // Existing BWTDallas Unit Category is authoritative. A submitted category is
+    // workflow context only for creating a new Unit and must not silently alter
+    // requirement/catalog evaluation for an existing Unit.
+    includeUnitCategory: creatingNewUnit
+  });
 
   const effectiveStates = applyDetectedValues({ formData, observations, formOptions });
+  const catalogIssues = buildDetectedCatalogIssues({ observations, effectiveStates, formData });
+  const submittedUnitCategoryRaw = body.unit_category_config_value_id ?? body.unitCategoryConfigValueId;
+  const submittedUnitCategoryId = normalizePositiveInteger(submittedUnitCategoryRaw);
+  const submittedUnitCategoryValid = Boolean(submittedUnitCategoryId
+    && (Array.isArray(formOptions.unitCategories) ? formOptions.unitCategories : [])
+      .some((category) => Number(category.id) === submittedUnitCategoryId));
   let requirementWorkflow = null;
   let requirementChecks = [];
 
@@ -284,10 +289,38 @@ async function buildPreflight({ body = {}, resolution = {}, userId, roleCodes = 
         : `The technician must explicitly confirm the ${unitAction.action} action before Tool work can continue.`
     });
   }
-  if (requirementWorkflow?.strictBlocked) {
-    blockers.push({ code: 'LOT_REQUIREMENTS_BLOCKED', message: requirementWorkflow.message || 'The Unit does not meet the intended Lot requirements.' });
-  } else if (requirementWorkflow?.technicalFailure) {
-    warnings.push({ code: 'LOT_REQUIREMENT_WARNING', message: requirementWorkflow.message || 'The intended Lot allows this Unit with a requirement warning.' });
+  if (creatingNewUnit && !submittedUnitCategoryValid) {
+    blockers.push({
+      code: submittedUnitCategoryRaw === undefined || submittedUnitCategoryRaw === null || String(submittedUnitCategoryRaw).trim() === ''
+        ? 'UNIT_CATEGORY_REQUIRED'
+        : 'INVALID_UNIT_CATEGORY',
+      message: submittedUnitCategoryRaw === undefined || submittedUnitCategoryRaw === null || String(submittedUnitCategoryRaw).trim() === ''
+        ? 'Unit Category is a Tool processing prerequisite for creating a new Unit. Supply unit_category_config_value_id from /api/v1/units/creation-options.'
+        : 'The supplied Unit Category is not available in BWTDallas. Choose a valid unit_category_config_value_id from /api/v1/units/creation-options.'
+    });
+  }
+  for (const issue of catalogIssues) {
+    if (issue.field_key === 'model' || issue.field_key === 'processor') {
+      blockers.push({ code: issue.code, message: issue.message, field_key: issue.field_key });
+    }
+  }
+
+  const hasRequirementFailure = hasFailedToolRequirementChecks(requirementChecks);
+  const hasIncompleteRequirements = hasIncompleteToolRequirementChecks(requirementChecks);
+  if (hasRequirementFailure) {
+    warnings.push({
+      code: 'LOT_REQUIREMENTS_NOT_SATISFIED',
+      message: 'One or more current Tool or Unit values do not satisfy the intended Lot requirements. The Tool may continue; BWTDallas will enforce Lot requirements when the technician finishes the Unit.'
+    });
+  }
+  if (hasIncompleteRequirements) {
+    warnings.push({
+      code: 'LOT_REQUIREMENTS_INCOMPLETE',
+      message: 'Some Lot requirements cannot be evaluated from the Tool submission or current Unit record. The Tool may continue; complete remaining Unit fields in BWTDallas.'
+    });
+  }
+  if (requirementWorkflow?.technicalFailure && !hasRequirementFailure && !hasIncompleteRequirements) {
+    warnings.push({ code: 'LOT_REQUIREMENT_WARNING', message: requirementWorkflow.message || 'The intended Lot has a requirement warning that BWTDallas will enforce in the technician workflow.' });
   }
 
   const assetEvidence = resolution.evidence || {};
@@ -324,6 +357,7 @@ async function buildPreflight({ body = {}, resolution = {}, userId, roleCodes = 
       ...sourcePolicy,
       effective: serializeEffectiveToolPolicy(effectiveToolPolicy)
     },
+    catalog_issues: catalogIssues,
     requirements: {
       status: summarizeRequirementStates(requirementChecks),
       policy_code: requirementWorkflow?.policyCode || null,

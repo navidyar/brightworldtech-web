@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=20260919-virtual-huddle'] }) %>
+  <script defer src="/js/modal.js?v=20260919-virtual-huddle"></script>
+  <script defer src="/js/virtual-huddle-management.js?v=20260919-virtual-huddle"></script>
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+        <main class="content-shell">
+          <section class="page-heading">
+            <div><h1><%= message.subject %></h1><p>Sent <%= formatDateTime(message.sent_at) %> by <%= message.sender_name_snapshot %> (<%= formatRoleLabel(message.sender_role_code_snapshot) %>).</p></div>
+            <div class="action-row">
+              <a class="secondary-button" href="/management/virtual-huddle">Back to History</a>
+              <a class="secondary-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/related/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/related/modal" hx-target="#modal-root" hx-swap="innerHTML">Send Related Huddle</a>
+              <% if (isAdminUser) { %><a class="danger-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/delete/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Permanently</a><% } %>
+            </div>
+          </section>
+
+          <% if (successMessage) { %><div class="message success" data-auto-dismiss-success><p><%= successMessage %></p></div><% } %>
+
+          <section class="content-card">
+            <div class="content-header"><div><p class="eyebrow"><%= messageTypeLabel(message.message_type_code) %> Huddle</p><h2>Original Message</h2></div></div>
+            <% if (message.parent_subject) { %><div class="message info"><p><strong>Related to:</strong> <%= message.parent_subject %></p></div><% } %>
+            <div class="virtual-huddle-message-copy"><%= message.message_body %></div>
+            <% if (message.confirmation_phrase) { %><p class="field-hint"><strong>Required phrase:</strong> <%= message.confirmation_phrase %></p><% } %>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div><p class="eyebrow">Recipients</p><h2>Acknowledgment Status</h2></div>
+              <% if (recipients.some((recipient) => recipient.acknowledgment_mode_code === 'required_ack' && recipient.recipient_state_code === 'awaiting_confirmation')) { %>
+                <a class="secondary-button danger-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/revoke-all/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/revoke-all/modal" hx-target="#modal-root" hx-swap="innerHTML">Revoke All Awaiting</a>
+              <% } %>
+            </div>
+            <div class="table-card">
+              <table>
+                <thead><tr><th>Employee</th><th>Role at Send</th><th>Requirement</th><th>Status</th><th>Confirmed</th><th>Optional Note / Revocation</th><th></th></tr></thead>
+                <tbody>
+                  <% recipients.forEach((recipient) => { %>
+                    <tr>
+                      <td><strong><%= recipient.user_name_snapshot %></strong></td>
+                      <td><%= formatRoleLabel(recipient.role_code_snapshot) %></td>
+                      <td><%= recipient.acknowledgment_mode_code === 'required_ack' ? 'Required' : recipient.acknowledgment_mode_code === 'optional_ack' ? 'Optional' : 'Informational' %></td>
+                      <td>
+                        <% if (recipient.recipient_state_code === 'acknowledged') { %><span class="pill good">Acknowledged</span>
+                        <% } else if (recipient.recipient_state_code === 'awaiting_confirmation') { %><span class="pill warning">Awaiting Confirmation</span>
+                        <% } else if (recipient.recipient_state_code === 'revoked') { %><span class="pill muted">Revoked</span>
+                        <% } else if (recipient.acknowledgment_mode_code === 'optional_ack') { %><span class="pill muted">Optional / Not Tracked</span>
+                        <% } else { %><span class="pill muted">Informational / Not Tracked</span><% } %>
+                      </td>
+                      <td><%= recipient.acknowledged_at ? formatDateTime(recipient.acknowledged_at) : '—' %></td>
+                      <td>
+                        <% if (recipient.acknowledgment_note) { %><%= recipient.acknowledgment_note %>
+                        <% } else if (recipient.revocation_reason) { %><%= recipient.revocation_reason %><span class="table-muted-line">Revoked <%= recipient.revoked_at ? formatDateTime(recipient.revoked_at) : '' %><% if (recipient.revoked_by_first_name || recipient.revoked_by_last_name) { %> by <%= `${recipient.revoked_by_first_name || ''} ${recipient.revoked_by_last_name || ''}`.trim() %><% } %></span>
+                        <% } else { %>—<% } %>
+                      </td>
+                      <td>
+                        <% if (recipient.acknowledgment_mode_code === 'required_ack' && recipient.recipient_state_code === 'awaiting_confirmation') { %>
+                          <a class="secondary-button button-small danger-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/<%= recipient.virtual_huddle_recipient_id %>/revoke/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/<%= recipient.virtual_huddle_recipient_id %>/revoke/modal" hx-target="#modal-root" hx-swap="innerHTML">Revoke</a>
+                        <% } %>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <% if (relatedMessages.length > 0) { %>
+            <section class="content-card">
+              <div class="content-header"><div><p class="eyebrow">Thread</p><h2>Related Huddles</h2></div></div>
+              <div class="table-card"><table><thead><tr><th>Sent</th><th>Type</th><th>Subject</th></tr></thead><tbody>
+                <% relatedMessages.forEach((related) => { if (Number(related.virtual_huddle_message_id) !== Number(message.virtual_huddle_message_id)) { %>
+                  <tr><td><%= formatDateTime(related.sent_at) %></td><td><%= messageTypeLabel(related.message_type_code) %></td><td><a href="/management/virtual-huddle/<%= related.virtual_huddle_message_id %>"><%= related.subject %></a></td></tr>
+                <% } }) %>
+              </tbody></table></div>
+            </section>
+          <% } %>
+        </main>
+      </div>
+    </div>
+    <div id="modal-root"></div>
+  </body>
+</html>

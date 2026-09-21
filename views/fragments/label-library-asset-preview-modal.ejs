@@ -1,0 +1,50 @@
+<%
+  const assetLabel = asset.name || asset.source_filename || `Asset ${asset.asset_id}`;
+  const kindLabel = String(asset.asset_kind || 'asset').replaceAll('_', ' ');
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal label-library-asset-preview-modal" role="dialog" aria-modal="true" aria-labelledby="label-library-asset-preview-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="label-library-asset-preview-title">Asset Preview</h2>
+        <p><%= assetLabel %></p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <div class="label-library-asset-preview-meta">
+        <span><strong>Type</strong> <%= kindLabel %></span>
+        <span><strong>Size</strong> <%= formatBytes(asset.byte_size) %></span>
+        <% if (asset.width_pixels && asset.height_pixels) { %>
+          <span><strong>Dimensions</strong> <%= asset.width_pixels %> × <%= asset.height_pixels %> px</span>
+        <% } %>
+        <% if (asset.source_filename) { %><span><strong>Source</strong> <%= asset.source_filename %></span><% } %>
+      </div>
+
+      <% if (previewNote) { %><div class="message warning"><p><%= previewNote %></p></div><% } %>
+
+      <% if (previewKind === 'image') { %>
+        <div class="label-library-asset-preview-image-shell">
+          <img src="/management/label-library/assets/<%= asset.asset_id %>/file" alt="Preview of <%= assetLabel %>" />
+        </div>
+      <% } else if (previewKind === 'json' && jsonPreview) { %>
+        <div class="label-library-asset-json-preview" aria-label="JSON asset contents"><pre><%= jsonPreview %></pre></div>
+      <% } else { %>
+        <div class="label-library-asset-preview-empty">
+          <strong>No visual preview is available for this asset type.</strong>
+          <p>The stored metadata above is still available for identification.</p>
+        </div>
+      <% } %>
+
+      <div class="label-library-asset-preview-hash">
+        <small>SHA-256</small>
+        <code><%= asset.sha256 %></code>
+      </div>
+
+      <div class="form-actions">
+        <button type="button" class="secondary-button" data-modal-close>Close</button>
+      </div>
+    </div>
+  </section>
+</div>

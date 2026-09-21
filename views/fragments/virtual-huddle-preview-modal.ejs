@@ -1,0 +1,60 @@
+<%
+  const requiredRecipients = audience.recipients.filter((recipient) => recipient.acknowledgment_mode_code === 'required_ack');
+  const optionalRecipients = audience.recipients.filter((recipient) => recipient.acknowledgment_mode_code === 'optional_ack');
+  const informationalRecipients = audience.recipients.filter((recipient) => recipient.acknowledgment_mode_code === 'informational');
+%>
+<div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close>
+  <section class="modal-panel site-clean-modal virtual-huddle-compose-modal" role="dialog" aria-modal="true" aria-labelledby="virtual-huddle-preview-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Final Review</p>
+        <h2 id="virtual-huddle-preview-title">Confirm Huddle Send</h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <% if (parentMessage) { %><div class="message info"><p><strong>Related to:</strong> <%= parentMessage.subject %></p></div><% } %>
+
+      <div class="virtual-huddle-preview-message">
+        <span class="pill <%= formData.messageTypeCode === 'urgent' ? 'bad' : formData.messageTypeCode === 'priority' ? 'warning' : 'muted' %>"><%= messageTypeLabel(formData.messageTypeCode) %></span>
+        <h3><%= formData.subject %></h3>
+        <div class="virtual-huddle-message-copy"><%= formData.messageBody %></div>
+      </div>
+
+      <p><strong><%= audience.recipients.length %></strong> active recipient<%= audience.recipients.length === 1 ? '' : 's' %> will receive this Huddle.</p>
+      <div class="virtual-huddle-audience-summary">
+        <% if (requiredRecipients.length > 0) { %><span class="pill warning"><%= requiredRecipients.length %> required acknowledgment</span><% } %>
+        <% if (optionalRecipients.length > 0) { %><span class="pill muted"><%= optionalRecipients.length %> optional acknowledgment</span><% } %>
+        <% if (informationalRecipients.length > 0) { %><span class="pill muted"><%= informationalRecipients.length %> informational</span><% } %>
+      </div>
+
+      <div class="table-card virtual-huddle-preview-recipients">
+        <table>
+          <thead><tr><th>Employee</th><th>Role</th><th>Requirement</th></tr></thead>
+          <tbody>
+            <% audience.recipients.forEach((recipient) => { %>
+              <tr>
+                <td><%= recipient.display_name %></td>
+                <td><%= formatRoleLabel(recipient.primary_role_code) %></td>
+                <td><%= recipient.acknowledgment_mode_code === 'required_ack' ? confirmationPhrase : recipient.acknowledgment_mode_code === 'optional_ack' ? 'Optional acknowledgment' : 'No acknowledgment' %></td>
+              </tr>
+            <% }) %>
+          </tbody>
+        </table>
+      </div>
+
+      <form method="post" action="/management/virtual-huddle" hx-post="/management/virtual-huddle" hx-target="#modal-root" hx-swap="innerHTML">
+        <input type="hidden" name="messageTypeCode" value="<%= formData.messageTypeCode %>" />
+        <input type="hidden" name="subject" value="<%= formData.subject %>" />
+        <textarea name="messageBody" hidden><%= formData.messageBody %></textarea>
+        <% if (formData.parentMessageId) { %><input type="hidden" name="parentMessageId" value="<%= formData.parentMessageId %>" /><% } %>
+        <% formData.targetRoleCodes.forEach((roleCode) => { %><input type="hidden" name="targetRoleCodes" value="<%= roleCode %>" /><% }) %>
+        <% formData.targetUserIds.forEach((userId) => { %><input type="hidden" name="targetUserIds" value="<%= userId %>" /><% }) %>
+        <div class="form-actions">
+          <button type="submit" class="primary-button">Send Huddle</button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

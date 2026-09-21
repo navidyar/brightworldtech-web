@@ -648,6 +648,27 @@ body :is(input[type="checkbox"], input[type="radio"]) {
   color: #254b82;
 }
 
+.site-success-confirmation {
+  display: inline-flex;
+  width: max-content;
+  max-width: 100%;
+  align-items: center;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.site-success-confirmation--dismissing {
+  opacity: 0;
+  transform: translateY(-2px);
+}
+
+@media (max-width: 700px) {
+  .site-success-confirmation {
+    white-space: normal;
+  }
+}
+
 :is(
   .pill,
   .status,
@@ -4392,4 +4413,160 @@ body :is(.form-field > span:first-child, .form-field > label:first-child, .stack
 .site-search-clear-button:disabled {
   cursor: default;
   opacity: 0.45;
+}
+
+/* Virtual Huddle shared presentation. Functional overlay/scroll behavior lives in features.css. */
+.virtual-huddle-panel {
+  width: min(760px, 100%);
+}
+
+.modal-panel.site-clean-modal.virtual-huddle-panel .virtual-huddle-severity-header {
+  padding: 16px 18px;
+  color: #fff;
+}
+
+.modal-panel.site-clean-modal.virtual-huddle-notice .virtual-huddle-severity-header {
+  background: var(--virtual-huddle-notice-header);
+}
+
+.modal-panel.site-clean-modal.virtual-huddle-standard .virtual-huddle-severity-header {
+  background: var(--virtual-huddle-standard-header);
+}
+
+.modal-panel.site-clean-modal.virtual-huddle-priority .virtual-huddle-severity-header {
+  background: var(--virtual-huddle-priority-header);
+}
+
+.modal-panel.site-clean-modal.virtual-huddle-urgent .virtual-huddle-severity-header {
+  background: var(--virtual-huddle-urgent-header);
+}
+
+.modal-panel.site-clean-modal.virtual-huddle-panel .virtual-huddle-severity-header :is(h2, p, .eyebrow) {
+  color: #fff;
+}
+
+.modal-panel.site-clean-modal.virtual-huddle-panel .virtual-huddle-severity-header .modal-close-button {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.modal-panel.site-clean-modal.virtual-huddle-panel .virtual-huddle-severity-header .modal-close-button:hover {
+  border-color: rgba(255, 255, 255, 0.42);
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.virtual-huddle-message-copy {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+  color: var(--ui-ink);
+  line-height: 1.55;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.virtual-huddle-message-meta {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.virtual-huddle-message-meta > div {
+  display: grid;
+  grid-template-columns: minmax(105px, 0.28fr) 1fr;
+  gap: 10px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.virtual-huddle-message-meta dt {
+  color: var(--ui-muted);
+  font-weight: 650;
+}
+
+.virtual-huddle-message-meta dd {
+  margin: 0;
+  color: var(--ui-ink);
+}
+
+.virtual-huddle-related {
+  margin: 0 0 12px;
+}
+
+.virtual-huddle-signout {
+  margin-top: 10px;
+}
+
+.virtual-huddle-compose-modal {
+  width: min(980px, 100%);
+}
+
+.virtual-huddle-choice-row {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--ui-line);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface);
+}
+
+.virtual-huddle-choice-row > input {
+  flex: 0 0 auto;
+  margin-top: 2px;
+}
+
+.virtual-huddle-choice-row > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.virtual-huddle-choice-row small {
+  color: var(--ui-muted);
+  line-height: 1.35;
+}
+
+.virtual-huddle-inline-summary {
+  color: var(--ui-muted);
+  font-size: 0.84rem;
+}
+
+.virtual-huddle-inline-summary strong {
+  color: var(--ui-heading);
+}
+
+.virtual-huddle-audience-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 14px;
+}
+
+.virtual-huddle-preview-message h3 {
+  margin: 10px 0 8px;
+}
+
+.virtual-huddle-preview-recipients {
+  margin: 14px 0;
+}
+
+.virtual-huddle-recipient-picker .table-muted-line {
+  display: block;
+}
+
+@media (max-width: 720px) {
+  .virtual-huddle-message-meta > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
+  .virtual-huddle-type-grid,
+  .virtual-huddle-role-grid {
+    grid-template-columns: 1fr !important;
+  }
 }

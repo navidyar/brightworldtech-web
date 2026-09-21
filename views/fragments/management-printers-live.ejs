@@ -1,5 +1,5 @@
 <div id="management-printers-live" hx-get="/management/printers/live" hx-trigger="label-printer-registry-changed from:body" hx-swap="outerHTML" hx-vals='js:{message: event.detail && event.detail.message ? event.detail.message : ""}'<% if (oob) { %> hx-swap-oob="outerHTML"<% } %>>
-  <% if (successMessage) { %><div class="message success"><%= successMessage %></div><% } %>
+  <% if (successMessage) { %><div class="message success" data-auto-dismiss-success><%= successMessage %></div><% } %>
   <% if (errorMessages.length) { %><div class="message error"><% errorMessages.forEach((m) => { %><p><%= m %></p><% }) %></div><% } %>
 
   <section class="site-clean-section">
@@ -11,7 +11,7 @@
           <% if (!printers.length) { %><tr><td colspan="6">No printers are registered.</td></tr><% } %>
           <% printers.forEach((printer) => { %>
             <tr>
-              <td><strong><%= printer.display_name %></strong><br/><small><%= printer.location_label || 'No location label' %></small><% if (printer.manufacturer || printer.model) { %><br/><small><%= [printer.manufacturer, printer.model].filter(Boolean).join(' ') %></small><% } %></td>
+              <td><strong><%= printer.display_name %></strong><br/><small><%= printer.location_label || 'No location label' %></small><% if (printer.manufacturer || printer.model) { %><br/><small><%= [printer.manufacturer, printer.model].filter(Boolean).join(' ') %></small><% } %><br/><small><%= printer.printer_profile_code ? 'Print profile configured' : 'Print profile not configured' %></small></td>
               <td><%= printer.host_address %>:<%= printer.port %><br/><small><%= printer.protocol_code %><% if (printer.cups_queue_name) { %> · <%= printer.cups_queue_name %><% } %></small></td>
               <td><span class="pill <%= printer.scope_code === 'managed' ? 'good' : 'slate' %>"><%= printer.scope_code === 'managed' ? 'Managed' : 'Solo' %></span><% if (printer.scope_code === 'solo') { %><br/><small><%= printer.ownerLabel %> · <%= Number(printer.is_shared) === 1 ? 'Shared' : 'Private' %></small><% } %></td>
               <td><span class="pill <%= Number(printer.is_enabled) === 1 ? 'good' : 'bad' %>"><%= Number(printer.is_enabled) === 1 ? 'Enabled' : 'Disabled' %></span><br/><small>Last probe: <%= printer.last_probe_status || '—' %></small></td>

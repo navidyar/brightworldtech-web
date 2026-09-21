@@ -1,0 +1,82 @@
+<%
+  const blocking = presentation.acknowledgment_mode_code === 'required_ack';
+  const optionalAck = presentation.acknowledgment_mode_code === 'optional_ack';
+  const informational = presentation.acknowledgment_mode_code === 'informational';
+%>
+<div class="virtual-huddle-layer <%= blocking ? 'is-blocking' : 'is-dismissible' %>" data-virtual-huddle-layer data-blocking="<%= blocking ? 'true' : 'false' %>">
+  <div class="virtual-huddle-backdrop">
+    <section class="modal-panel site-clean-modal virtual-huddle-panel virtual-huddle-<%= presentation.message_type_code %>" role="<%= blocking ? 'alertdialog' : 'dialog' %>" aria-modal="true" aria-labelledby="virtual-huddle-dialog-title" tabindex="-1">
+      <header class="modal-header virtual-huddle-severity-header">
+        <div>
+          <p class="eyebrow"><%= messageTypeLabel(presentation.message_type_code) %> · Virtual Huddle</p>
+          <h2 id="virtual-huddle-dialog-title"><%= presentation.subject %></h2>
+        </div>
+        <% if (!blocking) { %>
+          <button type="button" class="modal-close-button" data-huddle-dismiss="<%= presentation.virtual_huddle_recipient_id %>" aria-label="Close Virtual Huddle">×</button>
+        <% } %>
+      </header>
+
+      <div class="modal-body">
+        <% if (blocking && Number(presentation.pending_required_count || 0) > 1) { %>
+          <div class="message warning"><p>This is the first of <strong><%= presentation.pending_required_count %></strong> Huddles awaiting your confirmation.</p></div>
+        <% } %>
+
+        <% if (optionalAck) { %>
+          <div class="message info">
+            <p>Acknowledgment is optional because this message was sent from a lower role. Confirm it to save a permanent record, or close it without creating an acceptance record. You can retrieve it later from My Huddles.</p>
+          </div>
+        <% } %>
+
+        <% if (informational) { %>
+          <div class="message info"><p>This is an informational Notice and does not require acknowledgment.</p></div>
+        <% } %>
+
+        <% if (presentation.parent_subject) { %>
+          <p class="virtual-huddle-related"><strong>Related to:</strong> <%= presentation.parent_subject %></p>
+        <% } %>
+
+        <div class="virtual-huddle-message-copy"><%= presentation.message_body %></div>
+
+        <dl class="virtual-huddle-message-meta">
+          <div><dt>Sent by</dt><dd><%= presentation.sender_name_snapshot %> (<%= formatRoleLabel(presentation.sender_role_code_snapshot) %>)</dd></div>
+          <div><dt>Sent</dt><dd><%= formatDateTime(presentation.sent_at) %></dd></div>
+        </dl>
+
+        <% if (blocking || optionalAck) { %>
+          <form class="app-form app-form-clean virtual-huddle-ack-form" data-huddle-ack-form data-recipient-id="<%= presentation.virtual_huddle_recipient_id %>" autocomplete="off">
+            <section class="form-section">
+              <div class="form-section-header"><h3>Acknowledgment</h3></div>
+              <div class="form-grid single-column">
+                <label class="form-field">
+                  <span>Type <strong><%= confirmationPhrase %></strong></span>
+                  <input type="text" name="confirmationPhrase" autocomplete="off" spellcheck="false" required />
+                </label>
+                <label class="form-field">
+                  <span>Optional context</span>
+                  <textarea name="note" rows="3" maxlength="2000"></textarea>
+                  <small class="field-hint">Optional context only. Do not post questions here; contact Management directly so any clarification can be issued as a related Huddle.</small>
+                </label>
+              </div>
+            </section>
+            <div class="message error" data-huddle-error hidden></div>
+            <div class="form-actions">
+              <button type="submit" class="primary-button">Confirm Read</button>
+              <% if (optionalAck) { %>
+                <button type="button" class="secondary-button" data-huddle-dismiss="<%= presentation.virtual_huddle_recipient_id %>">Close Without Acknowledging</button>
+              <% } %>
+            </div>
+          </form>
+          <% if (blocking) { %>
+            <form method="post" action="/logout" class="virtual-huddle-signout">
+              <button type="submit" class="secondary-button">Sign Out</button>
+            </form>
+          <% } %>
+        <% } else { %>
+          <div class="form-actions">
+            <button type="button" class="primary-button" data-huddle-dismiss="<%= presentation.virtual_huddle_recipient_id %>">Close Notice</button>
+          </div>
+        <% } %>
+      </div>
+    </section>
+  </div>
+</div>

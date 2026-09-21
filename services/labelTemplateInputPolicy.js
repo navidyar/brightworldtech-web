@@ -2,11 +2,19 @@
 
 const {
   LABEL_TEMPLATE_CATEGORIES,
-  LABEL_TEMPLATE_STATUSES
+  LABEL_TEMPLATE_STATUSES,
+  LABEL_TEMPLATE_PRINT_SCOPES
 } = require('../config/labelLibrary');
+const {
+  DEFAULT_LABEL_BUILDER_MEDIA_CODE,
+  LABEL_BUILDER_DEFAULT_LENGTH_MM,
+  findLabelBuilderMediaWidth,
+  buildLabelBuilderGeometry
+} = require('../config/labelBuilder');
 
 const categoryCodes = new Set(LABEL_TEMPLATE_CATEGORIES.map((category) => category.code));
 const statusCodes = new Set(LABEL_TEMPLATE_STATUSES);
+const printScopeCodes = new Set(LABEL_TEMPLATE_PRINT_SCOPES.map((scope) => scope.code));
 
 class LabelTemplateInputError extends Error {
   constructor(messages) {
@@ -21,6 +29,10 @@ function normalizeTemplateInput(input = {}, { allowStatus = false } = {}) {
   const description = String(input.description || '').trim();
   const categoryCode = String(input.categoryCode || input.category_code || '').trim().toLowerCase();
   const status = String(input.status || 'draft').trim().toLowerCase();
+  const printScope = String(input.printScope || input.print_scope || 'lot').trim().toLowerCase();
+  const mediaWidthCode = String(input.mediaWidthCode || input.media_width_code || DEFAULT_LABEL_BUILDER_MEDIA_CODE).trim();
+  const mediaWidth = findLabelBuilderMediaWidth(mediaWidthCode);
+  const mediaGeometry = mediaWidth ? buildLabelBuilderGeometry(mediaWidth.code, LABEL_BUILDER_DEFAULT_LENGTH_MM) : null;
   const errors = [];
 
   if (name.length < 2) errors.push('Template name is required.');
@@ -28,6 +40,8 @@ function normalizeTemplateInput(input = {}, { allowStatus = false } = {}) {
   if (description.length > 1000) errors.push('Description must be 1,000 characters or fewer.');
   if (!categoryCodes.has(categoryCode)) errors.push('Choose a valid label category.');
   if (allowStatus && !statusCodes.has(status)) errors.push('Choose a valid template status.');
+  if (!printScopeCodes.has(printScope)) errors.push('Choose whether the template is for Lot Selection or Standalone printing.');
+  if (!mediaWidth || !mediaGeometry) errors.push('Choose a supported continuous roll width.');
 
   if (errors.length) throw new LabelTemplateInputError(errors);
 
@@ -35,8 +49,25 @@ function normalizeTemplateInput(input = {}, { allowStatus = false } = {}) {
     name,
     description: description || null,
     categoryCode,
-    status: allowStatus ? status : 'draft'
+    printScope,
+    status: allowStatus ? status : 'draft',
+    mediaWidthCode: mediaWidth?.code || DEFAULT_LABEL_BUILDER_MEDIA_CODE,
+    mediaWidth: mediaWidth || null,
+    mediaGeometry: mediaGeometry || null
   });
+}
+
+function getIndexedInputValue(input = {}, fieldName, key) {
+  const directKey = `${fieldName}_${key}`;
+  if (input[directKey] !== undefined) return input[directKey];
+
+  const nested = input[fieldName];
+  if (nested && typeof nested === 'object' && !Array.isArray(nested) && nested[key] !== undefined) {
+    return nested[key];
+  }
+  const literalKey = `${fieldName}[${key}]`;
+  if (input[literalKey] !== undefined) return input[literalKey];
+  return undefined;
 }
 
 function normalizeLotAssignments(input = {}, availableTemplateIds = []) {
@@ -44,14 +75,11 @@ function normalizeLotAssignments(input = {}, availableTemplateIds = []) {
   const selectedIds = Array.isArray(input.templateId)
     ? input.templateId
     : input.templateId ? [input.templateId] : [];
-  const requiredIds = new Set((Array.isArray(input.requiredTemplateId)
-    ? input.requiredTemplateId
-    : input.requiredTemplateId ? [input.requiredTemplateId] : []).map(Number));
-  const activeIds = new Set((Array.isArray(input.activeTemplateId)
-    ? input.activeTemplateId
-    : input.activeTemplateId ? [input.activeTemplateId] : []).map(Number));
-  const quantities = input.quantity || {};
-  const sortOrders = input.sortOrder || {};
+  const normalPrintIds = new Set((Array.isArray(input.normalPrintTemplateId)
+    ? input.normalPrintTemplateId
+    : input.normalPrintTemplateId ? [input.normalPrintTemplateId]
+      : Array.isArray(input.requiredTemplateId) ? input.requiredTemplateId
+        : input.requiredTemplateId ? [input.requiredTemplateId] : []).map(Number));
   const seen = new Set();
   const assignments = [];
 
@@ -61,19 +89,17 @@ function normalizeLotAssignments(input = {}, availableTemplateIds = []) {
       continue;
     }
     seen.add(labelTemplateId);
-    const quantity = Number(quantities[labelTemplateId]);
-    const sortOrder = Number(sortOrders[labelTemplateId]);
+    const quantity = Number(getIndexedInputValue(input, 'quantity', labelTemplateId));
     assignments.push({
       labelTemplateId,
-      isRequired: requiredIds.has(labelTemplateId),
+      isRequired: normalPrintIds.has(labelTemplateId),
       defaultQuantity: Number.isSafeInteger(quantity) && quantity >= 1 && quantity <= 10 ? quantity : 1,
-      sortOrder: Number.isSafeInteger(sortOrder) && sortOrder > 0 ? sortOrder : (assignments.length + 1) * 10,
-      isActive: activeIds.has(labelTemplateId)
+      sortOrder: (assignments.length + 1) * 10,
+      isActive: true
     });
   }
 
-  return assignments.sort((a, b) => a.sortOrder - b.sortOrder || a.labelTemplateId - b.labelTemplateId)
-    .map((assignment, index) => ({ ...assignment, sortOrder: (index + 1) * 10 }));
+  return assignments;
 }
 
 module.exports = {

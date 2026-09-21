@@ -11,7 +11,8 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'u
 test('Stage 10W79E extends the existing inventory transaction with memory rather than adding a parallel endpoint', () => {
   const routes = read('routes/api.js');
   const service = read('services/apiScalarInventory.js');
-  assert.match(routes, /\/units\/:unitId\/inventory\/:reportId/);
+  assert.match(routes, /router\.post\('\/units\/commit'/);
+  assert.doesNotMatch(routes, /\/units\/:unitId\/inventory\/:reportId/);
   assert.match(service, /normalizeMemoryObservation/);
   assert.match(service, /resolveMemoryObservation/);
   assert.match(service, /memoryObservation/);
@@ -25,10 +26,11 @@ test('memory ingestion uses current BWTDallas module rows and existing RAM type 
   assert.doesNotMatch(memory, /INSERT\s+INTO\s+config_values/i);
 });
 
-test('manual configuration is authoritative while coherent tool details may refresh speed', () => {
+test('current memory is Tool-authoritative and TechTools has final authority over ScanTools', () => {
   const memory = read('services/apiMemoryInventory.js');
-  assert.match(memory, /manual_memory_configuration_conflict/);
-  assert.match(memory, /manual_memory_configuration_preserved/);
+  assert.match(memory, /tool_authoritative_memory_configuration/);
+  assert.match(memory, /techtools_current_memory_is_final/);
+  assert.match(memory, /unchanged/);
   assert.match(memory, /details_only/);
   assert.match(memory, /speed_mhz/);
 });

@@ -67,6 +67,29 @@ test('Previous-to-Current copy preserves supported component properties', () => 
   assert.match(source, /updateModuleTotals\(form\)/);
 });
 
+
+test('Previous hardware distinguishes explicit zero from unknown without phantom rows', () => {
+  const markup = readProjectFile('views/fragments/tech-unit-form.ejs');
+  const script = readProjectFile('public/js/tech-unit-form.js');
+  const controller = readProjectFile('controllers/techController.js');
+
+  assert.match(markup, /const previousMemoryRows =[\s\S]*?: \[\];/);
+  assert.match(markup, /const previousStorageRows =[\s\S]*?: \[\];/);
+  assert.match(markup, /data-previous-memory-total-suffix/);
+  assert.match(markup, /data-previous-storage-total-suffix/);
+  assert.match(markup, /Not recorded/);
+  assert.match(markup, /hasCapacityValue\(formData\.previousRamGb\) \? formData\.previousRamGb : ''/);
+  assert.match(markup, /hasCapacityValue\(formData\.previousStorageGb\) \? formData\.previousStorageGb : ''/);
+
+  assert.match(script, /COLLAPSIBLE_EMPTY_REPEATABLE_ROW_TYPES = new Set\(\['previousMemory', 'previousStorage'/);
+  assert.match(script, /updatePreviousCapacityDisplay/);
+  assert.match(script, /display\.textContent = hasRecordedValue \? \(formatCapacityGb\(displayedTotal\) \|\| '0GB'\) : 'Not recorded'/);
+
+  assert.match(controller, /getNonNegativeIntegerOrBlank/);
+  assert.match(controller, /previousRamGb: getComponentCapacityTotalGb\(previousMemoryModules, req\.body\.previousRamGb, \{ allowZero: true \}\)/);
+  assert.match(controller, /previousStorageGb: getComponentCapacityTotalGb\(previousStorageDevices, req\.body\.previousStorageGb, \{ allowZero: true \}\)/);
+});
+
 test('Previous components use dedicated persistence while Lot requirements remain Current-only', () => {
   const modelSource = readProjectFile('models/techUnitModel.js');
   const controllerSource = readProjectFile('controllers/techController.js');

@@ -24,12 +24,14 @@ test('hardware detection remains separate from functional camera and fingerprint
   assert.match(service, /fingerprintTestPlan/);
 });
 
-test('TechTools Ready Running and NotApplicable states remain explicit and are not coerced into Pass', () => {
+test('TechTools transient states remain historical-only while retired uncertainty states are not accepted as form results', () => {
   const service = read('services/apiHardwareDiagnosticsInventory.js');
   assert.match(service, /ready/);
   assert.match(service, /running/);
-  assert.match(service, /not_applicable/);
   assert.match(service, /non_final/);
+  for (const retired of ['could_not_determine', 'not_tested', 'not_applicable', 'test_not_available', 'not_available']) {
+    assert.doesNotMatch(service, new RegExp(`['\"]${retired}['\"]`));
+  }
 });
 
 test('override use is retained but the actual override code is deliberately not stored', () => {
@@ -42,18 +44,20 @@ test('existing form-backed test fields are reused instead of adding duplicate AP
   const service = read('services/apiHardwareDiagnosticsInventory.js');
   for (const column of [
     'keyboard_test_result_config_value_id', 'microphone_check_result_config_value_id',
-    'audio_output_check_result_config_value_id', 'driver_check_status_config_value_id',
+    'audio_output_check_result_config_value_id', 'bios_lock_config_value_id', 'mdm_lock_config_value_id', 'driver_check_status_config_value_id',
     'virus_check_status_config_value_id', 'test_result_config_value_id'
   ]) assert.match(service, new RegExp(column));
   assert.doesNotMatch(read('scripts/migrateApiHardwareDiagnosticsInventory.js'), /keyboard_test_result|camera_test_result|microphone_check_result/);
 });
 
-test('Stage 10W79I does not reintroduce retired Physical Camera Status or auto-pass complete diagnostics', () => {
+test('Stage 10W79I does not reintroduce retired Physical Camera Status and only maps explicit final overall diagnostics', () => {
   const service = read('services/apiHardwareDiagnosticsInventory.js');
   const migration = read('scripts/migrateApiHardwareDiagnosticsInventory.js');
   assert.doesNotMatch(service, /physical_camera_status/);
   assert.doesNotMatch(migration, /physical_camera_status/);
-  assert.doesNotMatch(service, /complete_diagnostics_status_config_value_id/);
+  assert.match(service, /complete_diagnostics_status_config_value_id/);
+  assert.match(service, /normalizeDiagnosticState\(diagnostics\?\.value\?\.unit_result\)/);
+  assert.match(service, /\['pass', 'fail'\]\.includes\(overallDiagnosticState\)/);
 });
 
 test('configuration resolution now uses numeric system category bindings rather than removed category codes', () => {

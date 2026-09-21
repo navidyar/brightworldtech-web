@@ -160,6 +160,16 @@ function buildRequirementEvaluationState({ check = {}, observationState = '', ha
   return 'UNKNOWN';
 }
 
+function hasFailedToolRequirementChecks(checks = []) {
+  return (Array.isArray(checks) ? checks : []).some((check) => String(check?.evaluation_state || '') === 'FAIL');
+}
+
+function hasIncompleteToolRequirementChecks(checks = []) {
+  return (Array.isArray(checks) ? checks : []).some((check) =>
+    ['UNKNOWN', 'NOT_EVALUATABLE_BY_THIS_TOOL'].includes(String(check?.evaluation_state || ''))
+  );
+}
+
 function summarizeRequirementStates(checks = []) {
   const states = (Array.isArray(checks) ? checks : []).map((check) => check.evaluation_state);
   if (states.length === 0) return 'PASS';
@@ -177,5 +187,7 @@ module.exports = {
   buildSourcePolicyDecision,
   buildExistingUnitActionDecision,
   buildRequirementEvaluationState,
+  hasFailedToolRequirementChecks,
+  hasIncompleteToolRequirementChecks,
   summarizeRequirementStates
 };

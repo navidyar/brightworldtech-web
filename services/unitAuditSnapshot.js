@@ -192,7 +192,7 @@ function formatCameraRows(rows, formOptions) {
   const values = normalizeRows(rows).filter(rowHasValue).map((row) => compactObject({
     type: optionLabelByCollection(formOptions, 'cameraTypeOptions', row.cameraTypeConfigValueId),
     location: optionLabelByCollection(formOptions, 'cameraLocationOptions', row.cameraLocationConfigValueId),
-    test: optionLabelByCollection(formOptions, 'testResultOptions', row.testResultConfigValueId)
+    test: optionLabelByCollection(formOptions, 'componentTestResultOptions', row.testResultConfigValueId)
   }));
   return { value: values, text: values.map((row) => [row.type, row.location, row.test].filter(Boolean).join(' · ')).join('; ') };
 }
@@ -211,7 +211,7 @@ function formatBatteryRows(rows) {
 function formatBiometricRows(rows, formOptions) {
   const values = normalizeRows(rows).filter(rowHasValue).map((row) => compactObject({
     hardware: optionLabelByCollection(formOptions, 'biometricHardwareOptions', row.hardwareConfigValueId),
-    test: optionLabelByCollection(formOptions, 'availabilityTestResultOptions', row.testResultConfigValueId)
+    test: optionLabelByCollection(formOptions, 'componentTestResultOptions', row.testResultConfigValueId)
   }));
   return { value: values, text: values.map((row) => [row.hardware, row.test].filter(Boolean).join(' · ')).join('; ') };
 }

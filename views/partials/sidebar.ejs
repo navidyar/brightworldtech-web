@@ -19,7 +19,7 @@
     'admin-config-database'
   ];
   const adminSectionActive = adminConfigurationNavKeys.includes(currentNav);
-  const managementSectionActive = ['management', 'management-login-activity', 'management-lots', 'management-label-library', 'management-printers'].includes(currentNav);
+  const managementSectionActive = ['management', 'management-login-activity', 'management-lots', 'management-label-library', 'management-printers', 'management-virtual-huddle'].includes(currentNav);
   const sidebarRoleCodes = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
   const isQcOnlyNavigationUser = sidebarRoleCodes.includes('qc')
     && !sidebarRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
@@ -69,6 +69,11 @@
       </a>
     <% } %>
 
+    <a href="/my-huddles" class="sidebar-link <%= currentNav === 'my-huddles' ? 'active' : '' %>" <%= currentNav === 'my-huddles' ? 'aria-current="page"' : '' %>>
+      <span class="sidebar-icon" aria-hidden="true">✉</span>
+      <span>My Huddles</span>
+    </a>
+
     <% if (canAccessMenuArea('admin')) { %>
       <section class="sidebar-section <%= adminSectionActive ? 'is-active' : '' %>">
         <div class="sidebar-section-heading <%= adminSectionActive ? 'is-active' : '' %>">
@@ -110,6 +115,10 @@
 
           <a href="/management/printers" class="sidebar-sublink <%= currentNav === 'management-printers' ? 'active' : '' %>" <%= currentNav === 'management-printers' ? 'aria-current="page"' : '' %>>
             <span>Printers</span>
+          </a>
+
+          <a href="/management/virtual-huddle" class="sidebar-sublink <%= currentNav === 'management-virtual-huddle' ? 'active' : '' %>" <%= currentNav === 'management-virtual-huddle' ? 'aria-current="page"' : '' %>>
+            <span>Virtual Huddle</span>
           </a>
 
         </div>

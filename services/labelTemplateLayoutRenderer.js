@@ -3,9 +3,17 @@
 const sharp = require('sharp');
 const QRCode = require('qrcode');
 const {
-  buildCode39Bars,
+  buildCode39BarsToFit,
   buildBrotherQl810wRaster
 } = require('./labelPrintingService');
+const {
+  LABEL_BUILDER_ROTATIONS,
+  LABEL_BUILDER_TEXT_CASES,
+  LABEL_BUILDER_FONT_FAMILIES,
+  DEFAULT_LABEL_BUILDER_FONT_FAMILY
+} = require('../config/labelBuilder');
+
+const FONT_FAMILY_CODES = new Set(LABEL_BUILDER_FONT_FAMILIES.map((font) => font.code));
 
 const MAX_TEXT_LENGTH = 500;
 
@@ -50,14 +58,36 @@ function normalizeLayout(layout) {
 function normalizeTemplate(template = {}) {
   const width = Number(template.canvas_width_dots ?? template.canvasWidthDots);
   const height = Number(template.canvas_height_dots ?? template.canvasHeightDots);
+  const printableWidthDots = Number(template.printable_width_dots ?? template.printableWidthDots ?? width);
+  const horizontalOffsetDots = Number(template.horizontal_offset_dots ?? template.horizontalOffsetDots ?? 0);
   const feedMarginDots = Number(template.feed_margin_dots ?? template.feedMarginDots ?? 35);
   const printerProfileCode = String(template.printer_profile_code ?? template.printerProfileCode ?? '');
+  const mediaCode = String(template.media_code ?? template.mediaCode ?? '62mm_continuous');
+  const deviceWidthDots = Number(template.device_width_dots ?? template.deviceWidthDots ?? 720);
 
   if (!Number.isSafeInteger(width) || width <= 0 || !Number.isSafeInteger(height) || height <= 0) {
     throw new Error('Label template canvas dimensions are invalid.');
   }
+  if (!Number.isSafeInteger(deviceWidthDots) || deviceWidthDots !== 720) {
+    throw new Error('Brother QL-810W device width must be 720 dots.');
+  }
+  if (!Number.isSafeInteger(printableWidthDots) || printableWidthDots <= 0 || printableWidthDots > deviceWidthDots) {
+    throw new Error('Label template printable width is invalid.');
+  }
+  if (!Number.isSafeInteger(horizontalOffsetDots) || horizontalOffsetDots < 0 || horizontalOffsetDots + printableWidthDots > deviceWidthDots) {
+    throw new Error('Label template horizontal print offset is invalid.');
+  }
 
-  return Object.freeze({ width, height, feedMarginDots, printerProfileCode });
+  return Object.freeze({
+    width,
+    height,
+    printableWidthDots,
+    horizontalOffsetDots,
+    feedMarginDots,
+    printerProfileCode,
+    mediaCode,
+    deviceWidthDots
+  });
 }
 
 function resolveFieldValue(fieldValues, field, fallback = '') {
@@ -74,8 +104,39 @@ function applyFormat(value, format) {
     case 'plain': return normalized;
     case 'upper': return normalized.toUpperCase();
     case 'lower': return normalized.toLowerCase();
+    case 'camel': return normalized.toLowerCase().replace(/\b[a-z]+\b/g, (word) => word.charAt(0).toUpperCase() + word.slice(1));
     default: throw new Error(`Unsupported label field format: ${format}.`);
   }
+}
+
+function normalizeRotation(value) {
+  const rotation = Number(value ?? 0);
+  return LABEL_BUILDER_ROTATIONS.includes(rotation) ? rotation : 0;
+}
+
+function getUnrotatedRenderElement(element = {}) {
+  const rotation = normalizeRotation(element.rotation);
+  if (rotation !== 90 && rotation !== 270) return element;
+  const box = normalizeBox(element);
+  const centerX = box.x + (box.width / 2);
+  const centerY = box.y + (box.height / 2);
+  return {
+    ...element,
+    x: centerX - (box.height / 2),
+    y: centerY - (box.width / 2),
+    width: box.height,
+    height: box.width
+  };
+}
+
+function wrapElementRotation(svg, element = {}) {
+  if (!svg) return '';
+  const rotation = normalizeRotation(element.rotation);
+  if (!rotation) return svg;
+  const box = normalizeBox(element);
+  const centerX = box.x + (box.width / 2);
+  const centerY = box.y + (box.height / 2);
+  return `<g transform="rotate(${rotation} ${centerX} ${centerY})">${svg}</g>`;
 }
 
 function resolvePayload(payload, fieldValues) {
@@ -116,13 +177,20 @@ function normalizeBox(element = {}) {
 function normalizeTextStyle(style = {}, box) {
   const requestedSize = Number(style.fontSize || 20);
   const fontSize = Math.max(6, Math.min(Number.isFinite(requestedSize) ? requestedSize : 20, box.height));
-  const weight = Number(style.fontWeight || 500);
+  const weight = Number(style.fontWeight || 400);
   const align = ['left', 'center', 'right'].includes(style.align) ? style.align : 'left';
+  const fontFamily = FONT_FAMILY_CODES.has(String(style.fontFamily || '').trim())
+    ? String(style.fontFamily).trim()
+    : DEFAULT_LABEL_BUILDER_FONT_FAMILY;
+  const textCase = LABEL_BUILDER_TEXT_CASES.includes(String(style.textCase || '').trim())
+    ? String(style.textCase).trim()
+    : 'plain';
   return {
-    fontFamily: style.fontFamily === 'DejaVu Sans' ? 'DejaVu Sans' : 'DejaVu Sans',
+    fontFamily,
     fontSize,
-    fontWeight: Number.isFinite(weight) ? Math.max(100, Math.min(900, weight)) : 500,
+    fontWeight: Number.isFinite(weight) ? Math.max(100, Math.min(900, weight)) : 400,
     align,
+    textCase,
     overflow: style.overflow === 'shrink' ? 'shrink' : 'clip'
   };
 }
@@ -147,13 +215,20 @@ function fitText(value, box, style) {
 function renderTextSvg(value, element) {
   const box = normalizeBox(element);
   const style = normalizeTextStyle(element.style, box);
-  const fitted = fitText(value, box, style);
+  const casedValue = applyFormat(value, style.textCase);
+  const fitted = fitText(casedValue, box, style);
   if (!fitted.text) return '';
 
   const anchor = style.align === 'center' ? 'middle' : style.align === 'right' ? 'end' : 'start';
   const x = style.align === 'center' ? box.x + (box.width / 2) : style.align === 'right' ? box.x + box.width : box.x;
   const baseline = box.y + Math.min(box.height, fitted.fontSize);
-  return `<text x="${x}" y="${baseline}" font-family="DejaVu Sans" font-size="${fitted.fontSize}" font-weight="${style.fontWeight}" text-anchor="${anchor}" fill="#000000">${escapeXml(fitted.text)}</text>`;
+  const mediumWeight = style.fontWeight === 500;
+  const renderWeight = mediumWeight ? 400 : style.fontWeight;
+  const mediumStrokeWidth = mediumWeight ? Math.max(0.7, Math.min(2, fitted.fontSize * 0.025)) : 0;
+  const mediumStroke = mediumWeight
+    ? ` stroke="#000000" stroke-width="${mediumStrokeWidth.toFixed(2)}" paint-order="stroke fill" stroke-linejoin="round"`
+    : '';
+  return `<text x="${x}" y="${baseline}" font-family="${escapeXml(style.fontFamily)}" font-size="${fitted.fontSize}" font-weight="${renderWeight}" text-anchor="${anchor}" fill="#000000"${mediumStroke}>${escapeXml(fitted.text)}</text>`;
 }
 
 function buildBarcodeSvg(value, element) {
@@ -164,12 +239,18 @@ function buildBarcodeSvg(value, element) {
   const safeValue = normalizeText(value, 48).toUpperCase().replace(/[^0-9A-Z.\- $/+%]/g, '');
   if (!safeValue) return '';
 
-  const textHeight = element.showText ? Math.min(24, Math.max(14, box.height * 0.22)) : 0;
+  const requestedHumanReadableFontSize = Number(element.humanReadableFontSize);
+  const humanReadableFontSize = Number.isSafeInteger(requestedHumanReadableFontSize)
+    && requestedHumanReadableFontSize >= 8
+    && requestedHumanReadableFontSize <= 48
+    ? requestedHumanReadableFontSize
+    : 20;
+  const textHeight = element.showText
+    ? Math.min(Math.max(0, box.height - 1), Math.max(12, humanReadableFontSize + 4))
+    : 0;
   const barHeight = Math.max(1, box.height - textHeight);
-  let barcode = buildCode39Bars(safeValue, 3, 7, 3);
-  if (!barcode || barcode.width > box.width) barcode = buildCode39Bars(safeValue, 2, 5, 2);
-  if (!barcode || barcode.width > box.width) barcode = buildCode39Bars(safeValue, 1, 3, 1);
-  if (!barcode || barcode.width > box.width) throw new Error(`Barcode value does not fit element ${element.id || '(unnamed)'}.`);
+  const barcode = buildCode39BarsToFit(safeValue, box.width);
+  if (!barcode) throw new Error(`Barcode value does not fit element ${element.id || '(unnamed)'}.`);
 
   const startX = Math.floor(box.x + ((box.width - barcode.width) / 2));
   const bars = barcode.bars
@@ -181,7 +262,7 @@ function buildBarcodeSvg(value, element) {
     ...element,
     y: box.y + barHeight,
     height: textHeight,
-    style: { fontSize: Math.min(20, textHeight), fontWeight: 700, align: 'center', overflow: 'shrink' }
+    style: { fontFamily: 'Liberation Sans', fontSize: Math.min(humanReadableFontSize, Math.max(6, textHeight - 2)), fontWeight: 700, align: 'center', overflow: 'shrink' }
   };
   return `${bars}${renderTextSvg(safeValue, textElement)}`;
 }
@@ -202,6 +283,30 @@ function renderQrSvg(element, qrDataUris) {
   const dataUri = qrDataUris && qrDataUris[String(element.id || '')];
   if (!dataUri) throw new Error(`QR element ${element.id || '(unnamed)'} could not be generated.`);
   return `<image x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" href="${escapeXml(dataUri)}" preserveAspectRatio="xMidYMid meet"/>`;
+}
+
+function normalizeShapeThickness(value) {
+  const thickness = Number(value ?? 2);
+  return Number.isSafeInteger(thickness) ? Math.max(1, Math.min(40, thickness)) : 2;
+}
+
+function renderLineSvg(element) {
+  const box = normalizeBox(element);
+  const thickness = normalizeShapeThickness(element.thickness);
+  const y = box.y + (box.height / 2);
+  return `<line x1="${box.x}" y1="${y}" x2="${box.x + box.width}" y2="${y}" stroke="#000000" stroke-width="${thickness}" stroke-linecap="butt" shape-rendering="crispEdges"/>`;
+}
+
+function renderRectangleSvg(element) {
+  const box = normalizeBox(element);
+  if (element.fill === 'filled') {
+    return `<rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" fill="#000000" shape-rendering="crispEdges"/>`;
+  }
+  const thickness = normalizeShapeThickness(element.thickness);
+  const inset = thickness / 2;
+  const width = Math.max(0, box.width - thickness);
+  const height = Math.max(0, box.height - thickness);
+  return `<rect x="${box.x + inset}" y="${box.y + inset}" width="${width}" height="${height}" fill="none" stroke="#000000" stroke-width="${thickness}" shape-rendering="crispEdges"/>`;
 }
 
 async function buildQrDataUris(layout, fieldValues) {
@@ -252,31 +357,40 @@ function buildLayoutSvg({ layout, template, fieldValues = {}, assetDataUris = {}
   parts.push('<g text-rendering="geometricPrecision">');
   for (const element of safeLayout.elements) {
     if (!element || typeof element !== 'object') continue;
+    const renderElement = getUnrotatedRenderElement(element);
+    let elementSvg = '';
     switch (element.type) {
       case 'static_text':
-        parts.push(renderTextSvg(element.text || '', element));
+        elementSvg = renderTextSvg(element.text || '', renderElement);
         break;
       case 'dynamic_text':
-        parts.push(renderTextSvg(
+        elementSvg = renderTextSvg(
           applyFormat(resolveFieldValue(fieldValues, element.source?.field, element.source?.fallback || ''), element.source?.format || 'plain'),
-          element
-        ));
+          renderElement
+        );
         break;
       case 'composed_text':
-        parts.push(renderTextSvg(resolveParts(element.parts, fieldValues), element));
+        elementSvg = renderTextSvg(resolveParts(element.parts, fieldValues), renderElement);
         break;
       case 'barcode':
-        parts.push(buildBarcodeSvg(resolvePayload(element.payload, fieldValues), element));
+        elementSvg = buildBarcodeSvg(resolvePayload(element.payload, fieldValues), renderElement);
         break;
       case 'image':
-        parts.push(renderImageSvg(element, assetDataUris));
+        elementSvg = renderImageSvg(renderElement, assetDataUris);
         break;
       case 'qr':
-        parts.push(renderQrSvg(element, qrDataUris));
+        elementSvg = renderQrSvg(renderElement, qrDataUris);
+        break;
+      case 'line':
+        elementSvg = renderLineSvg(renderElement);
+        break;
+      case 'rectangle':
+        elementSvg = renderRectangleSvg(renderElement);
         break;
       default:
         throw new Error(`Unsupported label element type: ${element.type || '(blank)'}.`);
     }
+    parts.push(wrapElementRotation(elementSvg, element));
   }
   parts.push('</g>', '</svg>');
   return parts.join('');
@@ -286,6 +400,20 @@ function createBitmap(width, height, monochromeBytes) {
   const pixels = new Uint8Array(width * height);
   for (let index = 0; index < pixels.length; index += 1) pixels[index] = monochromeBytes[index] < 128 ? 1 : 0;
   return { width, height, pixels };
+}
+
+function padBitmapToDeviceWidth(bitmap, { deviceWidthDots, horizontalOffsetDots }) {
+  if (bitmap.width === deviceWidthDots) return bitmap;
+  if (bitmap.width + horizontalOffsetDots > deviceWidthDots) {
+    throw new Error('Rendered label does not fit inside the printer device width.');
+  }
+  const pixels = new Uint8Array(deviceWidthDots * bitmap.height);
+  for (let y = 0; y < bitmap.height; y += 1) {
+    const sourceStart = y * bitmap.width;
+    const targetStart = (y * deviceWidthDots) + horizontalOffsetDots;
+    pixels.set(bitmap.pixels.subarray(sourceStart, sourceStart + bitmap.width), targetStart);
+  }
+  return { width: deviceWidthDots, height: bitmap.height, pixels };
 }
 
 async function renderLayout({ layout, template, fieldValues = {}, assetDataUris = {} }) {
@@ -306,8 +434,12 @@ async function renderLayout({ layout, template, fieldValues = {}, assetDataUris 
     throw new Error(`Unsupported label printer profile: ${safeTemplate.printerProfileCode || '(blank)'}.`);
   }
 
-  const bitmap = createBitmap(rendered.info.width, rendered.info.height, rendered.data);
-  const raster = buildBrotherQl810wRaster(bitmap, { feedMarginDots: safeTemplate.feedMarginDots });
+  const logicalBitmap = createBitmap(rendered.info.width, rendered.info.height, rendered.data);
+  const bitmap = padBitmapToDeviceWidth(logicalBitmap, safeTemplate);
+  const raster = buildBrotherQl810wRaster(bitmap, {
+    feedMarginDots: safeTemplate.feedMarginDots,
+    mediaCode: safeTemplate.mediaCode
+  });
   const previewSvg = buildLayoutSvg({ layout, template, fieldValues, assetDataUris, qrDataUris, outputScale: 2 });
   const previewPng = await sharp(Buffer.from(previewSvg))
     .flatten({ background: '#ffffff' })
@@ -329,5 +461,9 @@ module.exports = {
   resolveParts,
   buildQrDataUris,
   buildLayoutSvg,
+  normalizeRotation,
+  getUnrotatedRenderElement,
+  wrapElementRotation,
+  padBitmapToDeviceWidth,
   renderLayout
 };

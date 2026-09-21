@@ -31,11 +31,11 @@ test('component totals are synchronized before submit verification and fingerpri
 test('server derives totals from structured rows and sanitizes hidden legacy summaries', () => {
   const controller = read('controllers/techController.js');
 
-  assert.match(controller, /function getComponentCapacityTotalGb\(rows, submittedLegacyTotal\)/);
+  assert.match(controller, /function getComponentCapacityTotalGb\(rows, submittedLegacyTotal, \{ allowZero = false \} = \{\}\)/);
   assert.match(controller, /hasStructuredCapacityEntry\(rows\)[\s\S]*?return String\(componentTotal\)/);
-  assert.match(controller, /return getPositiveIntegerOrBlank\(submittedLegacyTotal\)/);
-  assert.match(controller, /previousRamGb: getComponentCapacityTotalGb\(previousMemoryModules, req\.body\.previousRamGb\)/);
+  assert.match(controller, /allowZero[\s\S]*?getNonNegativeIntegerOrBlank\(submittedLegacyTotal\)[\s\S]*?getPositiveIntegerOrBlank\(submittedLegacyTotal\)/);
+  assert.match(controller, /previousRamGb: getComponentCapacityTotalGb\(previousMemoryModules, req\.body\.previousRamGb, \{ allowZero: true \}\)/);
   assert.match(controller, /ramGb: getComponentCapacityTotalGb\(memoryModules, req\.body\.ramGb\)/);
-  assert.match(controller, /previousStorageGb: getComponentCapacityTotalGb\(previousStorageDevices, req\.body\.previousStorageGb\)/);
+  assert.match(controller, /previousStorageGb: getComponentCapacityTotalGb\(previousStorageDevices, req\.body\.previousStorageGb, \{ allowZero: true \}\)/);
   assert.match(controller, /storageGb: getComponentCapacityTotalGb\(storageDevices, req\.body\.storageGb\)/);
 });

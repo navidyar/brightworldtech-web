@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle, stylesheets: ['/css/modal.css?v=20260919-virtual-huddle'] }) %>
+  <script defer src="/js/modal.js?v=20260919-virtual-huddle"></script>
+  <script defer src="/js/virtual-huddle-management.js?v=20260919-virtual-huddle"></script>
+  <body>
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+        <main class="content-shell">
+          <section class="page-heading">
+            <div>
+              <h1>Virtual Huddle</h1>
+              <p>Send documented announcements to role groups or individual active employees and review acknowledgment history.</p>
+            </div>
+            <a class="primary-button" href="/management/virtual-huddle/new/modal" hx-get="/management/virtual-huddle/new/modal" hx-target="#modal-root" hx-swap="innerHTML">New Huddle</a>
+          </section>
+
+          <% if (successMessage) { %><div class="message success" data-auto-dismiss-success><p><%= successMessage %></p></div><% } %>
+          <% if (Array.isArray(errorMessages) && errorMessages.length > 0) { %><div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div><% } %>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div><p class="eyebrow">History</p><h2>Sent Huddles</h2></div>
+              <div class="virtual-huddle-inline-summary"><strong><%= formatNumber(totalCount) %></strong> total messages</div>
+            </div>
+
+            <div class="table-card">
+              <table>
+                <thead>
+                  <tr><th>Sent</th><th>Type</th><th>Subject</th><th>Sent By</th><th>Audience</th><th>Acknowledged</th><th>Awaiting</th><th>Revoked</th><th></th></tr>
+                </thead>
+                <tbody>
+                  <% if (messages.length === 0) { %>
+                    <tr><td colspan="9">No Virtual Huddles have been sent yet.</td></tr>
+                  <% } %>
+                  <% messages.forEach((message) => { const roles = String(message.target_role_codes || '').split(',').filter(Boolean); %>
+                    <tr>
+                      <td><%= formatDateTime(message.sent_at) %></td>
+                      <td><span class="pill <%= message.message_type_code === 'urgent' ? 'bad' : message.message_type_code === 'priority' ? 'warning' : 'muted' %>"><%= messageTypeLabel(message.message_type_code) %></span></td>
+                      <td><strong><%= message.subject %></strong><% if (message.parent_message_id) { %><span class="table-muted-line">Related Huddle</span><% } %></td>
+                      <td><%= message.sender_name_snapshot %><span class="table-muted-line"><%= formatRoleLabel(message.sender_role_code_snapshot) %></span></td>
+                      <td>
+                        <% if (roles.length > 0) { %><%= roles.map(formatRoleLabel).join(', ') %><% } %>
+                        <% if (Number(message.individual_target_count || 0) > 0) { %><span class="table-muted-line"><%= message.individual_target_count %> individual<%= Number(message.individual_target_count) === 1 ? '' : 's' %></span><% } %>
+                      </td>
+                      <td><%= formatNumber(message.acknowledged_count) %></td>
+                      <td><%= formatNumber(message.awaiting_count) %></td>
+                      <td><%= formatNumber(message.revoked_count) %></td>
+                      <td><a class="secondary-button button-small" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>">Open</a></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+
+            <% if (totalPages > 1) { %>
+              <nav class="table-pagination" aria-label="Virtual Huddle history pages">
+                <% if (page > 1) { %><a class="table-pagination__link" href="/management/virtual-huddle?page=<%= page - 1 %>">Previous</a><% } %>
+                <span>Page <%= page %> of <%= totalPages %></span>
+                <% if (page < totalPages) { %><a class="table-pagination__link" href="/management/virtual-huddle?page=<%= page + 1 %>">Next</a><% } %>
+              </nav>
+            <% } %>
+          </section>
+        </main>
+      </div>
+    </div>
+    <div id="modal-root"></div>
+  </body>
+</html>

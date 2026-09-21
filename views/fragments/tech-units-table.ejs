@@ -1277,7 +1277,8 @@
                         <div><dt>Open-Box Status</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.openBoxStatusConfigValueId || '—') : '—' %></dd></div>
                         <div><dt>Box Language</dt><dd><%= specsTests && specsTests.labels ? (specsTests.labels.boxLanguageConfigValueId || '—') : '—' %></dd></div>
                       <% } %>
-                      <div><dt>Skinned</dt><dd><%= specifications ? specifications.skinnedStatusLabel : '—' %></dd></div>
+                      <div><dt>Skinning Status</dt><dd><%= specifications ? specifications.skinnedStatusLabel : '—' %></dd></div>
+                      <% if (specifications && specifications.skinnedStatusLabel === 'Skinned by BWT') { %><div><dt>Skinned by BWT</dt><dd><%= specifications.skinnedByName || '—' %><%= specifications.skinnedAt ? ` · ${formatDateTime(specifications.skinnedAt)}` : '' %></dd></div><% } %>
                     </dl>
 
                     <% if (specsTests && ((specsTests.cameras || []).length || (specsTests.batteries || []).length || (specsTests.biometrics || []).length || (specsTests.ports || []).length)) { %>

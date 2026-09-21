@@ -75,6 +75,19 @@ test('submission_id reuses existing Tool receipt report_id idempotency and does 
   assert.doesNotMatch(service, /CREATE TABLE|INSERT INTO .*submission|preflight_id/i);
 });
 
+test('concurrent new-Unit idempotency replay revalidates current identity before returning the existing receipt', () => {
+  const service = read('services/apiUnitCommit.js');
+  const helperStart = service.indexOf('async function createAndIngestUnit');
+  const helperEnd = service.indexOf('async function commitUnit');
+  const helper = service.slice(helperStart, helperEnd);
+
+  assert.match(helper, /error\?\.code === 'ER_DUP_ENTRY'/);
+  assert.match(helper, /apiUnitIntake\.resolveUnit\(body, \{[\s\S]*preflightContext: \{ userId, roleCodes, toolSource \}/);
+  assert.match(helper, /assertPreflightCanProceed\(replayResolution\)/);
+  assert.match(helper, /buildReplayResponse\(\{[\s\S]*submission: concurrentSubmission,[\s\S]*resolution: replayResolution,[\s\S]*requestedUnitId,[\s\S]*userId,[\s\S]*intentionalDuplicate/);
+  assert.doesNotMatch(helper, /concurrentSubmission\.submitted_by_user_id[\s\S]*status: 'REPLAYED'/);
+});
+
 test('Commit summarizes partial acceptance without treating protected or ignored fields as a whole-submission failure', () => {
   const service = read('services/apiUnitCommit.js');
   assert.match(service, /accepted_fields/);
@@ -103,6 +116,6 @@ test('confirmed Intentional Duplicate uses the same atomic new-Unit Commit trans
   const service = read('services/apiUnitCommit.js');
   assert.match(service, /confirm_duplicate_match_creation/);
   assert.match(service, /if \(intentionalDuplicate\)/);
-  assert.match(service, /return await createAndIngestUnit\(\{ body, userId, toolSource, submissionId, resolution \}\)/);
+  assert.match(service, /if \(intentionalDuplicate\)[\s\S]*createAndIngestUnit\(\{[\s\S]*intentionalDuplicate[\s\S]*\}\)/);
   assert.match(service, /INTENTIONAL_DUPLICATE_UNIT_ID_NOT_ALLOWED/);
 });

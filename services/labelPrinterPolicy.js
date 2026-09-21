@@ -2,7 +2,9 @@
 
 const net = require('node:net');
 const dns = require('node:dns').promises;
+const { findLabelPrinterProfile, inferLabelPrinterProfile } = require('../config/labelPrinting');
 
+const { findQl810wContinuousMedia } = require('../config/labelMedia');
 const LABEL_PRINTER_SCOPES = Object.freeze(['managed', 'solo']);
 const LABEL_PRINTER_PROTOCOLS = Object.freeze([
   Object.freeze({ code: 'raw_9100', label: 'RAW 9100', defaultPort: 9100 }),
@@ -58,8 +60,19 @@ function normalizePrinterInput(input = {}, { scope = 'solo' } = {}) {
   if (!protocol) throw new LabelPrinterInputError('Select a supported printer protocol.');
   const port = Number(input.port || protocol.defaultPort);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new LabelPrinterInputError('Printer port must be between 1 and 65535.');
-  const dpi = input.dpi === '' || input.dpi === null || input.dpi === undefined ? null : Number(input.dpi);
-  if (dpi !== null && (!Number.isInteger(dpi) || dpi < 100 || dpi > 2400)) throw new LabelPrinterInputError('Printer DPI must be between 100 and 2400.');
+  const rawProfileCode = String(input.printerProfileCode || '').trim();
+  const inferredProfile = rawProfileCode
+    ? findLabelPrinterProfile(rawProfileCode)
+    : inferLabelPrinterProfile({ manufacturer: input.manufacturer, model: input.model });
+  if (rawProfileCode && !inferredProfile) throw new LabelPrinterInputError('Select a supported printer profile.');
+
+  const rawDpi = input.dpi === '' || input.dpi === null || input.dpi === undefined ? null : Number(input.dpi);
+  if (rawDpi !== null && (!Number.isInteger(rawDpi) || rawDpi < 100 || rawDpi > 2400)) throw new LabelPrinterInputError('Printer DPI must be between 100 and 2400.');
+
+  const explicitMediaCode = String(input.mediaCode || '').trim().slice(0, 64);
+  if (inferredProfile?.code === 'brother_ql810w_300dpi' && explicitMediaCode && !findQl810wContinuousMedia(explicitMediaCode)) {
+    throw new LabelPrinterInputError('Select a supported Brother QL-810W continuous roll width.');
+  }
 
   return Object.freeze({
     scope,
@@ -69,12 +82,12 @@ function normalizePrinterInput(input = {}, { scope = 'solo' } = {}) {
     port,
     protocolCode: protocol.code,
     cupsQueueName: String(input.cupsQueueName || '').trim().slice(0, 128) || null,
-    manufacturer: String(input.manufacturer || '').trim().slice(0, 80) || null,
-    model: String(input.model || '').trim().slice(0, 120) || null,
+    manufacturer: String(input.manufacturer || '').trim().slice(0, 80) || inferredProfile?.manufacturer || null,
+    model: String(input.model || '').trim().slice(0, 120) || inferredProfile?.model || null,
     detectedDescription: String(input.detectedDescription || '').trim().slice(0, 255) || null,
-    printerProfileCode: String(input.printerProfileCode || '').trim().slice(0, 64) || null,
-    mediaCode: String(input.mediaCode || '').trim().slice(0, 64) || null,
-    dpi,
+    printerProfileCode: inferredProfile?.code || null,
+    mediaCode: explicitMediaCode || inferredProfile?.mediaCode || null,
+    dpi: inferredProfile?.dpi || rawDpi,
     isShared: scope === 'managed' ? true : Boolean(input.isShared),
     isEnabled: input.isEnabled === undefined ? true : Boolean(input.isEnabled)
   });
@@ -154,5 +167,6 @@ module.exports = {
   canUsePrinter,
   canEditSoloPrinter,
   canJoinPrinterGroup,
+  probeTcpPort,
   probePrinterHost
 };

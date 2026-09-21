@@ -1,0 +1,94 @@
+<%
+  const imagePreviewAssetKinds = new Set(['logo', 'image', 'background']);
+  const assetGroup = (asset) => {
+    const mimeType = String(asset?.mime_type || '');
+    const kind = String(asset?.asset_kind || '');
+    if (mimeType === 'application/json' || kind.endsWith('_json')) return { key: 'json', label: 'Generated JSON' };
+    if (kind === 'logo') return { key: 'logo', label: 'Logos' };
+    if (kind === 'image') return { key: 'image', label: 'Images' };
+    if (kind === 'background') return { key: 'background', label: 'Backgrounds' };
+    return { key: 'other', label: 'Other Assets' };
+  };
+  let currentAssetGroup = '';
+%>
+<section id="label-library-assets-section" class="site-clean-section label-library-section" data-label-library-assets-section data-repository-storage="<%= formatBytes(storage.total_bytes) %>">
+  <div class="site-clean-section-heading label-library-section-heading">
+    <div>
+      <h2>Shared Assets</h2>
+      <p>Reusable PNG/SVG artwork and JSON layout configuration are deduplicated by SHA-256.</p>
+    </div>
+    <div class="label-library-heading-actions">
+      <span data-label-library-asset-count data-count="<%= Number(storage.asset_count || 0) %>"><%= formatNumber(storage.asset_count) %> asset<%= Number(storage.asset_count) === 1 ? '' : 's' %></span>
+      <a class="secondary-button" href="/management/label-library/assets/upload/modal" hx-get="/management/label-library/assets/upload/modal" hx-target="#modal-root" hx-swap="innerHTML">Upload Asset</a>
+    </div>
+  </div>
+
+
+  <div class="label-library-storage-breakdown">
+    <span>Images <strong data-label-library-image-storage data-bytes="<%= Number(storage.image_bytes || 0) %>"><%= formatBytes(storage.image_bytes) %></strong></span>
+    <span>JSON <strong data-label-library-json-storage data-bytes="<%= Number(storage.json_bytes || 0) %>"><%= formatBytes(storage.json_bytes) %></strong></span>
+    <span>Total <strong data-label-library-total-storage data-bytes="<%= Number(storage.total_bytes || 0) %>"><%= formatBytes(storage.total_bytes) %></strong></span>
+  </div>
+
+  <div class="table-card label-library-assets-table-card">
+    <table>
+      <thead><tr><th>Asset</th><th>Type</th><th>Size</th><th>Used by</th><th>Created</th><th>Action</th></tr></thead>
+      <tbody>
+        <% if (assets.length === 0) { %><tr><td colspan="6">No shared assets have been stored yet.</td></tr><% } %>
+        <% assets.forEach((asset) => { %>
+          <%
+            const group = assetGroup(asset);
+            const canShowImageThumb = imagePreviewAssetKinds.has(String(asset.asset_kind || '')) && String(asset.mime_type || '').startsWith('image/');
+          %>
+          <% if (group.key !== currentAssetGroup) { currentAssetGroup = group.key; %>
+            <tr class="label-library-asset-group-row" data-label-asset-group="<%= group.key %>"><th colspan="6"><%= group.label %></th></tr>
+          <% } %>
+          <tr data-label-asset-row data-asset-id="<%= asset.asset_id %>" data-asset-name="<%= asset.name || asset.source_filename || `Asset ${asset.asset_id}` %>">
+            <td>
+              <div class="label-library-asset-cell">
+                <a
+                  class="label-library-asset-thumbnail"
+                  href="/management/label-library/assets/<%= asset.asset_id %>/preview/modal"
+                  hx-get="/management/label-library/assets/<%= asset.asset_id %>/preview/modal"
+                  hx-target="#modal-root"
+                  hx-swap="innerHTML"
+                  aria-label="Preview <%= asset.name || asset.source_filename || `Asset ${asset.asset_id}` %>"
+                >
+                  <% if (canShowImageThumb) { %>
+                    <img src="/management/label-library/assets/<%= asset.asset_id %>/file" alt="" loading="lazy" />
+                  <% } else if (String(asset.mime_type || '') === 'application/json') { %>
+                    <span aria-hidden="true">JSON</span>
+                  <% } else { %>
+                    <span aria-hidden="true">FILE</span>
+                  <% } %>
+                </a>
+                <div>
+                  <strong><%= asset.name || asset.source_filename || `Asset ${asset.asset_id}` %></strong>
+                  <small class="label-library-hash"><%= asset.sha256 %></small>
+                </div>
+              </div>
+            </td>
+            <td><span class="pill slate"><%= String(asset.asset_kind || '').replaceAll('_', ' ') %></span></td>
+            <td>
+              <%= formatBytes(asset.byte_size) %>
+              <% if (asset.width_pixels && asset.height_pixels) { %><small><%= asset.width_pixels %> × <%= asset.height_pixels %> px</small><% } %>
+            </td>
+            <td><%= formatNumber(asset.template_count) %> template<%= Number(asset.template_count) === 1 ? '' : 's' %></td>
+            <td><%= formatDateTime(asset.created_at) %></td>
+            <td>
+              <div class="management-user-row-actions label-library-asset-actions">
+                <a class="secondary-button compact-button" href="/management/label-library/assets/<%= asset.asset_id %>/preview/modal" hx-get="/management/label-library/assets/<%= asset.asset_id %>/preview/modal" hx-target="#modal-root" hx-swap="innerHTML">Preview</a>
+                <% if (['image/png', 'image/svg+xml'].includes(String(asset.mime_type || ''))) { %>
+                  <a class="secondary-button compact-button" href="/management/label-library/assets/<%= asset.asset_id %>/rename/modal" hx-get="/management/label-library/assets/<%= asset.asset_id %>/rename/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                  <a class="secondary-button compact-button danger-button" href="/management/label-library/assets/<%= asset.asset_id %>/delete/modal" hx-get="/management/label-library/assets/<%= asset.asset_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete</a>
+                <% } else { %>
+                  <small>Managed by template</small>
+                <% } %>
+              </div>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>

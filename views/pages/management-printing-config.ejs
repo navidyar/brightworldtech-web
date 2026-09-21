@@ -17,7 +17,7 @@
 
           <%- include('../partials/configuration-nav', { currentNav }) %>
 
-          <% if (saved) { %><div class="message success"><p>Printing configuration saved.</p></div><% } %>
+          <% if (saved) { %><div class="message success" data-auto-dismiss-success><p>Printing configuration saved.</p></div><% } %>
           <% if (Array.isArray(errorMessages) && errorMessages.length) { %>
             <div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div>
           <% } %>

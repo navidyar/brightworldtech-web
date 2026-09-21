@@ -1,6 +1,7 @@
 'use strict';
 
 const techUnitModel = require('../models/techUnitModel');
+const unitExpandedFormModel = require('../models/unitExpandedFormModel');
 const unitAuditEventModel = require('../models/unitAuditEventModel');
 const { buildUnitFormAuditEvent } = require('./unitAuditSnapshot');
 const { resolveUnitIdentity } = require('./apiUnitIdentity');
@@ -28,6 +29,115 @@ function normalizePositiveInteger(value) {
 function normalizeBoolean(value) {
   if (value === true || value === 1 || value === '1') return true;
   return String(value || '').trim().toLowerCase() === 'true';
+}
+
+
+function normalizeOptionalNonNegativeInteger(value, fieldLabel) {
+  if (value === undefined || value === null || String(value).trim() === '') return null;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) {
+    throw new ApiUnitIntakeError(422, 'INVALID_PREVIOUS_COMPONENT_DATA', `${fieldLabel} must be a non-negative whole number.`);
+  }
+  return parsed;
+}
+
+function optionIdSet(options = []) {
+  return new Set((Array.isArray(options) ? options : [])
+    .map((option) => normalizePositiveInteger(option?.id))
+    .filter(Boolean));
+}
+
+function normalizePreviousMemory(body, formOptions) {
+  const raw = body.previous_memory ?? body.previousMemory;
+  if (raw === undefined || raw === null) return { totalGb: null, modules: [], supplied: false };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new ApiUnitIntakeError(422, 'INVALID_PREVIOUS_COMPONENT_DATA', 'previous_memory must be an object when supplied.');
+  }
+
+  const totalGb = normalizeOptionalNonNegativeInteger(raw.total_gb ?? raw.totalGb, 'Previous Memory total_gb');
+  const modules = Array.isArray(raw.modules) ? raw.modules : [];
+  const ramTypeIds = optionIdSet(formOptions.ramTypes);
+  const installCodes = new Set((Array.isArray(formOptions.memoryInstallTypes) ? formOptions.memoryInstallTypes : [])
+    .map((option) => String(option?.code || '').trim()).filter(Boolean));
+
+  const normalizedModules = modules.map((module, index) => {
+    if (!module || typeof module !== 'object' || Array.isArray(module)) {
+      throw new ApiUnitIntakeError(422, 'INVALID_PREVIOUS_COMPONENT_DATA', `previous_memory.modules[${index}] must be an object.`);
+    }
+    const sizeGb = normalizeOptionalNonNegativeInteger(module.size_gb ?? module.sizeGb, `Previous Memory module ${index + 1} size_gb`);
+    if (sizeGb === null) {
+      throw new ApiUnitIntakeError(422, 'INVALID_PREVIOUS_COMPONENT_DATA', `Previous Memory module ${index + 1} requires size_gb.`);
+    }
+    const ramTypeConfigValueId = normalizePositiveInteger(module.ram_type_config_value_id ?? module.ramTypeConfigValueId);
+    if (ramTypeConfigValueId && !ramTypeIds.has(ramTypeConfigValueId)) {
+      throw new ApiUnitIntakeError(422, 'INVALID_PREVIOUS_COMPONENT_DATA', `Previous Memory module ${index + 1} uses an unavailable Memory Type.`);
+    }
+    const memoryInstallTypeCode = normalizeText(module.memory_install_type_code ?? module.memoryInstallTypeCode, 80);
+    if (memoryInstallTypeCode && !installCodes.has(memoryInstallTypeCode)) {
+      throw new ApiUnitIntakeError(422, 'INVALID_PREVIOUS_COMPONENT_DATA', `Previous Memory module ${index + 1} uses an unavailable install type.`);
+    }
+    return {
+      slotLabel: normalizeText(module.slot_label ?? module.slotLabel, 80) || `Memory Slot ${index + 1}`,
+      sizeGb: String(sizeGb),
+      ramTypeConfigValueId: ramTypeConfigValueId ? String(ramTypeConfigValueId) : '',
+      memoryInstallTypeCode
+    };
+  });
+
+  const moduleTotal = normalizedModules.reduce((sum, module) => sum + Number(module.sizeGb || 0), 0);
+  if (totalGb !== null && normalizedModules.length > 0 && totalGb !== moduleTotal) {
+    throw new ApiUnitIntakeError(422, 'PREVIOUS_MEMORY_TOTAL_MISMATCH', 'Previous Memory total_gb must equal the sum of the supplied previous Memory modules.');
+  }
+  if (totalGb === 0 && normalizedModules.some((module) => Number(module.sizeGb) > 0)) {
+    throw new ApiUnitIntakeError(422, 'PREVIOUS_MEMORY_TOTAL_MISMATCH', 'Previous Memory cannot be 0 GB when previous Memory modules are supplied.');
+  }
+
+  return { totalGb: totalGb ?? (normalizedModules.length ? moduleTotal : null), modules: normalizedModules, supplied: true };
+}
+
+function normalizePreviousStorage(body, formOptions) {
+  const raw = body.previous_storage ?? body.previousStorage;
+  if (raw === undefined || raw === null) return { totalGb: null, devices: [], supplied: false };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new ApiUnitIntakeError(422, 'INVALID_PREVIOUS_COMPONENT_DATA', 'previous_storage must be an object when supplied.');
+  }
+
+  const totalGb = normalizeOptionalNonNegativeInteger(raw.total_gb ?? raw.totalGb, 'Previous Storage total_gb');
+  const devices = Array.isArray(raw.devices) ? raw.devices : [];
+  const storageTypeIds = optionIdSet(formOptions.storageTypes);
+
+  const normalizedDevices = devices.map((device, index) => {
+    if (!device || typeof device !== 'object' || Array.isArray(device)) {
+      throw new ApiUnitIntakeError(422, 'INVALID_PREVIOUS_COMPONENT_DATA', `previous_storage.devices[${index}] must be an object.`);
+    }
+    const sizeGb = normalizeOptionalNonNegativeInteger(device.size_gb ?? device.sizeGb, `Previous Storage device ${index + 1} size_gb`);
+    if (sizeGb === null) {
+      throw new ApiUnitIntakeError(422, 'INVALID_PREVIOUS_COMPONENT_DATA', `Previous Storage device ${index + 1} requires size_gb.`);
+    }
+    const storageTypeConfigValueId = normalizePositiveInteger(device.storage_type_config_value_id ?? device.storageTypeConfigValueId);
+    if (storageTypeConfigValueId && !storageTypeIds.has(storageTypeConfigValueId)) {
+      throw new ApiUnitIntakeError(422, 'INVALID_PREVIOUS_COMPONENT_DATA', `Previous Storage device ${index + 1} uses an unavailable Storage Type.`);
+    }
+    return {
+      slotLabel: normalizeText(device.slot_label ?? device.slotLabel, 80) || `Drive ${index + 1}`,
+      sizeGb: String(sizeGb),
+      storageTypeConfigValueId: storageTypeConfigValueId ? String(storageTypeConfigValueId) : '',
+      // Previous Storage mirrors the normal BWTDallas technician form: manual
+      // capture is limited to capacity/type. Serial and other drive evidence remain
+      // Tool-managed and are not manually authored through the API.
+      serialNumber: ''
+    };
+  });
+
+  const deviceTotal = normalizedDevices.reduce((sum, device) => sum + Number(device.sizeGb || 0), 0);
+  if (totalGb !== null && normalizedDevices.length > 0 && totalGb !== deviceTotal) {
+    throw new ApiUnitIntakeError(422, 'PREVIOUS_STORAGE_TOTAL_MISMATCH', 'Previous Storage total_gb must equal the sum of the supplied previous Storage devices.');
+  }
+  if (totalGb === 0 && normalizedDevices.some((device) => Number(device.sizeGb) > 0)) {
+    throw new ApiUnitIntakeError(422, 'PREVIOUS_STORAGE_TOTAL_MISMATCH', 'Previous Storage cannot be 0 GB when previous Storage devices are supplied.');
+  }
+
+  return { totalGb: totalGb ?? (normalizedDevices.length ? deviceTotal : null), devices: normalizedDevices, supplied: true };
 }
 
 function normalizeIdentity(body = {}) {
@@ -269,7 +379,14 @@ async function resolveUnit(body = {}, { formOptions = null, preflightContext = n
 }
 
 async function listCreationOptions() {
-  const formOptions = await techUnitModel.getTechUnitFormOptions();
+  const [formOptions, expandedFormOptions] = await Promise.all([
+    techUnitModel.getTechUnitFormOptions(),
+    unitExpandedFormModel.getExpandedFormOptions()
+  ]);
+  const serializeConfigOptions = (options) => (Array.isArray(options) ? options : []).map((option) => ({
+    config_value_id: Number(option.id),
+    label: String(option.label || option.value || '').trim()
+  }));
   return {
     lots: (Array.isArray(formOptions.lots) ? formOptions.lots : []).map((lot) => ({
       lot_id: Number(lot.lot_id),
@@ -280,7 +397,21 @@ async function listCreationOptions() {
     unit_categories: (Array.isArray(formOptions.unitCategories) ? formOptions.unitCategories : []).map((category) => ({
       config_value_id: Number(category.id),
       label: String(category.label || category.value || '').trim()
-    }))
+    })),
+    previous_component_options: {
+      ram_types: serializeConfigOptions(formOptions.ramTypes),
+      memory_install_types: (Array.isArray(formOptions.memoryInstallTypes) ? formOptions.memoryInstallTypes : []).map((option) => ({
+        code: String(option.code || '').trim(),
+        label: String(option.label || option.code || '').trim()
+      })),
+      storage_types: serializeConfigOptions(formOptions.storageTypes),
+      storage_wipe_statuses: serializeConfigOptions(formOptions.storageWipeStatuses)
+    },
+    tool_field_options: {
+      test_results: serializeConfigOptions(expandedFormOptions.testResultOptions),
+      component_test_results: serializeConfigOptions(expandedFormOptions.componentTestResultOptions),
+      lock_statuses: serializeConfigOptions(expandedFormOptions.lockStatusOptions)
+    }
   };
 }
 
@@ -359,10 +490,17 @@ async function createUnitInternal({ body = {}, userId, toolSource, connection = 
     throw new ApiUnitIntakeError(422, 'INVALID_UNIT_CATEGORY', 'The supplied Unit Category is not available in BWTDallas.');
   }
 
+  const previousMemory = normalizePreviousMemory(body, formOptions);
+  const previousStorage = normalizePreviousStorage(body, formOptions);
+
   const formData = {
     ...techUnitModel.getBlankUnitFormData(formOptions),
     lotId: String(lotId),
     unitCategoryConfigValueId: requestedCategoryId ? String(requestedCategoryId) : '',
+    previousRamGb: previousMemory.totalGb === null ? '' : String(previousMemory.totalGb),
+    previousMemoryModules: previousMemory.modules,
+    previousStorageGb: previousStorage.totalGb === null ? '' : String(previousStorage.totalGb),
+    previousStorageDevices: previousStorage.devices,
     // Unit Serial is never inferred by the tool. If present here it was physically
     // confirmed and entered by the Tech User in ScanTools/TechTools.
     unitSerialNumber: identity.unitSerialNumber,
@@ -400,6 +538,10 @@ async function createUnitInternal({ body = {}, userId, toolSource, connection = 
             unitSerialNumber: identity.unitSerialNumber ? 'tech_user_input_via_tool' : 'not_supplied',
             biosSerialNumber: identity.biosSerialNumber ? 'tool_observed' : 'not_supplied',
             systemUuid: identity.systemUuid ? 'tool_or_tech_observed' : 'not_supplied'
+          },
+          previousComponentProvenance: {
+            memory: previousMemory.supplied ? 'tech_user_input_via_tool' : 'not_supplied',
+            storage: previousStorage.supplied ? 'tech_user_input_via_tool' : 'not_supplied'
           },
           duplicateMatchCreation: allowDuplicateCreation,
           duplicateMatchCount: hasDuplicateCandidates ? existing.match_count : 0
@@ -446,7 +588,7 @@ async function createUnitInternal({ body = {}, userId, toolSource, connection = 
       throw new ApiUnitIntakeError(
         422,
         'UNIT_CATEGORY_REQUIRED',
-        'This BWTDallas schema requires a Unit Category at creation. Supply unit_category_config_value_id from /api/v1/units/creation-options.'
+        'Unit Category is a Tool processing prerequisite for creating a new Unit. Supply unit_category_config_value_id from /api/v1/units/creation-options.'
       );
     }
 

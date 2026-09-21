@@ -45,7 +45,7 @@
           </section>
 
           <% if (notice && noticeMessages[notice]) { %>
-            <div class="message <%= notice === 'not-found' ? 'error' : 'success' %>"><p><%= noticeMessages[notice] %></p></div>
+            <div class="message <%= notice === 'not-found' ? 'error' : 'success' %>" <%= notice === 'not-found' ? '' : 'data-auto-dismiss-success' %>><p><%= noticeMessages[notice] %></p></div>
           <% } %>
 
           <section class="site-summary-panel model-catalog-summary-panel" aria-label="Visible model totals">
@@ -79,10 +79,10 @@
               </div>
             </div>
 
-            <form class="app-form model-catalog-filter-form" method="get" action="/management/config/models">
+            <form class="app-form model-catalog-filter-form" method="get" action="/management/config/models" data-auto-submit-filter-form data-auto-submit-delay="300">
               <label class="form-field">
                 <span>Manufacturer</span>
-                <select name="manufacturerId">
+                <select data-auto-submit-filter="immediate" name="manufacturerId">
                   <option value="">All manufacturers</option>
                   <% manufacturers.forEach((manufacturer) => { %>
                     <option value="<%= manufacturer.id %>" <%= selected(filters.manufacturerId, manufacturer.id) %>><%= manufacturer.label %></option>
@@ -92,7 +92,7 @@
 
               <label class="form-field">
                 <span>Unit Category</span>
-                <select name="unitCategoryConfigValueId">
+                <select data-auto-submit-filter="immediate" name="unitCategoryConfigValueId">
                   <option value="">All categories</option>
                   <% unitCategories.forEach((category) => { %>
                     <option value="<%= category.id %>" <%= selected(filters.unitCategoryConfigValueId, category.id) %>><%= category.label %></option>
@@ -102,19 +102,18 @@
 
               <label class="form-field">
                 <span>Search</span>
-                <input type="search" name="search" value="<%= filters.search || '' %>" placeholder="Model name" />
+                <input type="search" data-auto-submit-filter="debounced" name="search" value="<%= filters.search || '' %>" placeholder="Model name" />
               </label>
 
               <label class="form-field">
                 <span>Status</span>
-                <select name="includeInactive">
+                <select data-auto-submit-filter="immediate" name="includeInactive">
                   <option value="0" <%= !filters.includeInactive ? 'selected' : '' %>>Active only</option>
                   <option value="1" <%= filters.includeInactive ? 'selected' : '' %>>Active and inactive</option>
                 </select>
               </label>
 
               <div class="model-catalog-filter-actions">
-                <button class="primary-button" type="submit">Apply Filters</button>
                 <a class="secondary-button" href="/management/config/models">Reset</a>
               </div>
             </form>

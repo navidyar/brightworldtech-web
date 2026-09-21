@@ -17,7 +17,7 @@
     hardwareIssue: 'Choose a hardware issue, enter a custom issue, or choose None when there is no hardware issue.'
   });
 
-  const COLLAPSIBLE_EMPTY_REPEATABLE_ROW_TYPES = new Set(['camera', 'battery', 'biometric', 'port']);
+  const COLLAPSIBLE_EMPTY_REPEATABLE_ROW_TYPES = new Set(['previousMemory', 'previousStorage', 'camera', 'battery', 'biometric', 'port']);
 
   const LOT_UNIT_FORM_PROFILE_REFRESH_INTERVAL_MS = 30000;
   const LOT_UNIT_FORM_PROFILE_SUBMIT_VERIFICATION_MAX_AGE_MS = 5000;
@@ -1117,7 +1117,7 @@
     controls.forEach((control) => {
       if (visible) {
         if (control.getAttribute('data-lot-profile-disabled') === 'true') {
-          control.disabled = false;
+          control.disabled = control.getAttribute('data-current-hardware-authority-disabled') === 'true';
           control.removeAttribute('data-lot-profile-disabled');
         }
         return;
@@ -1141,7 +1141,7 @@
     form.querySelectorAll(`[data-unit-form-companion-key="${fieldKey}"]`).forEach((control) => {
       if (visible) {
         if (control.getAttribute('data-lot-profile-disabled') === 'true') {
-          control.disabled = false;
+          control.disabled = control.getAttribute('data-current-hardware-authority-disabled') === 'true';
           control.removeAttribute('data-lot-profile-disabled');
         }
         return;
@@ -1179,6 +1179,79 @@
     });
   }
 
+  function getSelectedLotToolRequirementState(form) {
+    const lotSelect = getAssignableLotCatalog(form);
+    const selectedOption = getSelectedOption(lotSelect);
+    const requiresScanTools = selectedOption?.getAttribute('data-require-scantools') === '1';
+    const requiresTechTools = selectedOption?.getAttribute('data-require-techtools') === '1';
+    return {
+      requiresScanTools,
+      requiresTechTools,
+      requiresTools: requiresScanTools || requiresTechTools
+    };
+  }
+
+  function setCurrentHardwareAuthorityState(form, kind, { locked, toolOwned, lotRequiresTools }) {
+    const section = form?.querySelector(`[data-current-hardware-field="${kind}"]`);
+    if (!section) return;
+
+    section.classList.toggle('is-tool-controlled', Boolean(locked));
+    section.dataset.currentHardwareAuthority = locked ? 'locked' : 'manual';
+
+    section.querySelectorAll('[name], [data-add-module-row], [data-remove-module-row]').forEach((control) => {
+      if (locked) {
+        if (!control.disabled) {
+          control.disabled = true;
+          control.setAttribute('data-current-hardware-authority-disabled', 'true');
+        } else if (control.getAttribute('data-current-hardware-authority-disabled') !== 'true') {
+          control.setAttribute('data-current-hardware-authority-disabled', 'true');
+        }
+        control.setAttribute('aria-disabled', 'true');
+        return;
+      }
+
+      if (control.getAttribute('data-current-hardware-authority-disabled') === 'true') {
+        const lotProfileDisabled = control.getAttribute('data-lot-profile-disabled') === 'true';
+        control.disabled = lotProfileDisabled;
+        control.removeAttribute('data-current-hardware-authority-disabled');
+        if (!lotProfileDisabled) control.removeAttribute('aria-disabled');
+      }
+    });
+
+    const message = form.querySelector(`[data-current-hardware-authority-message="${kind}"]`);
+    if (!message) return;
+
+    if (!locked) {
+      message.hidden = true;
+      message.textContent = '';
+      return;
+    }
+
+    const label = kind === 'memory' ? 'Current Memory' : 'Current Storage';
+    message.hidden = false;
+    message.textContent = lotRequiresTools
+      ? `${label} is Tool-controlled because this Lot requires ScanTools or TechTools. Previous values remain editable.`
+      : `${label} was populated by Tools in this production cycle and is read-only. Previous values remain editable.`;
+  }
+
+  function updateCurrentHardwareAuthorityState(form) {
+    if (!form) return;
+    const lotPolicy = getSelectedLotToolRequirementState(form);
+    const memoryToolOwned = form.dataset.currentMemoryToolOwned === 'true';
+    const storageToolOwned = form.dataset.currentStorageToolOwned === 'true';
+
+    setCurrentHardwareAuthorityState(form, 'memory', {
+      locked: lotPolicy.requiresTools || memoryToolOwned,
+      toolOwned: memoryToolOwned,
+      lotRequiresTools: lotPolicy.requiresTools
+    });
+    setCurrentHardwareAuthorityState(form, 'storage', {
+      locked: lotPolicy.requiresTools || storageToolOwned,
+      toolOwned: storageToolOwned,
+      lotRequiresTools: lotPolicy.requiresTools
+    });
+  }
+
   function applyDefaultLotUnitFormProfile(form) {
     const visibleByKey = new Map();
 
@@ -1197,6 +1270,7 @@
     applyFollowerVisibility(form, visibleByKey);
     applyManufacturerFieldApplicability(form);
     applyRegularTechCosmeticIssuePolicy(form);
+    updateCurrentHardwareAuthorityState(form);
     updateAutoCollapsedSections(form);
   }
 
@@ -1432,6 +1506,7 @@
     applyFollowerVisibility(form, visibleByKey);
     applyManufacturerFieldApplicability(form);
     applyRegularTechCosmeticIssuePolicy(form);
+    updateCurrentHardwareAuthorityState(form);
     updateAutoCollapsedSections(form);
     restoreSequentialFocusAfterVisibilityChange(form, activeControl, previousFocusTargets);
 
@@ -3736,15 +3811,27 @@
     synchronizeCurrentCapacityFromComponents(previousStorageInput, previousStorageTotal, previousStorageState.hasStructuredEntries);
     synchronizeCurrentCapacityFromComponents(storageInput, storageTotal, storageState.hasStructuredEntries);
 
-    previousMemoryDisplays.forEach((display) => {
-      display.textContent = formatCapacityGb(previousMemoryTotal) || '0GB';
-    });
+    const updatePreviousCapacityDisplay = (displays, totalInput, state, suffixSelector) => {
+      const summaryValue = totalInput ? String(totalInput.value || '').trim() : '';
+      const hasRecordedValue = state.hasStructuredEntries || summaryValue !== '';
+      const displayedTotal = state.hasStructuredEntries
+        ? state.total
+        : Number(summaryValue);
+
+      displays.forEach((display) => {
+        display.textContent = hasRecordedValue ? (formatCapacityGb(displayedTotal) || '0GB') : 'Not recorded';
+      });
+
+      form.querySelectorAll(suffixSelector).forEach((suffix) => {
+        suffix.hidden = !hasRecordedValue;
+      });
+    };
+
+    updatePreviousCapacityDisplay(previousMemoryDisplays, previousMemoryInput, previousMemoryState, '[data-previous-memory-total-suffix]');
     memoryDisplays.forEach((display) => {
       display.textContent = formatCapacityGb(memoryTotal) || '0GB';
     });
-    previousStorageDisplays.forEach((display) => {
-      display.textContent = formatCapacityGb(previousStorageTotal) || '0GB';
-    });
+    updatePreviousCapacityDisplay(previousStorageDisplays, previousStorageInput, previousStorageState, '[data-previous-storage-total-suffix]');
     storageDisplays.forEach((display) => {
       display.textContent = formatCapacityGb(storageTotal) || '0GB';
     });
@@ -4284,6 +4371,7 @@
     updateIntentionalDuplicateRequestControls(form);
     updateCatalogRequestControls(form);
     updateOutcomeApprovalRequestControls(form, { clearWhenDisabled: true });
+    updateCurrentHardwareAuthorityState(form);
     refreshLotUnitFormProfile(form).then(() => {
       updateOutcomeApprovalRequestControls(form, { clearWhenDisabled: true });
       applyAuthoritativeServerFieldErrors(form);
@@ -4485,6 +4573,7 @@
       synchronizeAssignableLotCombobox(form);
       updateIntentionalDuplicateRequestControls(form);
       updateProductionWeightPreview(form);
+      updateCurrentHardwareAuthorityState(form);
       refreshDuplicateCheckForSelectedLot(form);
       refreshLotUnitFormProfile(form).then(() => {
         applyAuthoritativeServerFieldErrors(form);

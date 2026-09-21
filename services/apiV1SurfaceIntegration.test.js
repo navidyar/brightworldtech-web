@@ -17,6 +17,22 @@ test('API v1 Unit surface exposes the finalized Resolve, Action, Commit, options
   assert.match(routes, /router\.put\('\/units\/:unitId\/wipe-certificates\/:certificateId'/);
 });
 
+test('Tool catalog requests reuse the existing Admin-reviewed Unit Request workflow and expose status polling only', () => {
+  const routes = read('routes/api.js');
+  const service = read('services/apiCatalogRequest.js');
+  const requestModel = read('models/unitRequestModel.js');
+
+  assert.match(routes, /router\.post\('\/units\/catalog-requests\/model'/);
+  assert.match(routes, /router\.post\('\/units\/catalog-requests\/processor'/);
+  assert.match(routes, /router\.get\('\/units\/catalog-requests\/:requestId'/);
+  assert.match(service, /unitRequestModel\.createModelCatalogRequest/);
+  assert.match(service, /unitRequestModel\.createProcessorCatalogRequest/);
+  assert.match(service, /unitRequestModel\.getUnitRequestById/);
+  assert.doesNotMatch(service, /approveModelCatalogRequest|approveProcessorCatalogRequest/);
+  assert.match(requestModel, /Only Admin can approve Model Catalog requests/);
+  assert.match(requestModel, /Only Admin can approve Processor Catalog requests/);
+});
+
 test('legacy direct Unit create and inventory ingestion are no longer public API routes', () => {
   const routes = read('routes/api.js');
   const controller = read('controllers/apiUnitController.js');

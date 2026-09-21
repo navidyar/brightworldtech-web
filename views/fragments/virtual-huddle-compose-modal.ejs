@@ -1,0 +1,98 @@
+<%
+  const selectedRoles = Array.isArray(formData.targetRoleCodes) ? formData.targetRoleCodes.map(String) : [];
+  const selectedUsers = Array.isArray(formData.targetUserIds) ? formData.targetUserIds.map(String) : [];
+%>
+<div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close>
+  <section class="modal-panel site-clean-modal virtual-huddle-compose-modal" role="dialog" aria-modal="true" aria-labelledby="virtual-huddle-compose-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Virtual Huddle</p>
+        <h2 id="virtual-huddle-compose-title"><%= parentMessage ? 'Send Related Huddle' : 'New Huddle Notice' %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <% if (Array.isArray(errorMessages) && errorMessages.length > 0) { %>
+        <div class="message error">
+          <% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %>
+        </div>
+      <% } %>
+
+      <% if (parentMessage) { %>
+        <div class="message info"><p><strong>Related to:</strong> <%= parentMessage.subject %></p></div>
+      <% } %>
+
+      <form class="app-form app-form-clean" method="post" action="/management/virtual-huddle/preview" hx-post="/management/virtual-huddle/preview" hx-target="#modal-root" hx-swap="innerHTML" autocomplete="off" data-huddle-compose-form>
+        <% if (formData.parentMessageId) { %><input type="hidden" name="parentMessageId" value="<%= formData.parentMessageId %>" /><% } %>
+
+        <section class="form-section">
+          <div class="form-section-header"><h3>Message</h3></div>
+          <div class="form-grid single-column">
+            <label class="form-field">
+              <span>Subject</span>
+              <input type="text" name="subject" maxlength="255" value="<%= formData.subject || '' %>" required autofocus />
+            </label>
+            <label class="form-field">
+              <span>Message</span>
+              <textarea name="messageBody" rows="7" maxlength="12000" required><%= formData.messageBody || '' %></textarea>
+            </label>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section-header"><h3>Message Type</h3></div>
+          <div class="form-grid virtual-huddle-type-grid">
+            <% messageTypeOptions.forEach((option) => { %>
+              <label class="virtual-huddle-choice-row">
+                <input type="radio" name="messageTypeCode" value="<%= option.code %>" <%= formData.messageTypeCode === option.code ? 'checked' : '' %> />
+                <span><strong><%= option.label %></strong><small><%= option.description %></small></span>
+              </label>
+            <% }) %>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section-header"><h3>Role Groups</h3></div>
+          <div class="form-grid virtual-huddle-role-grid">
+            <% roleOptions.forEach((option) => { %>
+              <label class="virtual-huddle-choice-row">
+                <input type="checkbox" name="targetRoleCodes" value="<%= option.code %>" data-huddle-role-target <%= selectedRoles.includes(option.code) ? 'checked' : '' %> />
+                <span><strong><%= option.label %></strong></span>
+              </label>
+            <% }) %>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <div class="form-section-header"><h3>Individual Recipients</h3></div>
+          <div class="form-grid single-column">
+            <label class="form-field">
+              <span>Search active employees</span>
+              <input type="search" data-huddle-recipient-search placeholder="Search by name, username, or role" autocomplete="off" />
+            </label>
+            <div class="table-card virtual-huddle-recipient-picker" data-huddle-recipient-picker>
+              <table>
+                <thead><tr><th></th><th>Employee</th><th>Role</th></tr></thead>
+                <tbody>
+                  <% users.forEach((user) => { %>
+                    <tr data-huddle-user-row data-search="<%= `${user.display_name} ${user.username || ''} ${formatRoleLabel(user.primary_role_code)}`.toLowerCase() %>" data-user-id="<%= user.user_id %>" data-role-code="<%= user.primary_role_code %>">
+                      <td><input type="checkbox" name="targetUserIds" value="<%= user.user_id %>" data-huddle-user-target aria-label="Select <%= user.display_name %>" <%= selectedUsers.includes(String(user.user_id)) ? 'checked' : '' %> /></td>
+                      <td><strong><%= user.display_name %></strong><% if (user.username) { %><span class="table-muted-line"><%= user.username %></span><% } %></td>
+                      <td><%= formatRoleLabel(user.primary_role_code) %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+            <p class="field-hint" data-huddle-recipient-count>0 active recipients selected</p>
+          </div>
+        </section>
+
+        <div class="form-actions">
+          <button type="submit" class="primary-button">Review &amp; Send</button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

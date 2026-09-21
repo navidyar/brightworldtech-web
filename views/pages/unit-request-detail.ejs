@@ -45,7 +45,7 @@
               <a class="secondary-button" href="<%= unitRequestQueueUrl %>">Back to Requests</a>
             </div>
 
-            <% if (successMessage) { %><div class="message success"><p><%= successMessage %></p></div><% } %>
+            <% if (successMessage) { %><div class="message success" data-auto-dismiss-success><p><%= successMessage %></p></div><% } %>
             <% if (errorMessages.length > 0) { %><div class="message error"><% errorMessages.forEach((errorMessage) => { %><p><%= errorMessage %></p><% }) %></div><% } %>
 
             <% if (request.isIntentionalDuplicateRequest) { %>

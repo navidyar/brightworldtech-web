@@ -239,40 +239,26 @@ function determineMemoryOwnership({ currentRows, sourceCode = '', latestAppliedV
   return 'protected_legacy';
 }
 
-function buildMemoryPlan({ observation, currentRows, sourceCode = '', latestAppliedValue = null }) {
+function buildMemoryPlan({ observation, currentRows, sourceCode = '', latestAppliedValue = null, latestAppliedToolSource = '', incomingToolSource = '' }) {
   if (!observation) return null;
   if (observation.state === 'unknown') {
     return { status: 'ignored_unknown', reason: 'unknown_does_not_overwrite', mode: 'none', pairs: [], observation };
   }
 
   const ownership = determineMemoryOwnership({ currentRows, sourceCode, latestAppliedValue });
-  const pairs = pairCompatibleModules(currentRows, observation.value.modules);
-
-  if (ownership === 'manual' || ownership === 'protected_legacy') {
-    if (!pairs) {
-      return {
-        status: 'blocked_manual',
-        reason: ownership === 'manual' ? 'manual_memory_configuration_conflict' : 'existing_memory_not_tool_owned',
-        mode: 'none',
-        pairs: [],
-        observation,
-        ownership
-      };
-    }
-    const hasDetailChange = pairs.some(({ current, incoming }) => (
-      incoming.speed_mhz !== null && Number(current.speed_mhz || 0) !== Number(incoming.speed_mhz || 0)
-    ));
+  const existingToolSource = String(latestAppliedToolSource || '').trim().toLowerCase();
+  const incomingSource = String(incomingToolSource || '').trim().toLowerCase();
+  if (ownership === 'tool' && existingToolSource === 'techtools' && incomingSource === 'scantools') {
     return {
-      status: hasDetailChange ? 'applied' : 'unchanged',
-      reason: ownership === 'manual'
-        ? 'manual_memory_configuration_preserved'
-        : 'existing_memory_configuration_confirmed',
-      mode: 'details_only',
-      pairs,
+      status: 'unchanged',
+      reason: 'techtools_current_memory_is_final',
+      mode: 'none',
+      pairs: [],
       observation,
       ownership
     };
   }
+  const pairs = pairCompatibleModules(currentRows, observation.value.modules);
 
   if (pairs) {
     const hasDetailChange = pairs.some(({ current, incoming }) => (
@@ -290,7 +276,7 @@ function buildMemoryPlan({ observation, currentRows, sourceCode = '', latestAppl
 
   return {
     status: 'applied',
-    reason: ownership === 'blank' ? 'memory_populated_from_tool' : 'latest_tool_memory_configuration',
+    reason: ownership === 'blank' ? 'memory_populated_from_tool' : 'tool_authoritative_memory_configuration',
     mode: 'replace',
     pairs: [],
     observation,
@@ -311,7 +297,7 @@ async function loadCurrentMemoryRows(connection, unitId, { lock = false } = {}) 
     `SELECT unit_memory_module_id, unit_id, slot_label, size_gb,
             ram_type_config_value_id, memory_install_type_code, speed_mhz
        FROM unit_memory_modules
-      WHERE unit_id = ?
+      WHERE unit_id = ? AND is_current = 1
       ORDER BY unit_memory_module_id${lock ? ' FOR UPDATE' : ''}`,
     [unitId]
   );

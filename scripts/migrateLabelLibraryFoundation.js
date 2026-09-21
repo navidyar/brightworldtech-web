@@ -84,16 +84,16 @@ function buildTableDefinitions({ userIdType, lotIdType, unitIdType }) {
   return Object.freeze({
     label_templates: {
       requiredColumns: [
-        'label_template_id', 'name', 'description', 'category_code', 'status',
+        'label_template_id', 'name', 'description', 'category_code', 'print_scope', 'status',
         'cloned_from_template_id', 'printer_profile_code', 'media_code', 'dpi',
         'canvas_width_dots', 'canvas_height_dots', 'printable_width_dots',
-        'horizontal_offset_dots', 'feed_margin_dots', 'revision', 'imported_at',
-        'activated_at', 'archived_at', 'new_until', 'last_used_at', 'print_count',
+        'horizontal_offset_dots', 'feed_margin_dots', 'revision',
+        'activated_at', 'archived_at', 'new_until', 'last_used_at', 'print_count', 'library_sort_order',
         'created_by_user_id', 'updated_by_user_id', 'created_at', 'updated_at'
       ],
       requiredIndexes: [
-        'PRIMARY', 'idx_label_templates_status_category', 'idx_label_templates_new_until',
-        'idx_label_templates_popularity'
+        'PRIMARY', 'idx_label_templates_status_category', 'idx_label_templates_print_scope_status', 'idx_label_templates_new_until',
+        'idx_label_templates_popularity', 'idx_label_templates_library_order'
       ],
       requiredForeignKeys: {
         fk_label_templates_clone: ['cloned_from_template_id', 'label_templates', 'label_template_id', 'SET NULL', 'CASCADE'],
@@ -105,6 +105,7 @@ function buildTableDefinitions({ userIdType, lotIdType, unitIdType }) {
         name VARCHAR(160) NOT NULL,
         description VARCHAR(1000) NULL,
         category_code VARCHAR(40) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+        print_scope VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'lot',
         status VARCHAR(20) CHARACTER SET ascii COLLATE ascii_bin NOT NULL DEFAULT 'draft',
         cloned_from_template_id BIGINT UNSIGNED NULL,
         printer_profile_code VARCHAR(64) CHARACTER SET ascii COLLATE ascii_bin NULL,
@@ -116,20 +117,22 @@ function buildTableDefinitions({ userIdType, lotIdType, unitIdType }) {
         horizontal_offset_dots SMALLINT NULL,
         feed_margin_dots SMALLINT UNSIGNED NULL,
         revision INT UNSIGNED NOT NULL DEFAULT 1,
-        imported_at DATETIME(6) NULL,
         activated_at DATETIME(6) NULL,
         archived_at DATETIME(6) NULL,
         new_until DATETIME(6) NULL,
         last_used_at DATETIME(6) NULL,
         print_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+        library_sort_order INT UNSIGNED NOT NULL DEFAULT 0,
         created_by_user_id ${userIdType} NULL,
         updated_by_user_id ${userIdType} NULL,
         created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
         updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
         PRIMARY KEY (label_template_id),
         KEY idx_label_templates_status_category (status, category_code, name),
+        KEY idx_label_templates_print_scope_status (print_scope, status, name),
         KEY idx_label_templates_new_until (new_until),
         KEY idx_label_templates_popularity (print_count, last_used_at),
+        KEY idx_label_templates_library_order (library_sort_order, label_template_id),
         KEY idx_label_templates_clone (cloned_from_template_id),
         KEY idx_label_templates_created_by (created_by_user_id),
         KEY idx_label_templates_updated_by (updated_by_user_id),
