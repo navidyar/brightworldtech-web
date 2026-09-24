@@ -1,11 +1,7 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const ELEVATED_COMPLETION_ROLES = new Set(['admin', 'management', 'tech_lead']);
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
 
 function canChooseCompletionAttribution(roleCodes = []) {
   return (Array.isArray(roleCodes) ? roleCodes : [])

@@ -41,13 +41,6 @@ function inferLabelBuilderMediaWidth(template = {}) {
 function inferLabelBuilderLengthMm(template = {}, layout = null) {
   const explicit = normalizeContinuousLengthMm(layout?.lengthMm);
   if (explicit !== null) return explicit;
-
-  const legacyPreset = String(layout?.mediaPresetCode || '').match(/_(\d+(?:\.\d+)?)mm$/i);
-  if (legacyPreset) {
-    const legacyLength = normalizeContinuousLengthMm(legacyPreset[1]);
-    if (legacyLength !== null) return legacyLength;
-  }
-
   return normalizeContinuousLengthMm(dotsToMm(template.canvas_height_dots ?? template.canvasHeightDots), QL810W_DEFAULT_LENGTH_MM);
 }
 

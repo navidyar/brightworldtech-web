@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const techUnitModel = require('../models/techUnitModel');
 const unitExpandedFormModel = require('../models/unitExpandedFormModel');
 const unitAuditEventModel = require('../models/unitAuditEventModel');
@@ -19,11 +20,6 @@ class ApiUnitIntakeError extends Error {
 
 function normalizeText(value, maxLength = 120) {
   return String(value || '').trim().slice(0, maxLength);
-}
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function normalizeBoolean(value) {

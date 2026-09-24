@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const { pool } = require('../models/db');
 const apiUnitIntake = require('./apiUnitIntake');
 const apiScalarInventory = require('./apiScalarInventory');
@@ -25,11 +26,6 @@ class ApiUnitCommitError extends Error {
     this.code = code;
     this.details = details;
   }
-}
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function normalizeText(value, maxLength = 191) {

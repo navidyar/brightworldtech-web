@@ -1,5 +1,5 @@
 const { pool } = require('./db');
-const { getCanonicalCosmeticGrade, isNotYetGradedToken } = require('../services/cosmeticGradeNormalization');
+const { isNotYetGradedToken } = require('../services/cosmeticGradeNormalization');
 const { buildLotHierarchyOptions } = require('../services/lotHierarchyPresentation');
 const { COSMETIC_GRADE_BY_SYSTEM_VALUE_ID, SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 
@@ -258,31 +258,6 @@ function buildReportingWindow({ key, label, startDate = '', endDate = '' }) {
   };
 }
 
-function buildOutcomeWindowWhere(window, alias = 'uo') {
-  const whereParts = [
-    `${alias}.is_current = 1`,
-    `${alias}.outcome_code IN ('pass', 'fail')`
-  ];
-  const params = [];
-
-  if (window && window.startSql) {
-    whereParts.push(`${alias}.selected_at >= ?`);
-    params.push(window.startSql);
-  }
-
-  if (window && window.endSql) {
-    whereParts.push(`${alias}.selected_at < ?`);
-    params.push(window.endSql);
-  }
-
-  return {
-    whereSql: `WHERE ${whereParts.join(' AND ')}`,
-    andSql: `AND ${whereParts.join(' AND ')}`,
-    params
-  };
-}
-
-
 function buildCompletedUnitWindowWhere(window, gradeAlias = 'uga') {
   const whereParts = [
     `${gradeAlias}.is_current = 1`
@@ -519,10 +494,6 @@ async function getCompletionLotBreakdown(window) {
     completed: Number(row.completed_count || 0),
     weighted: Number(row.weighted_count || 0)
   }));
-}
-
-async function getCompletionLotTypeBreakdown(window) {
-  return getCompletionLotBreakdown(window);
 }
 
 async function getManagementCompletionData(filters = {}) {
@@ -1195,11 +1166,6 @@ async function getOverrideStats() {
 
 function normalizeGradeLabel(label, code) {
   const rawValue = String(label || code || '').trim();
-  const canonicalGrade = getCanonicalCosmeticGrade(rawValue);
-
-  if (canonicalGrade) {
-    return canonicalGrade;
-  }
 
   if (isNotYetGradedToken(rawValue)) {
     return 'Not Yet Graded';
@@ -1221,6 +1187,7 @@ async function getGradeBreakdown(filters = {}) {
         grade.config_value_id AS grade_id,
         grade_system.system_config_value_id AS grade_system_config_value_id,
         COALESCE(grade.label, grade.value, 'Unknown Grade') AS grade_label,
+        COALESCE(grade.sort_order, 999998) AS grade_sort_order,
         COUNT(*) AS unit_count
       FROM unit_grade_assessments uga
       INNER JOIN units u
@@ -1231,17 +1198,8 @@ async function getGradeBreakdown(filters = {}) {
         ON grade_system.config_value_id = grade.config_value_id
       WHERE uga.is_current = 1
         ${unitFilter.andSql}
-      GROUP BY grade.config_value_id, grade.label, grade.value, grade_system.system_config_value_id
-      ORDER BY
-        CASE grade_system.system_config_value_id
-          WHEN ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_A} THEN 10
-          WHEN ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_AB} THEN 20
-          WHEN ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_B} THEN 30
-          WHEN ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_C} THEN 40
-          WHEN ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_D} THEN 50
-          ELSE 999
-        END,
-        grade.label
+      GROUP BY grade.config_value_id, grade.label, grade.value, grade.sort_order, grade_system.system_config_value_id
+      ORDER BY grade_sort_order, grade.label
     `,
     unitFilter.params
   );

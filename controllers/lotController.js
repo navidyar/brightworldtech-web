@@ -7,6 +7,7 @@ const lotUnitFormProfileModel = require('../models/lotUnitFormProfileModel');
 const lotUnitBrowserLayoutModel = require('../models/lotUnitBrowserLayoutModel');
 const labelLibraryModel = require('../models/labelLibraryModel');
 const unitAmazonModel = require('../models/unitAmazonModel');
+const { isHtmxRequest } = require('../utils/htmxRequest');
 const {
   REQUIREMENT,
   UNIT_FORM_SECTIONS,
@@ -153,10 +154,6 @@ function getRequirementFormDataFromRequest(req) {
     requiredValue: pickFirstBodyValue(req.body.requiredValue),
     notes: String(req.body.notes || '').trim()
   };
-}
-
-function isHtmxRequest(req) {
-  return String(req.get('HX-Request') || '').toLowerCase() === 'true';
 }
 
 function sendHtmxRedirect(req, res, redirectUrl) {
@@ -311,8 +308,14 @@ function validateLotForm(formData, formOptions, currentLotId = null) {
     }
   }
 
-  if (formData.lotTypeConfigValueId && !Number.isInteger(Number(formData.lotTypeConfigValueId))) {
-    errors.push('Lot type must be valid.');
+  if (formData.lotTypeConfigValueId) {
+    const selectedLotTypeId = Number(formData.lotTypeConfigValueId);
+    const selectedLotTypeIsAvailable = Number.isInteger(selectedLotTypeId)
+      && (formOptions.lotTypes || []).some((lotType) => Number(lotType.config_value_id) === selectedLotTypeId);
+
+    if (!selectedLotTypeIsAvailable) {
+      errors.push('Choose an active Lot Type.');
+    }
   }
 
   if (formOptions.capabilities.hasRequirementPolicy) {
@@ -605,9 +608,9 @@ function buildLotUnitFormRuleSections(profile, selectionMaps) {
       .filter((field) => field.section === section.key)
       .map((field) => {
         const resolvedField = profile.fieldsByKey.get(field.key);
-        const visibilityMode = String(
-          selectionMaps.visibilityModes[field.key] ?? VISIBILITY.INHERIT
-        );
+        const visibilityMode = field.inheritVisibilityFromFieldKey
+          ? VISIBILITY.INHERIT
+          : String(selectionMaps.visibilityModes[field.key] ?? VISIBILITY.INHERIT);
         const requirementMode = String(
           selectionMaps.requirementModes[field.key] ?? REQUIREMENT.INHERIT
         );
@@ -1748,7 +1751,8 @@ async function renderEditLotModal(req, res, next) {
     const lot = await lotModel.getLotById(lotId);
     const formOptions = await lotModel.getLotFormOptions({
       currentLotId: lotId,
-      includeParentLotIds: lot?.parent_lot_id ? [lot.parent_lot_id] : []
+      includeParentLotIds: lot?.parent_lot_id ? [lot.parent_lot_id] : [],
+      currentLotTypeConfigValueId: lot?.lot_type_config_value_id || null
     });
 
     if (!lot) {
@@ -1782,7 +1786,8 @@ async function updateLotModal(req, res, next) {
     const lot = await lotModel.getLotById(lotId);
     const formOptions = await lotModel.getLotFormOptions({
       currentLotId: lotId,
-      includeParentLotIds: lot?.parent_lot_id ? [lot.parent_lot_id] : []
+      includeParentLotIds: lot?.parent_lot_id ? [lot.parent_lot_id] : [],
+      currentLotTypeConfigValueId: lot?.lot_type_config_value_id || null
     });
 
     if (!Number.isInteger(lotId) || lotId <= 0 || !lot) {
@@ -1824,7 +1829,8 @@ async function updateLotModal(req, res, next) {
       const lot = await lotModel.getLotById(lotId);
       const formOptions = await lotModel.getLotFormOptions({
         currentLotId: lotId,
-        includeParentLotIds: lot?.parent_lot_id ? [lot.parent_lot_id] : []
+        includeParentLotIds: lot?.parent_lot_id ? [lot.parent_lot_id] : [],
+        currentLotTypeConfigValueId: lot?.lot_type_config_value_id || null
       });
 
       return res.status(400).render('fragments/lot-form-modal', {

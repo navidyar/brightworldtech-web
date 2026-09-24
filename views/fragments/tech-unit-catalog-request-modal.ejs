@@ -95,22 +95,36 @@
             </div>
           <% } %>
 
+          <% if (safeContext.interpretedProcessor && safeContext.interpretedProcessor.rawValue && safeContext.interpretedProcessor.changed) { %>
+            <div class="message info">
+              <p><strong>BWTDallas interpreted the observed Processor string as:</strong> <%= [
+                safeContext.requestedProcessorType ? `Type: ${safeContext.requestedProcessorType}` : '',
+                safeContext.interpretedProcessor.modelCode ? `Processor: ${safeContext.interpretedProcessor.modelCode}` : '',
+                safeContext.interpretedProcessor.family ? `Family: ${safeContext.interpretedProcessor.family}` : '',
+                safeContext.interpretedProcessor.generation ? `Generation: ${safeContext.interpretedProcessor.generation}` : '',
+                safeContext.requestedProcessorSpeedGhz ? `Speed: ${safeContext.requestedProcessorSpeedGhz} GHz` : ''
+              ].filter(Boolean).join(' · ') %></p>
+              <p>The original observed string is still retained in the request.</p>
+            </div>
+          <% } %>
+
           <form class="app-form unit-request-form" method="post" action="/tech/unit-catalog-requests/processor" hx-post="/tech/unit-catalog-requests/processor" hx-target="#modal-root" hx-swap="innerHTML">
             <input type="hidden" name="unitModelId" value="<%= safeContext.unitModelId %>" />
 
             <div class="form-grid">
               <label class="form-field">
-                <span>Observed Processor Type</span>
-                <input type="text" name="requestedProcessorType" value="<%= requestedProcessorType || '' %>" maxlength="100" required placeholder="Example: Intel, AMD, Apple, Qualcomm" />
+                <span>Observed Processor Type <small>(optional if included below)</small></span>
+                <input type="text" name="requestedProcessorType" value="<%= requestedProcessorType || '' %>" maxlength="100" placeholder="Example: Intel, AMD, Apple, Qualcomm" />
               </label>
               <label class="form-field">
                 <span>Observed Processor</span>
-                <input type="text" name="requestedProcessorName" value="<%= requestedProcessorName || '' %>" maxlength="150" required placeholder="Exact value from BIOS, ScanTools, or TechTools" />
+                <input type="text" name="requestedProcessorName" value="<%= requestedProcessorName || '' %>" maxlength="150" required placeholder="Example: Intel(R) Core(TM) i9-10885H CPU @ 2.40GHz" />
+                <small class="field-hint">Paste the processor exactly as shown. BWTDallas will interpret the string and search the catalog automatically.</small>
               </label>
               <label class="form-field">
-                <span>Observed Processor Speed GHz</span>
-                <input type="number" name="requestedProcessorSpeedGhz" value="<%= requestedProcessorSpeedGhz || '' %>" min="0.01" max="99.99" step="0.01" required placeholder="Example: 2.40" />
-                <small class="field-hint">Enter the numeric GHz value reported by the source tool or BIOS.</small>
+                <span>Observed Processor Speed GHz <small>(optional if included below)</small></span>
+                <input type="number" name="requestedProcessorSpeedGhz" value="<%= requestedProcessorSpeedGhz || '' %>" min="0.01" max="99.99" step="0.01" placeholder="Example: 2.40" />
+                <small class="field-hint">Enter it separately, or paste a Processor string containing a GHz value.</small>
               </label>
             </div>
 

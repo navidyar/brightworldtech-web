@@ -1,4 +1,5 @@
 const dashboardModel = require('../models/dashboardModel');
+const accessPolicy = require('../config/accessPolicy');
 
 function formatDashboardTitle(key) {
   return String(key || '')
@@ -88,6 +89,17 @@ async function buildDashboardPayload(req, dashboardKey = null) {
 async function renderDashboardHome(req, res, next) {
   try {
     const dashboards = getAccessibleDashboards(res);
+    const canAccessFeature = res.locals.canAccessFeature;
+
+    if (typeof canAccessFeature !== 'function' || !canAccessFeature('operationsDashboard')) {
+      const primaryRole = accessPolicy.getPrimaryRole(req.currentUser?.roles || []);
+      const preferredDashboardKey = primaryRole === 'management' ? 'management' : 'tech';
+      const preferredDashboard = dashboards.find((dashboard) => dashboard.key === preferredDashboardKey) || dashboards[0] || null;
+
+      if (preferredDashboard) {
+        return res.redirect(`/dashboards/${encodeURIComponent(preferredDashboard.key)}`);
+      }
+    }
 
     if (dashboards.length === 1) {
       return res.redirect(`/dashboards/${encodeURIComponent(dashboards[0].key)}`);

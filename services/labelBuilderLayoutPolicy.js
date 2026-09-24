@@ -175,19 +175,10 @@ function normalizeTextStyle(style = {}) {
     fontWeight,
     align,
     textCase,
-    overflow: style.overflow === 'clip' ? 'clip' : 'shrink'
+    overflow: 'wrap'
   };
 }
 
-function constrainTextStyleToElement(style, element) {
-  const quarterTurn = Number(element?.rotation) === 90 || Number(element?.rotation) === 270;
-  const localHeight = quarterTurn ? Number(element?.width) : Number(element?.height);
-  if (!Number.isFinite(localHeight) || localHeight < 6) return style;
-  return {
-    ...style,
-    fontSize: Math.min(Number(style?.fontSize || DEFAULT_LABEL_BUILDER_FONT_SIZE), Math.floor(localHeight))
-  };
-}
 
 function createBlankBuilderLayout({
   mediaWidthCode = DEFAULT_LABEL_BUILDER_MEDIA_CODE,
@@ -239,7 +230,7 @@ function normalizeBuilderElement(element, index, { width, height }) {
 
   if (type === 'static_text') {
     normalized.text = String(element.text ?? '').slice(0, 500);
-    normalized.style = constrainTextStyleToElement(normalizeTextStyle(element.style), normalized);
+    normalized.style = normalizeTextStyle(element.style);
   } else if (type === 'dynamic_text') {
     const field = String(element.source?.field || '').trim();
     normalized.source = {
@@ -248,10 +239,10 @@ function normalizeBuilderElement(element, index, { width, height }) {
       fallback: String(element.source?.fallback || '').slice(0, 160),
       format: 'plain'
     };
-    normalized.style = constrainTextStyleToElement(normalizeTextStyle(element.style), normalized);
+    normalized.style = normalizeTextStyle(element.style);
   } else if (type === 'composed_text') {
     normalized.parts = normalizePayloadParts(element.parts);
-    normalized.style = constrainTextStyleToElement(normalizeTextStyle(element.style), normalized);
+    normalized.style = normalizeTextStyle(element.style);
   } else if (type === 'image') {
     const assetKey = String(element.assetKey || '').trim().toLowerCase();
     normalized.assetKey = SHARED_ASSET_KEY_PATTERN.test(assetKey) ? assetKey : '';
@@ -300,13 +291,11 @@ function normalizeBuilderLayout(layout, {
     throw new LabelBuilderLayoutError(`Label layout must use schemaVersion ${LABEL_BUILDER_SCHEMA_VERSION}.`);
   }
 
-  const legacyWidthCode = String(layout.mediaPresetCode || '').split('_').slice(0, 2).join('_');
-  const resolvedMediaCode = String(mediaWidthCode || layout.mediaWidthCode || legacyWidthCode || '').trim();
+  const resolvedMediaCode = String(mediaWidthCode || layout.mediaWidthCode || '').trim();
   const media = findLabelBuilderMediaWidth(resolvedMediaCode);
   if (!media) throw new LabelBuilderLayoutError('Choose a supported continuous roll width.');
 
-  const legacyLengthMatch = String(layout.mediaPresetCode || '').match(/_(\d+(?:\.\d+)?)mm$/i);
-  const resolvedLengthMm = normalizeLengthMm(lengthMm ?? layout.lengthMm ?? legacyLengthMatch?.[1] ?? LABEL_BUILDER_DEFAULT_LENGTH_MM);
+  const resolvedLengthMm = normalizeLengthMm(lengthMm ?? layout.lengthMm ?? LABEL_BUILDER_DEFAULT_LENGTH_MM);
   const geometry = buildLabelBuilderGeometry(media.code, resolvedLengthMm);
   if (!geometry) throw new LabelBuilderLayoutError('The selected continuous media geometry is invalid.');
 
@@ -322,9 +311,9 @@ function normalizeBuilderLayout(layout, {
     return normalized;
   });
 
-  const { mediaPresetCode: _legacyPresetCode, ...rest } = layout;
+  const { mediaPresetCode: _retiredMediaPresetCode, ...currentLayout } = layout;
   return {
-    ...rest,
+    ...currentLayout,
     schemaVersion: LABEL_BUILDER_SCHEMA_VERSION,
     builderVersion: LABEL_BUILDER_VERSION,
     mediaWidthCode: media.code,
@@ -381,12 +370,6 @@ function inspectLayoutReadiness(layout) {
   }
   return { ready: issues.length === 0, issues };
 }
-
-function normalizeGridSize(value) {
-  const size = Number(value);
-  return LABEL_BUILDER_GRID_SIZES.includes(size) ? size : 5;
-}
-
 module.exports = {
   FINAL_ELEMENT_TYPES,
   DRAFT_ELEMENT_TYPES,
@@ -394,7 +377,6 @@ module.exports = {
   createBlankBuilderLayout,
   normalizeBuilderLayout,
   inspectLayoutReadiness,
-  normalizeGridSize,
   normalizeRotation,
   normalizeTextStyle,
   normalizePayload,

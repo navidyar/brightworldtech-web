@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const unitRequestModel = require('../models/unitRequestModel');
 const catalogRequestAccessPolicy = require('./catalogRequestAccessPolicy');
 
@@ -11,11 +12,6 @@ class ApiCatalogRequestError extends Error {
     this.code = code;
     this.details = details;
   }
-}
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function normalizeText(value, maxLength = 1000) {

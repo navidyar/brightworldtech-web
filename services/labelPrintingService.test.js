@@ -3,7 +3,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
-  LABEL_PRINTERS,
   buildUnitLabelContent,
   buildBrotherQl810wRaster,
   buildCode39Bars,
@@ -23,12 +22,6 @@ const SAMPLE_UNIT = Object.freeze({
 });
 
 const SAMPLE_LOT = Object.freeze({ lot_name: 'Production Lot' });
-
-test('label printing retains the configured fallback printer definition', () => {
-  assert.equal(LABEL_PRINTERS.length >= 1, true);
-  assert.equal(LABEL_PRINTERS[0].queue, 'BWT_NavidPrinter');
-  assert.equal(LABEL_PRINTERS[0].printerProfileCode, 'brother_ql810w_300dpi');
-});
 
 test('unit label content uses authoritative unit identity and compact specifications', () => {
   const content = buildUnitLabelContent(SAMPLE_UNIT, SAMPLE_LOT);

@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const { pool } = require('../models/db');
 const techUnitModel = require('../models/techUnitModel');
 const unitExpandedFormModel = require('../models/unitExpandedFormModel');
@@ -31,6 +32,7 @@ const {
   loadCurrentMemoryRows,
   buildMemoryPlan,
   applyMemoryPlan,
+  syncMemorySummary,
   toFormMemoryModules,
   memorySpeedSummary
 } = require('./apiMemoryInventory');
@@ -41,6 +43,7 @@ const {
   loadCurrentStorageRows,
   buildStoragePlan,
   applyStoragePlan,
+  syncStorageSummary,
   toFormStorageDevices,
   storageDetailSummary
 } = require('./apiStorageInventory');
@@ -116,11 +119,6 @@ class ApiScalarInventoryError extends Error {
     this.code = code;
     this.details = details;
   }
-}
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function normalizeText(value, maxLength) {
@@ -1167,10 +1165,17 @@ async function ingestScalarInventory({
     if (resolvedMemoryObservation && memoryPlan) {
       const beforeSpeedText = memorySpeedSummary(currentMemoryRows);
       const memoryChanged = await applyMemoryPlan(connection, safeUnitId, memoryPlan);
-      if (memoryChanged) {
+      const afterMemoryRows = memoryChanged
+        ? await loadCurrentMemoryRows(connection, safeUnitId)
+        : currentMemoryRows;
+      const memorySummary = memoryPlan.status === 'ignored_unknown'
+        ? { totalGb: null, ramTypeConfigValueId: null, changed: false }
+        : await syncMemorySummary(connection, safeUnitId, afterMemoryRows);
+      if (memoryChanged || memorySummary.changed) {
         changedCount += 1;
-        const afterMemoryRows = await loadCurrentMemoryRows(connection, safeUnitId);
         afterFormData.memoryModules = toFormMemoryModules(afterMemoryRows);
+        afterFormData.ramGb = memorySummary.totalGb === null ? '' : String(memorySummary.totalGb);
+        afterFormData.ramTypeConfigValueId = memorySummary.ramTypeConfigValueId ? String(memorySummary.ramTypeConfigValueId) : '';
         const afterSpeedText = memorySpeedSummary(afterMemoryRows);
         if (beforeSpeedText !== afterSpeedText) {
           memoryAuditChange = {
@@ -1217,10 +1222,19 @@ async function ingestScalarInventory({
     if (resolvedStorageObservation && storagePlan) {
       const beforeStorageDetailText = storageDetailSummary(currentStorageRows);
       const storageChanged = await applyStoragePlan(connection, safeUnitId, storagePlan);
-      if (storageChanged) {
+      const afterStorageRows = storageChanged
+        ? await loadCurrentStorageRows(connection, safeUnitId)
+        : currentStorageRows;
+      const storageSummary = storagePlan.status === 'ignored_unknown'
+        ? { totalGb: null, storageTypeConfigValueId: null, changed: false }
+        : await syncStorageSummary(connection, safeUnitId, afterStorageRows, {
+          emptyTotalGb: resolvedStorageObservation.state === 'confirmed_absent' ? 0 : null
+        });
+      if (storageChanged || storageSummary.changed) {
         changedCount += 1;
-        const afterStorageRows = await loadCurrentStorageRows(connection, safeUnitId);
         afterFormData.storageDevices = toFormStorageDevices(afterStorageRows);
+        afterFormData.storageGb = storageSummary.totalGb === null ? '' : String(storageSummary.totalGb);
+        afterFormData.storageTypeConfigValueId = storageSummary.storageTypeConfigValueId ? String(storageSummary.storageTypeConfigValueId) : '';
         const afterStorageDetailText = storageDetailSummary(afterStorageRows);
         if (beforeStorageDetailText !== afterStorageDetailText) {
           storageAuditChange = {

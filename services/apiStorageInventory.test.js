@@ -10,7 +10,9 @@ const {
   currentMatchesStoredObservation,
   determineStorageOwnership,
   buildStoragePlan,
-  physicalIdentityChanged
+  physicalIdentityChanged,
+  summarizeCurrentStorageRows,
+  syncStorageSummary
 } = require('./apiStorageInventory');
 
 function current(overrides = {}) {
@@ -162,7 +164,7 @@ test('TechTools current storage has final Tool authority over later ScanTools da
     currentRows: [current()],
     latestAppliedValue: oldObservation,
     latestAppliedToolSource: 'techtools',
-    incomingToolSource: 'scantools'
+    incomingToolSource: 'scantool'
   });
   assert.equal(plan.status, 'unchanged');
   assert.equal(plan.reason, 'techtools_current_storage_is_final');
@@ -213,4 +215,34 @@ test('unknown storage never overwrites current storage', () => {
   });
   assert.equal(plan.status, 'ignored_unknown');
   assert.equal(plan.mode, 'none');
+});
+
+
+test('current storage rows synchronize the Unit summary used by Browser, exports, labels, and lifecycle views', async () => {
+  const summary = summarizeCurrentStorageRows([
+    current({ unit_storage_device_id: 1, size_gb: 512, storage_type_config_value_id: 10 }),
+    current({ unit_storage_device_id: 2, size_gb: 512, storage_type_config_value_id: 10 })
+  ]);
+  assert.deepEqual(summary, { totalGb: 1024, storageTypeConfigValueId: 10 });
+  assert.deepEqual(summarizeCurrentStorageRows([], { emptyTotalGb: 0 }), { totalGb: 0, storageTypeConfigValueId: null });
+  assert.deepEqual(
+    summarizeCurrentStorageRows([
+      current({ unit_storage_device_id: 1, size_gb: 512, storage_type_config_value_id: 10 }),
+      current({ unit_storage_device_id: 2, size_gb: 512, storage_type_config_value_id: 11 })
+    ]),
+    { totalGb: 1024, storageTypeConfigValueId: null }
+  );
+
+  const queries = [];
+  const connection = {
+    async query(sql, params) {
+      queries.push({ sql: String(sql), params });
+      return [{ affectedRows: 1 }];
+    }
+  };
+  const result = await syncStorageSummary(connection, 42, [current({ size_gb: 512, storage_type_config_value_id: 10 })]);
+  assert.equal(result.changed, true);
+  assert.equal(result.totalGb, 512);
+  assert.match(queries[0].sql, /UPDATE units[\s\S]*storage_gb = \?, storage_type_config_value_id = \?/);
+  assert.deepEqual(queries[0].params, [512, 10, 42, 512, 10]);
 });

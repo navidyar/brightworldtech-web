@@ -58,6 +58,14 @@ test('manual Storage size/type edits receive a root-installed stale-detail safeg
   assert.doesNotMatch(migration, /log_bin_trust_function_creators|SUPER privilege/i);
 });
 
+test('storage Tool rows synchronize the shared Unit summary consumed by downstream presentation surfaces', () => {
+  const service = read('services/apiScalarInventory.js');
+  const storage = read('services/apiStorageInventory.js');
+  assert.match(storage, /async function syncStorageSummary/);
+  assert.match(storage, /storage_gb = \?, storage_type_config_value_id = \?/);
+  assert.match(service, /syncStorageSummary\(connection, safeUnitId, afterStorageRows/);
+});
+
 test('storage observations are immutable run observations and Unknown never erases current data', () => {
   const service = read('services/apiScalarInventory.js');
   const storage = read('services/apiStorageInventory.js');

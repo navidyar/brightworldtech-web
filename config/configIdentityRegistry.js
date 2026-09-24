@@ -59,7 +59,7 @@ const CATEGORY_BINDINGS = Object.freeze([
   [SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_TYPES, 'Storage Types', ['storage_types', 'storage_type', 'ssd_types', 'ssd_type']],
   [SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_WIPE_STATUSES, 'Storage Wipe Statuses', ['storage_wipe_statuses', 'storage_wipe_status', 'wipe_statuses', 'wipe_status']],
   [SYSTEM_CONFIG_CATEGORY_IDS.OPERATING_SYSTEMS, 'Operating Systems', ['operating_systems', 'operating_system']],
-  [SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, 'Cosmetic Grades', ['cosmetic_grades', 'overall_unit_grades', 'unit_grades', 'unit_grade', 'grades']],
+  [SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, 'Unit Grades', ['cosmetic_grades', 'overall_unit_grades', 'unit_grades', 'unit_grade', 'grades']],
   [SYSTEM_CONFIG_CATEGORY_IDS.ABSOLUTE_STATUSES, 'Absolute Statuses', ['absolute_statuses', 'absolute_status']],
   [SYSTEM_CONFIG_CATEGORY_IDS.TOUCHSCREEN_STATUSES, 'Touchscreen Statuses', ['touchscreen_statuses', 'touchscreen_status']],
   [SYSTEM_CONFIG_CATEGORY_IDS.KEYBOARD_LANGUAGES, 'Keyboard Languages', ['keyboard_languages', 'keyboard_language']],
@@ -182,6 +182,7 @@ const SYSTEM_CONFIG_VALUE_IDS = Object.freeze({
   COSMETIC_GRADE_B: 503,
   COSMETIC_GRADE_C: 504,
   COSMETIC_GRADE_D: 505,
+  COSMETIC_GRADE_S: 506,
 
   DISPLAY_TYPE_LCD: 601,
   DISPLAY_TYPE_OLED: 602,
@@ -281,6 +282,7 @@ const VALUE_BINDINGS = Object.freeze([
   { systemId: SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_ELS, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.PRODUCTION_WEIGHT_TYPES, name: 'ELS production weight', legacyCodes: ['production_weight_els', 'els'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.PRODUCTION_WEIGHT_CONFIGURATION_TASK, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.PRODUCTION_WEIGHT_TYPES, name: 'Configuration Task production weight', legacyCodes: ['production_weight_configuration_task', 'configuration_task'], required: false },
 
+  { systemId: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_S, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, name: 'Cosmetic Grade S (Supreme)', legacyCodes: ['s', 'grade_s', 'cosmetic_grade_s', 'supreme', 'supreme_grade'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_A, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, name: 'Cosmetic Grade A', legacyCodes: ['a', 'grade_a', 'cosmetic_grade_a'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_AB, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, name: 'Cosmetic Grade AB', legacyCodes: ['ab', 'grade_ab', 'cosmetic_grade_ab'], required: false },
   { systemId: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_B, categorySystemId: SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES, name: 'Cosmetic Grade B', legacyCodes: ['b', 'grade_b', 'cosmetic_grade_b'], required: false },
@@ -319,6 +321,7 @@ const POLICY_KEY_BY_SYSTEM_VALUE_ID = Object.freeze({
 });
 
 const COSMETIC_GRADE_BY_SYSTEM_VALUE_ID = Object.freeze({
+  [SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_S]: 'S',
   [SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_A]: 'A',
   [SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_AB]: 'AB',
   [SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_B]: 'B',
@@ -334,16 +337,7 @@ const IDENTIFIER_KEY_BY_SYSTEM_VALUE_ID = Object.freeze({
   [SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_SYSTEM_UUID]: 'system_uuid'
 });
 
-const CATEGORY_BY_SYSTEM_ID = new Map(CATEGORY_BINDINGS.map((entry) => [entry.systemId, entry]));
-const VALUE_BY_SYSTEM_ID = new Map(VALUE_BINDINGS.map((entry) => [entry.systemId, entry]));
 
-function getCategoryBinding(systemId) {
-  return CATEGORY_BY_SYSTEM_ID.get(Number(systemId)) || null;
-}
-
-function getValueBinding(systemId) {
-  return VALUE_BY_SYSTEM_ID.get(Number(systemId)) || null;
-}
 
 module.exports = {
   CATEGORY_BINDINGS,
@@ -356,7 +350,5 @@ module.exports = {
   SYSTEM_CONFIG_VALUE_IDS,
   SYSTEM_VALUE_ID_BY_OPERATOR_KEY,
   SYSTEM_VALUE_ID_BY_REQUIREMENT_KEY,
-  VALUE_BINDINGS,
-  getCategoryBinding,
-  getValueBinding
+  VALUE_BINDINGS
 };

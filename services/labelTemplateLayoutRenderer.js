@@ -45,6 +45,30 @@ function normalizeComposedStaticText(value, maxLength = MAX_TEXT_LENGTH) {
     .slice(0, maxLength);
 }
 
+function normalizeWrappedText(value, maxLength = MAX_TEXT_LENGTH) {
+  return String(value ?? '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\r\n?/g, '\n')
+    .replace(/[^\x20-\x7E\n]/g, ' ')
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .trim()
+    .slice(0, maxLength);
+}
+
+function applyTextCasePreservingLines(value, textCase) {
+  const text = normalizeWrappedText(value);
+  switch (String(textCase || 'plain').trim().toLowerCase()) {
+    case 'plain': return text;
+    case 'upper': return text.toUpperCase();
+    case 'lower': return text.toLowerCase();
+    case 'camel': return text.toLowerCase().replace(/\b[a-z]+\b/g, (word) => word.charAt(0).toUpperCase() + word.slice(1));
+    default: throw new Error(`Unsupported label field format: ${textCase}.`);
+  }
+}
+
 function normalizeLayout(layout) {
   if (!layout || typeof layout !== 'object' || Number(layout.schemaVersion) !== 1) {
     throw new Error('Label template layout must use schemaVersion 1.');
@@ -176,7 +200,7 @@ function normalizeBox(element = {}) {
 
 function normalizeTextStyle(style = {}, box) {
   const requestedSize = Number(style.fontSize || 20);
-  const fontSize = Math.max(6, Math.min(Number.isFinite(requestedSize) ? requestedSize : 20, box.height));
+  const fontSize = Math.max(6, Math.min(Number.isFinite(requestedSize) ? requestedSize : 20, 300));
   const weight = Number(style.fontWeight || 400);
   const align = ['left', 'center', 'right'].includes(style.align) ? style.align : 'left';
   const fontFamily = FONT_FAMILY_CODES.has(String(style.fontFamily || '').trim())
@@ -191,7 +215,7 @@ function normalizeTextStyle(style = {}, box) {
     fontWeight: Number.isFinite(weight) ? Math.max(100, Math.min(900, weight)) : 400,
     align,
     textCase,
-    overflow: style.overflow === 'shrink' ? 'shrink' : 'clip'
+    overflow: ['wrap', 'clip', 'shrink'].includes(style.overflow) ? style.overflow : 'wrap'
   };
 }
 
@@ -212,23 +236,91 @@ function fitText(value, box, style) {
   };
 }
 
-function renderTextSvg(value, element) {
+function estimateTextWidth(text, fontSize, fontFamily = '') {
+  const mono = /Mono/i.test(String(fontFamily || ''));
+  if (mono) return String(text || '').length * fontSize * 0.6;
+  let units = 0;
+  for (const char of String(text || '')) {
+    if (/\s/.test(char)) units += 0.33;
+    else if (/[ilI1|!.,:'`]/.test(char)) units += 0.3;
+    else if (/[MW@#%&]/.test(char)) units += 0.9;
+    else if (/[A-Z0-9]/.test(char)) units += 0.62;
+    else units += 0.54;
+  }
+  return units * fontSize;
+}
+
+function breakLongWord(word, boxWidth, style) {
+  const parts = [];
+  let current = '';
+  for (const char of String(word || '')) {
+    const candidate = current + char;
+    if (current && estimateTextWidth(candidate, style.fontSize, style.fontFamily) > boxWidth) {
+      parts.push(current);
+      current = char;
+    } else {
+      current = candidate;
+    }
+  }
+  if (current) parts.push(current);
+  return parts.length ? parts : [''];
+}
+
+function wrapTextLines(value, box, style) {
+  const text = normalizeWrappedText(value);
+  if (!text) return [];
+  const lines = [];
+  for (const paragraph of text.split(/\r?\n/)) {
+    if (!paragraph) {
+      lines.push('');
+      continue;
+    }
+    let line = '';
+    for (const word of paragraph.trim().split(/\s+/)) {
+      const chunks = estimateTextWidth(word, style.fontSize, style.fontFamily) <= box.width
+        ? [word]
+        : breakLongWord(word, box.width, style);
+      for (const chunk of chunks) {
+        const candidate = line ? `${line} ${chunk}` : chunk;
+        if (line && estimateTextWidth(candidate, style.fontSize, style.fontFamily) > box.width) {
+          lines.push(line);
+          line = chunk;
+        } else {
+          line = candidate;
+        }
+      }
+    }
+    lines.push(line);
+  }
+  return lines;
+}
+
+function renderTextSvg(value, element, { allowShrink = false } = {}) {
   const box = normalizeBox(element);
   const style = normalizeTextStyle(element.style, box);
-  const casedValue = applyFormat(value, style.textCase);
-  const fitted = fitText(casedValue, box, style);
-  if (!fitted.text) return '';
-
+  const casedValue = applyTextCasePreservingLines(value, style.textCase);
   const anchor = style.align === 'center' ? 'middle' : style.align === 'right' ? 'end' : 'start';
   const x = style.align === 'center' ? box.x + (box.width / 2) : style.align === 'right' ? box.x + box.width : box.x;
-  const baseline = box.y + Math.min(box.height, fitted.fontSize);
-  const mediumWeight = style.fontWeight === 500;
-  const renderWeight = mediumWeight ? 400 : style.fontWeight;
-  const mediumStrokeWidth = mediumWeight ? Math.max(0.7, Math.min(2, fitted.fontSize * 0.025)) : 0;
+  const effectiveStyle = allowShrink ? style : { ...style, overflow: 'wrap' };
+  const fitted = allowShrink ? fitText(casedValue, box, effectiveStyle) : null;
+  const fontSize = fitted ? fitted.fontSize : effectiveStyle.fontSize;
+  const lines = fitted ? (fitted.text ? [fitted.text] : []) : wrapTextLines(casedValue, box, effectiveStyle);
+  if (!lines.length) return '';
+
+  const lineHeight = fontSize * 1.05;
+  const maxLines = Math.max(1, Math.floor(box.height / lineHeight));
+  const visibleLines = lines.slice(0, maxLines);
+  const blockHeight = visibleLines.length * lineHeight;
+  const firstBaseline = box.y + ((box.height - blockHeight) / 2) + (fontSize * 0.82);
+  const mediumWeight = effectiveStyle.fontWeight === 500;
+  const renderWeight = mediumWeight ? 400 : effectiveStyle.fontWeight;
+  const mediumStrokeWidth = mediumWeight ? Math.max(0.7, Math.min(2, fontSize * 0.025)) : 0;
   const mediumStroke = mediumWeight
     ? ` stroke="#000000" stroke-width="${mediumStrokeWidth.toFixed(2)}" paint-order="stroke fill" stroke-linejoin="round"`
     : '';
-  return `<text x="${x}" y="${baseline}" font-family="${escapeXml(style.fontFamily)}" font-size="${fitted.fontSize}" font-weight="${renderWeight}" text-anchor="${anchor}" fill="#000000"${mediumStroke}>${escapeXml(fitted.text)}</text>`;
+  const clipId = `text_clip_${String(element.id || 'region').replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+  const tspans = visibleLines.map((line, index) => `<tspan x="${x}" y="${firstBaseline + (index * lineHeight)}">${escapeXml(line)}</tspan>`).join('');
+  return `<defs><clipPath id="${clipId}"><rect x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" /></clipPath></defs><g clip-path="url(#${clipId})"><text font-family="${escapeXml(effectiveStyle.fontFamily)}" font-size="${fontSize}" font-weight="${renderWeight}" text-anchor="${anchor}" fill="#000000"${mediumStroke}>${tspans}</text></g>`;
 }
 
 function buildBarcodeSvg(value, element) {
@@ -264,7 +356,7 @@ function buildBarcodeSvg(value, element) {
     height: textHeight,
     style: { fontFamily: 'Liberation Sans', fontSize: Math.min(humanReadableFontSize, Math.max(6, textHeight - 2)), fontWeight: 700, align: 'center', overflow: 'shrink' }
   };
-  return `${bars}${renderTextSvg(safeValue, textElement)}`;
+  return `${bars}${renderTextSvg(safeValue, textElement, { allowShrink: true })}`;
 }
 
 function renderImageSvg(element, assetDataUris) {

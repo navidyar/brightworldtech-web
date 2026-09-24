@@ -14,14 +14,11 @@ function buildCurrentHardwareFormAuthority({
 
   function buildField(fieldKey) {
     const toolOwned = owned.has(fieldKey);
-    const locked = lotRequiresTools || toolOwned;
     return Object.freeze({
       fieldKey,
-      locked,
+      locked: false,
       toolOwned,
-      reason: lotRequiresTools
-        ? 'lot_requires_tools'
-        : (toolOwned ? 'tool_populated_current_cycle' : 'manual_allowed')
+      reason: toolOwned ? 'tool_populated_editable' : 'manual_allowed'
     });
   }
 
@@ -34,24 +31,8 @@ function buildCurrentHardwareFormAuthority({
 }
 
 
-function applyCurrentHardwareAuthorityToSubmission({ formData = {}, existingFormData = null, authority = null, mode = 'create' } = {}) {
-  const result = { ...formData };
-  const existing = existingFormData || {};
-  const isEdit = mode === 'edit';
-
-  if (authority?.memory?.locked) {
-    result.ramGb = isEdit ? existing.ramGb : '';
-    result.ramTypeConfigValueId = isEdit ? existing.ramTypeConfigValueId : '';
-    result.memoryModules = isEdit && Array.isArray(existing.memoryModules) ? existing.memoryModules : [];
-  }
-
-  if (authority?.storage?.locked) {
-    result.storageGb = isEdit ? existing.storageGb : '';
-    result.storageTypeConfigValueId = isEdit ? existing.storageTypeConfigValueId : '';
-    result.storageDevices = isEdit && Array.isArray(existing.storageDevices) ? existing.storageDevices : [];
-  }
-
-  return result;
+function applyCurrentHardwareAuthorityToSubmission({ formData = {} } = {}) {
+  return { ...formData };
 }
 
 module.exports = {

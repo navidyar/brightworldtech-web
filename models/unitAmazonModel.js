@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const { pool } = require('./db');
 const { getConfigValueIdBySystemId } = require('./configLookupModel');
 const lotUnitFormProfileModel = require('./lotUnitFormProfileModel');
@@ -16,11 +17,6 @@ const AMAZON_DETAIL_FIELDS = Object.freeze([
   ['pallet_number', 'palletNumber', 150],
   ['buyer_comments', 'buyerComments', 5000]
 ]);
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
 
 function normalizeText(value, maxLength) {
   const normalized = String(value == null ? '' : value).trim();
@@ -226,21 +222,6 @@ async function saveAmazonDetailsForUnitWithConnection(connection, {
     ]
   );
 }
-
-async function saveAmazonDetailsForUnit({ unitId, formData, currentUserId }) {
-  const connection = await pool.getConnection();
-  try {
-    await connection.beginTransaction();
-    await saveAmazonDetailsForUnitWithConnection(connection, { unitId, formData, currentUserId });
-    await connection.commit();
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
-}
-
 async function getLotAmazonPolicy(destinationLotId, connection = pool) {
   const safeLotId = normalizePositiveInteger(destinationLotId);
   if (!safeLotId) return { generateAmazonAssetTag: false, palletNumberVisible: false };
@@ -442,12 +423,6 @@ async function searchDirectLotPalletNumbers(lotId, search = '', limit = 25, conn
     hasMore: rows.length > safeLimit
   };
 }
-
-async function listDirectLotPalletNumbers(lotId, connection = pool) {
-  const result = await searchDirectLotPalletNumbers(lotId, '', 50, connection);
-  return result.values;
-}
-
 async function countDirectLotUnitsMissingAmazonAssetTag(lotId, connection = pool) {
   const safeLotId = normalizePositiveInteger(lotId);
   if (!safeLotId) return 0;
@@ -530,9 +505,7 @@ module.exports = {
   getAmazonDetailsByUnitIds,
   getBlankAmazonFormData,
   getLotAmazonPolicy,
-  listDirectLotPalletNumbers,
   searchDirectLotPalletNumbers,
   normalizeAmazonAssetTag,
-  saveAmazonDetailsForUnit,
   saveAmazonDetailsForUnitWithConnection
 };

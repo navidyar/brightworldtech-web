@@ -1,12 +1,8 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const { pool } = require('./db');
 const unitAuditEventModel = require('./unitAuditEventModel');
-
-function normalizePositiveInteger(value) {
-  const numeric = Number(value);
-  return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null;
-}
 
 async function isQcRequirementSchemaReady(connection = pool) {
   const [rows] = await connection.query(

@@ -474,6 +474,15 @@ async function lockQcReviewReversionTargetWithConnection(connection, {
     throw error;
   }
 
+  if (String(state.decision_code || '').trim().toLowerCase() === 'rejected') {
+    const correction = await unitQcCorrectionModel.getLatestCorrectionForQcCheck(safeQcCheckId, connection);
+    if (correction) {
+      const error = new Error('This Quality Control rejection can no longer be reverted because the technician already submitted a correction and returned the Unit for QC recheck.');
+      error.code = 'BWT_QC_REVERSION_WORKFLOW_ADVANCED';
+      throw error;
+    }
+  }
+
   return state;
 }
 

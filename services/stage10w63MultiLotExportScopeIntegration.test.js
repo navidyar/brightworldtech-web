@@ -21,6 +21,16 @@ test('Export Scope uses independent checkboxes for the parent and each direct ch
   assert.match(controller, /description: `Includes \$\{childLot\.lot_name\} and anything below that child Lot\.`/);
 });
 
+
+test('Lot Details loads the shared export client before Lot-specific export behavior', () => {
+  const detailPage = read('views/pages/management-lot-detail.ejs');
+  const sharedClientIndex = detailPage.indexOf('/js/unit-export-shared.js?v=20260921-cleanup-stage2b');
+  const lotClientIndex = detailPage.indexOf('/js/unit-export.js?v=20260921-cleanup-stage2b');
+
+  assert.ok(sharedClientIndex > 0);
+  assert.ok(lotClientIndex > sharedClientIndex);
+});
+
 test('scope refresh submits every checked Lot and preserves selected export columns', () => {
   const exportScript = read('public/js/unit-export.js');
 

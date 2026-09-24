@@ -1,16 +1,12 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 class BulkLabelPrintSelectionError extends Error {
   constructor(messages) {
     super(Array.isArray(messages) && messages.length ? messages[0] : 'Bulk label selection is invalid.');
     this.name = 'BulkLabelPrintSelectionError';
     this.messages = Array.isArray(messages) ? messages : [String(messages || this.message)];
   }
-}
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function canOfferBulkLabelPrint(filters = {}) {

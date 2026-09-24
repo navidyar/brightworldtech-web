@@ -47,6 +47,7 @@ test('Processors Needing Review exposes Edit and Admin duplicate-repair actions 
 test('processor editing keeps canonical metadata separate and prevents rename-to-duplicate mistakes', () => {
   const modal = read('views/fragments/processor-catalog-edit-modal.ejs');
   const model = read('models/processorCatalogModel.js');
+  const controller = read('controllers/processorCatalogController.js');
 
   assert.match(modal, /name="modelCode"/);
   assert.match(modal, /name="legacyFamily"/);
@@ -57,6 +58,8 @@ test('processor editing keeps canonical metadata separate and prevents rename-to
   assert.match(model, /LOWER\(TRIM\(model_code\)\) = LOWER\(TRIM\(\?\)\)/);
   assert.match(model, /Resolve Duplicate/);
   assert.match(model, /autoAssignProcessorFamilyMembershipWithConnection/);
+  assert.match(controller, /requiresProcessorInterpretationReview/);
+  assert.match(controller, /res\.status\(200\)\.render\('fragments\/processor-catalog-edit-modal'/);
 });
 
 test('processor merge transfers live references, collapses duplicate relationships, and permanently deletes the source', () => {

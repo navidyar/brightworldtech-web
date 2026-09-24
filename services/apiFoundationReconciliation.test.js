@@ -68,7 +68,8 @@ test('Tool UUID ingestion is conservative and does not silently overwrite establ
   assert.match(unitModel, /applyToolSystemUuidIdentifier/);
   assert.match(unitModel, /BWT_SYSTEM_UUID_IDENTITY_CONFLICT/);
   assert.match(inventory, /SYSTEM_UUID_IDENTITY_CONFLICT/);
-  assert.match(inventory, /field_key, observation_state[\s\S]*'system_uuid', 'known'/);
+  assert.match(inventory, /\['system_uuid',[\s\S]*applyToolSystemUuidIdentifier/);
+  assert.match(inventory, /for \(const identityResult of identityEnrichments\)[\s\S]*INSERT INTO unit_tool_observations[\s\S]*field_key, observation_state[\s\S]*VALUES \(\?, \?, \?, 'known'/);
 });
 
 test('reconciliation migration moves legacy UUID storage without adding global UUID uniqueness', () => {

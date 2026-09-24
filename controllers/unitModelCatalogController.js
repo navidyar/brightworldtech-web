@@ -1,9 +1,6 @@
 const unitModelCatalogModel = require('../models/unitModelCatalogModel');
 
-function isHtmxRequest(req) {
-  return String(req.get('HX-Request') || '').toLowerCase() === 'true';
-}
-
+const { isHtmxRequest } = require('../utils/htmxRequest');
 function parsePositiveInteger(value) {
   return unitModelCatalogModel.normalizePositiveInteger(value);
 }
@@ -274,6 +271,42 @@ async function updateUnitModelProcessors(req, res, next) {
   }
 }
 
+async function renderDeleteUnitModelModal(req, res, next) {
+  try {
+    const unitModelId = parsePositiveInteger(req.params.unitModelId);
+    const filters = getFilters(req);
+    const unitModel = await unitModelCatalogModel.getUnitModelDeletionDetails(unitModelId);
+    if (!unitModel) {
+      return res.status(404).render('fragments/unit-model-status-modal', {
+        actionType: 'error', unitModel: null, filters, errorMessages: ['The selected model could not be found.']
+      });
+    }
+    return res.render('fragments/unit-model-delete-modal', { unitModel, filters, errorMessages: [] });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function deleteUnitModel(req, res, next) {
+  try {
+    const unitModelId = parsePositiveInteger(req.params.unitModelId);
+    const filters = getFilters(req);
+    const result = await unitModelCatalogModel.deleteUnitModel({ unitModelId });
+    return sendRedirect(req, res, buildReturnUrl(filters, result?.retired ? 'retired' : 'deleted'));
+  } catch (error) {
+    if (String(error?.code || '').startsWith('BWT_UNIT_MODEL_DELETE_')) {
+      const unitModelId = parsePositiveInteger(req.params.unitModelId);
+      const filters = getFilters(req);
+      const unitModel = await unitModelCatalogModel.getUnitModelDeletionDetails(unitModelId);
+      if (!unitModel) return sendRedirect(req, res, buildReturnUrl(filters, 'not-found'));
+      return res.status(400).render('fragments/unit-model-delete-modal', {
+        unitModel, filters, errorMessages: [error.message]
+      });
+    }
+    next(error);
+  }
+}
+
 async function renderUnitModelStatusModal(req, res, next) {
   try {
     const unitModelId = parsePositiveInteger(req.params.unitModelId);
@@ -316,6 +349,8 @@ module.exports = {
   updateUnitModel,
   renderUnitModelProcessorsModal,
   updateUnitModelProcessors,
+  renderDeleteUnitModelModal,
+  deleteUnitModel,
   renderUnitModelStatusModal,
   updateUnitModelStatus
 };

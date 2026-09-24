@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const {
   APP_DISPLAY_TIME_ZONE,
   formatDateKey,
@@ -24,11 +25,6 @@ class QcReportingScopeError extends Error {
     this.name = 'QcReportingScopeError';
     this.code = 'BWT_QC_REPORTING_SCOPE_INVALID';
   }
-}
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function normalizeTechnicianIds(value, allowedIds = []) {

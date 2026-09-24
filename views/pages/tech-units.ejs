@@ -22,14 +22,19 @@
     ? canCreateOrEditTechUnits()
     : pageRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode)));
   const isQcUnitBrowserUser = isQcPortalMode || (pageRoleCodes.includes('qc') && !canCreateTechUnits);
+  const selectedBrowserLot = !isQcPortalMode && filters && filters.lotId
+    ? (Array.isArray(result.lots) ? result.lots : []).find((lot) => String(lot.lot_id) === String(filters.lotId))
+    : null;
+  const selectedBrowserLotObjectives = selectedBrowserLot ? String(selectedBrowserLot.objectives || '').trim() : '';
 %>
 <!DOCTYPE html>
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260819-stage10w68p-interaction-refinements"></script>
-  <script defer src="/js/tech-units.js?v=20260826-stage10w73c-browser-refinement"></script>
-  <script defer src="/js/tech-units-date-picker.js?v=20260812-stage10w46-month-year-picker"></script>
-  <script defer src="/js/tech-unit-form.js?v=20260828-stage10w74n-request-context-labels"></script>
+  <script defer src="/js/unit-export-shared.js?v=20260921-cleanup-stage2b"></script>
+  <script defer src="/js/tech-units.js?v=20260922-unit-scoped-realtime"></script>
+  <script defer src="/js/tech-units-date-picker.js?v=20260921-cleanup-stage2c"></script>
+  <script defer src="/js/tech-unit-form.js?v=20260924-lot-objectives-viewport-clamp"></script>
 
   <body class="css-scope-tech-units">
     <div class="app-shell">
@@ -168,16 +173,27 @@
                   </div>
 
                   <div class="tech-filter-grid <%= isRegularTechBrowserUser ? 'tech-filter-grid--regular-tech' : 'tech-filter-grid--tech-lead-plus' %>" aria-label="Unit filters">
-                    <label class="form-field">
-                      <span>Lot</span>
-                      <select name="lotId" data-tech-filter-auto-submit data-hierarchical-lot-select>
+                    <div class="form-field tech-lot-filter-field">
+                      <div class="tech-lot-filter-label-row">
+                        <label for="tech-units-lot-filter">Lot</label>
+                        <% if (selectedBrowserLotObjectives) { %>
+                          <details class="tech-lot-objectives-disclosure tech-lot-objectives-disclosure--browser">
+                            <summary aria-label="View objectives for <%= selectedBrowserLot.lot_name %>">Objectives</summary>
+                            <div class="tech-lot-objectives-body">
+                              <strong><%= selectedBrowserLot.lot_name %> Objectives</strong>
+                              <span><%= selectedBrowserLotObjectives %></span>
+                            </div>
+                          </details>
+                        <% } %>
+                      </div>
+                      <select id="tech-units-lot-filter" name="lotId" data-tech-filter-auto-submit data-hierarchical-lot-select>
                         <option value="">All visible lots</option>
                         <%- include('../partials/hierarchical-lot-options', {
                           lotOptions: Array.isArray(result.lotHierarchyOptions) && result.lotHierarchyOptions.length > 0 ? result.lotHierarchyOptions : result.lots,
                           selectedLotId: filters.lotId
                         }) %>
                       </select>
-                    </label>
+                    </div>
 
                     <% if (result.palletFilterEnabled) { %>
                       <label class="form-field tech-pallet-filter-field">

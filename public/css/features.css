@@ -140,10 +140,19 @@
   box-sizing: border-box;
   overflow: hidden;
   line-height: 1.05;
-  white-space: nowrap;
+  white-space: normal;
   transform-origin: center center;
   pointer-events: none;
   color: #000;
+}
+
+:where(body.css-scope-label-builder) .label-builder-region-text {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 :where(body.css-scope-label-builder) .label-builder-region-content[hidden] {
@@ -843,9 +852,7 @@ html.modal-open {
 }
 
 :where(.modal-header) {
-  position: sticky;
-  top: 0;
-  z-index: 2;
+  position: static;
   display: flex;
   align-items: start;
   justify-content: space-between;

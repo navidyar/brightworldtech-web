@@ -379,22 +379,6 @@ async function saveIssueDetailsForUnitWithConnection(connection, { unitId, formD
     await appendGeneralComment(connection, safeUnitId, formData || {}, currentUserId);
   }
 }
-
-async function saveIssueDetailsForUnit({ unitId, formData, currentUserId }) {
-  const connection = await pool.getConnection();
-
-  try {
-    await connection.beginTransaction();
-    await saveIssueDetailsForUnitWithConnection(connection, { unitId, formData, currentUserId });
-    await connection.commit();
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
-}
-
 module.exports = {
   getBlankIssueFormData,
   getIssueFormOptions,
@@ -402,6 +386,5 @@ module.exports = {
   getGeneralCommentValidationDataByUnitId,
   isNoCosmeticIssueOption,
   isNoHardwareIssueOption,
-  saveIssueDetailsForUnit,
   saveIssueDetailsForUnitWithConnection
 };

@@ -6,7 +6,9 @@ const {
   normalizeMemoryObservation,
   resolveRamTypeCandidate,
   buildMemoryPlan,
-  determineMemoryOwnership
+  determineMemoryOwnership,
+  summarizeCurrentMemoryRows,
+  syncMemorySummary
 } = require('./apiMemoryInventory');
 
 function current(overrides = {}) {
@@ -88,7 +90,7 @@ test('TechTools current memory has final Tool authority over later ScanTools dat
     currentRows: [current()],
     latestAppliedValue: latest,
     latestAppliedToolSource: 'techtools',
-    incomingToolSource: 'scantools'
+    incomingToolSource: 'scantool'
   });
   assert.equal(plan.status, 'unchanged');
   assert.equal(plan.reason, 'techtools_current_memory_is_final');
@@ -111,4 +113,33 @@ test('unknown later tool memory does not erase current memory', () => {
   });
   assert.equal(plan.status, 'ignored_unknown');
   assert.equal(plan.mode, 'none');
+});
+
+
+test('current memory rows synchronize the Unit summary used by Browser, exports, labels, and lifecycle views', async () => {
+  const summary = summarizeCurrentMemoryRows([
+    current({ unit_memory_module_id: 1, size_gb: 8, ram_type_config_value_id: 10 }),
+    current({ unit_memory_module_id: 2, size_gb: 8, ram_type_config_value_id: 10 })
+  ]);
+  assert.deepEqual(summary, { totalGb: 16, ramTypeConfigValueId: 10 });
+  assert.deepEqual(
+    summarizeCurrentMemoryRows([
+      current({ unit_memory_module_id: 1, size_gb: 8, ram_type_config_value_id: 10 }),
+      current({ unit_memory_module_id: 2, size_gb: 8, ram_type_config_value_id: 11 })
+    ]),
+    { totalGb: 16, ramTypeConfigValueId: null }
+  );
+
+  const queries = [];
+  const connection = {
+    async query(sql, params) {
+      queries.push({ sql: String(sql), params });
+      return [{ affectedRows: 1 }];
+    }
+  };
+  const result = await syncMemorySummary(connection, 42, [current({ size_gb: 16, ram_type_config_value_id: 10 })]);
+  assert.equal(result.changed, true);
+  assert.equal(result.totalGb, 16);
+  assert.match(queries[0].sql, /UPDATE units[\s\S]*ram_gb = \?, ram_type_config_value_id = \?/);
+  assert.deepEqual(queries[0].params, [16, 10, 42, 16, 10]);
 });

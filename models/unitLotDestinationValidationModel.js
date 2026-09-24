@@ -1,14 +1,10 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const {
   assertDestinationValidation,
   buildDestinationValidationDecision
 } = require('../services/unitLotDestinationValidation');
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
 
 function createUnitLotDestinationValidator({
   techUnits,

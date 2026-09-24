@@ -1,10 +1,6 @@
 'use strict';
 
-function normalizePositiveInteger(value) {
-  const numeric = Number(value);
-  return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null;
-}
-
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 function shouldStartNewProductionCycle({
   allowNewProductionCycle = true,
   destinationPolicyEnabled = false,

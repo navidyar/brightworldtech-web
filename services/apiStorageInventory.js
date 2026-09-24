@@ -1,5 +1,7 @@
 'use strict';
 
+const { TOOL_SOURCES } = require('./apiToolCredential');
+
 const STORAGE_FIELD_KEY = 'storage_devices';
 const STORAGE_INSTALL_TYPES = new Set(['removable_device', 'integrated_soldered', 'unknown']);
 
@@ -332,7 +334,7 @@ function buildStoragePlan({ observation, currentRows, sourceCode = '', latestApp
   const ownership = determineStorageOwnership({ currentRows, sourceCode, latestAppliedValue });
   const existingToolSource = String(latestAppliedToolSource || '').trim().toLowerCase();
   const incomingSource = String(incomingToolSource || '').trim().toLowerCase();
-  if (ownership === 'tool' && existingToolSource === 'techtools' && incomingSource === 'scantools') {
+  if (ownership === 'tool' && existingToolSource === TOOL_SOURCES.TECHTOOLS && incomingSource === TOOL_SOURCES.SCANTOOL) {
     return {
       status: 'unchanged',
       reason: 'techtools_current_storage_is_final',
@@ -375,6 +377,37 @@ async function loadCurrentStorageRows(connection, unitId, { lock = false } = {})
     [unitId]
   );
   return normalizedCurrentRows(rows);
+}
+
+function summarizeCurrentStorageRows(rows = [], { emptyTotalGb = null } = {}) {
+  const currentRows = normalizedCurrentRows(rows);
+  if (currentRows.length === 0) {
+    return { totalGb: emptyTotalGb, storageTypeConfigValueId: null };
+  }
+
+  const totalGb = Number(currentRows.reduce((sum, row) => sum + Number(row.size_gb || 0), 0).toFixed(2));
+  const installedRows = currentRows.filter((row) => Number(row.size_gb || 0) > 0);
+  const installedTypeIds = installedRows.map((row) => Number(row.storage_type_config_value_id) || null);
+  const distinctTypeIds = new Set(installedTypeIds.filter(Boolean));
+  const storageTypeConfigValueId = installedRows.length > 0
+    && installedTypeIds.every(Boolean)
+    && distinctTypeIds.size === 1
+      ? [...distinctTypeIds][0]
+      : null;
+
+  return { totalGb, storageTypeConfigValueId };
+}
+
+async function syncStorageSummary(connection, unitId, rows = null, options = {}) {
+  const summary = summarizeCurrentStorageRows(rows || await loadCurrentStorageRows(connection, unitId), options);
+  const [result] = await connection.query(
+    `UPDATE units
+        SET storage_gb = ?, storage_type_config_value_id = ?
+      WHERE unit_id = ?
+        AND (NOT (storage_gb <=> ?) OR NOT (storage_type_config_value_id <=> ?))`,
+    [summary.totalGb, summary.storageTypeConfigValueId, unitId, summary.totalGb, summary.storageTypeConfigValueId]
+  );
+  return { ...summary, changed: Number(result?.affectedRows || 0) > 0 };
 }
 
 async function loadLatestAppliedStorageValue(connection, unitId) {
@@ -531,6 +564,8 @@ module.exports = {
   buildStoragePlan,
   loadCurrentStorageRows,
   loadLatestAppliedStorageValue,
+  summarizeCurrentStorageRows,
+  syncStorageSummary,
   applyStoragePlan,
   toFormStorageDevices,
   storageDetailSummary

@@ -1,7 +1,7 @@
 'use strict';
 
 const { spawn } = require('node:child_process');
-const { LABEL_PRINTERS, MAX_LABEL_COPIES } = require('../config/labelPrinting');
+const { MAX_LABEL_COPIES } = require('../config/labelPrinting');
 const { findQl810wContinuousMedia } = require('../config/labelMedia');
 
 const CODE39_PATTERNS = Object.freeze({
@@ -219,7 +219,6 @@ function submitRasterToCups(raster, { queue, title }) {
 }
 
 module.exports = {
-  LABEL_PRINTERS,
   MAX_LABEL_COPIES,
   buildUnitLabelContent,
   buildBrotherQl810wRaster,

@@ -2,6 +2,7 @@ const unitRequestModel = require('../models/unitRequestModel');
 const overrideRequestModel = require('../models/overrideRequestModel');
 const unifiedRequestQueue = require('../services/unifiedRequestQueue');
 const processorCatalogModel = require('../models/processorCatalogModel');
+const unitModelCatalogModel = require('../models/unitModelCatalogModel');
 const { publishUnitBrowserChange } = require('../services/unitBrowserRealtime');
 
 const REVIEW_ROLE_CODES = new Set(['admin', 'management', 'tech_lead']);
@@ -127,6 +128,7 @@ function getErrorMessages(query) {
   if (query.error === 'self-review') return ['You cannot approve or reject your own request. Withdraw it instead if it is still pending.'];
   if (query.error === 'outcome-target-invalid') return ['This Pass/Fail confirmation no longer has the exact current pending outcome target recorded by the Tech. No review was recorded.'];
   if (query.error === 'qc-reversion-stale') return ['That QC decision is no longer the current decision for this Unit work cycle. No reversion was recorded. Refresh the Unit before taking action.'];
+  if (query.error === 'qc-reversion-workflow-advanced') return ['That QC rejection can no longer be reverted because the technician already submitted a correction and returned the Unit for QC recheck. No reversion was recorded.'];
   if (query.error === 'not-owner') return ['You can withdraw only your own pending requests.'];
   if (query.error === 'catalog-permission') return ['Only Admin can approve or reject Model and Processor Catalog requests.'];
   if (query.error === 'catalog-input') return ['Complete the canonical catalog values before approving this request.'];
@@ -243,13 +245,24 @@ async function renderUnitRequestDetail(req, res, next) {
     const canReviewThisRequest = isUnitRequestReviewer(req)
       && (!isOwnRequest || canSelfReviewCatalogRequest)
       && (!isCatalogRequest(request) || catalogManager);
+    const needsModelReviewData = request.requestType === unitRequestModel.MODEL_CATALOG_REQUEST_TYPE
+      && catalogManager
+      && request.isPending
+      && canReviewThisRequest;
     const needsProcessorReviewData = request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE
       && catalogManager
       && request.isPending
       && canReviewThisRequest;
+    let modelUnitCategories = [];
     let processorBrands = [];
     let processorCatalogOptions = [];
     let processorCatalogMatches = [];
+    let processorInterpretation = null;
+    let processorSuggestedBrandId = null;
+
+    if (needsModelReviewData) {
+      modelUnitCategories = await unitModelCatalogModel.listUnitCategories();
+    }
 
     if (needsProcessorReviewData) {
       let allProcessorCatalogOptions = [];
@@ -258,13 +271,24 @@ async function renderUnitRequestDetail(req, res, next) {
         processorCatalogModel.listProcessorCatalogOptions({ includeInactive: true })
       ]);
       processorCatalogOptions = allProcessorCatalogOptions.filter((processor) => processor.isActive);
-      processorCatalogMatches = await processorCatalogModel.findLikelyProcessorMatches({
+      processorInterpretation = processorCatalogModel.interpretProcessorObservation({
+        value: request.catalogContext?.requestedProcessorName || '',
         brandName: request.catalogContext?.requestedProcessorType || '',
-        modelCode: request.catalogContext?.requestedProcessorName || '',
+        baseSpeedGhz: request.catalogContext?.requestedProcessorSpeedGhz || ''
+      });
+      processorCatalogMatches = await processorCatalogModel.findLikelyProcessorMatches({
+        brandName: processorInterpretation.brandName || request.catalogContext?.requestedProcessorType || '',
+        modelCode: processorInterpretation.modelCode || request.catalogContext?.requestedProcessorName || '',
         includeInactive: true,
         limit: 5,
         processorOptions: allProcessorCatalogOptions
       });
+      const interpretedBrandKey = String(processorInterpretation.brandName || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+      const suggestedBrand = processorBrands.find((brand) => {
+        const candidateKey = String(brand.label || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+        return interpretedBrandKey && (candidateKey === interpretedBrandKey || candidateKey.includes(interpretedBrandKey) || interpretedBrandKey.includes(candidateKey));
+      }) || null;
+      processorSuggestedBrandId = suggestedBrand ? suggestedBrand.id : null;
     }
 
     return res.render('pages/unit-request-detail', {
@@ -280,9 +304,12 @@ async function renderUnitRequestDetail(req, res, next) {
       isAdminCatalogReviewer: isAdminCatalogReviewer(req),
       canReviewThisRequest,
       canWithdrawRequest: request.isPending && Number(request.requestedByUserId) === Number(req.currentUser.user_id),
+      modelUnitCategories,
       processorBrands,
       processorCatalogOptions,
       processorCatalogMatches,
+      processorInterpretation,
+      processorSuggestedBrandId,
       successMessage: getSuccessMessage(req.query),
       errorMessages: getErrorMessages(req.query)
     });
@@ -412,6 +439,7 @@ async function approveUnitRequest(req, res, next) {
         reviewedByUserId: req.currentUser.user_id,
         reviewerNote: req.body.reviewerNote,
         approvedModelName: req.body.approvedModelName,
+        approvedUnitCategoryConfigValueId: req.body.approvedUnitCategoryConfigValueId,
         reviewerIsAdmin: isAdminCatalogReviewer(req)
       });
     } else if (request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE) {
@@ -459,6 +487,7 @@ async function approveUnitRequest(req, res, next) {
     const queueFilters = getQueueFilters(req);
     if (error?.code === 'BWT_UNIT_REQUEST_DESTINATION_INVALID') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'destination-invalid' }));
     if (error?.code === 'BWT_UNIT_REQUEST_SELF_REVIEW') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'self-review' }));
+    if (error?.code === 'BWT_QC_REVERSION_WORKFLOW_ADVANCED') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'qc-reversion-workflow-advanced' }));
     if (['BWT_QC_REVERSION_STALE', 'BWT_QC_REVERSION_NOT_LATEST', 'BWT_QC_REVERSION_ALREADY_REVERTED', 'BWT_QC_REVERSION_COMPLETION_STALE', 'BWT_QC_REVERSION_REQUEST_STALE'].includes(error?.code)) return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'qc-reversion-stale' }));
     if (error?.code === 'BWT_CATALOG_PROCESSOR_DUPLICATE') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'processor-duplicate', detail: String(error.message || '').slice(0, 1000) }));
     if (error?.code === 'BWT_CATALOG_ADMIN_REQUIRED') return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'catalog-permission' }));

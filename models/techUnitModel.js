@@ -14,10 +14,7 @@ const {
   sortOptionsByPopularity
 } = require('../services/operationalOptionRanking');
 const { isUnitFormFieldManaged } = require('../services/unitFormSubmissionPolicy');
-const {
-  getCosmeticGradeSortRank: getCanonicalCosmeticGradeSortRank,
-  normalizeCosmeticGradeOptions
-} = require('../services/cosmeticGradeNormalization');
+const { normalizeCosmeticGradeOptions } = require('../services/cosmeticGradeNormalization');
 const unitAuditEventModel = require('./unitAuditEventModel');
 const lotValidationOverrideModel = require('./lotValidationOverrideModel');
 const unitWorkflowAudit = require('../services/unitWorkflowAudit');
@@ -1024,10 +1021,6 @@ function getCosmeticGradeFilterIds(gradeOptions, selectedGradeId) {
   return selectedOption.filterIds;
 }
 
-function getCosmeticGradeSortRank(option = {}) {
-  return getCanonicalCosmeticGradeSortRank(option.label || option.code || option.value);
-}
-
 function buildCosmeticGradeFilterOptions(overallGradeOptions) {
   const gradeOptions = (Array.isArray(overallGradeOptions) ? overallGradeOptions : [])
     .map((option) => ({
@@ -1035,7 +1028,7 @@ function buildCosmeticGradeFilterOptions(overallGradeOptions) {
       filterValue: `grade:${option.id}`
     }))
     .sort((left, right) => {
-      const rankDifference = getCosmeticGradeSortRank(left) - getCosmeticGradeSortRank(right);
+      const rankDifference = Number(left.sortOrder ?? 999999) - Number(right.sortOrder ?? 999999);
 
       if (rankDifference !== 0) {
         return rankDifference;
@@ -1293,25 +1286,6 @@ async function getUnitById(unitId) {
 
   return rows[0] || null;
 }
-
-async function getUnitIdByAssetTag(assetTag) {
-  const assetNumber = normalizeAssetTagInput(assetTag);
-  const state = await getUnitTableState();
-  if (!assetNumber || !state.exists || !state.primaryKeyColumn) return null;
-
-  const [rows] = await pool.query(
-    `
-      SELECT ${escapeIdentifier(state.primaryKeyColumn)} AS unit_id
-      FROM units
-      WHERE asset_number = ?
-      LIMIT 1
-    `,
-    [assetNumber]
-  );
-
-  return rows[0]?.unit_id ? Number(rows[0].unit_id) : null;
-}
-
 function mapMemoryModuleRows(rows = []) {
   return rows.map((row) => ({
     componentRowId: row.component_row_id ? String(row.component_row_id) : '',
@@ -2034,14 +2008,9 @@ function getGradeSortRankSql() {
 
   return `
         CASE
-          WHEN current_grade_value.config_value_id IS NULL THEN 100
-          WHEN ${gradeLabelSql} REGEXP 'not[^a-z0-9]*yet[^a-z0-9]*graded|not[^a-z0-9]*graded|ungraded|n/?a' THEN 100
-          WHEN current_grade_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_A} THEN 10
-          WHEN current_grade_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_AB} THEN 20
-          WHEN current_grade_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_B} THEN 30
-          WHEN current_grade_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_C} THEN 40
-          WHEN current_grade_system.system_config_value_id = ${SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_D} THEN 50
-          ELSE 70
+          WHEN current_grade_value.config_value_id IS NULL THEN 999999
+          WHEN ${gradeLabelSql} REGEXP 'not[^a-z0-9]*yet[^a-z0-9]*graded|not[^a-z0-9]*graded|ungraded|n/?a' THEN 999999
+          ELSE COALESCE(current_grade_value.sort_order, 999998)
         END`;
 }
 
@@ -2880,16 +2849,6 @@ async function listTechUnits(filters = {}) {
     techUserOptions,
     pagination
   };
-}
-
-async function getIdentifierTypeId(typeCode, connection = pool) {
-  const systemIdByType = {
-    asset_tag: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_ASSET_TAG,
-    unit_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_UNIT_SERIAL,
-    bios_serial_number: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_BIOS_SERIAL,
-    system_uuid: SYSTEM_CONFIG_VALUE_IDS.IDENTIFIER_SYSTEM_UUID
-  };
-  return getConfigValueIdBySystemId(systemIdByType[typeCode], connection);
 }
 
 async function getIdentifierTypeMap(connection = pool) {
@@ -6937,9 +6896,42 @@ async function getCurrentHardwareFormAuthorityStatus(unitId, lotId, connection =
         AND run.status = 'completed'
         AND run.tool_source IN ('scantool', 'techtools')
         AND observation.field_key IN (?, ?)
-        AND observation.observation_state IN ('known', 'confirmed_absent')
-        AND observation.application_status IN ('applied', 'unchanged')`,
-    [safeUnitId, productionCycleKey, CURRENT_MEMORY_FIELD_KEY, CURRENT_STORAGE_FIELD_KEY]
+        AND observation.application_status IN ('applied', 'unchanged')
+        AND (
+          (
+            observation.field_key = ?
+            AND observation.observation_state = 'known'
+            AND EXISTS (
+              SELECT 1
+                FROM unit_memory_modules current_memory
+               WHERE current_memory.unit_id = run.unit_id
+                 AND current_memory.is_current = 1
+            )
+          )
+          OR (
+            observation.field_key = ?
+            AND (
+              observation.observation_state = 'confirmed_absent'
+              OR (
+                observation.observation_state = 'known'
+                AND EXISTS (
+                  SELECT 1
+                    FROM unit_storage_devices current_storage
+                   WHERE current_storage.unit_id = run.unit_id
+                     AND current_storage.is_current = 1
+                )
+              )
+            )
+          )
+        )`,
+    [
+      safeUnitId,
+      productionCycleKey,
+      CURRENT_MEMORY_FIELD_KEY,
+      CURRENT_STORAGE_FIELD_KEY,
+      CURRENT_MEMORY_FIELD_KEY,
+      CURRENT_STORAGE_FIELD_KEY
+    ]
   );
 
   return buildCurrentHardwareFormAuthority({
@@ -7704,7 +7696,6 @@ module.exports = {
   updateTechUnit,
   useExistingTechUnit,
   getUnitById,
-  getUnitIdByAssetTag,
   searchUnitsByIdentity,
   getTechUnitLifecycleSummaryById,
   getTechUnitPermanentDeletionPreviewById,

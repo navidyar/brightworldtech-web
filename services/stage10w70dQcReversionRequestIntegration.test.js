@@ -35,7 +35,9 @@ test('Stage 10W70D separates QC request authority from Tech Lead+ direct reversi
   assert.match(routes, /qc-review\/:qcCheckId\/reversion-request'[\s\S]*requireRole\(\['qc'\]\)/);
   assert.match(routes, /qc-review\/:qcCheckId\/revert\/modal'[\s\S]*requireRole\(overrideReviewRoles\)/);
   assert.doesNotMatch(controller, /ownsLatestQcReview|reviewedByUserId\) === currentUserId/);
-  assert.match(controller, /canRequestQcReversion = Boolean\(context\.latestQcReview\)[\s\S]*?isQcRequester[\s\S]*?!pendingQcReversionRequest/);
+  assert.match(controller, /qcReversionAvailable = Boolean\(context\.latestQcReview\) && !context\.latestQcCorrection/);
+  assert.match(controller, /canRequestQcReversion = qcReversionAvailable[\s\S]*?isQcRequester[\s\S]*?!pendingQcReversionRequest/);
+  assert.match(controller, /canDirectlyRevertQc = qcReversionAvailable/);
   assert.match(details, /Request Reversion/);
   assert.match(details, /reversion-request\/modal/);
   assert.match(details, /Reversion Request Pending/);
@@ -84,13 +86,20 @@ test('Stage 10W70D approval revalidates the exact target and preserves separate 
 
 test('Stage 10W70D rejects stale targets and prevents direct reversion from bypassing a pending QC request', () => {
   const requestModel = read('models/unitRequestModel.js');
+  const qcModel = read('models/unitQcCheckModel.js');
   const controller = read('controllers/techController.js');
+  const requestController = read('controllers/unitRequestController.js');
 
   assert.match(requestModel, /BWT_QC_REVERSION_REQUEST_STALE/);
   assert.match(requestModel, /async function revertQcReviewDirectlyWithRequestGuard/);
   assert.match(requestModel, /A QC Reversion Request is pending for this decision/);
   assert.match(requestModel, /BWT_QC_REVERSION_PENDING_REQUEST/);
   assert.match(controller, /Review that request through Requests instead of using direct reversion/);
+  assert.match(controller, /BWT_QC_REVERSION_WORKFLOW_ADVANCED/);
+  assert.match(controller, /technician already submitted a correction and returned the Unit for QC recheck/);
+  assert.match(qcModel, /getLatestCorrectionForQcCheck/);
+  assert.match(qcModel, /BWT_QC_REVERSION_WORKFLOW_ADVANCED/);
+  assert.match(requestController, /qc-reversion-workflow-advanced/);
   assert.match(controller, /revertQcReviewDirectlyWithRequestGuard/);
 });
 

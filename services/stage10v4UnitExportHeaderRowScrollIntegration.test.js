@@ -22,7 +22,7 @@ test('the synchronized scrollbar is rendered after the header and before preview
 });
 
 test('the header-row scrollbar stays viewport-width while representing the full table width', () => {
-  const client = read('public/js/tech-units.js');
+  const client = read('public/js/unit-export-shared.js');
 
   assert.match(client, /const scrollRow = modal\.querySelector\('\[data-unit-export-top-scroll-row\]'\)/);
   assert.match(client, /topScroll\.style\.width = `\$\{viewportWidth\}px`/);
@@ -46,6 +46,6 @@ test('Stage 10V.6 cache-busts the adjusted Export Preview assets', () => {
     'views/pages/tech-units.ejs',
     'views/pages/tech-unit-detail.ejs'
   ]) {
-    assert.match(read(relativePath), /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
+    assert.match(read(relativePath), /unit-export-shared\.js\?v=20260921-cleanup-stage2b[\s\S]*tech-units\.js\?v=20260921-cleanup-stage2b/);
   }
 });

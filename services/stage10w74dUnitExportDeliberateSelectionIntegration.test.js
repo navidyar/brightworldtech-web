@@ -24,6 +24,7 @@ test('Export Preview opens with every export column deliberately unselected', ()
 
 test('preview keeps all columns renderable while zero-selection state disables downloads', () => {
   const modal = read('views/fragments/tech-unit-export-preview-modal.ejs');
+  const sharedScript = read('public/js/unit-export-shared.js');
   const browserScript = read('public/js/unit-export.js');
   const unitBrowserScript = read('public/js/tech-units.js');
 
@@ -31,10 +32,11 @@ test('preview keeps all columns renderable while zero-selection state disables d
   assert.match(modal, /hasSelectedExportColumns\) \{ %>href="<%= safeCsvDownloadUrl %>"<% \} else \{ %>aria-disabled="true" tabindex="-1"/);
   assert.match(modal, /Select at least one column to enable CSV or XLSX downloads\./);
 
+  assert.match(sharedScript, /const hasSelection = selectedKeys\.length > 0/);
+  assert.match(sharedScript, /Select at least one column before downloading an export\./);
+  assert.match(sharedScript, /link\.removeAttribute\('href'\)/);
+
   for (const script of [browserScript, unitBrowserScript]) {
-    assert.match(script, /const hasSelection = selectedKeys\.length > 0/);
-    assert.match(script, /Select at least one column before downloading an export\./);
-    assert.match(script, /link\.removeAttribute\('href'\)/);
     assert.match(script, /setAllUnitExportColumns\(getUnitExportModal\(clearAllExportColumns\), false\)/);
   }
 });

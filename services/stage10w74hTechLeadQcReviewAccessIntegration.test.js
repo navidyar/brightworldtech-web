@@ -28,20 +28,20 @@ test('Tech Lead QC Review access uses the same guarded page and decision routes 
   assert.match(routes, /'\/tech\/units\/:unitId\/qc-review',[\s\S]*?requireRole\(QC_REVIEW_ROLE_CODES\)/);
 });
 
-test('QC Reporting remains separately guarded as Management+ only', () => {
+test('QC Reporting remains separately guarded as Admin-only', () => {
   const routes = read('routes/management.js');
   const policy = require('../config/accessPolicy');
 
   const reportingRoute = routes.match(/router\.get\(\s*'\/management\/qc-reporting'[\s\S]*?\n\);/)?.[0] || '';
-  assert.match(reportingRoute, /requireRole\(QC_REPORTING_ROLE_CODES\)/);
-  assert.deepEqual([...policy.QC_REPORTING_ROLE_CODES], ['admin', 'management']);
+  assert.match(reportingRoute, /requireFeature\('qcReporting'\)/);
+  assert.deepEqual([...policy.QC_REPORTING_ROLE_CODES], ['admin']);
 });
 
-test('Tech Lead sees QC Review navigation but QC Reporting remains tied to the Management menu area', () => {
+test('Tech Lead sees QC Review navigation while QC Reporting is tied to the Admin menu area', () => {
   const sidebar = read('views/partials/sidebar.ejs');
 
   assert.match(sidebar, /if \(canAccessMenuArea\('qc'\)\)[\s\S]*?href="\/qc\/review"[\s\S]*?>QC Review</);
-  assert.match(sidebar, /if \(canAccessMenuArea\('management'\)\)[\s\S]*?href="\/management\/qc-reporting"[\s\S]*?>QC Reporting</);
+  assert.match(sidebar, /if \(canAccessMenuArea\('admin'\)\)[\s\S]*?canAccessFeature\('qcReporting'\)[\s\S]*?href="\/management\/qc-reporting"[\s\S]*?>QC Reporting</);
 });
 
 test('QC Portal mode keeps production controls suppressed while allowing QC decisions', () => {

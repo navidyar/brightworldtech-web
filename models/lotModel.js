@@ -211,6 +211,7 @@ async function listConfigValuesForSystemCategory(systemConfigCategoryId) {
     values: values.map((value) => ({
       config_value_id: value.configValueId,
       system_config_value_id: value.systemConfigValueId,
+      system_config_category_id: value.systemConfigCategoryId,
       label: value.label,
       value: value.value,
       sort_order: value.sortOrder,
@@ -383,6 +384,7 @@ async function getLotFormOptions(options = {}) {
     ? options.includeParentLotIds
     : [];
   const currentLotId = Number(options.currentLotId);
+  const currentLotTypeConfigValueId = Number(options.currentLotTypeConfigValueId);
   const excludedParentLotIds = Number.isInteger(currentLotId) && currentLotId > 0
     ? [currentLotId, ...await listDescendantLotIds(currentLotId)]
     : [];
@@ -421,7 +423,12 @@ async function getLotFormOptions(options = {}) {
 
   return {
     capabilities,
-    lotTypes: lotTypeResult.values,
+    lotTypes: lotTypeResult.values.filter((lotType) => (
+      Number(lotType.is_active) === 1
+      || (Number.isInteger(currentLotTypeConfigValueId)
+        && currentLotTypeConfigValueId > 0
+        && Number(lotType.config_value_id) === currentLotTypeConfigValueId)
+    )),
     lotTypeCategory: lotTypeResult.category,
     requirementPolicies: buildRequirementPolicyOptions(requirementPolicyResult.values),
     requirementPolicyCategory: requirementPolicyResult.category,

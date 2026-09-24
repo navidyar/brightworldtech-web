@@ -50,6 +50,14 @@ test('Tech Lead and higher roles review overrides from the unified detail page',
   assert.match(detail, /Reject Request/);
 });
 
+test('takeover review explains that missing Unit completion data does not block reassignment', () => {
+  const detail = read('views/pages/override-request-detail.ejs');
+
+  assert.match(detail, /const isTakeoverReview/);
+  assert.match(detail, /Missing Unit completion information does not block the takeover/);
+  assert.match(detail, /remains required before completion/);
+});
+
 test('requesters can withdraw their own pending override from the unified page', () => {
   const model = read('models/overrideRequestModel.js');
   const controller = read('controllers/unitRequestController.js');

@@ -150,14 +150,14 @@ async function listUnitModels(filters = {}) {
   }));
 }
 
-async function getUnitModelById(unitModelId) {
+async function getUnitModelById(unitModelId, connection = pool) {
   const safeId = normalizePositiveInteger(unitModelId);
 
   if (!safeId) {
     return null;
   }
 
-  const [rows] = await pool.query(`
+  const [rows] = await connection.query(`
     SELECT
       um.unit_model_id,
       um.manufacturer_id,
@@ -266,6 +266,144 @@ async function setUnitModelActive(unitModelId, isActive) {
   await pool.execute('UPDATE unit_models SET is_active = ? WHERE unit_model_id = ?', [isActive ? 1 : 0, safeId]);
 }
 
+async function tableHasColumn(connection, tableName, columnName) {
+  const [rows] = await connection.query(
+    `SELECT COUNT(*) AS count_value
+       FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE()
+        AND TABLE_NAME = ?
+        AND COLUMN_NAME = ?`,
+    [tableName, columnName]
+  );
+  return Number(rows[0]?.count_value || 0) > 0;
+}
+
+async function countReference(connection, tableName, columnName, unitModelId) {
+  if (!await tableHasColumn(connection, tableName, columnName)) return 0;
+  const [rows] = await connection.query(
+    `SELECT COUNT(*) AS count_value FROM ${quoteIdentifier(tableName)} WHERE ${quoteIdentifier(columnName)} = ?`,
+    [unitModelId]
+  );
+  return Number(rows[0]?.count_value || 0);
+}
+
+async function getUnitModelDeletionDetails(unitModelId, connection = pool) {
+  const unitModel = await getUnitModelById(unitModelId, connection);
+  if (!unitModel) return null;
+
+  const [unitCount, lotRequirementCount, modelRequestCount, processorRequestCount, processorMappingCount] = await Promise.all([
+    countReference(connection, 'units', 'unit_model_id', unitModel.id),
+    countReference(connection, 'lot_requirements', 'unit_model_id', unitModel.id),
+    countReference(connection, 'unit_model_catalog_requests', 'approved_unit_model_id', unitModel.id),
+    countReference(connection, 'unit_processor_catalog_requests', 'unit_model_id', unitModel.id),
+    countReference(connection, 'unit_model_processor_options', 'unit_model_id', unitModel.id)
+  ]);
+
+  return {
+    ...unitModel,
+    unitCount,
+    lotRequirementCount,
+    modelRequestCount,
+    processorRequestCount,
+    processorMappingCount
+  };
+}
+
+async function deleteUnitModel({ unitModelId }) {
+  const safeId = normalizePositiveInteger(unitModelId);
+  if (!safeId) {
+    const error = new Error('The selected Unit Model could not be found.');
+    error.code = 'BWT_UNIT_MODEL_DELETE_INPUT_INVALID';
+    throw error;
+  }
+
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const [rows] = await connection.query(
+      `SELECT unit_model_id, model_name, is_active
+         FROM unit_models
+        WHERE unit_model_id = ?
+        LIMIT 1
+        FOR UPDATE`,
+      [safeId]
+    );
+    const unitModel = rows[0];
+    if (!unitModel) {
+      const error = new Error('The selected Unit Model could not be found.');
+      error.code = 'BWT_UNIT_MODEL_DELETE_NOT_FOUND';
+      throw error;
+    }
+
+    const [unitCount, lotRequirementCount, modelRequestCount, processorRequestCount] = await Promise.all([
+      countReference(connection, 'units', 'unit_model_id', safeId),
+      countReference(connection, 'lot_requirements', 'unit_model_id', safeId),
+      countReference(connection, 'unit_model_catalog_requests', 'approved_unit_model_id', safeId),
+      countReference(connection, 'unit_processor_catalog_requests', 'unit_model_id', safeId)
+    ]);
+
+    if (unitCount > 0 || lotRequirementCount > 0 || modelRequestCount > 0 || processorRequestCount > 0) {
+      await connection.query('UPDATE unit_models SET is_active = 0 WHERE unit_model_id = ? LIMIT 1', [safeId]);
+      await connection.commit();
+      return {
+        deleted: false,
+        retired: true,
+        unitModelId: safeId,
+        modelName: unitModel.model_name,
+        retainedUnitCount: unitCount,
+        retainedLotRequirementCount: lotRequirementCount,
+        retainedModelRequestCount: modelRequestCount,
+        retainedProcessorRequestCount: processorRequestCount
+      };
+    }
+
+    let removedProcessorMappings = 0;
+    if (await tableHasColumn(connection, 'unit_model_processor_options', 'unit_model_id')) {
+      const [result] = await connection.query('DELETE FROM unit_model_processor_options WHERE unit_model_id = ?', [safeId]);
+      removedProcessorMappings = Number(result.affectedRows || 0);
+    }
+
+    await connection.query('DELETE FROM unit_models WHERE unit_model_id = ? LIMIT 1', [safeId]);
+    await connection.commit();
+    return {
+      deleted: true,
+      retired: false,
+      unitModelId: safeId,
+      modelName: unitModel.model_name,
+      removedProcessorMappings
+    };
+  } catch (error) {
+    await connection.rollback();
+    if (error && (error.code === 'ER_ROW_IS_REFERENCED_2' || error.code === 'ER_ROW_IS_REFERENCED')) {
+      try {
+        await connection.beginTransaction();
+        const [result] = await connection.query('UPDATE unit_models SET is_active = 0 WHERE unit_model_id = ? LIMIT 1', [safeId]);
+        await connection.commit();
+        if (Number(result.affectedRows || 0) > 0) {
+          return {
+            deleted: false,
+            retired: true,
+            unitModelId: safeId,
+            modelName: '',
+            retainedByForeignKey: true
+          };
+        }
+      } catch (retireError) {
+        await connection.rollback();
+        retireError.cause = error;
+        throw retireError;
+      }
+      const blocked = new Error('The Unit Model still has a database reference, so it was not permanently deleted.');
+      blocked.code = 'BWT_UNIT_MODEL_DELETE_IN_USE';
+      blocked.cause = error;
+      throw blocked;
+    }
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
 async function listUnitModelProcessorAssociations(unitModelId) {
   const unitModel = await getUnitModelById(unitModelId);
   if (!unitModel) return null;
@@ -361,6 +499,8 @@ module.exports = {
   listUnitCategories,
   listUnitModels,
   getUnitModelById,
+  getUnitModelDeletionDetails,
+  deleteUnitModel,
   listUnitModelProcessorAssociations,
   modelExists,
   createUnitModel,

@@ -41,7 +41,9 @@ test('structured Current rows determine submitted totals while valid summary-onl
 
   assert.match(controller, /function getComponentCapacityTotalGb\(rows, submittedLegacyTotal, \{ allowZero = false \} = \{\}\)/);
   assert.match(controller, /ramGb: getComponentCapacityTotalGb\(memoryModules, req\.body\.ramGb\)/);
+  assert.match(controller, /ramTypeConfigValueId: getCommonComponentTypeId\(memoryModules, 'ramTypeConfigValueId'\)/);
   assert.match(controller, /storageGb: getComponentCapacityTotalGb\(storageDevices, req\.body\.storageGb\)/);
+  assert.match(controller, /storageTypeConfigValueId: getCommonComponentTypeId\(storageDevices, 'storageTypeConfigValueId'\)/);
   assert.match(model, /submittedMemoryTotalGb = normalizeOptionalNonNegativeInteger\(formData\.ramGb\)/);
   assert.match(model, /submittedStorageTotalGb = normalizeOptionalNonNegativeInteger\(formData\.storageGb\)/);
   assert.match(model, /memoryTotalGb = submittedMemoryTotalGb !== null/);

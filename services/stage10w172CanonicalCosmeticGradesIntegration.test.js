@@ -10,18 +10,20 @@ function read(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 }
 
-test('Add/Edit Unit presents canonical letter grades including AB and accepts legacy current IDs', () => {
+test('Add/Edit Unit uses configured Cosmetic Grade values while preserving legacy canonical IDs', () => {
   const form = read('views/fragments/tech-unit-form.ejs');
   const expandedModel = read('models/unitExpandedFormModel.js');
   const controller = read('controllers/techController.js');
 
-  assert.match(form, /Cosmetic Grade A, AB, B, C, or D/);
-  assert.match(form, /A, AB, B, C, or D is cosmetic only/);
+  assert.match(form, /Cosmetic Grade describes appearance only/);
+  assert.match(form, /Grade options and order are managed in Configuration/);
   assert.match(form, /gradeOption\.filterIds/);
+  assert.match(form, /data-requires-cosmetic-issue=/);
   assert.match(expandedModel, /normalizeCosmeticGradeOptions\(rawOverallGradeOptions\)/);
   assert.match(expandedModel, /resolveCanonicalCosmeticGradeConfigValueId/);
+  assert.match(expandedModel, /belongsToCosmeticGradeCategory/);
   assert.match(expandedModel, /SYSTEM_CONFIG_CATEGORY_IDS\.COSMETIC_GRADES/);
-  assert.match(controller, /Choose a valid Cosmetic Grade: A, AB, B, C, or D\./);
+  assert.match(controller, /Choose a valid active Cosmetic Grade\./);
 });
 
 test('Lot defaults use the numeric Cosmetic Grades system category identity', () => {
@@ -30,45 +32,48 @@ test('Lot defaults use the numeric Cosmetic Grades system category identity', ()
   assert.doesNotMatch(lotModel, /listConfigValuesForFirstExistingCategory\(\['cosmetic_grades'/);
 });
 
-test('dashboard and Unit Browser grade ordering place AB between A and B by numeric system value identity', () => {
+test('dashboard and Unit Browser use configured Cosmetic Grade sort order', () => {
   const dashboard = read('models/dashboardModel.js');
   const browserModel = read('models/techUnitModel.js');
 
-  for (const model of [dashboard, browserModel]) {
-    assert.match(model, /SYSTEM_CONFIG_VALUE_IDS\.COSMETIC_GRADE_A/);
-    assert.match(model, /SYSTEM_CONFIG_VALUE_IDS\.COSMETIC_GRADE_AB/);
-    assert.match(model, /SYSTEM_CONFIG_VALUE_IDS\.COSMETIC_GRADE_B/);
-    assert.match(model, /SYSTEM_CONFIG_VALUE_IDS\.COSMETIC_GRADE_C/);
-    assert.match(model, /SYSTEM_CONFIG_VALUE_IDS\.COSMETIC_GRADE_D/);
-  }
+  assert.match(dashboard, /COALESCE\(grade\.sort_order, 999998\) AS grade_sort_order/);
+  assert.match(dashboard, /ORDER BY grade_sort_order, grade\.label/);
+  assert.match(browserModel, /COALESCE\(current_grade_value\.sort_order, 999998\)/);
+  assert.match(browserModel, /Number\(left\.sortOrder \?\? 999999\)/);
   assert.match(dashboard, /COSMETIC_GRADE_BY_SYSTEM_VALUE_ID/);
 });
 
-test('canonical Cosmetic Grade migration is audit-first and remaps all known grade references using numeric bindings', () => {
+test('canonical Unit Grade migration consolidates duplicate grade categories without replacing stable IDs', () => {
   const script = read('scripts/migrateCanonicalCosmeticGrades.js');
+  const registry = read('config/configIdentityRegistry.js');
 
   assert.match(script, /const APPLY = process\.argv\.includes\('--apply'\)/);
-  assert.match(script, /Canonical Cosmetic Grade policy: A, AB, B, C, D/);
+  assert.match(script, /Canonical Cosmetic Grade policy: S \(Supreme\), A, AB, B, C, D/);
   assert.match(script, /SYSTEM_CONFIG_CATEGORY_IDS\.COSMETIC_GRADES/);
-  assert.match(script, /SYSTEM_CONFIG_VALUE_IDS\.COSMETIC_GRADE_A/);
+  assert.match(registry, /SYSTEM_CONFIG_CATEGORY_IDS\.COSMETIC_GRADES, 'Unit Grades'/);
+  assert.match(script, /SYSTEM_CONFIG_VALUE_IDS\.COSMETIC_GRADE_S/);
   assert.match(script, /system_config_categories/);
   assert.match(script, /system_config_values/);
-  assert.match(script, /unit_grade_assessments', 'overall_grade_config_value_id'/);
-  assert.match(script, /lots', 'default_grade_config_value_id'/);
-  assert.match(script, /lot_requirements', 'requirement_config_value_id'/);
-  assert.match(script, /clearCurrentNotYetGradedAssessments/);
-  assert.match(script, /bindGradeValue/);
-  assert.match(script, /deactivateRows/);
+  assert.match(script, /preserveConfiguredPresentation/);
+  assert.match(script, /Authoritative Unit Grades category ID/);
+  assert.match(script, /loadGradeCategories/);
+  assert.match(script, /normalizeUnitGradesCategory/);
+  assert.match(script, /deactivateLegacyGradeCategories/);
+  assert.match(script, /Legacy custom grade values requiring manual review/);
+  assert.match(script, /Additional configurable grade values found/);
+  assert.doesNotMatch(script, /DELETE FROM config_categories/);
   assert.match(script, /No database changes were made\. Re-run with --apply/);
 });
 
 
-test('protected Cosmetic Grade configuration keeps stable IDs while allowing rename and deactivation', () => {
+test('protected canonical Unit Grades keep stable IDs while Configuration controls labels, active state, order, and custom values', () => {
   const page = read('views/pages/management-config.ejs');
   const form = read('views/fragments/config-value-form-modal.ejs');
   const controller = read('controllers/configController.js');
   const model = read('models/configModel.js');
 
+  assert.match(page, /Unit Grades are the single application-wide grade configuration/);
+  assert.match(page, /Add, rename, activate\/deactivate, and reorder grades here/);
   assert.match(page, /value\.isProtected[\s\S]*?Protected/);
   assert.match(form, /database ID remains unchanged/);
   assert.match(form, /Renaming it also changes how current and historical records display this value/);
@@ -79,14 +84,16 @@ test('protected Cosmetic Grade configuration keeps stable IDs while allowing ren
   assert.match(model, /comparison_operator_config_value_id/);
   assert.match(model, /requirement_config_value_id/);
   assert.match(model, /is_protected/);
+  assert.match(model, /isRetiredLegacyUnitGradeCategory/);
+  assert.match(model, /hasAuthoritativeUnitGrades/);
   assert.doesNotMatch(form, /name="code"/);
 });
 
-test('package exposes audit, migration, and validation commands for canonical grades', () => {
+test('package exposes audit, migration, and validation commands for configurable grades', () => {
   const packageJson = JSON.parse(read('package.json'));
 
   assert.equal(packageJson.scripts['audit:cosmetic-grades'], 'node scripts/migrateCanonicalCosmeticGrades.js');
   assert.equal(packageJson.scripts['migrate:cosmetic-grades'], 'node scripts/migrateCanonicalCosmeticGrades.js --apply');
-  assert.match(packageJson.scripts['validate:cosmetic-grades'], /cosmeticGradeNormalization\.test\.js/);
-  assert.match(packageJson.scripts['validate:cosmetic-grades'], /stage10w172CanonicalCosmeticGradesIntegration\.test\.js/);
+  assert.match(packageJson.scripts['validate:configurable-port-grades'], /cosmeticGradeNormalization\.test\.js/);
+  assert.match(packageJson.scripts['validate:configurable-port-grades'], /configurablePortGradeOptionsIntegration\.test\.js/);
 });

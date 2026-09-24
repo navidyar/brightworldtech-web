@@ -43,8 +43,6 @@ const LABEL_FIELD_GROUPS = Object.freeze([
 const LABEL_FIELDS = Object.freeze(LABEL_FIELD_GROUPS.flatMap((group) => (
   group.fields.map((field) => Object.freeze({ ...field, groupCode: group.code, groupLabel: group.label }))
 )));
-const LABEL_FIELD_KEYS = Object.freeze(new Set(LABEL_FIELDS.map((field) => field.key)));
-
 function findLabelField(key) {
   const normalized = String(key || '').trim();
   return LABEL_FIELDS.find((field) => field.key === normalized) || null;
@@ -53,6 +51,5 @@ function findLabelField(key) {
 module.exports = {
   LABEL_FIELD_GROUPS,
   LABEL_FIELDS,
-  LABEL_FIELD_KEYS,
   findLabelField
 };

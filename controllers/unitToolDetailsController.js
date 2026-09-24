@@ -1,11 +1,7 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const unitToolDetailsModel = require('../models/unitToolDetailsModel');
-
-function normalizePositiveInteger(value) {
-  const numeric = Number(value);
-  return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null;
-}
 
 async function renderToolDetails(req, res, next) {
   const unitId = normalizePositiveInteger(req.params.unitId);

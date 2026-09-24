@@ -8,21 +8,23 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-test('Stage 9H exposes Management QC Reporting only through Admin and Management access', () => {
+test('Stage 9H exposes QC Reporting only through Admin access', () => {
   const routes = read('routes/management.js');
   const sidebar = read('views/partials/sidebar.ejs');
 
   assert.match(routes, /qcReportingController/);
   const routeBlock = routes.match(/router\.get\(\s*'\/management\/qc-reporting'[\s\S]*?\n\);/)?.[0] || '';
   assert.match(routeBlock, /requireAuth/);
-  assert.match(routeBlock, /requireRole\(QC_REPORTING_ROLE_CODES\)/);
+  assert.match(routeBlock, /requireFeature\('qcReporting'\)/);
   assert.match(routeBlock, /renderManagementQcReportingPage/);
   assert.match(sidebar, /management-qc-reporting/);
   assert.match(sidebar, />QC Reporting</);
   assert.doesNotMatch(routeBlock, /unitBrowserRoles/);
 
   const policy = require('../config/accessPolicy');
-  assert.deepEqual([...policy.QC_REPORTING_ROLE_CODES], ['admin', 'management']);
+  assert.deepEqual([...policy.QC_REPORTING_ROLE_CODES], ['admin']);
+  assert.equal(policy.canAccessFeature(['admin'], 'qcReporting'), true);
+  assert.equal(policy.canAccessFeature(['management'], 'qcReporting'), false);
   assert.equal(policy.hasAnyAssignedRole(['tech_lead'], policy.QC_REPORTING_ROLE_CODES), false);
   assert.equal(policy.canAccessMenuArea(['tech_lead'], 'management'), false);
 });

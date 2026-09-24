@@ -185,6 +185,15 @@
     return (year * 12) + month;
   }
 
+  window.BWTDatePickerUtils = Object.freeze({
+    MONTH_NAMES,
+    getChicagoDateOnly,
+    parseDate,
+    formatDate,
+    toIso,
+    monthKey
+  });
+
   function dispatchValueChange(input) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));

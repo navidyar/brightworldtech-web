@@ -40,8 +40,7 @@ const RULE_TYPE = Object.freeze({
   PERMISSION_CONTROL: 'permission_control',
   DERIVED_CONTROL: 'derived_control',
   SYSTEM_CONTROL: 'system_control',
-  FUTURE_SECTION: 'future_section',
-  LEGACY_HIDDEN: 'legacy_hidden'
+  FUTURE_SECTION: 'future_section'
 });
 
 const AVAILABILITY = Object.freeze({
@@ -65,8 +64,7 @@ const UNIT_FORM_SECTIONS = Object.freeze([
   Object.freeze({ key: 'tests', label: 'Tests & Checks', order: 85 }),
   Object.freeze({ key: 'issues', label: 'Issues', order: 90 }),
   Object.freeze({ key: 'grade_outcome', label: 'Grade & Outcome', order: 100 }),
-  Object.freeze({ key: 'comments', label: 'Comments', order: 110 }),
-  Object.freeze({ key: 'legacy_hidden', label: 'Legacy Hidden', order: 120 })
+  Object.freeze({ key: 'comments', label: 'Comments', order: 110 })
 ]);
 
 function defineField(definition) {

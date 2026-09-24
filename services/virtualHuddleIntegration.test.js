@@ -8,29 +8,32 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-test('Virtual Huddle is globally wired with server enforcement, recipient routes, and Management+ administration', () => {
+test('Virtual Huddle is globally wired as an in-place overlay with recipient routes and Management+ administration', () => {
   const server = read('server.js');
   const routes = read('routes/virtualHuddle.js');
-  const middleware = read('middleware/virtualHuddleMiddleware.js');
 
-  assert.match(server, /enforceVirtualHuddleAcknowledgment/);
-  assert.match(server, /app\.use\(enforceVirtualHuddleAcknowledgment\)/);
+  assert.doesNotMatch(server, /enforceVirtualHuddleAcknowledgment/);
+  assert.equal(fs.existsSync(path.join(root, 'middleware/virtualHuddleMiddleware.js')), false);
   assert.match(server, /app\.use\(virtualHuddleRoutes\)/);
   assert.match(routes, /\/virtual-huddle\/events/);
   assert.match(routes, /\/virtual-huddle\/recipients\/:recipientId\/acknowledge/);
   assert.match(routes, /\/management\/virtual-huddle\/preview/);
   assert.match(routes, /requireRole\(adminRoles\).*hardDeleteMessage/s);
-  assert.match(middleware, /await virtualHuddleModel\.hasPendingRequiredAcknowledgment/);
-  assert.match(middleware, /\/virtual-huddle\/required/);
 });
 
-test('global delivery uses SSE and preserves mandatory server-side blocking', () => {
+test('global delivery uses SSE, blocks through the overlay, and restores the interrupted page state in place', () => {
   const script = read('public/js/virtual-huddle.js');
   const events = read('services/virtualHuddleEvents.js');
   assert.match(script, /new EventSource\('\/virtual-huddle\/events'\)/);
   assert.match(script, /virtual-huddle-change/);
   assert.match(script, /virtual-huddle-blocked/);
   assert.match(script, /data-huddle-ack-form/);
+  assert.match(script, /captureReturnState/);
+  assert.match(script, /restoreReturnState/);
+  assert.match(script, /window\.scrollTo\(state\.scrollX, state\.scrollY\)/);
+  assert.match(script, /setSelectionRange/);
+  assert.match(script, /recipientMutationInFlight/);
+  assert.match(script, /huddleChangeQueued/);
   assert.match(events, /clientsByUserId/);
   assert.match(events, /publishVirtualHuddleChange/);
 });
@@ -81,4 +84,20 @@ test('all Virtual Huddle templates are present and use the shared head/fragment 
     assert.equal(fs.existsSync(path.join(root, file)), true, file);
     assert.ok(read(file).length > 40, file);
   }
+});
+
+test('Notice messages are delivery-only and do not remain in permanent Huddle history', () => {
+  const model = read('models/virtualHuddleModel.js');
+  const controller = read('controllers/virtualHuddleController.js');
+  const preview = read('views/fragments/virtual-huddle-preview-modal.ejs');
+  const management = read('views/pages/management-virtual-huddle.ejs');
+
+  assert.match(model, /WHERE message_type_code <> 'notice'/);
+  assert.match(model, /WHERE m\.message_type_code <> 'notice'/);
+  assert.match(model, /ephemeralNotice/);
+  assert.match(model, /DELETE FROM virtual_huddle_recipients WHERE virtual_huddle_recipient_id = \?/);
+  assert.match(model, /DELETE FROM virtual_huddle_messages[\s\S]*message_type_code = 'notice'/);
+  assert.match(controller, /messageTypeCode === 'notice'[\s\S]*notice_sent=1/);
+  assert.match(preview, /delivery-only[\s\S]*does not create a permanent Huddle history/i);
+  assert.match(management, /Notices are delivery-only and are not saved to history/i);
 });

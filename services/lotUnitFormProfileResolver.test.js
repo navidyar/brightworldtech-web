@@ -29,29 +29,36 @@ test('resolves application defaults without stored rules', () => {
   assert.equal(profile.storedRuleCount, 0);
 });
 
-test('previous hardware visibility follows current sections until explicitly overridden', () => {
-  const inheritedProfile = resolveLotUnitFormProfile({
+test('previous hardware visibility always follows its Current section, including legacy overrides', () => {
+  const hiddenProfile = resolveLotUnitFormProfile({
     lineage: rootOnly,
     rules: [
       { lotId: 10, fieldKey: 'memory_modules', visibilityMode: 'hidden', requirementMode: 'optional' },
-      { lotId: 10, fieldKey: 'storage_devices', visibilityMode: 'hidden', requirementMode: 'optional' }
+      { lotId: 10, fieldKey: 'previous_memory_size', visibilityMode: 'visible', requirementMode: 'inherit' },
+      { lotId: 10, fieldKey: 'storage_devices', visibilityMode: 'hidden', requirementMode: 'optional' },
+      { lotId: 10, fieldKey: 'previous_storage_size', visibilityMode: 'visible', requirementMode: 'inherit' }
     ]
   });
 
-  assert.equal(getResolvedUnitFormField(inheritedProfile, 'previous_memory_size').visible, false);
-  assert.equal(getResolvedUnitFormField(inheritedProfile, 'previous_storage_size').visible, false);
+  assert.equal(getResolvedUnitFormField(hiddenProfile, 'memory_modules').visible, false);
+  assert.equal(getResolvedUnitFormField(hiddenProfile, 'previous_memory_size').visible, false);
+  assert.equal(getResolvedUnitFormField(hiddenProfile, 'storage_devices').visible, false);
+  assert.equal(getResolvedUnitFormField(hiddenProfile, 'previous_storage_size').visible, false);
 
-  const overriddenProfile = resolveLotUnitFormProfile({
+  const visibleProfile = resolveLotUnitFormProfile({
     lineage: rootOnly,
     rules: [
-      { lotId: 10, fieldKey: 'memory_modules', visibilityMode: 'hidden', requirementMode: 'optional' },
-      { lotId: 10, fieldKey: 'previous_memory_size', visibilityMode: 'visible', requirementMode: 'inherit' }
+      { lotId: 10, fieldKey: 'memory_modules', visibilityMode: 'visible', requirementMode: 'optional' },
+      { lotId: 10, fieldKey: 'previous_memory_size', visibilityMode: 'hidden', requirementMode: 'inherit' },
+      { lotId: 10, fieldKey: 'storage_devices', visibilityMode: 'visible', requirementMode: 'optional' },
+      { lotId: 10, fieldKey: 'previous_storage_size', visibilityMode: 'hidden', requirementMode: 'inherit' }
     ]
   });
 
-  assert.equal(getResolvedUnitFormField(overriddenProfile, 'memory_modules').visible, false);
-  assert.equal(getResolvedUnitFormField(overriddenProfile, 'previous_memory_size').visible, true);
-  assert.equal(getResolvedUnitFormField(overriddenProfile, 'previous_memory_size').required, false);
+  assert.equal(getResolvedUnitFormField(visibleProfile, 'memory_modules').visible, true);
+  assert.equal(getResolvedUnitFormField(visibleProfile, 'previous_memory_size').visible, true);
+  assert.equal(getResolvedUnitFormField(visibleProfile, 'storage_devices').visible, true);
+  assert.equal(getResolvedUnitFormField(visibleProfile, 'previous_storage_size').visible, true);
 });
 
 test('applies parent rules first and lets descendants override each mode independently', () => {

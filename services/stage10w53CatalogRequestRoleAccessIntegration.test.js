@@ -11,7 +11,16 @@ const catalogRequestAccessPolicy = require('./catalogRequestAccessPolicy');
 const unitModelCatalogModel = {};
 const unitRequestModel = {};
 const processorCatalogModel = {
-  findLikelyProcessorMatches: async () => []
+  findLikelyProcessorMatches: async () => [],
+  interpretProcessorObservation: ({ value = '', brandName = '', baseSpeedGhz = '' } = {}) => ({
+    rawValue: String(value || ''),
+    brandName: String(brandName || ''),
+    modelCode: String(value || ''),
+    family: '',
+    generation: '',
+    baseSpeedGhz: baseSpeedGhz === '' || baseSpeedGhz === null || baseSpeedGhz === undefined ? null : Number(baseSpeedGhz),
+    changed: false
+  })
 };
 const unitModelCatalogModelPath = require.resolve('../models/unitModelCatalogModel');
 const unitRequestModelPath = require.resolve('../models/unitRequestModel');

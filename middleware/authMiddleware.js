@@ -1,4 +1,5 @@
 const authModel = require('../models/authModel');
+const accessPolicy = require('../config/accessPolicy');
 
 async function loadCurrentUser(req, res, next) {
   try {
@@ -44,6 +45,24 @@ function requireGuest(req, res, next) {
   return next();
 }
 
+function requireFeature(featureKey) {
+  return (req, res, next) => {
+    if (!req.currentUser) {
+      return res.redirect('/login');
+    }
+
+    if (!accessPolicy.canAccessFeature(req.currentUser.roles, featureKey)) {
+      return res.status(403).render('pages/error', {
+        pageTitle: 'Access Denied',
+        message: 'You do not have permission to access this page.',
+        error: null
+      });
+    }
+
+    return next();
+  };
+}
+
 function requireRole(allowedRoles) {
   const allowed = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
 
@@ -70,5 +89,6 @@ module.exports = {
   loadCurrentUser,
   requireAuth,
   requireGuest,
-  requireRole
+  requireRole,
+  requireFeature
 };

@@ -10,6 +10,7 @@ const {
   normalizeDiagnosticsObservation,
   normalizeDiagnosticState,
   buildHardwareDiagnosticsPlan,
+  syncBatteryHealthSummary,
   KEYBOARD_TEST_FIELD_KEY,
   BIOS_LOCK_FIELD_KEY,
   MDM_LOCK_FIELD_KEY,
@@ -90,6 +91,22 @@ function currentState(overrides = {}) {
     biometrics: overrides.biometrics || []
   };
 }
+
+test('tool battery reconciliation synchronizes the Unit battery health summary used outside the repeatable form rows', async () => {
+  const queries = [];
+  const fakeConnection = {
+    async query(sql, params = []) {
+      queries.push({ sql: String(sql), params });
+      return [{ affectedRows: 1 }];
+    }
+  };
+
+  await syncBatteryHealthSummary(fakeConnection, 42);
+
+  assert.equal(queries.length, 1);
+  assert.match(queries[0].sql, /UPDATE units[\s\S]*battery_health_percent = \(\s*SELECT MIN\(health_percent\)[\s\S]*FROM unit_batteries/);
+  assert.deepEqual(queries[0].params, [42, 42]);
+});
 
 test('battery keeps presence and health while ignoring transient charge/capacity noise', () => {
   const observation = normalizeBatteryObservation({ detected: true, overallHealth: 87.43, currentCharge: 20, designCapacity: 50000 });

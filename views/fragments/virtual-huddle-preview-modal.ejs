@@ -22,6 +22,9 @@
       </div>
 
       <p><strong><%= audience.recipients.length %></strong> active recipient<%= audience.recipients.length === 1 ? '' : 's' %> will receive this Huddle.</p>
+      <% if (formData.messageTypeCode === 'notice') { %>
+        <div class="message info"><p>This Notice is delivery-only. It does not create a permanent Huddle history or acknowledgment record.</p></div>
+      <% } %>
       <div class="virtual-huddle-audience-summary">
         <% if (requiredRecipients.length > 0) { %><span class="pill warning"><%= requiredRecipients.length %> required acknowledgment</span><% } %>
         <% if (optionalRecipients.length > 0) { %><span class="pill muted"><%= optionalRecipients.length %> optional acknowledgment</span><% } %>

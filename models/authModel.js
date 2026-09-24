@@ -116,37 +116,6 @@ async function getUserByLoginIdentifier(identifier, connection = pool) {
   return normalizeAuthUser(rows[0]);
 }
 
-async function getUserByEmail(email, connection = pool) {
-  const normalizedEmail = normalizeEmail(email);
-
-  const [rows] = await connection.query(
-    `
-      SELECT
-        u.user_id,
-        u.account_status_config_value_id,
-        status_system.system_config_value_id AS account_status_system_config_value_id,
-        u.first_name,
-        u.last_name,
-        u.username,
-        u.email,
-        u.password_hash,
-        u.failed_login_count,
-        u.locked_until,
-        u.last_login_at,
-        u.is_active
-      FROM users u
-      LEFT JOIN config_values status
-        ON status.config_value_id = u.account_status_config_value_id
-      LEFT JOIN system_config_values status_system
-        ON status_system.config_value_id = status.config_value_id
-      WHERE LOWER(u.email) = ?
-      LIMIT 1
-    `,
-    [normalizedEmail]
-  );
-
-  return normalizeAuthUser(rows[0]);
-}
 
 async function getUserByIdWithRoles(userId) {
   const [rows] = await pool.query(
@@ -536,7 +505,6 @@ module.exports = {
   normalizeEmail,
   normalizeLoginIdentifier,
   getUserByLoginIdentifier,
-  getUserByEmail,
   getUserByIdWithRoles,
   recordSuccessfulLogin,
   recordFailedLogin,

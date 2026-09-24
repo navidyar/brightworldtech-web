@@ -22,12 +22,17 @@ const ACCOUNT_ROLE_CODES = [
   'tech'
 ];
 
-const UNIT_BROWSER_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'qc', 'tech']);
 const UNIT_PRODUCTION_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'tech']);
-const UNIT_HISTORY_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'qc', 'tech']);
 const QC_PORTAL_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'qc']);
 const QC_REVIEW_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'qc']);
-const QC_REPORTING_ROLE_CODES = Object.freeze(['admin', 'management']);
+const QC_REPORTING_ROLE_CODES = Object.freeze(['admin']);
+
+const FEATURE_ROLE_CODES = Object.freeze({
+  operationsDashboard: Object.freeze(['admin']),
+  userAdministration: Object.freeze(['admin']),
+  managedPrinters: Object.freeze(['admin']),
+  qcReporting: QC_REPORTING_ROLE_CODES
+});
 const UNIT_REQUEST_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'qc', 'tech']);
 
 const DASHBOARD_DEFINITIONS = [
@@ -148,6 +153,16 @@ function canAccessMenuArea(userRoleCodes, menuAreaKey) {
   return hasAnyRole(userRoleCodes, menuArea.allowedRoles);
 }
 
+function canAccessFeature(userRoleCodes, featureKey) {
+  const allowedRoles = FEATURE_ROLE_CODES[String(featureKey || '').trim()];
+
+  if (!allowedRoles) {
+    return false;
+  }
+
+  return hasAnyAssignedRole(userRoleCodes, allowedRoles);
+}
+
 function canAccessUnitRequests(userRoleCodes) {
   return hasAnyAssignedRole(userRoleCodes, UNIT_REQUEST_ROLE_CODES);
 }
@@ -164,16 +179,16 @@ module.exports = {
   ROLE_HIERARCHY,
   ROLE_EFFECTIVE_ROLES,
   ACCOUNT_ROLE_CODES,
-  UNIT_BROWSER_ROLE_CODES,
   UNIT_PRODUCTION_ROLE_CODES,
-  UNIT_HISTORY_ROLE_CODES,
   UNIT_REQUEST_ROLE_CODES,
   QC_PORTAL_ROLE_CODES,
   QC_REVIEW_ROLE_CODES,
   QC_REPORTING_ROLE_CODES,
+  FEATURE_ROLE_CODES,
   DASHBOARD_DEFINITIONS,
   MENU_AREAS,
   canAccessDashboard,
+  canAccessFeature,
   canAccessMenuArea,
   canAccessUnitRequests,
   canCreateOrEditTechUnits,

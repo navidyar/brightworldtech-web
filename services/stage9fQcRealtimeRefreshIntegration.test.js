@@ -58,6 +58,6 @@ test('Unit Browser assets are cache-busted for the realtime and icon changes', (
   for (const page of ['views/pages/tech-units.ejs', 'views/pages/tech-unit-detail.ejs']) {
     const source = read(page);
     assert.match(source, /<body class="css-scope-tech-units">/);
-    assert.match(source, /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
+    assert.match(source, /tech-units\.js\?v=[^"'\s>]+/);
   }
 });

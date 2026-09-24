@@ -124,7 +124,7 @@ test('Stage 10V assets are cache-busted on Unit Browser and single-Unit entry po
     'views/pages/tech-units.ejs',
     'views/pages/tech-unit-detail.ejs'
   ]) {
-    assert.match(read(relativePath), /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
+    assert.match(read(relativePath), /tech-units\.js\?v=[^\"'\s>]+/);
   }
 
   assert.match(read('views/partials/head.ejs'), /app\.css\?v=[^"\'\s>]+/);

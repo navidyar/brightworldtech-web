@@ -31,7 +31,9 @@ test('Processor Catalog request captures type, processor, speed, and source note
   assert.match(modal, /name="requestedProcessorType"/);
   assert.match(modal, /name="requestedProcessorName"/);
   assert.match(modal, /name="requestedProcessorSpeedGhz"/);
-  assert.match(modal, /min="0\.01" max="99\.99" step="0\.01" required/);
+  assert.match(modal, /name="requestedProcessorSpeedGhz"[\s\S]*?min="0\.01" max="99\.99" step="0\.01"/);
+  assert.match(modal, /optional if included below/);
+  assert.match(controller, /interpretProcessorObservation/);
   assert.match(controller, /normalizeProcessorSpeed/);
   assert.match(controller, /requestedProcessorSpeedGhz/);
   assert.match(controller, /0\.01 through 99\.99 GHz/);
@@ -56,7 +58,8 @@ test('Management can create or reuse a Processor Type and map the approved Proce
   assert.match(requestDetail, /name="approvedProcessorBrandId"/);
   assert.match(requestDetail, /<select name="approvedProcessorBrandId"[\s\S]*?<option value="">[\s\S]*?<\/option>[\s\S]*?processorBrands\.forEach/);
   assert.match(requestDetail, /name="approvedProcessorBrandName"/);
-  assert.match(requestDetail, /value="<%= request\.catalogContext\.requestedProcessorSpeedGhz \|\| '' %>"/);
+  assert.match(requestDetail, /processorInterpretation\?\.baseSpeedGhz/);
+  assert.match(requestDetail, /processorInterpretation\?\.modelCode/);
   assert.match(controller, /approvedProcessorBrandName: req\.body\.approvedProcessorBrandName/);
   assert.match(model, /resolveProcessorBrandForApproval/);
   assert.match(model, /INSERT INTO processor_brands/);

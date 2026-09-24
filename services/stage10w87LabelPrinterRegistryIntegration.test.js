@@ -78,12 +78,12 @@ test('printer registry migration is additive and seeds the existing CUPS printer
   assert.match(config, /protocolCode: 'raw_9100'/);
 });
 
-test('Management+ receives registry/group controls and Tech users receive owner-scoped solo controls', () => {
+test('Admin receives registry/group controls and Tech users receive owner-scoped solo controls', () => {
   const routes = read('routes/management.js');
   const controller = read('controllers/labelPrinterController.js');
   assert.match(routes, /\/management\/printers/);
   assert.match(routes, /\/management\/printer-groups/);
-  assert.match(routes, /requireRole\(managementRoles\)/);
+  assert.match(routes, /requireFeature\('managedPrinters'\)/);
   assert.match(routes, /\/tech\/printers/);
   assert.match(routes, /requireRole\(techRoles\)/);
   assert.match(controller, /listOwnedSoloPrinters\(req\.currentUser\.user_id\)/);
@@ -104,10 +104,9 @@ test('printer registration supports probe-and-review without switching productio
   assert.match(labelConfig, /findLabelPrinter/);
 });
 
-test('sidebar exposes Printers for Management and My Printers for Tech without exposing QC-only access', () => {
+test('sidebar exposes managed Printers through the Admin feature guard and My Printers for Tech without exposing QC-only access', () => {
   const sidebar = read('views/partials/sidebar.ejs');
-  assert.match(sidebar, /href="\/management\/printers"/);
-  assert.match(sidebar, />Printers</);
+  assert.match(sidebar, /canAccessFeature\('managedPrinters'\)[\s\S]*?href="\/management\/printers"[\s\S]*?>Printer Management</);
   assert.match(sidebar, /href="\/tech\/printers"/);
   assert.match(sidebar, />My Printers</);
   assert.match(sidebar, /canAccessMenuArea\('tech'\) && !isQcOnlyNavigationUser/);

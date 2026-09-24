@@ -2,6 +2,8 @@
 
 const { pool } = require('./db');
 const processorFamilyModel = require('./processorFamilyModel');
+const { listProcessorMetadata } = require('../services/processorMetadataCatalog');
+const { getIntelCoreGeneration, ordinal } = require('../services/processorFamilyClassifier');
 
 const MAX_PROCESSOR_MODEL_LENGTH = 150;
 const MAX_PROCESSOR_FAMILY_LENGTH = 100;
@@ -27,7 +29,7 @@ function normalizeSearch(value) {
 }
 
 function normalizeProcessorIdentity(value, brandName = '') {
-  let normalized = String(value || '').toLowerCase();
+  let normalized = String(value || '').toLowerCase().replace(/\((?:r|tm)\)/g, ' ').replace(/[™®]/g, ' ');
   const brandTokens = String(brandName || '')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
@@ -45,6 +47,169 @@ function normalizeProcessorIdentity(value, brandName = '') {
   }
 
   return normalized.replace(/[^a-z0-9]+/g, '');
+}
+
+
+const PROCESSOR_BRAND_ALIASES = Object.freeze([
+  { canonical: 'Intel', patterns: [/\bintel(?:\s+corporation)?\b/i] },
+  { canonical: 'AMD', patterns: [/\bamd\b/i, /\badvanced\s+micro\s+devices\b/i] },
+  { canonical: 'Apple', patterns: [/\bapple\b/i] },
+  { canonical: 'Qualcomm', patterns: [/\bqualcomm\b/i] },
+  { canonical: 'MediaTek', patterns: [/\bmediatek\b/i] },
+  { canonical: 'Rockchip', patterns: [/\brockchip\b/i] }
+]);
+
+function normalizeObservedProcessorText(value) {
+  return normalizeText(value, 300)
+    .replace(/\((?:r|tm)\)/gi, '')
+    .replace(/[™®]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function detectProcessorBrandName(value, suppliedBrandName = '') {
+  const supplied = normalizeObservedProcessorText(suppliedBrandName);
+  const source = `${supplied} ${normalizeObservedProcessorText(value)}`.trim();
+  for (const alias of PROCESSOR_BRAND_ALIASES) {
+    if (alias.patterns.some((pattern) => pattern.test(source))) return alias.canonical;
+  }
+  return supplied;
+}
+
+function getObservedProcessorSpeed(value) {
+  const source = normalizeObservedProcessorText(value);
+  const match = source.match(/(?:@|base\s*speed\s*[:=]?)?\s*(\d+(?:\.\d+)?)\s*ghz\b/i);
+  if (!match) return null;
+  const speed = normalizeOptionalDecimal(match[1]);
+  return speed !== null && speed >= 0.01 && speed <= 99.99 ? speed : null;
+}
+
+function getExplicitProcessorGeneration(value) {
+  const source = normalizeObservedProcessorText(value);
+  const match = source.match(/\b(\d{1,2})(?:st|nd|rd|th)\s*(?:gen|generation)\b/i);
+  return match ? `${ordinal(Number(match[1]))} Gen` : '';
+}
+
+function metadataMatchForObservation(value, brandName = '') {
+  const requestedIdentity = normalizeProcessorIdentity(value, brandName);
+  if (requestedIdentity.length < 3) return null;
+  const requestedBrand = detectProcessorBrandName(value, brandName).toLowerCase();
+  return listProcessorMetadata().find((metadata) => {
+    if (requestedBrand && metadata.brandName.toLowerCase() !== requestedBrand) return false;
+    return normalizeProcessorIdentity(metadata.modelCode, metadata.brandName) === requestedIdentity;
+  }) || null;
+}
+
+function inferProcessorPieces(value, brandName = '') {
+  const raw = normalizeObservedProcessorText(value);
+  const detectedBrandName = detectProcessorBrandName(raw, brandName);
+  let working = raw
+    .replace(/(?:@|base\s*speed\s*[:=]?)?\s*\d+(?:\.\d+)?\s*ghz\b/ig, ' ')
+    .replace(/\b\d{1,2}(?:st|nd|rd|th)\s*(?:gen|generation)\b/ig, ' ')
+    .replace(/\b(?:cpu|processor)\s*@?\s*$/ig, ' ')
+    .replace(/\bwith\s+radeon\s+(?:graphics|gfx)\b/ig, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (detectedBrandName) {
+    const brandAlias = PROCESSOR_BRAND_ALIASES.find((alias) => alias.canonical.toLowerCase() === detectedBrandName.toLowerCase());
+    if (brandAlias) {
+      for (const pattern of brandAlias.patterns) working = working.replace(pattern, ' ');
+      working = working.replace(/\s+/g, ' ').trim();
+    } else {
+      const escaped = detectedBrandName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      working = working.replace(new RegExp(`^${escaped}\\b`, 'i'), '').trim();
+    }
+  }
+
+  let modelCode = working;
+  let family = '';
+  let generation = getExplicitProcessorGeneration(raw);
+  const brandKey = detectedBrandName.toLowerCase();
+
+  if (brandKey === 'intel') {
+    let match = working.match(/\bcore\s+i([3579])[-\s]?([0-9]{4,5}[a-z0-9-]*)\b/i);
+    if (match) {
+      modelCode = `i${match[1]}-${match[2]}`;
+      family = 'Core';
+      if (!generation) {
+        const inferredGeneration = getIntelCoreGeneration(match[2]);
+        if (inferredGeneration) generation = `${ordinal(inferredGeneration)} Gen`;
+      }
+    } else if ((match = working.match(/\bcore\s+m([357])[-\s]?([a-z0-9-]+)\b/i))) {
+      modelCode = `Core m${match[1]}-${match[2]}`;
+      family = 'Core m';
+      if (!generation) {
+        const inferredGeneration = getIntelCoreGeneration(match[2]);
+        if (inferredGeneration) generation = `${ordinal(inferredGeneration)} Gen`;
+      }
+    } else if ((match = working.match(/\bcore\s+ultra\s+([3579])\s+([a-z0-9-]+)\b/i))) {
+      modelCode = `Core Ultra ${match[1]} ${match[2]}`;
+      family = 'Core Ultra';
+      const seriesMatch = match[2].match(/^([12])\d{2}/);
+      if (!generation && seriesMatch) generation = `Series ${seriesMatch[1]}`;
+    } else if (/^xeon\b/i.test(working)) {
+      family = 'Xeon';
+    } else if (/^celeron\b/i.test(working)) {
+      family = 'Celeron';
+    } else if (/^pentium\s+gold\b/i.test(working)) {
+      family = 'Pentium Gold';
+    } else if (/^pentium\s+silver\b/i.test(working)) {
+      family = 'Pentium Silver';
+    }
+  } else if (brandKey === 'amd') {
+    const match = working.match(/\bryzen\s+([3579])(?:\s+(pro))?\s+([2-9]\d{3}[a-z0-9-]*)\b/i);
+    if (match) {
+      modelCode = `Ryzen ${match[1]}${match[2] ? ' PRO' : ''} ${match[3]}`;
+      family = 'Ryzen';
+      if (!generation) generation = `${match[3][0]}000 Series`;
+    } else if (/^epyc\b/i.test(working)) {
+      family = 'EPYC';
+    } else if (/^athlon\b/i.test(working)) {
+      family = 'Athlon';
+    }
+  }
+
+  modelCode = normalizeText(modelCode.replace(/\b(?:cpu|processor)\b\s*$/i, ''), MAX_PROCESSOR_MODEL_LENGTH);
+  return { brandName: detectedBrandName, modelCode, family, generation };
+}
+
+function interpretProcessorObservation({ value = '', brandName = '', family = '', generation = '', baseSpeedGhz = '' } = {}) {
+  const rawValue = normalizeObservedProcessorText(value);
+  const suppliedFamily = normalizeText(family, MAX_PROCESSOR_FAMILY_LENGTH);
+  const suppliedGeneration = normalizeText(generation, MAX_PROCESSOR_GENERATION_LENGTH);
+  const suppliedSpeed = normalizeOptionalDecimal(baseSpeedGhz);
+  const detectedBrandName = detectProcessorBrandName(rawValue, brandName);
+  const metadata = metadataMatchForObservation(rawValue, detectedBrandName);
+  const inferred = inferProcessorPieces(rawValue, detectedBrandName);
+
+  const modelCode = normalizeText(metadata?.modelCode || inferred.modelCode || rawValue, MAX_PROCESSOR_MODEL_LENGTH);
+  const resolvedBrandName = normalizeText(metadata?.brandName || inferred.brandName || detectedBrandName, 100);
+  const resolvedFamily = suppliedFamily || normalizeText(metadata?.processorFamily || inferred.family, MAX_PROCESSOR_FAMILY_LENGTH);
+  const resolvedGeneration = suppliedGeneration || normalizeText(metadata?.generation || inferred.generation, MAX_PROCESSOR_GENERATION_LENGTH);
+  const observedSpeed = getObservedProcessorSpeed(rawValue);
+  const resolvedSpeed = suppliedSpeed !== null ? suppliedSpeed : (observedSpeed !== null ? observedSpeed : (metadata?.baseSpeedGhz ?? null));
+  const originalIdentity = normalizeProcessorIdentity(rawValue, resolvedBrandName);
+  const canonicalIdentity = normalizeProcessorIdentity(modelCode, resolvedBrandName);
+
+  return {
+    rawValue,
+    brandName: resolvedBrandName,
+    modelCode,
+    family: resolvedFamily,
+    generation: resolvedGeneration,
+    baseSpeedGhz: resolvedSpeed,
+    matchedMetadata: Boolean(metadata),
+    identity: canonicalIdentity,
+    changed: Boolean(rawValue) && (
+      modelCode.toLowerCase() !== rawValue.toLowerCase()
+      || Boolean(resolvedBrandName && !String(brandName || '').trim())
+      || Boolean(resolvedFamily && !suppliedFamily)
+      || Boolean(resolvedGeneration && !suppliedGeneration)
+      || Boolean(resolvedSpeed !== null && suppliedSpeed === null)
+      || originalIdentity !== canonicalIdentity
+    )
+  };
 }
 
 function getCanonicalProcessorNameErrors({ brandName = '', modelCode = '' } = {}) {
@@ -188,7 +353,8 @@ async function findLikelyProcessorMatches({ processorBrandId = null, brandName =
   const safeBrandId = normalizePositiveInteger(processorBrandId);
   const safeBrandName = normalizeText(brandName, 100);
   const safeModelCode = normalizeText(modelCode, MAX_PROCESSOR_MODEL_LENGTH);
-  const requestedIdentity = normalizeProcessorIdentity(safeModelCode, safeBrandName);
+  const interpreted = interpretProcessorObservation({ value: safeModelCode, brandName: safeBrandName });
+  const requestedIdentity = interpreted.identity || normalizeProcessorIdentity(safeModelCode, safeBrandName);
   if (requestedIdentity.length < 4) return [];
 
   const options = Array.isArray(processorOptions)
@@ -390,10 +556,10 @@ async function processorExists({ processorBrandId, modelCode, excludeProcessorMo
 
 async function createProcessorModel(input = {}, currentUserId = null) {
   const processorBrandId = normalizePositiveInteger(input.processorBrandId);
-  const modelCode = normalizeText(input.modelCode, MAX_PROCESSOR_MODEL_LENGTH);
-  const legacyFamily = normalizeText(input.legacyFamily, MAX_PROCESSOR_FAMILY_LENGTH);
-  const generation = normalizeText(input.generation, MAX_PROCESSOR_GENERATION_LENGTH);
-  const baseSpeedGhz = normalizeOptionalDecimal(input.baseSpeedGhz);
+  let modelCode = normalizeText(input.modelCode, MAX_PROCESSOR_MODEL_LENGTH);
+  let legacyFamily = normalizeText(input.legacyFamily, MAX_PROCESSOR_FAMILY_LENGTH);
+  let generation = normalizeText(input.generation, MAX_PROCESSOR_GENERATION_LENGTH);
+  let baseSpeedGhz = normalizeOptionalDecimal(input.baseSpeedGhz);
   const isActive = input.isActive === true || input.isActive === '1';
 
   if (!processorBrandId || modelCode.length < 2) {
@@ -417,6 +583,24 @@ async function createProcessorModel(input = {}, currentUserId = null) {
     const brand = brandRows[0];
     if (!brand) {
       const error = new Error('Select an active Processor Type.');
+      error.code = 'BWT_PROCESSOR_CATALOG_INPUT_INVALID';
+      throw error;
+    }
+
+    const interpretation = interpretProcessorObservation({
+      value: modelCode,
+      brandName: brand.name,
+      family: legacyFamily,
+      generation,
+      baseSpeedGhz
+    });
+    modelCode = interpretation.modelCode || modelCode;
+    if (!legacyFamily && interpretation.family) legacyFamily = interpretation.family;
+    if (!generation && interpretation.generation) generation = interpretation.generation;
+    if (baseSpeedGhz === null && interpretation.baseSpeedGhz !== null) baseSpeedGhz = interpretation.baseSpeedGhz;
+    const canonicalNameErrors = getCanonicalProcessorNameErrors({ brandName: brand.name, modelCode });
+    if (canonicalNameErrors.length > 0) {
+      const error = new Error(canonicalNameErrors.join(' '));
       error.code = 'BWT_PROCESSOR_CATALOG_INPUT_INVALID';
       throw error;
     }
@@ -466,10 +650,10 @@ async function createProcessorModel(input = {}, currentUserId = null) {
 async function updateProcessorModel(processorModelId, input = {}, currentUserId = null) {
   const safeId = normalizePositiveInteger(processorModelId);
   const processorBrandId = normalizePositiveInteger(input.processorBrandId);
-  const modelCode = normalizeText(input.modelCode, MAX_PROCESSOR_MODEL_LENGTH);
-  const legacyFamily = normalizeText(input.legacyFamily, MAX_PROCESSOR_FAMILY_LENGTH);
-  const generation = normalizeText(input.generation, MAX_PROCESSOR_GENERATION_LENGTH);
-  const baseSpeedGhz = normalizeOptionalDecimal(input.baseSpeedGhz);
+  let modelCode = normalizeText(input.modelCode, MAX_PROCESSOR_MODEL_LENGTH);
+  let legacyFamily = normalizeText(input.legacyFamily, MAX_PROCESSOR_FAMILY_LENGTH);
+  let generation = normalizeText(input.generation, MAX_PROCESSOR_GENERATION_LENGTH);
+  let baseSpeedGhz = normalizeOptionalDecimal(input.baseSpeedGhz);
   const isActive = input.isActive === true || input.isActive === '1';
 
   if (!safeId || !processorBrandId || modelCode.length < 2) {
@@ -508,6 +692,24 @@ async function updateProcessorModel(processorModelId, input = {}, currentUserId 
       [processorBrandId]
     );
     if (!brandRows[0]) throw new Error('Select an active Processor Type.');
+
+    const interpretation = interpretProcessorObservation({
+      value: modelCode,
+      brandName: brandRows[0].name,
+      family: legacyFamily,
+      generation,
+      baseSpeedGhz
+    });
+    modelCode = interpretation.modelCode || modelCode;
+    if (!legacyFamily && interpretation.family) legacyFamily = interpretation.family;
+    if (!generation && interpretation.generation) generation = interpretation.generation;
+    if (baseSpeedGhz === null && interpretation.baseSpeedGhz !== null) baseSpeedGhz = interpretation.baseSpeedGhz;
+    const canonicalNameErrors = getCanonicalProcessorNameErrors({ brandName: brandRows[0].name, modelCode });
+    if (canonicalNameErrors.length > 0) {
+      const error = new Error(canonicalNameErrors.join(' '));
+      error.code = 'BWT_PROCESSOR_CATALOG_INPUT_INVALID';
+      throw error;
+    }
 
     if (await processorExists({ processorBrandId, modelCode, excludeProcessorModelId: safeId }, connection)) {
       const error = new Error('A processor with that Processor Type and canonical Processor name already exists. Ask an Admin to use Resolve Duplicate instead of creating another duplicate.');
@@ -770,7 +972,16 @@ async function deleteProcessorModel({ processorModelId, currentUserId = null }) 
       lotRequirementCount = Number(rows[0]?.count_value || 0);
     }
 
-    if (unitCount > 0 || lotRequirementCount > 0) {
+    let requestCount = 0;
+    if (await tableHasColumn(connection, 'unit_processor_catalog_requests', 'approved_processor_model_id')) {
+      const [rows] = await connection.query(
+        'SELECT COUNT(*) AS count_value FROM unit_processor_catalog_requests WHERE approved_processor_model_id = ?',
+        [safeProcessorId]
+      );
+      requestCount = Number(rows[0]?.count_value || 0);
+    }
+
+    if (unitCount > 0 || lotRequirementCount > 0 || requestCount > 0) {
       await connection.query(
         'UPDATE processor_models SET is_active = 0 WHERE processor_model_id = ? LIMIT 1',
         [safeProcessorId]
@@ -782,9 +993,9 @@ async function deleteProcessorModel({ processorModelId, currentUserId = null }) 
         processor: { id: safeProcessorId, modelCode: processor.model_code, brandName: processor.brand_name },
         retainedUnitCount: unitCount,
         retainedLotRequirementCount: lotRequirementCount,
+        retainedRequestCount: requestCount,
         removedModelMappings: 0,
-        removedFamilyMemberships: 0,
-        clearedRequestLinks: 0
+        removedFamilyMemberships: 0
       };
     }
 
@@ -818,23 +1029,13 @@ async function deleteProcessorModel({ processorModelId, currentUserId = null }) 
       }
     }
 
-    let clearedRequestLinks = 0;
-    if (await tableHasColumn(connection, 'unit_processor_catalog_requests', 'approved_processor_model_id')) {
-      const [result] = await connection.query(
-        'UPDATE unit_processor_catalog_requests SET approved_processor_model_id = NULL WHERE approved_processor_model_id = ?',
-        [safeProcessorId]
-      );
-      clearedRequestLinks = Number(result.affectedRows || 0);
-    }
-
     await connection.query('DELETE FROM processor_models WHERE processor_model_id = ? LIMIT 1', [safeProcessorId]);
     await connection.commit();
     return {
       deleted: true,
       processor: { id: safeProcessorId, modelCode: processor.model_code, brandName: processor.brand_name },
       removedModelMappings,
-      removedFamilyMemberships,
-      clearedRequestLinks
+      removedFamilyMemberships
     };
   } catch (error) {
     await connection.rollback();
@@ -855,7 +1056,6 @@ async function deleteProcessorModel({ processorModelId, currentUserId = null }) 
             retainedLotRequirementCount: 0,
             removedModelMappings: 0,
             removedFamilyMemberships: 0,
-            clearedRequestLinks: 0,
             retainedByForeignKey: true
           };
         }
@@ -1176,6 +1376,7 @@ module.exports = {
   createProcessorModel,
   getCatalogFilters,
   getCanonicalProcessorNameErrors,
+  interpretProcessorObservation,
   getProcessorById,
   findLikelyProcessorMatches,
   deleteProcessorModel,

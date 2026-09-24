@@ -1,7 +1,7 @@
 const { pool } = require('./db');
 const unitFieldSourceModel = require('./unitFieldSourceModel');
 const { listConfigValuesBySystemCategoryIds, getConfigValueBySystemId } = require('./configLookupModel');
-const { SYSTEM_CONFIG_CATEGORY_IDS, SYSTEM_CONFIG_VALUE_IDS, COSMETIC_GRADE_BY_SYSTEM_VALUE_ID } = require('../config/configIdentityRegistry');
+const { SYSTEM_CONFIG_CATEGORY_IDS, COSMETIC_GRADE_BY_SYSTEM_VALUE_ID } = require('../config/configIdentityRegistry');
 const unitOutcomeModel = require('./unitOutcomeModel');
 const overrideRequestModel = require('./overrideRequestModel');
 const operationalOptionRankingModel = require('./operationalOptionRankingModel');
@@ -44,45 +44,6 @@ function normalizeOptionalInteger(value) {
   const parsed = Number(normalized);
 
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function normalizeOptionalNonNegativeInteger(value) {
-  const normalized = normalizeText(value);
-
-  if (!normalized) {
-    return null;
-  }
-
-  const parsed = Number(normalized);
-
-  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
-}
-
-function normalizeRows(rows) {
-  if (!rows) {
-    return [];
-  }
-
-  if (Array.isArray(rows)) {
-    return rows.filter((row) => row && typeof row === 'object');
-  }
-
-  if (typeof rows === 'object') {
-    return Object.keys(rows)
-      .sort((a, b) => Number(a) - Number(b))
-      .map((key) => rows[key])
-      .filter((row) => row && typeof row === 'object');
-  }
-
-  return [];
-}
-
-function graphicsRowHasAnyValue(row) {
-  return Boolean(
-    normalizeText(row.gpuTypeConfigValueId) ||
-      normalizeText(row.gpuModel) ||
-      normalizeText(row.vramMb)
-  );
 }
 
 async function tableExists(tableName, connection = pool) {
@@ -513,17 +474,6 @@ async function getExpandedFormDataByUnitId(unitId) {
   };
 }
 
-function getNormalizedGraphicsAdapters(formData) {
-  return normalizeRows(formData.graphicsAdapters)
-    .filter(graphicsRowHasAnyValue)
-    .map((row) => ({
-      gpuTypeConfigValueId: normalizeOptionalInteger(row.gpuTypeConfigValueId),
-      gpuModel: normalizeNullableText(row.gpuModel, 150),
-      vramMb: normalizeOptionalNonNegativeInteger(row.vramMb)
-    }))
-    .filter((row) => row.gpuTypeConfigValueId || row.gpuModel || row.vramMb !== null);
-}
-
 async function saveUnitSpecifications(connection, unitId, formData, currentUserId) {
   if (!await tableExists('unit_specifications', connection)) {
     return;
@@ -647,9 +597,10 @@ async function resolveCanonicalCosmeticGradeConfigValueId(connection, selectedCo
   }
 
   const [selectedRows] = await connection.query(
-    `SELECT cv.config_value_id, scv.system_config_value_id, cv.label, cv.value
+    `SELECT cv.config_value_id, cv.is_active, scv.system_config_value_id, scc.system_config_category_id, cv.label, cv.value
      FROM config_values cv
      LEFT JOIN system_config_values scv ON scv.config_value_id = cv.config_value_id
+     LEFT JOIN system_config_categories scc ON scc.config_category_id = cv.config_category_id
      WHERE cv.config_value_id = ?
      LIMIT 1`,
     [selectedId]
@@ -658,9 +609,10 @@ async function resolveCanonicalCosmeticGradeConfigValueId(connection, selectedCo
   const selectedSystemId = Number(selectedRow?.system_config_value_id || 0);
   const canonicalGrade = COSMETIC_GRADE_BY_SYSTEM_VALUE_ID[selectedSystemId]
     || getCanonicalCosmeticGradeFromOption(selectedRow || {});
+  const belongsToCosmeticGradeCategory = Number(selectedRow?.system_config_category_id || 0) === SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES;
 
   if (!canonicalGrade) {
-    return null;
+    return belongsToCosmeticGradeCategory && Number(selectedRow?.is_active || 0) === 1 ? selectedId : null;
   }
 
   const systemId = Object.entries(COSMETIC_GRADE_BY_SYSTEM_VALUE_ID)
@@ -787,54 +739,6 @@ async function saveOutcome(connection, unitId, formData, currentUserId, { canReq
   });
 }
 
-async function saveGraphicsAdapters(connection, unitId, formData, currentUserId) {
-  if (!await tableExists('unit_graphics_adapters', connection)) {
-    return;
-  }
-
-  const graphicsAdapters = getNormalizedGraphicsAdapters(formData);
-
-  await connection.query(
-    `
-      UPDATE unit_graphics_adapters
-      SET
-        is_current = 0,
-        updated_by_user_id = ?
-      WHERE unit_id = ?
-        AND is_current = 1
-    `,
-    [normalizeOptionalInteger(currentUserId), unitId]
-  );
-
-  for (const graphicsAdapter of graphicsAdapters) {
-    await connection.query(
-      `
-        INSERT INTO unit_graphics_adapters (
-          unit_id,
-          gpu_type_config_value_id,
-          gpu_model,
-          vram_mb,
-          is_current,
-          source_code,
-          created_by_user_id,
-          updated_by_user_id
-        )
-        VALUES (?, ?, ?, ?, 1, 'tech_edit', ?, ?)
-      `,
-      [
-        unitId,
-        graphicsAdapter.gpuTypeConfigValueId,
-        graphicsAdapter.gpuModel,
-        graphicsAdapter.vramMb,
-        normalizeOptionalInteger(currentUserId),
-        normalizeOptionalInteger(currentUserId)
-      ]
-    );
-  }
-
-  await upsertManualFieldSources(connection, unitId, ['graphics_adapters'], currentUserId);
-}
-
 async function saveExpandedDetailsForUnitWithConnection(connection, { unitId, formData, currentUserId, canRequestOutcomeConfirmation = false }) {
   const safeUnitId = Number(unitId);
 
@@ -847,26 +751,9 @@ async function saveExpandedDetailsForUnitWithConnection(connection, { unitId, fo
   await saveOverallGrade(connection, safeUnitId, formData, currentUserId);
   await saveOutcome(connection, safeUnitId, formData, currentUserId, { canRequestOutcomeConfirmation });
 }
-
-async function saveExpandedDetailsForUnit({ unitId, formData, currentUserId }) {
-  const connection = await pool.getConnection();
-
-  try {
-    await connection.beginTransaction();
-    await saveExpandedDetailsForUnitWithConnection(connection, { unitId, formData, currentUserId });
-    await connection.commit();
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
-}
-
 module.exports = {
   getBlankExpandedFormData,
   getExpandedFormOptions,
   getExpandedFormDataByUnitId,
-  saveExpandedDetailsForUnit,
   saveExpandedDetailsForUnitWithConnection
 };

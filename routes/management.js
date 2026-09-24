@@ -8,11 +8,10 @@ const qcReportingController = require('../controllers/qcReportingController');
 const labelLibraryController = require('../controllers/labelLibraryController');
 const labelPrintQueueController = require('../controllers/labelPrintQueueController');
 const labelPrinterController = require('../controllers/labelPrinterController');
-const { requireAuth, requireRole } = require('../middleware/authMiddleware');
+const { requireAuth, requireRole, requireFeature } = require('../middleware/authMiddleware');
 const {
   QC_PORTAL_ROLE_CODES,
-  QC_REVIEW_ROLE_CODES,
-  QC_REPORTING_ROLE_CODES
+  QC_REVIEW_ROLE_CODES
 } = require('../config/accessPolicy');
 
 const router = express.Router();
@@ -59,21 +58,21 @@ router.get(
 router.get(
   '/management/qc-reporting',
   requireAuth,
-  requireRole(QC_REPORTING_ROLE_CODES),
+  requireFeature('qcReporting'),
   qcReportingController.renderManagementQcReportingPage
 );
 
 router.get(
   '/management/users',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.renderUsersPage
 );
 
 router.get(
   '/management/users/inactive',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.renderInactiveUsersPage
 );
 
@@ -94,126 +93,126 @@ router.get(
 router.get(
   '/management/printers',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.renderManagementPrintersPage
 );
 
 router.get(
   '/management/printers/live',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.renderManagementPrintersLive
 );
 
 router.get(
   '/management/printers/new/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.renderNewManagedPrinterModal
 );
 
 router.post(
   '/management/printers/probe',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.probeManagedPrinter
 );
 
 router.post(
   '/management/printers',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.createManagedPrinter
 );
 
 router.post(
   '/management/printers/:printerId/sharing',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.updateManagedPrinterSharing
 );
 
 router.get(
   '/management/printers/:printerId/scope/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.renderConvertPrinterScopeModal
 );
 
 router.post(
   '/management/printers/:printerId/scope',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.convertPrinterScope
 );
 
 router.get(
   '/management/printers/:printerId/edit/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.renderEditManagedPrinterModal
 );
 
 router.post(
   '/management/printers/:printerId/edit/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.updateManagedPrinter
 );
 
 router.get(
   '/management/printers/:printerId/delete/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.renderDeleteManagedPrinterModal
 );
 
 router.post(
   '/management/printers/:printerId/delete',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.deleteManagedPrinter
 );
 
 router.get(
   '/management/printer-groups/new/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.renderNewGroupModal
 );
 
 router.post(
   '/management/printer-groups',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.createGroup
 );
 
 router.get(
   '/management/printer-groups/:groupId/members/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.renderGroupMembersModal
 );
 
 router.post(
   '/management/printer-groups/:groupId/members',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.updateGroupMembers
 );
 
 router.get(
   '/management/printer-groups/:groupId/delete/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.renderDeleteGroupModal
 );
 
 router.post(
   '/management/printer-groups/:groupId/delete',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('managedPrinters'),
   labelPrinterController.deleteGroup
 );
 
@@ -410,14 +409,14 @@ router.get(
 router.get(
   '/management/users/new',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.renderNewUserPage
 );
 
 router.post(
   '/management/users',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.createUser
 );
 
@@ -425,70 +424,70 @@ router.post(
 router.get(
   '/management/users/:userId/edit/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.renderEditUserModal
 );
 
 router.post(
   '/management/users/:userId/edit/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.updateUserModal
 );
 
 router.get(
   '/management/users/:userId/deactivate/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.renderDeactivateUserModal
 );
 
 router.get(
   '/management/users/:userId/reactivate/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.renderReactivateUserModal
 );
 
 router.get(
   '/management/users/:userId/delete-pending/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.renderDeletePendingUserModal
 );
 
 router.get(
   '/management/users/:userId/setup-link/modal',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.renderSetupLinkModal
 );
 
 router.post(
   '/management/users/:userId/setup-link',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.createSetupLinkForExistingUser
 );
 
 router.post(
   '/management/users/:userId/deactivate',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.deactivateUser
 );
 
 router.post(
   '/management/users/:userId/reactivate',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.reactivateUser
 );
 
 router.post(
   '/management/users/:userId/delete-pending',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   managementController.deletePendingSetupUser
 );
 
@@ -719,21 +718,21 @@ router.get(
 router.get(
   '/tech/units/export/preview',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   techController.renderTechUnitsExportPreview
 );
 
 router.get(
   '/tech/units/export/csv',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   techController.downloadTechUnitsCsv
 );
 
 router.get(
   '/tech/units/export/xlsx',
   requireAuth,
-  requireRole(managementRoles),
+  requireFeature('userAdministration'),
   techController.downloadTechUnitsXlsx
 );
 

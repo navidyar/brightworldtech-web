@@ -88,11 +88,13 @@ test('Print Label modal surfaces a clear message when the current user has no el
   assert.match(controller, /No label printers or printer groups are currently available to your account/);
 });
 
-test('temporary configured-printer fallback remains only for an empty or unavailable registry', () => {
+test('completed registry cutover fails closed instead of restoring hardcoded printer fallback', () => {
   const runtime = read('services/labelPrinterRuntimeService.js');
-  assert.match(runtime, /Compatibility fallback is intentionally limited to an empty registry during cutover/);
-  assert.match(runtime, /if \(allRows\.length > 0\) return Object\.freeze\(\[\]\)/);
-  assert.match(runtime, /labelPrintingService\.LABEL_PRINTERS\.map\(mapLegacyPrinterToPrintOption\)/);
+  const printing = read('services/labelLibraryPrintingService.js');
+  assert.doesNotMatch(runtime, /mapLegacyPrinterToPrintOption|LABEL_PRINTERS/);
+  assert.match(runtime, /Label printer registry unavailable:/);
+  assert.match(runtime, /return Object\.freeze\(\[\]\)/);
+  assert.doesNotMatch(printing, /LABEL_PRINTERS\.find/);
 });
 
 test('printer/template compatibility is checked before raster data is submitted', () => {

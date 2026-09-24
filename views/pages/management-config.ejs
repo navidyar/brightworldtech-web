@@ -2,6 +2,9 @@
   const isProductionWeightCategory = (category) => Number(category?.system_config_category_id || 0) === 27;
   const isSystemUsedCategory = (category) => Number(category?.system_config_category_id || 0) > 0;
   const isPasswordLinkExpirySetting = (category, value) => Number(value?.system_config_value_id || 0) === 121;
+  const isCosmeticGradeCategory = (category) => Number(category?.system_config_category_id || 0) === 7;
+  const isPortTypeCategory = (category) => Number(category?.system_config_category_id || 0) === 45;
+  const isLotTypeCategory = (category) => Number(category?.system_config_category_id || 0) === 22;
   const visibleValueCount = categorySections.reduce((sectionTotal, section) => (
     sectionTotal + section.categories.reduce((categoryTotal, category) => categoryTotal + category.values.length, 0)
   ), 0);
@@ -141,6 +144,13 @@
                           <div class="configuration-category-toolbar">
                             <div class="configuration-category-toolbar-copy">
                               <p><%= category.description || 'No category description is configured.' %></p>
+                              <% if (isCosmeticGradeCategory(category)) { %>
+                                <p class="configuration-ordering-help">Unit Grades are the single application-wide grade configuration. Add, rename, activate/deactivate, and reorder grades here. Canonical grade IDs remain protected for history and compatibility; configured labels and order are used throughout the application. Grades below A require a Cosmetic Issue for regular Tech users.</p>
+                              <% } else if (isPortTypeCategory(category)) { %>
+                                <p class="configuration-ordering-help">Port / Expansion options are shared by Unit forms and Unit Details. Renaming a value keeps its database ID, so existing Unit records display the updated label.</p>
+                              <% } else if (isLotTypeCategory(category)) { %>
+                                <p class="configuration-ordering-help">Lot Types are shared by Create/Edit Lot. Active values appear as selectable Lot Types in configured order. Deactivating a value removes it from new selections while existing Lots keep their stored type until changed.</p>
+                              <% } %>
                               <% if (supportsDragOrdering) { %>
                                 <p class="configuration-ordering-help">Drag the grip to reorder this list. Changes save automatically. Search can remain active; matching values move while hidden values keep their positions. Use the arrow keys while the grip is focused for keyboard ordering.</p>
                                 <p class="configuration-ordering-status" data-configuration-order-status aria-live="polite"></p>

@@ -10,6 +10,11 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell unit-requests-page">
+          <% const isTakeoverReview = request.requestType === 'manual_tech_override_request'
+            && (request.isParkedTakeoverRequest
+              || !request.isDuplicateIntakeMoveRequest
+              || request.duplicateIntakeActionKind === 'takeover'); %>
+
           <section class="dashboard-hero accent-green">
             <div>
               <p class="eyebrow"><%= request.requestType === 'outcome_confirmation' ? 'Outcome Confirmation' : (request.isParkedTakeoverRequest ? 'Parked Unit Takeover' : (request.isDuplicateIntakeMoveRequest ? request.duplicateIntakeRequestLabel : 'Existing Unit Override')) %></p>
@@ -74,9 +79,11 @@
                   <h3>Approve or Reject</h3>
                   <p><%= request.requestType === 'outcome_confirmation'
                     ? 'Approval or rejection records your review of the Tech’s exact Pass/Fail decision. It does not change the Tech’s Pass/Fail selection.'
-                    : request.isParkedTakeoverRequest
-                      ? 'Approval rechecks the selected destination Lot, returns the Unit to Active, and assigns it to the requesting Tech.'
-                      : 'Approval rechecks the selected destination Lot before changing the Unit assignment or Lot.' %></p>
+                    : isTakeoverReview
+                      ? (request.isParkedTakeoverRequest
+                        ? 'Approval confirms the selected destination Lot is still open, returns the Unit to Active, and assigns it to the requesting Tech. Missing Unit completion information does not block the takeover and remains required before completion.'
+                        : 'Approval confirms the selected destination Lot is still open and assigns the Unit to the requesting Tech. Missing Unit completion information does not block the takeover and remains required before completion.')
+                      : 'Approval rechecks the selected destination Lot requirements before changing the Unit Lot.' %></p>
                 </div>
 
                 <div class="unit-request-review-actions">

@@ -24,7 +24,6 @@ const TOUCHSCREEN_TEST_FIELD_KEY = 'touchscreen_status';
 const COMPLETE_DIAGNOSTICS_FIELD_KEY = 'complete_diagnostics';
 
 const DIAGNOSTIC_STATES = new Set(['ready', 'running', 'pass', 'fail', 'warning', 'physically_not_present', 'locked', 'unlocked']);
-const PRESENCE_STATES = new Set(['present', 'absent', 'unknown']);
 
 function normalizeText(value, maxLength = 1000) {
   return String(value ?? '').trim().slice(0, maxLength);
@@ -441,6 +440,19 @@ async function buildHardwareDiagnosticsPlan(connection, {
   };
 }
 
+async function syncBatteryHealthSummary(connection, unitId) {
+  await connection.query(
+    `UPDATE units
+        SET battery_health_percent = (
+          SELECT MIN(health_percent)
+            FROM unit_batteries
+           WHERE unit_id = ? AND health_percent IS NOT NULL
+        )
+      WHERE unit_id = ?`,
+    [unitId, unitId]
+  );
+}
+
 async function applyHardwareDiagnosticsPlan(connection, unitId, plan) {
   const spec = plan.desiredSpec;
   const assignments = [
@@ -473,6 +485,7 @@ async function applyHardwareDiagnosticsPlan(connection, unitId, plan) {
       plan.batteryHealthPlan.reason = 'tool_created_single_battery_row';
     }
   }
+  if (plan.batteryHealthPlan) await syncBatteryHealthSummary(connection, unitId);
 
   if (plan.fingerprintHardwarePlan.status === 'insert' && plan.fingerprintHardwarePlan.resolution?.status === 'resolved') {
     const result = await insertMinimalRepeatableRow(connection, 'unit_biometrics', unitId, { hardware_config_value_id: plan.fingerprintHardwarePlan.resolution.resolvedId });
@@ -557,6 +570,7 @@ module.exports = {
   resolveDiagnosticState,
   loadCurrentHardwareDiagnosticsState,
   buildHardwareDiagnosticsPlan,
+  syncBatteryHealthSummary,
   applyHardwareDiagnosticsPlan,
   currentToolSnapshot,
   sectionToolSnapshot,

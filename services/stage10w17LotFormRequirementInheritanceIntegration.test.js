@@ -63,6 +63,8 @@ test('requirements cover operational form values and numeric fields expose equal
 
 test('Cosmetic Grade requirement options collapse legacy wording into canonical letters', () => {
   const normalized = normalizeCosmeticGradeRequirementOptions([
+    { value: 'config_value:5', label: 'Supreme Grade', code: 'supreme', source: 'unit_grades' },
+    { value: 'config_value:8', label: 'S', code: 's', source: 'cosmetic_grades' },
     { value: 'config_value:10', label: 'Grade A', code: 'grade_a', source: 'unit_grades' },
     { value: 'config_value:20', label: 'A', code: 'a', source: 'cosmetic_grades' },
     { value: 'config_value:30', label: 'Cosmetic Grade AB', code: 'cosmetic_grade_ab', source: 'unit_grades' },
@@ -72,8 +74,8 @@ test('Cosmetic Grade requirement options collapse legacy wording into canonical 
     { value: 'config_value:50', label: 'Not Yet Graded', code: 'not_yet_graded', source: 'cosmetic_grades' }
   ]);
 
-  assert.deepEqual(normalized.map((option) => option.label), ['A', 'AB', 'B']);
-  assert.deepEqual(normalized.map((option) => option.value), ['config_value:20', 'config_value:35', 'config_value:45']);
+  assert.deepEqual(normalized.map((option) => option.label), ['S', 'A', 'AB', 'B']);
+  assert.deepEqual(normalized.map((option) => option.value), ['config_value:8', 'config_value:20', 'config_value:35', 'config_value:45']);
 });
 
 test('requirement UI supports searchable catalogs, exact text, and numeric range values', () => {

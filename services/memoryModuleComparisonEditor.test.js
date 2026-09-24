@@ -116,3 +116,41 @@ test('hardware comparison uses equal flat columns and responsive storage rows', 
   assert.match(css, /\.tech-storage-edit-row \.tech-memory-remove-button[\s\S]*?grid-row: 1/);
   assert.match(css, /@media \(max-width: 980px\)/);
 });
+
+
+test('repeatable hardware Add targets its exact Previous or Current list without forcing a profile rerender', () => {
+  const source = readProjectFile('public/js/tech-unit-form.js');
+  const addModuleRow = source.match(/function addModuleRow\(form, rowType\) \{[\s\S]*?\n  \}/)?.[0] || '';
+
+  assert.match(addModuleRow, /data-module-list=\"\$\{rowType\}\"/);
+  assert.match(addModuleRow, /data-module-template=\"\$\{rowType\}\"/);
+  assert.match(addModuleRow, /list\.appendChild\(row\)/);
+  assert.match(addModuleRow, /primeRepeatableRowFromCurrentProfile\(form, row\)/);
+  assert.doesNotMatch(addModuleRow, /refreshLotUnitFormProfile/);
+});
+
+test('Lot profile re-enable path no longer restores legacy Current hardware authority disables', () => {
+  const source = readProjectFile('public/js/tech-unit-form.js');
+  const profileState = source.match(/function updateProfileManagedSubmissionState\(form, scope, visible\) \{[\s\S]*?\n  \}/)?.[0] || '';
+  const companionState = source.match(/function updateCompanionSubmissionState\(form, fieldKey, visible\) \{[\s\S]*?\n  \}/)?.[0] || '';
+
+  assert.match(profileState, /control\.disabled = false/);
+  assert.match(companionState, /control\.disabled = false/);
+  assert.doesNotMatch(profileState, /data-current-hardware-authority-disabled/);
+  assert.doesNotMatch(companionState, /data-current-hardware-authority-disabled/);
+});
+
+test('Previous and Current hardware panels keep stable sides and linked visibility', () => {
+  const css = readProjectFile('public/css/app.css');
+  const resolver = readProjectFile('services/lotUnitFormProfileResolver.js');
+  const controller = readProjectFile('controllers/lotController.js');
+  const modal = readProjectFile('views/fragments/lot-unit-form-rules-modal.ejs');
+
+  assert.match(css, /tech-memory-state--previous[\s\S]*grid-column:\s*1/);
+  assert.match(css, /tech-memory-state--current[\s\S]*grid-column:\s*2/);
+  assert.match(resolver, /function applyLinkedVisibility\(statesByKey\)/);
+  assert.match(resolver, /type:\s*'linked_field'/);
+  assert.match(controller, /field\.inheritVisibilityFromFieldKey[\s\S]*VISIBILITY\.INHERIT/);
+  assert.match(modal, /field\.inheritVisibilityFromFieldKey/);
+  assert.match(modal, /Follows Current/);
+});

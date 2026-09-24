@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const crypto = require('node:crypto');
 const { pool } = require('../models/db');
 const unitAuditEventModel = require('../models/unitAuditEventModel');
@@ -21,11 +22,6 @@ function normalizeText(value, maxLength = 1000) {
   const text = String(value ?? '').trim();
   if (!text) return null;
   return text.slice(0, maxLength);
-}
-
-function normalizePositiveInteger(value) {
-  const numeric = Number(value);
-  return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null;
 }
 
 function normalizeNonNegativeInteger(value) {

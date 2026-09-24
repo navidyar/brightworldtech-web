@@ -7,8 +7,7 @@
     return select && select.selectedOptions.length > 0 ? select.selectedOptions[0] : null;
   }
 
-  const NON_A_COSMETIC_GRADES = new Set(['AB', 'B', 'C', 'D']);
-  const NON_A_COSMETIC_ISSUE_REQUIRED_MESSAGE = 'Cosmetic Grade AB, B, C, or D requires at least one actual Cosmetic Issue with severity and location.';
+  const COSMETIC_ISSUE_REQUIRED_MESSAGE = 'The selected Cosmetic Grade requires at least one actual Cosmetic Issue with severity and location.';
 
   const REPEATABLE_REQUIRED_MESSAGES = Object.freeze({
     memory: 'Add at least one complete memory module with a positive size.',
@@ -941,15 +940,13 @@
   }
 
   function requiresActualCosmeticIssueForSelectedGrade(form) {
-    if (!form || form.getAttribute('data-require-actual-cosmetic-issue-for-non-a-grade') !== 'true') {
+    if (!form || form.getAttribute('data-require-actual-cosmetic-issue-for-lower-grades') !== 'true') {
       return false;
     }
 
     const gradeSelect = form.querySelector('[data-cosmetic-grade-select]');
     const selectedOption = getSelectedOption(gradeSelect);
-    const canonicalGrade = String(selectedOption?.getAttribute('data-cosmetic-grade') || '').trim().toUpperCase();
-
-    return NON_A_COSMETIC_GRADES.has(canonicalGrade);
+    return selectedOption?.getAttribute('data-requires-cosmetic-issue') === 'true';
   }
 
   function hasCompleteActualCosmeticIssueRow(wrapper) {
@@ -1071,7 +1068,7 @@
         : hasCompleteRepeatableRow(wrapper)
     );
     const requiredMessage = gradeCosmeticRequired
-      ? NON_A_COSMETIC_ISSUE_REQUIRED_MESSAGE
+      ? COSMETIC_ISSUE_REQUIRED_MESSAGE
       : (REPEATABLE_REQUIRED_MESSAGES[rowType] || 'Complete at least one row.');
 
     if (anchor) {
@@ -1117,7 +1114,7 @@
     controls.forEach((control) => {
       if (visible) {
         if (control.getAttribute('data-lot-profile-disabled') === 'true') {
-          control.disabled = control.getAttribute('data-current-hardware-authority-disabled') === 'true';
+          control.disabled = false;
           control.removeAttribute('data-lot-profile-disabled');
         }
         return;
@@ -1141,7 +1138,7 @@
     form.querySelectorAll(`[data-unit-form-companion-key="${fieldKey}"]`).forEach((control) => {
       if (visible) {
         if (control.getAttribute('data-lot-profile-disabled') === 'true') {
-          control.disabled = control.getAttribute('data-current-hardware-authority-disabled') === 'true';
+          control.disabled = false;
           control.removeAttribute('data-lot-profile-disabled');
         }
         return;
@@ -1179,49 +1176,25 @@
     });
   }
 
-  function getSelectedLotToolRequirementState(form) {
-    const lotSelect = getAssignableLotCatalog(form);
-    const selectedOption = getSelectedOption(lotSelect);
-    const requiresScanTools = selectedOption?.getAttribute('data-require-scantools') === '1';
-    const requiresTechTools = selectedOption?.getAttribute('data-require-techtools') === '1';
-    return {
-      requiresScanTools,
-      requiresTechTools,
-      requiresTools: requiresScanTools || requiresTechTools
-    };
-  }
-
-  function setCurrentHardwareAuthorityState(form, kind, { locked, toolOwned, lotRequiresTools }) {
+  function updateCurrentHardwareToolContext(form, kind, toolOwned) {
     const section = form?.querySelector(`[data-current-hardware-field="${kind}"]`);
     if (!section) return;
 
-    section.classList.toggle('is-tool-controlled', Boolean(locked));
-    section.dataset.currentHardwareAuthority = locked ? 'locked' : 'manual';
-
-    section.querySelectorAll('[name], [data-add-module-row], [data-remove-module-row]').forEach((control) => {
-      if (locked) {
-        if (!control.disabled) {
-          control.disabled = true;
-          control.setAttribute('data-current-hardware-authority-disabled', 'true');
-        } else if (control.getAttribute('data-current-hardware-authority-disabled') !== 'true') {
-          control.setAttribute('data-current-hardware-authority-disabled', 'true');
-        }
-        control.setAttribute('aria-disabled', 'true');
-        return;
-      }
-
-      if (control.getAttribute('data-current-hardware-authority-disabled') === 'true') {
-        const lotProfileDisabled = control.getAttribute('data-lot-profile-disabled') === 'true';
-        control.disabled = lotProfileDisabled;
-        control.removeAttribute('data-current-hardware-authority-disabled');
-        if (!lotProfileDisabled) control.removeAttribute('aria-disabled');
-      }
+    // Current Memory/Storage are always manually editable. Clear any legacy
+    // client-side authority lock state that may still exist in an open form.
+    section.classList.remove('is-tool-controlled');
+    section.removeAttribute('data-current-hardware-authority');
+    section.querySelectorAll('[data-current-hardware-authority-disabled="true"]').forEach((control) => {
+      const lotProfileDisabled = control.getAttribute('data-lot-profile-disabled') === 'true';
+      control.disabled = lotProfileDisabled;
+      control.removeAttribute('data-current-hardware-authority-disabled');
+      if (!lotProfileDisabled) control.removeAttribute('aria-disabled');
     });
 
     const message = form.querySelector(`[data-current-hardware-authority-message="${kind}"]`);
     if (!message) return;
 
-    if (!locked) {
+    if (!toolOwned) {
       message.hidden = true;
       message.textContent = '';
       return;
@@ -1229,27 +1202,13 @@
 
     const label = kind === 'memory' ? 'Current Memory' : 'Current Storage';
     message.hidden = false;
-    message.textContent = lotRequiresTools
-      ? `${label} is Tool-controlled because this Lot requires ScanTools or TechTools. Previous values remain editable.`
-      : `${label} was populated by Tools in this production cycle and is read-only. Previous values remain editable.`;
+    message.textContent = `${label} includes values reported by Tools in this production cycle. Review and correct them manually if needed.`;
   }
 
   function updateCurrentHardwareAuthorityState(form) {
     if (!form) return;
-    const lotPolicy = getSelectedLotToolRequirementState(form);
-    const memoryToolOwned = form.dataset.currentMemoryToolOwned === 'true';
-    const storageToolOwned = form.dataset.currentStorageToolOwned === 'true';
-
-    setCurrentHardwareAuthorityState(form, 'memory', {
-      locked: lotPolicy.requiresTools || memoryToolOwned,
-      toolOwned: memoryToolOwned,
-      lotRequiresTools: lotPolicy.requiresTools
-    });
-    setCurrentHardwareAuthorityState(form, 'storage', {
-      locked: lotPolicy.requiresTools || storageToolOwned,
-      toolOwned: storageToolOwned,
-      lotRequiresTools: lotPolicy.requiresTools
-    });
+    updateCurrentHardwareToolContext(form, 'memory', form.dataset.currentMemoryToolOwned === 'true');
+    updateCurrentHardwareToolContext(form, 'storage', form.dataset.currentStorageToolOwned === 'true');
   }
 
   function applyDefaultLotUnitFormProfile(form) {
@@ -2262,6 +2221,101 @@
     return String(option.getAttribute('data-lot-search-text') || getAssignableLotOptionFullPath(option)).trim();
   }
 
+  function getAssignableLotOptionObjectives(option) {
+    if (!option) return '';
+    return String(option.getAttribute('data-lot-objectives') || '').trim();
+  }
+
+  function updateAssignableLotObjectives(form) {
+    const panel = form ? form.querySelector('[data-lot-objectives-panel]') : null;
+    const text = panel ? panel.querySelector('[data-lot-objectives-text]') : null;
+    const catalog = getAssignableLotCatalog(form);
+    const option = getAssignableLotOptionById(form, catalog ? catalog.value : '');
+
+    if (!panel || !text) {
+      return;
+    }
+
+    const objectives = getAssignableLotOptionObjectives(option);
+    const objectivesChanged = String(text.textContent || '').trim() !== objectives;
+    text.textContent = objectives;
+    panel.hidden = !objectives;
+
+    if (!objectives || objectivesChanged) {
+      panel.open = false;
+    }
+  }
+
+  function positionLotObjectivesDisclosure(disclosure) {
+    const body = disclosure ? disclosure.querySelector('.tech-lot-objectives-body') : null;
+    if (!body) return;
+
+    body.style.removeProperty('--tech-lot-objectives-shift-x');
+    if (!disclosure.open) return;
+
+    const bodyRect = body.getBoundingClientRect();
+    const viewportGap = 16;
+    const maxLeft = Math.max(viewportGap, window.innerWidth - bodyRect.width - viewportGap);
+    const clampedLeft = Math.min(Math.max(bodyRect.left, viewportGap), maxLeft);
+    const shiftX = clampedLeft - bodyRect.left;
+
+    if (Math.abs(shiftX) >= 1) {
+      body.style.setProperty('--tech-lot-objectives-shift-x', `${Math.round(shiftX)}px`);
+    }
+  }
+
+  function closeLotObjectivesDisclosures(exceptDisclosure = null) {
+    document.querySelectorAll('.tech-lot-objectives-disclosure[open]').forEach((disclosure) => {
+      if (disclosure !== exceptDisclosure) {
+        disclosure.open = false;
+      }
+    });
+  }
+
+  document.addEventListener('toggle', (event) => {
+    const disclosure = event.target.closest && event.target.closest('.tech-lot-objectives-disclosure');
+    if (!disclosure || disclosure !== event.target) return;
+
+    if (!disclosure.open) {
+      positionLotObjectivesDisclosure(disclosure);
+      return;
+    }
+
+    closeLotObjectivesDisclosures(disclosure);
+    window.requestAnimationFrame(() => positionLotObjectivesDisclosure(disclosure));
+  }, true);
+
+  document.addEventListener('pointerdown', (event) => {
+    const disclosure = event.target.closest('.tech-lot-objectives-disclosure');
+    closeLotObjectivesDisclosures(disclosure);
+  });
+
+  document.addEventListener('focusin', (event) => {
+    const disclosure = event.target.closest('.tech-lot-objectives-disclosure');
+    closeLotObjectivesDisclosures(disclosure);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') {
+      return;
+    }
+
+    const disclosure = document.querySelector('.tech-lot-objectives-disclosure[open]');
+    if (!disclosure) {
+      return;
+    }
+
+    event.preventDefault();
+    disclosure.open = false;
+    disclosure.querySelector('summary')?.focus();
+  });
+
+  window.addEventListener('resize', () => {
+    document.querySelectorAll('.tech-lot-objectives-disclosure[open]').forEach((disclosure) => {
+      positionLotObjectivesDisclosure(disclosure);
+    });
+  });
+
   function getAssignableLotOptionPathIds(option) {
     return String(option && option.getAttribute('data-lot-path-ids') || '')
       .split(',')
@@ -2342,6 +2396,7 @@
     setAssignableLotInputValidity(form, '');
     updateAssignableLotHierarchyBreadcrumb(form);
     updateAssignableLotAssumptionStatus(form);
+    updateAssignableLotObjectives(form);
     updateIntentionalDuplicateRequestControls(form);
     resetLotUnitFormProfile(form);
   }
@@ -2538,6 +2593,7 @@
     closeAssignableLotOptions(form);
     updateAssignableLotHierarchyBreadcrumb(form);
     updateAssignableLotAssumptionStatus(form);
+    updateAssignableLotObjectives(form);
     updateIntentionalDuplicateRequestControls(form);
     updateProductionWeightPreview(form);
     refreshDuplicateCheckForSelectedLot(form);
@@ -2589,6 +2645,7 @@
     updateAssignableLotHint(form);
     updateAssignableLotHierarchyBreadcrumb(form);
     updateAssignableLotAssumptionStatus(form);
+    updateAssignableLotObjectives(form);
   }
 
 
@@ -3767,10 +3824,6 @@
     }, { total: 0, hasStructuredEntries: false });
   }
 
-  function sumPositiveModuleSizes(form, selector) {
-    return getModuleCapacityState(form, selector).total;
-  }
-
   function updateStructuredCopyButtons(form) {
     const previousMemoryState = getModuleCapacityState(form, '[data-previous-memory-size-input]');
     const previousStorageState = getModuleCapacityState(form, '[data-previous-storage-size-input]');
@@ -3890,11 +3943,6 @@
     validateRequiredRepeatableSection(list.closest('[data-unit-form-repeatable-type]'), false);
     updateRepeatableAddButtonState(form, rowType);
     applyManufacturerFieldApplicability(form);
-    refreshLotUnitFormProfile(form, {
-      background: true,
-      force: true,
-      applyEvenIfUnchanged: true
-    }).catch(() => {});
   }
 
   function setModuleRowFieldValue(row, fieldName, value) {

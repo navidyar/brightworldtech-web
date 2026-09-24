@@ -51,6 +51,7 @@ async function listConfigValueOptions(systemCategoryId) {
     configValueId: row.configValueId,
     systemConfigValueId: row.systemConfigValueId,
     systemConfigCategoryId: row.systemConfigCategoryId,
+    sortOrder: row.sortOrder,
     source: row.systemConfigCategoryId
   }));
 }

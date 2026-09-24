@@ -1,6 +1,5 @@
 'use strict';
 
-const USERNAME_STEM_LENGTH = 4;
 const USERNAME_MAX_LENGTH = 32;
 const USERNAME_PATTERN = /^[A-Z]{4}(?:[2-9]|[1-9][0-9]+)?$/;
 
@@ -67,7 +66,6 @@ function generateUsername({ firstName, lastName, existingUsernames = [] }) {
 }
 
 module.exports = {
-  USERNAME_STEM_LENGTH,
   USERNAME_MAX_LENGTH,
   USERNAME_PATTERN,
   normalizeNameLetters,

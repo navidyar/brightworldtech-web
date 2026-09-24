@@ -30,10 +30,17 @@ test('Label Library template filters update without an Apply button', () => {
   assert.doesNotMatch(page, />Apply<\/button>/);
 });
 
-test('simple Management processor and model catalog filters use the shared autosubmit behavior', () => {
-  for (const file of ['views/pages/management-processors.ejs', 'views/pages/management-unit-models.ejs']) {
+test('simple Management processor and model catalog filters preserve the controls during live filtering', () => {
+  const cases = [
+    ['views/pages/management-processors.ejs', '.processor-catalog-results-section'],
+    ['views/pages/management-unit-models.ejs', '.model-catalog-results-section']
+  ];
+
+  for (const [file, target] of cases) {
     const page = read(file);
     assert.match(page, /data-auto-submit-filter-form/);
+    assert.match(page, new RegExp(`data-auto-submit-filter-target=\"${target.replaceAll('.', '\\.') }\"`));
+    assert.match(page, /data-auto-submit-filter-sync="\.model-catalog-summary-panel"/);
     assert.match(page, /data-auto-submit-filter="debounced"/);
     assert.match(page, /data-auto-submit-filter="immediate"/);
     assert.doesNotMatch(page, />Apply Filters<\/button>/);

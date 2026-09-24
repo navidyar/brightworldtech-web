@@ -7,7 +7,8 @@
   <script defer src="/js/lot-unit-form-rules.js"></script>
   <script defer src="/js/lot-unit-browser-layout.js?v=20260826-stage10w73e"></script>
   <script defer src="/js/lot-label-template-picker.js?v=20260909-stage10w83"></script>
-  <script defer src="/js/unit-export.js?v=20260813-stage10w63-multi-lot-export-scope"></script>
+  <script defer src="/js/unit-export-shared.js?v=20260921-cleanup-stage2b"></script>
+  <script defer src="/js/unit-export.js?v=20260921-cleanup-stage2b"></script>
 
   <body class="lots-lookup-typography-preview lots-lookup-ui-preview css-scope-lots">
     <div class="app-shell">
@@ -234,6 +235,15 @@
               </dl>
             </aside>
           </section>
+
+          <% if (String(lot.notes || '').trim()) { %>
+            <section class="site-clean-section lot-detail-section lot-detail-management-notes-section" aria-labelledby="lot-detail-management-notes-heading">
+              <div class="site-clean-section-heading">
+                <h2 id="lot-detail-management-notes-heading">Internal Management Notes</h2>
+              </div>
+              <div class="lot-detail-management-note"><%= String(lot.notes || '').trim() %></div>
+            </section>
+          <% } %>
 
           <% if (lotRelationships.directChildLots.length > 0) { %>
             <section class="site-clean-section lot-detail-section">

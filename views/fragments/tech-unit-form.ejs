@@ -88,7 +88,7 @@
   const selectedOutcomeCode = String(formData.outcomeCode || '').trim().toLowerCase();
   const outcomeApprovalRequested = Boolean(formData.outcomeApprovalRequested);
   const canRequestOutcomeConfirmation = Boolean(formOptions.canRequestOutcomeConfirmation);
-  const requiresActualCosmeticIssueForNonAGrade = Boolean(formOptions.requiresActualCosmeticIssueForNonAGrade);
+  const requiresActualCosmeticIssueForLowerGrades = Boolean(formOptions.requiresActualCosmeticIssueForLowerGrades);
   const productionWeightCapabilities = formOptions.productionWeightCapabilities || {};
   const productionWeightDetails = formData.productionWeightDetails || {
     formattedEffectiveWeight: '—',
@@ -233,7 +233,7 @@
   </div>
 <% } %>
 
-<form class="app-form tech-unit-form" method="post" action="<%= formAction %>" data-tech-unit-form data-unit-form-mode="<%= mode %>" data-original-lot-id="<%= formData.lotId || '' %>" data-current-memory-tool-owned="<%= formOptions.currentHardwareAuthority?.memory?.toolOwned ? 'true' : 'false' %>" data-current-storage-tool-owned="<%= formOptions.currentHardwareAuthority?.storage?.toolOwned ? 'true' : 'false' %>" data-lot-unit-form-profile-url="/tech/units/lot-form-profile" data-lot-requirement-preview-url="/tech/units/lot-requirement-preview" data-require-actual-cosmetic-issue-for-non-a-grade="<%= requiresActualCosmeticIssueForNonAGrade ? 'true' : 'false' %>" <%- htmxAttrs %>>
+<form class="app-form tech-unit-form" method="post" action="<%= formAction %>" data-tech-unit-form data-unit-form-mode="<%= mode %>" data-original-lot-id="<%= formData.lotId || '' %>" data-current-memory-tool-owned="<%= formOptions.currentHardwareAuthority?.memory?.toolOwned ? 'true' : 'false' %>" data-current-storage-tool-owned="<%= formOptions.currentHardwareAuthority?.storage?.toolOwned ? 'true' : 'false' %>" data-lot-unit-form-profile-url="/tech/units/lot-form-profile" data-lot-requirement-preview-url="/tech/units/lot-requirement-preview" data-require-actual-cosmetic-issue-for-lower-grades="<%= requiresActualCosmeticIssueForLowerGrades ? 'true' : 'false' %>" <%- htmxAttrs %>>
   <input type="hidden" name="currentUnitStatusConfigValueId" value="<%= formData.currentUnitStatusConfigValueId || formOptions.defaultUnitStatusId || '' %>" />
   <input type="hidden" name="lotRequirementMode" value="<%= mode %>" />
   <% if (isEditMode) { %>
@@ -338,6 +338,7 @@
                 data-lot-search-text="<%= hierarchyLot.searchText || hierarchyLot.fullPath || lotOptionName %>"
                 data-production-weight="<%= hierarchyLot.selectable && canViewProductionWeight ? lotProductionWeightValue : '' %>"
                 data-allow-duplicate-unit-assumption="<%= hierarchyLot.selectable && Number(lot.allow_duplicate_unit_assumption || 0) === 1 ? '1' : '0' %>"
+                data-lot-objectives="<%= hierarchyLot.selectable ? String(lot.objectives || '').trim() : '' %>"
                 data-require-scantools="<%= lotToolPolicy.requireScanToolsBeforeCompletion ? '1' : '0' %>"
                 data-require-techtools="<%= lotToolPolicy.requireTechToolsBeforeCompletion ? '1' : '0' %>"
                 <%= hierarchyLot.selectable ? '' : 'disabled' %>
@@ -358,6 +359,18 @@
           <strong data-assignable-lot-hierarchy-path><%= selectedAssignableLotHierarchy?.fullPath || '' %></strong>
         </p>
       </label>
+
+      <%
+        const selectedAssignableLotObjectives = selectedAssignableLot ? String(selectedAssignableLot.objectives || '').trim() : '';
+      %>
+      <details
+        class="tech-lot-objectives-disclosure tech-lot-objectives-disclosure--form"
+        data-lot-objectives-panel
+        <%= selectedAssignableLotObjectives ? '' : 'hidden' %>
+      >
+        <summary>Objectives</summary>
+        <div class="tech-lot-objectives-body" data-lot-objectives-text><%= selectedAssignableLotObjectives %></div>
+      </details>
 
       <p class="field-hint tech-lot-form-profile-status" data-lot-unit-form-profile-status data-status="idle" aria-live="polite">
         Select an assignable Lot to apply its field visibility and requirement settings.
@@ -778,19 +791,19 @@
       <div class="tech-catalog-request-fields" data-processor-catalog-request-fields hidden>
         <div class="form-grid">
           <label class="form-field">
-            <span>Observed Processor Type</span>
+            <span>Observed Processor Type <small>(optional if included below)</small></span>
             <input type="text" maxlength="100" placeholder="Example: Intel, AMD, Apple, Qualcomm" autocomplete="off" data-processor-request-type-input />
           </label>
           <label class="form-field">
             <span>Observed Processor</span>
-            <input type="text" maxlength="150" placeholder="Exact value from BIOS, ScanTools, or TechTools" autocomplete="off" data-processor-request-name-input />
+            <input type="text" maxlength="150" placeholder="Example: Intel(R) Core(TM) i9-10885H CPU @ 2.40GHz" autocomplete="off" data-processor-request-name-input />
           </label>
           <label class="form-field">
-            <span>Observed Processor Speed GHz</span>
+            <span>Observed Processor Speed GHz <small>(optional if included above)</small></span>
             <input type="number" min="0.01" max="99.99" step="0.01" placeholder="Example: 2.40" autocomplete="off" data-processor-request-speed-input />
           </label>
         </div>
-        <small class="field-hint">These values are used only to prepare the catalog request. They do not save directly to the Unit.</small>
+        <small class="field-hint">Paste the Processor as observed. BWTDallas can derive Processor Type and GHz from recognized strings. These values are used only to prepare the catalog request and do not save directly to the Unit.</small>
       </div>
 
       <div class="tech-catalog-request-action" data-catalog-request-action-kind="processor">
@@ -1105,7 +1118,7 @@
       </div>
       <p>
         Choose None when the unit has no cosmetic issue. Severity and location are required only when an actual cosmetic issue is selected.
-        <% if (requiresActualCosmeticIssueForNonAGrade) { %> Cosmetic Grade AB, B, C, or D requires at least one actual Cosmetic Issue; None does not satisfy this Tech requirement.<% } %>
+        <% if (requiresActualCosmeticIssueForLowerGrades) { %> Cosmetic Grades configured below A require at least one actual Cosmetic Issue; A and grades configured above it do not require an issue solely because of grade.<% } %>
       </p>
     </div>
 
@@ -1255,7 +1268,7 @@
         <h3>Cosmetic Grade and Unit Pass/Fail</h3>
       </div>
       <p>
-        Cosmetic Grade A, AB, B, C, or D only describes appearance. Unit Pass/Fail describes the working condition and is tracked separately for completion reporting.
+        Cosmetic Grade describes appearance only. Unit Pass/Fail describes the working condition and is tracked separately for completion reporting.
       </p>
     </div>
 
@@ -1277,10 +1290,10 @@
         <select name="overallGradeConfigValueId" data-cosmetic-grade-select>
           <option value="">Select cosmetic grade</option>
           <% overallGradeOptions.forEach((gradeOption) => { %>
-            <option value="<%= gradeOption.id %>" data-cosmetic-grade="<%= gradeOption.canonicalGrade || gradeOption.label %>" <%= selected(formData.overallGradeConfigValueId, gradeOption.id) || (Array.isArray(gradeOption.filterIds) && gradeOption.filterIds.map(String).includes(String(formData.overallGradeConfigValueId || ''))) ? 'selected' : '' %>><%= gradeOption.label %></option>
+            <option value="<%= gradeOption.id %>" data-cosmetic-grade="<%= gradeOption.canonicalGrade || gradeOption.label %>" data-requires-cosmetic-issue="<%= gradeOption.requiresCosmeticIssue ? 'true' : 'false' %>" <%= selected(formData.overallGradeConfigValueId, gradeOption.id) || (Array.isArray(gradeOption.filterIds) && gradeOption.filterIds.map(String).includes(String(formData.overallGradeConfigValueId || ''))) ? 'selected' : '' %>><%= gradeOption.label %></option>
           <% }) %>
         </select>
-        <small class="field-hint">A, AB, B, C, or D is cosmetic only and does not determine pass/fail by itself.</small>
+        <small class="field-hint">Cosmetic Grade is appearance-only and does not determine pass/fail by itself. Grade options and order are managed in Configuration.</small>
       </label>
 
       <fieldset class="form-field tech-outcome-field" data-unit-form-field-key="unit_outcome">

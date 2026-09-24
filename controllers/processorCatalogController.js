@@ -3,10 +3,7 @@
 const processorCatalogModel = require('../models/processorCatalogModel');
 const operationalOptionRankingModel = require('../models/operationalOptionRankingModel');
 
-function isHtmxRequest(req) {
-  return String(req.get('HX-Request') || '').toLowerCase() === 'true';
-}
-
+const { isHtmxRequest } = require('../utils/htmxRequest');
 function isAdmin(req) {
   return Boolean(req?.currentUser && Array.isArray(req.currentUser.roles) && req.currentUser.roles.includes('admin'));
 }
@@ -72,8 +69,74 @@ function getFormData(req = null, processor = null) {
   };
 }
 
-async function validateForm(formData, processorModelId) {
+
+function normalizeBrandKey(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function findBrandForInterpretation(brands = [], brandName = '') {
+  const requested = normalizeBrandKey(brandName);
+  if (!requested) return null;
+  return brands.find((brand) => {
+    const candidate = normalizeBrandKey(brand.label);
+    return candidate === requested || candidate.includes(requested) || requested.includes(candidate);
+  }) || null;
+}
+
+function interpretCatalogFormData(formData, brands = []) {
+  const selectedBrandId = processorCatalogModel.normalizePositiveInteger(formData.processorBrandId);
+  const selectedBrand = brands.find((brand) => brand.id === selectedBrandId) || null;
+  const detectedFromRaw = processorCatalogModel.interpretProcessorObservation({ value: formData.modelCode });
+  const interpretation = processorCatalogModel.interpretProcessorObservation({
+    value: formData.modelCode,
+    brandName: selectedBrand?.label || detectedFromRaw.brandName,
+    family: formData.legacyFamily,
+    generation: formData.generation,
+    baseSpeedGhz: formData.baseSpeedGhz
+  });
+  const inferredBrand = selectedBrand || findBrandForInterpretation(brands, interpretation.brandName);
+  const brandConflict = selectedBrand && detectedFromRaw.brandName
+    && normalizeBrandKey(selectedBrand.label) !== normalizeBrandKey(detectedFromRaw.brandName)
+      ? `The Processor string appears to identify ${detectedFromRaw.brandName}, but Processor Type is ${selectedBrand.label}. Correct the Processor Type or Processor string before saving.`
+      : '';
+
+  return {
+    formData: {
+      ...formData,
+      processorBrandId: inferredBrand ? String(inferredBrand.id) : formData.processorBrandId,
+      modelCode: interpretation.modelCode || formData.modelCode,
+      legacyFamily: formData.legacyFamily || interpretation.family || '',
+      generation: formData.generation || interpretation.generation || '',
+      baseSpeedGhz: formData.baseSpeedGhz || (interpretation.baseSpeedGhz !== null ? String(interpretation.baseSpeedGhz) : '')
+    },
+    interpretation,
+    brandConflict
+  };
+}
+
+async function getLikelyMatchesForForm(formData, brands, processorModelId = null) {
+  const processorBrandId = processorCatalogModel.normalizePositiveInteger(formData.processorBrandId);
+  const selectedBrand = brands.find((brand) => brand.id === processorBrandId) || null;
+  if (!formData.modelCode || (!selectedBrand && !processorBrandId)) return [];
+  const matches = await processorCatalogModel.findLikelyProcessorMatches({
+    processorBrandId,
+    brandName: selectedBrand?.label || '',
+    modelCode: formData.modelCode,
+    includeInactive: true,
+    limit: 5
+  });
+  return processorModelId ? matches.filter((processor) => processor.id !== processorModelId) : matches;
+}
+
+function requiresProcessorInterpretationReview(submittedFormData, interpretedFormData) {
+  const submittedModel = processorCatalogModel.normalizeText(submittedFormData?.modelCode, processorCatalogModel.MAX_PROCESSOR_MODEL_LENGTH);
+  const canonicalModel = processorCatalogModel.normalizeText(interpretedFormData?.modelCode, processorCatalogModel.MAX_PROCESSOR_MODEL_LENGTH);
+  return Boolean(submittedModel && canonicalModel && submittedModel.toLowerCase() !== canonicalModel.toLowerCase());
+}
+
+async function validateForm(formData, processorModelId, { brandConflict = '' } = {}) {
   const errors = [];
+  if (brandConflict) errors.push(brandConflict);
   const processorBrandId = processorCatalogModel.normalizePositiveInteger(formData.processorBrandId);
   if (!processorBrandId) errors.push('Choose a Processor Type.');
   if (formData.modelCode.length < 2) errors.push('Processor name must be at least 2 characters.');
@@ -112,10 +175,17 @@ async function validateForm(formData, processorModelId) {
 async function renderProcessorCatalogPage(req, res, next) {
   try {
     const filters = getFilters(req);
-    const [processors, brands] = await Promise.all([
-      processorCatalogModel.listProcessorModels(filters),
-      processorCatalogModel.listProcessorBrands()
-    ]);
+    const brands = await processorCatalogModel.listProcessorBrands();
+    let processors = await processorCatalogModel.listProcessorModels(filters);
+    if (filters.search) {
+      const interpretedSearch = processorCatalogModel.interpretProcessorObservation({ value: filters.search });
+      if (interpretedSearch.modelCode && interpretedSearch.modelCode.toLowerCase() !== filters.search.toLowerCase()) {
+        const interpretedResults = await processorCatalogModel.listProcessorModels({ ...filters, search: interpretedSearch.modelCode });
+        const byId = new Map(processors.map((processor) => [processor.id, processor]));
+        interpretedResults.forEach((processor) => byId.set(processor.id, processor));
+        processors = Array.from(byId.values());
+      }
+    }
     return res.render('pages/management-processors', {
       pageTitle: 'Processor Catalog',
       currentNav: 'admin-config-processors',
@@ -134,21 +204,28 @@ async function renderNewProcessorModal(req, res, next) {
   try {
     const filters = getFilters(req);
     const brands = await processorCatalogModel.listProcessorBrands();
+    const initialFormData = {
+      processorBrandId: filters.processorBrandId ? String(filters.processorBrandId) : '',
+      modelCode: filters.search || '',
+      legacyFamily: '',
+      generation: '',
+      baseSpeedGhz: '',
+      isActive: '1'
+    };
+    const interpreted = interpretCatalogFormData(initialFormData, brands);
+    const processorMatches = interpreted.formData.modelCode.length >= 2
+      ? await getLikelyMatchesForForm(interpreted.formData, brands)
+      : [];
     return res.render('fragments/processor-catalog-edit-modal', {
       mode: 'create',
       processor: null,
       brands,
-      formData: {
-        processorBrandId: filters.processorBrandId ? String(filters.processorBrandId) : '',
-        modelCode: '',
-        legacyFamily: '',
-        generation: '',
-        baseSpeedGhz: '',
-        isActive: '1'
-      },
+      formData: interpreted.formData,
+      interpretation: filters.search ? interpreted.interpretation : null,
+      processorMatches,
       filters,
       returnTo: 'processor-catalog',
-      errorMessages: []
+      errorMessages: interpreted.brandConflict ? [interpreted.brandConflict] : []
     });
   } catch (error) {
     next(error);
@@ -159,11 +236,19 @@ async function createProcessor(req, res, next) {
   const filters = getFilters(req);
   try {
     const brands = await processorCatalogModel.listProcessorBrands();
-    const formData = getFormData(req);
-    const errorMessages = await validateForm(formData, null);
+    const submittedFormData = getFormData(req);
+    const interpreted = interpretCatalogFormData(submittedFormData, brands);
+    const formData = interpreted.formData;
+    const errorMessages = await validateForm(formData, null, { brandConflict: interpreted.brandConflict });
+    const processorMatches = await getLikelyMatchesForForm(formData, brands);
     if (errorMessages.length > 0) {
       return res.status(400).render('fragments/processor-catalog-edit-modal', {
-        mode: 'create', processor: null, brands, formData, filters, returnTo: 'processor-catalog', errorMessages
+        mode: 'create', processor: null, brands, formData, interpretation: interpreted.interpretation, processorMatches, filters, returnTo: 'processor-catalog', errorMessages
+      });
+    }
+    if (requiresProcessorInterpretationReview(submittedFormData, formData)) {
+      return res.status(200).render('fragments/processor-catalog-edit-modal', {
+        mode: 'create', processor: null, brands, formData, interpretation: interpreted.interpretation, processorMatches, filters, returnTo: 'processor-catalog', errorMessages: []
       });
     }
 
@@ -180,8 +265,10 @@ async function createProcessor(req, res, next) {
   } catch (error) {
     if (error?.code === 'BWT_PROCESSOR_CATALOG_DUPLICATE' || error?.code === 'BWT_PROCESSOR_CATALOG_INPUT_INVALID') {
       const brands = await processorCatalogModel.listProcessorBrands();
+      const interpreted = interpretCatalogFormData(getFormData(req), brands);
+      const processorMatches = await getLikelyMatchesForForm(interpreted.formData, brands);
       return res.status(400).render('fragments/processor-catalog-edit-modal', {
-        mode: 'create', processor: null, brands, formData: getFormData(req), filters, returnTo: 'processor-catalog', errorMessages: [error.message]
+        mode: 'create', processor: null, brands, formData: interpreted.formData, interpretation: interpreted.interpretation, processorMatches, filters, returnTo: 'processor-catalog', errorMessages: [error.message]
       });
     }
     next(error);
@@ -208,6 +295,8 @@ async function renderEditProcessorModal(req, res, next) {
       processor,
       brands,
       formData: getFormData(null, processor),
+      interpretation: null,
+      processorMatches: [],
       filters,
       returnTo,
       errorMessages: []
@@ -228,11 +317,19 @@ async function updateProcessor(req, res, next) {
     ]);
     if (!processor) return sendRedirect(req, res, buildReturnUrl(filters, 'not-found', returnTo));
 
-    const formData = getFormData(req);
-    const errorMessages = await validateForm(formData, processorModelId);
+    const submittedFormData = getFormData(req);
+    const interpreted = interpretCatalogFormData(submittedFormData, brands);
+    const formData = interpreted.formData;
+    const errorMessages = await validateForm(formData, processorModelId, { brandConflict: interpreted.brandConflict });
+    const processorMatches = await getLikelyMatchesForForm(formData, brands, processorModelId);
     if (errorMessages.length > 0) {
       return res.status(400).render('fragments/processor-catalog-edit-modal', {
-        mode: 'edit', processor, brands, formData, filters, returnTo, errorMessages
+        mode: 'edit', processor, brands, formData, interpretation: interpreted.interpretation, processorMatches, filters, returnTo, errorMessages
+      });
+    }
+    if (requiresProcessorInterpretationReview(submittedFormData, formData)) {
+      return res.status(200).render('fragments/processor-catalog-edit-modal', {
+        mode: 'edit', processor, brands, formData, interpretation: interpreted.interpretation, processorMatches, filters, returnTo, errorMessages: []
       });
     }
 
@@ -255,8 +352,10 @@ async function updateProcessor(req, res, next) {
         processorCatalogModel.getProcessorById(processorModelId),
         processorCatalogModel.listProcessorBrands()
       ]);
+      const interpreted = interpretCatalogFormData(getFormData(req), brands);
+      const processorMatches = await getLikelyMatchesForForm(interpreted.formData, brands, processorModelId);
       return res.status(400).render('fragments/processor-catalog-edit-modal', {
-        mode: 'edit', processor, brands, formData: getFormData(req), filters, returnTo, errorMessages: [error.message]
+        mode: 'edit', processor, brands, formData: interpreted.formData, interpretation: interpreted.interpretation, processorMatches, filters, returnTo, errorMessages: [error.message]
       });
     }
     next(error);

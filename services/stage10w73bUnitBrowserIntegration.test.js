@@ -95,7 +95,7 @@ test('Export remains independent while Comments rendering is handled only by the
 });
 
 test('modified Browser assets use the shared CSS scope and cache-busted script', () => {
-  const expectedJs = '/js/tech-units.js?v=20260826-stage10w73c-browser-refinement';
+  const expectedJs = '/js/tech-units.js?v=20260921-cleanup-stage2b';
   assert.match(read('views/partials/head.ejs'), /\/css\/app\.css\?v=/);
 
   for (const file of ['views/pages/tech-units.ejs', 'views/pages/tech-unit-detail.ejs']) {

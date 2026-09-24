@@ -350,29 +350,6 @@ async function saveOutcomeForUnitWithConnection(connection, { unitId, formData, 
     approvalRequested
   };
 }
-
-async function saveOutcomeForUnit({ unitId, formData, currentUserId }) {
-  const connection = await pool.getConnection();
-
-  try {
-    await connection.beginTransaction();
-
-    const result = await saveOutcomeForUnitWithConnection(connection, {
-      unitId,
-      formData,
-      currentUserId
-    });
-
-    await connection.commit();
-    return result;
-  } catch (error) {
-    await connection.rollback();
-    throw error;
-  } finally {
-    connection.release();
-  }
-}
-
 module.exports = {
   VALID_OUTCOME_CODES,
   normalizeOutcomeCode,
@@ -384,6 +361,5 @@ module.exports = {
   getOutcomeFormDataByUnitId,
   getCurrentOutcomeByUnitId,
   listCurrentOutcomesForUnits,
-  saveOutcomeForUnit,
   saveOutcomeForUnitWithConnection,
 };

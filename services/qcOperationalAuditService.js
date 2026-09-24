@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 function normalizeCount(value) {
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
@@ -8,11 +9,6 @@ function normalizeCount(value) {
 function normalizeDecision(value) {
   const normalized = String(value || '').trim().toLowerCase();
   return ['accepted', 'rejected'].includes(normalized) ? normalized : '';
-}
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function toTimestamp(value) {

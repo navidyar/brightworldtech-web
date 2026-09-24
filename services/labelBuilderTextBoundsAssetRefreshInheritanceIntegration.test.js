@@ -8,12 +8,19 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-test('Builder constrains text size to its region and previews the same shrink behavior as rendering', () => {
+test('Builder keeps configured text size static and wraps text inside resized regions', () => {
   const builder = read('public/js/label-builder.js');
-  assert.match(builder, /function constrainTextFontSizeToRegion\(region\)/);
-  assert.match(builder, /function getFittedTextFontSize\(region, text\)/);
-  assert.match(builder, /fontSizeInput\.max = String\(Math\.max\(6, Math\.floor\(localTextBox\.height\)\)\)/);
-  assert.match(builder, /safeText\.length \* fontSize \* 0\.59 > localBox\.width/);
+  const css = read('public/css/features.css');
+  const renderer = read('services/labelTemplateLayoutRenderer.js');
+  const policy = read('services/labelBuilderLayoutPolicy.js');
+  assert.doesNotMatch(builder, /constrainTextFontSizeToRegion|getFittedTextFontSize/);
+  assert.match(builder, /previewFontSize = Math\.max\(1, Number\(region\.style\.fontSize/);
+  assert.match(builder, /fontSizeInput\.max = '300'/);
+  assert.match(builder, /text\.dataset\.builderRegionText = ''/);
+  assert.match(css, /\.label-builder-region-text[\s\S]*white-space: pre-wrap;[\s\S]*overflow-wrap: anywhere;/);
+  assert.match(renderer, /function wrapTextLines\(value, box, style\)/);
+  assert.match(renderer, /const effectiveStyle = allowShrink \? style : \{ \.\.\.style, overflow: 'wrap' \}/);
+  assert.match(policy, /overflow: 'wrap'/);
 });
 
 test('Barcode human-readable text explicitly uses Liberation Sans with Arial fallback in Builder and renderer', () => {

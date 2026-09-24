@@ -417,14 +417,39 @@ async function dismissRecipient({ recipientId, userId }) {
       throw error;
     }
 
-    await connection.query(`
-      UPDATE virtual_huddle_recipients
-      SET dismissed_at = COALESCE(dismissed_at, CURRENT_TIMESTAMP(6))
-      WHERE virtual_huddle_recipient_id = ?
-    `, [Number(recipient.virtual_huddle_recipient_id)]);
+    const messageId = Number(recipient.virtual_huddle_message_id);
+    const ephemeralNotice = recipient.acknowledgment_mode_code === 'informational'
+      && recipient.message_type_code === 'notice';
+
+    if (ephemeralNotice) {
+      await connection.query(
+        'DELETE FROM virtual_huddle_recipients WHERE virtual_huddle_recipient_id = ?',
+        [Number(recipient.virtual_huddle_recipient_id)]
+      );
+
+      const [[remainingRow]] = await connection.query(`
+        SELECT COUNT(*) AS remaining_count
+        FROM virtual_huddle_recipients
+        WHERE virtual_huddle_message_id = ?
+      `, [messageId]);
+
+      if (Number(remainingRow?.remaining_count || 0) === 0) {
+        await connection.query(`
+          DELETE FROM virtual_huddle_messages
+          WHERE virtual_huddle_message_id = ?
+            AND message_type_code = 'notice'
+        `, [messageId]);
+      }
+    } else {
+      await connection.query(`
+        UPDATE virtual_huddle_recipients
+        SET dismissed_at = COALESCE(dismissed_at, CURRENT_TIMESTAMP(6))
+        WHERE virtual_huddle_recipient_id = ?
+      `, [Number(recipient.virtual_huddle_recipient_id)]);
+    }
 
     await connection.commit();
-    return { messageId: Number(recipient.virtual_huddle_message_id) };
+    return { messageId, ephemeralNotice };
   } catch (error) {
     await connection.rollback();
     throw error;
@@ -473,7 +498,11 @@ async function listManagementHistory({ page = 1, pageSize = 50 } = {}) {
   const safePage = Math.max(1, Number.parseInt(page, 10) || 1);
   const offset = (safePage - 1) * safePageSize;
 
-  const [[countRow]] = await pool.query('SELECT COUNT(*) AS total_count FROM virtual_huddle_messages');
+  const [[countRow]] = await pool.query(`
+    SELECT COUNT(*) AS total_count
+    FROM virtual_huddle_messages
+    WHERE message_type_code <> 'notice'
+  `);
   const totalCount = Number(countRow?.total_count || 0);
 
   const [rows] = await pool.query(`
@@ -513,6 +542,7 @@ async function listManagementHistory({ page = 1, pageSize = 50 } = {}) {
       FROM virtual_huddle_recipients
       GROUP BY virtual_huddle_message_id
     ) rec ON rec.virtual_huddle_message_id = m.virtual_huddle_message_id
+    WHERE m.message_type_code <> 'notice'
     ORDER BY m.sent_at DESC, m.virtual_huddle_message_id DESC
     LIMIT ? OFFSET ?
   `, [safePageSize, offset]);
@@ -536,6 +566,7 @@ async function getManagementMessageDetail(messageId) {
     LEFT JOIN virtual_huddle_messages parent
       ON parent.virtual_huddle_message_id = m.parent_message_id
     WHERE m.virtual_huddle_message_id = ?
+      AND m.message_type_code <> 'notice'
     LIMIT 1
   `, [safeMessageId]);
   const message = messageRows[0];
@@ -563,8 +594,9 @@ async function getManagementMessageDetail(messageId) {
   const [relatedMessages] = await pool.query(`
     SELECT virtual_huddle_message_id, parent_message_id, subject, message_type_code, sent_at
     FROM virtual_huddle_messages
-    WHERE virtual_huddle_message_id = ?
-       OR thread_root_message_id = ?
+    WHERE (virtual_huddle_message_id = ?
+       OR thread_root_message_id = ?)
+      AND message_type_code <> 'notice'
     ORDER BY sent_at, virtual_huddle_message_id
   `, [threadRootMessageId, threadRootMessageId]);
 

@@ -221,12 +221,6 @@ async function listAssignableLots() {
   const result = await getAssignableLotOptions();
   return result.lots;
 }
-
-async function listAssignableLotHierarchyOptions() {
-  const result = await getAssignableLotOptions();
-  return result.hierarchyOptions;
-}
-
 function createOverrideDestinationLotError(code, message) {
   const error = new Error(message);
   error.code = code;
@@ -1450,6 +1444,10 @@ async function approveOverrideRequest({
     const previousAssignedUserId = wasParked
       ? null
       : normalizeOptionalInteger(request.assigned_to_user_id) || normalizeOptionalInteger(request.created_by_user_id);
+    const isTakeoverApproval = isManualTechOverride && (
+      wasParked
+      || (requestedByUserId && requestedByUserId !== previousAssignedUserId)
+    );
     const currentLotId = normalizeOptionalInteger(request.current_lot_id);
     const completionTableReady = isManualTechOverride && await tableExists('unit_work_completions');
     let hasRecordedWork = false;
@@ -1498,8 +1496,9 @@ async function approveOverrideRequest({
 
     let destinationValidation = null;
 
-    if (isManualTechOverride && request.unit_id && approvedDestinationLotId) {
-      // Lazy-load to avoid a module cycle through Unit expanded-form outcome helpers.
+    if (isManualTechOverride && !isTakeoverApproval && request.unit_id && approvedDestinationLotId) {
+      // Same-tech Lot moves still validate the Unit against destination requirements.
+      // A takeover must transfer control first so the requesting Tech can complete missing Unit data afterward.
       const unitLotDestinationValidationModel = require('./unitLotDestinationValidationModel');
       destinationValidation = await unitLotDestinationValidationModel.assertExistingUnitDestination({
         unitId: request.unit_id,
@@ -2034,7 +2033,6 @@ module.exports = {
   overrideTableExists,
   getAssignableLotOptions,
   listAssignableLots,
-  listAssignableLotHierarchyOptions,
   listOverrideRequests,
   listOverrideRequestSummaries,
   getLatestOverrideRequestMapForUnits,

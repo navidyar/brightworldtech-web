@@ -16,12 +16,6 @@ function setCachedSessionInactivityTimeoutMinutes(value) {
   cacheExpiresAt = Date.now() + CACHE_TTL_MS;
   return cachedMinutes;
 }
-
-function clearSessionInactivityTimeoutCache() {
-  cachedMinutes = null;
-  cacheExpiresAt = 0;
-}
-
 async function getConfiguredSessionInactivityTimeoutMinutes(options = {}) {
   const now = Date.now();
 
@@ -44,5 +38,4 @@ module.exports = {
   CACHE_TTL_MS,
   getConfiguredSessionInactivityTimeoutMinutes,
   setCachedSessionInactivityTimeoutMinutes,
-  clearSessionInactivityTimeoutCache
 };

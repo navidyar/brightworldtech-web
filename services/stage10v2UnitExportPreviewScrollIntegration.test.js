@@ -37,7 +37,7 @@ test('Export Preview renders a second horizontal scrollbar directly below the ta
 });
 
 test('the custom header scrollbar follows native table scrolling and controls table scrollLeft', () => {
-  const client = read('public/js/tech-units.js');
+  const client = read('public/js/unit-export-shared.js');
 
   assert.match(client, /function initializeUnitExportTableScroll\(modal\)/);
   assert.match(client, /tableScroll\.addEventListener\('scroll', refresh/);
@@ -46,7 +46,7 @@ test('the custom header scrollbar follows native table scrolling and controls ta
 });
 
 test('top export scrollbar sizes itself to the table and hides when horizontal overflow is absent', () => {
-  const client = read('public/js/tech-units.js');
+  const client = read('public/js/unit-export-shared.js');
 
   assert.match(client, /const contentWidth = Math\.max\(/);
   assert.match(client, /const proportionalThumbWidth = contentWidth > 0/);
@@ -58,10 +58,11 @@ test('top export scrollbar sizes itself to the table and hides when horizontal o
 });
 
 test('column changes and browser resizing recalculate the synchronized scrollbar', () => {
-  const client = read('public/js/tech-units.js');
+  const sharedClient = read('public/js/unit-export-shared.js');
+  const unitBrowserClient = read('public/js/tech-units.js');
 
-  assert.match(client, /window\.requestAnimationFrame\(\(\) => \{\s*initializeUnitExportTableScroll\(modal\);\s*\}\)/);
-  assert.match(client, /window\.addEventListener\('resize', \(\) => \{\s*initializeUnitExportTableScroll/);
+  assert.match(sharedClient, /window\.requestAnimationFrame\(\(\) => \{\s*initializeUnitExportTableScroll\(modal\);\s*\}\)/);
+  assert.match(unitBrowserClient, /window\.addEventListener\('resize', \(\) => \{\s*initializeUnitExportTableScroll/);
 });
 
 test('Export Preview uses the shared restrained blue-gray scrollbar contract', () => {
@@ -86,6 +87,6 @@ test('Stage 10V.6 cache-busts the changed shared CSS and Unit Browser script', (
     'views/pages/tech-units.ejs',
     'views/pages/tech-unit-detail.ejs'
   ]) {
-    assert.match(read(relativePath), /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
+    assert.match(read(relativePath), /unit-export-shared\.js\?v=20260921-cleanup-stage2b[\s\S]*tech-units\.js\?v=20260921-cleanup-stage2b/);
   }
 });

@@ -34,7 +34,7 @@ test('download actions appear near the top of the modal and the footer retains o
 
 test('preview cells are keyed so checkbox changes can hide unselected columns immediately', () => {
   const modal = read('views/fragments/tech-unit-export-preview-modal.ejs');
-  const browser = read('public/js/tech-units.js');
+  const browser = read('public/js/unit-export-shared.js');
 
   assert.match(modal, /data-export-column-key="<%= column\.key %>"/);
   assert.match(browser, /querySelectorAll\('\[data-export-column-key\]'\)/);

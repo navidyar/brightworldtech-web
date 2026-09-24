@@ -16,12 +16,6 @@ function setCachedLabelPrintSettings(settings) {
   cacheExpiresAt = Date.now() + CACHE_TTL_MS;
   return cachedSettings;
 }
-
-function clearLabelPrintSettingsCache() {
-  cachedSettings = null;
-  cacheExpiresAt = 0;
-}
-
 async function getLabelPrintSettings(options = {}) {
   const now = Date.now();
   if (!options.forceRefresh && cachedSettings && now < cacheExpiresAt) return cachedSettings;
@@ -65,5 +59,4 @@ module.exports = {
   getLabelPrintSettings,
   updateLabelPrintSettings,
   setCachedLabelPrintSettings,
-  clearLabelPrintSettingsCache
 };

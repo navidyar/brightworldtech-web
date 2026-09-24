@@ -21,7 +21,7 @@ test('Export Preview renders an accessible custom scrollbar directly below its h
 });
 
 test('custom scrollbar thumb is always visible when horizontal overflow exists', () => {
-  const client = read('public/js/tech-units.js');
+  const client = read('public/js/unit-export-shared.js');
 
   assert.match(client, /const hasHorizontalOverflow = contentWidth > viewportWidth \+ 1/);
   assert.match(client, /scrollRow\.hidden = !hasHorizontalOverflow/);
@@ -32,7 +32,7 @@ test('custom scrollbar thumb is always visible when horizontal overflow exists',
 });
 
 test('custom scrollbar supports pointer dragging and track clicks', () => {
-  const client = read('public/js/tech-units.js');
+  const client = read('public/js/unit-export-shared.js');
 
   assert.match(client, /topScroll\.addEventListener\('pointerdown'/);
   assert.match(client, /topScroll\.addEventListener\('pointermove'/);
@@ -42,7 +42,7 @@ test('custom scrollbar supports pointer dragging and track clicks', () => {
 });
 
 test('custom scrollbar supports keyboard navigation', () => {
-  const client = read('public/js/tech-units.js');
+  const client = read('public/js/unit-export-shared.js');
 
   assert.match(client, /topScroll\.addEventListener\('keydown'/);
   assert.match(client, /event\.key === 'ArrowLeft'/);

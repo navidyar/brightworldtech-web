@@ -1,15 +1,11 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const UNIT_FIELD_SOURCE_KEY_MAPPINGS = Object.freeze([
   Object.freeze({ legacyKey: 'complete_diagnostics_status', canonicalKey: 'complete_diagnostics' }),
   Object.freeze({ legacyKey: 'virus_check_status', canonicalKey: 'virus_check' }),
   Object.freeze({ legacyKey: 'driver_check_status', canonicalKey: 'driver_check' })
 ]);
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
 
 function planUnitFieldSourceKeyMigration(rows = [], mappingsToPlan = UNIT_FIELD_SOURCE_KEY_MAPPINGS) {
   const keysByUnit = new Map();

@@ -21,8 +21,8 @@ const { loadCurrentUser } = require('./middleware/authMiddleware');
 const { applyConfiguredSessionTimeout } = require('./middleware/sessionTimeoutMiddleware');
 const { DEFAULT_SESSION_INACTIVITY_TIMEOUT_MINUTES } = require('./services/sessionInactivityTimeoutPolicy');
 const { applyAuthenticatedNavigationPolicy } = require('./middleware/navigationPolicyMiddleware');
+const { publishSuccessfulApplicationMutations } = require('./middleware/applicationLiveRefreshMiddleware');
 const { attachAccessLocals } = require('./middleware/accessMiddleware');
-const { enforceVirtualHuddleAcknowledgment } = require('./middleware/virtualHuddleMiddleware');
 const { escapeHtml, formatDateTime, formatDate, formatTime, formatNumber, formatBytes, formatRoleLabel, formatWeight } = require('./views/partials/helpers');
 
 const app = express();
@@ -70,9 +70,9 @@ app.use(
 
 app.use(applyConfiguredSessionTimeout);
 app.use(loadCurrentUser);
+app.use(publishSuccessfulApplicationMutations);
 app.use(applyAuthenticatedNavigationPolicy);
 app.use(attachAccessLocals);
-app.use(enforceVirtualHuddleAcknowledgment);
 
 app.use(virtualHuddleRoutes);
 app.use('/api/v1', apiRoutes);

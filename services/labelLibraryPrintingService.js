@@ -436,8 +436,8 @@ async function prepareBulkPrintDestination(destination, descriptors = []) {
   return labelPrinterRuntimeService.ensureCupsQueue(ranked[0]);
 }
 
-async function printDescriptor({ descriptor, unit = null, lot = null, fieldValues = null, printer = null, printerId = '', copies, submissionLockHeld = false, skipOnlineProbe = false, titleLabel = '' }) {
-  const resolvedPrinter = printer || labelPrintingService.LABEL_PRINTERS.find((candidate) => candidate.id === String(printerId || '').trim());
+async function printDescriptor({ descriptor, unit = null, lot = null, fieldValues = null, printer = null, copies, submissionLockHeld = false, skipOnlineProbe = false, titleLabel = '' }) {
+  const resolvedPrinter = printer;
   const safeCopies = Number(copies);
   if (!resolvedPrinter || !resolvedPrinter.queue) throw new Error('The selected printer is not available.');
   assertPrinterTemplateCompatibility(descriptor, resolvedPrinter);

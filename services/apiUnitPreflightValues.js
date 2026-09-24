@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const {
   getLotRequirementField,
   normalizeRequirementKey
@@ -65,11 +66,6 @@ const OPTION_SOURCE_BY_REQUIREMENT_KEY = Object.freeze({
   overall_grade: 'overallGradeOptions',
   unit_outcome: 'outcomeOptions'
 });
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
 
 function normalizeComparableText(value) {
   return String(value ?? '')

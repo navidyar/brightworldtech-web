@@ -296,14 +296,14 @@
             <div class="form-grid single-column">
               <% if (safeFormOptions.capabilities.hasObjectives) { %>
                 <label class="form-field">
-                  <span>Objectives</span>
-                  <textarea name="objectives" rows="4" placeholder="Describe what this lot is intended to accomplish."><%= safeFormData.objectives || '' %></textarea>
+                  <span>Tech Objectives</span>
+                  <textarea name="objectives" rows="4" placeholder="Instructions and objectives technicians should follow while processing this Lot."><%= safeFormData.objectives || '' %></textarea>
                 </label>
               <% } %>
 
               <% if (safeFormOptions.capabilities.hasNotes) { %>
                 <label class="form-field">
-                  <span>Notes</span>
+                  <span>Internal Management Notes</span>
                   <textarea name="notes" rows="4" placeholder="Internal notes for Management or Leads."><%= safeFormData.notes || '' %></textarea>
                 </label>
               <% } %>

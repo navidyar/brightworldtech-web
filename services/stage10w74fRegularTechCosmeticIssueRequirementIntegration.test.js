@@ -9,40 +9,40 @@ function read(relativePath) {
   return fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
 }
 
-test('regular Tech non-A Cosmetic Grades force Cosmetic Issues visible and required', () => {
+test('regular Tech lower Cosmetic Grades force Cosmetic Issues visible and required', () => {
   const controller = read('controllers/techController.js');
   const form = read('views/fragments/tech-unit-form.ejs');
   const script = read('public/js/tech-unit-form.js');
 
   const policy = read('services/regularTechCosmeticIssuePolicy.js');
-  assert.match(policy, /NON_A_COSMETIC_GRADES = new Set\(\['AB', 'B', 'C', 'D'\]\)/);
-  assert.match(controller, /requiresActualCosmeticIssueForNonAGrade: isRegularTechUnitBrowserUser\(req\)/);
+  assert.match(policy, /gradeOption\?\.requiresCosmeticIssue === true/);
+  assert.match(controller, /requiresActualCosmeticIssueForLowerGrades: isRegularTechUnitBrowserUser\(req\)/);
   assert.match(controller, /resolveRegularTechCosmeticIssuePolicy\(/);
   assert.match(policy, /field && field\.key === 'cosmetic_issues'[\s\S]*visible: true,[\s\S]*required: true/);
-  assert.match(form, /data-require-actual-cosmetic-issue-for-non-a-grade=/);
+  assert.match(form, /data-require-actual-cosmetic-issue-for-lower-grades=/);
   assert.match(form, /data-cosmetic-grade-select/);
-  assert.match(form, /data-cosmetic-grade="<%= gradeOption\.canonicalGrade \|\| gradeOption\.label %>"/);
-  assert.match(script, /NON_A_COSMETIC_GRADES = new Set\(\['AB', 'B', 'C', 'D'\]\)/);
+  assert.match(form, /data-requires-cosmetic-issue="<%= gradeOption\.requiresCosmeticIssue \? 'true' : 'false' %>"/);
+  assert.match(script, /getAttribute\('data-requires-cosmetic-issue'\) === 'true'/);
   assert.match(script, /const visible = lotVisible \|\| gradeRequired;/);
   assert.match(script, /const required = lotRequired \|\| gradeRequired;/);
 });
 
-test('Grade A remains exempt while None cannot satisfy AB, B, C, or D for regular Techs', () => {
+test('Grades S and A remain exempt while None cannot satisfy AB, B, C, or D for regular Techs', () => {
   const controller = read('controllers/techController.js');
   const policy = read('services/regularTechCosmeticIssuePolicy.js');
   const script = read('public/js/tech-unit-form.js');
 
-  assert.doesNotMatch(policy, /NON_A_COSMETIC_GRADES = new Set\([^\n]*'A'/);
+  assert.match(policy, /COSMETIC_ISSUE_REQUIRED_GRADES = new Set\(\['AB', 'B', 'C', 'D'\]\)/);
   assert.match(policy, /row\.isNoIssue !== '1'/);
   assert.match(policy, /isPositiveInteger\(row\.issueTypeConfigValueId\)/);
   assert.match(policy, /isPositiveInteger\(row\.severityConfigValueId\)/);
   assert.match(policy, /isPositiveInteger\(row\.locationConfigValueId\)/);
-  assert.match(controller, /code: 'regular_tech_non_a_grade'/);
+  assert.match(controller, /code: 'regular_tech_lower_cosmetic_grade'/);
   assert.match(script, /row\.getAttribute\('data-cosmetic-no-issue'\) !== 'true'/);
-  assert.match(script, /NON_A_COSMETIC_ISSUE_REQUIRED_MESSAGE/);
+  assert.match(script, /COSMETIC_ISSUE_REQUIRED_MESSAGE/);
 });
 
-test('existing non-A grades still enforce the rule when the Lot hides Cosmetic Grade on Edit', () => {
+test('existing lower grades still enforce the rule when the Lot hides Cosmetic Grade on Edit', () => {
   const policy = read('services/regularTechCosmeticIssuePolicy.js');
 
   assert.match(policy, /const useExistingGrade = mode === 'edit' && gradeField && !gradeField\.visible;/);

@@ -62,7 +62,7 @@ test('server renderer supports the curated server-installed font families', () =
   assert.match(builder, /Liberation Sans/);
   assert.match(builder, /Noto Sans/);
   assert.match(renderer, /FONT_FAMILY_CODES/);
-  assert.match(renderer, /font-family="\$\{escapeXml\(style\.fontFamily\)\}"/);
+  assert.match(renderer, /font-family="\$\{escapeXml\((?:effectiveStyle|style)\.fontFamily\)\}"/);
 });
 
 test('print availability migration defaults existing templates to Lot Selection', () => {

@@ -217,8 +217,20 @@
                       <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
                       <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
                       <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
-                      <label class="form-field"><span>Canonical Unit Model Name</span><input type="text" name="approvedModelName" value="<%= request.catalogContext.requestedModelName %>" minlength="2" maxlength="150" required /></label>
-                      <label class="form-field"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional normalization or source note"></textarea></label>
+                      <div class="processor-request-approval-grid">
+                        <label class="form-field">
+                          <span>Unit Category</span>
+                          <select name="approvedUnitCategoryConfigValueId" required>
+                            <option value="">Select Unit Category</option>
+                            <% modelUnitCategories.forEach((category) => { %>
+                              <option value="<%= category.id %>" <%= String(category.id) === String(request.catalogContext.unitCategoryConfigValueId || '') ? 'selected' : '' %>><%= category.label %></option>
+                            <% }) %>
+                          </select>
+                          <small class="field-hint">Requested as <strong><%= request.catalogContext.unitCategoryLabel || 'Unspecified' %></strong>. Choose the category this canonical model should actually use.</small>
+                        </label>
+                        <label class="form-field"><span>Canonical Unit Model Name</span><input type="text" name="approvedModelName" value="<%= request.catalogContext.requestedModelName %>" minlength="2" maxlength="150" required /></label>
+                      </div>
+                      <label class="form-field"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional normalization, category, or source note"></textarea></label>
                       <button class="primary-button" type="submit">Approve Model Request</button>
                     </form>
                     <form method="post" action="/unit-requests/<%= request.unitRequestId %>/reject">
@@ -273,15 +285,28 @@
                       <div class="processor-request-mode-section" data-new-processor-section>
                         <div class="processor-request-mode-heading">
                           <strong>2. Create a New Canonical Processor only when none exists</strong>
-                          <span>Keep the Processor name concise. Store family, generation, and GHz in their separate fields.</span>
+                          <span>BWTDallas has interpreted the observed string into canonical pieces. Review them before approval.</span>
                         </div>
+
+                        <% if (processorInterpretation && processorInterpretation.rawValue && processorInterpretation.changed) { %>
+                          <div class="message info">
+                            <p><strong>Interpreted from:</strong> <%= processorInterpretation.rawValue %></p>
+                            <p><strong>Suggested canonical values:</strong> <%= [
+                              processorInterpretation.brandName,
+                              processorInterpretation.modelCode,
+                              processorInterpretation.family ? `Family ${processorInterpretation.family}` : '',
+                              processorInterpretation.generation,
+                              processorInterpretation.baseSpeedGhz !== null ? `${processorInterpretation.baseSpeedGhz} GHz` : ''
+                            ].filter(Boolean).join(' · ') %></p>
+                          </div>
+                        <% } %>
 
                         <div class="message" data-processor-similarity-warning hidden>
                           <p><strong>Possible existing processor:</strong> <span data-processor-similarity-text></span></p>
                           <p>Select the existing canonical Processor above rather than creating a duplicate.</p>
                         </div>
-                        <div class="message error" data-processor-format-warning hidden>
-                          <p><strong>Canonical Processor name needs correction:</strong> <span data-processor-format-text></span></p>
+                        <div class="message info" data-processor-format-warning hidden>
+                          <p><strong>Natural Processor string detected:</strong> <span data-processor-format-text></span>. BWTDallas will normalize recognized pieces when you submit.</p>
                         </div>
 
                         <div class="processor-request-approval-grid">
@@ -289,32 +314,32 @@
                             <span>Processor Type</span>
                             <select name="approvedProcessorBrandId" data-processor-brand-select data-new-processor-field>
                               <option value="">Create/reactivate the Processor Type named beside this field</option>
-                              <% processorBrands.forEach((processorBrand) => { %><option value="<%= processorBrand.id %>"><%= processorBrand.label %></option><% }) %>
+                              <% processorBrands.forEach((processorBrand) => { %><option value="<%= processorBrand.id %>" <%= String(processorSuggestedBrandId || '') === String(processorBrand.id) ? 'selected' : '' %>><%= processorBrand.label %></option><% }) %>
                             </select>
                           </label>
                           <label class="form-field">
                             <span>Canonical Processor Type Name</span>
-                            <input type="text" name="approvedProcessorBrandName" value="<%= request.catalogContext.requestedProcessorType %>" minlength="2" maxlength="100" required data-canonical-processor-brand data-new-processor-field />
+                            <input type="text" name="approvedProcessorBrandName" value="<%= processorInterpretation?.brandName || request.catalogContext.requestedProcessorType %>" minlength="2" maxlength="100" required data-canonical-processor-brand data-new-processor-field />
                           </label>
                           <label class="form-field">
                             <span>Canonical Processor</span>
-                            <input type="text" name="approvedProcessorModelCode" value="<%= request.catalogContext.requestedProcessorName %>" minlength="2" maxlength="150" required data-canonical-processor-model data-new-processor-field />
+                            <input type="text" name="approvedProcessorModelCode" value="<%= processorInterpretation?.modelCode || request.catalogContext.requestedProcessorName %>" minlength="2" maxlength="150" required data-canonical-processor-model data-new-processor-field />
                           </label>
                           <label class="form-field">
                             <span>Processor Family <small>(optional)</small></span>
-                            <input type="text" name="approvedProcessorFamily" maxlength="100" placeholder="Example: Core" data-new-processor-field />
+                            <input type="text" name="approvedProcessorFamily" value="<%= processorInterpretation?.family || '' %>" maxlength="100" placeholder="Example: Core" data-new-processor-field />
                           </label>
                           <label class="form-field">
                             <span>Generation <small>(optional)</small></span>
-                            <input type="text" name="approvedProcessorGeneration" maxlength="80" placeholder="Example: 9th Gen" data-new-processor-field />
+                            <input type="text" name="approvedProcessorGeneration" value="<%= processorInterpretation?.generation || '' %>" maxlength="80" placeholder="Example: 9th Gen" data-new-processor-field />
                           </label>
                           <label class="form-field">
                             <span>Base Speed GHz</span>
-                            <input type="number" name="approvedProcessorBaseSpeedGhz" value="<%= request.catalogContext.requestedProcessorSpeedGhz || '' %>" min="0.01" max="99.99" step="0.01" required placeholder="Example: 2.20" data-canonical-processor-speed data-new-processor-field />
+                            <input type="number" name="approvedProcessorBaseSpeedGhz" value="<%= processorInterpretation?.baseSpeedGhz ?? request.catalogContext.requestedProcessorSpeedGhz ?? '' %>" min="0.01" max="99.99" step="0.01" required placeholder="Example: 2.20" data-canonical-processor-speed data-new-processor-field />
                           </label>
                         </div>
 
-                        <p class="field-hint processor-request-canonical-hint">Example canonical record: <strong>Intel</strong> · <strong>i5-9500T</strong> · Family <strong>Core</strong> · Generation <strong>9th Gen</strong> · Base Speed <strong>2.20 GHz</strong>. Do not put “Intel Core”, “@ 2.20 GHz”, or generation text into the Processor field.</p>
+                        <p class="field-hint processor-request-canonical-hint">The original observed Processor string remains part of the request. These fields are the normalized catalog record BWTDallas will create only when an existing Processor is not reused.</p>
 
                         <div class="message info processor-request-admin-confirmation-note">
                           <p><strong>Admin Catalog Review:</strong> Reuse an existing Processor whenever one already exists. Keep canonical Processor naming and metadata consistent with the global catalog.</p>
@@ -380,6 +405,6 @@
         </main>
       </div>
     </div>
-    <script defer src="/js/processor-request-review.js?v=20260810-stage10w30-processor-catalog-integrity"></script>
+    <script defer src="/js/processor-request-review.js?v=20260923-processor-string-interpretation"></script>
   </body>
 </html>

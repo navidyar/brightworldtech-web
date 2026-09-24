@@ -241,11 +241,11 @@ function isRequired(state) {
     );
 }
 
-function applyLinkedVisibilityDefaults(statesByKey) {
+function applyLinkedVisibility(statesByKey) {
   for (const state of statesByKey.values()) {
     const sourceKey = String(state.field.inheritVisibilityFromFieldKey || '').trim();
 
-    if (!sourceKey || state.visibilitySource.type !== 'application_default') {
+    if (!sourceKey) {
       continue;
     }
 
@@ -259,7 +259,7 @@ function applyLinkedVisibilityDefaults(statesByKey) {
 
     state.resolvedVisibilityMode = sourceState.resolvedVisibilityMode;
     state.visibilitySource = Object.freeze({
-      type: 'linked_field_default',
+      type: 'linked_field',
       lotId: sourceState.visibilitySource.lotId ?? null,
       lotName: sourceState.visibilitySource.lotName ?? null,
       fieldKey: sourceKey
@@ -378,7 +378,7 @@ function resolveLotUnitFormProfile({
     }
   }
 
-  applyLinkedVisibilityDefaults(statesByKey);
+  applyLinkedVisibility(statesByKey);
   applyLotRequirementConstraints(statesByKey, normalizedLotRequirementConstraints);
   applyDependencyRules(statesByKey, dependencyRules);
 

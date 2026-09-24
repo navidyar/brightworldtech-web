@@ -44,6 +44,20 @@ function isActiveRecord(record) {
   return record.is_active === true || record.is_active === 1 || record.is_active === '1';
 }
 
+function normalizeConfigCategoryLabel(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ');
+}
+
+function isRetiredLegacyUnitGradeCategory(category, hasAuthoritativeUnitGrades) {
+  if (!hasAuthoritativeUnitGrades || category.isActive) return false;
+  if (Number(category.system_config_category_id || 0) > 0) return false;
+  return ['unit grades', 'cosmetic grades', 'overall unit grades'].includes(normalizeConfigCategoryLabel(category.label));
+}
+
 function getConfigSection(systemConfigCategoryId) {
   const systemId = Number(systemConfigCategoryId);
 
@@ -92,7 +106,8 @@ function getConfigSection(systemConfigCategoryId) {
     SYSTEM_CONFIG_CATEGORY_IDS.ISSUE_LOCATIONS,
     SYSTEM_CONFIG_CATEGORY_IDS.ISSUE_SEVERITIES,
     SYSTEM_CONFIG_CATEGORY_IDS.COMMENT_TYPES,
-    SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_SIZES
+    SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_SIZES,
+    SYSTEM_CONFIG_CATEGORY_IDS.PORT_TYPES
   ].includes(systemId)) {
     return {
       key: 'unit-workflow',
@@ -251,7 +266,7 @@ async function listConfigCategoriesWithValues(options = {}) {
     valuesByCategoryId.get(value.config_category_id).push(value);
   }
 
-  return categoryRows.map((category) => {
+  const normalizedCategories = categoryRows.map((category) => {
     const allValues = valuesByCategoryId.get(category.config_category_id) || [];
     const activeValues = allValues.filter((value) => value.isActive);
     const inactiveValues = allValues.filter((value) => !value.isActive);
@@ -276,6 +291,13 @@ async function listConfigCategoriesWithValues(options = {}) {
       supportsDragOrdering: orderingPolicy.supportsDragOrdering && visibleValues.length >= 3
     };
   });
+  const hasAuthoritativeUnitGrades = normalizedCategories.some((category) => (
+    Number(category.system_config_category_id || 0) === SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES
+  ));
+
+  return normalizedCategories.filter((category) => (
+    !isRetiredLegacyUnitGradeCategory(category, hasAuthoritativeUnitGrades)
+  ));
 }
 
 async function listConfigCategoriesForForm() {
@@ -307,7 +329,7 @@ async function listConfigCategoriesForForm() {
     ORDER BY sort_order, label, cc.config_category_id
   `);
 
-  return rows.map((row) => {
+  const normalizedCategories = rows.map((row) => {
     const activeValueCount = Number(row.active_value_count || 0);
     const orderingPolicy = getConfigCategoryOrderingPolicy(row.system_config_category_id, activeValueCount);
 
@@ -320,6 +342,13 @@ async function listConfigCategoriesForForm() {
       dragOrderingManaged: orderingPolicy.supportsDragOrdering
     };
   });
+  const hasAuthoritativeUnitGrades = normalizedCategories.some((category) => (
+    Number(category.system_config_category_id || 0) === SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES
+  ));
+
+  return normalizedCategories.filter((category) => (
+    !isRetiredLegacyUnitGradeCategory(category, hasAuthoritativeUnitGrades)
+  ));
 }
 
 async function getConfigCategoryById(configCategoryId) {

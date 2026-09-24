@@ -8,7 +8,7 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
 
-test('Management+ can delete printer groups without deleting printers', () => {
+test('Admin can delete printer groups without deleting printers', () => {
   const routes = read('routes/management.js');
   const controller = read('controllers/labelPrinterController.js');
   const model = read('models/labelPrinterModel.js');
@@ -23,7 +23,7 @@ test('Management+ can delete printer groups without deleting printers', () => {
   assert.match(modal, /does not remove the printers themselves/);
 });
 
-test('Management+ can force Share on or off for any solo printer', () => {
+test('Admin can force Share on or off for any solo printer', () => {
   const routes = read('routes/management.js');
   const controller = read('controllers/labelPrinterController.js');
   const model = read('models/labelPrinterModel.js');
@@ -85,7 +85,7 @@ test('ordinary Tech Users cannot add an offline solo printer', () => {
   assert.match(form, /Tech Users cannot add this solo printer while it is offline/);
 });
 
-test('Management+ can convert solo and managed printers without deleting the printer record', () => {
+test('Admin can convert solo and managed printers without deleting the printer record', () => {
   const routes = read('routes/management.js');
   const controller = read('controllers/labelPrinterController.js');
   const model = read('models/labelPrinterModel.js');
@@ -101,7 +101,7 @@ test('Management+ can convert solo and managed printers without deleting the pri
   assert.match(modal, /Share after conversion/);
 });
 
-test('Management sharing control is placed immediately after Remove for solo printers', () => {
+test('Admin sharing control is placed immediately after Remove for solo printers', () => {
   const live = read('views/fragments/management-printers-live.ejs');
   const removeIndex = live.indexOf('>Remove</a>');
   const sharingIndex = live.indexOf("'Make Private' : 'Force Share'");
@@ -109,7 +109,7 @@ test('Management sharing control is placed immediately after Remove for solo pri
   assert.ok(sharingIndex > removeIndex);
 });
 
-test('Management editing a solo printer stays on Management routes', () => {
+test('Admin editing a solo printer stays on managed-printer routes', () => {
   const form = read('views/fragments/label-printer-form-modal.ejs');
   const controller = read('controllers/labelPrinterController.js');
   assert.match(form, /managementContext \? '\/management\/printers' : '\/tech\/printers'/);

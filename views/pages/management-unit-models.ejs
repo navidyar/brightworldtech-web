@@ -5,6 +5,8 @@
     updated: 'Unit model updated.',
     activated: 'Unit model activated.',
     deactivated: 'Unit model deactivated.',
+    deleted: 'Unit model permanently deleted.',
+    retired: 'Unit model removed from the active catalog because existing references must be preserved.',
     'processors-updated': 'Exact Processor associations updated.',
     'not-found': 'The selected model was not found.'
   };
@@ -79,7 +81,7 @@
               </div>
             </div>
 
-            <form class="app-form model-catalog-filter-form" method="get" action="/management/config/models" data-auto-submit-filter-form data-auto-submit-delay="300">
+            <form class="app-form model-catalog-filter-form" method="get" action="/management/config/models" data-auto-submit-filter-form data-auto-submit-delay="300" data-auto-submit-filter-target=".model-catalog-results-section" data-auto-submit-filter-sync=".model-catalog-summary-panel">
               <label class="form-field">
                 <span>Manufacturer</span>
                 <select data-auto-submit-filter="immediate" name="manufacturerId">
@@ -157,6 +159,7 @@
                             <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
                             <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/processors/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/processors/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Processors</a>
                             <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML"><%= model.isActive ? 'Deactivate' : 'Activate' %></a>
+                            <a class="danger-button button-small" href="/management/config/models/<%= model.id %>/delete/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/delete/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Delete</a>
                           </div>
                         </td>
                       </tr>

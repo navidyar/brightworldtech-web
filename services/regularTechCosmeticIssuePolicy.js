@@ -2,8 +2,8 @@
 
 const { getCanonicalCosmeticGradeFromOption } = require('./cosmeticGradeNormalization');
 
-const NON_A_COSMETIC_GRADES = new Set(['AB', 'B', 'C', 'D']);
-const REGULAR_TECH_COSMETIC_ISSUE_MESSAGE = 'Cosmetic Grade AB, B, C, or D requires at least one actual Cosmetic Issue with severity and location for Tech users.';
+const COSMETIC_ISSUE_REQUIRED_GRADES = new Set(['AB', 'B', 'C', 'D']);
+const REGULAR_TECH_COSMETIC_ISSUE_MESSAGE = 'The selected Cosmetic Grade requires at least one actual Cosmetic Issue with severity and location for Tech users.';
 
 function isPositiveInteger(value) {
   const parsed = Number(value);
@@ -24,7 +24,7 @@ function findSelectedCosmeticGradeOption(configValueId, formOptions = {}) {
     )) || null;
 }
 
-function getEffectiveSubmittedCosmeticGrade({ mode, formData, existingFormData, profile, formOptions } = {}) {
+function getEffectiveSubmittedCosmeticGradeOption({ mode, formData, existingFormData, profile, formOptions } = {}) {
   const gradeField = Array.isArray(profile?.fields)
     ? profile.fields.find((field) => field && field.key === 'overall_grade')
     : null;
@@ -34,7 +34,7 @@ function getEffectiveSubmittedCosmeticGrade({ mode, formData, existingFormData, 
     : formData?.overallGradeConfigValueId;
   const gradeOption = findSelectedCosmeticGradeOption(gradeConfigValueId, formOptions);
 
-  return gradeOption ? getCanonicalCosmeticGradeFromOption(gradeOption) : null;
+  return gradeOption;
 }
 
 function forceCosmeticIssuesVisibleRequired(profile) {
@@ -71,16 +71,19 @@ function hasCompleteActualCosmeticIssue(formData = {}) {
 }
 
 function resolveRegularTechCosmeticIssuePolicy({ mode, formData, existingFormData, profile, formOptions } = {}) {
-  const canonicalGrade = getEffectiveSubmittedCosmeticGrade({
+  const gradeOption = getEffectiveSubmittedCosmeticGradeOption({
     mode,
     formData,
     existingFormData,
     profile,
     formOptions
   });
+  const canonicalGrade = gradeOption ? getCanonicalCosmeticGradeFromOption(gradeOption) : null;
+  const gradeRequiresIssue = gradeOption?.requiresCosmeticIssue === true
+    || (gradeOption?.requiresCosmeticIssue === undefined && COSMETIC_ISSUE_REQUIRED_GRADES.has(canonicalGrade));
   const requiresActualCosmeticIssue = Boolean(
-    formOptions?.requiresActualCosmeticIssueForNonAGrade
-    && NON_A_COSMETIC_GRADES.has(canonicalGrade)
+    formOptions?.requiresActualCosmeticIssueForLowerGrades
+    && gradeRequiresIssue
   );
 
   return {
@@ -91,7 +94,7 @@ function resolveRegularTechCosmeticIssuePolicy({ mode, formData, existingFormDat
 }
 
 module.exports = {
-  NON_A_COSMETIC_GRADES,
+  COSMETIC_ISSUE_REQUIRED_GRADES,
   REGULAR_TECH_COSMETIC_ISSUE_MESSAGE,
   forceCosmeticIssuesVisibleRequired,
   hasCompleteActualCosmeticIssue,

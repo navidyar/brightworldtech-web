@@ -8,6 +8,8 @@
   if (returnTo === 'processor-families') query.set('returnTo', 'processor-families');
   const queryString = query.toString();
   const isCreate = mode === 'create';
+  const safeInterpretation = typeof interpretation !== 'undefined' && interpretation ? interpretation : null;
+  const safeProcessorMatches = typeof processorMatches !== 'undefined' && Array.isArray(processorMatches) ? processorMatches : [];
   const formAction = isCreate
     ? `/management/config/processors/new/modal${queryString ? `?${queryString}` : ''}`
     : `/management/config/processors/${processor.id}/edit/modal${queryString ? `?${queryString}` : ''}`;
@@ -24,12 +26,37 @@
         <div class="message error"><ul><% errorMessages.forEach((message) => { %><li><%= message %></li><% }) %></ul></div>
       <% } %>
 
+      <% if (safeInterpretation && safeInterpretation.rawValue && safeInterpretation.changed) { %>
+        <div class="message info">
+          <p><strong>Processor string interpreted:</strong> Review the normalized catalog values below before saving.</p>
+          <p><%= [
+            safeInterpretation.brandName ? `Type: ${safeInterpretation.brandName}` : '',
+            safeInterpretation.modelCode ? `Processor: ${safeInterpretation.modelCode}` : '',
+            safeInterpretation.family ? `Family: ${safeInterpretation.family}` : '',
+            safeInterpretation.generation ? `Generation: ${safeInterpretation.generation}` : '',
+            safeInterpretation.baseSpeedGhz !== null ? `Base Speed: ${safeInterpretation.baseSpeedGhz} GHz` : ''
+          ].filter(Boolean).join(' · ') %></p>
+        </div>
+      <% } %>
+
+      <% if (safeProcessorMatches.length > 0) { %>
+        <div class="message <%= safeProcessorMatches.some((match) => match.identityMatch) ? 'error' : 'info' %>">
+          <p><strong><%= safeProcessorMatches.some((match) => match.identityMatch) ? 'Existing Processor found' : 'Possible existing Processor' %>:</strong></p>
+          <ul>
+            <% safeProcessorMatches.forEach((match) => { %>
+              <li>#<%= match.id %> · <%= match.displayLabel %><%= match.isActive ? '' : ' (Inactive)' %></li>
+            <% }) %>
+          </ul>
+          <p>Reuse the existing canonical record when it represents the same physical processor instead of creating a duplicate.</p>
+        </div>
+      <% } %>
+
       <form class="app-form app-form-clean" method="post" action="<%= formAction %>" data-processor-catalog-form>
         <input type="hidden" name="returnTo" value="<%= returnTo %>" />
         <div class="form-grid">
           <label class="form-field">
-            <span>Processor Type</span>
-            <select name="processorBrandId" required>
+            <span>Processor Type <small>(optional when included in Processor string)</small></span>
+            <select name="processorBrandId">
               <option value="">Select Processor Type</option>
               <% brands.filter((brand) => brand.isActive || String(brand.id) === String(formData.processorBrandId)).forEach((brand) => { %>
                 <option value="<%= brand.id %>" <%= selected(formData.processorBrandId, brand.id) %>><%= brand.label %><%= brand.isActive ? '' : ' (Inactive)' %></option>
@@ -39,7 +66,8 @@
 
           <label class="form-field">
             <span>Processor</span>
-            <input type="text" name="modelCode" value="<%= formData.modelCode || '' %>" minlength="2" maxlength="150" required />
+            <input type="text" name="modelCode" value="<%= formData.modelCode || '' %>" minlength="2" maxlength="150" required placeholder="Example: Intel(R) Core(TM) i9-10885H CPU @ 2.40GHz" />
+            <small class="field-hint">Paste the processor exactly as observed. BWTDallas will separate the brand, canonical model, family, generation, and GHz when it can do so confidently.</small>
           </label>
 
           <label class="form-field">
@@ -63,7 +91,7 @@
           </label>
         </div>
 
-        <p class="field-hint">For Intel Core processors, keep the canonical Processor concise (for example, <strong>i5-9500T</strong>). Store Core, 9th Gen, and 2.20 GHz in their separate metadata fields. If another record already represents the same physical processor, use the existing canonical record or Resolve Duplicate instead of creating another duplicate.</p>
+        <p class="field-hint">Natural processor strings are accepted. For example, Intel Core i5-9500T can be pasted as observed. Before saving, BWTDallas normalizes recognized values and checks the global Processor Catalog for the same physical processor. If no match exists, review the interpreted fields and save the new canonical record.</p>
 
         <div class="form-actions">
           <button class="primary-button" type="submit"><%= isCreate ? 'Add Processor' : 'Save Processor' %></button>

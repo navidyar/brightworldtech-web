@@ -177,22 +177,12 @@ async function getTechnicianQcGradeSummary(technicianUserId, filters = {}, conne
   assertValidQcGradeSummary(summary);
   return summary;
 }
-
-async function listTechnicianQcGradeSummaries(filters = {}, connection = pool) {
-  const rows = await listQcReviewActions(filters, connection);
-  const technicianUserIds = normalizePositiveIntegerList(filters.technicianUserIds);
-  const summaries = calculateQcGradeSummariesByTechnician(rows, technicianUserIds);
-  summaries.forEach(assertValidQcGradeSummary);
-  return summaries;
-}
-
 module.exports = {
   buildQcReviewActionQuery,
   getOverallQcGradeSummary,
   getQcGradingTechnician,
   getTechnicianQcGradeSummary,
   listQcReviewActions,
-  listTechnicianQcGradeSummaries,
   normalizeOptionalDateTime,
   normalizePositiveIntegerList
 };

@@ -8,12 +8,12 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-test('QC Portal access policy includes Admin, Management, Tech Lead, and QC while reporting remains Management+', () => {
+test('QC Portal access policy includes Admin, Management, Tech Lead, and QC while reporting remains Admin-only', () => {
   const policy = require('../config/accessPolicy');
 
   assert.deepEqual([...policy.QC_PORTAL_ROLE_CODES], ['admin', 'management', 'tech_lead', 'qc']);
   assert.deepEqual([...policy.QC_REVIEW_ROLE_CODES], ['admin', 'management', 'tech_lead', 'qc']);
-  assert.deepEqual([...policy.QC_REPORTING_ROLE_CODES], ['admin', 'management']);
+  assert.deepEqual([...policy.QC_REPORTING_ROLE_CODES], ['admin']);
   assert.equal(policy.canAccessMenuArea(['admin'], 'qc'), true);
   assert.equal(policy.canAccessMenuArea(['management'], 'qc'), true);
   assert.equal(policy.canAccessMenuArea(['qc'], 'qc'), true);
@@ -28,15 +28,15 @@ test('QC Review routes reuse the Unit Browser and authorize formal QC decisions 
   assert.match(routes, /'\/qc\/review\/table',[\s\S]*?requireRole\(QC_PORTAL_ROLE_CODES\)[\s\S]*?renderQcPortalReviewTable/);
   assert.match(routes, /'\/tech\/units\/:unitId\/qc-review\/:decisionCode\/modal',[\s\S]*?requireRole\(QC_REVIEW_ROLE_CODES\)/);
   assert.match(routes, /'\/tech\/units\/:unitId\/qc-review',[\s\S]*?requireRole\(QC_REVIEW_ROLE_CODES\)/);
-  assert.match(routes, /'\/management\/qc-reporting',[\s\S]*?requireRole\(QC_REPORTING_ROLE_CODES\)/);
+  assert.match(routes, /'\/management\/qc-reporting',[\s\S]*?requireFeature\('qcReporting'\)/);
 });
 
-test('QC Portal navigation owns QC Review and QC Reporting without granting reporting to QC users', () => {
+test('QC Portal navigation owns QC Review while Admin navigation owns QC Reporting', () => {
   const sidebar = read('views/partials/sidebar.ejs');
 
   assert.match(sidebar, />QC Portal</);
   assert.match(sidebar, /href="\/qc\/review"[\s\S]*?>QC Review</);
-  assert.match(sidebar, /canAccessMenuArea\('management'\)[\s\S]*?href="\/management\/qc-reporting"[\s\S]*?>QC Reporting</);
+  assert.match(sidebar, /canAccessMenuArea\('admin'\)[\s\S]*?canAccessFeature\('qcReporting'\)[\s\S]*?href="\/management\/qc-reporting"[\s\S]*?>QC Reporting</);
   assert.match(sidebar, /canAccessMenuArea\('tech'\) && !isQcOnlyNavigationUser/);
 
   const managementSection = sidebar.match(/if \(canAccessMenuArea\('management'\)\)[\s\S]*?if \(canAccessMenuArea\('qc'\)\)/)?.[0] || '';

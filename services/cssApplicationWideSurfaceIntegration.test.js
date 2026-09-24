@@ -105,6 +105,9 @@ test('behavior-critical mechanics remain owned by features.css after application
     assert.ok(features.includes(token), `features.css must retain ${token}`);
   });
 
+  assert.match(features, /:where\(\.modal-header\)\s*\{[\s\S]*?position:\s*static;/);
+  assert.doesNotMatch(features, /:where\(\.modal-header\)\s*\{[\s\S]*?position:\s*sticky;/);
+
   for (const protectedToken of ['lot-tree-row-hidden', 'data-unit-form-field-key', 'label-builder-canvas', 'label-builder-resize-handle']) {
     assert.ok(!app.includes(protectedToken), `app.css must not take ownership of ${protectedToken}`);
   }

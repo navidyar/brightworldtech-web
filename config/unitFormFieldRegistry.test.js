@@ -96,7 +96,7 @@ test('compound repeatable rows stay section-controlled so their conditional chil
   }
 });
 
-test('lot-configurable list excludes permission, workflow, system, legacy, and disabled future controls', () => {
+test('lot-configurable list excludes permission, workflow, system, and disabled future controls', () => {
   const configurableKeys = new Set(listLotConfigurableUnitFormFields().map((field) => field.key));
 
   for (const key of [

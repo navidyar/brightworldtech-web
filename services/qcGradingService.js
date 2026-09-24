@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const ACCEPTED = 'accepted';
 const REJECTED = 'rejected';
 const VALID_DECISIONS = new Set([ACCEPTED, REJECTED]);
@@ -13,11 +14,6 @@ const QC_GRADE_POLICY = Object.freeze({
   reversedCompletionsExcluded: true,
   unreviewedUnitsExcluded: true
 });
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
 
 function normalizeDecision(value) {
   const decision = String(value || '').trim().toLowerCase();

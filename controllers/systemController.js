@@ -1,18 +1,5 @@
 const systemModel = require('../models/systemModel');
-
-async function renderHomePage(req, res, next) {
-  try {
-    const status = await systemModel.getFoundationStatus();
-
-    res.render('pages/home', {
-      pageTitle: 'Dashboard',
-      currentNav: 'dashboard',
-      status
-    });
-  } catch (error) {
-    next(error);
-  }
-}
+const { streamApplicationLiveRefreshEvents } = require('../services/applicationLiveRefreshEvents');
 
 async function renderDatabasePage(req, res, next) {
   try {
@@ -42,8 +29,12 @@ async function getHealth(req, res) {
   });
 }
 
+function streamApplicationEvents(req, res) {
+  return streamApplicationLiveRefreshEvents(req, res);
+}
+
 module.exports = {
-  renderHomePage,
   renderDatabasePage,
-  getHealth
+  getHealth,
+  streamApplicationEvents
 };

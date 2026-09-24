@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const fs = require('node:fs');
 const QRCode = require('qrcode');
 const labelLibraryModel = require('../models/labelLibraryModel');
@@ -9,6 +10,7 @@ const labelLibraryPrintingService = require('../services/labelLibraryPrintingSer
 const labelPrinterRuntimeService = require('../services/labelPrinterRuntimeService');
 const labelPrintingService = require('../services/labelPrintingService');
 const labelPrintHistoryModel = require('../models/labelPrintHistoryModel');
+const { isHtmxRequest } = require('../utils/htmxRequest');
 const {
   LABEL_TEMPLATE_CATEGORIES,
   LABEL_TEMPLATE_STATUSES,
@@ -166,10 +168,6 @@ async function preflightActiveBuilderLayout(template, layout, geometry, reusable
   }
 }
 
-function isHtmxRequest(req) {
-  return String(req.get('HX-Request') || '').toLowerCase() === 'true';
-}
-
 function sendRedirect(req, res, url) {
   if (isHtmxRequest(req)) {
     res.set('HX-Redirect', url);
@@ -215,11 +213,6 @@ function applyTemplateFilters(templates, query = {}) {
 
 async function getTemplateLayoutState(template, options = {}) {
   return inspectTemplateReadiness(template, options);
-}
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function normalizeStandalonePrintCopies(value) {
@@ -1288,7 +1281,6 @@ async function renderTemplateBuilder(req, res, next) {
     }
     const media = inferLabelBuilderMediaWidth(template)
       || findLabelBuilderMediaWidth(layout?.mediaWidthCode)
-      || findLabelBuilderMediaWidth(String(layout?.mediaPresetCode || '').split('_').slice(0, 2).join('_'))
       || findLabelBuilderMediaWidth(DEFAULT_LABEL_BUILDER_MEDIA_CODE);
     const lengthMm = inferLabelBuilderLengthMm(template, layout) || LABEL_BUILDER_DEFAULT_LENGTH_MM;
     const geometry = buildLabelBuilderGeometry(media.code, lengthMm);

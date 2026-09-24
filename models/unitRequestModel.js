@@ -1348,13 +1348,22 @@ async function createProcessorCatalogRequest({
   }
 
   const safeRequesterUserId = normalizePositiveInteger(requestedByUserId);
-  const safeRequestedProcessorType = normalizeText(requestedProcessorType, 100);
   const safeRequestedProcessorName = normalizeText(requestedProcessorName, 150);
-  const safeRequestedProcessorSpeedGhz = normalizeOptionalDecimal(requestedProcessorSpeedGhz);
+  const suppliedProcessorType = normalizeText(requestedProcessorType, 100);
+  const suppliedProcessorSpeedGhz = normalizeOptionalDecimal(requestedProcessorSpeedGhz);
+  const interpretedProcessor = processorCatalogModel.interpretProcessorObservation({
+    value: safeRequestedProcessorName,
+    brandName: suppliedProcessorType,
+    baseSpeedGhz: suppliedProcessorSpeedGhz
+  });
+  const safeRequestedProcessorType = suppliedProcessorType || normalizeText(interpretedProcessor.brandName, 100);
+  const safeRequestedProcessorSpeedGhz = suppliedProcessorSpeedGhz !== null
+    ? suppliedProcessorSpeedGhz
+    : normalizeOptionalDecimal(interpretedProcessor.baseSpeedGhz);
   const safeRequesterNote = assertRequesterNote(requesterNote);
 
-  if (!safeRequesterUserId || safeRequestedProcessorType.length < 2 || safeRequestedProcessorName.length < 2 || safeRequestedProcessorSpeedGhz === null || safeRequestedProcessorSpeedGhz < 0.01) {
-    const error = new Error('Enter the observed Processor Type, exact Processor value, and Processor Speed before submitting this request.');
+  if (!safeRequesterUserId || safeRequestedProcessorType.length < 2 || safeRequestedProcessorName.length < 2 || safeRequestedProcessorSpeedGhz === null || safeRequestedProcessorSpeedGhz < 0.01 || safeRequestedProcessorSpeedGhz > 99.99) {
+    const error = new Error('Enter the observed Processor value. Include the Processor Type and GHz either in that string or in their separate fields.');
     error.code = 'BWT_CATALOG_REQUEST_INPUT_INVALID';
     throw error;
   }
@@ -1690,13 +1699,21 @@ async function approveIntentionalDuplicateRequest({ unitRequestId, reviewedByUse
   }
 }
 
-async function approveModelCatalogRequest({ unitRequestId, reviewedByUserId, reviewerNote = '', approvedModelName, reviewerIsAdmin = false }) {
+async function approveModelCatalogRequest({
+  unitRequestId,
+  reviewedByUserId,
+  reviewerNote = '',
+  approvedModelName,
+  approvedUnitCategoryConfigValueId,
+  reviewerIsAdmin = false
+}) {
   const safeRequestId = normalizePositiveInteger(unitRequestId);
   const safeReviewerUserId = normalizePositiveInteger(reviewedByUserId);
   const safeApprovedModelName = normalizeText(approvedModelName, 150);
+  const safeApprovedCategoryId = normalizePositiveInteger(approvedUnitCategoryConfigValueId);
 
-  if (!safeRequestId || !safeReviewerUserId || safeApprovedModelName.length < 2) {
-    const error = new Error('Enter a canonical Unit Model name before approving this request.');
+  if (!safeRequestId || !safeReviewerUserId || safeApprovedModelName.length < 2 || !safeApprovedCategoryId) {
+    const error = new Error('Enter a canonical Unit Model name and select its Unit Category before approving this request.');
     error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
     throw error;
   }
@@ -1747,7 +1764,8 @@ async function approveModelCatalogRequest({ unitRequestId, reviewedByUserId, rev
 
     const isSelfReview = Number(request.requested_by_user_id) === safeReviewerUserId;
 
-    const context = await assertActiveModelRequestContext(connection, request.manufacturer_id, request.unit_category_config_value_id);
+    const requestedCategoryId = normalizePositiveInteger(request.unit_category_config_value_id);
+    const context = await assertActiveModelRequestContext(connection, request.manufacturer_id, safeApprovedCategoryId);
     const [existingRows] = await connection.query(
       `
         SELECT unit_model_id, is_active
@@ -1791,11 +1809,11 @@ async function approveModelCatalogRequest({ unitRequestId, reviewedByUserId, rev
     await connection.query(
       `
         UPDATE unit_model_catalog_requests
-        SET approved_model_name = ?, approved_unit_model_id = ?
+        SET unit_category_config_value_id = ?, approved_model_name = ?, approved_unit_model_id = ?
         WHERE unit_request_id = ?
         LIMIT 1
       `,
-      [safeApprovedModelName, approvedUnitModelId, safeRequestId]
+      [context.unitCategoryConfigValueId, safeApprovedModelName, approvedUnitModelId, safeRequestId]
     );
 
     await connection.query(
@@ -1816,6 +1834,8 @@ async function approveModelCatalogRequest({ unitRequestId, reviewedByUserId, rev
       eventDetails: {
         approvedUnitModelId,
         approvedModelName: safeApprovedModelName,
+        requestedUnitCategoryConfigValueId: requestedCategoryId,
+        approvedUnitCategoryConfigValueId: context.unitCategoryConfigValueId,
         selfReviewedByAdmin: isSelfReview,
         reviewAuthority: 'admin',
         action: actionLabel
@@ -1950,8 +1970,8 @@ async function approveProcessorCatalogRequest({
   const safeReviewerUserId = normalizePositiveInteger(reviewedByUserId);
   const safeExistingProcessorModelId = normalizePositiveInteger(approvedExistingProcessorModelId);
   const requestedModelCode = normalizeText(approvedProcessorModelCode, 150);
-  const safeFamily = normalizeText(approvedProcessorFamily, 100);
-  const safeGeneration = normalizeText(approvedProcessorGeneration, 80);
+  let safeFamily = normalizeText(approvedProcessorFamily, 100);
+  let safeGeneration = normalizeText(approvedProcessorGeneration, 80);
   const requestedBrandName = normalizeText(approvedProcessorBrandName, 100);
 
   if (!safeRequestId || !safeReviewerUserId || (!safeExistingProcessorModelId && (requestedModelCode.length < 2 || (!normalizePositiveInteger(approvedProcessorBrandId) && requestedBrandName.length < 2)))) {
@@ -2061,7 +2081,19 @@ async function approveProcessorCatalogRequest({
       });
       const submittedSpeed = normalizeOptionalDecimal(request.requested_processor_speed_ghz);
       const reviewerSpeed = normalizeOptionalDecimal(approvedProcessorBaseSpeedGhz);
-      safeBaseSpeed = reviewerSpeed !== null ? reviewerSpeed : submittedSpeed;
+      const interpretation = processorCatalogModel.interpretProcessorObservation({
+        value: requestedModelCode,
+        brandName: processorBrand.name,
+        family: safeFamily,
+        generation: safeGeneration,
+        baseSpeedGhz: reviewerSpeed !== null ? reviewerSpeed : submittedSpeed
+      });
+      canonicalModelCode = interpretation.modelCode || requestedModelCode;
+      if (!safeFamily && interpretation.family) safeFamily = interpretation.family;
+      if (!safeGeneration && interpretation.generation) safeGeneration = interpretation.generation;
+      safeBaseSpeed = reviewerSpeed !== null
+        ? reviewerSpeed
+        : (submittedSpeed !== null ? submittedSpeed : interpretation.baseSpeedGhz);
 
       if (safeBaseSpeed === null || safeBaseSpeed < 0.01 || safeBaseSpeed > 99.99) {
         const error = new Error('Confirm a Processor Base Speed from 0.01 through 99.99 GHz before approving a new canonical Processor.');
@@ -2069,7 +2101,6 @@ async function approveProcessorCatalogRequest({
         throw error;
       }
 
-      canonicalModelCode = requestedModelCode;
       const canonicalNameErrors = processorCatalogModel.getCanonicalProcessorNameErrors({
         brandName: processorBrand.name,
         modelCode: canonicalModelCode

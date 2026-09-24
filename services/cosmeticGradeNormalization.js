@@ -1,8 +1,12 @@
 'use strict';
 
-const { COSMETIC_GRADE_BY_SYSTEM_VALUE_ID } = require('../config/configIdentityRegistry');
+const {
+  COSMETIC_GRADE_BY_SYSTEM_VALUE_ID,
+  SYSTEM_CONFIG_CATEGORY_IDS
+} = require('../config/configIdentityRegistry');
 
 const CANONICAL_COSMETIC_GRADES = Object.freeze([
+  Object.freeze({ code: 's', value: 'S', label: 'S', description: 'Supreme Grade; highest cosmetic condition.', sortOrder: 5 }),
   Object.freeze({ code: 'a', value: 'A', label: 'A', sortOrder: 10 }),
   Object.freeze({ code: 'ab', value: 'AB', label: 'AB', sortOrder: 20 }),
   Object.freeze({ code: 'b', value: 'B', label: 'B', sortOrder: 30 }),
@@ -11,6 +15,8 @@ const CANONICAL_COSMETIC_GRADES = Object.freeze([
 ]);
 
 const CANONICAL_GRADE_BY_TOKEN = new Map([
+  ['s', 'S'],
+  ['supreme', 'S'],
   ['a', 'A'],
   ['ab', 'AB'],
   ['a_b', 'AB'],
@@ -22,15 +28,18 @@ const CANONICAL_GRADE_BY_TOKEN = new Map([
 const CANONICAL_GRADE_ORDER = new Map(
   CANONICAL_COSMETIC_GRADES.map((grade, index) => [grade.value, index])
 );
+const CANONICAL_LOWER_GRADE_SET = new Set(['AB', 'B', 'C', 'D']);
 
 function normalizeCosmeticGradeToken(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
+  const rawValue = String(value || '').trim().toLowerCase();
+  const suffix = rawValue.endsWith('+') ? '_plus' : (rawValue.endsWith('-') ? '_minus' : '');
+  const withoutSuffix = suffix ? rawValue.slice(0, -1) : rawValue;
+
+  return `${withoutSuffix
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .replace(/^(cosmetic_)?grade_/, '')
-    .replace(/_grade$/, '');
+    .replace(/_grade$/, '')}${suffix}`;
 }
 
 function isNotYetGradedToken(value) {
@@ -58,6 +67,16 @@ function getCanonicalCosmeticGradeFromOption(option = {}) {
   }
 
   return null;
+}
+
+function isCosmeticGradeCategoryOption(option = {}) {
+  const systemCategoryId = Number(option.systemConfigCategoryId || option.system_config_category_id || 0);
+  if (systemCategoryId === SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES) {
+    return true;
+  }
+
+  const source = String(option.source || option.categoryCode || option.category_code || '').trim().toLowerCase();
+  return ['cosmetic_grades', 'overall_grade', 'overall_unit_grades', 'unit_grades', 'unit_grade', 'grades'].includes(source);
 }
 
 function getCosmeticGradeOptionPriority(option = {}, canonicalGrade) {
@@ -95,25 +114,76 @@ function getConfigValueIdFromOption(option = {}) {
   return Number.isSafeInteger(tokenId) && tokenId > 0 ? tokenId : null;
 }
 
+function getOptionSortOrder(option = {}) {
+  const parsed = Number(option.sortOrder ?? option.sort_order);
+  return Number.isFinite(parsed) ? parsed : 999999;
+}
+
+function getOptionDisplayLabel(option = {}, fallback = '') {
+  return String(option.label || option.displayLabel || option.name || option.rawValue || option.databaseValue || option.value || fallback || '').trim();
+}
+
+function annotateCosmeticIssuePolicy(options) {
+  const aOption = options.find((option) => option.canonicalGrade === 'A') || null;
+  const aSortOrder = aOption ? getOptionSortOrder(aOption) : null;
+
+  return options.map((option) => {
+    let requiresCosmeticIssue = false;
+
+    if (CANONICAL_LOWER_GRADE_SET.has(option.canonicalGrade)) {
+      requiresCosmeticIssue = true;
+    } else if (!option.canonicalGrade && aSortOrder !== null) {
+      requiresCosmeticIssue = getOptionSortOrder(option) > aSortOrder;
+    }
+
+    return {
+      ...option,
+      requiresCosmeticIssue
+    };
+  });
+}
+
 function normalizeCosmeticGradeOptions(options) {
-  const groups = new Map();
+  const canonicalGroups = new Map();
+  const customOptions = [];
 
   (Array.isArray(options) ? options : []).forEach((option) => {
+    if ([option.code, option.label, option.value].some(isNotYetGradedToken)) {
+      return;
+    }
+
     const canonicalGrade = getCanonicalCosmeticGradeFromOption(option);
+    const configValueId = getConfigValueIdFromOption(option);
 
     if (!canonicalGrade) {
+      if (!isCosmeticGradeCategoryOption(option) || !configValueId) {
+        return;
+      }
+
+      customOptions.push({
+        ...option,
+        id: option.id || configValueId,
+        configValueId,
+        label: getOptionDisplayLabel(option, `Grade ${configValueId}`),
+        canonicalGrade: null,
+        sortOrder: getOptionSortOrder(option),
+        filterIds: [configValueId],
+        legacyValues: option.value ? [option.value] : []
+      });
       return;
     }
 
     const candidate = {
       ...option,
+      id: option.id || configValueId,
+      configValueId: configValueId || option.configValueId,
       code: canonicalGrade.toLowerCase(),
-      label: canonicalGrade,
-      canonicalGrade
+      label: getOptionDisplayLabel(option, canonicalGrade),
+      canonicalGrade,
+      sortOrder: getOptionSortOrder(option)
     };
     const priority = getCosmeticGradeOptionPriority(option, canonicalGrade);
-    const configValueId = getConfigValueIdFromOption(option);
-    const existing = groups.get(canonicalGrade) || {
+    const existing = canonicalGroups.get(canonicalGrade) || {
       option: null,
       priority: -1,
       filterIds: [],
@@ -132,19 +202,28 @@ function normalizeCosmeticGradeOptions(options) {
       existing.priority = priority;
     }
 
-    groups.set(canonicalGrade, existing);
+    canonicalGroups.set(canonicalGrade, existing);
   });
 
-  return Array.from(groups.values())
-    .map((entry) => ({
+  const normalized = [
+    ...Array.from(canonicalGroups.values()).map((entry) => ({
       ...entry.option,
       filterIds: entry.filterIds,
       legacyValues: entry.legacyValues
-    }))
-    .sort((left, right) => (
-      (CANONICAL_GRADE_ORDER.get(left.canonicalGrade) ?? 999)
-      - (CANONICAL_GRADE_ORDER.get(right.canonicalGrade) ?? 999)
-    ));
+    })),
+    ...customOptions
+  ].sort((left, right) => {
+    const sortDifference = getOptionSortOrder(left) - getOptionSortOrder(right);
+    if (sortDifference !== 0) return sortDifference;
+
+    const canonicalDifference = (CANONICAL_GRADE_ORDER.get(left.canonicalGrade) ?? 999)
+      - (CANONICAL_GRADE_ORDER.get(right.canonicalGrade) ?? 999);
+    if (canonicalDifference !== 0) return canonicalDifference;
+
+    return String(left.label || '').localeCompare(String(right.label || ''), undefined, { numeric: true, sensitivity: 'base' });
+  });
+
+  return annotateCosmeticIssuePolicy(normalized);
 }
 
 function normalizeCosmeticGradeRequirementOptions(options) {

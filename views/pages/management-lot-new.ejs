@@ -240,8 +240,8 @@
                       <span>
                         <strong>Unlimited / Open Lot</strong>
                         <small>
-                          Use this for mixed lots such as As-Is, Export, Refurbisher, or open receiving lots
-                          where Management does not want a strict unit amount goal.
+                          Use this for open-ended or mixed-purpose Lots where Management does not want
+                          a strict unit amount goal.
                         </small>
                       </span>
                     </label>
@@ -297,24 +297,24 @@
                       <p class="eyebrow">Notes</p>
                       <h3>Instructions</h3>
                     </div>
-                    <p>Internal guidance for Management, Leads, and future Tech workflows.</p>
+                    <p>Tech Objectives are shown to technicians during Lot-filtered Unit work. Internal Management Notes stay on Management Lot Details.</p>
                   </div>
 
                   <div class="form-grid single-column">
                     <% if (formOptions.capabilities.hasObjectives) { %>
                       <label class="form-field">
-                        <span>Objectives</span>
+                        <span>Tech Objectives</span>
                         <textarea
                           name="objectives"
                           rows="4"
-                          placeholder="Describe what this lot is intended to accomplish."
+                          placeholder="Instructions and objectives technicians should follow while processing this Lot."
                         ><%= formData.objectives %></textarea>
                       </label>
                     <% } %>
 
                     <% if (formOptions.capabilities.hasNotes) { %>
                       <label class="form-field">
-                        <span>Notes</span>
+                        <span>Internal Management Notes</span>
                         <textarea
                           name="notes"
                           rows="4"

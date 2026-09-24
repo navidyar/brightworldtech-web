@@ -41,8 +41,10 @@ test('repeatable cameras, batteries, biometrics, and ports use compact Add rows 
   assert.match(form, /data-unit-form-repeatable-type="biometric" data-module-max="6"/);
   assert.match(form, /data-unit-form-repeatable-type="port" data-module-max="30"/);
   const script = read('public/js/tech-unit-form.js');
+  const addModuleRow = script.match(/function addModuleRow\(form, rowType\) \{[\s\S]*?\n  \}/)?.[0] || '';
   assert.match(script, /updateRepeatableAddButtonState/);
-  assert.match(script, /refreshLotUnitFormProfile\(form,\s*\{\s*background: true,\s*force: true,\s*applyEvenIfUnchanged: true\s*\}\)/);
+  assert.match(addModuleRow, /primeRepeatableRowFromCurrentProfile\(form, row\);\s*list\.appendChild\(row\);/);
+  assert.doesNotMatch(addModuleRow, /refreshLotUnitFormProfile/);
 });
 
 test('all newly introduced fields participate in Lot visible-hidden and required-optional configuration', () => {
@@ -159,8 +161,13 @@ test('new repeatable rows are renumbered with their real collection names and re
   assert.match(script, /if \(rowType === 'battery'\) \{\s*return 'batteries';/);
   assert.match(script, /if \(rowType === 'biometric'\) \{\s*return 'biometrics';/);
   assert.match(script, /if \(rowType === 'port'\) \{\s*return 'ports';/);
+  const addModuleRow = script.match(/function addModuleRow\(form, rowType\) \{[\s\S]*?\n  \}/)?.[0] || '';
+  const addClickHandler = script.match(/const addButton = event\.target\.closest\('\[data-add-module-row\]'\);[\s\S]*?\n    \}/)?.[0] || '';
   assert.match(script, /applyEvenIfUnchanged/);
-  assert.match(script, /applyManufacturerFieldApplicability\(form\);\s*refreshLotUnitFormProfile\(form, \{\s*background: true,\s*force: true,\s*applyEvenIfUnchanged: true/);
+  assert.match(addModuleRow, /primeRepeatableRowFromCurrentProfile\(form, row\)/);
+  assert.match(addModuleRow, /applyManufacturerFieldApplicability\(form\);/);
+  assert.doesNotMatch(addModuleRow, /refreshLotUnitFormProfile/);
+  assert.match(addClickHandler, /if \(!String\(rowType \|\| ''\)\.startsWith\('previous'\)\) \{\s*scheduleLotRequirementWorkflowRefresh\(form\);/);
 });
 
 test('one-click save preflight cannot be aborted by a queued background Lot requirement refresh', () => {

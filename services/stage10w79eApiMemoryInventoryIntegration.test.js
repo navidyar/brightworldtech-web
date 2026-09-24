@@ -44,6 +44,14 @@ test('manual memory component changes immediately invalidate unchanged stale spe
   assert.match(migration, /memory_install_type_code/);
 });
 
+test('memory Tool rows synchronize the shared Unit summary consumed by downstream presentation surfaces', () => {
+  const service = read('services/apiScalarInventory.js');
+  const memory = read('services/apiMemoryInventory.js');
+  assert.match(memory, /async function syncMemorySummary/);
+  assert.match(memory, /ram_gb = \?, ram_type_config_value_id = \?/);
+  assert.match(service, /syncMemorySummary\(connection, safeUnitId, afterMemoryRows\)/);
+});
+
 test('memory observations remain one immutable run observation and unknown never erases current data', () => {
   const service = read('services/apiScalarInventory.js');
   const memory = read('services/apiMemoryInventory.js');

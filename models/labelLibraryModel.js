@@ -142,22 +142,6 @@ async function getLabelTemplateById(labelTemplateId, connection = null) {
   );
   return rows[0] || null;
 }
-
-async function getInitialRegisteredLabelTemplate(connection = null) {
-  const db = connection || getDefaultConnection();
-  const [rows] = await db.query(
-    `SELECT template.*
-     FROM label_library_audit_events event
-     INNER JOIN label_templates template
-       ON template.label_template_id = event.entity_id
-     WHERE event.event_type = 'initial_template_registered'
-       AND event.entity_type = 'label_template'
-     ORDER BY event.label_library_audit_event_id
-     LIMIT 1`
-  );
-  return rows[0] || null;
-}
-
 async function listTemplateAssets(labelTemplateId, connection = null) {
   const db = connection || getDefaultConnection();
   const id = normalizePositiveInteger(labelTemplateId, 'Label template ID');
@@ -995,7 +979,6 @@ async function copyLotTemplateSetForDuplicate({ sourceLotId, targetLotId, inheri
 module.exports = {
   listLabelTemplates,
   getLabelTemplateById,
-  getInitialRegisteredLabelTemplate,
   listTemplateAssets,
   getTemplateAssetByRole,
   listCurrentTemplateConfigAssets,

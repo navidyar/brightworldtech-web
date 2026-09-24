@@ -1,11 +1,7 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const productionCycleModel = require('./productionCycleModel');
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
 
 async function tableExists(connection) {
   const [rows] = await connection.query(

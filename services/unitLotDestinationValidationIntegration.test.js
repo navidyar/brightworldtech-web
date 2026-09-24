@@ -22,12 +22,14 @@ test('duplicate assumptions and return-to-active validate the destination before
   assert.ok(returnMove > returnValidation);
 });
 
-test('override approval validates both destination Lot moves and same-Lot reassignment', () => {
+test('takeover approval transfers control before completion validation while same-tech Lot moves still validate', () => {
   const source = read('models/overrideRequestModel.js');
 
-  assert.match(source, /isManualTechOverride && request\.unit_id && approvedDestinationLotId/);
+  assert.match(source, /const isTakeoverApproval = isManualTechOverride && \([\s\S]*requestedByUserId !== previousAssignedUserId/);
+  assert.match(source, /isManualTechOverride && !isTakeoverApproval && request\.unit_id && approvedDestinationLotId/);
   assert.match(source, /assertExistingUnitDestination\(\{/);
   assert.match(source, /destinationValidation\.warningMessages/);
+  assert.match(source, /const assignableLots = await listAssignableLots\(\)/);
 });
 
 test('Intentional Duplicate approval rechecks the saved intake against current destination rules', () => {

@@ -57,17 +57,17 @@ test('builder enforces Brother continuous length limits', () => {
   }, { template: { status: 'draft' } }), /12\.7 mm and 1000 mm/);
 });
 
-test('builder upgrades the old fixed-length 62 mm preset when saving', () => {
+test('builder normalizes the current variable-length media contract when saving', () => {
   const layout = normalizeBuilderLayout({
     schemaVersion: 1,
-    builderVersion: 1,
-    mediaPresetCode: '62mm_continuous_50mm',
+    builderVersion: 2,
+    mediaWidthCode: '62mm_continuous',
+    lengthMm: 50,
     elements: []
   }, { template: { status: 'draft' } });
   assert.equal(layout.builderVersion, 2);
   assert.equal(layout.mediaWidthCode, '62mm_continuous');
   assert.equal(layout.lengthMm, 50);
-  assert.equal(Object.hasOwn(layout, 'mediaPresetCode'), false);
 });
 
 test('builder rejects duplicate region IDs', () => {
@@ -305,7 +305,7 @@ test('Label Builder preserves Camel Case for text styles and payload field parts
   assert.equal(layout.elements[1].payload.parts[0].format, 'camel');
 });
 
-test('text font size is capped by the drawable region height including quarter-turn layouts', () => {
+test('text font size remains user-controlled when the drawable region is resized or rotated', () => {
   const layout = normalizeBuilderLayout({
     schemaVersion: 1,
     mediaWidthCode: '62mm_continuous',
@@ -313,7 +313,7 @@ test('text font size is capped by the drawable region height including quarter-t
     elements: [
       {
         id: 'plain-text', type: 'static_text', x: 10, y: 10, width: 180, height: 30,
-        text: 'TOO LARGE', style: { fontFamily: 'DejaVu Sans', fontSize: 90 }
+        text: 'TOO LARGE', style: { fontFamily: 'DejaVu Sans', fontSize: 90, overflow: 'shrink' }
       },
       {
         id: 'rotated-text', type: 'static_text', x: 10, y: 60, width: 24, height: 160, rotation: 90,
@@ -322,6 +322,8 @@ test('text font size is capped by the drawable region height including quarter-t
     ]
   }, { template: { status: 'draft' } });
 
-  assert.equal(layout.elements[0].style.fontSize, 30);
-  assert.equal(layout.elements[1].style.fontSize, 24);
+  assert.equal(layout.elements[0].style.fontSize, 90);
+  assert.equal(layout.elements[1].style.fontSize, 90);
+  assert.equal(layout.elements[0].style.overflow, 'wrap');
+  assert.equal(layout.elements[1].style.overflow, 'wrap');
 });

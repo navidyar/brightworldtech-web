@@ -1,11 +1,7 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const processorFamilyModel = require('../models/processorFamilyModel');
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
-}
 
 function getFormDataFromRequest(req) {
   return {

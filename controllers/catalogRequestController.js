@@ -98,9 +98,18 @@ async function getModelRequestContext(source = {}) {
 
 async function getProcessorRequestContext(source = {}) {
   const unitModelId = normalizeId(source.unitModelId);
-  const requestedProcessorType = normalizeText(source.requestedProcessorType, 100);
   const requestedProcessorName = normalizeText(source.requestedProcessorName, 150);
-  const requestedProcessorSpeedGhz = normalizeProcessorSpeed(source.requestedProcessorSpeedGhz);
+  const suppliedProcessorType = normalizeText(source.requestedProcessorType, 100);
+  const suppliedProcessorSpeedGhz = normalizeProcessorSpeed(source.requestedProcessorSpeedGhz);
+  const interpretedProcessor = processorCatalogModel.interpretProcessorObservation({
+    value: requestedProcessorName,
+    brandName: suppliedProcessorType,
+    baseSpeedGhz: suppliedProcessorSpeedGhz
+  });
+  const requestedProcessorType = suppliedProcessorType || interpretedProcessor.brandName;
+  const requestedProcessorSpeedGhz = suppliedProcessorSpeedGhz || (interpretedProcessor.baseSpeedGhz !== null
+    ? Number(interpretedProcessor.baseSpeedGhz).toFixed(2)
+    : '');
   const unitModel = unitModelId ? await unitModelCatalogModel.getUnitModelById(unitModelId) : null;
   const errors = [];
   let globalProcessorMatches = [];
@@ -112,7 +121,7 @@ async function getProcessorRequestContext(source = {}) {
   if (requestedProcessorType.length >= 2 && requestedProcessorName.length >= 2) {
     globalProcessorMatches = await processorCatalogModel.findLikelyProcessorMatches({
       brandName: requestedProcessorType,
-      modelCode: requestedProcessorName,
+      modelCode: interpretedProcessor.modelCode || requestedProcessorName,
       includeInactive: true,
       limit: 5
     });
@@ -136,6 +145,7 @@ async function getProcessorRequestContext(source = {}) {
     requestedProcessorType,
     requestedProcessorName,
     requestedProcessorSpeedGhz,
+    interpretedProcessor,
     globalProcessorMatches,
     existingGlobalMatch,
     alreadyMappedProcessor,
@@ -254,14 +264,14 @@ async function createProcessorCatalogRequest(req, res, next) {
 
     const context = await getProcessorRequestContext(req.body || {});
     const requesterNote = normalizeText(req.body?.requesterNote, 1000);
-    const requestedProcessorType = normalizeText(req.body?.requestedProcessorType, 100);
-    const requestedProcessorName = normalizeText(req.body?.requestedProcessorName, 150);
-    const requestedProcessorSpeedGhz = normalizeProcessorSpeed(req.body?.requestedProcessorSpeedGhz);
+    const requestedProcessorType = context.requestedProcessorType;
+    const requestedProcessorName = context.requestedProcessorName;
+    const requestedProcessorSpeedGhz = context.requestedProcessorSpeedGhz;
     const errors = [...context.errors];
 
-    if (requestedProcessorType.length < 2) errors.push('Enter the observed Processor Type.');
+    if (requestedProcessorType.length < 2) errors.push('Enter the observed Processor Type, or include the brand in the Processor string.');
     if (requestedProcessorName.length < 2) errors.push('Enter the exact Processor value observed in BIOS, ScanTools, or TechTools.');
-    if (!requestedProcessorSpeedGhz) errors.push('Enter an observed Processor Speed from 0.01 through 99.99 GHz.');
+    if (!requestedProcessorSpeedGhz) errors.push('Enter an observed Processor Speed from 0.01 through 99.99 GHz, or include a GHz value in the Processor string.');
 
     if (errors.length > 0) {
       return renderErrorModal(res, buildCatalogModalView({
@@ -300,9 +310,9 @@ async function createProcessorCatalogRequest(req, res, next) {
         requestKind: 'processor',
         context,
         requesterNote: normalizeText(req.body?.requesterNote, 1000),
-        requestedProcessorType: normalizeText(req.body?.requestedProcessorType, 100),
-        requestedProcessorName: normalizeText(req.body?.requestedProcessorName, 150),
-        requestedProcessorSpeedGhz: normalizeProcessorSpeed(req.body?.requestedProcessorSpeedGhz),
+        requestedProcessorType: context.requestedProcessorType,
+        requestedProcessorName: context.requestedProcessorName,
+        requestedProcessorSpeedGhz: context.requestedProcessorSpeedGhz,
         errorMessages: [error.message || 'The Processor Catalog request could not be submitted.']
       }));
     } catch (renderError) {

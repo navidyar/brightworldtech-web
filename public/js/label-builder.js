@@ -116,7 +116,7 @@
     fontWeight: 400,
     align: 'left',
     textCase: 'plain',
-    overflow: 'shrink'
+    overflow: 'wrap'
   });
 
   const parseJsonScript = (id) => JSON.parse(document.getElementById(id)?.textContent || '{}');
@@ -153,19 +153,9 @@
     return ROTATIONS.includes(number) ? number : 0;
   }
 
-  function legacyMediaCode(layout) {
-    const code = String(layout.mediaPresetCode || '');
-    return code ? code.split('_').slice(0, 2).join('_') : '';
-  }
-
-  function legacyLengthMm(layout) {
-    const match = String(layout.mediaPresetCode || '').match(/_(\d+(?:\.\d+)?)mm$/i);
-    return match ? normalizeLengthMm(match[1]) : null;
-  }
-
-  const initialMediaCode = initialLayout.mediaWidthCode || legacyMediaCode(initialLayout) || mediaWidthSelect.value;
+  const initialMediaCode = initialLayout.mediaWidthCode || mediaWidthSelect.value;
   const initialMedia = mediaByCode.get(initialMediaCode) || mediaWidths[0];
-  const initialLengthMm = normalizeLengthMm(initialLayout.lengthMm) || legacyLengthMm(initialLayout) || normalizeLengthMm(lengthInput.value) || 30;
+  const initialLengthMm = normalizeLengthMm(initialLayout.lengthMm) || normalizeLengthMm(lengthInput.value) || 30;
 
   const state = {
     layout: {
@@ -198,7 +188,6 @@
     savedStatusText: 'Not saved this session',
     savedStatusGreen: false
   };
-  delete state.layout.mediaPresetCode;
   mediaWidthSelect.value = state.media.code;
   lengthInput.value = String(state.lengthMm);
 
@@ -262,7 +251,7 @@
     region.style.fontWeight = [400, 500, 700].includes(Number(region.style.fontWeight)) ? Number(region.style.fontWeight) : 400;
     region.style.align = ['left', 'center', 'right'].includes(region.style.align) ? region.style.align : 'left';
     region.style.textCase = ['plain', 'upper', 'lower', 'camel'].includes(region.style.textCase) ? region.style.textCase : 'plain';
-    region.style.overflow = 'shrink';
+    region.style.overflow = 'wrap';
     if (region.type === 'dynamic_text') {
       region.source = { ...(region.source || {}), field: String(region.source?.field || ''), format: 'plain' };
       if (!region.style.textCase && ['upper', 'lower', 'camel'].includes(region.source?.format)) region.style.textCase = region.source.format;
@@ -270,28 +259,6 @@
     }
   }
 
-  function getTextLocalBoxDots(region) {
-    const quarterTurn = normalizeRotation(region?.rotation) === 90 || normalizeRotation(region?.rotation) === 270;
-    return {
-      width: Math.max(2, Number(quarterTurn ? region?.height : region?.width) || 2),
-      height: Math.max(2, Number(quarterTurn ? region?.width : region?.height) || 2)
-    };
-  }
-
-  function constrainTextFontSizeToRegion(region) {
-    if (!region || !TEXT_TYPES.has(region.type)) return;
-    normalizeTextStyle(region);
-    const localBox = getTextLocalBoxDots(region);
-    if (localBox.height >= 6) region.style.fontSize = Math.min(region.style.fontSize, Math.floor(localBox.height));
-  }
-
-  function getFittedTextFontSize(region, text) {
-    const localBox = getTextLocalBoxDots(region);
-    let fontSize = Math.min(Number(region?.style?.fontSize || DEFAULT_STYLE.fontSize), localBox.height);
-    const safeText = String(text || '');
-    while (fontSize > 6 && safeText.length * fontSize * 0.59 > localBox.width) fontSize -= 1;
-    return Math.max(6, fontSize);
-  }
 
   function normalizeRegion(region) {
     region.width = clamp(Math.round(Number(region.width) || 2), 2, state.geometry.canvasWidthDots);
@@ -299,7 +266,7 @@
     region.x = clamp(Math.round(Number(region.x) || 0), 0, state.geometry.canvasWidthDots - region.width);
     region.y = clamp(Math.round(Number(region.y) || 0), 0, state.geometry.canvasHeightDots - region.height);
     region.rotation = normalizeRotation(region.rotation);
-    if (TEXT_TYPES.has(region.type)) constrainTextFontSizeToRegion(region);
+    if (TEXT_TYPES.has(region.type)) normalizeTextStyle(region);
     if (region.type === 'composed_text') region.parts = normalizeComposedParts(region.parts);
     if (region.type === 'image') {
       const assetKey = String(region.assetKey || '').trim().toLowerCase();
@@ -338,7 +305,6 @@
   function syncLayoutIdentity() {
     state.layout.mediaWidthCode = state.media.code;
     state.layout.lengthMm = state.lengthMm;
-    delete state.layout.mediaPresetCode;
   }
 
   function buildHistorySnapshot() {
@@ -355,8 +321,13 @@
     };
   }
 
+  function syncApplicationUnsavedWork() {
+    root.dataset.applicationUnsavedWork = state.dirty ? 'true' : 'false';
+  }
+
   function updateDirtyIndicator(signature = buildHistorySnapshot().signature) {
     state.dirty = signature !== state.savedSignature;
+    syncApplicationUnsavedWork();
     if (state.dirty) {
       saveState.textContent = 'Unsaved changes';
       saveState.classList.remove('green');
@@ -438,6 +409,7 @@
     state.historyIndex = 0;
     state.savedSignature = snapshot.signature;
     state.dirty = false;
+    syncApplicationUnsavedWork();
     updateHistoryControls();
   }
 
@@ -490,6 +462,7 @@
   function markDirty() {
     if (state.historyRestoring) return;
     state.dirty = true;
+    syncApplicationUnsavedWork();
     saveState.textContent = 'Unsaved changes';
     saveState.classList.remove('green');
     updateTestPrintControl();
@@ -535,11 +508,95 @@
     return text;
   }
 
+  function normalizeWrappedPreviewText(value) {
+    return String(value ?? '')
+      .normalize('NFKD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/\r\n?/g, '\n')
+      .replace(/[^\x20-\x7E\n]/g, ' ')
+      .split('\n')
+      .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+      .join('\n')
+      .trim()
+      .slice(0, 500);
+  }
+
+  function estimatePreviewTextWidth(text, fontSize, fontFamily = '') {
+    if (/Mono/i.test(String(fontFamily || ''))) return String(text || '').length * fontSize * 0.6;
+    let units = 0;
+    for (const char of String(text || '')) {
+      if (/\s/.test(char)) units += 0.33;
+      else if (/[ilI1|!.,:'`]/.test(char)) units += 0.3;
+      else if (/[MW@#%&]/.test(char)) units += 0.9;
+      else if (/[A-Z0-9]/.test(char)) units += 0.62;
+      else units += 0.54;
+    }
+    return units * fontSize;
+  }
+
+  function breakPreviewLongWord(word, boxWidth, style) {
+    const parts = [];
+    let current = '';
+    for (const char of String(word || '')) {
+      const candidate = current + char;
+      if (current && estimatePreviewTextWidth(candidate, style.fontSize, style.fontFamily) > boxWidth) {
+        parts.push(current);
+        current = char;
+      } else {
+        current = candidate;
+      }
+    }
+    if (current) parts.push(current);
+    return parts.length ? parts : [''];
+  }
+
+  function wrapPreviewTextLines(value, boxWidth, style) {
+    const text = normalizeWrappedPreviewText(value);
+    if (!text) return [];
+    const lines = [];
+    for (const paragraph of text.split(/\r?\n/)) {
+      if (!paragraph) {
+        lines.push('');
+        continue;
+      }
+      let line = '';
+      for (const word of paragraph.trim().split(/\s+/)) {
+        const chunks = estimatePreviewTextWidth(word, style.fontSize, style.fontFamily) <= boxWidth
+          ? [word]
+          : breakPreviewLongWord(word, boxWidth, style);
+        for (const chunk of chunks) {
+          const candidate = line ? `${line} ${chunk}` : chunk;
+          if (line && estimatePreviewTextWidth(candidate, style.fontSize, style.fontFamily) > boxWidth) {
+            lines.push(line);
+            line = chunk;
+          } else {
+            line = candidate;
+          }
+        }
+      }
+      lines.push(line);
+    }
+    return lines;
+  }
+
   function getRegionPreviewText(region) {
-    if (region.type === 'static_text') return applyTextCase(region.text || 'Static Text', region.style?.textCase);
-    if (region.type === 'dynamic_text') return applyTextCase(getFieldPreviewValue(region.source?.field), region.style?.textCase);
-    if (region.type === 'composed_text') return applyTextCase(getComposedPreviewValue(region.parts), region.style?.textCase);
-    return '';
+    let value = '';
+    if (region.type === 'static_text') value = region.text || 'Static Text';
+    else if (region.type === 'dynamic_text') value = getFieldPreviewValue(region.source?.field);
+    else if (region.type === 'composed_text') value = getComposedPreviewValue(region.parts);
+    return applyTextCase(normalizeWrappedPreviewText(value), region.style?.textCase);
+  }
+
+  function getVisibleRegionPreviewLines(region, boxWidth, boxHeight) {
+    const fontSize = Math.max(6, Math.min(Number(region.style?.fontSize || DEFAULT_STYLE.fontSize), 300));
+    const style = {
+      fontFamily: String(region.style?.fontFamily || DEFAULT_STYLE.fontFamily),
+      fontSize
+    };
+    const lines = wrapPreviewTextLines(getRegionPreviewText(region), Math.max(1, boxWidth), style);
+    const lineHeight = fontSize * 1.05;
+    const maxLines = Math.max(1, Math.floor(Math.max(1, boxHeight) / lineHeight));
+    return lines.slice(0, maxLines);
   }
 
   function normalizePayloadFormat(value) {
@@ -976,8 +1033,7 @@
       content.style.top = `${top}px`;
       content.style.transform = `rotate(${rotation}deg)`;
       content.style.fontFamily = fontByCode.get(region.style.fontFamily)?.cssFamily || region.style.fontFamily;
-      const fittedFontSizeDots = getFittedTextFontSize(region, getRegionPreviewText(region));
-      const previewFontSize = Math.max(6, fittedFontSizeDots * state.scale);
+      const previewFontSize = Math.max(1, Number(region.style.fontSize || DEFAULT_STYLE.fontSize) * state.scale);
       content.style.fontSize = `${previewFontSize}px`;
       if (Number(region.style.fontWeight) === 500) {
         const mediumStrokePx = Math.max(0.45, Math.min(1.5, previewFontSize * 0.025));
@@ -987,9 +1043,13 @@
         content.style.fontWeight = String(region.style.fontWeight);
         content.style.removeProperty('-webkit-text-stroke');
       }
-      content.style.justifyContent = region.style.align === 'center' ? 'center' : region.style.align === 'right' ? 'flex-end' : 'flex-start';
-      content.style.textAlign = region.style.align;
-      content.textContent = getRegionPreviewText(region);
+      const text = content.querySelector('[data-builder-region-text]');
+      if (text) {
+        text.style.textAlign = region.style.align;
+        const boxWidthDots = quarterTurn ? region.height : region.width;
+        const boxHeightDots = quarterTurn ? region.width : region.height;
+        text.textContent = getVisibleRegionPreviewLines(region, boxWidthDots, boxHeightDots).join('\n');
+      }
     }
 
     if (isImage && image) {
@@ -1429,8 +1489,7 @@
     if (region.type === 'dynamic_text') dynamicFieldSelect.value = String(region.source?.field || '');
     if (TEXT_TYPES.has(region.type)) {
       fontFamilySelect.value = region.style.fontFamily;
-      const localTextBox = getTextLocalBoxDots(region);
-      fontSizeInput.max = String(Math.max(6, Math.floor(localTextBox.height)));
+      fontSizeInput.max = '300';
       fontSizeInput.value = String(region.style.fontSize);
       fontWeightSelect.value = String(region.style.fontWeight);
       textAlignSelect.value = region.style.align;
@@ -1483,6 +1542,10 @@
       content.className = 'label-builder-region-content';
       content.dataset.builderRegionContent = '';
       content.setAttribute('aria-hidden', 'true');
+      const text = document.createElement('span');
+      text.className = 'label-builder-region-text';
+      text.dataset.builderRegionText = '';
+      content.appendChild(text);
 
       const image = document.createElement('img');
       image.className = 'label-builder-region-image';
@@ -1663,7 +1726,6 @@
       region.y = Math.round(top);
       region.width = Math.round(right - left);
       region.height = Math.round(bottom - top);
-      constrainTextFontSizeToRegion(region);
     }
 
     const node = canvas.querySelector(`[data-builder-region="${CSS.escape(region.id)}"]`);
@@ -1714,7 +1776,6 @@
         region.height = clamp(Math.round(region.width / ratio), 2, state.geometry.canvasHeightDots - region.y);
       }
     }
-    constrainTextFontSizeToRegion(region);
     refreshSelectedRegion();
   }
 
@@ -1832,9 +1893,7 @@
     if (region.type === 'static_text') region.text = String(staticTextInput.value || '').slice(0, 500);
     if (region.type === 'dynamic_text') region.source = { ...(region.source || {}), field: dynamicFieldSelect.value, format: 'plain' };
     region.style.fontFamily = fontFamilySelect.value;
-    const localTextBox = getTextLocalBoxDots(region);
-    const maxFontSize = Math.max(6, Math.floor(localTextBox.height));
-    region.style.fontSize = clamp(Math.round(Number(fontSizeInput.value) || DEFAULT_STYLE.fontSize), 6, Math.min(300, maxFontSize));
+    region.style.fontSize = clamp(Math.round(Number(fontSizeInput.value) || DEFAULT_STYLE.fontSize), 6, 300);
     fontSizeInput.value = String(region.style.fontSize);
     region.style.fontWeight = [400, 500, 700].includes(Number(fontWeightSelect.value)) ? Number(fontWeightSelect.value) : 400;
     region.style.align = ['left', 'center', 'right'].includes(textAlignSelect.value) ? textAlignSelect.value : 'left';
@@ -1929,7 +1988,6 @@
     region.x = clamp(Math.round(centerX - (nextWidth / 2)), 0, state.geometry.canvasWidthDots - nextWidth);
     region.y = clamp(Math.round(centerY - (nextHeight / 2)), 0, state.geometry.canvasHeightDots - nextHeight);
     region.rotation = target;
-    constrainTextFontSizeToRegion(region);
     refreshSelectedRegion();
     return true;
   }

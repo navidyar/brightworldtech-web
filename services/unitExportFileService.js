@@ -1,7 +1,6 @@
 'use strict';
 
 const zlib = require('node:zlib');
-const { UNIT_EXPORT_COLUMNS } = require('../config/unitExportContract');
 const { APP_DISPLAY_TIME_ZONE, formatDateKey } = require('../utils/timeZone');
 const { formatHardwareCapacityGb } = require('./hardwareCapacity');
 

@@ -64,7 +64,7 @@ test('reporting week/month inputs on management dashboards are covered by the sh
     assert.match(view, /type="week"[^>]*data-date-picker-only/);
     assert.match(view, /type="month"[^>]*data-date-picker-only/);
   });
-  assert.match(head, /date-picker-only\.js\?v=20260812-stage10w48-cross-browser-period-picker/);
+  assert.match(head, /date-picker-only\.js\?v=20260921-cleanup-stage2c/);
 });
 
 test('shared period picker JavaScript has valid syntax', () => {

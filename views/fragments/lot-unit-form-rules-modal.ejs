@@ -112,7 +112,9 @@
                             <% } %>
                           </td>
                           <td>
-                            <% if (field.visibilityConfigurable) { %>
+                            <% if (field.inheritVisibilityFromFieldKey) { %>
+                              <span class="lot-unit-form-rule-unavailable">Follows Current</span>
+                            <% } else if (field.visibilityConfigurable) { %>
                               <label class="form-field compact-rule-select">
                                 <span class="visually-hidden"><%= field.label %> visibility</span>
                                 <select name="visibilityModes[<%= field.key %>]" data-visibility-mode>

@@ -6,6 +6,7 @@ const accessPolicy = require('../config/accessPolicy');
 const managementUserRoleEditPolicy = require('../services/managementUserRoleEditPolicy');
 const { buildUsernameStem } = require('../services/userUsernamePolicy');
 const { APP_DISPLAY_TIME_ZONE, formatDateKey, getDayRangeUtc } = require('../utils/timeZone');
+const { isHtmxRequest } = require('../utils/htmxRequest');
 const {
   DEFAULT_PASSWORD_LINK_EXPIRY_HOURS,
   MIN_PASSWORD_LINK_EXPIRY_HOURS,
@@ -23,10 +24,6 @@ function addHours(date, hours) {
 
 function getBaseUrl() {
   return (process.env.BASE_URL || 'https://bwtdallas.com').replace(/\/$/, '');
-}
-
-function isHtmxRequest(req) {
-  return String(req.get('HX-Request') || '').toLowerCase() === 'true';
 }
 
 function redirectAfterHtmxAwareAction(req, res, redirectUrl) {

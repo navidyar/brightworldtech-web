@@ -2,7 +2,6 @@
 
 const { spawn } = require('node:child_process');
 const labelPrinterModel = require('../models/labelPrinterModel');
-const labelPrintingService = require('./labelPrintingService');
 const { canUsePrinter, probeTcpPort } = require('./labelPrinterPolicy');
 const {
   rankPrinterRouteCandidates,
@@ -59,13 +58,6 @@ function buildPrinterLabel(name, location) {
   const safeLocation = String(location || '').trim();
   return safeLocation ? `${safeName} · ${safeLocation}` : safeName;
 }
-
-function endpointForPrinter(printer) {
-  if (!printer || !printer.host) return null;
-  const protocol = String(printer.protocolCode || 'raw_9100');
-  return `${protocol}://${printer.host}:${Number(printer.port) || 0}`;
-}
-
 function mapRegistryPrinterToPrintOption(row) {
   const registryPrinterId = Number(row.label_printer_id);
   return Object.freeze({
@@ -89,23 +81,9 @@ function mapRegistryPrinterToPrintOption(row) {
     kind: 'printer',
     lifetimePrintCount: Number(row.lifetime_print_count || 0),
     groupSortOrder: Number(row.group_sort_order || 0),
-    isCompatibilityFallback: false,
     lastProbeStatus: String(row.last_probe_status || '') || null,
     lastProbeAt: row.last_probe_at || null,
     endpoint: `${String(row.protocol_code || 'raw_9100')}://${String(row.host_address || '')}:${Number(row.port) || 9100}`
-  });
-}
-
-function mapLegacyPrinterToPrintOption(printer) {
-  return Object.freeze({
-    ...printer,
-    kind: 'printer',
-    registryPrinterId: null,
-    scopeCode: 'legacy',
-    ownerUserId: null,
-    isShared: true,
-    isCompatibilityFallback: true,
-    endpoint: `${String(printer.protocolCode || 'raw_9100')}://${String(printer.host || '')}:${Number(printer.port) || 9100}`
   });
 }
 
@@ -118,23 +96,15 @@ function isRegistryRowPrintCapable(row) {
 async function listPrintPrintersForUser({ userId, roleCodes = [] }) {
   try {
     const rows = await labelPrinterModel.listAvailablePrintersForUser({ userId, roleCodes });
-    const options = rows.filter(isRegistryRowPrintCapable).map(mapRegistryPrinterToPrintOption);
-    if (options.length > 0) return Object.freeze(options);
-
-    // Compatibility fallback is intentionally limited to an empty registry during cutover.
-    const allRows = await labelPrinterModel.listPrinters({ includeDisabled: true });
-    if (allRows.length > 0) return Object.freeze([]);
+    return Object.freeze(rows.filter(isRegistryRowPrintCapable).map(mapRegistryPrinterToPrintOption));
   } catch (error) {
-    console.warn('Label printer registry unavailable; using temporary configured-printer fallback:', error.message);
+    console.warn('Label printer registry unavailable:', error.message);
+    return Object.freeze([]);
   }
-
-  return Object.freeze(labelPrintingService.LABEL_PRINTERS.map(mapLegacyPrinterToPrintOption));
 }
 
 async function listPrintDestinationsForUser({ userId, roleCodes = [] }) {
   const printers = await listPrintPrintersForUser({ userId, roleCodes });
-  if (printers.some((printer) => printer.isCompatibilityFallback)) return printers;
-
   const rows = await labelPrinterModel.listRoutingGroupRows();
   const groups = new Map();
   for (const row of rows) {
@@ -178,9 +148,7 @@ async function resolvePrintPrinterForUser({ printerId, userId, roleCodes = [] })
     return mapRegistryPrinterToPrintOption(row);
   }
 
-  // Temporary stale-modal/fallback support only when the registry is empty/unavailable.
-  const printers = await listPrintPrintersForUser({ userId, roleCodes });
-  return printers.find((printer) => printer.id === String(printerId || '').trim()) || null;
+  return null;
 }
 
 function runCupsCommand(command, args, timeoutMs = CUPS_COMMAND_TIMEOUT_MS) {
@@ -251,14 +219,6 @@ async function ensureCupsQueue(printer) {
   if (!printer) throw new LabelPrinterRuntimeError('The selected printer is not available.');
 
   let queue = String(printer.queue || '').trim();
-  if (printer.isCompatibilityFallback) {
-    if (!queue || !await cupsQueueExists(queue)) {
-      throw new LabelPrinterRuntimeError(`The configured CUPS queue “${queue || 'unknown'}” is not available.`);
-    }
-    await ensureAbortJobPolicy(queue);
-    return printer;
-  }
-
   if (!printer.registryPrinterId) throw new LabelPrinterRuntimeError('The selected registry printer is missing its printer ID.');
 
   const isRaw = String(printer.protocolCode) === 'raw_9100';
@@ -321,7 +281,6 @@ async function recordPrinterReachability(printer, reachable, details = {}) {
 
 async function probePrinterOnce(printer, timeoutMs) {
   if (!printer?.host || !printer?.port) {
-    if (printer?.isCompatibilityFallback) return true;
     return false;
   }
   return probeTcpPort(printer.host, printer.port, timeoutMs);
@@ -329,7 +288,6 @@ async function probePrinterOnce(printer, timeoutMs) {
 
 async function assertPrinterOnline(printer) {
   if (!printer?.host || !printer?.port) {
-    if (printer?.isCompatibilityFallback) return true;
     throw new LabelPrinterUnavailableError('The selected printer does not have a valid network endpoint.');
   }
 
@@ -526,8 +484,6 @@ module.exports = {
   parsePrinterGroupId,
   parseRegistryPrinterId,
   mapRegistryPrinterToPrintOption,
-  mapLegacyPrinterToPrintOption,
-  endpointForPrinter,
   isRegistryRowPrintCapable,
   listPrintPrintersForUser,
   listPrintDestinationsForUser,

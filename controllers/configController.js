@@ -1,6 +1,7 @@
 const configModel = require('../models/configModel');
 const operationalOptionRankingModel = require('../models/operationalOptionRankingModel');
 const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
+const { isHtmxRequest } = require('../utils/htmxRequest');
 const {
   MIN_PASSWORD_LINK_EXPIRY_HOURS,
   MAX_PASSWORD_LINK_EXPIRY_HOURS,
@@ -33,10 +34,6 @@ function isRequiredSecuritySetting(configValue) {
 
 function parseIncludeInactiveFlag(value) {
   return value === '1' || value === 'true' || value === 'yes' || value === 'on';
-}
-
-function isHtmxRequest(req) {
-  return String(req.get('HX-Request') || '').toLowerCase() === 'true';
 }
 
 function sendHtmxRedirect(req, res, redirectUrl) {

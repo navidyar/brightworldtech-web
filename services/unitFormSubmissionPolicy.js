@@ -259,49 +259,6 @@ function hasMeaningfulRepeatableValue(formData, fieldKey) {
   return false;
 }
 
-function hasMeaningfulFieldValue(formData, fieldKey) {
-  const binding = FIELD_BINDINGS[fieldKey];
-
-  if (!binding) {
-    return false;
-  }
-
-  if (fieldKey === 'previous_memory_size') {
-    return hasMeaningfulPreviousMemoryValue(formData);
-  }
-
-  if (fieldKey === 'previous_storage_size') {
-    return hasMeaningfulPreviousStorageValue(formData);
-  }
-
-  if (binding.repeatableType) {
-    return hasMeaningfulRepeatableValue(formData, fieldKey);
-  }
-
-  if (binding.repeatableProperty && binding.childProperty) {
-    return normalizeRows(formData[binding.repeatableProperty])
-      .some((row) => normalizeText(row[binding.childProperty]) !== '');
-  }
-
-  if (binding.appendOnly) {
-    const contentProperty = binding.properties[0];
-    return normalizeText(formData[contentProperty]) !== '';
-  }
-
-  return binding.properties.some((propertyName) => {
-    const value = formData[propertyName];
-
-    if (typeof value === 'boolean') {
-      return value;
-    }
-
-    if (Array.isArray(value)) {
-      return value.length > 0;
-    }
-
-    return normalizeText(value) !== '';
-  });
-}
 
 function hasCompleteRequiredFieldValue(formData, fieldKey) {
   if (fieldKey === 'memory_modules') {
@@ -632,7 +589,6 @@ module.exports = {
   buildManagedValidationFormData,
   getUnitFormSubmissionPolicy,
   hasCompleteRequiredFieldValue,
-  hasMeaningfulFieldValue,
   isAnyUnitFormFieldManaged,
   isUnitFormFieldManaged
 };

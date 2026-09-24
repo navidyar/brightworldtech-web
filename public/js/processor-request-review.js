@@ -2,7 +2,7 @@
   'use strict';
 
   function normalizeProcessorIdentity(value, brandName = '') {
-    let normalized = String(value || '').toLowerCase();
+    let normalized = String(value || '').toLowerCase().replace(/\((?:r|tm)\)/g, ' ').replace(/[™®]/g, ' ');
     const brandTokens = String(brandName || '')
       .toLowerCase()
       .split(/[^a-z0-9]+/)
@@ -68,7 +68,6 @@
     const options = getOptions(form);
     const defaultExistingHint = existingHint?.textContent || '';
     let strongDuplicate = false;
-    let formatInvalid = false;
 
     if (!existingSearch || !existingId || !modelCode) return;
 
@@ -85,7 +84,7 @@
       const reusingExisting = Boolean(existingId.value);
       const confirmationMissing = !reviewerIsAdmin && !reusingExisting && adminConfirmation && !adminConfirmation.checked;
       if (approveButton) {
-        approveButton.disabled = !reusingExisting && (strongDuplicate || formatInvalid || Boolean(confirmationMissing));
+        approveButton.disabled = !reusingExisting && (strongDuplicate || Boolean(confirmationMissing));
         approveButton.textContent = reusingExisting ? 'Associate Existing Processor' : 'Create and Associate Processor';
       }
     };
@@ -131,7 +130,6 @@
     const updateValidationWarnings = () => {
       if (existingId.value) {
         strongDuplicate = false;
-        formatInvalid = false;
         if (warning) warning.hidden = true;
         if (formatWarning) formatWarning.hidden = true;
         updateButtonState();
@@ -158,9 +156,8 @@
       }
 
       const problems = getCanonicalNameProblems(modelCode.value, getBrandName());
-      formatInvalid = problems.length > 0;
       if (formatWarning && formatText) {
-        formatWarning.hidden = !formatInvalid;
+        formatWarning.hidden = problems.length === 0;
         formatText.textContent = problems.join('; ');
       }
 
@@ -190,9 +187,9 @@
 
     form.addEventListener('submit', (event) => {
       updateExistingSelection();
-      if (!existingId.value && (strongDuplicate || formatInvalid)) {
+      if (!existingId.value && strongDuplicate) {
         event.preventDefault();
-        (strongDuplicate ? warning : formatWarning)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        warning?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     });
 

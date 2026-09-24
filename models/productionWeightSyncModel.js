@@ -1,15 +1,11 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const { pool } = require('./db');
 const productionWeightModel = require('./productionWeightModel');
 
 const SYNCABLE_CREDIT_SOURCE = 'manual_completion';
 const UPDATE_CHUNK_SIZE = 500;
-
-function normalizePositiveInteger(value) {
-  const numeric = Number(value);
-  return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null;
-}
 
 function chunk(values, size = UPDATE_CHUNK_SIZE) {
   const result = [];

@@ -88,3 +88,15 @@ test('Stage 10W79I remains isolated from wipe evidence Unit Details Lot policy p
   assert.doesNotMatch(combined, /wipe_certificate|unit_storage_wipe_certificates|lot_tool_policy|production_cycle|production_weight/);
   assert.doesNotMatch(combined, /views\/|tech-unit-details/);
 });
+
+test('Tool battery health stays consistent across repeatable form rows, Unit Details, and legacy summary consumers', () => {
+  const service = read('services/apiHardwareDiagnosticsInventory.js');
+  const specsModel = read('models/unitSpecsTestsModel.js');
+  const details = read('views/fragments/tech-units-table.ejs');
+  assert.match(service, /syncBatteryHealthSummary/);
+  assert.match(service, /SELECT MIN\(health_percent\)[\s\S]*FROM unit_batteries/);
+  assert.match(service, /if \(plan\.batteryHealthPlan\) await syncBatteryHealthSummary/);
+  assert.match(specsModel, /getRepeatableRows\(safeUnitId, 'unit_batteries'/);
+  assert.match(details, /<dt>Battery Health<\/dt>[\s\S]*batteryHealthText \|\| unit\.formattedBatteryHealth/);
+});
+

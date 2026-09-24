@@ -3,6 +3,7 @@
 const accessPolicy = require('../config/accessPolicy');
 const huddlePolicy = require('../config/virtualHuddlePolicy');
 const virtualHuddleModel = require('../models/virtualHuddleModel');
+const { isHtmxRequest } = require('../utils/htmxRequest');
 const {
   addVirtualHuddleClient,
   publishVirtualHuddleChange,
@@ -18,7 +19,7 @@ const ROLE_OPTIONS = [
 ];
 
 const MESSAGE_TYPE_OPTIONS = [
-  { code: 'notice', label: 'Notice', description: 'Informational message. No acknowledgment is required.' },
+  { code: 'notice', label: 'Notice', description: 'Delivery-only message. No acknowledgment or permanent Huddle record is created.' },
   { code: 'standard', label: 'Standard', description: 'Normal operational message requiring acknowledgment.' },
   { code: 'priority', label: 'Priority', description: 'Important message with a burnt-orange severity header.' },
   { code: 'urgent', label: 'Urgent', description: 'Immediate message with a dark-red severity header.' }
@@ -31,10 +32,6 @@ function asArray(value) {
 function normalizeId(value) {
   const parsed = Number.parseInt(value, 10);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
-}
-
-function isHtmxRequest(req) {
-  return String(req.get('HX-Request') || '').toLowerCase() === 'true';
 }
 
 function wantsJson(req) {
@@ -109,7 +106,9 @@ async function renderManagementPage(req, res, next) {
       messageTypeLabel,
       successMessage: req.query.sent === '1'
         ? 'Virtual Huddle sent.'
-        : req.query.revoked === '1'
+        : req.query.notice_sent === '1'
+          ? 'Notice sent. Notices are delivery-only and are not kept in Huddle history.'
+          : req.query.revoked === '1'
           ? 'Awaiting acknowledgment revoked.'
           : req.query.deleted === '1'
             ? 'Virtual Huddle permanently deleted.'
@@ -212,7 +211,10 @@ async function sendHuddle(req, res, next) {
     });
 
     publishVirtualHuddleChange(result.recipientUserIds, 'sent');
-    return redirectHtmxAware(req, res, `/management/virtual-huddle/${result.messageId}?sent=1`);
+    const destination = formData.messageTypeCode === 'notice'
+      ? '/management/virtual-huddle?notice_sent=1'
+      : `/management/virtual-huddle/${result.messageId}?sent=1`;
+    return redirectHtmxAware(req, res, destination);
   } catch (error) {
     if (String(error.code || '').startsWith('HUDDLE_')) {
       try {
@@ -447,12 +449,12 @@ async function acknowledge(req, res, next) {
 
 async function dismiss(req, res, next) {
   try {
-    await virtualHuddleModel.dismissRecipient({
+    const result = await virtualHuddleModel.dismissRecipient({
       recipientId: req.params.recipientId,
       userId: req.currentUser.user_id
     });
     publishVirtualHuddleChange([req.currentUser.user_id], 'dismissed');
-    return res.json({ ok: true });
+    return res.json({ ok: true, ephemeralNotice: Boolean(result.ephemeralNotice) });
   } catch (error) {
     if (String(error.code || '').startsWith('HUDDLE_')) {
       return res.status(422).json({ ok: false, error: error.message });

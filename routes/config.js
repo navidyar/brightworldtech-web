@@ -238,6 +238,20 @@ router.post(
 );
 
 router.get(
+  '/management/config/models/:unitModelId/delete/modal',
+  requireAuth,
+  requireRole(configRoles),
+  unitModelCatalogController.renderDeleteUnitModelModal
+);
+
+router.post(
+  '/management/config/models/:unitModelId/delete',
+  requireAuth,
+  requireRole(configRoles),
+  unitModelCatalogController.deleteUnitModel
+);
+
+router.get(
   '/management/config/models/:unitModelId/:actionType/modal',
   requireAuth,
   requireRole(configRoles),

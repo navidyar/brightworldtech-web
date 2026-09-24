@@ -2,8 +2,6 @@ const { pool } = require('./db');
 const { getConfigValueBySystemId, listConfigValuesBySystemCategoryIds } = require('./configLookupModel');
 const { SYSTEM_CONFIG_CATEGORY_IDS, SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 
-const PRODUCTION_WEIGHT_CATEGORY_CODES = ['production_weight_types', 'production_weights'];
-
 const PRODUCTION_WEIGHT_CODE_ALIASES = new Map([
   ['laptop', 'production_weight_laptop'],
   ['laptops', 'production_weight_laptop'],
@@ -124,31 +122,6 @@ async function getProductionWeightOptionById(configValueId) {
   const options = await listConfigValuesBySystemCategoryIds(SYSTEM_CONFIG_CATEGORY_IDS.PRODUCTION_WEIGHT_TYPES);
   return normalizeWeightOption(options.find((option) => option.configValueId === safeConfigValueId) || null);
 }
-
-async function getProductionWeightOptionByCode(weightCode) {
-  const normalizedWeightCode = normalizeProductionWeightCode(weightCode);
-  const semanticCode = PRODUCTION_WEIGHT_CODE_ALIASES.get(normalizedWeightCode) || normalizedWeightCode;
-  const systemId = WEIGHT_SYSTEM_ID_BY_DOMAIN_CODE.get(semanticCode);
-  if (!systemId) return null;
-  return normalizeWeightOption(await getConfigValueBySystemId(systemId));
-}
-
-async function getDefaultProductionWeightForUnitCategory(unitCategoryConfigValueId) {
-  const safeConfigValueId = Number(unitCategoryConfigValueId);
-  if (!Number.isInteger(safeConfigValueId) || safeConfigValueId <= 0) return null;
-
-  const [rows] = await pool.query(
-    `SELECT scv.system_config_value_id
-     FROM system_config_values scv
-     WHERE scv.config_value_id = ?
-     LIMIT 1`,
-    [safeConfigValueId]
-  );
-  const categorySystemId = Number(rows[0]?.system_config_value_id || 0);
-  const weightSystemId = UNIT_CATEGORY_TO_WEIGHT_SYSTEM_ID.get(categorySystemId);
-  return weightSystemId ? normalizeWeightOption(await getConfigValueBySystemId(weightSystemId)) : null;
-}
-
 async function getProductionWeightPayloadFromConfigValueId(configValueId) {
   const selectedWeightOption = await getProductionWeightOptionById(configValueId);
 
@@ -247,14 +220,11 @@ function buildProductionWeightDetails({
 }
 
 module.exports = {
-  PRODUCTION_WEIGHT_CATEGORY_CODES,
   normalizeWeightValue,
   formatWeightValue,
   mapUnitCategoryCodeToProductionWeightCode,
   listProductionWeightOptions,
   getProductionWeightOptionById,
-  getProductionWeightOptionByCode,
-  getDefaultProductionWeightForUnitCategory,
   getProductionWeightPayloadFromConfigValueId,
   findProductionWeightOptionForCategory,
   buildProductionWeightDetails,

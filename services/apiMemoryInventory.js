@@ -1,5 +1,7 @@
 'use strict';
 
+const { TOOL_SOURCES } = require('./apiToolCredential');
+
 const MEMORY_FIELD_KEY = 'memory_modules';
 const MEMORY_INSTALL_TYPES = new Set(['removable_module', 'integrated_soldered', 'unknown']);
 
@@ -248,7 +250,7 @@ function buildMemoryPlan({ observation, currentRows, sourceCode = '', latestAppl
   const ownership = determineMemoryOwnership({ currentRows, sourceCode, latestAppliedValue });
   const existingToolSource = String(latestAppliedToolSource || '').trim().toLowerCase();
   const incomingSource = String(incomingToolSource || '').trim().toLowerCase();
-  if (ownership === 'tool' && existingToolSource === 'techtools' && incomingSource === 'scantools') {
+  if (ownership === 'tool' && existingToolSource === TOOL_SOURCES.TECHTOOLS && incomingSource === TOOL_SOURCES.SCANTOOL) {
     return {
       status: 'unchanged',
       reason: 'techtools_current_memory_is_final',
@@ -302,6 +304,37 @@ async function loadCurrentMemoryRows(connection, unitId, { lock = false } = {}) 
     [unitId]
   );
   return normalizedCurrentRows(rows);
+}
+
+function summarizeCurrentMemoryRows(rows = []) {
+  const currentRows = normalizedCurrentRows(rows);
+  if (currentRows.length === 0) {
+    return { totalGb: null, ramTypeConfigValueId: null };
+  }
+
+  const totalGb = Number(currentRows.reduce((sum, row) => sum + Number(row.size_gb || 0), 0).toFixed(2));
+  const installedRows = currentRows.filter((row) => Number(row.size_gb || 0) > 0);
+  const installedTypeIds = installedRows.map((row) => Number(row.ram_type_config_value_id) || null);
+  const distinctTypeIds = new Set(installedTypeIds.filter(Boolean));
+  const ramTypeConfigValueId = installedRows.length > 0
+    && installedTypeIds.every(Boolean)
+    && distinctTypeIds.size === 1
+      ? [...distinctTypeIds][0]
+      : null;
+
+  return { totalGb, ramTypeConfigValueId };
+}
+
+async function syncMemorySummary(connection, unitId, rows = null) {
+  const summary = summarizeCurrentMemoryRows(rows || await loadCurrentMemoryRows(connection, unitId));
+  const [result] = await connection.query(
+    `UPDATE units
+        SET ram_gb = ?, ram_type_config_value_id = ?
+      WHERE unit_id = ?
+        AND (NOT (ram_gb <=> ?) OR NOT (ram_type_config_value_id <=> ?))`,
+    [summary.totalGb, summary.ramTypeConfigValueId, unitId, summary.totalGb, summary.ramTypeConfigValueId]
+  );
+  return { ...summary, changed: Number(result?.affectedRows || 0) > 0 };
 }
 
 async function loadLatestAppliedMemoryValue(connection, unitId) {
@@ -383,6 +416,8 @@ module.exports = {
   buildMemoryPlan,
   loadCurrentMemoryRows,
   loadLatestAppliedMemoryValue,
+  summarizeCurrentMemoryRows,
+  syncMemorySummary,
   applyMemoryPlan,
   toFormMemoryModules,
   memorySpeedSummary

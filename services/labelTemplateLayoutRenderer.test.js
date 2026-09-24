@@ -133,7 +133,25 @@ test('generic renderer preserves As Stored text and applies Camel Case only when
     }
   });
 
-  assert.match(svg, />Win 11 Pro<\/text>/);
-  assert.doesNotMatch(svg, />WIN 11 Pro<\/text>/);
-  assert.equal((svg.match(/>Win 11 Pro<\/text>/g) || []).length, 2);
+  assert.match(svg, /Win 11 Pro/);
+  assert.doesNotMatch(svg, /WIN 11 Pro/);
+  assert.equal((svg.match(/Win 11 Pro/g) || []).length, 2);
+});
+
+test('generic text renderer preserves configured font size and wraps legacy shrink text instead of auto-scaling it', () => {
+  const wrapLayout = {
+    schemaVersion: 1,
+    elements: [
+      {
+        id: 'wrapped-text', type: 'static_text', x: 10, y: 10, width: 100, height: 90,
+        text: 'ALPHA BETA GAMMA',
+        style: { fontFamily: 'DejaVu Sans', fontSize: 24, align: 'left', overflow: 'shrink' }
+      }
+    ]
+  };
+  const svg = buildLayoutSvg({ layout: wrapLayout, template });
+  assert.match(svg, /font-size="24"/);
+  assert.match(svg, />ALPHA<\/tspan>/);
+  assert.match(svg, />BETA<\/tspan>/);
+  assert.match(svg, />GAMMA<\/tspan>/);
 });

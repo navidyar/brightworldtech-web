@@ -4,6 +4,7 @@ const labelPrinterModel = require('../models/labelPrinterModel');
 const managementModel = require('../models/managementModel');
 const { LABEL_PRINTER_PROFILES } = require('../config/labelPrinting');
 const { QL810W_CONTINUOUS_MEDIA_WIDTHS } = require('../config/labelMedia');
+const { isHtmxRequest } = require('../utils/htmxRequest');
 const {
   streamPrinterRegistryEvents,
   broadcastPrinterRegistryChange
@@ -16,10 +17,6 @@ const {
   isTechLeadPlus,
   probePrinterHost
 } = require('../services/labelPrinterPolicy');
-
-function isHtmxRequest(req) {
-  return String(req.get('HX-Request') || '').toLowerCase() === 'true';
-}
 
 function notice(query = {}) {
   if (query.created === '1') return 'Printer added.';

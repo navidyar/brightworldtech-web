@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const { pool } = require('./db');
 const unitAmazonModel = require('./unitAmazonModel');
 const lotQcRequirementModel = require('./lotQcRequirementModel');
@@ -10,11 +11,6 @@ const {
 
 const INITIAL_PRODUCTION_CYCLE_PREFIX = 'production:initial:';
 const MOVE_PRODUCTION_CYCLE_PREFIX = 'production:move:';
-
-function normalizePositiveInteger(value) {
-  const numeric = Number(value);
-  return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null;
-}
 
 async function getColumnSet(connection, tableName) {
   const [rows] = await connection.query(

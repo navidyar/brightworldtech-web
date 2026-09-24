@@ -176,7 +176,9 @@ test('Admin processor request approval reuses global processors and blocks stron
   assert.match(script, /Associate Existing Processor/);
   assert.match(script, /Create and Associate Processor/);
   assert.match(script, /strongDuplicate/);
-  assert.match(script, /formatInvalid/);
+  assert.doesNotMatch(script, /formatInvalid/);
+  assert.match(model, /interpretProcessorObservation/);
+  assert.match(page, /Natural Processor string detected/);
 });
 
 test('technician missing-processor request identifies a global processor as an association request instead of encouraging a duplicate', () => {

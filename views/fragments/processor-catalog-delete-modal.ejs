@@ -1,6 +1,6 @@
 <%
   const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
-  const willRetire = Number(processor.unitCount || 0) > 0 || Number(processor.lotRequirementCount || 0) > 0;
+  const willRetire = Number(processor.unitCount || 0) > 0 || Number(processor.requestCount || 0) > 0 || Number(processor.lotRequirementCount || 0) > 0;
   const returnParams = new URLSearchParams();
   if (returnTo) returnParams.set('returnTo', returnTo);
   if (filters?.processorBrandId) returnParams.set('processorBrandId', String(filters.processorBrandId));
@@ -26,11 +26,11 @@
 
       <div class="site-clean-section site-clean-surface">
         <% if (willRetire) { %>
-          <p>This processor is still referenced by existing Units or direct Lot requirements, so it will be removed from the active catalog instead of physically deleted.</p>
-          <p>The processor record and its historical relationships will be preserved so existing Unit history and Lot evaluation remain intact. It will no longer appear in normal active processor selections.</p>
+          <p>This processor is still referenced by existing Units, approved Processor Requests, or direct Lot requirements, so it will be removed from the active catalog instead of physically deleted.</p>
+          <p>The processor record and its historical relationships will be preserved so existing Unit, request, and Lot history remain intact. It will no longer appear in normal active processor selections.</p>
         <% } else { %>
           <p>This permanently removes the processor from the Processor Catalog, Unit Model compatibility lists, and Processor Family memberships.</p>
-          <p>Approved Processor Request records are preserved, but their link to this deleted processor is cleared.</p>
+          <p>Catalog-only Unit Model compatibility mappings and Processor Family memberships are removed with the unused processor.</p>
         <% } %>
 
         <div class="site-summary-stats">

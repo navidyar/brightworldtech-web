@@ -44,7 +44,7 @@ const CATEGORY_DEFINITIONS = Object.freeze([
     ['Fingerprint Reader', false]
   ] },
   { systemId: SYSTEM_CONFIG_CATEGORY_IDS.PORT_TYPES, label: 'Ports / Expansion Types', description: 'Configurable physical port and expansion types.', values: [
-    ['HDMI', false], ['DisplayPort', false], ['VGA', false], ['USB', false], ['USB-C', false], ['Thunderbolt', false], ['LAN / Ethernet', false], ['SD Card', false], ['microSD', false], ['3.5mm Audio', false], ['Unused Expansion Port', false]
+    ['HDMI', false], ['DisplayPort', false], ['VGA', false], ['USB-A', false], ['USB-C', false], ['Thunderbolt', false], ['LAN / Ethernet', false], ['SD Card', false], ['microSD', false], ['3.5mm Audio', false], ['Unused Expansion Port', false]
   ] },
   { systemId: SYSTEM_CONFIG_CATEGORY_IDS.BOX_LANGUAGES, label: 'Box Languages', description: 'Configurable packaging language values.', values: [
     ['English', false], ['Spanish', false]

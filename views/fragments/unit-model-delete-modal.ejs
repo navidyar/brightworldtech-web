@@ -1,0 +1,55 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const willRetire = Number(unitModel.unitCount || 0) > 0
+    || Number(unitModel.lotRequirementCount || 0) > 0
+    || Number(unitModel.modelRequestCount || 0) > 0
+    || Number(unitModel.processorRequestCount || 0) > 0;
+  const returnParams = new URLSearchParams();
+  if (filters?.manufacturerId) returnParams.set('manufacturerId', String(filters.manufacturerId));
+  if (filters?.unitCategoryConfigValueId) returnParams.set('unitCategoryConfigValueId', String(filters.unitCategoryConfigValueId));
+  if (filters?.includeInactive) returnParams.set('includeInactive', '1');
+  if (filters?.search) returnParams.set('search', filters.search);
+  const formAction = `/management/config/models/${unitModel.id}/delete${returnParams.toString() ? `?${returnParams.toString()}` : ''}`;
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal" role="dialog" aria-modal="true" aria-labelledby="unit-model-delete-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="unit-model-delete-title">Delete Unit Model</h2>
+        <p><strong><%= unitModel.manufacturerName %> <%= unitModel.modelName %></strong></p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length) { %>
+        <div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <div class="site-clean-section site-clean-surface">
+        <% if (willRetire) { %>
+          <p>This Unit Model is still referenced by Units, catalog Requests, or direct Lot requirements, so it cannot be permanently deleted.</p>
+          <p>This action removes it from the active catalog while preserving those operational and historical references.</p>
+        <% } else { %>
+          <p>This Unit Model has no operational or request-history references and can be permanently removed.</p>
+          <p>Any Processor compatibility mappings attached only to this model will be removed with it.</p>
+        <% } %>
+
+        <div class="site-summary-stats">
+          <article><span><small>Units</small><strong><%= formatNumber(unitModel.unitCount || 0) %></strong></span></article>
+          <article><span><small>Model Requests</small><strong><%= formatNumber(unitModel.modelRequestCount || 0) %></strong></span></article>
+          <article><span><small>Processor Requests</small><strong><%= formatNumber(unitModel.processorRequestCount || 0) %></strong></span></article>
+          <article><span><small>Lot Requirements</small><strong><%= formatNumber(unitModel.lotRequirementCount || 0) %></strong></span></article>
+          <article><span><small>Processor Mappings</small><strong><%= formatNumber(unitModel.processorMappingCount || 0) %></strong></span></article>
+        </div>
+      </div>
+
+      <form class="app-form app-form-clean" method="post" action="<%= formAction %>">
+        <div class="form-actions">
+          <button type="submit" class="danger-button"><%= willRetire ? 'Remove from Active Catalog' : 'Permanently Delete Model' %></button>
+          <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

@@ -1,5 +1,6 @@
 'use strict';
 
+const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const techUnitModel = require('../models/techUnitModel');
 const apiUnitIntake = require('./apiUnitIntake');
 
@@ -11,11 +12,6 @@ class ApiUnitActionError extends Error {
     this.code = code;
     this.details = details;
   }
-}
-
-function normalizePositiveInteger(value) {
-  const parsed = Number(value);
-  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
 function normalizeBoolean(value) {

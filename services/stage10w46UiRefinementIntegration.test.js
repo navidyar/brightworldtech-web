@@ -38,6 +38,10 @@ test('all shared date calendars expose direct Month and Year selectors', () => {
   assert.match(sharedPicker, /yearSelect\.addEventListener\('change'/);
   assert.match(sharedPicker, /getYearBounds/);
 
+  assert.match(sharedPicker, /window\.BWTDatePickerUtils = Object\.freeze/);
+  assert.match(techPicker, /window\.BWTDatePickerUtils/);
+  assert.doesNotMatch(techPicker, /function getChicagoDateOnly|function parseDate|function formatDate|function toIso|function monthKey/);
+
   assert.match(techPicker, /data-tech-created-date-picker-month/);
   assert.match(techPicker, /data-tech-created-date-picker-year/);
   assert.match(techPicker, /monthSelect\.addEventListener\('change'/);
@@ -88,6 +92,6 @@ test('shared UI assets remain cache-busted without pinning later visual revision
   assert.match(head, /app\.css\?v=/);
   assert.match(head, /features\.css\?v=/);
   assert.doesNotMatch(head, /work-area\.css/);
-  assert.match(head, /date-picker-only\.js\?v=20260812-stage10w48-cross-browser-period-picker/);
-  assert.match(techUnits, /tech-units-date-picker\.js\?v=20260812-stage10w46-month-year-picker/);
+  assert.match(head, /date-picker-only\.js\?v=20260921-cleanup-stage2c/);
+  assert.match(techUnits, /tech-units-date-picker\.js\?v=20260921-cleanup-stage2c/);
 });

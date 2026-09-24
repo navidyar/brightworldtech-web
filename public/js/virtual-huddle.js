@@ -2,9 +2,11 @@
   'use strict';
 
   let eventSource = null;
-  let lastFocusedElement = null;
+  let returnState = null;
   let refreshInFlight = false;
   let refreshQueued = false;
+  let recipientMutationInFlight = false;
+  let huddleChangeQueued = false;
 
   function getRoot() {
     let root = document.getElementById('virtual-huddle-root');
@@ -33,6 +35,35 @@
     window.requestAnimationFrame(() => target.focus?.({ preventScroll: true }));
   }
 
+  function captureReturnState() {
+    if (returnState) return;
+    const activeElement = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const selectionStart = activeElement && 'selectionStart' in activeElement ? activeElement.selectionStart : null;
+    const selectionEnd = activeElement && 'selectionEnd' in activeElement ? activeElement.selectionEnd : null;
+    returnState = {
+      activeElement,
+      selectionStart,
+      selectionEnd,
+      scrollX: window.scrollX,
+      scrollY: window.scrollY
+    };
+  }
+
+  function restoreReturnState() {
+    if (!returnState) return;
+    const state = returnState;
+    returnState = null;
+
+    window.requestAnimationFrame(() => {
+      window.scrollTo(state.scrollX, state.scrollY);
+      if (!state.activeElement?.isConnected || typeof state.activeElement.focus !== 'function') return;
+      state.activeElement.focus({ preventScroll: true });
+      if (state.selectionStart !== null && typeof state.activeElement.setSelectionRange === 'function') {
+        state.activeElement.setSelectionRange(state.selectionStart, state.selectionEnd ?? state.selectionStart);
+      }
+    });
+  }
+
   function syncPageState() {
     const layer = getLayer();
     const blocking = isBlockingLayer(layer);
@@ -40,15 +71,12 @@
     document.body?.classList.toggle('virtual-huddle-blocked', blocking);
 
     if (layer) {
-      if (!lastFocusedElement || !lastFocusedElement.isConnected) lastFocusedElement = document.activeElement;
+      captureReturnState();
       focusDialog();
       return;
     }
 
-    if (lastFocusedElement?.isConnected && typeof lastFocusedElement.focus === 'function') {
-      lastFocusedElement.focus({ preventScroll: true });
-    }
-    lastFocusedElement = null;
+    restoreReturnState();
   }
 
   async function refreshPresentation() {
@@ -98,6 +126,14 @@
     box.hidden = !message;
   }
 
+  function handleHuddleChange() {
+    if (recipientMutationInFlight) {
+      huddleChangeQueued = true;
+      return;
+    }
+    void refreshPresentation();
+  }
+
   async function acknowledge(form) {
     const recipientId = form.dataset.recipientId;
     if (!recipientId) return;
@@ -106,6 +142,8 @@
     const button = form.querySelector('button[type="submit"]');
     if (button) button.disabled = true;
 
+    recipientMutationInFlight = true;
+    let saved = false;
     try {
       const payload = new URLSearchParams(new FormData(form));
       const response = await fetch(`/virtual-huddle/recipients/${encodeURIComponent(recipientId)}/acknowledge`, {
@@ -122,25 +160,46 @@
         showFormError(form, data.error || 'The acknowledgment could not be saved.');
         return;
       }
-      await refreshPresentation();
+      saved = true;
     } catch (error) {
       showFormError(form, 'The acknowledgment could not be saved. Check the connection and try again.');
     } finally {
+      recipientMutationInFlight = false;
       if (button?.isConnected) button.disabled = false;
+    }
+
+    if (saved) {
+      huddleChangeQueued = false;
+      await refreshPresentation();
+    } else if (huddleChangeQueued) {
+      huddleChangeQueued = false;
+      void refreshPresentation();
     }
   }
 
   async function dismiss(recipientId) {
     if (!recipientId) return;
+    recipientMutationInFlight = true;
+    let dismissed = false;
     try {
       const response = await fetch(`/virtual-huddle/recipients/${encodeURIComponent(recipientId)}/dismiss`, {
         method: 'POST',
         credentials: 'same-origin',
         headers: { Accept: 'application/json' }
       });
-      if (response.ok) await refreshPresentation();
+      dismissed = response.ok;
     } catch (error) {
       // Leave the dialog visible when dismissal cannot be persisted.
+    } finally {
+      recipientMutationInFlight = false;
+    }
+
+    if (dismissed) {
+      huddleChangeQueued = false;
+      await refreshPresentation();
+    } else if (huddleChangeQueued) {
+      huddleChangeQueued = false;
+      void refreshPresentation();
     }
   }
 
@@ -171,7 +230,7 @@
   function connectEvents() {
     if (!('EventSource' in window) || eventSource) return;
     eventSource = new EventSource('/virtual-huddle/events');
-    eventSource.addEventListener('virtual-huddle-change', refreshPresentation);
+    eventSource.addEventListener('virtual-huddle-change', handleHuddleChange);
     window.addEventListener('beforeunload', () => {
       eventSource?.close();
       eventSource = null;

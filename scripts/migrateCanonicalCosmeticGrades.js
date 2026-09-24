@@ -14,7 +14,18 @@ const {
 } = require('../services/cosmeticGradeNormalization');
 
 const APPLY = process.argv.includes('--apply');
+const UNIT_GRADES_CATEGORY_LABEL = 'Unit Grades';
+const GRADE_CATEGORY_ALIASES = new Set([
+  'unit_grades',
+  'unit_grade',
+  'cosmetic_grades',
+  'cosmetic_grade',
+  'overall_unit_grades',
+  'overall_grade'
+]);
+
 const GRADE_SYSTEM_IDS = Object.freeze({
+  S: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_S,
   A: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_A,
   AB: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_AB,
   B: SYSTEM_CONFIG_VALUE_IDS.COSMETIC_GRADE_B,
@@ -49,6 +60,18 @@ function pickColumn(columns, candidates) {
   return candidates.find((column) => columns.has(column)) || null;
 }
 
+function normalizeCategoryToken(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function isGradeCategoryAlias(value) {
+  return GRADE_CATEGORY_ALIASES.has(normalizeCategoryToken(value));
+}
+
 async function getCosmeticCategoryId(connection) {
   if (!await tableExists(connection, 'system_config_categories')) {
     throw new Error('Configuration ID foundation is not applied. Run migrate:config-ids first.');
@@ -65,12 +88,56 @@ async function getCosmeticCategoryId(connection) {
   return id;
 }
 
-async function loadGradeValues(connection, categoryId) {
+async function loadGradeCategories(connection, canonicalCategoryId) {
+  const columns = await getColumnSet(connection, 'config_categories');
+  const labelColumn = pickColumn(columns, ['label', 'name']);
+  const codeColumn = columns.has('code') ? 'code' : null;
+  const descriptionColumn = columns.has('description') ? 'description' : null;
+  const activeColumn = columns.has('is_active') ? 'is_active' : null;
+  const [rows] = await connection.query(
+    `SELECT
+       cc.config_category_id,
+       ${labelColumn ? `cc.${quoteIdentifier(labelColumn)}` : 'NULL'} AS label,
+       ${codeColumn ? `cc.${quoteIdentifier(codeColumn)}` : 'NULL'} AS code,
+       ${descriptionColumn ? `cc.${quoteIdentifier(descriptionColumn)}` : 'NULL'} AS description,
+       ${activeColumn ? `cc.${quoteIdentifier(activeColumn)}` : '1'} AS is_active,
+       scc.system_config_category_id
+     FROM config_categories cc
+     LEFT JOIN system_config_categories scc ON scc.config_category_id = cc.config_category_id
+     ORDER BY cc.config_category_id`
+  );
+
+  const candidates = rows.filter((row) => (
+    Number(row.config_category_id) === Number(canonicalCategoryId)
+    || isGradeCategoryAlias(row.code)
+    || isGradeCategoryAlias(row.label)
+  )).map((row) => ({
+    ...row,
+    config_category_id: Number(row.config_category_id),
+    system_config_category_id: row.system_config_category_id == null ? null : Number(row.system_config_category_id)
+  }));
+
+  for (const category of candidates) {
+    if (
+      category.system_config_category_id
+      && category.system_config_category_id !== SYSTEM_CONFIG_CATEGORY_IDS.COSMETIC_GRADES
+    ) {
+      throw new Error(`Grade-like category ${category.config_category_id} is bound to unrelated system category ${category.system_config_category_id}.`);
+    }
+  }
+
+  return candidates;
+}
+
+async function loadGradeValues(connection, categoryIds) {
+  const ids = Array.from(new Set((categoryIds || []).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0)));
+  if (ids.length === 0) return [];
   const columns = await getColumnSet(connection, 'config_values');
   const labelColumn = pickColumn(columns, ['label', 'name']);
   const valueColumn = columns.has('value') ? 'value' : null;
   const activeColumn = columns.has('is_active') ? 'is_active' : null;
   const protectedColumn = columns.has('is_protected') ? 'is_protected' : null;
+  const placeholders = ids.map(() => '?').join(', ');
   const [rows] = await connection.query(
     `SELECT
        cv.config_value_id,
@@ -82,9 +149,9 @@ async function loadGradeValues(connection, categoryId) {
        scv.system_config_value_id
      FROM config_values cv
      LEFT JOIN system_config_values scv ON scv.config_value_id = cv.config_value_id
-     WHERE cv.config_category_id = ?
-     ORDER BY cv.config_value_id`,
-    [categoryId]
+     WHERE cv.config_category_id IN (${placeholders})
+     ORDER BY cv.config_category_id, cv.config_value_id`,
+    ids
   );
   return rows.map((row) => ({
     ...row,
@@ -98,7 +165,7 @@ function matchesGrade(row, grade) {
   return getCanonicalCosmeticGradeFromOption(row) === grade;
 }
 
-function buildPlan(rows) {
+function buildPlan(rows, canonicalCategoryId) {
   const entries = CANONICAL_COSMETIC_GRADES.map((gradeDefinition) => {
     const systemId = GRADE_SYSTEM_IDS[gradeDefinition.value];
     const boundRows = rows.filter((row) => Number(row.system_config_value_id) === Number(systemId));
@@ -111,12 +178,16 @@ function buildPlan(rows) {
       throw new Error(`System Cosmetic Grade ${gradeDefinition.value} is bound to config value ${boundRow.config_value_id}, but that row no longer represents ${gradeDefinition.value}.`);
     }
 
+    const canonicalMatches = matchingRows.filter((row) => Number(row.config_category_id) === Number(canonicalCategoryId));
     const unboundMatches = matchingRows.filter((row) => !row.system_config_value_id);
-    if (!boundRow && unboundMatches.length > 1) {
-      throw new Error(`Cosmetic Grade ${gradeDefinition.value} has multiple unbound matching values (${unboundMatches.map((row) => row.config_value_id).join(', ')}). Run the configuration ID audit before canonicalizing.`);
+    if (!boundRow && canonicalMatches.length > 1) {
+      throw new Error(`Cosmetic Grade ${gradeDefinition.value} has multiple matching values in the canonical Unit Grades category (${canonicalMatches.map((row) => row.config_value_id).join(', ')}).`);
+    }
+    if (!boundRow && canonicalMatches.length === 0 && unboundMatches.length > 1) {
+      throw new Error(`Cosmetic Grade ${gradeDefinition.value} has multiple legacy matching values (${unboundMatches.map((row) => row.config_value_id).join(', ')}). Run the configuration ID audit before canonicalizing.`);
     }
 
-    const targetRow = boundRow || unboundMatches[0] || null;
+    const targetRow = boundRow || canonicalMatches[0] || unboundMatches[0] || null;
     return {
       gradeDefinition,
       systemId,
@@ -127,12 +198,49 @@ function buildPlan(rows) {
 
   const notYetRows = rows.filter((row) => [row.label, row.value].some(isNotYetGradedToken));
   const targetIds = new Set(entries.map((entry) => entry.targetRow?.config_value_id).filter(Boolean));
-  const otherRows = rows.filter((row) => (
+  const configurableRows = rows.filter((row) => (
     !targetIds.has(row.config_value_id)
     && !entries.some((entry) => entry.matchingRows.some((candidate) => candidate.config_value_id === row.config_value_id))
     && !notYetRows.some((candidate) => candidate.config_value_id === row.config_value_id)
   ));
-  return { entries, notYetRows, otherRows };
+  return { entries, notYetRows, configurableRows };
+}
+
+
+async function normalizeUnitGradesCategory(connection, categoryId) {
+  const columns = await getColumnSet(connection, 'config_categories');
+  const assignments = [];
+  const params = [];
+  for (const columnName of ['label', 'name']) {
+    if (columns.has(columnName)) {
+      assignments.push(`${quoteIdentifier(columnName)} = ?`);
+      params.push(UNIT_GRADES_CATEGORY_LABEL);
+    }
+  }
+  if (columns.has('description')) {
+    assignments.push('description = ?');
+    params.push('Configurable cosmetic condition grades used throughout Unit, Lot, QC, reporting, export, and label workflows.');
+  }
+  if (columns.has('is_active')) assignments.push('is_active = 1');
+  if (assignments.length === 0) return;
+  params.push(categoryId);
+  await connection.query(
+    `UPDATE config_categories SET ${assignments.join(', ')} WHERE config_category_id = ?`,
+    params
+  );
+}
+
+async function deactivateLegacyGradeCategories(connection, categoryIds) {
+  const ids = Array.from(new Set((categoryIds || []).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0)));
+  if (ids.length === 0) return 0;
+  const columns = await getColumnSet(connection, 'config_categories');
+  if (!columns.has('is_active')) return 0;
+  const placeholders = ids.map(() => '?').join(', ');
+  const [result] = await connection.query(
+    `UPDATE config_categories SET is_active = 0 WHERE config_category_id IN (${placeholders})`,
+    ids
+  );
+  return Number(result.affectedRows || 0);
 }
 
 async function countReferenceColumn(connection, tableName, columnName, ids) {
@@ -182,7 +290,7 @@ async function insertGradeValue(connection, categoryId, gradeDefinition) {
   }
   if (columns.has('description')) {
     fields.push('description');
-    values.push(`Canonical Cosmetic Grade ${gradeDefinition.value}.`);
+    values.push(gradeDefinition.description || `Canonical Cosmetic Grade ${gradeDefinition.value}.`);
   }
   if (columns.has('sort_order')) {
     fields.push('sort_order');
@@ -204,28 +312,29 @@ async function insertGradeValue(connection, categoryId, gradeDefinition) {
   return Number(result.insertId);
 }
 
-async function normalizeTargetValue(connection, targetId, categoryId, gradeDefinition) {
+async function normalizeTargetValue(connection, targetId, categoryId, gradeDefinition, options = {}) {
   const columns = await getColumnSet(connection, 'config_values');
   const labelColumn = pickColumn(columns, ['label', 'name']);
+  const preserveConfiguredPresentation = options.preserveConfiguredPresentation === true;
   const assignments = ['config_category_id = ?'];
   const params = [categoryId];
-  if (labelColumn) {
+  if (!preserveConfiguredPresentation && labelColumn) {
     assignments.push(`${quoteIdentifier(labelColumn)} = ?`);
     params.push(gradeDefinition.label);
   }
-  if (columns.has('value')) {
+  if (!preserveConfiguredPresentation && columns.has('value')) {
     assignments.push('value = ?');
     params.push(gradeDefinition.value);
   }
-  if (columns.has('description')) {
+  if (!preserveConfiguredPresentation && columns.has('description')) {
     assignments.push('description = ?');
-    params.push(`Canonical Cosmetic Grade ${gradeDefinition.value}.`);
+    params.push(gradeDefinition.description || `Canonical Cosmetic Grade ${gradeDefinition.value}.`);
   }
-  if (columns.has('sort_order')) {
+  if (!preserveConfiguredPresentation && columns.has('sort_order')) {
     assignments.push('sort_order = ?');
     params.push(gradeDefinition.sortOrder);
   }
-  if (columns.has('is_active')) assignments.push('is_active = 1');
+  if (!preserveConfiguredPresentation && columns.has('is_active')) assignments.push('is_active = 1');
   if (columns.has('is_protected')) assignments.push('is_protected = 1');
   params.push(targetId);
   await connection.query(
@@ -291,17 +400,25 @@ async function main() {
     }
 
     const categoryId = await getCosmeticCategoryId(connection);
-    const rows = await loadGradeValues(connection, categoryId);
-    const plan = buildPlan(rows);
+    const gradeCategories = await loadGradeCategories(connection, categoryId);
+    const legacyCategories = gradeCategories.filter((category) => category.config_category_id !== categoryId);
+    const rows = await loadGradeValues(connection, gradeCategories.map((category) => category.config_category_id));
+    const plan = buildPlan(rows, categoryId);
+    const legacyConfigurableRows = plan.configurableRows.filter((row) => row.config_category_id !== categoryId);
 
-    console.log('Canonical Cosmetic Grade policy: A, AB, B, C, D');
-    console.log(`Cosmetic Grades category ID: ${categoryId}`);
-    console.log(`Grade-category config values found: ${rows.length}`);
+    console.log('Canonical Cosmetic Grade policy: S (Supreme), A, AB, B, C, D');
+    console.log(`Authoritative Unit Grades category ID: ${categoryId}`);
+    console.log(`Grade configuration categories found: ${gradeCategories.length}`);
+    for (const category of gradeCategories) {
+      console.log(`  #${category.config_category_id} ${category.label || category.code || '(unnamed)'}${category.config_category_id === categoryId ? ' (authoritative)' : ' (legacy duplicate)'}`);
+    }
+    console.log(`Grade-category config values found across all grade categories: ${rows.length}`);
     for (const entry of plan.entries) {
       console.log(`  ${entry.gradeDefinition.value}: ${entry.matchingRows.length} matching value(s)${entry.targetRow ? `; target config value ${entry.targetRow.config_value_id}` : '; will be inserted'}`);
     }
     console.log(`Not-yet-graded values found: ${plan.notYetRows.length}`);
-    console.log(`Other noncanonical values found: ${plan.otherRows.length}`);
+    console.log(`Additional configurable grade values found: ${plan.configurableRows.length}`);
+    console.log(`Legacy custom grade values requiring manual review: ${legacyConfigurableRows.length}`);
 
     for (const [tableName, columnName] of [
       ['unit_grade_assessments', 'overall_grade_config_value_id'],
@@ -317,7 +434,12 @@ async function main() {
       return;
     }
 
+    if (legacyConfigurableRows.length > 0) {
+      throw new Error(`Legacy Unit Grades contains ${legacyConfigurableRows.length} custom grade value(s). Refusing to hide that category until those values are reviewed.`);
+    }
+
     await connection.beginTransaction();
+    await normalizeUnitGradesCategory(connection, categoryId);
     const targetIds = new Set();
     let assessmentRemaps = 0;
     let lotDefaultRemaps = 0;
@@ -326,7 +448,9 @@ async function main() {
     for (const entry of plan.entries) {
       const targetId = entry.targetRow?.config_value_id
         || await insertGradeValue(connection, categoryId, entry.gradeDefinition);
-      await normalizeTargetValue(connection, targetId, categoryId, entry.gradeDefinition);
+      await normalizeTargetValue(connection, targetId, categoryId, entry.gradeDefinition, {
+        preserveConfiguredPresentation: Boolean(entry.targetRow?.system_config_value_id)
+      });
       await bindGradeValue(connection, entry.systemId, targetId);
       targetIds.add(targetId);
       const sourceIds = entry.matchingRows.map((row) => row.config_value_id);
@@ -342,16 +466,22 @@ async function main() {
     const notYetIds = plan.notYetRows.map((row) => row.config_value_id);
     const clearedCurrentNotYet = await clearCurrentNotYetGradedAssessments(connection, notYetIds);
     const clearedLotDefaults = await clearNotYetGradedLotDefaults(connection, notYetIds);
-    const deactivatedValues = await deactivateRows(connection, [...new Set([...duplicateIds, ...notYetIds, ...plan.otherRows.map((row) => row.config_value_id)])]);
+    const deactivatedValues = await deactivateRows(connection, [...new Set([...duplicateIds, ...notYetIds])]);
+    const deactivatedLegacyCategories = await deactivateLegacyGradeCategories(
+      connection,
+      legacyCategories.map((category) => category.config_category_id)
+    );
 
     await connection.commit();
-    console.log('Canonical Cosmetic Grade migration applied.');
+    console.log('Canonical Unit Grades migration applied.');
     console.log(`Assessment references remapped: ${assessmentRemaps}`);
     console.log(`Lot default references remapped: ${lotDefaultRemaps}`);
     console.log(`Lot requirement references remapped: ${requirementRemaps}`);
     console.log(`Current Not Yet Graded assessments cleared: ${clearedCurrentNotYet}`);
     console.log(`Not Yet Graded lot defaults cleared: ${clearedLotDefaults}`);
-    console.log(`Legacy/noncanonical grade values deactivated: ${deactivatedValues}`);
+    console.log(`Legacy duplicate/Not Yet Graded values deactivated: ${deactivatedValues}`);
+    console.log(`Legacy duplicate grade categories deactivated: ${deactivatedLegacyCategories}`);
+    console.log(`Visible authoritative configuration category: ${UNIT_GRADES_CATEGORY_LABEL}`);
   } catch (error) {
     try { await connection.rollback(); } catch (_) { /* no active transaction */ }
     throw error;
