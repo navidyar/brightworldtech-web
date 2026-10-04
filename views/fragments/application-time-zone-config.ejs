@@ -1,0 +1,66 @@
+<%
+  const safeSettings = applicationSettings || { defaultTimeZone: 'UTC' };
+  const selectedTimeZone = safeSettings.defaultTimeZone || 'UTC';
+  const availableTimeZones = Array.isArray(supportedTimeZones) && supportedTimeZones.length > 0
+    ? supportedTimeZones.slice()
+    : ['UTC'];
+  if (!availableTimeZones.includes(selectedTimeZone)) availableTimeZones.unshift(selectedTimeZone);
+
+  const groupedTimeZones = new Map();
+  for (const zone of availableTimeZones) {
+    const groupName = zone === 'UTC' ? 'Universal' : (zone.includes('/') ? zone.split('/')[0] : 'Other');
+    if (!groupedTimeZones.has(groupName)) groupedTimeZones.set(groupName, []);
+    groupedTimeZones.get(groupName).push(zone);
+  }
+%>
+<details
+  class="configuration-category"
+  data-configuration-category
+  data-search-text="application settings application time zone timezone default timezone iana daylight saving fallback <%= selectedTimeZone.toLowerCase() %>">
+  <summary class="configuration-category-summary">
+    <span class="configuration-category-summary-title">
+      <strong>Application Time Zone</strong>
+      <code>default_time_zone</code>
+    </span>
+    <span class="configuration-category-summary-meta">
+      <span><%= selectedTimeZone %></span>
+      <span class="pill neutral">Application setting</span>
+    </span>
+  </summary>
+
+  <div class="configuration-category-body">
+    <div class="configuration-category-toolbar-copy">
+      <p>Browser time zones are detected automatically. This setting is the application-wide fallback when a browser time zone is not available.</p>
+    </div>
+
+    <% if (timeZoneSaved) { %>
+      <div class="message success"><p>Application default time zone saved.</p></div>
+    <% } %>
+    <% if (timeZoneError) { %>
+      <div class="message error"><p><%= timeZoneError %></p></div>
+    <% } %>
+
+    <form
+      class="app-form"
+      method="post"
+      action="/management/config/application-time-zone"
+      data-configuration-value-row
+      data-search-text="application time zone timezone default fallback <%= selectedTimeZone.toLowerCase() %>">
+      <div class="site-inline-actions">
+        <label class="form-field site-search-field">
+          <span>Default time zone</span>
+          <select name="defaultTimeZone" required>
+            <% Array.from(groupedTimeZones.entries()).forEach(([groupName, zones]) => { %>
+              <optgroup label="<%= groupName %>">
+                <% zones.forEach((zone) => { %>
+                  <option value="<%= zone %>" <%= zone === selectedTimeZone ? 'selected' : '' %>><%= zone %></option>
+                <% }) %>
+              </optgroup>
+            <% }) %>
+          </select>
+        </label>
+        <button type="submit" class="primary-button">Save Time Zone</button>
+      </div>
+    </form>
+  </div>
+</details>

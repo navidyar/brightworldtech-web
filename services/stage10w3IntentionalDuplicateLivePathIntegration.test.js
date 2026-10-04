@@ -47,8 +47,8 @@ test('requester and reviewer queue retrieval both use the same persisted Unit Re
   const controller = read('controllers/unitRequestController.js');
   const queue = read('services/unifiedRequestQueue.js');
 
-  assert.match(controller, /const requesterUserId = reviewer \? null : req\.currentUser\.user_id/);
-  assert.match(controller, /unitRequestModel\.listUnitRequests\([\s\S]*?requestedByUserId:\s*requesterUserId/);
+  assert.match(controller, /const requesterUserId = canReviewAnyUnitRequests\(req\) \? null : req\.currentUser\.user_id/);
+  assert.match(controller, /unitRequestModel\.listUnitRequestSummaries\([\s\S]*?requestedByUserId:\s*requesterUserId/);
   assert.match(queue, /requestSource:\s*'unit_request'/);
   assert.match(queue, /requestKey:\s*`unit-\$\{request\.unitRequestId\}`/);
   assert.match(queue, /detailUrl:\s*`\/unit-requests\/\$\{request\.unitRequestId\}`/);

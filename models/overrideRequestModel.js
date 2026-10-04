@@ -3,6 +3,7 @@ const productionWeightSyncModel = require('./productionWeightSyncModel');
 const productionCycleModel = require('./productionCycleModel');
 const unitWorkflowAudit = require('../services/unitWorkflowAudit');
 const { buildLotHierarchyOptions } = require('../services/lotHierarchyPresentation');
+const { formatAssetTagNumber } = require('../utils/assetTag');
 
 const OVERRIDE_TABLE = 'unit_override_requests';
 const MANUAL_TECH_OVERRIDE_REQUEST_TYPE = 'manual_tech_override_request';
@@ -12,18 +13,8 @@ const VALID_STATUS_FILTERS = new Set(['pending', 'approved', 'denied', 'cancelle
 const OVERRIDE_SCHEMA_CAPABILITY_CACHE_MS = 60000;
 let overrideSchemaCapabilityCache = null;
 
-function getAssetTagPrefix() {
-  const prefix = String(process.env.ASSET_TAG_PREFIX || 'BWT').trim();
-
-  return prefix ? prefix.toUpperCase() : 'BWT';
-}
-
 function getDisplayAssetTag(assetNumber) {
-  if (!assetNumber) {
-    return '';
-  }
-
-  return `${getAssetTagPrefix()}${String(assetNumber)}`;
+  return formatAssetTagNumber(assetNumber);
 }
 
 async function tableExists(tableName) {

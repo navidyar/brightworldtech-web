@@ -8,7 +8,7 @@ const test = require('node:test');
 const ROOT = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 
-test('Duplicate Lot reuses rounded choice cards and hides the Parent Lot control for Top-Level placement', () => {
+test('Duplicate Lot reuses shared choice controls and hides the Parent Lot control for Top-Level placement', () => {
   const modal = read('views/fragments/lot-duplicate-modal.ejs');
   const lotScript = read('public/js/lot-form.js');
   const lotCss = read('public/css/app.css');

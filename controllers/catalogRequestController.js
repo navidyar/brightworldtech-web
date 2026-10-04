@@ -66,14 +66,23 @@ async function getModelRequestContext(source = {}) {
 
   let inactiveMatch = null;
   let activeMatch = null;
+  let mappedMatch = null;
 
   if (manufacturer && unitCategory && requestedModelName.length >= 2) {
-    const models = await unitModelCatalogModel.listUnitModels({
-      manufacturerId,
-      unitCategoryConfigValueId,
-      includeInactive: true,
-      search: requestedModelName
-    });
+    const [models, mapping] = await Promise.all([
+      unitModelCatalogModel.listUnitModels({
+        manufacturerId,
+        unitCategoryConfigValueId,
+        includeInactive: true,
+        search: requestedModelName
+      }),
+      unitModelCatalogModel.findUnitModelIntakeMapping({
+        manufacturerId,
+        unitCategoryConfigValueId,
+        observedModelName: requestedModelName
+      })
+    ]);
+    mappedMatch = mapping;
     const exactMatch = models.find((model) => String(model.modelName || '').trim().toLowerCase() === requestedModelName.toLowerCase()) || null;
 
     if (exactMatch && exactMatch.isActive) {
@@ -81,6 +90,9 @@ async function getModelRequestContext(source = {}) {
       errors.push('That Unit Model already exists in the active catalog. Select it instead of submitting a request.');
     } else if (exactMatch) {
       inactiveMatch = exactMatch;
+    }
+    if (mappedMatch) {
+      errors.push(`That incoming model already maps to ${mappedMatch.targetModelName} (${mappedMatch.targetCategoryLabel}). Select the Catalog Model instead of submitting a request.`);
     }
   }
 
@@ -92,6 +104,7 @@ async function getModelRequestContext(source = {}) {
     requestedModelName,
     inactiveMatch,
     activeMatch,
+    mappedMatch,
     errors
   };
 }
@@ -162,7 +175,7 @@ async function renderModelCatalogRequestModal(req, res, next) {
     if (!catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(req)) {
       return res.status(403).render('fragments/tech-unit-catalog-request-modal', buildCatalogModalView({
         requestKind: 'model',
-        errorMessages: ['Your role cannot submit Catalog Exception requests from Add/Edit Unit.']
+        errorMessages: ['Catalog request submission permission is required.']
       }));
     }
 
@@ -182,7 +195,7 @@ async function renderProcessorCatalogRequestModal(req, res, next) {
     if (!catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(req)) {
       return res.status(403).render('fragments/tech-unit-catalog-request-modal', buildCatalogModalView({
         requestKind: 'processor',
-        errorMessages: ['Your role cannot submit Catalog Exception requests from Add/Edit Unit.']
+        errorMessages: ['Catalog request submission permission is required.']
       }));
     }
 
@@ -205,7 +218,7 @@ async function createModelCatalogRequest(req, res, next) {
     if (!catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(req)) {
       return res.status(403).render('fragments/tech-unit-catalog-request-modal', buildCatalogModalView({
         requestKind: 'model',
-        errorMessages: ['Your role cannot submit Catalog Exception requests from Add/Edit Unit.']
+        errorMessages: ['Catalog request submission permission is required.']
       }));
     }
 
@@ -258,7 +271,7 @@ async function createProcessorCatalogRequest(req, res, next) {
     if (!catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(req)) {
       return res.status(403).render('fragments/tech-unit-catalog-request-modal', buildCatalogModalView({
         requestKind: 'processor',
-        errorMessages: ['Your role cannot submit Catalog Exception requests from Add/Edit Unit.']
+        errorMessages: ['Catalog request submission permission is required.']
       }));
     }
 

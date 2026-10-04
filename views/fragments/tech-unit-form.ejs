@@ -300,7 +300,7 @@
         );
       %>
       <label class="form-field tech-assignable-lot-field">
-        <span>Assignable Lot</span>
+        <span>Assignable Lot <span data-unit-form-required-indicator aria-hidden="true">*</span></span>
         <div class="tech-assignable-lot-combobox" data-assignable-lot-combobox>
           <input
             type="search"
@@ -545,8 +545,8 @@
     </div>
 
     <div class="form-grid">
-      <label class="form-field">
-        <span>Unit Category</span>
+      <label class="form-field" data-unit-form-protected-field-key="unit_category">
+        <span>Unit Category <span data-unit-form-required-indicator aria-hidden="true">*</span></span>
         <select name="unitCategoryConfigValueId" required data-unit-category-select>
           <option value="">Select category</option>
           <% formOptions.unitCategories.forEach((category) => { %>
@@ -890,7 +890,7 @@
       <section class="tech-memory-state tech-memory-state--current" data-unit-form-field-key="memory_modules" data-unit-form-repeatable-type="memory" data-current-hardware-field="memory" aria-label="Current memory modules">
         <div class="tech-memory-state-bar">
           <div class="tech-memory-state-title">
-            <strong>Current</strong>
+            <strong data-unit-form-required-label>Current</strong>
             <span><strong data-memory-total-display><%= formatCapacity(hasExplicitCapacityRows(memoryRows) ? memoryTotalGb() : formData.ramGb) || "0GB" %></strong> total</span>
           </div>
           <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="memory">+ Add</button>
@@ -954,7 +954,7 @@
       <section class="tech-memory-state tech-memory-state--current" data-unit-form-field-key="storage_devices" data-unit-form-repeatable-type="storage" data-current-hardware-field="storage" aria-label="Current storage devices">
         <div class="tech-memory-state-bar">
           <div class="tech-memory-state-title">
-            <strong>Current</strong>
+            <strong data-unit-form-required-label>Current</strong>
             <span><strong data-storage-total-display><%= formatCapacity(hasExplicitCapacityRows(storageRows) ? storageTotalGb() : formData.storageGb) || "0GB" %></strong> total</span>
           </div>
           <button tabindex="-1" type="button" class="secondary-button" data-add-module-row="storage">+ Add</button>
@@ -1038,7 +1038,7 @@
 
     <div class="tech-spec-repeatables">
       <section class="tech-spec-repeatable" data-unit-form-field-key="cameras" data-unit-form-repeatable-type="camera" data-module-max="3">
-        <div class="tech-spec-repeatable-header"><strong>Cameras</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="camera">+ Add</button></div>
+        <div class="tech-spec-repeatable-header"><strong data-unit-form-required-label>Cameras</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="camera">+ Add</button></div>
         <div class="tech-spec-repeatable-list" data-module-list="camera">
           <% cameraRows.forEach((row, index) => { %>
             <div class="tech-spec-repeatable-row tech-spec-repeatable-row--camera" data-module-row="camera">
@@ -1056,7 +1056,7 @@
       </section>
 
       <section class="tech-spec-repeatable" data-unit-form-field-key="batteries" data-unit-form-repeatable-type="battery" data-module-max="2">
-        <div class="tech-spec-repeatable-header"><strong>Batteries</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="battery">+ Add</button></div>
+        <div class="tech-spec-repeatable-header"><strong data-unit-form-required-label>Batteries</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="battery">+ Add</button></div>
         <div class="tech-spec-repeatable-list" data-module-list="battery">
           <% batteryRows.forEach((row, index) => { %><div class="tech-spec-repeatable-row tech-spec-repeatable-row--battery" data-module-row="battery"><input type="hidden" name="batteries[<%= index %>][rowId]" value="<%= row.rowId || '' %>" data-module-field /><span class="tech-memory-row-number" data-module-display-number><%= index + 1 %></span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Battery recorded</span><label class="form-field" data-unit-form-field-key="battery_health"><span>Health %</span><input type="number" name="batteries[<%= index %>][healthPercent]" value="<%= row.healthPercent || '' %>" min="0" max="100" step="0.1" inputmode="decimal" placeholder="Example: 87.5" data-module-field /></label><label class="form-field" data-unit-form-field-key="battery_cycle_count" data-apple-only-field><span>Cycle Count</span><input type="number" name="batteries[<%= index %>][cycleCount]" value="<%= row.cycleCount || '' %>" min="0" step="1" inputmode="numeric" data-module-field /></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div><% }) %>
         </div>
@@ -1064,7 +1064,7 @@
       </section>
 
       <section class="tech-spec-repeatable" data-unit-form-field-key="biometrics" data-unit-form-repeatable-type="biometric" data-module-max="6">
-        <div class="tech-spec-repeatable-header"><strong>Biometrics</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="biometric">+ Add</button></div>
+        <div class="tech-spec-repeatable-header"><strong data-unit-form-required-label>Biometrics</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="biometric">+ Add</button></div>
         <div class="tech-spec-repeatable-list" data-module-list="biometric">
           <% biometricRows.forEach((row, index) => { %><div class="tech-spec-repeatable-row tech-spec-repeatable-row--biometric" data-module-row="biometric"><input type="hidden" name="biometrics[<%= index %>][rowId]" value="<%= row.rowId || '' %>" data-module-field /><span class="tech-memory-row-number" data-module-display-number><%= index + 1 %></span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Biometric hardware recorded</span><label class="form-field" data-unit-form-field-key="biometric_hardware"><span>Hardware</span><select name="biometrics[<%= index %>][hardwareConfigValueId]" data-module-field><option value="">Choose an option</option><% biometricHardwareOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.hardwareConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="biometrics_test"><span>Test</span><select name="biometrics[<%= index %>][testResultConfigValueId]" data-module-field><option value="">Choose an option</option><% componentTestResultOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.testResultConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div><% }) %>
         </div>
@@ -1072,7 +1072,7 @@
       </section>
 
       <section class="tech-spec-repeatable" data-unit-form-field-key="ports" data-unit-form-repeatable-type="port" data-module-max="30">
-        <div class="tech-spec-repeatable-header"><strong>Ports / Expansion</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="port">+ Add</button></div>
+        <div class="tech-spec-repeatable-header"><strong data-unit-form-required-label>Ports / Expansion</strong><button tabindex="-1" type="button" class="secondary-button" data-add-module-row="port">+ Add</button></div>
         <div class="tech-spec-repeatable-list" data-module-list="port">
           <% portRows.forEach((row, index) => { %><div class="tech-spec-repeatable-row tech-spec-repeatable-row--port" data-module-row="port"><input type="hidden" name="ports[<%= index %>][rowId]" value="<%= row.rowId || '' %>" data-module-field /><span class="tech-memory-row-number" data-module-display-number><%= index + 1 %></span><span class="tech-spec-recorded-state" data-repeatable-recorded-state hidden>Port entry recorded</span><label class="form-field" data-unit-form-field-key="port_type"><span>Port Type</span><select name="ports[<%= index %>][portTypeConfigValueId]" data-module-field><option value="">Choose an option</option><% portTypeOptions.forEach((option) => { %><option value="<%= option.id %>" <%= selected(row.portTypeConfigValueId, option.id) %>><%= option.label %></option><% }) %></select></label><label class="form-field" data-unit-form-field-key="port_count"><span>Count</span><input type="number" name="ports[<%= index %>][portCount]" value="<%= row.portCount === 0 || row.portCount ? row.portCount : '' %>" min="0" step="1" inputmode="numeric" data-module-field /></label><button tabindex="-1" type="button" class="secondary-button tech-memory-remove-button" data-remove-module-row>Remove</button></div><% }) %>
         </div>

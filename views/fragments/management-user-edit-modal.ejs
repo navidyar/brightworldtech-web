@@ -5,14 +5,14 @@
   const selectedRoles = Array.isArray(safeFormData.roleCodes) ? safeFormData.roleCodes : [];
   const safeReturnPath = returnPath === 'inactive' ? 'inactive' : 'active';
   const isRoleEditingLocked = Boolean(roleEditingLocked);
+  const canEditRoleAssignments = Boolean(canEditRoles);
   const lockedRoleCode = roleEditingLockCode === 'admin' ? 'admin' : 'management';
   const lockedRoleLabel = lockedRoleCode === 'admin' ? 'Admin' : 'Management';
-  const currentRoleCode = selectedRoles[0] || user.primary_role_code || '';
-  const currentRoleLabel = user.primary_role_name || user.role_names || currentRoleCode || 'No role assigned';
+  const currentRoleLabel = user.role_names || user.primary_role_name || selectedRoles.join(', ') || 'No role assigned';
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel management-user-modal management-user-form-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-edit-title">
+  <section class="modal-panel management-user-modal management-user-form-modal flat-form-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-edit-title">
     <header class="modal-header">
       <div>
         <p class="eyebrow">Management</p>
@@ -86,40 +86,57 @@
           </label>
         </div>
 
+        <% if (canManageLoginInactivity) { %>
+          <label class="form-field">
+            <span>Login Inactivity Monitoring</span>
+            <select name="loginInactivityMode">
+              <option value="inherit" <%= (safeFormData.loginInactivityMode || 'inherit') === 'inherit' ? 'selected' : '' %>>Inherit from assigned role(s)</option>
+              <option value="allow" <%= safeFormData.loginInactivityMode === 'allow' ? 'selected' : '' %>>Monitor this user</option>
+              <option value="deny" <%= safeFormData.loginInactivityMode === 'deny' ? 'selected' : '' %>>Do not monitor this user</option>
+            </select>
+            <small class="field-hint">This user-level setting overrides the role default. Monitored active users are flagged after more than 5 business days without a login.</small>
+          </label>
+        <% } %>
+
+        <% if (canEditRoleAssignments || isRoleEditingLocked) { %>
         <div>
-          <p class="eyebrow management-user-modal-roles-label">Primary Access Role</p>
+          <p class="eyebrow management-user-modal-roles-label">Access Roles</p>
           <% if (isRoleEditingLocked) { %>
             <p class="management-user-role-help">Your current <%= lockedRoleLabel %> role is locked while you edit your own account. Another authorized user must make any role change.</p>
-            <% if (currentRoleCode) { %>
-              <input type="hidden" name="roleCodes" value="<%= currentRoleCode %>" />
-            <% } %>
+            <% selectedRoles.forEach((roleCode) => { %>
+              <input type="hidden" name="roleCodes" value="<%= roleCode %>" />
+            <% }) %>
 
             <div class="workflow-list management-user-modal-roles">
-              <div class="workflow-item active" aria-label="Current access role">
+              <div class="workflow-item active" aria-label="Current access roles">
                 <span aria-hidden="true"></span>
                 <div>
                   <strong><%= currentRoleLabel %></strong>
-                  <p>Current role — role editing is unavailable for your own <%= lockedRoleLabel %> account.</p>
+                  <p>Current roles — role editing is unavailable for your own <%= lockedRoleLabel %> account.</p>
                 </div>
               </div>
             </div>
           <% } else { %>
-            <p class="management-user-role-help">Choose one primary account access role. QC grants read-only cross-technician Unit access; production work, packing, and task activity remain separate operational records.</p>
+            <p class="management-user-role-help">Select one or more roles. Approved default permissions from every assigned role combine; an unapproved permission on one role does not cancel a grant from another role.</p>
 
             <div class="workflow-list management-user-modal-roles">
               <% safeRoles.forEach((role) => { %>
-                <label class="workflow-item <%= selectedRoles.includes(role.code) ? 'active' : '' %>">
-                  <input type="radio" name="roleCodes" value="<%= role.code %>" <%= selectedRoles.includes(role.code) ? 'checked' : '' %> />
+                <% const roleSelected = selectedRoles.includes(role.code); %>
+                <label class="workflow-item <%= roleSelected ? 'active' : '' %> <%= role.assignmentLocked ? 'is-disabled' : '' %>">
+                  <input type="checkbox" name="roleCodes" value="<%= role.code %>" <%= roleSelected ? 'checked' : '' %> <%= role.assignmentLocked ? 'disabled' : '' %> />
+                  <% if (role.assignmentLocked && roleSelected) { %><input type="hidden" name="roleCodes" value="<%= role.code %>" /><% } %>
 
                   <div>
                     <strong><%= role.name %></strong>
-                    <p><%= role.description || role.code %></p>
+                    <p><%= role.description || 'No description.' %><% if (!role.is_active) { %> · Inactive role currently assigned<% } %><% if (role.assignmentLocked) { %> · Protected assignment requires Super Admin authority<% } %></p>
                   </div>
                 </label>
               <% }) %>
             </div>
           <% } %>
         </div>
+
+        <% } %>
 
         <div class="action-row">
           <button type="submit" class="primary-button">Save User Changes</button>

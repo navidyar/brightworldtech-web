@@ -20,12 +20,12 @@ test('Shared Assets table provides lazy visual cues and a preview action', () =>
   assert.match(fragment, />Preview<\/a>/);
 });
 
-test('asset preview route is Management-only and controller supports images and JSON', () => {
+test('asset preview route uses labels.library.view and controller supports images and JSON', () => {
   const routes = read('routes/management.js');
   const controller = read('controllers/labelLibraryController.js');
 
   assert.match(routes, /label-library\/assets\/:assetId\/preview\/modal/);
-  assert.match(routes, /requireRole\(managementRoles\)[\s\S]*renderAssetPreviewModal/);
+  assert.match(routes, /label-library\/assets\/:assetId\/preview\/modal'[\s\S]*?requirePermission\('labels\.library\.view'\)[\s\S]*?renderAssetPreviewModal/);
   assert.match(controller, /MAX_LABEL_ASSET_JSON_PREVIEW_BYTES = 256 \* 1024/);
   assert.match(controller, /previewKind = 'image'/);
   assert.match(controller, /previewKind = 'json'/);

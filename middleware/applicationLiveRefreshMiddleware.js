@@ -8,6 +8,7 @@ const NON_DATA_MUTATION_PATHS = Object.freeze([
   /^\/login$/,
   /^\/logout$/,
   /^\/setup-password$/,
+  /^\/account\/tool-pin$/,
   /^\/api\/v1\/auth\//,
   /^\/api\/v1\/units\/resolve$/,
   /^\/management\/printers\/probe$/,
@@ -21,7 +22,8 @@ const NON_DATA_MUTATION_PATHS = Object.freeze([
   /^\/tech\/units\/\d+\/intentional-duplicate-request\/modal$/,
   /^\/management\/virtual-huddle\/preview$/,
   /^\/virtual-huddle(?:\/|$)/,
-  /^\/management\/virtual-huddle(?:\/|$)/
+  /^\/management\/virtual-huddle(?:\/|$)/,
+  /^\/management\/roles-permissions\/\d+\/permissions$/
 ]);
 
 

@@ -141,6 +141,7 @@
                         <td><%= processor.legacyFamily || '—' %></td>
                         <td><%= processor.generation || '—' %></td>
                         <td>
+                          <% if (hasPermission('configuration.processors.manage')) { %>
                           <div class="model-catalog-row-actions">
                             <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/edit/modal?returnTo=processor-families" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/edit/modal?returnTo=processor-families">Edit</a>
                             <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/families/modal?returnTo=processor-families" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/families/modal?returnTo=processor-families">Assign Family</a>
@@ -148,6 +149,7 @@
                             <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/merge/modal?returnTo=processor-families" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/merge/modal?returnTo=processor-families">Resolve Duplicate</a>
                             <a class="danger-button button-small" href="/management/config/processors/<%= processor.id %>/delete/modal?returnTo=processor-families" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/delete/modal?returnTo=processor-families">Delete</a>
                           </div>
+                          <% } else { %>—<% } %>
                         </td>
                       </tr>
                     <% }) %>

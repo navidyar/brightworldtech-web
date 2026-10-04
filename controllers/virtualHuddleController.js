@@ -46,6 +46,10 @@ function isAdmin(req) {
   return currentPrimaryRole(req) === 'admin';
 }
 
+function hasPermission(req, permissionKey) {
+  return req.currentPermissions instanceof Set && req.currentPermissions.has(permissionKey);
+}
+
 function messageTypeLabel(code) {
   return MESSAGE_TYPE_OPTIONS.find((option) => option.code === code)?.label || code || 'Message';
 }
@@ -97,12 +101,19 @@ function redirectHtmxAware(req, res, url) {
 
 async function renderManagementPage(req, res, next) {
   try {
-    const history = await virtualHuddleModel.listManagementHistory({ page: req.query.page });
+    const history = await virtualHuddleModel.listManagementHistory({
+      page: req.query.page,
+      status: req.query.status,
+      messageType: req.query.messageType,
+      search: req.query.search,
+      sort: req.query.sort
+    });
     return res.render('pages/management-virtual-huddle', {
       pageTitle: 'Virtual Huddle',
       currentNav: 'management-virtual-huddle',
       ...history,
-      isAdminUser: isAdmin(req),
+      canSendHuddles: hasPermission(req, 'huddle.send'),
+      openHuddleMessageId: normalizeId(req.query.openHuddle),
       messageTypeLabel,
       successMessage: req.query.sent === '1'
         ? 'Virtual Huddle sent.'
@@ -234,32 +245,106 @@ async function sendHuddle(req, res, next) {
   }
 }
 
-async function renderManagementDetail(req, res, next) {
+async function renderManagementDetail(req, res) {
+  const messageId = normalizeId(req.params.messageId);
+  return res.redirect(messageId
+    ? `/management/virtual-huddle?openHuddle=${encodeURIComponent(messageId)}`
+    : '/management/virtual-huddle');
+}
+
+async function renderManagementDetailModalContent(req, res, messageId, { successMessage = null, statusCode = 200 } = {}) {
+  const detail = await virtualHuddleModel.getManagementMessageDetail(messageId);
+  if (!detail) return res.status(404).send('Virtual Huddle not found.');
+
+  return res.status(statusCode).render('fragments/virtual-huddle-detail-modal', {
+    ...detail,
+    canSendHuddles: hasPermission(req, 'huddle.send'),
+    canAddRecipients: hasPermission(req, 'huddle.recipients.add'),
+    canRevokeRecipients: hasPermission(req, 'huddle.recipients.revoke'),
+    canRequireRecipients: hasPermission(req, 'huddle.recipients.require'),
+    canDeleteMessages: isAdmin(req) && hasPermission(req, 'huddle.messages.delete'),
+    confirmationPhrase: huddlePolicy.HUDDLE_CONFIRMATION_PHRASE,
+    messageTypeLabel,
+    successMessage
+  });
+}
+
+async function renderManagementDetailModal(req, res, next) {
+  try {
+    return await renderManagementDetailModalContent(req, res, req.params.messageId);
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function renderManagementRecipientStatus(req, res, next) {
   try {
     const detail = await virtualHuddleModel.getManagementMessageDetail(req.params.messageId);
-    if (!detail) {
-      return res.status(404).render('pages/not-found', {
-        pageTitle: 'Virtual Huddle Not Found',
-        requestedPath: req.originalUrl
-      });
-    }
-
-    return res.render('pages/management-virtual-huddle-detail', {
-      pageTitle: 'Virtual Huddle Detail',
-      currentNav: 'management-virtual-huddle',
-      ...detail,
-      isAdminUser: isAdmin(req),
-      confirmationPhrase: huddlePolicy.HUDDLE_CONFIRMATION_PHRASE,
-      messageTypeLabel,
-      successMessage: req.query.sent === '1'
-        ? 'Virtual Huddle sent.'
-        : req.query.revoked === '1'
-          ? 'Recipient acknowledgment requirement revoked.'
-          : req.query.revoked_all === '1'
-            ? 'All remaining acknowledgment requirements were revoked.'
-            : null
+    if (!detail) return res.status(404).send('Virtual Huddle not found.');
+    return res.render('fragments/virtual-huddle-recipient-status', {
+      message: detail.message,
+      recipients: detail.recipients,
+      canRevokeRecipients: hasPermission(req, 'huddle.recipients.revoke'),
+      canRequireRecipients: hasPermission(req, 'huddle.recipients.require')
     });
   } catch (error) {
+    return next(error);
+  }
+}
+
+async function getAddRecipientCandidates(detail) {
+  const users = await virtualHuddleModel.listActiveUsers();
+  const existingUserIds = new Set((detail?.recipients || []).map((recipient) => normalizeId(recipient.user_id)).filter(Boolean));
+  const senderUserId = normalizeId(detail?.message?.sent_by_user_id);
+  return users.filter((user) => Number(user.user_id) !== senderUserId && !existingUserIds.has(Number(user.user_id)));
+}
+
+async function renderAddRecipientsModal(req, res, next) {
+  try {
+    const detail = await virtualHuddleModel.getManagementMessageDetail(req.params.messageId);
+    if (!detail) return res.status(404).send('Virtual Huddle not found.');
+    const users = await getAddRecipientCandidates(detail);
+    return res.render('fragments/virtual-huddle-add-recipients-modal', {
+      message: detail.message,
+      users,
+      selectedUserIds: [],
+      errorMessages: []
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function addRecipients(req, res, next) {
+  const selectedUserIds = asArray(req.body.targetUserIds).map((value) => String(value));
+  try {
+    const result = await virtualHuddleModel.addRecipients({
+      messageId: req.params.messageId,
+      userIds: selectedUserIds
+    });
+    publishVirtualHuddleChange(result.userIds, 'recipient-added');
+    if (isHtmxRequest(req)) {
+      return await renderManagementDetailModalContent(req, res, req.params.messageId, {
+        successMessage: `${result.count} recipient${result.count === 1 ? '' : 's'} added to this Huddle.`
+      });
+    }
+    return res.redirect(`/management/virtual-huddle?openHuddle=${encodeURIComponent(req.params.messageId)}`);
+  } catch (error) {
+    if (String(error.code || '').startsWith('HUDDLE_')) {
+      try {
+        const detail = await virtualHuddleModel.getManagementMessageDetail(req.params.messageId);
+        if (!detail) return res.status(404).send('Virtual Huddle not found.');
+        const users = await getAddRecipientCandidates(detail);
+        return res.status(422).render('fragments/virtual-huddle-add-recipients-modal', {
+          message: detail.message,
+          users,
+          selectedUserIds,
+          errorMessages: [error.message]
+        });
+      } catch (renderError) {
+        return next(renderError);
+      }
+    }
     return next(error);
   }
 }
@@ -299,7 +384,33 @@ async function revokeRecipient(req, res, next) {
       reason: req.body.reason
     });
     if (result.userId) publishVirtualHuddleChange([result.userId], 'revoked');
-    return redirectHtmxAware(req, res, `/management/virtual-huddle/${req.params.messageId}?revoked=1`);
+    if (isHtmxRequest(req)) {
+      return await renderManagementDetailModalContent(req, res, req.params.messageId, {
+        successMessage: 'Recipient acknowledgment requirement revoked.'
+      });
+    }
+    return res.redirect(`/management/virtual-huddle?openHuddle=${encodeURIComponent(req.params.messageId)}`);
+  } catch (error) {
+    if (String(error.code || '').startsWith('HUDDLE_')) {
+      return res.status(422).send(error.message);
+    }
+    return next(error);
+  }
+}
+
+async function requireRecipientAgain(req, res, next) {
+  try {
+    const result = await virtualHuddleModel.requireRecipientAgain({
+      messageId: req.params.messageId,
+      recipientId: req.params.recipientId
+    });
+    if (result.userId) publishVirtualHuddleChange([result.userId], 'required-again');
+    if (isHtmxRequest(req)) {
+      return await renderManagementDetailModalContent(req, res, req.params.messageId, {
+        successMessage: 'Recipient acknowledgment is required again.'
+      });
+    }
+    return res.redirect(`/management/virtual-huddle?openHuddle=${encodeURIComponent(req.params.messageId)}`);
   } catch (error) {
     if (String(error.code || '').startsWith('HUDDLE_')) {
       return res.status(422).send(error.message);
@@ -338,7 +449,12 @@ async function revokeAll(req, res, next) {
       reason: req.body.reason
     });
     publishVirtualHuddleChange(result.userIds, 'revoked');
-    return redirectHtmxAware(req, res, `/management/virtual-huddle/${req.params.messageId}?revoked_all=1`);
+    if (isHtmxRequest(req)) {
+      return await renderManagementDetailModalContent(req, res, req.params.messageId, {
+        successMessage: 'All remaining acknowledgment requirements were revoked.'
+      });
+    }
+    return res.redirect(`/management/virtual-huddle?openHuddle=${encodeURIComponent(req.params.messageId)}`);
   } catch (error) {
     if (String(error.code || '').startsWith('HUDDLE_')) {
       return res.status(422).send(error.message);
@@ -421,10 +537,32 @@ async function acknowledge(req, res, next) {
     });
     publishVirtualHuddleChange([req.currentUser.user_id], 'acknowledged');
     if (wantsJson(req)) return res.json({ ok: true, recipientId: result.recipientId });
+    if (isHtmxRequest(req) && hasPermission(req, 'huddle.personal.view')) {
+      res.set('HX-Trigger', JSON.stringify({ huddlePersonalAcknowledged: { recipientId: result.recipientId } }));
+      return await renderPersonalDetailModalContent(req, res, result.recipientId, {
+        successMessage: 'Virtual Huddle acknowledged and saved to your history.'
+      });
+    }
     return res.redirect(`/my-huddles/accepted/${result.recipientId}`);
   } catch (error) {
     if (String(error.code || '').startsWith('HUDDLE_')) {
       if (wantsJson(req)) return res.status(422).json({ ok: false, error: error.message });
+      if (isHtmxRequest(req) && hasPermission(req, 'huddle.personal.view')) {
+        const recipient = await virtualHuddleModel.getPersonalRecipientDetail(
+          req.params.recipientId,
+          req.currentUser.user_id
+        );
+        if (recipient) {
+          return res.status(422).render('fragments/virtual-huddle-personal-detail-modal', {
+            recipient,
+            isAdminUser: isAdmin(req),
+            confirmationPhrase: huddlePolicy.HUDDLE_CONFIRMATION_PHRASE,
+            messageTypeLabel,
+            successMessage: null,
+            errorMessages: [error.message]
+          });
+        }
+      }
       if (isAdmin(req)) {
         const recipient = await virtualHuddleModel.getAdminOptionalInboxDetail(
           req.params.recipientId,
@@ -465,16 +603,19 @@ async function dismiss(req, res, next) {
 
 async function renderMyHuddles(req, res, next) {
   try {
-    const accepted = await virtualHuddleModel.listAcknowledgedHistory(req.currentUser.user_id);
-    const adminInbox = isAdmin(req)
-      ? await virtualHuddleModel.listAdminOptionalInbox(req.currentUser.user_id)
-      : [];
+    const history = await virtualHuddleModel.listPersonalHistory(req.currentUser.user_id, {
+      page: req.query.page,
+      status: req.query.status,
+      messageType: req.query.messageType,
+      search: req.query.search,
+      sort: req.query.sort
+    });
     return res.render('pages/my-huddles', {
       pageTitle: 'My Huddles',
       currentNav: 'my-huddles',
-      accepted,
-      adminInbox,
+      ...history,
       isAdminUser: isAdmin(req),
+      openHuddleRecipientId: normalizeId(req.query.openHuddle),
       messageTypeLabel,
       successMessage: req.query.deleted === '1'
         ? 'Admin inbox copy deleted.'
@@ -482,6 +623,37 @@ async function renderMyHuddles(req, res, next) {
           ? 'Virtual Huddle acknowledged and saved to your history.'
           : null
     });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function renderPersonalDetailModalContent(req, res, recipientId, {
+  successMessage = null,
+  errorMessages = [],
+  statusCode = 200
+} = {}) {
+  const recipient = await virtualHuddleModel.getPersonalRecipientDetail(
+    recipientId,
+    req.currentUser.user_id
+  );
+  if (!recipient) return res.status(404).send('Huddle record not found.');
+  if (recipient.acknowledgment_mode_code === 'optional_ack' && !isAdmin(req)) {
+    return res.status(403).send('Admin access is required for this optional Huddle record.');
+  }
+  return res.status(statusCode).render('fragments/virtual-huddle-personal-detail-modal', {
+    recipient,
+    isAdminUser: isAdmin(req),
+    confirmationPhrase: huddlePolicy.HUDDLE_CONFIRMATION_PHRASE,
+    messageTypeLabel,
+    successMessage,
+    errorMessages
+  });
+}
+
+async function renderPersonalDetailModal(req, res, next) {
+  try {
+    return await renderPersonalDetailModalContent(req, res, req.params.recipientId);
   } catch (error) {
     return next(error);
   }
@@ -576,22 +748,28 @@ async function deleteOwnOptional(req, res, next) {
 
 module.exports = {
   acknowledge,
+  addRecipients,
   deleteOwnOptional,
   dismiss,
   hardDeleteMessage,
   previewCompose,
   renderAcceptedDetail,
+  renderAddRecipientsModal,
   renderAdminInboxDetail,
   renderComposeModal,
   renderCurrentPresentation,
   renderDeleteOwnOptionalModal,
   renderHardDeleteModal,
   renderManagementDetail,
+  renderManagementDetailModal,
+  renderPersonalDetailModal,
+  renderManagementRecipientStatus,
   renderManagementPage,
   renderMyHuddles,
   renderRequiredPage,
   renderRevokeAllModal,
   renderRevokeModal,
+  requireRecipientAgain,
   revokeAll,
   revokeRecipient,
   sendHuddle,

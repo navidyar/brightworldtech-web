@@ -12,11 +12,11 @@ function read(relativePath) {
 test('duplicate resolver gives Asset Tag authority, then serial AND, then OR fallback', () => {
   const identity = read('services/apiUnitIdentity.js');
   assert.match(identity, /matchMode: 'asset_tag_exact'/);
-  assert.match(identity, /const intersection = intersectSets\(unitSerialSet, biosSerialSet\)/);
+  assert.match(identity, /const serialAnd = intersectSets\(unitSerialSet, biosSerialSet\)/);
   assert.match(identity, /matchMode: 'serial_and'/);
-  assert.match(identity, /const fallback = unionSets\(unitSerialSet, biosSerialSet\)/);
+  assert.match(identity, /const serialOr = unionSets\(unitSerialSet, biosSerialSet\)/);
   assert.match(identity, /matchMode: 'serial_or_fallback'/);
-  assert.match(identity, /Asset Tag is authoritative/);
+  assert.match(identity, /Asset Tag remains authoritative/);
 });
 
 test('API duplicate responses are informational and include operational Unit summaries', () => {
@@ -87,7 +87,9 @@ test('Keyboard Language and Windows Release are accepted by scalar inventory wit
   assert.match(policy, /keyboard_language/);
   assert.match(policy, /formProperty: 'keyboardLanguageConfigValueId'/);
   assert.match(inventory, /SYSTEM_CONFIG_CATEGORY_IDS\.KEYBOARD_LANGUAGES/);
-  assert.match(inventory, /keyboardLanguageAliases/);
+  assert.doesNotMatch(inventory, /keyboardLanguageAliases/);
+  assert.match(inventory, /resolveSystemConfigValue/);
+  assert.match(read('scripts/migrateToolConfigAliases.js'), /KEYBOARD_LANGUAGES/);
   assert.match(inventory, /keyboard_language_config_value_id/);
   assert.match(inventory, /windows_display_version/);
   assert.match(inventory, /dependent_os_build_manual_override/);

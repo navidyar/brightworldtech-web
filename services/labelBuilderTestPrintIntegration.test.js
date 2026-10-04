@@ -8,7 +8,7 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-test('Builder Test Print routes are management-only and remain more specific than normal Builder and template action routes', () => {
+test('Builder Test Print routes use labels.print and remain more specific than normal Builder and template action routes', () => {
   const routes = read('routes/management.js');
   const modal = routes.indexOf("'/management/label-library/templates/:labelTemplateId/builder/test-print/modal'");
   const post = routes.indexOf("'/management/label-library/templates/:labelTemplateId/builder/test-print'");
@@ -16,7 +16,7 @@ test('Builder Test Print routes are management-only and remain more specific tha
   const genericAction = routes.indexOf("'/management/label-library/templates/:labelTemplateId/:action/modal'");
   assert.ok(modal >= 0 && post >= 0 && builder >= 0 && genericAction >= 0);
   assert.ok(modal < builder && post < builder && builder < genericAction);
-  assert.match(routes.slice(modal, builder), /requireRole\(managementRoles\)/);
+  assert.match(routes.slice(modal, builder), /requirePermission\('labels\.print'\)/);
   assert.match(routes.slice(modal, builder), /renderBuilderTestPrintModal/);
   assert.match(routes.slice(modal, builder), /printBuilderTestTemplate/);
 });

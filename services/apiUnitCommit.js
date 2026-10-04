@@ -4,6 +4,7 @@ const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const { pool } = require('../models/db');
 const apiUnitIntake = require('./apiUnitIntake');
 const apiScalarInventory = require('./apiScalarInventory');
+const unitRequestModel = require('../models/unitRequestModel');
 
 const TEST_FIELD_KEYS = new Set([
   'keyboard_test',
@@ -86,6 +87,12 @@ function preflightDetails(resolution) {
     matches: Array.isArray(resolution?.matches) ? resolution.matches : [],
     preflight: resolution?.preflight || null
   };
+}
+
+function assertCommitPermission(permissions, key) {
+  if (!(permissions instanceof Set) || !permissions.has(key)) {
+    throw new ApiUnitCommitError(403, 'UNIT_PERMISSION_DENIED', `The ${key} permission is required for this Unit Commit action.`);
+  }
 }
 
 function assertPreflightCanProceed(resolution) {
@@ -178,6 +185,18 @@ async function createAndIngestUnit({ body, userId, roleCodes = [], toolSource, s
         is_parked: false
       }
     });
+    const approvedDuplicateRequestId = normalizePositiveInteger(
+      resolution?.creation_policy?.approved_intentional_duplicate_request_id
+      ?? body.intentional_duplicate_request_id
+      ?? body.intentionalDuplicateRequestId
+    );
+    if (approvedDuplicateRequestId) {
+      await unitRequestModel.consumeToolUuidDuplicateAuthorization(connection, {
+        unitRequestId: approvedDuplicateRequestId,
+        requestedByUserId: userId,
+        createdUnitId: created.unitId
+      });
+    }
     await connection.commit();
 
     const unit = await apiUnitIntake.serializeUnit(created.unitId);
@@ -224,7 +243,7 @@ async function createAndIngestUnit({ body, userId, roleCodes = [], toolSource, s
   }
 }
 
-async function commitUnit({ body = {}, userId, roleCodes = [], toolSource }) {
+async function commitUnit({ body = {}, userId, roleCodes = [], permissions, toolSource }) {
   const submissionId = normalizeText(body.submission_id ?? body.submissionId ?? body.report_id ?? body.reportId);
   const intentionalDuplicate = normalizeBoolean(body.confirm_duplicate_match_creation ?? body.confirmDuplicateMatchCreation);
   if (!submissionId) {
@@ -242,12 +261,24 @@ async function commitUnit({ body = {}, userId, roleCodes = [], toolSource }) {
     resolution = await apiUnitIntake.resolveUnit(body, {
       preflightContext: { userId, roleCodes, toolSource }
     });
-    assertPreflightCanProceed(resolution);
-
     const existingSubmission = await apiScalarInventory.getSubmissionById({
       toolSource,
       reportId: submissionId
     });
+    if (intentionalDuplicate && existingSubmission) {
+      const replay = await buildReplayResponse({
+        submission: existingSubmission,
+        resolution,
+        requestedUnitId,
+        userId,
+        intentionalDuplicate
+      });
+      if (replay) return replay;
+    }
+    assertPreflightCanProceed(resolution);
+    const commitPermission = intentionalDuplicate || resolution.status === 'NOT_FOUND' ? 'units.create' : 'units.edit';
+    assertCommitPermission(permissions, commitPermission);
+
     const replay = await buildReplayResponse({
       submission: existingSubmission,
       resolution,
@@ -336,5 +367,6 @@ module.exports = {
   ApiUnitCommitError,
   summarizeInventory,
   assertPreflightCanProceed,
+  assertCommitPermission,
   commitUnit
 };

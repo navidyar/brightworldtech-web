@@ -156,6 +156,7 @@ async function recordCorrectionSubmission({
   rejectedQcCheckId,
   submittedByUserId,
   submittedByRoleCodes = [],
+  submittedByPermissions = null,
   correctionNotes
 }) {
   const safeUnitId = normalizePositiveInteger(unitId, 'Unit ID');
@@ -248,7 +249,8 @@ async function recordCorrectionSubmission({
     if (!canSubmitQcCorrectionForCurrentAssignment({
       submitterUserId: safeSubmitterId,
       assignedToUserId: state.assigned_to_user_id,
-      roleCodes: submittedByRoleCodes
+      roleCodes: submittedByRoleCodes,
+      permissions: submittedByPermissions
     })) {
       const error = new Error('The Unit assignment changed before this correction was saved. Refresh the Unit Browser.');
       error.code = 'BWT_QC_CORRECTION_PERMISSION_CHANGED';

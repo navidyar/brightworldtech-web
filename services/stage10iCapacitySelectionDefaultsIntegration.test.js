@@ -56,7 +56,8 @@ test('client and server require explicit type selections only for meaningful har
   assert.match(client, /Select a Memory Type for this module/);
   assert.match(client, /Select an Install Type for this module/);
   assert.match(client, /Select a Storage Type for this device/);
-  assert.match(client, /validateAllCapacityInputs\(form, true\) \|\| !validateHardwareRowSelections\(form, true\)/);
+  assert.match(client, /if \(!validateAllCapacityInputs\(form, true\)\) \{[\s\S]*?valid = false;/);
+  assert.match(client, /if \(!validateHardwareRowSelections\(form, true\)\) \{[\s\S]*?valid = false;/);
 
   assert.match(controller, /requires a Memory Type selection/);
   assert.match(controller, /requires an Install Type selection/);

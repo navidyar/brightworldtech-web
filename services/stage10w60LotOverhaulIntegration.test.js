@@ -63,14 +63,14 @@ test('Tech Unit Browser supports explicit direct and descendant Lot scopes', () 
   assert.match(pagination, /'lotScope'/);
 });
 
-test('Duplicate Lot is Management-only, starts hidden, and excludes Units and operational history', () => {
+test('Duplicate Lot uses its granular permission, starts hidden, and excludes Units and operational history', () => {
   const routes = read('routes/lots.js');
   const controller = read('controllers/lotController.js');
   const lotModel = read('models/lotModel.js');
   const duplicateModal = read('views/fragments/lot-duplicate-modal.ejs');
 
-  assert.match(routes, /'\/management\/lots\/:lotId\/duplicate\/modal'[\s\S]*?requireRole\(lotManagementRoles\)/);
-  assert.match(routes, /'\/management\/lots\/:lotId\/duplicate'[\s\S]*?requireRole\(lotManagementRoles\)/);
+  assert.match(routes, /'\/management\/lots\/:lotId\/duplicate\/modal'[\s\S]*?requirePermission\('lots\.view'\)[\s\S]*?requirePermission\('lots\.duplicate'\)/);
+  assert.match(routes, /'\/management\/lots\/:lotId\/duplicate'[\s\S]*?requirePermission\('lots\.view'\)[\s\S]*?requirePermission\('lots\.duplicate'\)/);
   assert.match(controller, /lotModel\.duplicateLot/);
   assert.match(lotModel, /normalizeLotDuplicationInheritanceMode/);
   assert.match(lotModel, /preserve_source/);

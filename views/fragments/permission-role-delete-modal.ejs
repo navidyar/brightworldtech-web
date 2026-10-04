@@ -1,0 +1,57 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const selectedReplacementIds = new Set((formData && Array.isArray(formData.replacementRoleIds) ? formData.replacementRoleIds : []).map(String));
+  const removeAssignments = Boolean(formData && formData.removeAssignments);
+  const assignmentCount = Number(role.assignment_count || 0);
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal permission-role-modal" role="dialog" aria-modal="true" aria-labelledby="permission-role-delete-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Roles & Permissions</p>
+        <h2 id="permission-role-delete-title">Delete <%= role.name %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <% if (safeErrors.length) { %><div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div><% } %>
+
+      <% if (permanentRole) { %>
+        <div class="message warning"><p>The permanent Super Admin role cannot be deleted or deactivated.</p></div>
+      <% } else if (transitionallyProtected) { %>
+        <div class="message warning"><p>This compatibility role cannot be deleted until its remaining legacy role-based authorization gates have been retired.</p></div>
+      <% } else { %>
+        <p>This permanently deletes the role definition. Permission audit history remains preserved.</p>
+        <% if (assignmentCount > 0) { %>
+          <div class="message warning"><p>This role is currently assigned to <strong><%= assignmentCount %></strong> user<%= assignmentCount === 1 ? '' : 's' %>. Choose replacement roles or explicitly remove this role without replacement.</p></div>
+        <% } %>
+
+        <form class="app-form app-form-clean" method="post" action="/management/roles-permissions/<%= role.role_id %>/delete" hx-post="/management/roles-permissions/<%= role.role_id %>/delete" hx-target="#modal-root" hx-swap="innerHTML">
+          <% if (assignmentCount > 0) { %>
+            <fieldset class="permission-role-replacement-fieldset">
+              <legend>Replacement roles (optional)</legend>
+              <p class="field-hint">Every selected role will be added to each affected user before this role is removed.</p>
+              <div class="permission-role-replacement-list">
+                <% replacementRoles.forEach((candidate) => { %>
+                  <label class="configuration-inline-checkbox">
+                    <input type="checkbox" name="replacementRoleIds" value="<%= candidate.role_id %>" <%= selectedReplacementIds.has(String(candidate.role_id)) ? 'checked' : '' %> />
+                    <span><strong><%= candidate.name %></strong><small><%= candidate.permission_count %> default permission<%= Number(candidate.permission_count) === 1 ? '' : 's' %></small></span>
+                  </label>
+                <% }) %>
+              </div>
+            </fieldset>
+
+            <label class="configuration-inline-checkbox permission-role-remove-assignments">
+              <input type="checkbox" name="removeAssignments" value="1" <%= removeAssignments ? 'checked' : '' %> />
+              <span><strong>Allow removal without a replacement role</strong><small>Use this only when the affected users should simply lose this role.</small></span>
+            </label>
+          <% } %>
+          <div class="form-actions">
+            <button class="danger-button" type="submit">Delete Role</button>
+            <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+          </div>
+        </form>
+      <% } %>
+    </div>
+  </section>
+</div>

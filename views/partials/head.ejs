@@ -45,11 +45,13 @@
     })();
   </script>
 
-  <!-- Authoritative BWTDallas CSS contract. New UI must reuse these three files. -->
-  <link rel="stylesheet" href="/css/theme.css?v=20260921-token-normalization-step10" />
+  <script src="/js/time-zone-context.js?v=20260930-global-timezone-foundation"></script>
 
-  <link rel="stylesheet" href="/css/app.css?v=20260924-lot-objectives-viewport-clamp" />
-  <link rel="stylesheet" href="/css/features.css?v=20260924-preview-parity" />
+  <!-- Authoritative BWTDallas CSS contract. New UI must reuse these three files. -->
+  <link rel="stylesheet" href="/css/theme.css?v=20261002-dashboard-palette-r1" />
+
+  <link rel="stylesheet" href="/css/app.css?v=20261002-global-weight-650" />
+  <link rel="stylesheet" href="/css/features.css?v=20260930-modal-sidebar-viewport-lock" />
 
   <script src="/js/form-history-policy.js?v=20260820-stage10w69d-no-form-history"></script>
   <% if (typeof isAuthenticated !== 'undefined' && isAuthenticated) { %>
@@ -59,16 +61,18 @@
     ></script>
   <% } %>
   <% if (typeof isAuthenticated !== 'undefined' && isAuthenticated) { %>
-    <script defer src="/js/application-live-refresh.js?v=20260924-preserve-active-work"></script>
+    <script defer src="/js/application-live-refresh.js?v=20261002-account-modal-refresh-guard"></script>
     <script defer src="/js/virtual-huddle.js?v=20260923-preserve-work-notice-delivery"></script>
+    <script defer src="/js/account-tool-pin.js?v=20261002-tool-pin-self-service-r1"></script>
   <% } %>
   <script defer src="/js/theme.js"></script>
-  <script defer src="/js/sidebar.js?v=20260819-stage10w68p-interaction-refinements"></script>
-  <script defer src="/js/date-picker-only.js?v=20260921-cleanup-stage2c"></script>
+  <script defer src="/js/sidebar.js?v=20261002-phone-hamburger-r6"></script>
+  <script defer src="/js/date-picker-only.js?v=20260925-date-picker-viewport-clamp"></script>
   <script defer src="/js/hierarchical-lot-select.js?v=20260819-stage10w68y-mouse-focus-continuity"></script>
   <script defer src="/js/search-clear-controls.js?v=20260828-stage10w74q-sitewide-search-clear"></script>
   <script defer src="/js/auto-submit-filters.js?v=20260918-fragment-preserve-focus"></script>
+  <script defer src="/js/live-list-filter.js?v=20261001-permission-expand-collapse"></script>
   <script defer src="/js/success-confirmations.js?v=20260918-success-confirmations"></script>
-  <script defer src="/js/management-reporting-controls.js?v=20260828-stage10w74k-qc-reporting-table-sorting"></script>
+  <script defer src="/js/management-reporting-controls.js?v=20261002-tech-auto-submit"></script>
   <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.10/dist/htmx.min.js" integrity="sha384-H5SrcfygHmAuTDZphMHqBJLc3FhssKjG7w/CeCpFReSfwBWDTKpkzPP8c+cLsK+V" crossorigin="anonymous"></script>
 </head>

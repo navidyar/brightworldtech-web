@@ -1,54 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
-  <script defer src="/js/modal.js?v=20260919-virtual-huddle"></script>
-  <script defer src="/js/virtual-huddle-management.js?v=20260919-virtual-huddle"></script>
-  <body>
+  <script defer src="/js/modal.js?v=20261001-huddle-queue"></script>
+  <script defer src="/js/virtual-huddle-management.js?v=20261002-row-open-personal-modal"></script>
+  <%
+    const buildHuddleQueueUrl = (nextStatus = statusFilter, nextMessageType = messageTypeFilter, nextSearch = searchTerm, nextPage = 1, nextSort = sort) => {
+      const params = new URLSearchParams({ status: nextStatus || 'pending', messageType: nextMessageType || 'all', sort: nextSort || 'sent_desc' });
+      if (nextSearch) params.set('search', nextSearch);
+      if (Number(nextPage) > 1) params.set('page', String(nextPage));
+      return `/management/virtual-huddle?${params.toString()}`;
+    };
+    const sortHref = (ascending, descending) => buildHuddleQueueUrl(statusFilter, messageTypeFilter, searchTerm, 1, sort === ascending ? descending : ascending);
+    const sortClass = (ascending, descending) => `table-sort-link${[ascending, descending].includes(sort) ? ' is-active' : ''}`;
+    const sortIndicator = (ascending, descending) => sort === ascending ? '↑' : (sort === descending ? '↓' : '');
+    const statusTabs = [
+      ['pending', 'Pending'],
+      ['acknowledged', 'Acknowledged'],
+      ['archived', 'Archived']
+    ];
+    const messageTypeTabs = [
+      ['all', 'All Types'],
+      ['standard', 'Standard'],
+      ['priority', 'Priority'],
+      ['urgent', 'Urgent']
+    ];
+  %>
+  <body class="css-scope-unit-requests css-scope-virtual-huddle">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
       <div class="app-main">
         <%- include('../partials/topbar', { pageTitle }) %>
-        <main class="content-shell">
-          <section class="page-heading">
+        <main class="content-shell unit-requests-page unit-request-queue-page virtual-huddle-queue-page">
+          <section class="page-heading virtual-huddle-page-heading">
             <div>
+              <p class="eyebrow">Team Communication</p>
               <h1>Virtual Huddle</h1>
-              <p>Send documented Huddles to role groups or individual active employees and review acknowledgment history. Notices are delivery-only and are not saved to history.</p>
+              <p>Send documented Huddles, track required acknowledgments, and review recipient history. Resolved Huddles move to Archived automatically <%= archiveAfterDays %> days after the final required acknowledgment or revocation.</p>
             </div>
-            <a class="primary-button" href="/management/virtual-huddle/new/modal" hx-get="/management/virtual-huddle/new/modal" hx-target="#modal-root" hx-swap="innerHTML">New Huddle</a>
+            <% if (canSendHuddles) { %><a class="primary-button" href="/management/virtual-huddle/new/modal" hx-get="/management/virtual-huddle/new/modal" hx-target="#modal-root" hx-swap="innerHTML">New Huddle</a><% } %>
           </section>
 
           <% if (successMessage) { %><div class="message success" data-auto-dismiss-success><p><%= successMessage %></p></div><% } %>
           <% if (Array.isArray(errorMessages) && errorMessages.length > 0) { %><div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div><% } %>
 
-          <section class="content-card">
-            <div class="content-header">
-              <div><p class="eyebrow">History</p><h2>Sent Huddles</h2></div>
-              <div class="virtual-huddle-inline-summary"><strong><%= formatNumber(totalCount) %></strong> total messages</div>
+          <section class="unit-request-workspace" aria-labelledby="virtual-huddle-workspace-heading">
+            <div class="unit-request-workspace-heading">
+              <h3 id="virtual-huddle-workspace-heading"><%= statusFilter === 'archived' ? 'Archived Huddles' : 'Huddle Queue' %></h3>
+              <p class="unit-requests-content-summary">Pending means at least one required acknowledgment is still outstanding. Acknowledged contains only fully resolved Huddles, including those resolved by revocation.</p>
+            </div>
+            <div class="unit-request-tabs-panel">
+              <nav class="unit-request-tabs" aria-label="Virtual Huddle status filters">
+                <% statusTabs.forEach(([code, label]) => { %>
+                  <a href="<%= buildHuddleQueueUrl(code) %>" class="unit-request-tab <%= statusFilter === code ? 'active' : '' %>"><%= label %></a>
+                <% }) %>
+              </nav>
+              <nav class="unit-request-tabs virtual-huddle-type-tabs" aria-label="Virtual Huddle type filters">
+                <% messageTypeTabs.forEach(([code, label]) => { %>
+                  <a href="<%= buildHuddleQueueUrl(statusFilter, code) %>" class="unit-request-tab <%= messageTypeFilter === code ? 'active' : '' %>"><%= label %></a>
+                <% }) %>
+              </nav>
+            </div>
+            <form id="huddle-history-filter-form" class="unit-request-queue-filters" method="get" action="/management/virtual-huddle" data-huddle-history-filter-form>
+              <input type="hidden" name="status" value="<%= statusFilter %>" />
+              <input type="hidden" name="sort" value="<%= sort %>" />
+              <div class="unit-request-search-toolbar">
+                <label class="unit-request-control-label" for="virtual-huddle-search">Search Huddles</label>
+                <div class="unit-request-search-row">
+                  <div class="unit-request-search-input-group">
+                    <input id="virtual-huddle-search" type="search" name="search" value="<%= searchTerm %>" maxlength="150" placeholder="Subject, message, sender, role, or recipient" autocomplete="off" />
+                  </div>
+                  <button class="secondary-button button-small" type="submit">Search</button>
+                  <a class="unit-request-filter-clear" href="<%= buildHuddleQueueUrl(statusFilter, 'all', '') %>" <%= messageTypeFilter !== 'all' || searchTerm ? '' : 'hidden' %>>Clear filters</a>
+                </div>
+              </div>
+            </form>
+          </section>
+
+          <section class="unit-request-results-panel" aria-labelledby="virtual-huddle-results-heading">
+            <div class="unit-request-results-header">
+              <h3 id="virtual-huddle-results-heading">Huddles</h3>
+              <p class="unit-request-results-count" aria-live="polite"><%= `${totalCount} ${totalCount === 1 ? 'Huddle' : 'Huddles'} found` %></p>
+            </div>
+            <div class="unit-request-results-controls">
+              <label class="unit-request-control-label" for="virtual-huddle-type-filter">Message Type</label>
+              <div class="unit-request-type-filter-row">
+                <select id="virtual-huddle-type-filter" name="messageType" form="huddle-history-filter-form" data-huddle-history-type-filter>
+                  <option value="all" <%= messageTypeFilter === 'all' ? 'selected' : '' %>>All Types</option>
+                  <option value="standard" <%= messageTypeFilter === 'standard' ? 'selected' : '' %>>Standard</option>
+                  <option value="priority" <%= messageTypeFilter === 'priority' ? 'selected' : '' %>>Priority</option>
+                  <option value="urgent" <%= messageTypeFilter === 'urgent' ? 'selected' : '' %>>Urgent</option>
+                </select>
+              </div>
             </div>
 
-            <div class="table-card">
-              <table>
+            <div class="table-card site-data-table-card virtual-huddle-table-card">
+              <table class="site-data-table virtual-huddle-table">
                 <thead>
-                  <tr><th>Sent</th><th>Type</th><th>Subject</th><th>Sent By</th><th>Audience</th><th>Acknowledged</th><th>Awaiting</th><th>Revoked</th><th></th></tr>
+                  <tr>
+                    <th scope="col"><a class="<%= sortClass('message_asc', 'message_desc') %>" href="<%= sortHref('message_asc', 'message_desc') %>">Message<% if (sortIndicator('message_asc', 'message_desc')) { %><span aria-hidden="true"><%= sortIndicator('message_asc', 'message_desc') %></span><% } %></a></th>
+                    <th scope="col"><a class="<%= sortClass('type_asc', 'type_desc') %>" href="<%= sortHref('type_asc', 'type_desc') %>">Type<% if (sortIndicator('type_asc', 'type_desc')) { %><span aria-hidden="true"><%= sortIndicator('type_asc', 'type_desc') %></span><% } %></a></th>
+                    <th scope="col"><a class="<%= sortClass('sender_asc', 'sender_desc') %>" href="<%= sortHref('sender_asc', 'sender_desc') %>">Sent By<% if (sortIndicator('sender_asc', 'sender_desc')) { %><span aria-hidden="true"><%= sortIndicator('sender_asc', 'sender_desc') %></span><% } %></a></th>
+                    <th scope="col"><a class="<%= sortClass('sent_asc', 'sent_desc') %>" href="<%= sortHref('sent_asc', 'sent_desc') %>">Sent<% if (sortIndicator('sent_asc', 'sent_desc')) { %><span aria-hidden="true"><%= sortIndicator('sent_asc', 'sent_desc') %></span><% } %></a></th>
+                  </tr>
                 </thead>
                 <tbody>
                   <% if (messages.length === 0) { %>
-                    <tr><td colspan="9">No Virtual Huddles have been sent yet.</td></tr>
+                    <tr><td colspan="4" class="site-data-table-empty">No Huddles match the current filters.</td></tr>
                   <% } %>
-                  <% messages.forEach((message) => { const roles = String(message.target_role_codes || '').split(',').filter(Boolean); %>
-                    <tr>
-                      <td><%= formatDateTime(message.sent_at) %></td>
-                      <td><span class="pill <%= message.message_type_code === 'urgent' ? 'bad' : message.message_type_code === 'priority' ? 'warning' : 'muted' %>"><%= messageTypeLabel(message.message_type_code) %></span></td>
-                      <td><strong><%= message.subject %></strong><% if (message.parent_message_id) { %><span class="table-muted-line">Related Huddle</span><% } %></td>
-                      <td><%= message.sender_name_snapshot %><span class="table-muted-line"><%= formatRoleLabel(message.sender_role_code_snapshot) %></span></td>
+                  <% messages.forEach((message) => { %>
+                    <tr class="virtual-huddle-row virtual-huddle-row--<%= message.message_type_code %>" data-huddle-message-type="<%= message.message_type_code %>" data-huddle-row-open tabindex="0" role="link" aria-label="Open <%= message.subject %>">
                       <td>
-                        <% if (roles.length > 0) { %><%= roles.map(formatRoleLabel).join(', ') %><% } %>
-                        <% if (Number(message.individual_target_count || 0) > 0) { %><span class="table-muted-line"><%= message.individual_target_count %> individual<%= Number(message.individual_target_count) === 1 ? '' : 's' %></span><% } %>
+                        <a
+                          class="site-data-table-primary-link"
+                          href="/management/virtual-huddle?openHuddle=<%= message.virtual_huddle_message_id %>"
+                          hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/modal"
+                          hx-target="#modal-root"
+                          hx-swap="innerHTML"
+                          data-modal-trigger
+                          data-huddle-row-primary
+                        ><%= message.subject %></a>
                       </td>
-                      <td><%= formatNumber(message.acknowledged_count) %></td>
-                      <td><%= formatNumber(message.awaiting_count) %></td>
-                      <td><%= formatNumber(message.revoked_count) %></td>
-                      <td><a class="secondary-button button-small" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>">Open</a></td>
+                      <td><span class="unit-request-type-label"><%= messageTypeLabel(message.message_type_code) %></span></td>
+                      <td>
+                        <div class="site-data-table-stack">
+                          <strong><%= message.sender_name_snapshot %></strong>
+                          <small><%= formatRoleLabel(message.sender_role_code_snapshot) %></small>
+                        </div>
+                      </td>
+                      <td><%= formatDateTime(message.sent_at) %></td>
                     </tr>
                   <% }) %>
                 </tbody>
@@ -57,15 +136,15 @@
 
             <% if (totalPages > 1) { %>
               <nav class="table-pagination" aria-label="Virtual Huddle history pages">
-                <% if (page > 1) { %><a class="table-pagination__link" href="/management/virtual-huddle?page=<%= page - 1 %>">Previous</a><% } %>
+                <% if (page > 1) { %><a class="table-pagination__link" href="<%= buildHuddleQueueUrl(statusFilter, messageTypeFilter, searchTerm, page - 1) %>">Previous</a><% } %>
                 <span>Page <%= page %> of <%= totalPages %></span>
-                <% if (page < totalPages) { %><a class="table-pagination__link" href="/management/virtual-huddle?page=<%= page + 1 %>">Next</a><% } %>
+                <% if (page < totalPages) { %><a class="table-pagination__link" href="<%= buildHuddleQueueUrl(statusFilter, messageTypeFilter, searchTerm, page + 1) %>">Next</a><% } %>
               </nav>
             <% } %>
           </section>
         </main>
       </div>
     </div>
-    <div id="modal-root"></div>
+    <div id="modal-root"<% if (openHuddleMessageId) { %> hx-get="/management/virtual-huddle/<%= openHuddleMessageId %>/modal" hx-trigger="load" hx-swap="innerHTML"<% } %>></div>
   </body>
 </html>

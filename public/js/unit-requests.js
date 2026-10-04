@@ -221,25 +221,79 @@
     }
   }
 
+  function getRequestHeaderTypeTone(requestTypeLabel) {
+    const normalized = String(requestTypeLabel || '').trim().toLowerCase();
+    if (normalized.includes('processor')) return 'purple';
+    if (normalized.includes('duplicate')) return 'orange';
+    if (normalized.includes('qc') || normalized.includes('quality control')) return 'danger';
+    return 'info';
+  }
+
+  function getRequestHeaderStatusTone(statusElement) {
+    if (!statusElement) return 'warn';
+    const statusClass = Array.from(statusElement.classList)
+      .find((className) => className.startsWith('record-detail-status--'));
+    return statusClass ? statusClass.replace('record-detail-status--', '') : 'warn';
+  }
+
   function buildRequestDetailModal(markup, fallbackTitle = 'Request Details') {
     const parsed = new DOMParser().parseFromString(String(markup || ''), 'text/html');
     const content = parsed.querySelector('main.unit-requests-page');
     if (!content || !modalRoot) return false;
 
-    const title = content.querySelector('.dashboard-hero h2, .unit-request-detail-header h2')?.textContent?.trim() || fallbackTitle;
+    const intro = content.querySelector('.record-detail-intro');
+    const summary = content.querySelector('.unit-request-detail-header');
+    const statusElement = content.querySelector('.record-detail-status');
+    const title = intro?.querySelector('h1, h2')?.textContent?.trim()
+      || summary?.querySelector('h1, h2')?.textContent?.trim()
+      || fallbackTitle;
+    const requestTypeLabel = intro?.querySelector('.eyebrow')?.textContent?.trim() || 'Unit Request';
+    const requestMeta = summary?.querySelector('.unit-request-detail-meta')?.textContent?.trim() || '';
+    const statusLabel = statusElement?.querySelector('strong')?.textContent?.trim() || '';
+    const requestTypeTone = getRequestHeaderTypeTone(requestTypeLabel);
+    const statusTone = getRequestHeaderStatusTone(statusElement);
+
+    intro?.remove();
+    summary?.remove();
+
     const panel = document.createElement('div');
     panel.innerHTML = `
       <div class="modal-backdrop" data-modal-backdrop>
-        <section class="modal-panel site-clean-modal unit-request-detail-modal" role="dialog" aria-modal="true" aria-labelledby="unit-request-detail-modal-title">
-          <header class="modal-header">
-            <div><h2 id="unit-request-detail-modal-title"></h2></div>
-            <button type="button" class="modal-close-button" data-modal-close aria-label="Close request details">×</button>
+        <section class="modal-panel site-clean-modal record-detail-modal unit-request-detail-modal" role="dialog" aria-modal="true" aria-labelledby="unit-request-detail-modal-title">
+          <header class="modal-header informational-modal-header">
+            <div class="informational-modal-heading informational-modal-heading--${requestTypeTone}">
+              <span class="informational-modal-heading__icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false">
+                  <path d="M7 3.5h7l3 3v14H7z" />
+                  <path d="M14 3.5v3h3M9.5 11h5M9.5 14.5h5" />
+                </svg>
+              </span>
+              <div class="informational-modal-heading__copy">
+                <p class="eyebrow" data-request-modal-type></p>
+                <h2 id="unit-request-detail-modal-title"></h2>
+                <p class="modal-description informational-modal-heading__meta" data-request-modal-meta></p>
+              </div>
+            </div>
+            <div class="informational-modal-header__actions">
+              <div class="informational-modal-status informational-modal-status--${statusTone}" data-request-modal-status>
+                <span>Status</span>
+                <strong></strong>
+              </div>
+              <button type="button" class="modal-close-button" data-modal-close aria-label="Close request details">×</button>
+            </div>
           </header>
-          <div class="modal-body unit-request-modal-content"></div>
+          <div class="modal-body record-detail-body unit-request-modal-content"></div>
         </section>
       </div>`;
 
+    panel.querySelector('[data-request-modal-type]').textContent = requestTypeLabel;
     panel.querySelector('#unit-request-detail-modal-title').textContent = title;
+    const metaElement = panel.querySelector('[data-request-modal-meta]');
+    metaElement.textContent = requestMeta;
+    metaElement.hidden = !requestMeta;
+    const modalStatus = panel.querySelector('[data-request-modal-status]');
+    modalStatus.querySelector('strong').textContent = statusLabel;
+    modalStatus.hidden = !statusLabel;
     panel.querySelector('.unit-request-modal-content').innerHTML = content.innerHTML;
     modalRoot.replaceChildren(...Array.from(panel.childNodes));
     document.dispatchEvent(new CustomEvent('unit-request:modal-loaded', { detail: { root: modalRoot } }));
@@ -250,12 +304,12 @@
     if (!modalRoot) return;
     modalRoot.innerHTML = `
       <div class="modal-backdrop" data-modal-backdrop>
-        <section class="modal-panel site-clean-modal unit-request-detail-modal" role="dialog" aria-modal="true" aria-labelledby="unit-request-loading-title" aria-busy="true">
+        <section class="modal-panel site-clean-modal record-detail-modal unit-request-detail-modal" role="dialog" aria-modal="true" aria-labelledby="unit-request-loading-title" aria-busy="true">
           <header class="modal-header">
             <div><h2 id="unit-request-loading-title">${title}</h2></div>
             <button type="button" class="modal-close-button" data-modal-close aria-label="Close request details">×</button>
           </header>
-          <div class="modal-body unit-request-modal-content">
+          <div class="modal-body record-detail-body unit-request-modal-content">
             <div class="message"><p>Loading request details…</p></div>
           </div>
         </section>

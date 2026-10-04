@@ -143,43 +143,12 @@ code {
 
 .sidebar-brand {
   position: relative;
-  padding: 20px 58px 15px 18px;
+  padding: 20px 18px 15px;
   border-bottom: 1px solid var(--line-soft);
 }
 
-.sidebar-pin-button {
-  display: none;
-  position: absolute;
-  top: 12px;
-  right: 10px;
-  min-width: 38px;
-  height: 30px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 9px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--slate);
-  background: #ffffff;
-  font: inherit;
-  font-size: 0.74rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.sidebar-pin-button:hover,
-.sidebar-pin-button:focus-visible {
-  border-color: rgba(29, 78, 216, 0.34);
-  color: var(--blue-dark);
-  background: var(--blue-soft);
-}
-
 @media (min-width: 981px) {
-  .sidebar-pin-button {
-    display: inline-flex;
-  }
-
-  html:not([data-sidebar-pinned="true"]) .sidebar:is(:hover, :focus-within, .is-desktop-open) {
+  html:not([data-sidebar-pinned="true"]) .sidebar.is-desktop-open {
     transform: translateX(0);
     box-shadow: 18px 0 34px rgba(15, 23, 42, 0.16);
   }
@@ -432,6 +401,51 @@ code {
   color: var(--muted);
   font-size: 0.72rem;
   text-transform: capitalize;
+}
+
+.tool-pin-topbar-button {
+  display: inline-flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid rgba(29, 78, 216, 0.18);
+  border-radius: 999px;
+  color: var(--blue-dark);
+  background: var(--blue-soft);
+  text-decoration: none;
+  font-size: 0.82rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.tool-pin-topbar-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.tool-pin-topbar-button:hover,
+.tool-pin-topbar-button:focus-visible {
+  border-color: rgba(29, 78, 216, 0.34);
+  background: #dfeaff;
+}
+
+.account-tool-pin-modal {
+  width: min(560px, calc(100vw - 32px));
+}
+
+.account-tool-pin-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
 .logout-button {
@@ -1290,7 +1304,18 @@ pre {
   }
 
   .user-chip {
+    min-width: 0;
     max-width: 100%;
+  }
+
+  .tool-pin-topbar-button {
+    width: 38px;
+    flex: 0 0 38px;
+    padding: 0;
+  }
+
+  .tool-pin-topbar-label {
+    display: none;
   }
 
   table {
@@ -2853,7 +2878,8 @@ html[data-theme="hybrid"] .topbar h1 {
 }
 
 html[data-theme="hybrid"] .user-chip,
-html[data-theme="hybrid"] .logout-button {
+html[data-theme="hybrid"] .logout-button,
+html[data-theme="hybrid"] .tool-pin-topbar-button {
   border-color: #3b424d;
   background: #2a2f37;
 }
@@ -2866,11 +2892,14 @@ html[data-theme="hybrid"] .user-chip p {
   color: #c5cbd4;
 }
 
-html[data-theme="hybrid"] .logout-button {
+html[data-theme="hybrid"] .logout-button,
+html[data-theme="hybrid"] .tool-pin-topbar-button {
   color: #eef4ff;
 }
 
-html[data-theme="hybrid"] .logout-button:hover {
+html[data-theme="hybrid"] .logout-button:hover,
+html[data-theme="hybrid"] .tool-pin-topbar-button:hover,
+html[data-theme="hybrid"] .tool-pin-topbar-button:focus-visible {
   background: #3a414d;
 }
 
@@ -3091,6 +3120,94 @@ body :is(
   box-shadow: var(--form-field-focus-shadow) !important;
 }
 
+/*
+ * Whole-site native form-control surface. Bare text/select/textarea controls must use the same flat
+ * application treatment as controls inside .form-field/.app-form-clean rather than falling back to
+ * browser inset/3D styling. Feature scopes may refine geometry later without redefining the shared skin.
+ */
+body :is(
+  input:not([type]),
+  input[type="text"],
+  input[type="search"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="week"],
+  input[type="month"],
+  input[type="datetime-local"],
+  input[type="tel"],
+  input[type="url"],
+  textarea,
+  select:not([multiple])
+) {
+  min-height: 39px;
+  border: 1px solid var(--ui-control-border);
+  border-radius: var(--ui-radius-compact);
+  background-color: #ffffff;
+  box-shadow: none;
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    background-color 160ms ease;
+}
+
+body :is(
+  input:not([type]),
+  input[type="text"],
+  input[type="search"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="week"],
+  input[type="month"],
+  input[type="datetime-local"],
+  input[type="tel"],
+  input[type="url"],
+  select:not([multiple])
+) {
+  padding: 0 11px;
+}
+
+body textarea {
+  padding: 9px 11px;
+}
+
+body select:not([multiple]):not([hidden]) {
+  appearance: none;
+  padding-right: 38px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none'%3E%3Cpath d='m4.25 6.25 3.75 3.5 3.75-3.5' stroke='%23315e9d' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 11px center;
+  background-size: 16px 16px;
+}
+
+body :is(
+  input:not([type]),
+  input[type="text"],
+  input[type="search"],
+  input[type="email"],
+  input[type="password"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  input[type="week"],
+  input[type="month"],
+  input[type="datetime-local"],
+  input[type="tel"],
+  input[type="url"],
+  textarea,
+  select:not([multiple])
+):disabled {
+  color: var(--ui-muted);
+  background-color: #f8fafc;
+  cursor: not-allowed;
+}
+
 body :is(input[type="radio"], input[type="checkbox"]):is(:focus, :focus-visible) {
   outline: none !important;
   box-shadow: none !important;
@@ -3137,6 +3254,120 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 .modal-panel.site-clean-modal .modal-body {
   padding: 16px 18px 20px;
   background: var(--ui-page);
+}
+
+/* Shared flat record-detail pattern for read-heavy modals. Opt-in only. */
+.record-detail-modal .record-detail-body {
+  background: #ffffff;
+}
+
+.record-detail-modal .record-detail-section {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.record-detail-modal .record-detail-user-section {
+  color: var(--ui-ink);
+}
+
+/* Flat read/detail and workflow modals let spacing and semantic color carry hierarchy without an outer frame. */
+.record-detail-modal,
+.workflow-detail-modal {
+  border: 0;
+}
+
+/* Shared flat workflow-detail pattern for confirmation/reversal dialogs with real form controls. */
+.workflow-detail-modal > .workflow-detail-body {
+  padding: 14px 18px 18px;
+  background: #ffffff;
+}
+
+.workflow-detail-modal .workflow-detail-summary {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.workflow-detail-modal .workflow-detail-summary dl {
+  gap: 0;
+}
+
+.workflow-detail-modal .workflow-detail-summary div {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.workflow-detail-modal .workflow-detail-summary dt {
+  color: var(--ui-blue-dark);
+}
+
+.workflow-detail-modal .workflow-detail-note {
+  margin: 0;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--ui-muted);
+  line-height: 1.45;
+}
+
+.workflow-detail-modal .workflow-detail-form {
+  gap: 0;
+  margin-top: 0;
+}
+
+.workflow-detail-modal .workflow-detail-section {
+  gap: 10px;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+.workflow-detail-modal .workflow-detail-section .form-section-header {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.workflow-detail-modal .workflow-detail-section .form-section-header h3 {
+  color: var(--ui-blue-dark);
+}
+
+.workflow-detail-modal .workflow-detail-section .form-grid {
+  gap: 0;
+}
+
+.workflow-detail-modal .workflow-detail-choice {
+  gap: 12px;
+  padding: 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+.workflow-detail-modal .workflow-detail-choice:last-child {
+  border-bottom: 0;
+}
+
+.workflow-detail-modal .workflow-detail-choice:has(input:checked) {
+  background: var(--ui-blue-soft);
+}
+
+.workflow-detail-modal .workflow-detail-choice strong {
+  color: var(--ui-heading);
+}
+
+.workflow-detail-modal .workflow-detail-form--simple > .form-field {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.workflow-detail-modal .workflow-detail-form > .form-actions {
+  margin-top: 0;
+  padding-top: 14px;
 }
 
 .app-form.app-form-clean {
@@ -3517,6 +3748,7 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   color: #2a3b50;
   background: #ffffff;
   box-shadow: 0 16px 34px rgba(28, 53, 87, 0.2), 0 3px 9px rgba(28, 53, 87, 0.12);
+  transform: translateX(var(--site-date-picker-shift-x, 0px));
 }
 
 .site-date-picker-calendar-heading {
@@ -4848,7 +5080,7 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 }
 
 :where(body.css-scope-label-builder) .label-builder-layer-position {
-  color: var(--text-muted);
+  color: var(--muted);
   font-size: 0.78rem;
   white-space: nowrap;
 }
@@ -5032,7 +5264,9 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 :where(body.css-scope-tech-units) .tech-units-clean-page .secondary-button:disabled,
 :where(body.css-scope-tech-units) .tech-units-clean-page .secondary-button[aria-disabled="true"],
 :where(body.css-scope-tech-units) #modal-root .secondary-button:disabled,
-:where(body.css-scope-tech-units) #modal-root .secondary-button[aria-disabled="true"] {
+:where(body.css-scope-tech-units) #modal-root .secondary-button[aria-disabled="true"],
+:where(body.css-scope-tech-units) .tech-units-clean-page :is(input, textarea, select):disabled,
+:where(body.css-scope-tech-units) #modal-root :is(input, textarea, select):disabled {
   cursor: not-allowed;
   opacity: 0.62;
 }
@@ -5352,11 +5586,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   box-shadow: none;
 }
 
-:where(body.css-scope-tech-units) .tech-units-clean-page :is(input, textarea, select):disabled,
-:where(body.css-scope-tech-units) #modal-root :is(input, textarea, select):disabled {
-  cursor: not-allowed;
-  opacity: 0.62;
-}
 
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-search-field textarea {
   min-height: 148px;
@@ -5370,12 +5599,14 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 }
 
 /* The trained workflow stays intentional: Lot + Category above; Grade + Tech User + date pair below. */
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(1) { grid-column: 1 / span 4; grid-row: 1; }
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(2) { grid-column: 5 / span 4; grid-row: 1; }
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(1),
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(1) { grid-column: 1 / span 4; grid-row: 1; }
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(2),
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(2) { grid-column: 5 / span 4; grid-row: 1; }
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(3) { grid-column: 1 / span 2; grid-row: 2; }
 
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(1) { grid-column: 1 / span 4; grid-row: 1; }
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(2) { grid-column: 5 / span 4; grid-row: 1; }
+
+
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(3) { grid-column: 1 / span 3; grid-row: 2; }
 
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-created-date-range {
@@ -6149,7 +6380,9 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   margin: 0;
 }
 
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-component-comparison-heading > div {
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-component-comparison-heading > div,
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-history-panel-header > div:first-child,
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-history-section-title > div {
   display: grid;
   gap: 3px;
 }
@@ -6340,10 +6573,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   background: #f7f3ff;
 }
 
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-history-panel-header > div:first-child {
-  display: grid;
-  gap: 3px;
-}
 
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-history-panel-header strong {
   color: #4c3f73;
@@ -6389,10 +6618,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   margin-bottom: 8px;
 }
 
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-history-section-title > div {
-  display: grid;
-  gap: 3px;
-}
 
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-history-section-title > div > span {
   color: #74678f;
@@ -6807,7 +7032,10 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
     flex-direction: column;
   }
 
-  :where(body.css-scope-tech-units) .tech-units-clean-heading-actions {
+:where(body.css-scope-tech-units) .tech-units-clean-heading-actions,
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-detail-actions,
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-detail-status,
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-history-panel-actions {
     width: 100%;
     justify-content: flex-end;
   }
@@ -6816,12 +7044,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
     justify-content: flex-start;
   }
 
-  :where(body.css-scope-tech-units) .tech-units-clean-page .tech-detail-actions,
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-detail-status,
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-history-panel-actions {
-    width: 100%;
-    justify-content: flex-end;
-  }
 
   :where(body.css-scope-tech-units) .tech-units-clean-page .tech-component-comparison-layout,
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-component-comparison-values {
@@ -6901,15 +7123,13 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
     grid-template-columns: 1fr;
   }
 
-  :where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(n),
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(n) {
-    grid-column: 1;
-  }
-
-  :where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--tech-lead-plus > .tech-created-date-range,
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--tech-lead-plus > :nth-child(n),
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--regular-tech > :nth-child(n),
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--tech-lead-plus > .tech-created-date-range,
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid--regular-tech > .tech-created-date-range {
     grid-column: 1;
   }
+
 
   /* The two dates remain horizontally paired and retain their 39px control height. */
   :where(body.css-scope-tech-units) .tech-units-clean-page .tech-created-date-range-inputs {
@@ -7231,7 +7451,8 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
  * behavior but are intentionally not shown.
  */
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-search-field,
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid > .form-field {
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-filter-grid > .form-field,
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-created-date-range {
   gap: 0;
 }
 
@@ -7249,9 +7470,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   text-transform: none;
 }
 
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-created-date-range {
-  gap: 0;
-}
 
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-created-date-range-inputs {
   margin-top: 0;
@@ -7794,7 +8012,8 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
     flex-direction: column;
   }
 
-  :where(body.css-scope-tech-units) #modal-root .tech-unit-modal .tech-unit-modal-header,
+:where(body.css-scope-tech-units) #modal-root .tech-unit-modal .tech-unit-modal-header,
+:where(body.css-scope-tech-units) #modal-root .tech-unit-modal .tech-unit-modal-body,
 :where(body.css-scope-tech-units) #modal-root .tech-unit-modal .tech-unit-modal-body {
     padding-right: 14px;
     padding-left: 14px;
@@ -7870,10 +8089,7 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
     padding-left: 14px;
   }
 
-  :where(body.css-scope-tech-units) #modal-root .tech-unit-modal .tech-unit-modal-body {
-    padding-right: 14px;
-    padding-left: 14px;
-  }
+
 }
 
 
@@ -7899,13 +8115,11 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   color: #3f4e63;
 }
 
-:where(body.css-scope-tech-units) #modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button) {
-  border-color: transparent;
-}
-
+:where(body.css-scope-tech-units) #modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button),
 :where(body.css-scope-tech-units) #modal-root .tech-unit-modal :is(.primary-button, .secondary-button):not(.danger-button):hover {
   border-color: transparent;
 }
+
 
 /* Correct Unit Outcome radio layout without an extra nested container. */
 :where(body.css-scope-tech-units) :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-field {
@@ -7976,7 +8190,8 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   box-shadow: none;
 }
 
-:where(body.css-scope-tech-units) :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option:has(input:is(:focus, :focus-visible)) {
+:where(body.css-scope-tech-units) :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-option:has(input:is(:focus, :focus-visible)),
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-state-toggle:has(input:is(:focus, :focus-visible)) {
   outline: none !important;
   box-shadow: none !important;
 }
@@ -8005,10 +8220,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 
 
 /* Compact state toggles and radio labels should not inherit field focus glow. */
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-state-toggle:has(input:is(:focus, :focus-visible)) {
-  outline: none !important;
-  box-shadow: none !important;
-}
 
 /* Unit Details R.1 — fluid multi-column read-only details workspace.
    The expanded /tech/units detail row should scan like a compact summary, not a long form. */
@@ -8144,7 +8355,8 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-current-module-layout,
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-notes-section--memory > .tech-detail-layout,
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-notes-section--storage > .tech-detail-layout,
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-notes-section--graphics > .tech-detail-layout {
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-notes-section--graphics > .tech-detail-layout,
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-notes-grid {
   grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: 8px;
 }
@@ -8160,10 +8372,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   box-shadow: none;
 }
 
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-notes-grid {
-  grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
-  gap: 8px;
-}
 
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-note-block {
   display: grid;
@@ -8289,10 +8497,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.14) !important;
 }
 
-:where(body.css-scope-tech-units) :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .form-field.has-unit-form-validation-error .tech-outcome-options {
-  border-color: #c62828 !important;
-  box-shadow: 0 0 0 3px rgba(198, 40, 40, 0.14) !important;
-}
 
 :where(body.css-scope-tech-units) :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-unit-form-validation-summary {
   display: grid;
@@ -9074,7 +9278,8 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 }
 
 @media (max-width: 560px) {
-  :where(body.css-scope-tech-units) :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-memory-state-bar {
+:where(body.css-scope-tech-units) :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-memory-state-bar,
+:where(body.css-scope-tech-units) :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-repeatable-section-heading {
     align-items: flex-start;
   }
 
@@ -9162,9 +9367,7 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 }
 
 @media (max-width: 560px) {
-  :where(body.css-scope-tech-units) :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-repeatable-section-heading {
-    align-items: flex-start;
-  }
+
 }
 
 :where(body.css-scope-tech-units) :is(#modal-root, .tech-unit-form-clean-page) .tech-unit-form .tech-outcome-approval-box[data-request-active="false"] textarea {
@@ -9226,7 +9429,8 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   padding-left: var(--tu-cell-inline-padding);
 }
 
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-summary-spec {
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-summary-spec,
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-summary-weight-strip {
   max-width: 100%;
 }
 
@@ -9246,9 +9450,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
   min-width: 0;
 }
 
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-summary-weight-strip {
-  max-width: 100%;
-}
 
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-unit-summary-weight-value {
   display: inline-grid;
@@ -9672,15 +9873,12 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 
 
 /* Scalable Pallet Number filter with select-style typeahead. */
-:where(body.css-scope-tech-units) .tech-units-clean-page .tech-pallet-filter-field {
-  position: relative;
-  min-width: 0;
-}
-
+:where(body.css-scope-tech-units) .tech-units-clean-page .tech-pallet-filter-field,
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-pallet-filter-combobox {
   position: relative;
   min-width: 0;
 }
+
 
 :where(body.css-scope-tech-units) .tech-units-clean-page .tech-pallet-filter-input {
   width: 100%;
@@ -9944,7 +10142,8 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 }
 
 @media (max-width: 680px) {
-  :where(body.css-scope-tech-units) #modal-root .tech-label-print-form .form-grid {
+:where(body.css-scope-tech-units) #modal-root .tech-label-print-form .form-grid,
+:where(body.css-scope-tech-units) #modal-root .tech-label-template-choice {
     grid-template-columns: 1fr;
   }
 }
@@ -10021,9 +10220,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 }
 
 @media (max-width: 680px) {
-  :where(body.css-scope-tech-units) #modal-root .tech-label-template-choice {
-    grid-template-columns: 1fr;
-  }
 
   :where(body.css-scope-tech-units) #modal-root .tech-label-template-choice-header {
     align-items: flex-start;
@@ -10154,8 +10350,9 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 :where(body.css-scope-tech-units) .tech-recent-print-detail-list div { min-width: 0; }
 :where(body.css-scope-tech-units) .tech-recent-print-detail-list dt { font-size: 0.72rem; color: var(--text-muted, #667085); }
 :where(body.css-scope-tech-units) .tech-recent-print-detail-list dd { margin: 0.1rem 0 0; font-size: 0.82rem; overflow-wrap: anywhere; }
-:where(body.css-scope-tech-units) .tech-recent-print-attempts { margin-top: 0.45rem; }
+:where(body.css-scope-tech-units) .tech-recent-print-attempts,
 :where(body.css-scope-tech-units) .tech-recent-print-error { margin-top: 0.45rem; }
+
 @media (max-width: 700px) { :where(body.css-scope-tech-units) .tech-recent-print-detail-list { grid-template-columns: 1fr; } }
 
 /* Tool-reported Current Memory / Storage context remains informational and editable. */
@@ -13837,11 +14034,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 }
 
 
-/* Personal earned-weight panel. */
-:where(body.css-scope-unit-requests) .tech-detail-actions .tech-personal-credit-action-button.is-active {
-  border-color: color-mix(in srgb, var(--blue) 58%, #64748b 42%) !important;
-}
-
 :where(body.css-scope-unit-requests) .management-review-destination-lot {
   display: grid;
   gap: 5px;
@@ -15295,6 +15487,13 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
     grid-template-columns: 1fr;
   }
 
+
+  :where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-split > .record-detail-section + .record-detail-section {
+    padding-left: 18px;
+    border-top: 1px solid var(--line-soft);
+    border-left: 0;
+  }
+
   :where(body.css-scope-unit-requests) .unit-request-review-actions form + form {
     padding-top: 12px;
     padding-left: 0;
@@ -15822,6 +16021,7 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 :where(body.css-scope-unit-requests) .unit-request-detail-modal .modal-body {
   flex: 1 1 auto;
   min-height: 0;
+  padding: 0;
   overflow-y: auto;
 }
 
@@ -15831,6 +16031,237 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 
 :where(body.css-scope-unit-requests) .unit-request-detail-modal .unit-request-detail-header > .secondary-button {
   display: none;
+}
+
+/* Modern request-detail page status summary. Request modals continue to extract the same semantic hooks. */
+:where(body.css-scope-unit-requests) .record-detail-summary-panel .record-detail-status--success > strong { color: var(--green); }
+:where(body.css-scope-unit-requests) .record-detail-summary-panel .record-detail-status--danger > strong { color: var(--red); }
+:where(body.css-scope-unit-requests) .record-detail-summary-panel .record-detail-status--warn > strong { color: #8a6100; }
+:where(body.css-scope-unit-requests) .record-detail-summary-panel .record-detail-status--slate > strong { color: var(--slate); }
+
+/* Request modal promotes request identity and status into the shared informational header. */
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .informational-modal-heading__copy > .eyebrow {
+  color: var(--informational-heading-accent);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-shell {
+  border-top: 1px solid var(--line-soft);
+}
+
+
+/* Flat record-detail presentation: keep the request data prominent and the container chrome quiet. */
+:where(body.css-scope-unit-requests) .unit-request-detail-modal {
+  --record-detail-info: var(--blue);
+  --record-detail-info-strong: var(--blue-dark);
+  --record-detail-info-soft: var(--blue-soft);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-intro {
+  align-items: center;
+  margin: 0;
+  padding: 14px 18px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: color-mix(in srgb, var(--record-detail-info-soft) 36%, #ffffff 64%);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-intro--success {
+  border-bottom-color: color-mix(in srgb, var(--green) 28%, var(--line-soft) 72%);
+  background: color-mix(in srgb, var(--green-bg) 48%, #ffffff 52%);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-intro--danger {
+  border-bottom-color: color-mix(in srgb, var(--red) 28%, var(--line-soft) 72%);
+  background: color-mix(in srgb, var(--red-bg) 48%, #ffffff 52%);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-intro--warn {
+  border-bottom-color: color-mix(in srgb, var(--yellow) 28%, var(--line-soft) 72%);
+  background: color-mix(in srgb, var(--yellow-bg) 52%, #ffffff 48%);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-intro--slate {
+  background: color-mix(in srgb, var(--slate-bg) 72%, #ffffff 28%);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-intro h2 {
+  display: none;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-intro p:not(.eyebrow) {
+  max-width: 760px;
+  margin-top: 4px;
+  font-size: 0.84rem;
+  line-height: 1.45;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal :is(
+  .record-detail-intro,
+  .unit-request-detail-header,
+  .record-detail-section
+) > .eyebrow {
+  color: var(--record-detail-info-strong);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .unit-request-detail-list dt {
+  color: color-mix(in srgb, var(--record-detail-info-strong) 82%, var(--ui-muted) 18%);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-intro .hero-badge {
+  min-width: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: right;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-intro .hero-badge strong {
+  margin-top: 2px;
+  color: var(--ui-heading);
+  font-size: 0.9rem;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-status--success strong {
+  color: var(--green);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-status--danger strong {
+  color: var(--red);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-status--warn strong {
+  color: var(--yellow);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-status--slate strong {
+  color: var(--slate);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-shell {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .unit-request-detail-header {
+  padding: 12px 18px 10px;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .unit-request-detail-header h2 {
+  display: none;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .unit-request-detail-header .eyebrow {
+  margin-bottom: 3px;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .unit-request-detail-grid.record-detail-split {
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-split > .record-detail-section {
+  margin: 0;
+  padding: 16px 18px 15px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-split > .record-detail-section + .record-detail-section {
+  padding: 16px 18px 15px 20px;
+  border-left: 1px solid var(--line-soft);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-split .unit-request-detail-list {
+  margin-top: 10px;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .unit-request-detail-section.record-detail-section {
+  margin: 0;
+  padding: 15px 18px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-user-section .unit-request-requester-note {
+  max-width: 900px;
+  margin-top: 6px;
+  color: var(--ui-heading);
+  font-size: 0.94rem;
+  font-weight: 520;
+  line-height: 1.55;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-result-section--success > .eyebrow {
+  color: var(--green);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-result-section--danger > .eyebrow {
+  color: var(--red);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-result-section--warn > .eyebrow {
+  color: var(--yellow);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-history-section .unit-request-event-list {
+  margin-top: 8px;
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-history-section .unit-request-event-list::before {
+  background: color-mix(in srgb, var(--record-detail-info) 34%, var(--line-soft) 66%);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-event::before {
+  border-color: color-mix(in srgb, var(--record-detail-info) 58%, #ffffff 42%);
+  background: var(--record-detail-info);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-event > strong {
+  color: var(--record-detail-info-strong);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-event--success::before {
+  border-color: color-mix(in srgb, var(--green) 58%, #ffffff 42%);
+  background: var(--green);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-event--success > strong {
+  color: var(--green);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-event--danger::before {
+  border-color: color-mix(in srgb, var(--red) 58%, #ffffff 42%);
+  background: var(--red);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-event--danger > strong {
+  color: var(--red);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-event--slate::before {
+  border-color: color-mix(in srgb, var(--slate) 44%, #ffffff 56%);
+  background: var(--slate);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-event--slate > strong {
+  color: var(--slate);
+}
+
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .unit-request-review-panel,
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .unit-request-snapshot-summary,
+:where(body.css-scope-unit-requests) .unit-request-detail-modal .record-detail-shell > .message {
+  margin-right: 18px;
+  margin-left: 18px;
 }
 
 @media (max-width: 720px) {
@@ -15857,18 +16288,6 @@ body label:has(:is(input[type="checkbox"], input[type="radio"]):is(:focus, :focu
 
 :where(body.css-scope-lots) .lot-child-row td {
   background: color-mix(in srgb, var(--surface) 92%, var(--surface-soft) 8%);
-}
-
-:where(body.css-scope-lots) .lot-number-badge {
-  margin-left: 8px;
-  padding: 2px 7px;
-  border: 1px solid var(--line-soft);
-  border-radius: 999px;
-  color: var(--muted);
-  background: var(--surface-soft);
-  font-size: 0.72rem;
-  font-weight: 850;
-  white-space: nowrap;
 }
 
 :where(body.css-scope-lots) .table-muted-line {
@@ -19781,34 +20200,38 @@ body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal.modal-panel.s
   }
 }
 
-:where(body.css-scope-management) .management-user-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+:where(body.css-scope-management) :is(.management-user-summary-inline, .management-summary-inline) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0;
   margin-top: 14px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
-:where(body.css-scope-management) .management-user-summary-card {
-  padding: 16px;
-  border: 1px solid var(--line-soft);
-  border-radius: 18px;
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
+:where(body.css-scope-management) :is(.management-user-summary-inline, .management-summary-inline) > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 0 16px;
+  border-left: 1px solid var(--line-soft);
 }
 
-:where(body.css-scope-management) .management-user-summary-card strong {
-  display: block;
-  margin-top: 4px;
+:where(body.css-scope-management) :is(.management-user-summary-inline, .management-summary-inline) > span:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+:where(body.css-scope-management) :is(.management-user-summary-inline, .management-summary-inline) strong {
   color: var(--text);
-  font-size: 1.05rem;
+  font-size: 0.92rem;
 }
 
-:where(body.css-scope-management) .management-user-summary-card span {
-  display: block;
-  margin-top: 6px;
+:where(body.css-scope-management) :is(.management-user-summary-inline, .management-summary-inline) small {
   color: var(--muted);
-  font-size: 0.84rem;
-  line-height: 1.4;
+  font-size: 0.76rem;
+  line-height: 1.35;
 }
 
 :where(body.css-scope-management) .management-user-identity,
@@ -19856,9 +20279,21 @@ body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal.modal-panel.s
   min-width: 300px;
 }
 
-@media (max-width: 980px) {
-:where(body.css-scope-management) .management-user-summary-grid {
-    grid-template-columns: 1fr;
+@media (max-width: 720px) {
+:where(body.css-scope-management) :is(.management-user-summary-inline, .management-summary-inline) {
+    align-items: stretch;
+  }
+
+:where(body.css-scope-management) :is(.management-user-summary-inline, .management-summary-inline) > span {
+    flex: 1 1 100%;
+    padding: 8px 0;
+    border-top: 1px solid var(--line-soft);
+    border-left: 0;
+  }
+
+:where(body.css-scope-management) :is(.management-user-summary-inline, .management-summary-inline) > span:first-child {
+    padding-top: 0;
+    border-top: 0;
   }
 }
 
@@ -19952,41 +20387,10 @@ body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal.modal-panel.s
   gap: 6px;
   font-size: 0.78rem;
   font-weight: 700;
-  color: var(--text-muted);
-}
-
-:where(body.css-scope-management) .management-login-summary-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  margin-top: 14px;
-}
-
-:where(body.css-scope-management) .management-login-summary-card {
-  padding: 16px;
-  border: 1px solid var(--line-soft);
-  border-radius: 14px;
-  background: var(--surface);
-  box-shadow: var(--shadow-soft);
-}
-
-:where(body.css-scope-management) .management-login-summary-card strong,
-:where(body.css-scope-management) .management-login-summary-card span {
-  display: block;
-}
-
-:where(body.css-scope-management) .management-login-summary-card strong {
-  margin-top: 4px;
-  color: var(--text);
-  font-size: 1.05rem;
-}
-
-:where(body.css-scope-management) .management-login-summary-card span {
-  margin-top: 6px;
   color: var(--muted);
-  font-size: 0.84rem;
-  line-height: 1.4;
 }
+
+
 
 :where(body.css-scope-management) .management-login-header {
   gap: 16px;
@@ -20033,6 +20437,11 @@ body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal.modal-panel.s
   margin-top: 20px;
 }
 
+:where(body.css-scope-management) .management-login-table-card table th,
+:where(body.css-scope-management) .management-login-table-card table td {
+  vertical-align: middle;
+}
+
 :where(body.css-scope-management) .management-login-user {
   display: grid;
   gap: 4px;
@@ -20072,10 +20481,6 @@ body.lots-lookup-ui-preview #modal-root .lot-unit-validation-modal.modal-panel.s
 }
 
 @media (max-width: 900px) {
-:where(body.css-scope-management) .management-login-summary-grid {
-    grid-template-columns: 1fr;
-  }
-
 :where(body.css-scope-management) .management-login-header {
     align-items: stretch;
   }
@@ -21417,14 +21822,14 @@ body :is(button, input, select, textarea) {
 .content-shell h1,
 .content-shell .page-heading h1 {
   font-size: clamp(1.58rem, 2.65vw, 2.1rem);
-  font-weight: 660;
+  font-weight: var(--ui-font-weight-strong);
   letter-spacing: -0.032em;
   line-height: 1.12;
 }
 
 .content-shell :is(.dashboard-hero h2, .content-header h2, .section-title) {
   font-size: clamp(1.35rem, 2.2vw, 1.72rem);
-  font-weight: 660;
+  font-weight: var(--ui-font-weight-strong);
   letter-spacing: -0.025em;
   line-height: 1.16;
 }
@@ -21457,7 +21862,7 @@ body :is(button, input, select, textarea) {
 /* Shell and navigation typography */
 .topbar h1 {
   font-size: 1.18rem;
-  font-weight: 660;
+  font-weight: var(--ui-font-weight-strong);
   letter-spacing: -0.018em;
 }
 
@@ -22715,6 +23120,55 @@ body :is(input[type="checkbox"], input[type="radio"]) {
   min-width: 210px;
 }
 
+/* Inline-editable configuration rows follow the same compact table rhythm as read-only values. */
+.configuration-editable-table th,
+.configuration-editable-table td {
+  vertical-align: middle;
+}
+
+.configuration-editable-table tbody td {
+  padding-top: 7px;
+  padding-bottom: 7px;
+}
+
+.configuration-editable-table th:last-child,
+.configuration-editable-table td:last-child {
+  width: 112px;
+  min-width: 112px;
+}
+
+.configuration-table-text-input {
+  width: min(260px, 100%);
+  min-height: 32px;
+  padding: 5px 9px;
+}
+
+.configuration-table-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: var(--ui-ink);
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.configuration-table-toggle input[type='checkbox'] {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.configuration-table-toggle span {
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
 .configuration-value-row--inactive td {
   color: #718096;
   background: #f8fafc;
@@ -23715,6 +24169,163 @@ body :is(input[type="checkbox"], input[type="radio"]) {
   border-top: 1px solid var(--qc-ready-border);
 }
 
+
+/* Shared informational modal heading: compact identity, semantic type color, and optional status. */
+#modal-root .modal-panel.site-clean-modal .modal-header.informational-modal-header {
+  align-items: center;
+  gap: 16px;
+  padding: 16px 18px 14px;
+}
+
+.informational-modal-heading {
+  --informational-heading-accent: var(--blue);
+  --informational-heading-soft: var(--blue-soft);
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.informational-modal-heading--purple {
+  --informational-heading-accent: var(--purple);
+  --informational-heading-soft: var(--purple-bg);
+}
+
+.informational-modal-heading--orange {
+  --informational-heading-accent: var(--orange);
+  --informational-heading-soft: var(--orange-bg);
+}
+
+.informational-modal-heading--danger {
+  --informational-heading-accent: var(--red);
+  --informational-heading-soft: var(--red-bg);
+}
+
+.informational-modal-heading__icon {
+  display: inline-flex;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--informational-heading-accent) 28%, var(--line) 72%);
+  border-radius: 9px;
+  color: var(--informational-heading-accent);
+  background: color-mix(in srgb, var(--informational-heading-soft) 72%, #ffffff 28%);
+}
+
+.informational-modal-heading__icon svg {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.informational-modal-heading__copy {
+  min-width: 0;
+}
+
+.informational-modal-heading__copy > .eyebrow {
+  margin: 0 0 1px;
+  color: var(--informational-heading-accent);
+}
+
+.informational-modal-heading__meta {
+  margin-top: 3px;
+}
+
+.informational-modal-header__actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 14px;
+}
+
+.informational-modal-status {
+  display: grid;
+  gap: 1px;
+  min-width: 86px;
+  text-align: right;
+}
+
+.informational-modal-status > span {
+  color: var(--ui-muted);
+  font-size: 0.67rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.055em;
+}
+
+.informational-modal-status > strong {
+  color: var(--ui-heading);
+  font-size: 0.86rem;
+  font-weight: 700;
+}
+
+.informational-modal-status--success > strong { color: var(--green); }
+.informational-modal-status--danger > strong { color: var(--red); }
+.informational-modal-status--warn > strong { color: var(--yellow); }
+.informational-modal-status--slate > strong { color: var(--slate); }
+
+/* The QC detail modal uses the shared flat record-detail hierarchy. */
+.tech-qc-review-modal.record-detail-modal .tech-qc-status-modal__body {
+  gap: 0;
+  background: #ffffff;
+}
+
+.tech-qc-review-modal.record-detail-modal .record-detail-alert {
+  margin-bottom: 14px;
+  border-radius: 6px;
+}
+
+.tech-qc-review-modal.record-detail-modal .tech-qc-workflow.record-detail-section {
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tech-qc-review-modal.record-detail-modal .tech-qc-review-meta {
+  gap: 20px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tech-qc-review-modal.record-detail-modal .tech-qc-note-panel.record-detail-section,
+.tech-qc-review-modal.record-detail-modal .tech-qc-correction-detail.record-detail-section {
+  margin: 0;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+.tech-qc-review-modal.record-detail-modal .tech-qc-correction-detail.record-detail-section:last-child {
+  border-bottom: 0;
+  padding-bottom: 2px;
+}
+
+.tech-qc-review-modal.record-detail-modal .record-detail-user-section .tech-qc-note-panel__text,
+.tech-qc-review-modal.record-detail-modal .tech-qc-correction-detail__notes p {
+  color: var(--ui-heading);
+  font-size: 0.94rem;
+  font-weight: 520;
+  line-height: 1.5;
+}
+
+.tech-qc-review-modal.record-detail-modal .tech-qc-review-meta--correction {
+  padding: 10px 0;
+  border-bottom: 0;
+}
+
+.tech-qc-review-modal.record-detail-modal .tech-qc-correction-detail__notes {
+  padding-top: 10px;
+  border-top: 1px solid var(--line-soft);
+}
+
 .tech-qc-modal-footer {
   flex: 0 0 auto;
   padding: 12px 18px 14px;
@@ -24248,19 +24859,19 @@ body :is(input[type="checkbox"], input[type="radio"]) {
 }
 
 .unit-export-action-toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 3;
+  position: static;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px 16px;
   margin: 12px 0 16px;
-  padding: 12px 14px;
-  border: 1px solid var(--ui-line-strong);
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 5px 14px rgba(31, 55, 85, 0.08);
+  padding: 12px 0;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .unit-export-action-summary {
@@ -25139,6 +25750,11 @@ body select[data-hierarchical-lot-select] option[data-lot-depth]:not([data-lot-d
  * and feature mechanics in features.css.
  */
 /* Shared typography keeps the application hierarchy strong without excessively heavy weights. */
+body :is(.content-shell, .modal-panel) :is(strong, b),
+body :is(.table-card, .site-data-table) :is(strong, b) {
+  font-weight: var(--ui-font-weight-strong);
+}
+
 body :is(.primary-button, .secondary-button, .danger-button, .auth-submit, .button),
 body :is(.button-small, .management-tab, .copy-url-button),
 body :is(.hero-badge span, .card-label, .status-label, .dashboard-plan-pill),
@@ -25325,8 +25941,6 @@ body :is(.form-field > span:first-child, .form-field > label:first-child, .stack
   .dashboard-metric-card,
   .dashboard-pie-panel,
   .tech-team-average-panel,
-  .management-user-summary-card,
-  .management-login-summary-card,
   .dashboard-chart-placeholder,
   .all-tech-metric-row
 ) {
@@ -25504,13 +26118,6 @@ body :is(.form-field > span:first-child, .form-field > label:first-child, .stack
   background: #fff;
 }
 
-.management-user-summary-card,
-.management-login-summary-card {
-  padding: 14px;
-}
-
-.management-user-summary-card strong,
-.management-login-summary-card strong,
 .management-login-user strong,
 .management-user-identity strong {
   color: var(--ui-heading);
@@ -25908,6 +26515,56 @@ body :is(.form-field > span:first-child, .form-field > label:first-child, .stack
   width: min(980px, 100%);
 }
 
+.modal-panel.site-clean-modal.virtual-huddle-detail-modal {
+  width: min(1320px, 100%);
+}
+
+.virtual-huddle-detail-modal .modal-header {
+  gap: 18px;
+}
+
+.virtual-huddle-detail-modal .modal-header > div {
+  min-width: 0;
+}
+
+.virtual-huddle-detail-modal .modal-header h2 {
+  overflow-wrap: anywhere;
+}
+
+.virtual-huddle-detail-body {
+  display: grid;
+  gap: 18px;
+}
+
+.virtual-huddle-detail-actions {
+  justify-content: flex-end;
+}
+
+.virtual-huddle-detail-section {
+  min-width: 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--ui-line);
+}
+
+.virtual-huddle-detail-section:first-of-type {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.virtual-huddle-detail-section .content-header {
+  margin-bottom: 12px;
+}
+
+.virtual-huddle-detail-table {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.virtual-huddle-detail-table table {
+  min-width: 880px;
+}
+
 .virtual-huddle-choice-row {
   display: flex;
   min-width: 0;
@@ -25973,6 +26630,19 @@ body :is(.form-field > span:first-child, .form-field > label:first-child, .stack
   .virtual-huddle-role-grid {
     grid-template-columns: 1fr !important;
   }
+
+  .virtual-huddle-detail-actions {
+    align-items: stretch;
+  }
+
+  .virtual-huddle-detail-actions :is(.secondary-button, .danger-button) {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .virtual-huddle-detail-section .content-header {
+    align-items: stretch;
+  }
 }
 
 /* Shared template-layout utilities. Static template presentation belongs here,
@@ -25999,4 +26669,1497 @@ body :is(.form-field > span:first-child, .form-field > label:first-child, .stack
 
 .dashboard-meter span {
   width: var(--dashboard-meter-width, 0%);
+}
+
+/* Flat modal system. These opt-in rules intentionally come after legacy/page-specific modal chrome so
+   the modal itself, spacing, dividers, and semantic color provide hierarchy instead of nested cards. */
+#modal-root .modal-panel.site-clean-modal:is(.record-detail-modal, .workflow-detail-modal) {
+  border: 0;
+}
+
+#modal-root .modal-panel.site-clean-modal.unit-request-detail-modal > .modal-body {
+  padding: 0;
+}
+
+#modal-root .modal-panel.site-clean-modal.workflow-detail-modal > .workflow-detail-body {
+  padding: 10px 18px 18px;
+  background: #fff;
+}
+
+#modal-root .workflow-detail-modal .tech-override-summary.workflow-detail-summary {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-summary dl {
+  gap: 0;
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-summary div {
+  padding: 9px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-summary div:last-child {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-note {
+  margin: 0;
+  padding: 10px 0 14px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-form {
+  gap: 0;
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-section {
+  gap: 10px;
+  margin: 0;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-section .form-grid {
+  gap: 0;
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-choice {
+  gap: 12px;
+  margin: 0;
+  padding: 11px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-choice:last-child {
+  border-bottom: 0;
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-choice:has(input:checked) {
+  background: color-mix(in srgb, var(--ui-blue-soft) 74%, #fff 26%);
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-form--simple > .form-field {
+  margin: 0;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+#modal-root .workflow-detail-modal .workflow-detail-form > .form-actions {
+  margin-top: 0;
+  padding-top: 14px;
+}
+
+/* Flat form/edit modal: keep real controls bordered, but remove decorative containers around the form
+   and option groups. Status pills remain semantic indicators rather than another panel. */
+#modal-root .flat-form-modal > .modal-body {
+  background: #fff;
+}
+
+#modal-root .flat-form-modal .auth-form {
+  gap: 18px;
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#modal-root .flat-form-modal .management-user-modal-summary {
+  gap: 10px;
+  margin: 0;
+  padding: 0 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+#modal-root .flat-form-modal .management-user-modal-roles {
+  display: grid;
+  gap: 0;
+  margin-top: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+#modal-root .flat-form-modal .management-user-modal-roles .workflow-item {
+  gap: 12px;
+  margin: 0;
+  padding: 11px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .flat-form-modal .management-user-modal-roles .workflow-item input[type="checkbox"] {
+  flex: 0 0 18px;
+  min-width: 18px;
+  width: 18px;
+  height: 18px;
+}
+
+#modal-root .flat-form-modal .management-user-modal-roles .workflow-item:last-child {
+  border-bottom: 0;
+}
+
+#modal-root .flat-form-modal .management-user-modal-roles .workflow-item:is(.active, :has(input:checked)) {
+  background: color-mix(in srgb, var(--ui-blue-soft) 74%, #fff 26%);
+}
+
+#modal-root .flat-form-modal .management-user-modal-roles .workflow-item:hover {
+  border-color: var(--line-soft);
+  background: color-mix(in srgb, var(--ui-blue-soft) 42%, #fff 58%);
+}
+
+#modal-root .flat-form-modal .management-user-modal-roles .workflow-item:is(.active, :has(input:checked)):hover {
+  background: color-mix(in srgb, var(--ui-blue-soft) 74%, #fff 26%);
+}
+
+#modal-root .flat-form-modal .management-user-modal-roles-label {
+  color: var(--ui-blue-dark);
+}
+
+#modal-root .flat-form-modal .action-row {
+  margin-top: 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+}
+
+
+/* Global modal presentation: the modal shell, spacing, dividers, and semantic messages provide hierarchy.
+   Keep actual controls, tables, previews, and warning/error surfaces visibly bounded; remove decorative
+   cards around ordinary form groups, options, summaries, and read-only sections across modal families. */
+#modal-root .modal-panel {
+  border: 0;
+}
+
+#modal-root .modal-panel :is(.app-form, .auth-form, .workflow-list) {
+  width: 100%;
+  margin-top: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .modal-panel .form-section {
+  gap: 10px;
+  margin: 0;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .modal-panel .form-section:first-child {
+  padding-top: 0;
+}
+
+#modal-root .modal-panel .form-section:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+#modal-root .modal-panel .form-section-header {
+  padding-bottom: 4px;
+  border-bottom: 0;
+}
+
+#modal-root .modal-panel .app-form-clean .form-section > :is(.form-grid, .workflow-list) {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .modal-panel :is(.checkbox-card, .workflow-item) {
+  margin: 0;
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .modal-panel :is(.checkbox-card, .workflow-item):last-child {
+  border-bottom: 0;
+}
+
+#modal-root .modal-panel :is(.checkbox-card, .workflow-item):has(input:checked) {
+  background: color-mix(in srgb, var(--ui-blue-soft) 68%, #ffffff 32%);
+}
+
+#modal-root .modal-panel :is(.checkbox-card, .workflow-item):has(input:disabled) {
+  opacity: 0.62;
+}
+
+#modal-root .modal-panel :is(
+  .management-user-modal-summary,
+  .tech-override-summary,
+  .tech-qc-review-summary,
+  .lot-delete-summary,
+  .lot-closure-summary,
+  .lot-requirement-delete-summary,
+  .lot-unit-form-rules-summary,
+  .lot-unit-validation-modal-summary,
+  .configuration-value-summary,
+  .label-library-direct-print-summary,
+  .label-template-lot-usage-summary,
+  .tech-duplicate-assume-summary,
+  .tech-bulk-print-summary,
+  .virtual-huddle-audience-summary,
+  .lot-visibility-summary,
+  .unit-model-summary,
+  .unit-request-snapshot-summary
+) {
+  margin-right: 0;
+  margin-left: 0;
+  padding: 10px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .modal-panel :is(
+  .label-library-direct-print-section,
+  .label-template-lot-usage-section,
+  .lot-unit-validation-modal-section,
+  .lot-unit-form-rule-section,
+  .processor-family-members-section
+) {
+  margin: 0;
+  padding: 14px 0;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .modal-panel :is(
+  .label-library-direct-print-section,
+  .label-template-lot-usage-section,
+  .lot-unit-validation-modal-section,
+  .lot-unit-form-rule-section,
+  .processor-family-members-section
+):last-child {
+  border-bottom: 0;
+}
+
+/* Request-detail modal bodies come from both catalog requests and operational override/confirmation
+   workflows. Normalize both through the same flat record-detail presentation instead of preserving
+   legacy dashboard/card chrome inside the modal. */
+#modal-root .record-detail-modal .unit-request-modal-content > .dashboard-hero {
+  display: none;
+}
+
+#modal-root .record-detail-modal .unit-request-modal-content > .content-card {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .record-detail-modal .unit-request-detail-grid:not(.record-detail-split) {
+  gap: 0;
+  margin: 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+#modal-root .record-detail-modal .unit-request-detail-grid:not(.record-detail-split) > .unit-request-detail-card {
+  margin: 0;
+  padding: 16px 18px 15px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .record-detail-modal .unit-request-detail-grid:not(.record-detail-split) > .unit-request-detail-card + .unit-request-detail-card {
+  padding-left: 20px;
+  border-left: 1px solid var(--line-soft);
+}
+
+#modal-root .record-detail-modal :is(.unit-request-detail-section, .unit-request-review-panel, .unit-request-snapshot-summary) {
+  margin: 0;
+  padding: 15px 18px;
+  border: 0;
+  border-top: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .record-detail-modal .unit-request-review-panel {
+  grid-template-columns: minmax(180px, 0.7fr) minmax(0, 1.8fr);
+}
+
+@media (max-width: 720px) {
+  #modal-root .record-detail-modal .unit-request-detail-grid:not(.record-detail-split) {
+    grid-template-columns: 1fr;
+  }
+
+  #modal-root .record-detail-modal .unit-request-detail-grid:not(.record-detail-split) > .unit-request-detail-card + .unit-request-detail-card {
+    padding-left: 18px;
+    border-top: 1px solid var(--line-soft);
+    border-left: 0;
+  }
+
+  #modal-root .record-detail-modal .unit-request-review-panel {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* Global modal structural flattening: keep semantic messages and real controls bounded, but let
+   ordinary summaries, read-only detail groups, and choice rows participate in one continuous modal
+   flow instead of rendering as nested cards. */
+#modal-root .modal-panel :where(
+  .site-clean-section,
+  .site-clean-surface,
+  .tech-delete-confirm-card,
+  .tech-permanent-delete-card,
+  .tech-outcome-approval-summary,
+  .production-weight-preview-card,
+  .site-detail-list
+) {
+  margin-right: 0;
+  margin-left: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .modal-panel :where(
+  .site-clean-section,
+  .site-clean-surface,
+  .tech-delete-confirm-card,
+  .tech-permanent-delete-card,
+  .tech-outcome-approval-summary,
+  .production-weight-preview-card
+) {
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+#modal-root .modal-panel :where(
+  .site-clean-section,
+  .site-clean-surface,
+  .tech-delete-confirm-card,
+  .tech-permanent-delete-card,
+  .tech-outcome-approval-summary,
+  .production-weight-preview-card
+):last-child {
+  border-bottom: 0;
+}
+
+#modal-root .modal-panel .site-detail-list > div {
+  padding: 9px 0;
+}
+
+#modal-root .modal-panel :is(
+  .lot-delete-summary dl > div,
+  .lot-delete-counts > span,
+  .site-summary-stats > article
+) {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .modal-panel .lot-delete-summary dl {
+  gap: 0;
+}
+
+#modal-root .modal-panel .lot-delete-summary dl > div {
+  padding: 9px 10px 9px 0;
+}
+
+#modal-root .modal-panel .lot-delete-summary dl > div + div {
+  padding-left: 14px;
+  border-left: 1px solid var(--line-soft);
+}
+
+#modal-root .modal-panel .lot-delete-counts {
+  gap: 0;
+}
+
+#modal-root .modal-panel .lot-delete-counts > span {
+  padding: 5px 12px;
+  border-right: 1px solid var(--line-soft);
+}
+
+#modal-root .modal-panel .lot-delete-counts > span:first-child {
+  padding-left: 0;
+}
+
+#modal-root .modal-panel .lot-delete-counts > span:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+#modal-root .modal-panel .site-summary-stats {
+  gap: 0;
+}
+
+#modal-root .modal-panel .site-summary-stats > article {
+  padding: 8px 12px;
+}
+
+#modal-root .modal-panel .site-summary-stats > article + article {
+  border-left: 1px solid var(--line-soft);
+}
+
+#modal-root .modal-panel :is(
+  .lot-inline-option,
+  .virtual-huddle-choice-row
+) {
+  margin: 0;
+  padding: 10px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#modal-root .modal-panel :is(
+  .lot-inline-option,
+  .virtual-huddle-choice-row
+):last-child {
+  border-bottom: 0;
+}
+
+#modal-root .modal-panel :is(
+  .lot-inline-option,
+  .virtual-huddle-choice-row
+):has(input:checked) {
+  background: color-mix(in srgb, var(--ui-blue-soft) 68%, #ffffff 32%);
+}
+
+@media (max-width: 720px) {
+  #modal-root .modal-panel .lot-delete-summary dl {
+    grid-template-columns: 1fr;
+  }
+
+  #modal-root .modal-panel .lot-delete-summary dl > div + div {
+    padding-left: 0;
+    border-top: 1px solid var(--line-soft);
+    border-left: 0;
+  }
+
+  #modal-root .modal-panel .site-summary-stats > article + article {
+    border-top: 1px solid var(--line-soft);
+    border-left: 0;
+  }
+}
+
+/* Shared compact live-filter controls for management tables and modal permission lists. */
+:where(body.css-scope-management) .management-live-filter-scope {
+  display: grid;
+  gap: 10px;
+}
+
+:where(body.css-scope-management) .management-live-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px 12px;
+  margin: 12px 0;
+}
+
+:where(body.css-scope-management) .management-live-filter-bar .form-field {
+  min-width: 170px;
+  margin: 0;
+}
+
+:where(body.css-scope-management) .management-live-filter-bar .management-live-filter-search {
+  flex: 0 1 360px;
+  width: min(360px, 100%);
+  max-width: 360px;
+  min-width: min(260px, 100%);
+}
+
+:where(body.css-scope-management) .management-live-filter-bar :is(input, select) {
+  min-height: 39px;
+}
+
+:where(body.css-scope-management) .management-live-filter-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 39px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+:where(body.css-scope-management) .management-live-filter-count strong {
+  margin-right: 4px;
+  color: var(--text);
+}
+
+:where(body.css-scope-management) .management-live-filter-clear {
+  min-height: 39px;
+  height: 39px;
+  align-self: end;
+}
+
+:where(body.css-scope-management) .management-live-filter-clear:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+:where(body.css-scope-management) [data-live-filter-empty][hidden],
+:where(body.css-scope-management) [data-live-filter-row][hidden],
+:where(body.css-scope-management) [data-live-filter-group][hidden] {
+  display: none !important;
+}
+
+:where(body.css-scope-management) .management-permission-audit-filter-form .form-field:nth-child(2) {
+  flex: 0 1 360px;
+  width: min(360px, 100%);
+  max-width: 360px;
+}
+
+:where(body.css-scope-management) .management-permission-audit-filter-form .management-login-filter-actions :is(.primary-button, .secondary-button) {
+  min-height: 39px;
+  height: 39px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:where(body.css-scope-management) .management-permission-audit-table-card th,
+:where(body.css-scope-management) .management-permission-audit-table-card td {
+  vertical-align: middle;
+}
+
+@media (max-width: 640px) {
+:where(body.css-scope-management) .management-live-filter-bar,
+:where(body.css-scope-management) .management-live-filter-bar .form-field,
+:where(body.css-scope-management) .management-live-filter-count {
+    width: 100%;
+    min-width: 0;
+  }
+
+:where(body.css-scope-management) .management-live-filter-bar .management-live-filter-search,
+:where(body.css-scope-management) .management-permission-audit-filter-form .form-field:nth-child(2) {
+    max-width: none;
+  }
+}
+
+/* Roles & Permissions administration. The library stays compact; role editing lives in a wide viewport-aware modal. */
+.permission-management-page {
+  display: grid;
+  gap: 16px;
+}
+
+.permission-management-heading,
+.permission-role-library-heading {
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.permission-role-library-summary,
+.permission-role-manage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.permission-role-table table {
+  min-width: 760px;
+}
+
+.permission-role-table table th,
+.permission-role-table table td {
+  vertical-align: middle;
+}
+
+.permission-role-name-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.permission-role-table-description {
+  display: block;
+  max-width: 560px;
+  margin-top: 4px;
+  color: var(--ui-muted);
+  line-height: 1.35;
+}
+
+.modal-panel.site-clean-modal.permission-role-manage-modal,
+.modal-panel.site-clean-modal.permission-user-manage-modal {
+  width: min(1320px, calc(100vw - 36px));
+}
+
+.permission-role-manage-body {
+  display: grid;
+  gap: 14px;
+}
+
+.permission-role-manage-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.permission-role-manage-details {
+  min-width: 0;
+  padding-right: 20px;
+  border-right: 1px solid var(--ui-line);
+}
+
+.permission-role-manage-permissions {
+  min-width: 0;
+}
+
+.permission-role-subheading {
+  margin-bottom: 10px;
+}
+
+.permission-role-subheading h3 {
+  margin: 0;
+}
+
+.permission-role-details-form,
+.permission-role-permissions-form {
+  display: grid;
+  gap: 10px;
+}
+
+.permission-role-manage-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ui-line);
+}
+
+.permission-role-manage-actions :is(.secondary-button, .danger-button) {
+  text-decoration: none;
+}
+
+.permission-role-permission-group {
+  overflow: hidden;
+  border: 1px solid var(--ui-line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.permission-role-permission-group > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--work-area-header-bg);
+  cursor: pointer;
+  list-style: none;
+}
+
+.permission-role-permission-group > summary::-webkit-details-marker {
+  display: none;
+}
+
+.permission-role-permission-group > summary::after {
+  content: '+';
+  flex: 0 0 auto;
+  font-weight: 800;
+}
+
+.permission-role-permission-group[open] > summary::after {
+  content: '−';
+}
+
+.permission-role-permission-group > summary span {
+  display: grid;
+  gap: 2px;
+}
+
+.permission-role-permission-group > summary small {
+  color: var(--ui-muted);
+  font-size: 0.76rem;
+}
+
+.permission-role-permission-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.permission-role-permission-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: flex-start;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--ui-line);
+  cursor: pointer;
+}
+
+.permission-role-permission-row:nth-child(even) {
+  border-left: 1px solid var(--ui-line);
+}
+
+.permission-role-permission-row input[type='checkbox'] {
+  margin-top: 3px;
+}
+
+.permission-role-permission-row > span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.permission-role-permission-row small {
+  color: var(--ui-muted);
+  line-height: 1.35;
+}
+
+.permission-role-permission-row code {
+  overflow-wrap: anywhere;
+  color: var(--ui-muted);
+  font-size: 0.72rem;
+}
+
+.permission-role-permission-row.is-readonly {
+  cursor: default;
+  opacity: 0.72;
+}
+
+.permission-role-readonly-details {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.permission-role-readonly-details > div {
+  display: grid;
+  gap: 3px;
+}
+
+.permission-role-readonly-details dt {
+  color: var(--ui-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+.permission-role-readonly-details dd {
+  margin: 0;
+}
+
+.permission-role-modal {
+  width: min(680px, calc(100vw - 32px));
+}
+
+.permission-role-replacement-fieldset {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.permission-role-replacement-fieldset legend {
+  padding: 0;
+  font-weight: 700;
+}
+
+.permission-role-replacement-list {
+  display: grid;
+  gap: 6px;
+}
+
+.permission-role-remove-assignments {
+  margin-top: 10px;
+}
+
+.permission-role-manage-footer {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+@media (max-width: 980px) {
+  .permission-role-manage-layout,
+  .permission-role-permission-list {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-role-manage-details {
+    padding-right: 0;
+    padding-bottom: 16px;
+    border-right: 0;
+    border-bottom: 1px solid var(--ui-line);
+  }
+
+  .permission-role-permission-row:nth-child(even) {
+    border-left: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .modal-panel.site-clean-modal.permission-role-manage-modal,
+  .modal-panel.site-clean-modal.permission-user-manage-modal {
+    width: calc(100vw - 20px);
+  }
+
+  .permission-role-library-summary,
+  .permission-role-manage-summary {
+    justify-content: flex-start;
+  }
+}
+
+/* User permission overrides: compact context/header spacing. */
+.permission-user-manage-body {
+  gap: 10px;
+}
+
+.permission-user-manage-body > .permission-role-manage-summary {
+  margin: 0;
+  padding: 0;
+}
+
+.permission-user-context-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding: 8px 0 10px;
+  border-bottom: 1px solid var(--ui-line);
+}
+
+.permission-user-context-label {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  min-width: 0;
+}
+
+.permission-user-context-label strong {
+  color: var(--ui-heading);
+  font-size: .86rem;
+}
+
+.permission-user-context-label small {
+  color: var(--ui-muted);
+  font-size: .76rem;
+}
+
+.permission-user-modal-filter {
+  margin-top: 0;
+}
+
+/* User permission overrides reuse the shared role workspace, table, form, and pill patterns. */
+.permission-user-manage-body,
+.permission-user-overrides-form {
+  display: grid;
+  gap: 14px;
+}
+
+.permission-user-role-summary {
+  padding: 12px 14px;
+}
+
+.permission-user-role-pills,
+.permission-user-role-sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.permission-user-role-sources .pill {
+  max-width: 100%;
+  white-space: normal;
+}
+
+.permission-user-permission-row {
+  display: grid;
+  gap: 9px;
+  min-width: 0;
+  padding: 10px 12px;
+  border-top: 1px solid var(--ui-line);
+}
+
+.permission-user-permission-row:nth-child(even) {
+  border-left: 1px solid var(--ui-line);
+}
+
+.permission-user-permission-state {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px 14px;
+}
+
+.permission-user-state-item {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.permission-user-state-label {
+  color: var(--ui-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.permission-user-permission-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.permission-user-permission-title,
+.permission-user-permission-description,
+.permission-user-permission-key {
+  display: block;
+  min-width: 0;
+}
+
+.permission-user-permission-title {
+  color: var(--ui-heading);
+  font-weight: 700;
+}
+
+.permission-user-permission-description,
+.permission-user-override-note {
+  color: var(--ui-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.permission-user-permission-copy code,
+.permission-user-permission-key {
+  overflow-wrap: anywhere;
+  color: var(--ui-muted);
+  font-size: 0.72rem;
+  white-space: normal;
+}
+
+.permission-user-override-field {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.permission-user-override-field select {
+  width: 100%;
+}
+
+.permission-user-override-note {
+  display: block;
+  margin-top: 4px;
+}
+
+.permission-user-category-override {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--ui-line);
+  background: var(--surface-soft);
+}
+
+.permission-user-category-override .form-field {
+  min-width: 190px;
+  margin: 0;
+}
+
+.permission-user-category-override > small {
+  flex: 1 1 280px;
+  margin-bottom: 8px;
+  color: var(--ui-muted);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.configuration-inline-checkbox.is-disabled {
+  opacity: 0.72;
+  cursor: default;
+}
+
+@media (max-width: 980px) {
+  .permission-role-editor-sections,
+  .permission-role-permission-list {
+    grid-template-columns: 1fr;
+  }
+
+  .permission-role-permission-row:nth-child(even) {
+    border-left: 0;
+  }
+
+  .permission-user-permission-row:nth-child(even) {
+    border-left: 0;
+  }
+
+  .permission-role-editor-summary {
+    justify-content: flex-start;
+  }
+}
+
+/* 2026-10-01 flat management/dashboard and discoverable sidebar refinements */
+.management-user-guidance {
+  margin-top: 2rem;
+  padding-top: 1.35rem;
+  border-top: 1px solid var(--line-soft);
+}
+.management-user-guidance-list { display: grid; gap: 0; }
+.management-user-guidance-item {
+  display: grid;
+  grid-template-columns: minmax(190px, .7fr) minmax(0, 2fr);
+  gap: 1.4rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+.management-user-guidance-item p { margin: 0; color: var(--muted); }
+
+.css-scope-admin-dashboard .admin-dashboard-heading { margin-bottom: 1rem; }
+.css-scope-admin-dashboard .dashboard-metric-grid,
+.css-scope-admin-dashboard .dashboard-panel-grid { display: none; }
+.css-scope-admin-dashboard .dashboard-donut { display: none; }
+.css-scope-admin-dashboard .dashboard-chart-shell,
+.css-scope-admin-dashboard .dashboard-chart-shell--wide { grid-template-columns: minmax(0, 1fr); }
+.css-scope-admin-dashboard :is(.dashboard-chart-card, #dashboard-live-region > .content-card, .dashboard-filter-card) {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  border-radius: 0;
+  padding-left: 0;
+  padding-right: 0;
+}
+.css-scope-admin-dashboard .dashboard-chart-grid { gap: 0 2rem; }
+.css-scope-admin-dashboard .dashboard-chart-card {
+  border-top: 1px solid var(--line-soft);
+  padding-top: 1.25rem;
+}
+.admin-dashboard-access {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--line-soft);
+}
+.admin-dashboard-access-count { color: var(--muted); font-size: .9rem; }
+.admin-dashboard-access-list { display: grid; }
+.admin-dashboard-access-list a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--line-soft);
+  color: inherit;
+  text-decoration: none;
+}
+.admin-dashboard-access-list a:hover strong { text-decoration: underline; text-underline-offset: .2em; }
+.admin-dashboard-access-list a > span:first-child { display: grid; gap: .25rem; }
+.admin-dashboard-access-list small { color: var(--muted); font-weight: 400; }
+
+.sidebar-icon svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.sidebar-edge-handle {
+  --sidebar-edge-handle-top: 45vh;
+  position: fixed;
+  left: 0;
+  top: var(--sidebar-edge-handle-top);
+  transform: translateY(-50%);
+  z-index: 45;
+  width: 27px;
+  min-width: 27px;
+  height: 74px;
+  padding: 7px 4px;
+  border: 1px solid color-mix(in srgb, var(--red) 78%, #000 22%);
+  border-left: 0;
+  border-radius: 0 9px 9px 0;
+  background: var(--red);
+  color: #fff;
+  box-shadow: 2px 2px 9px rgb(0 0 0 / .18);
+  cursor: ns-resize;
+  touch-action: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+.sidebar-edge-handle:hover,
+.sidebar-edge-handle:focus-visible { color: #fff; background: color-mix(in srgb, var(--red) 82%, #000 18%); }
+.sidebar-edge-handle-grip { display: grid; gap: 2px; }
+.sidebar-edge-handle-grip i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; }
+.sidebar-edge-handle-label { writing-mode: vertical-rl; transform: rotate(180deg); font-size: .64rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.sidebar-edge-handle {
+  transition: left 180ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+@media (min-width: 981px) {
+  html[data-sidebar-pinned="true"] .sidebar-edge-handle,
+  .sidebar.is-desktop-open + .sidebar-edge-handle {
+    left: calc(var(--sidebar-width) - 1px);
+  }
+}
+@media (max-width: 980px) {
+  .sidebar.is-mobile-open + .sidebar-edge-handle {
+    left: calc(min(var(--sidebar-width), 86vw) - 1px);
+  }
+}
+
+.topbar-account-link {
+  color: var(--muted);
+  font-size: .85rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+.topbar-account-link:hover { color: var(--text); text-decoration: underline; text-underline-offset: .2em; }
+.account-tool-pin-section { max-width: 760px; }
+.account-tool-pin-form { margin-top: 1rem; }
+.account-tool-pin-remove { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--line-soft); }
+.management-user-monitoring-note {
+  margin: .8rem 0 0;
+  padding: .7rem 0;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line-soft);
+  font-size: .86rem;
+}
+.management-user-monitoring-note strong { color: var(--text); }
+
+
+
+/* Printer registry: registered printer name is authoritative; alias is secondary. */
+.label-printer-registry-name {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: var(--ui-font-weight-strong);
+  line-height: 1.25;
+}
+.label-printer-registry-alias {
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 600;
+}
+
+/* 2026-10-01 refinement: aligned printer modal form. */
+.label-printer-form {
+  gap: 18px;
+}
+.label-printer-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+  align-items: start;
+}
+.label-printer-form-grid .form-field {
+  align-content: start;
+  gap: 5px;
+}
+.label-printer-form-grid .form-field > span {
+  min-height: 18px;
+  margin: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+.label-printer-optional {
+  color: var(--muted);
+  font-size: .72rem;
+  font-style: normal;
+  font-weight: 500;
+}
+.label-printer-field-wide,
+.label-printer-grid-note {
+  grid-column: 1 / -1;
+}
+.label-printer-grid-note {
+  margin: -5px 0 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line-soft);
+  color: var(--muted);
+  font-size: .78rem;
+  line-height: 1.4;
+}
+.label-printer-toggle-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 760px) {
+  .label-printer-form-grid,
+  .label-printer-toggle-row {
+    grid-template-columns: 1fr;
+  }
+  .label-printer-field-wide,
+  .label-printer-grid-note { grid-column: 1; }
+}
+
+/* QC reviewer oversight and independent spot-check workflow. */
+.modal-panel.site-clean-modal.qc-reviewer-audit-modal {
+  width: min(900px, calc(100vw - 36px));
+}
+
+.qc-reviewer-audit-context,
+.qc-reviewer-audit-result {
+  padding: 12px 14px;
+}
+
+.qc-reviewer-audit-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin: 0;
+}
+
+.qc-reviewer-audit-details > div {
+  display: grid;
+  gap: 3px;
+}
+
+.qc-reviewer-audit-details .qc-reviewer-audit-notes {
+  grid-column: 1 / -1;
+}
+
+.qc-reviewer-audit-outcomes {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.qc-reviewer-audit-outcomes legend {
+  margin-bottom: 4px;
+  color: var(--ui-heading);
+  font-weight: 750;
+}
+
+.qc-reviewer-oversight-summary {
+  margin-top: 0;
+}
+
+@media (max-width: 720px) {
+  .modal-panel.site-clean-modal.qc-reviewer-audit-modal {
+    width: calc(100vw - 20px);
+  }
+
+  .qc-reviewer-audit-details {
+    grid-template-columns: 1fr;
+  }
+
+  .qc-reviewer-audit-details .qc-reviewer-audit-notes {
+    grid-column: 1;
+  }
+}
+
+/* Phone navigation: replace the vertical edge tab with a fixed top hamburger. */
+@media (max-width: 720px) {
+  .sidebar-edge-handle {
+    left: 12px;
+    top: 12px;
+    width: 42px;
+    min-width: 42px;
+    height: 42px;
+    padding: 9px;
+    transform: none;
+    border: 1px solid color-mix(in srgb, var(--red) 78%, #000 22%);
+    border-radius: 9px;
+    background: var(--red);
+    cursor: pointer;
+    touch-action: manipulation;
+    gap: 0;
+  }
+
+  .sidebar.is-mobile-open + .sidebar-edge-handle {
+    left: calc(min(300px, calc(100vw - 48px)) - 54px);
+  }
+
+  .sidebar-edge-handle:hover,
+  .sidebar-edge-handle:focus-visible {
+    color: #fff;
+    background: color-mix(in srgb, var(--red) 82%, #000 18%);
+  }
+
+  .sidebar-edge-handle-label {
+    display: none;
+  }
+
+  .sidebar-edge-handle-grip {
+    display: grid;
+    width: 18px;
+    gap: 4px;
+  }
+
+  .sidebar-edge-handle-grip i {
+    width: 18px;
+    height: 2px;
+    border-radius: 2px;
+    background: currentColor;
+    transition: transform 160ms ease, opacity 160ms ease;
+  }
+
+  body.sidebar-mobile-open .sidebar-edge-handle-grip i:nth-child(1) {
+    transform: translateY(6px) rotate(45deg);
+  }
+
+  body.sidebar-mobile-open .sidebar-edge-handle-grip i:nth-child(2) {
+    opacity: 0;
+  }
+
+  body.sidebar-mobile-open .sidebar-edge-handle-grip i:nth-child(3) {
+    transform: translateY(-6px) rotate(-45deg);
+  }
+
+  .topbar {
+    padding-left: 64px;
+  }
+}
+
+
+/* Global aligned data-table refinement: shared by compact management list tables. */
+.site-data-table-card {
+  border-radius: 0;
+}
+.site-data-table {
+  min-width: 720px;
+  table-layout: fixed;
+}
+.site-data-table th,
+.site-data-table td {
+  vertical-align: middle;
+}
+.site-data-table-primary-link {
+  color: var(--blue-dark);
+  font-weight: 720;
+  text-decoration: none;
+}
+.site-data-table-primary-link:hover,
+.site-data-table-primary-link:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.site-data-table-stack {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.site-data-table-stack strong {
+  color: var(--text);
+  font-size: .84rem;
+  font-weight: 650;
+}
+.site-data-table-stack small {
+  color: var(--muted);
+  font-size: .74rem;
+}
+.site-data-table-empty {
+  color: var(--muted);
+  text-align: center;
+}
+.css-scope-virtual-huddle .virtual-huddle-type-tabs {
+  margin-top: 8px;
+  border-top: 1px solid var(--line-soft);
+  padding-top: 8px;
+}
+.css-scope-virtual-huddle .virtual-huddle-table th:nth-child(1),
+.css-scope-virtual-huddle .virtual-huddle-table td:nth-child(1) { width: 42%; }
+.css-scope-virtual-huddle .virtual-huddle-table th:nth-child(2),
+.css-scope-virtual-huddle .virtual-huddle-table td:nth-child(2) { width: 14%; }
+.css-scope-virtual-huddle .virtual-huddle-table th:nth-child(3),
+.css-scope-virtual-huddle .virtual-huddle-table td:nth-child(3) { width: 24%; }
+.css-scope-virtual-huddle .virtual-huddle-table th:nth-child(4),
+.css-scope-virtual-huddle .virtual-huddle-table td:nth-child(4) { width: 20%; }
+
+.css-scope-virtual-huddle .my-huddles-table th:nth-child(1),
+.css-scope-virtual-huddle .my-huddles-table td:nth-child(1) { width: 34%; }
+.css-scope-virtual-huddle .my-huddles-table th:nth-child(2),
+.css-scope-virtual-huddle .my-huddles-table td:nth-child(2) { width: 12%; }
+.css-scope-virtual-huddle .my-huddles-table th:nth-child(3),
+.css-scope-virtual-huddle .my-huddles-table td:nth-child(3) { width: 22%; }
+.css-scope-virtual-huddle .my-huddles-table th:nth-child(4),
+.css-scope-virtual-huddle .my-huddles-table td:nth-child(4) { width: 16%; }
+.css-scope-virtual-huddle .my-huddles-table th:nth-child(5),
+.css-scope-virtual-huddle .my-huddles-table td:nth-child(5) { width: 16%; }
+
+
+/* Virtual Huddle type treatment: type is communicated with text color only. */
+.css-scope-virtual-huddle .virtual-huddle-table .site-data-table-primary-link {
+  font-weight: 590;
+}
+
+.css-scope-virtual-huddle .virtual-huddle-row--standard {
+  --huddle-message-color: #315f8d;
+  --huddle-type-color: #4b6f96;
+}
+
+.css-scope-virtual-huddle .virtual-huddle-row--priority {
+  --huddle-message-color: #80571d;
+  --huddle-type-color: #8d6428;
+}
+
+.css-scope-virtual-huddle .virtual-huddle-row--urgent {
+  --huddle-message-color: #93424b;
+  --huddle-type-color: #9b4e57;
+}
+
+.css-scope-virtual-huddle .virtual-huddle-row .site-data-table-primary-link {
+  color: var(--huddle-message-color, var(--blue-dark));
+}
+
+.css-scope-virtual-huddle .virtual-huddle-row .unit-request-type-label {
+  color: var(--huddle-type-color, var(--slate));
+  font-weight: 650;
+}
+
+
+.css-scope-virtual-huddle .virtual-huddle-row[data-huddle-row-open] {
+  cursor: pointer;
+}
+.css-scope-virtual-huddle .virtual-huddle-row[data-huddle-row-open]:focus-visible {
+  outline: 2px solid #2f6fad;
+  outline-offset: -2px;
 }

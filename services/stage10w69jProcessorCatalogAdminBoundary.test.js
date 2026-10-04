@@ -30,7 +30,7 @@ test('all direct Processor Catalog Configuration routes are Admin-only', () => {
     const start = routes.indexOf(`'${routePath}'`);
     assert.notEqual(start, -1, `${routePath} route should exist`);
     const block = routes.slice(start, routes.indexOf(');', start) + 2);
-    assert.match(block, /requireRole\(configRoles\)/, `${routePath} must require Admin configuration access`);
+    assert.match(block, /requirePermission\('configuration\.processors\.manage'\)/, `${routePath} must require Processor Catalog management access`);
   }
 });
 
@@ -39,27 +39,27 @@ test('Management no longer receives direct Processor Catalog navigation', () => 
   const nav = read('views/partials/configuration-nav.ejs');
 
   assert.doesNotMatch(sidebar, /!canAccessMenuArea\('admin'\)[\s\S]*?\/management\/config\/processors/);
-  assert.match(nav, /label: 'Processor Catalog'[\s\S]*?allowed: isAdminConfigurationUser/);
+  assert.match(nav, /label: 'Processor Catalog'[\s\S]*?allowed: canViewConfiguration && hasPermission\('configuration\.processors\.manage'\)/);
   assert.doesNotMatch(nav, /isManagementConfigurationUser/);
 });
 
-test('Model and Processor Catalog request decisions are Admin-only while Management keeps inspection access', () => {
+test('Model and Processor Catalog request decisions require type-specific approval permission', () => {
   const controller = read('controllers/unitRequestController.js');
   const model = read('models/unitRequestModel.js');
   const page = read('views/pages/unit-request-detail.ejs');
   const queue = read('views/pages/unit-requests.ejs');
 
-  assert.match(controller, /const CATALOG_MANAGER_ROLE_CODES = new Set\(\['admin'\]\)/);
-  assert.match(controller, /Only Admin can approve or reject Model and Processor Catalog requests/);
-  assert.match(controller, /reviewerIsAdmin: isAdminCatalogReviewer\(req\)/);
+  assert.match(controller, /return request \? canApproveCatalogRequest\(req, request\) : canApproveAnyCatalogRequests\(req\)/);
+  assert.match(controller, /The matching Model or Processor Catalog approval permission is required to approve or reject this request/);
+  assert.match(controller, /reviewerIsAdmin: isAdminCatalogReviewer\(req, request\)/);
   assert.doesNotMatch(controller, /confirmedProcessorNamingWithAdmin/);
-  assert.match(model, /Only Admin can approve Model Catalog requests/);
-  assert.match(model, /Only Admin can approve Processor Catalog requests/);
+  assert.match(model, /Approve Model Catalog Requests permission is required to approve Model Catalog requests/);
+  assert.match(model, /Approve Processor Catalog Requests permission is required to approve Processor Catalog requests/);
   assert.doesNotMatch(model, /Management must confirm a new canonical Processor name and metadata with an Admin/);
   assert.doesNotMatch(page, /Management Request Boundary/);
   assert.doesNotMatch(page, /name="confirmedProcessorNamingWithAdmin"/);
-  assert.match(page, /Tech Leads and Management can inspect Model and Processor Catalog requests, but only Admin can approve or reject them/);
-  assert.match(queue, /Model and Processor Catalog approvals are Admin-only/);
+  assert.match(page, /The matching Model or Processor Catalog approval permission is required to approve or reject it/);
+  assert.match(queue, /Each request type has separate approval authority/);
 });
 
 test('Admin retains the complete direct Processor Catalog CRUD surface', () => {
@@ -71,6 +71,6 @@ test('Admin retains the complete direct Processor Catalog CRUD surface', () => {
   assert.match(page, />Models<\/a>/);
   assert.match(page, /Resolve Duplicate<\/a>/);
   assert.match(page, />Delete<\/a>/);
-  assert.match(routes, /processors\/:processorModelId\/edit\/modal'[\s\S]*?requireRole\(configRoles\)/);
-  assert.match(routes, /processors\/:processorModelId\/delete'[\s\S]*?requireRole\(configRoles\)/);
+  assert.match(routes, /processors\/:processorModelId\/edit\/modal'[\s\S]*?requirePermission\('configuration\.processors\.manage'\)/);
+  assert.match(routes, /processors\/:processorModelId\/delete'[\s\S]*?requirePermission\('configuration\.processors\.manage'\)/);
 });

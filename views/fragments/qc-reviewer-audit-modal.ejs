@@ -1,0 +1,80 @@
+<%
+  const safeReview = review || null;
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeForm = formData || { outcome: '', notes: '' };
+  const isOwnReview = Boolean(safeReview && Number(safeReview.reviewerUserId) === Number(currentUserId));
+  const alreadyAudited = Boolean(safeReview && safeReview.audit);
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal qc-reviewer-audit-modal" role="dialog" aria-modal="true" aria-labelledby="qc-reviewer-audit-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">QC Team Oversight</p>
+        <h2 id="qc-reviewer-audit-title">QC Reviewer Spot Check</h2>
+        <p>Independently inspect the Unit and verify whether the original QC decision was appropriate.</p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close QC reviewer audit">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (noticeMessage) { %><div class="message success"><p><%= noticeMessage %></p></div><% } %>
+      <% safeErrors.forEach((message) => { %><div class="message error"><p><%= message %></p></div><% }) %>
+
+      <% if (safeReview) { %>
+        <section class="site-clean-section qc-reviewer-audit-context">
+          <div class="site-clean-section-heading">
+            <div><h3>Original QC Decision</h3><p>This spot check is separate from the original decision and does not alter it.</p></div>
+            <span class="pill <%= safeReview.decisionCode === 'accepted' ? 'good' : 'bad' %>"><%= safeReview.decisionLabel %></span>
+          </div>
+          <dl class="record-detail-list qc-reviewer-audit-details">
+            <div><dt>Unit</dt><dd><strong><%= safeReview.unitLabel %></strong> <small>(Unit #<%= safeReview.unitId %>)</small></dd></div>
+            <div><dt>QC Reviewer</dt><dd><%= safeReview.reviewerName %></dd></div>
+            <div><dt>Completed</dt><dd><%= safeReview.completedAt ? formatDateTime(safeReview.completedAt) : '—' %></dd></div>
+            <div><dt>QC Reviewed</dt><dd><%= safeReview.reviewedAt ? formatDateTime(safeReview.reviewedAt) : '—' %></dd></div>
+            <div class="qc-reviewer-audit-notes"><dt>Original QC Notes</dt><dd><%= safeReview.reviewNotes || 'No QC note was recorded.' %></dd></div>
+          </dl>
+          <div class="site-clean-actions">
+            <a class="secondary-button" href="/tech/units/<%= safeReview.unitId %>" target="_blank" rel="noopener">Open Unit in New Tab</a>
+          </div>
+        </section>
+
+        <% if (alreadyAudited) { %>
+          <section class="site-clean-section qc-reviewer-audit-result">
+            <div class="site-clean-section-heading">
+              <div><h3>Recorded Audit</h3><p>Each QC decision receives at most one reviewer audit so the oversight history remains stable.</p></div>
+              <span class="pill <%= safeReview.audit.outcome === 'agree' ? 'good' : 'warning' %>"><%= safeReview.audit.outcomeLabel %></span>
+            </div>
+            <dl class="record-detail-list">
+              <div><dt>Audited By</dt><dd><%= safeReview.audit.auditedByName %></dd></div>
+              <div><dt>Audited At</dt><dd><%= safeReview.audit.auditedAt ? formatDateTime(safeReview.audit.auditedAt) : '—' %></dd></div>
+              <div><dt>Notes</dt><dd><%= safeReview.audit.notes || 'No additional notes.' %></dd></div>
+            </dl>
+          </section>
+        <% } else if (isOwnReview) { %>
+          <div class="message warning"><p>You cannot audit your own QC decision. A different authorized reviewer must perform the spot check.</p></div>
+        <% } else { %>
+          <form class="app-form app-form-clean" method="post" action="/management/qc-reporting/reviews/<%= safeReview.qcCheckId %>/audit" hx-post="/management/qc-reporting/reviews/<%= safeReview.qcCheckId %>/audit" hx-target="#modal-root" hx-swap="innerHTML">
+            <fieldset class="qc-reviewer-audit-outcomes">
+              <legend>Independent Audit Result</legend>
+              <label class="checkbox-row"><input type="radio" name="outcome" value="agree" <%= safeForm.outcome === 'agree' ? 'checked' : '' %> required /><span><strong>Agree</strong><small>The original QC decision matches your independent inspection.</small></span></label>
+              <label class="checkbox-row"><input type="radio" name="outcome" value="missed_defect" <%= safeForm.outcome === 'missed_defect' ? 'checked' : '' %> /><span><strong>QC Missed Defect</strong><small>The original reviewer accepted or otherwise missed a defect that should have affected QC.</small></span></label>
+              <label class="checkbox-row"><input type="radio" name="outcome" value="false_rejection" <%= safeForm.outcome === 'false_rejection' ? 'checked' : '' %> /><span><strong>QC False Rejection</strong><small>The original reviewer rejected the Unit for an issue your independent inspection does not support.</small></span></label>
+            </fieldset>
+            <label class="form-field">
+              <span>Audit Notes <small>(required for a discrepancy)</small></span>
+              <textarea name="notes" rows="4" maxlength="2000" placeholder="Explain what you independently verified, especially when you disagree with the original QC decision."><%= safeForm.notes || '' %></textarea>
+            </label>
+            <div class="site-clean-actions">
+              <button class="primary-button" type="submit">Record QC Reviewer Audit</button>
+              <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+            </div>
+          </form>
+        <% } %>
+      <% } %>
+
+      <% if (!safeReview) { %>
+        <div class="site-clean-actions"><button class="secondary-button" type="button" data-modal-close>Close</button></div>
+      <% } %>
+    </div>
+  </section>
+</div>

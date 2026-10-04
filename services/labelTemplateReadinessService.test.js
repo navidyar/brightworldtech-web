@@ -14,6 +14,7 @@ test('representative validation values cover current registered label fields', (
   assert.equal(values['unit.asset_tag'], 'BWT123456');
   assert.equal(values['unit.processor_short'], 'Intel Core i7-10th');
   assert.equal(values['unit.operating_system_short'], 'Win 11 Pro');
+  assert.equal(values['unit.cosmetic_grade'], 'A');
   assert.equal(values['lot.name'], '#ARS');
 });
 

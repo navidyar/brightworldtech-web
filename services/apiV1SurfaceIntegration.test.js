@@ -10,6 +10,7 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'u
 
 test('API v1 Unit surface exposes the finalized Resolve, Action, Commit, options, and wipe evidence endpoints', () => {
   const routes = read('routes/api.js');
+  assert.match(routes, /router\.get\('\/tool-configuration'/);
   assert.match(routes, /router\.get\('\/units\/creation-options'/);
   assert.match(routes, /router\.post\('\/units\/resolve'/);
   assert.match(routes, /router\.post\('\/units\/action'/);
@@ -17,7 +18,7 @@ test('API v1 Unit surface exposes the finalized Resolve, Action, Commit, options
   assert.match(routes, /router\.put\('\/units\/:unitId\/wipe-certificates\/:certificateId'/);
 });
 
-test('Tool catalog requests reuse the existing Admin-reviewed Unit Request workflow and expose status polling only', () => {
+test('Tool catalog requests reuse permission-reviewed Unit Request workflow and expose status polling only', () => {
   const routes = read('routes/api.js');
   const service = read('services/apiCatalogRequest.js');
   const requestModel = read('models/unitRequestModel.js');
@@ -29,8 +30,8 @@ test('Tool catalog requests reuse the existing Admin-reviewed Unit Request workf
   assert.match(service, /unitRequestModel\.createProcessorCatalogRequest/);
   assert.match(service, /unitRequestModel\.getUnitRequestById/);
   assert.doesNotMatch(service, /approveModelCatalogRequest|approveProcessorCatalogRequest/);
-  assert.match(requestModel, /Only Admin can approve Model Catalog requests/);
-  assert.match(requestModel, /Only Admin can approve Processor Catalog requests/);
+  assert.match(requestModel, /Approve Model Catalog Requests permission is required to approve Model Catalog requests/);
+  assert.match(requestModel, /Approve Processor Catalog Requests permission is required to approve Processor Catalog requests/);
 });
 
 test('legacy direct Unit create and inventory ingestion are no longer public API routes', () => {

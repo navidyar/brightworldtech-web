@@ -13,7 +13,7 @@ test('Configuration exposes an Admin-only category order endpoint', () => {
   const controller = read('controllers/configController.js');
 
   assert.match(routes, /\/management\/config\/categories\/:configCategoryId\/order/);
-  assert.match(routes, /requireRole\(configRoles\)[\s\S]*configController\.reorderConfigValues/);
+  assert.match(routes, /requirePermission\('configuration\.values\.manage'\)[\s\S]*configController\.reorderConfigValues/);
   assert.match(controller, /async function reorderConfigValues/);
   assert.match(controller, /orderedConfigValueIds/);
   assert.match(controller, /res\.status\(error\.statusCode\)\.json/);

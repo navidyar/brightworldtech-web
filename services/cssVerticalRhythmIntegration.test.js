@@ -30,14 +30,14 @@ test('Virtual Huddle table surfaces and Label Template intro note use the shared
   const myHuddles = read('views/pages/my-huddles.ejs');
   const labelTemplate = read('views/fragments/label-template-form-modal.ejs');
 
-  assert.match(history, /class="content-header"[\s\S]*?class="table-card"/);
+  assert.match(history, /class="unit-request-results-header"[\s\S]*?class="table-card site-data-table-card virtual-huddle-table-card"/);
   assert.match(detail, /Acknowledgment Status[\s\S]*?class="table-card"/);
-  assert.match(myHuddles, /Acknowledged Huddles[\s\S]*?class="table-card"/);
+  assert.match(myHuddles, /unit-request-results-header[\s\S]*?class="table-card site-data-table-card virtual-huddle-table-card"/);
   assert.match(labelTemplate, /class="message info"[\s\S]*?<\/div>\s*<form\b/);
 });
 
-test('shared app stylesheet cache key is bumped for the vertical-rhythm correction', () => {
+test('shared app stylesheet uses a cache key on every entry page', () => {
   for (const relativePath of ['views/partials/head.ejs', 'views/pages/error.ejs', 'views/pages/not-found.ejs']) {
-    assert.match(read(relativePath), /\/css\/app\.css\?v=20260921-shared-vertical-rhythm-final/);
+    assert.match(read(relativePath), /\/css\/app\.css\?v=[^"'\s>]+/);
   }
 });

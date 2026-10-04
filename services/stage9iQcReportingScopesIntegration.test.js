@@ -12,7 +12,7 @@ test('Stage 9I applies reporting scope before building Management QC totals', ()
   const controller = read('controllers/qcReportingController.js');
 
   assert.match(controller, /listManagementQcReportingTechnicianOptions/);
-  assert.match(controller, /buildQcReportingScope\(req\.query, technicianOptions\)/);
+  assert.match(controller, /buildQcReportingScope\(req\.query, technicianOptions, \{ timeZone: req\.timeZone \}\)/);
   assert.match(controller, /listManagementQcReportingRows\(scope\.queryFilters\)/);
   assert.match(controller, /QcReportingScopeError/);
   assert.match(controller, /status: 400/);
@@ -27,7 +27,8 @@ test('Stage 9I filters by completion date with an exclusive next-day boundary', 
   assert.doesNotMatch(model, /qc\.reviewed_at\s*[<>]=?\s*\?/);
   assert.match(scope, /getDayRangeUtc/);
   assert.match(scope, /endRange\.endAt/);
-  assert.match(scope, /APP_DISPLAY_TIME_ZONE/);
+  assert.match(scope, /getDayRangeUtc\(startDate, timeZone\)/);
+  assert.doesNotMatch(scope, /APP_DISPLAY_TIME_ZONE|America\/Chicago/);
 });
 
 test('Stage 9I technician-team filtering uses the shared QC attribution expression', () => {
@@ -68,7 +69,7 @@ test('Stage 9I reuses reporting-period behavior and cache-busts changed assets',
 test('Stage 9I shared CSS keeps filters compact and responsive', () => {
   const css = read('public/css/app.css');
 
-  assert.match(css, /Stage 9I: Quality Control reporting date and technician-team scopes/);
+  assert.match(css, /Quality Control reporting date and technician-team scopes/);
   assert.match(css, /\.qc-reporting-scope-form \{[\s\S]*grid-template-columns/);
   assert.match(css, /\.qc-reporting-team-options \{[\s\S]*grid-template-columns/);
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.qc-reporting-scope-form/);

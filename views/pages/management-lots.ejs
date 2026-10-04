@@ -150,7 +150,9 @@
                 <% } else { %>
                   <a class="secondary-button" href="/management/lots?showHidden=1">Show Hidden Lots</a>
                 <% } %>
-                <a class="primary-button" href="/management/lots/new/modal" hx-get="/management/lots/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Create Lot</a>
+                <% if (hasPermission('lots.create')) { %>
+                  <a class="primary-button" href="/management/lots/new/modal" hx-get="/management/lots/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Create Lot</a>
+                <% } %>
               </div>
             </div>
 
@@ -307,18 +309,20 @@
 
                       <td>
                         <div class="lot-row-actions site-inline-actions">
-                          <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
-                          <% if (Number(lot.is_closed) === 1) { %>
+                          <% if (hasPermission('lots.edit')) { %>
+                            <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                          <% } %>
+                          <% if (Number(lot.is_closed) === 1 && hasPermission('lots.reopen')) { %>
                             <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal" hx-target="#modal-root" hx-swap="innerHTML">Reopen</a>
-                          <% } else { %>
+                          <% } else if (Number(lot.is_closed) !== 1 && hasPermission('lots.close')) { %>
                             <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/close/modal" hx-get="/management/lots/<%= lot.lot_id %>/close/modal" hx-target="#modal-root" hx-swap="innerHTML">Close</a>
                           <% } %>
-                          <% if (Number(lot.is_active) === 1) { %>
+                          <% if (Number(lot.is_active) === 1 && hasPermission('lots.visibility.manage')) { %>
                             <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal" hx-target="#modal-root" hx-swap="innerHTML">Hide</a>
-                          <% } else { %>
+                          <% } else if (Number(lot.is_active) !== 1 && hasPermission('lots.visibility.manage')) { %>
                             <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-get="/management/lots/<%= lot.lot_id %>/unhide/modal" hx-target="#modal-root" hx-swap="innerHTML">Unhide</a>
                           <% } %>
-                          <% if (Number(lot.unitCount || 0) === 0 && childLots.length === 0) { %>
+                          <% if (hasPermission('lots.delete') && Number(lot.unitCount || 0) === 0 && childLots.length === 0) { %>
                             <a class="secondary-button danger-button" href="/management/lots/<%= lot.lot_id %>/delete/modal" hx-get="/management/lots/<%= lot.lot_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete</a>
                           <% } %>
                         </div>

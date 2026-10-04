@@ -12,11 +12,15 @@
           <section class="page-heading">
             <div>
               <h1>Label Printers</h1>
-              <p>Register managed printers and organize shared printers into routing groups. Production printing still uses the existing validated queue until registry cutover.</p>
+              <p>Review managed printers and shared printer groups. Production printing still uses the existing validated queue until registry cutover.</p>
             </div>
             <div class="management-user-row-actions site-inline-actions">
+              <% if (hasPermission('printers.groups.manage')) { %>
               <a class="secondary-button" href="/management/printer-groups/new/modal" hx-get="/management/printer-groups/new/modal" hx-target="#modal-root" hx-swap="innerHTML">New Group</a>
+              <% } %>
+              <% if (hasPermission('printers.managed.manage')) { %>
               <a class="primary-button" href="/management/printers/new/modal" hx-get="/management/printers/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Add Printer</a>
+              <% } %>
             </div>
           </section>
           <%- include('../fragments/management-printers-live', { printers, groups, successMessage, errorMessages, oob: false }) %>

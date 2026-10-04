@@ -18,25 +18,33 @@
     'admin-config-models',
     'admin-config-database'
   ];
-  const adminSectionActive = adminConfigurationNavKeys.includes(currentNav) || ['management', 'management-qc-reporting', 'management-printers'].includes(currentNav);
-  const managementSectionActive = ['management-login-activity', 'management-lots', 'management-label-library', 'management-virtual-huddle'].includes(currentNav);
-  const sidebarRoleCodes = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
-  const isQcOnlyNavigationUser = sidebarRoleCodes.includes('qc')
-    && !sidebarRoleCodes.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
-  const qcSectionActive = currentNav === 'qc-review' || (isQcOnlyNavigationUser && currentNav === 'unit-requests');
+  const canViewLoginAudit = typeof hasPermission === 'function' && hasPermission('audit.login.view');
+  const canViewUserManagementAudit = typeof hasPermission === 'function' && hasPermission('audit.user_management.view');
+  const canViewPermissionAudit = typeof hasPermission === 'function' && hasPermission('audit.permissions.view');
+  const canViewQcReporting = typeof hasPermission === 'function' && hasPermission('qc.reporting.view');
+  const canViewQcPortal = typeof hasPermission === 'function' && hasPermission('qc.portal.view');
+  const canViewConfiguration = typeof hasPermission === 'function' && hasPermission('configuration.view');
+  const canViewLots = typeof hasPermission === 'function' && hasPermission('lots.view');
+  const canViewHuddleAdministration = typeof hasPermission === 'function' && hasPermission('huddle.administration.view');
+  const canViewRolesPermissions = typeof hasPermission === 'function' && hasPermission('roles.view');
+  const canViewUsers = typeof hasPermission === 'function' && hasPermission('users.view');
+  const canViewLabelLibrary = typeof hasPermission === 'function' && hasPermission('labels.library.view');
+  const canViewManagedPrinters = typeof hasPermission === 'function' && hasPermission('printers.managed.view');
+  const canViewUnits = typeof hasPermission === 'function' && hasPermission('units.view');
+  const canManageOwnPrinters = typeof hasPermission === 'function' && hasPermission('printers.solo.manage');
+  const canViewRequests = typeof hasPermission === 'function' && hasPermission('requests.view');
+  const canViewMyHuddles = typeof hasPermission === 'function' && hasPermission('huddle.personal.view');
+  const adminSectionActive = adminConfigurationNavKeys.includes(currentNav) || ['management', 'management-user-history', 'management-login-activity', 'management-roles-permissions', 'management-permission-audit', 'management-qc-reporting', 'management-printers'].includes(currentNav);
+  const showAdminSection = canViewConfiguration || canViewLoginAudit || canViewPermissionAudit || canViewUserManagementAudit || canViewQcReporting || canViewRolesPermissions || canViewUsers || canViewManagedPrinters;
+  const managementSectionActive = ['management-lots', 'management-label-library', 'management-virtual-huddle'].includes(currentNav);
+  const showRequestsInQcSection = canViewQcPortal && canViewRequests && !canViewUnits && !canManageOwnPrinters;
+  const showTechSection = canViewUnits || canManageOwnPrinters || (canViewRequests && !showRequestsInQcSection);
+  const qcSectionActive = currentNav === 'qc-review' || (showRequestsInQcSection && currentNav === 'unit-requests');
   const techSectionActive = ['tech-units', 'tech-printers', 'unit-requests'].includes(currentNav);
 %>
 
 <aside class="sidebar" id="app-sidebar" aria-label="Primary navigation">
   <div class="sidebar-brand">
-    <button
-      type="button"
-      class="sidebar-pin-button"
-      data-sidebar-pin
-      aria-pressed="false"
-      title="Pin sidebar"
-    >Pin</button>
-
     <a href="/" class="brand-card">
       <div class="brand-mark">BWT</div>
       <div>
@@ -50,7 +58,7 @@
     <% if (accessibleDashboards.length > 1) { %>
       <section class="sidebar-section <%= dashboardSectionActive ? 'is-active' : '' %>">
         <div class="sidebar-section-heading <%= dashboardSectionActive ? 'is-active' : '' %>">
-          <span class="sidebar-icon" aria-hidden="true">⌂</span>
+          <span class="sidebar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3.5 10.5 12 3l8.5 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-5v-6h-4v6H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg></span>
           <span>Dashboard</span>
         </div>
 
@@ -64,41 +72,69 @@
       </section>
     <% } else { %>
       <a href="<%= dashboardHref %>" class="sidebar-link <%= dashboardSectionActive ? 'active' : '' %>" <%= dashboardSectionActive ? 'aria-current="page"' : '' %>>
-        <span class="sidebar-icon" aria-hidden="true">⌂</span>
+        <span class="sidebar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3.5 10.5 12 3l8.5 7.5v9a1.5 1.5 0 0 1-1.5 1.5h-5v-6h-4v6H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg></span>
         <span>Dashboard</span>
       </a>
     <% } %>
 
-    <a href="/my-huddles" class="sidebar-link <%= currentNav === 'my-huddles' ? 'active' : '' %>" <%= currentNav === 'my-huddles' ? 'aria-current="page"' : '' %>>
-      <span class="sidebar-icon" aria-hidden="true">✉</span>
-      <span>My Huddles</span>
-    </a>
+    <% if (canViewMyHuddles) { %>
+      <a href="/my-huddles" class="sidebar-link <%= currentNav === 'my-huddles' ? 'active' : '' %>" <%= currentNav === 'my-huddles' ? 'aria-current="page"' : '' %>>
+        <span class="sidebar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M3 6.5h18v11H3z"/><path d="m4 7.5 8 6 8-6"/></svg></span>
+        <span>My Huddles</span>
+      </a>
+    <% } %>
 
-    <% if (canAccessMenuArea('admin')) { %>
+    <% if (showAdminSection) { %>
       <section class="sidebar-section <%= adminSectionActive ? 'is-active' : '' %>">
         <div class="sidebar-section-heading <%= adminSectionActive ? 'is-active' : '' %>">
-          <span class="sidebar-icon" aria-hidden="true">✦</span>
+          <span class="sidebar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="M12 3.5v17M3.5 12h17"/><circle cx="12" cy="12" r="4.5"/></svg></span>
           <span>Admin</span>
         </div>
 
         <div class="sidebar-subnav">
-          <a href="/management/config" class="sidebar-sublink <%= adminConfigurationNavKeys.includes(currentNav) ? 'active' : '' %>" <%= currentNav === 'admin-config-values' ? 'aria-current="page"' : '' %>>
-            <span>Configuration</span>
-          </a>
+          <% if (canViewConfiguration) { %>
+            <a href="/management/config" class="sidebar-sublink <%= adminConfigurationNavKeys.includes(currentNav) ? 'active' : '' %>" <%= currentNav === 'admin-config-values' ? 'aria-current="page"' : '' %>>
+              <span>Configuration</span>
+            </a>
+          <% } %>
 
-          <% if (typeof canAccessFeature === 'function' && canAccessFeature('userAdministration')) { %>
+          <% if (canViewUsers) { %>
             <a href="/management/users" class="sidebar-sublink <%= currentNav === 'management' ? 'active' : '' %>" <%= currentNav === 'management' ? 'aria-current="page"' : '' %>>
               <span>Users</span>
             </a>
           <% } %>
 
-          <% if (typeof canAccessFeature === 'function' && canAccessFeature('qcReporting')) { %>
+          <% if (canViewRolesPermissions) { %>
+            <a href="/management/roles-permissions" class="sidebar-sublink <%= currentNav === 'management-roles-permissions' ? 'active' : '' %>" <%= currentNav === 'management-roles-permissions' ? 'aria-current="page"' : '' %>>
+              <span>Roles &amp; Permissions</span>
+            </a>
+          <% } %>
+
+          <% if (canViewUserManagementAudit) { %>
+            <a href="/management/users/history" class="sidebar-sublink <%= currentNav === 'management-user-history' ? 'active' : '' %>" <%= currentNav === 'management-user-history' ? 'aria-current="page"' : '' %>>
+              <span>Account History</span>
+            </a>
+          <% } %>
+
+          <% if (canViewLoginAudit) { %>
+            <a href="/management/login-activity" class="sidebar-sublink <%= currentNav === 'management-login-activity' ? 'active' : '' %>" <%= currentNav === 'management-login-activity' ? 'aria-current="page"' : '' %>>
+              <span>Login Activity</span>
+            </a>
+          <% } %>
+
+          <% if (canViewPermissionAudit) { %>
+            <a href="/management/permission-audit" class="sidebar-sublink <%= currentNav === 'management-permission-audit' ? 'active' : '' %>" <%= currentNav === 'management-permission-audit' ? 'aria-current="page"' : '' %>>
+              <span>Permission Audit</span>
+            </a>
+          <% } %>
+
+          <% if (canViewQcReporting) { %>
             <a href="/management/qc-reporting" class="sidebar-sublink <%= currentNav === 'management-qc-reporting' ? 'active' : '' %>" <%= currentNav === 'management-qc-reporting' ? 'aria-current="page"' : '' %>>
               <span>QC Reporting</span>
             </a>
           <% } %>
 
-          <% if (typeof canAccessFeature === 'function' && canAccessFeature('managedPrinters')) { %>
+          <% if (canViewManagedPrinters) { %>
             <a href="/management/printers" class="sidebar-sublink <%= currentNav === 'management-printers' ? 'active' : '' %>" <%= currentNav === 'management-printers' ? 'aria-current="page"' : '' %>>
               <span>Printer Management</span>
             </a>
@@ -107,37 +143,37 @@
       </section>
     <% } %>
 
-    <% if (canAccessMenuArea('management')) { %>
+    <% if (canViewHuddleAdministration || canViewLots || canViewLabelLibrary) { %>
       <section class="sidebar-section <%= managementSectionActive ? 'is-active' : '' %>">
         <div class="sidebar-section-heading <%= managementSectionActive ? 'is-active' : '' %>">
-          <span class="sidebar-icon" aria-hidden="true">◎</span>
+          <span class="sidebar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><circle cx="12" cy="12" r="8.5"/><path d="M7.5 12h9M12 7.5v9"/></svg></span>
           <span>Management</span>
         </div>
 
         <div class="sidebar-subnav">
+          <% if (canViewHuddleAdministration) { %>
           <a href="/management/virtual-huddle" class="sidebar-sublink <%= currentNav === 'management-virtual-huddle' ? 'active' : '' %>" <%= currentNav === 'management-virtual-huddle' ? 'aria-current="page"' : '' %>>
             <span>Virtual Huddle</span>
           </a>
-
+          <% } %>
+          <% if (canViewLots) { %>
           <a href="/management/lots" class="sidebar-sublink <%= currentNav === 'management-lots' ? 'active' : '' %>" <%= currentNav === 'management-lots' ? 'aria-current="page"' : '' %>>
             <span>Lots</span>
           </a>
-
-          <a href="/management/login-activity" class="sidebar-sublink <%= currentNav === 'management-login-activity' ? 'active' : '' %>" <%= currentNav === 'management-login-activity' ? 'aria-current="page"' : '' %>>
-            <span>Login Activity</span>
-          </a>
-
+          <% } %>
+          <% if (canViewLabelLibrary) { %>
           <a href="/management/label-library" class="sidebar-sublink <%= currentNav === 'management-label-library' ? 'active' : '' %>" <%= currentNav === 'management-label-library' ? 'aria-current="page"' : '' %>>
             <span>Label Library</span>
           </a>
+          <% } %>
         </div>
       </section>
     <% } %>
 
-    <% if (canAccessMenuArea('qc')) { %>
+    <% if (canViewQcPortal) { %>
       <section class="sidebar-section <%= qcSectionActive ? 'is-active' : '' %>">
         <div class="sidebar-section-heading <%= qcSectionActive ? 'is-active' : '' %>">
-          <span class="sidebar-icon" aria-hidden="true">✓</span>
+          <span class="sidebar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><path d="m5 12.5 4.2 4.2L19 7"/></svg></span>
           <span>QC Portal</span>
         </div>
 
@@ -146,7 +182,7 @@
             <span>QC Review</span>
           </a>
 
-          <% if (isQcOnlyNavigationUser && typeof canAccessUnitRequests === 'function' && canAccessUnitRequests()) { %>
+          <% if (showRequestsInQcSection) { %>
             <a href="/unit-requests" class="sidebar-sublink <%= currentNav === 'unit-requests' ? 'active' : '' %>" <%= currentNav === 'unit-requests' ? 'aria-current="page"' : '' %>>
               <span>Requests</span>
             </a>
@@ -156,21 +192,25 @@
       </section>
     <% } %>
 
-    <% if (canAccessMenuArea('tech') && !isQcOnlyNavigationUser) { %>
+    <% if (showTechSection) { %>
       <section class="sidebar-section <%= techSectionActive ? 'is-active' : '' %>">
         <div class="sidebar-section-heading <%= techSectionActive ? 'is-active' : '' %>">
-          <span class="sidebar-icon" aria-hidden="true">▣</span>
+          <span class="sidebar-icon" aria-hidden="true"><svg viewBox="0 0 24 24" focusable="false"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></span>
           <span>Tech</span>
         </div>
 
         <div class="sidebar-subnav">
-          <a href="/tech/units" class="sidebar-sublink <%= currentNav === 'tech-units' ? 'active' : '' %>" <%= currentNav === 'tech-units' ? 'aria-current="page"' : '' %>>
-            <span>Units</span>
-          </a>
-          <a href="/tech/printers" class="sidebar-sublink <%= currentNav === 'tech-printers' ? 'active' : '' %>" <%= currentNav === 'tech-printers' ? 'aria-current="page"' : '' %>>
-            <span>My Printers</span>
-          </a>
-          <% if (typeof canAccessUnitRequests === 'function' && canAccessUnitRequests()) { %>
+          <% if (canViewUnits) { %>
+            <a href="/tech/units" class="sidebar-sublink <%= currentNav === 'tech-units' ? 'active' : '' %>" <%= currentNav === 'tech-units' ? 'aria-current="page"' : '' %>>
+              <span>Units</span>
+            </a>
+          <% } %>
+          <% if (canManageOwnPrinters) { %>
+            <a href="/tech/printers" class="sidebar-sublink <%= currentNav === 'tech-printers' ? 'active' : '' %>" <%= currentNav === 'tech-printers' ? 'aria-current="page"' : '' %>>
+              <span>My Printers</span>
+            </a>
+          <% } %>
+          <% if (canViewRequests) { %>
             <a href="/unit-requests" class="sidebar-sublink <%= currentNav === 'unit-requests' ? 'active' : '' %>" <%= currentNav === 'unit-requests' ? 'aria-current="page"' : '' %>>
               <span>Requests</span>
             </a>
@@ -179,33 +219,14 @@
       </section>
     <% } %>
 
-    <% if (canAccessMenuArea('warehouse')) { %>
-      <section class="sidebar-section">
-        <div class="sidebar-section-heading">
-          <span class="sidebar-icon" aria-hidden="true">◇</span>
-          <span>Warehouse</span>
-        </div>
 
-        <div class="sidebar-subnav">
-          <span class="sidebar-sublink sidebar-sublink-muted">Warehouse tools planned</span>
-        </div>
-      </section>
-    <% } %>
-
-    <% if (canAccessMenuArea('sales')) { %>
-      <section class="sidebar-section">
-        <div class="sidebar-section-heading">
-          <span class="sidebar-icon" aria-hidden="true">◈</span>
-          <span>Sales</span>
-        </div>
-
-        <div class="sidebar-subnav">
-          <span class="sidebar-sublink sidebar-sublink-muted">Sales tools planned</span>
-        </div>
-      </section>
-    <% } %>
 
   </nav>
 </aside>
+
+<button type="button" class="sidebar-edge-handle" data-sidebar-edge-handle aria-label="Open navigation" title="Menu — hover to open, click to pin; drag vertically to move">
+  <span class="sidebar-edge-handle-grip" aria-hidden="true"><i></i><i></i><i></i></span>
+  <span class="sidebar-edge-handle-label" data-sidebar-edge-label>Menu</span>
+</button>
 
 <button type="button" class="sidebar-backdrop" data-sidebar-backdrop aria-label="Close navigation" hidden></button>

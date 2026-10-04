@@ -15,30 +15,34 @@
               || !request.isDuplicateIntakeMoveRequest
               || request.duplicateIntakeActionKind === 'takeover'); %>
 
-          <section class="dashboard-hero accent-green">
+          <section class="page-heading site-work-page-heading record-detail-intro record-detail-intro--<%= request.statusClass %>">
             <div>
               <p class="eyebrow"><%= request.requestType === 'outcome_confirmation' ? 'Outcome Confirmation' : (request.isParkedTakeoverRequest ? 'Parked Unit Takeover' : (request.isDuplicateIntakeMoveRequest ? request.duplicateIntakeRequestLabel : 'Existing Unit Override')) %></p>
-              <h2><%= request.displaySubject %></h2>
+              <h1><%= request.displaySubject %></h1>
               <p>Review the existing Unit, current assignment, requested destination, reason, and validation result.</p>
             </div>
-            <div class="hero-badge"><span>Status</span><strong><%= request.statusLabel %></strong></div>
+            <div class="site-clean-actions site-inline-actions"><a class="secondary-button" href="<%= requestQueueUrl %>">Back to Requests</a></div>
           </section>
 
-          <section class="content-card">
-            <div class="content-header unit-request-detail-header">
-              <div>
-                <p class="eyebrow">Request Summary</p>
-                <h2><%= request.isDuplicateIntakeMoveRequest ? request.duplicateIntakeRequestLabel : request.requestTypeLabel %></h2>
-                <p class="unit-request-detail-meta">Requested by <%= request.requestedByName %> · <%= request.createdAt ? formatDateTime(request.createdAt) : '—' %></p>
-              </div>
-              <a class="secondary-button" href="<%= requestQueueUrl %>">Back to Requests</a>
+          <section class="site-summary-panel site-summary-panel--expanded record-detail-summary-panel unit-request-detail-header" aria-label="Request summary">
+            <div class="site-summary-primary record-detail-status record-detail-status--<%= request.statusClass %>">
+              <span>Status</span>
+              <strong><%= request.statusLabel %></strong>
+              <small class="unit-request-detail-meta">Requested by <%= request.requestedByName %> · <%= request.createdAt ? formatDateTime(request.createdAt) : '—' %></small>
             </div>
+            <div class="site-summary-stats">
+              <article><span class="site-summary-icon" aria-hidden="true">R</span><span><small>Request Type</small><strong><%= request.isDuplicateIntakeMoveRequest ? request.duplicateIntakeRequestLabel : request.requestTypeLabel %></strong></span></article>
+              <article><span class="site-summary-icon" aria-hidden="true">U</span><span><small>Requested By</small><strong><%= request.requestedByName %></strong></span></article>
+              <article><span class="site-summary-icon" aria-hidden="true">↗</span><span><small>Submitted</small><strong><%= request.createdAt ? formatDateTime(request.createdAt) : '—' %></strong></span></article>
+            </div>
+          </section>
 
+          <section class="content-card record-detail-shell">
             <% if (successMessage) { %><div class="message success" data-auto-dismiss-success><p><%= successMessage %></p></div><% } %>
             <% if (errorMessages.length > 0) { %><div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div><% } %>
 
-            <div class="unit-request-detail-grid unit-request-detail-overview">
-              <section class="unit-request-detail-card">
+            <div class="unit-request-detail-grid unit-request-detail-overview record-detail-split">
+              <section class="unit-request-detail-card record-detail-section">
                 <p class="eyebrow">Existing Unit</p>
                 <h3><%= request.unitLabel %></h3>
                 <dl class="unit-request-detail-list">
@@ -54,7 +58,7 @@
                 </dl>
               </section>
 
-              <section class="unit-request-detail-card">
+              <section class="unit-request-detail-card record-detail-section">
                 <p class="eyebrow">Request Context</p>
                 <h3><%= request.isParkedTakeoverRequest ? 'Search Units · Parked Unit' : (request.isDuplicateIntakeMoveRequest ? 'Duplicate Intake' : request.requestTypeLabel) %></h3>
                 <dl class="unit-request-detail-list">
@@ -67,13 +71,13 @@
               </section>
             </div>
 
-            <section class="unit-request-detail-section">
+            <section class="unit-request-detail-section record-detail-section record-detail-user-section">
               <p class="eyebrow"><%= request.requestType === 'outcome_confirmation' ? 'Technician Request Note' : 'Requester Explanation' %></p>
               <p class="unit-request-requester-note"><%= request.requesterNote || (request.requestType === 'outcome_confirmation' ? 'No technician note entered.' : 'No requester explanation entered.') %></p>
             </section>
 
             <% if (canReviewRequest && request.isPending) { %>
-              <section class="unit-request-review-panel">
+              <section class="unit-request-review-panel record-detail-section">
                 <div>
                   <p class="eyebrow">Reviewer Action</p>
                   <h3>Approve or Reject</h3>
@@ -128,7 +132,7 @@
                 </div>
               </section>
             <% } else if (canWithdrawRequest) { %>
-              <section class="unit-request-review-panel">
+              <section class="unit-request-review-panel record-detail-section">
                 <div><p class="eyebrow">Requester Action</p><h3>Withdraw Pending Request</h3><p>Withdrawal preserves the request record but prevents later approval.</p></div>
                 <form method="post" action="/unit-requests/override/<%= request.unitOverrideRequestId %>/withdraw" onsubmit="return window.confirm('Withdraw this pending request?');">
                   <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
@@ -139,7 +143,7 @@
                 </form>
               </section>
             <% } else if (!request.isPending) { %>
-              <section class="unit-request-detail-section">
+              <section class="unit-request-detail-section record-detail-section record-detail-user-section">
                 <p class="eyebrow">Review Result</p>
                 <p class="unit-request-requester-note"><%= request.reviewNotes || 'No review note entered.' %></p>
                 <p class="table-muted-line"><%= request.reviewedByName || 'Reviewed' %> · <%= request.reviewedAt ? formatDateTime(request.reviewedAt) : '—' %></p>

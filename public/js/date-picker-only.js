@@ -12,9 +12,8 @@
     return PICKER_TYPES.has(type) ? type : null;
   }
 
-  function getChicagoDateOnly() {
+  function getLocalDateOnly() {
     const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Chicago',
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
@@ -149,11 +148,11 @@
   }
 
   function currentValueForType(type) {
-    const today = parseDate(getChicagoDateOnly());
+    const today = parseDate(getLocalDateOnly());
     const date = new Date(Date.UTC(today.year, today.month, today.day));
     if (type === 'week') return toWeekValue(date);
     if (type === 'month') return toMonthValue(today.year, today.month);
-    return getChicagoDateOnly();
+    return getLocalDateOnly();
   }
 
   function isValueAllowed(input, value) {
@@ -187,7 +186,7 @@
 
   window.BWTDatePickerUtils = Object.freeze({
     MONTH_NAMES,
-    getChicagoDateOnly,
+    getLocalDateOnly,
     parseDate,
     formatDate,
     toIso,
@@ -197,6 +196,23 @@
   function dispatchValueChange(input) {
     input.dispatchEvent(new Event('input', { bubbles: true }));
     input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function positionSiteDatePicker(picker, popover) {
+    if (!picker || !popover) return;
+
+    popover.style.removeProperty('--site-date-picker-shift-x');
+    if (popover.hidden || !picker.classList.contains('is-open')) return;
+
+    const popoverRect = popover.getBoundingClientRect();
+    const viewportGap = 16;
+    const maxLeft = Math.max(viewportGap, window.innerWidth - popoverRect.width - viewportGap);
+    const clampedLeft = Math.min(Math.max(popoverRect.left, viewportGap), maxLeft);
+    const shiftX = clampedLeft - popoverRect.left;
+
+    if (Math.abs(shiftX) >= 1) {
+      popover.style.setProperty('--site-date-picker-shift-x', `${Math.round(shiftX)}px`);
+    }
   }
 
   function calendarShell(input) {
@@ -298,6 +314,7 @@
 
       const closePicker = (returnFocus = false) => {
         popover.hidden = true;
+        popover.style.removeProperty('--site-date-picker-shift-x');
         picker.classList.remove('is-open');
         trigger.setAttribute('aria-expanded', 'false');
         if (returnFocus) trigger.focus();
@@ -337,7 +354,7 @@
 
       const renderDate = () => {
         const selectedDate = parseDate(input.value);
-        const today = getChicagoDateOnly();
+        const today = getLocalDateOnly();
         const limits = getMonthLimits();
         const firstWeekday = new Date(Date.UTC(displayedYear, displayedMonth, 1)).getUTCDay();
         const daysInMonth = new Date(Date.UTC(displayedYear, displayedMonth + 1, 0)).getUTCDate();
@@ -513,6 +530,7 @@
         picker.classList.add('is-open');
         trigger.setAttribute('aria-expanded', 'true');
         window.requestAnimationFrame(() => {
+          positionSiteDatePicker(picker, popover);
           grid.querySelector('[aria-pressed="true"], .is-current, button:not(:disabled)')?.focus();
         });
       };
@@ -577,6 +595,12 @@
 
   document.addEventListener('click', (event) => {
     if (isDateLikeInput(event.target)) event.preventDefault();
+  });
+
+  window.addEventListener('resize', () => {
+    document.querySelectorAll('[data-site-date-picker].is-open').forEach((picker) => {
+      positionSiteDatePicker(picker, picker.querySelector('[data-site-date-picker-popover]'));
+    });
   });
 
   document.addEventListener('DOMContentLoaded', initializeSiteDatePickers);

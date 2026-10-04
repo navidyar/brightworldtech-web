@@ -174,11 +174,11 @@ test('XLSX exports one worksheet row for every matching Unit plus the header', (
   assert.match(unitsXml, new RegExp(`dimension ref="A1:${excelColumnName(UNIT_EXPORT_COLUMNS.length)}74"`));
 });
 
-test('filenames use the Dallas export date and distinguish parked exports', () => {
+test('filenames use the supplied local export date and distinguish parked exports', () => {
   const now = new Date('2026-08-01T02:30:00.000Z');
 
-  assert.equal(buildUnitExportFilename('csv', { unitState: 'active' }, now), 'bwtdallas-units-2026-07-31.csv');
-  assert.equal(buildUnitExportFilename('xlsx', { unitState: 'parked' }, now), 'bwtdallas-units-parked-2026-07-31.xlsx');
+  assert.equal(buildUnitExportFilename('csv', { unitState: 'active' }, now, 'America/Chicago'), 'bwtdallas-units-2026-07-31.csv');
+  assert.equal(buildUnitExportFilename('xlsx', { unitState: 'parked' }, now, 'America/Chicago'), 'bwtdallas-units-parked-2026-07-31.xlsx');
 });
 
 test('Battery Health is converted to an Excel numeric percentage only when valid', () => {

@@ -10,19 +10,13 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell lot-new-page">
-          <section class="dashboard-hero accent-green">
+          <section class="page-heading lot-detail-page-heading">
             <div>
-              <p class="eyebrow">Management</p>
-              <h2>Create Lot</h2>
-              <p>
-                Create and configure a Lot before making it available to technicians.
-              </p>
+              <p class="eyebrow">Lot Management</p>
+              <h1>Create Lot</h1>
+              <p>Create and configure a Lot before making it available to technicians.</p>
             </div>
-
-            <div class="hero-badge">
-              <span>Mode</span>
-              <strong>New Lot</strong>
-            </div>
+            <div class="site-clean-actions site-inline-actions"><a class="secondary-button" href="/management/lots">Back to Lots</a></div>
           </section>
 
           <section class="content-card">
@@ -32,7 +26,6 @@
                 <h2>Lot Details</h2>
               </div>
 
-              <a class="secondary-button" href="/management/lots">Back to Lots</a>
             </div>
 
             <% if (errorMessages.length > 0) { %>

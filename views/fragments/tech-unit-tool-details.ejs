@@ -11,11 +11,6 @@
   };
   const stateText = (value) => clean(value).replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
   const stateValue = (value) => isKnown(value) ? stateText(value) : '';
-  const formatDateTime = (value) => {
-    if (!value) return '';
-    const date = new Date(value);
-    return Number.isNaN(date.getTime()) ? clean(value) : date.toLocaleString('en-US');
-  };
   const formatBytes = (value) => {
     const bytes = Number(value);
     if (!Number.isFinite(bytes) || bytes <= 0) return '';

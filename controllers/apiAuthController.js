@@ -33,18 +33,37 @@ async function login(req, res, next) {
 
     const identifier = authModel.normalizeLoginIdentifier(req.body?.identifier || req.body?.email);
     const password = String(req.body?.password || '');
-    if (!identifier || !password) {
-      return sendApiError(res, 400, 'INVALID_REQUEST', 'Username/email and password are required.');
+    const pin = String(req.body?.pin || '').trim();
+    const usingPin = Boolean(pin);
+    if (!identifier || (!password && !pin) || (password && pin)) {
+      return sendApiError(res, 400, 'INVALID_REQUEST', 'Username/email and exactly one Tool credential (password or 6-digit PIN) are required.');
+    }
+    if (usingPin && !/^\d{6}$/.test(pin)) {
+      return sendApiError(res, 401, 'INVALID_USER_CREDENTIALS', 'Invalid username, email, or Tool credential.');
     }
 
     const authUser = await authModel.getUserByLoginIdentifier(identifier);
-    if (!authUser || !authUser.password_hash || !authUser.is_active || authUser.account_status_code !== 'active') {
-      return sendApiError(res, 401, 'INVALID_USER_CREDENTIALS', 'Invalid username, email, or password.');
+    if (!authUser || !authUser.is_active || authUser.account_status_code !== 'active') {
+      return sendApiError(res, 401, 'INVALID_USER_CREDENTIALS', 'Invalid username, email, or Tool credential.');
     }
 
-    const passwordIsValid = await argon2.verify(authUser.password_hash, password);
-    if (!passwordIsValid) {
-      return sendApiError(res, 401, 'INVALID_USER_CREDENTIALS', 'Invalid username, email, or password.');
+    if (usingPin) {
+      if (!authUser.tool_pin_hash) {
+        return sendApiError(res, 401, 'INVALID_USER_CREDENTIALS', 'Invalid username, email, or Tool credential.');
+      }
+      if (authUser.tool_pin_locked_until && new Date(authUser.tool_pin_locked_until).getTime() > Date.now()) {
+        return sendApiError(res, 429, 'TOOL_PIN_LOCKED', 'Tool PIN sign-in is temporarily locked after repeated failed attempts. Try again later or use the account password.');
+      }
+      const pinIsValid = await argon2.verify(authUser.tool_pin_hash, pin);
+      if (!pinIsValid) {
+        await authModel.recordFailedToolPin(authUser.user_id);
+        return sendApiError(res, 401, 'INVALID_USER_CREDENTIALS', 'Invalid username, email, or Tool credential.');
+      }
+      await authModel.resetToolPinFailures(authUser.user_id);
+    } else {
+      if (!authUser.password_hash || !await argon2.verify(authUser.password_hash, password)) {
+        return sendApiError(res, 401, 'INVALID_USER_CREDENTIALS', 'Invalid username, email, or Tool credential.');
+      }
     }
 
     const user = await authModel.getUserByIdWithRoles(authUser.user_id);

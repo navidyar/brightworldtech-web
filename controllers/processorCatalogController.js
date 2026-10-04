@@ -4,9 +4,6 @@ const processorCatalogModel = require('../models/processorCatalogModel');
 const operationalOptionRankingModel = require('../models/operationalOptionRankingModel');
 
 const { isHtmxRequest } = require('../utils/htmxRequest');
-function isAdmin(req) {
-  return Boolean(req?.currentUser && Array.isArray(req.currentUser.roles) && req.currentUser.roles.includes('admin'));
-}
 
 function getFilters(req) {
   return processorCatalogModel.getCatalogFilters({
@@ -52,6 +49,7 @@ function getFormData(req = null, processor = null) {
     return {
       processorBrandId: String(processor.processorBrandId || ''),
       modelCode: processor.modelCode || '',
+      labelShortForm: processor.labelShortForm || '',
       legacyFamily: processor.legacyFamily || '',
       generation: processor.generation || '',
       baseSpeedGhz: processor.baseSpeedGhz ?? '',
@@ -62,6 +60,7 @@ function getFormData(req = null, processor = null) {
   return {
     processorBrandId: String(source.processorBrandId || '').trim(),
     modelCode: processorCatalogModel.normalizeText(source.modelCode, processorCatalogModel.MAX_PROCESSOR_MODEL_LENGTH),
+    labelShortForm: processorCatalogModel.normalizeText(source.labelShortForm, processorCatalogModel.MAX_PROCESSOR_SHORT_FORM_LENGTH),
     legacyFamily: processorCatalogModel.normalizeText(source.legacyFamily, processorCatalogModel.MAX_PROCESSOR_FAMILY_LENGTH),
     generation: processorCatalogModel.normalizeText(source.generation, processorCatalogModel.MAX_PROCESSOR_GENERATION_LENGTH),
     baseSpeedGhz: String(source.baseSpeedGhz || '').trim(),
@@ -141,6 +140,7 @@ async function validateForm(formData, processorModelId, { brandConflict = '' } =
   if (!processorBrandId) errors.push('Choose a Processor Type.');
   if (formData.modelCode.length < 2) errors.push('Processor name must be at least 2 characters.');
   if (formData.modelCode.length > processorCatalogModel.MAX_PROCESSOR_MODEL_LENGTH) errors.push(`Processor name must be ${processorCatalogModel.MAX_PROCESSOR_MODEL_LENGTH} characters or fewer.`);
+  if (formData.labelShortForm.length > processorCatalogModel.MAX_PROCESSOR_SHORT_FORM_LENGTH) errors.push(`Label Builder short form must be ${processorCatalogModel.MAX_PROCESSOR_SHORT_FORM_LENGTH} characters or fewer.`);
   const speed = processorCatalogModel.normalizeOptionalDecimal(formData.baseSpeedGhz);
   if (formData.baseSpeedGhz !== '' && (speed === null || speed < 0.01 || speed > 99.99)) errors.push('Base Speed must be blank or between 0.01 and 99.99 GHz.');
   if (processorBrandId && formData.modelCode) {
@@ -159,7 +159,7 @@ async function validateForm(formData, processorModelId, { brandConflict = '' } =
         limit: 8
       });
       const duplicate = likelyMatches.find((processor) => processor.identityMatch && processor.id !== processorModelId);
-      if (duplicate) errors.push(`Processor #${duplicate.id} (${duplicate.displayLabel}) already represents this canonical processor. Use Resolve Duplicate so the duplicate can be consolidated safely.`);
+      if (duplicate) errors.push(`Processor #${duplicate.id} (${duplicate.displayLabel}) already represents this Catalog Processor. Use Resolve Duplicate so the duplicate can be consolidated safely.`);
     }
   }
   if (processorBrandId && formData.modelCode && await processorCatalogModel.processorExists({
@@ -167,7 +167,7 @@ async function validateForm(formData, processorModelId, { brandConflict = '' } =
     modelCode: formData.modelCode,
     excludeProcessorModelId: processorModelId
   })) {
-    errors.push('That canonical Processor already exists for this Processor Type. Use Resolve Duplicate instead of keeping two records.');
+    errors.push('That Catalog Processor already exists for this Processor Type. Use Resolve Duplicate instead of keeping two records.');
   }
   return errors;
 }
@@ -192,7 +192,6 @@ async function renderProcessorCatalogPage(req, res, next) {
       filters,
       processors,
       brands,
-      isAdmin: isAdmin(req),
       notice: String(req.query.notice || '')
     });
   } catch (error) {
@@ -255,6 +254,7 @@ async function createProcessor(req, res, next) {
     await processorCatalogModel.createProcessorModel({
       processorBrandId: formData.processorBrandId,
       modelCode: formData.modelCode,
+      labelShortForm: formData.labelShortForm,
       legacyFamily: formData.legacyFamily,
       generation: formData.generation,
       baseSpeedGhz: formData.baseSpeedGhz,
@@ -336,6 +336,7 @@ async function updateProcessor(req, res, next) {
     await processorCatalogModel.updateProcessorModel(processorModelId, {
       processorBrandId: formData.processorBrandId,
       modelCode: formData.modelCode,
+      labelShortForm: formData.labelShortForm,
       legacyFamily: formData.legacyFamily,
       generation: formData.generation,
       baseSpeedGhz: formData.baseSpeedGhz,
@@ -565,7 +566,7 @@ async function mergeProcessor(req, res, next) {
       return res.status(400).render('fragments/processor-catalog-merge-modal', {
         processor, mergeTargets, filters, returnTo,
         selectedTargetId: targetProcessorModelId ? String(targetProcessorModelId) : '',
-        errorMessages: ['Choose an active canonical processor from the same Processor Type.']
+        errorMessages: ['Choose an active Catalog Processor from the same Processor Type.']
       });
     }
 

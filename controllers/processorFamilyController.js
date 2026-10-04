@@ -137,7 +137,7 @@ async function renderProcessorFamiliesPage(req, res, next) {
           : req.query.notice === 'updated'
             ? 'Processor updated.'
             : req.query.notice === 'merged'
-              ? 'Duplicate processor merged into its canonical processor and permanently removed.'
+              ? 'Duplicate processor merged into its Catalog Processor and permanently removed.'
               : req.query.notice === 'families-updated'
                 ? 'Processor Family memberships updated.'
                 : req.query.notice === 'models-updated'

@@ -56,6 +56,29 @@ test('catalog normalization applies manufacturer, model, and processor in depend
   assert.equal(states.get('processor_family'), 'known');
 });
 
+test('catalog normalization applies a saved model alias and canonical category', () => {
+  const data = blankForm();
+  const options = formOptions();
+  options.manufacturers = [{ id: 7, label: 'Lenovo' }];
+  options.unitCategories = [{ id: 10, label: 'Desktop' }, { id: 11, label: 'Micro' }];
+  options.unitModels = [{ id: 42, shortLabel: '7010', label: '7010', manufacturerId: 7, unitCategoryConfigValueId: 11 }];
+  options.unitModelIntakeMappings = [{
+    observedManufacturerId: 7,
+    observedUnitCategoryConfigValueId: 10,
+    observedModelKey: 'micro7010',
+    targetUnitModelId: 42,
+    targetUnitCategoryConfigValueId: 11
+  }];
+  const observations = normalizeDetectedValues({
+    detected_values: { manufacturer: 'Lenovo', model: 'Micro 7010' }
+  });
+  const states = applyDetectedValues({ formData: data, observations, formOptions: options });
+  assert.equal(data.manufacturerId, '7');
+  assert.equal(data.unitModelId, '42');
+  assert.equal(data.unitCategoryConfigValueId, '11');
+  assert.equal(states.get('model'), 'known');
+});
+
 test('memory install type and storage wipe status remain evaluable regardless of detected-value ordering', () => {
   const data = blankForm();
   const observations = normalizeDetectedValues({

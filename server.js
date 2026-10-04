@@ -18,12 +18,14 @@ const {
   scheduleOperationalOptionUsageRankingRefresh
 } = require('./models/operationalOptionRankingModel');
 const { loadCurrentUser } = require('./middleware/authMiddleware');
+const { loadPermissionContext } = require('./middleware/permissionContextMiddleware');
 const { applyConfiguredSessionTimeout } = require('./middleware/sessionTimeoutMiddleware');
+const { loadTimeZoneContext } = require('./middleware/timeZoneContextMiddleware');
 const { DEFAULT_SESSION_INACTIVITY_TIMEOUT_MINUTES } = require('./services/sessionInactivityTimeoutPolicy');
 const { applyAuthenticatedNavigationPolicy } = require('./middleware/navigationPolicyMiddleware');
 const { publishSuccessfulApplicationMutations } = require('./middleware/applicationLiveRefreshMiddleware');
 const { attachAccessLocals } = require('./middleware/accessMiddleware');
-const { escapeHtml, formatDateTime, formatDate, formatTime, formatNumber, formatBytes, formatRoleLabel, formatWeight } = require('./views/partials/helpers');
+const { escapeHtml, formatDateTime, formatDate, formatTime, formatTimeWithZone, formatDateKeyLabel, formatNumber, formatBytes, formatRoleLabel, formatWeight } = require('./views/partials/helpers');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,6 +43,8 @@ app.locals.escapeHtml = escapeHtml;
 app.locals.formatDateTime = formatDateTime;
 app.locals.formatDate = formatDate;
 app.locals.formatTime = formatTime;
+app.locals.formatTimeWithZone = formatTimeWithZone;
+app.locals.formatDateKeyLabel = formatDateKeyLabel;
 app.locals.formatNumber = formatNumber;
 app.locals.formatBytes = formatBytes;
 app.locals.formatRoleLabel = formatRoleLabel;
@@ -69,7 +73,9 @@ app.use(
 );
 
 app.use(applyConfiguredSessionTimeout);
+app.use(loadTimeZoneContext);
 app.use(loadCurrentUser);
+app.use(loadPermissionContext);
 app.use(publishSuccessfulApplicationMutations);
 app.use(applyAuthenticatedNavigationPolicy);
 app.use(attachAccessLocals);

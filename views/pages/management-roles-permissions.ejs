@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <body class="css-scope-management">
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+        <main class="content-shell permission-management-page">
+          <section class="page-heading permission-management-heading">
+            <div>
+              <p class="eyebrow">Administration</p>
+              <h1>Roles &amp; Permissions</h1>
+              <p>Roles are reusable default permission bundles. Users may inherit permissions from multiple assigned roles, with user-specific overrides applied later.</p>
+            </div>
+            <% if (typeof hasPermission === 'function' && hasPermission('roles.create')) { %>
+              <div class="site-clean-actions site-inline-actions">
+                <a class="primary-button" href="/management/roles-permissions/new/modal" hx-get="/management/roles-permissions/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Create Role</a>
+              </div>
+            <% } %>
+          </section>
+
+          <% if (successMessage) { %><div class="message success" data-auto-dismiss-success><p><%= successMessage %></p></div><% } %>
+          <% if (errorMessage) { %><div class="message error"><p><%= errorMessage %></p></div><% } %>
+
+          <section class="site-clean-section site-clean-surface">
+            <div class="site-clean-section-heading permission-role-library-heading">
+              <div>
+                <h2>Role Library</h2>
+                <p>Manage the role itself in a large workspace instead of expanding the full permission catalog on this page.</p>
+              </div>
+              <div class="permission-role-library-summary">
+                <span class="pill"><%= roles.length %> roles</span>
+                <span class="pill"><%= roles.filter((role) => role.is_active).length %> active</span>
+              </div>
+            </div>
+
+            <div class="management-live-filter-scope" data-live-filter>
+              <div class="management-live-filter-bar" aria-label="Role filters">
+                <label class="form-field management-live-filter-search">
+                  <span>Search Roles</span>
+                  <input type="search" autocomplete="off" placeholder="Role name or description..." data-live-filter-control="search" />
+                </label>
+                <label class="form-field">
+                  <span>Status</span>
+                  <select data-live-filter-control="status">
+                    <option value="">All statuses</option>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                  </select>
+                </label>
+                <button type="button" class="secondary-button button-small management-live-filter-clear" data-live-filter-clear>Clear</button>
+                <span class="management-live-filter-count"><strong data-live-filter-count><%= roles.length %></strong> shown</span>
+              </div>
+
+              <div class="table-card permission-role-table">
+                <div class="table-scroll">
+                  <table>
+                  <thead>
+                    <tr>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Default Permissions</th>
+                      <th>Assigned Users</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% if (roles.length === 0) { %><tr><td colspan="5">No roles are available.</td></tr><% } %>
+                    <% roles.forEach((role) => { %>
+                      <tr data-live-filter-row data-live-filter-search="<%= [role.name, role.description, role.code].filter(Boolean).join(' ') %>" data-live-filter-status="<%= role.is_active ? 'active' : 'inactive' %>">
+                        <td>
+                          <div class="permission-role-name-line">
+                            <strong><%= role.name %></strong>
+                            <% if (role.system_key === 'super_admin') { %><span class="pill warning">Permanent</span><% } %>
+                            <% if (role.transitionallyProtected) { %><span class="pill muted">Legacy Gate</span><% } %>
+                          </div>
+                          <% if (role.description) { %><small class="permission-role-table-description"><%= role.description %></small><% } %>
+                        </td>
+                        <td><span class="pill <%= role.is_active ? 'good' : 'muted' %>"><%= role.is_active ? 'Active' : 'Inactive' %></span></td>
+                        <td data-role-permission-count="<%= role.role_id %>"><%= role.permission_count %></td>
+                        <td><%= role.assignment_count %></td>
+                        <td>
+                          <a
+                            class="secondary-button button-small"
+                            href="/management/roles-permissions/<%= role.role_id %>/manage/modal"
+                            hx-get="/management/roles-permissions/<%= role.role_id %>/manage/modal"
+                            hx-target="#modal-root"
+                            hx-swap="innerHTML"
+                          >Manage</a>
+                        </td>
+                      </tr>
+                    <% }) %>
+                    <tr data-live-filter-empty hidden><td colspan="5">No roles match the current filters.</td></tr>
+                  </tbody>
+                </table>
+                </div>
+              </div>
+            </div>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div id="modal-root"></div>
+    <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+    <script defer src="/js/permission-role-management.js?v=20261001-preserve-permission-state"></script>
+  </body>
+</html>

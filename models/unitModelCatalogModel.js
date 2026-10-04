@@ -1,6 +1,7 @@
 const { pool } = require('./db');
 const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
 const processorCatalogModel = require('./processorCatalogModel');
+const { normalizeModelText } = require('../utils/catalogText');
 
 const MAX_MODEL_NAME_LENGTH = 150;
 
@@ -291,12 +292,13 @@ async function getUnitModelDeletionDetails(unitModelId, connection = pool) {
   const unitModel = await getUnitModelById(unitModelId, connection);
   if (!unitModel) return null;
 
-  const [unitCount, lotRequirementCount, modelRequestCount, processorRequestCount, processorMappingCount] = await Promise.all([
+  const [unitCount, lotRequirementCount, modelRequestCount, processorRequestCount, processorMappingCount, intakeMappingCount] = await Promise.all([
     countReference(connection, 'units', 'unit_model_id', unitModel.id),
     countReference(connection, 'lot_requirements', 'unit_model_id', unitModel.id),
     countReference(connection, 'unit_model_catalog_requests', 'approved_unit_model_id', unitModel.id),
     countReference(connection, 'unit_processor_catalog_requests', 'unit_model_id', unitModel.id),
-    countReference(connection, 'unit_model_processor_options', 'unit_model_id', unitModel.id)
+    countReference(connection, 'unit_model_processor_options', 'unit_model_id', unitModel.id),
+    countReference(connection, 'unit_model_intake_mappings', 'target_unit_model_id', unitModel.id)
   ]);
 
   return {
@@ -305,7 +307,8 @@ async function getUnitModelDeletionDetails(unitModelId, connection = pool) {
     lotRequirementCount,
     modelRequestCount,
     processorRequestCount,
-    processorMappingCount
+    processorMappingCount,
+    intakeMappingCount
   };
 }
 
@@ -335,14 +338,15 @@ async function deleteUnitModel({ unitModelId }) {
       throw error;
     }
 
-    const [unitCount, lotRequirementCount, modelRequestCount, processorRequestCount] = await Promise.all([
+    const [unitCount, lotRequirementCount, modelRequestCount, processorRequestCount, intakeMappingCount] = await Promise.all([
       countReference(connection, 'units', 'unit_model_id', safeId),
       countReference(connection, 'lot_requirements', 'unit_model_id', safeId),
       countReference(connection, 'unit_model_catalog_requests', 'approved_unit_model_id', safeId),
-      countReference(connection, 'unit_processor_catalog_requests', 'unit_model_id', safeId)
+      countReference(connection, 'unit_processor_catalog_requests', 'unit_model_id', safeId),
+      countReference(connection, 'unit_model_intake_mappings', 'target_unit_model_id', safeId)
     ]);
 
-    if (unitCount > 0 || lotRequirementCount > 0 || modelRequestCount > 0 || processorRequestCount > 0) {
+    if (unitCount > 0 || lotRequirementCount > 0 || modelRequestCount > 0 || processorRequestCount > 0 || intakeMappingCount > 0) {
       await connection.query('UPDATE unit_models SET is_active = 0 WHERE unit_model_id = ? LIMIT 1', [safeId]);
       await connection.commit();
       return {
@@ -353,7 +357,8 @@ async function deleteUnitModel({ unitModelId }) {
         retainedUnitCount: unitCount,
         retainedLotRequirementCount: lotRequirementCount,
         retainedModelRequestCount: modelRequestCount,
-        retainedProcessorRequestCount: processorRequestCount
+        retainedProcessorRequestCount: processorRequestCount,
+        retainedIntakeMappingCount: intakeMappingCount
       };
     }
 
@@ -490,6 +495,164 @@ async function replaceUnitModelProcessorAssociations({ unitModelId, processorMod
   }
 }
 
+async function listUnitModelIntakeMappings(unitModelId, connection = pool) {
+  const safeId = normalizePositiveInteger(unitModelId);
+  if (!safeId) return [];
+  const [rows] = await connection.query(
+    `SELECT
+       mapping.unit_model_intake_mapping_id,
+       mapping.observed_manufacturer_id,
+       manufacturer.name AS observed_manufacturer_name,
+       mapping.observed_unit_category_config_value_id,
+       COALESCE(observed_category.label, observed_category.value, CONCAT('Value #', observed_category.config_value_id)) AS observed_category_label,
+       mapping.observed_model_name,
+       mapping.target_unit_model_id,
+       mapping.is_active,
+       mapping.created_at,
+       mapping.updated_at
+     FROM unit_model_intake_mappings mapping
+     INNER JOIN manufacturers manufacturer
+       ON manufacturer.manufacturer_id = mapping.observed_manufacturer_id
+     INNER JOIN config_values observed_category
+       ON observed_category.config_value_id = mapping.observed_unit_category_config_value_id
+     WHERE mapping.target_unit_model_id = ?
+     ORDER BY mapping.is_active DESC, observed_category_label, mapping.observed_model_name`,
+    [safeId]
+  );
+  return rows.map((row) => ({
+    id: Number(row.unit_model_intake_mapping_id),
+    observedManufacturerId: Number(row.observed_manufacturer_id),
+    observedManufacturerName: row.observed_manufacturer_name,
+    observedUnitCategoryConfigValueId: Number(row.observed_unit_category_config_value_id),
+    observedCategoryLabel: row.observed_category_label,
+    observedModelName: row.observed_model_name,
+    targetUnitModelId: Number(row.target_unit_model_id),
+    isActive: Number(row.is_active) === 1,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  }));
+}
+
+async function findUnitModelIntakeMapping({ manufacturerId, unitCategoryConfigValueId, observedModelName }, connection = pool) {
+  const safeManufacturerId = normalizePositiveInteger(manufacturerId);
+  const safeCategoryId = normalizePositiveInteger(unitCategoryConfigValueId);
+  const observedModelKey = normalizeModelText(observedModelName);
+  if (!safeManufacturerId || !safeCategoryId || !observedModelKey) return null;
+
+  const [rows] = await connection.query(
+    `SELECT
+       mapping.unit_model_intake_mapping_id,
+       mapping.observed_model_name,
+       mapping.target_unit_model_id,
+       target.model_name AS target_model_name,
+       target.manufacturer_id AS target_manufacturer_id,
+       target.unit_category_config_value_id AS target_unit_category_config_value_id,
+       COALESCE(target_category.label, target_category.value, CONCAT('Value #', target_category.config_value_id)) AS target_category_label
+     FROM unit_model_intake_mappings mapping
+     INNER JOIN unit_models target
+       ON target.unit_model_id = mapping.target_unit_model_id
+      AND target.is_active = 1
+     LEFT JOIN config_values target_category
+       ON target_category.config_value_id = target.unit_category_config_value_id
+     WHERE mapping.observed_manufacturer_id = ?
+       AND mapping.observed_unit_category_config_value_id = ?
+       AND mapping.observed_model_key = ?
+       AND mapping.is_active = 1
+     LIMIT 1`,
+    [safeManufacturerId, safeCategoryId, observedModelKey]
+  );
+  const row = rows[0];
+  return row ? {
+    id: Number(row.unit_model_intake_mapping_id),
+    observedModelName: row.observed_model_name,
+    targetUnitModelId: Number(row.target_unit_model_id),
+    targetModelName: row.target_model_name,
+    targetManufacturerId: Number(row.target_manufacturer_id),
+    targetUnitCategoryConfigValueId: Number(row.target_unit_category_config_value_id),
+    targetCategoryLabel: row.target_category_label || ''
+  } : null;
+}
+
+async function saveUnitModelIntakeMapping({
+  observedManufacturerId,
+  observedUnitCategoryConfigValueId,
+  observedModelName,
+  targetUnitModelId,
+  currentUserId = null
+}, connection = pool) {
+  const manufacturerId = normalizePositiveInteger(observedManufacturerId);
+  const categoryId = normalizePositiveInteger(observedUnitCategoryConfigValueId);
+  const modelName = normalizeModelName(observedModelName);
+  const modelKey = normalizeModelText(modelName);
+  const targetId = normalizePositiveInteger(targetUnitModelId);
+  const userId = normalizePositiveInteger(currentUserId);
+  if (!manufacturerId || !categoryId || !modelName || !modelKey || !targetId) {
+    const error = new Error('Choose an incoming category, enter an incoming model, and select a Catalog Model.');
+    error.code = 'BWT_UNIT_MODEL_MAPPING_INPUT_INVALID';
+    throw error;
+  }
+  const target = await getUnitModelById(targetId, connection);
+  if (!target || !target.isActive) {
+    const error = new Error('The Catalog Model must be active.');
+    error.code = 'BWT_UNIT_MODEL_MAPPING_TARGET_INVALID';
+    throw error;
+  }
+  if (target.manufacturerId !== manufacturerId) {
+    const error = new Error('The incoming model and Catalog Model must use the same manufacturer.');
+    error.code = 'BWT_UNIT_MODEL_MAPPING_MANUFACTURER_MISMATCH';
+    throw error;
+  }
+
+  const [result] = await connection.query(
+    `INSERT INTO unit_model_intake_mappings (
+       observed_manufacturer_id,
+       observed_unit_category_config_value_id,
+       observed_model_name,
+       observed_model_key,
+       target_unit_model_id,
+       is_active,
+       created_by_user_id,
+       updated_by_user_id
+     ) VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+     ON DUPLICATE KEY UPDATE
+       observed_model_name = VALUES(observed_model_name),
+       target_unit_model_id = VALUES(target_unit_model_id),
+       is_active = 1,
+       updated_by_user_id = VALUES(updated_by_user_id)`,
+    [manufacturerId, categoryId, modelName, modelKey, targetId, userId, userId]
+  );
+  return Number(result.insertId || 0);
+}
+
+async function deactivateUnitModelIntakeMapping({ unitModelId, mappingId }, connection = pool) {
+  const safeUnitModelId = normalizePositiveInteger(unitModelId);
+  const safeMappingId = normalizePositiveInteger(mappingId);
+  if (!safeUnitModelId || !safeMappingId) return false;
+  const [result] = await connection.query(
+    `UPDATE unit_model_intake_mappings
+        SET is_active = 0
+      WHERE unit_model_intake_mapping_id = ?
+        AND target_unit_model_id = ?`,
+    [safeMappingId, safeUnitModelId]
+  );
+  return Number(result.affectedRows || 0) > 0;
+}
+
+async function findLikelyUnitModelMatches({ manufacturerId, unitCategoryConfigValueId, modelName, limit = 6, includeInactive = false }) {
+  const requestedKey = normalizeModelText(modelName);
+  if (!requestedKey) return [];
+  const candidates = await listUnitModels({ manufacturerId, includeInactive });
+  return candidates.map((candidate) => {
+    const candidateKey = normalizeModelText(candidate.modelName);
+    const identityMatch = candidateKey === requestedKey;
+    const related = requestedKey.length >= 3 && (candidateKey.includes(requestedKey) || requestedKey.includes(candidateKey));
+    const categoryMatch = Number(candidate.unitCategoryConfigValueId) === Number(unitCategoryConfigValueId);
+    return { ...candidate, identityMatch, related, categoryMatch, score: identityMatch ? 100 : (related ? 70 : 0) + (categoryMatch ? 5 : 0) };
+  }).filter((candidate) => candidate.identityMatch || candidate.related)
+    .sort((left, right) => right.score - left.score || left.modelName.localeCompare(right.modelName))
+    .slice(0, Math.max(1, Math.min(Number(limit) || 6, 25)));
+}
+
 module.exports = {
   MAX_MODEL_NAME_LENGTH,
   normalizePositiveInteger,
@@ -506,5 +669,10 @@ module.exports = {
   createUnitModel,
   updateUnitModel,
   replaceUnitModelProcessorAssociations,
-  setUnitModelActive
+  setUnitModelActive,
+  listUnitModelIntakeMappings,
+  findUnitModelIntakeMapping,
+  saveUnitModelIntakeMapping,
+  deactivateUnitModelIntakeMapping,
+  findLikelyUnitModelMatches
 };

@@ -175,6 +175,9 @@ async function buildPreflight({ body = {}, resolution = {}, userId, roleCodes = 
   const effectiveToolPolicy = intendedLot ? resolveLotToolPolicy(allLots, intendedLotId) : null;
   const sourcePolicy = buildSourcePolicyDecision({ toolSource, effectivePolicy: effectiveToolPolicy || {} });
   const allowDuplicateWithoutApproval = Boolean(intendedLot && Number(intendedLot.allow_duplicate_unit_assumption || 0) === 1);
+  const uuidDuplicateRequiresApproval = resolution.creation_policy?.uuid_match_requires_approval === true;
+  const uuidDuplicateApprovalSatisfied = resolution.creation_policy?.uuid_duplicate_approval_satisfied === true;
+  const directIntentionalDuplicateAuthorized = uuidDuplicateApprovalSatisfied || (allowDuplicateWithoutApproval && !uuidDuplicateRequiresApproval);
   const currentLotId = normalizePositiveInteger(matchedUnit?.lot_id);
   const currentLot = currentLotId ? allLots.find((lot) => Number(lot.lot_id) === currentLotId) || null : null;
   const normalMoveAllowed = await normalLotMoveAllowedWithoutApproval({
@@ -185,13 +188,17 @@ async function buildPreflight({ body = {}, resolution = {}, userId, roleCodes = 
   });
   const unitAction = intentionalDuplicateRequested
     ? {
-      authorized: allowDuplicateWithoutApproval,
+      authorized: directIntentionalDuplicateAuthorized,
       action_required: false,
       action: 'intentional_duplicate',
-      approval_required: !allowDuplicateWithoutApproval,
-      reason: allowDuplicateWithoutApproval
-        ? 'lot_allows_duplicate_units_without_approval'
-        : 'individual_intentional_duplicate_approval_required',
+      approval_required: !directIntentionalDuplicateAuthorized,
+      reason: uuidDuplicateApprovalSatisfied
+        ? 'approved_uuid_duplicate_request'
+        : uuidDuplicateRequiresApproval
+          ? 'matching_system_uuid_requires_intentional_duplicate_approval'
+          : directIntentionalDuplicateAuthorized
+            ? 'lot_allows_duplicate_units_without_approval'
+            : 'individual_intentional_duplicate_approval_required',
       explicit_confirmation_received: true
     }
     : buildExistingUnitActionDecision({
@@ -266,7 +273,12 @@ async function buildPreflight({ body = {}, resolution = {}, userId, roleCodes = 
     if (suppliedAssetTag || String(resolution.match_mode || '') === 'asset_tag_exact') {
       blockers.push({ code: 'ASSET_TAG_NOT_DUPLICABLE', message: 'An existing BWTDallas Asset Tag identifies one Unit and cannot be intentionally duplicated.' });
     }
-    if (intendedLot && !allowDuplicateWithoutApproval) {
+    if (uuidDuplicateRequiresApproval) {
+      blockers.push({
+        code: 'UUID_DUPLICATE_APPROVAL_REQUIRED',
+        message: 'This valid System UUID already belongs to an existing BWTDallas Unit. Submit an Intentional Duplicate request for authorized review; the Lot duplicate setting cannot bypass UUID approval.'
+      });
+    } else if (intendedLot && !allowDuplicateWithoutApproval) {
       blockers.push({ code: 'INTENTIONAL_DUPLICATE_APPROVAL_REQUIRED', message: 'This Lot requires the existing per-Unit Intentional Duplicate request workflow in BWTDallas.' });
     }
   }

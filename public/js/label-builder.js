@@ -124,11 +124,13 @@
   const initialLayout = parseJsonScript('label-builder-layout-json');
   const fontFamilies = parseJsonScript('label-builder-fonts-json');
   const fieldGroups = parseJsonScript('label-builder-field-groups-json');
+  const allFieldGroups = parseJsonScript('label-builder-all-field-groups-json');
   const sharedImageAssets = parseJsonScript('label-builder-assets-json');
   const composedValuePresets = parseJsonScript('label-builder-composed-presets-json');
   const mediaByCode = new Map(mediaWidths.map((media) => [media.code, media]));
   const fontByCode = new Map(fontFamilies.map((font) => [font.code, font]));
   const fieldByKey = new Map(fieldGroups.flatMap((group) => group.fields || []).map((field) => [field.key, field]));
+  const allFieldByKey = new Map(allFieldGroups.flatMap((group) => group.fields || []).map((field) => [field.key, field]));
   const imageAssetByKey = new Map((Array.isArray(sharedImageAssets) ? sharedImageAssets : []).map((asset) => [String(asset.assetKey || ''), asset]));
   const composedPresetById = new Map(
     ['common', 'recent', 'starter']
@@ -651,7 +653,7 @@
       }
       return '';
     }
-    const field = fieldByKey.get(key);
+    const field = allFieldByKey.get(key);
     return String(field?.sampleValue || field?.label || fieldKey || 'Dynamic Value');
   }
 
@@ -1215,7 +1217,19 @@
       }
       select.appendChild(optgroup);
     }
-    select.value = part.field || '';
+    const currentFieldKey = String(part.field || '');
+    if (currentFieldKey && !fieldByKey.has(currentFieldKey)) {
+      const inactiveField = allFieldByKey.get(currentFieldKey);
+      if (inactiveField) {
+        const option = document.createElement('option');
+        option.value = currentFieldKey;
+        option.textContent = `${inactiveField.label} (Inactive)`;
+        option.disabled = true;
+        option.dataset.inactiveCurrentField = '1';
+        select.appendChild(option);
+      }
+    }
+    select.value = currentFieldKey;
     select.addEventListener('change', () => {
       const region = selectedRegion();
       const parts = getComposedTargetParts(region);
@@ -1422,11 +1436,27 @@
     codeCaseWrap.hidden = payloadType !== 'field';
   }
 
+  function syncInactiveCurrentFieldOption(select, fieldKey) {
+    select.querySelectorAll('[data-inactive-current-field]').forEach((option) => option.remove());
+    const key = String(fieldKey || '');
+    if (!key || fieldByKey.has(key)) return;
+    const field = allFieldByKey.get(key);
+    if (!field) return;
+    const option = document.createElement('option');
+    option.value = key;
+    option.textContent = `${field.label} (Inactive)`;
+    option.disabled = true;
+    option.dataset.inactiveCurrentField = '1';
+    select.appendChild(option);
+  }
+
   function updateCodeInspector(region) {
     if (!region || !CODE_TYPES.has(region.type)) return;
     normalizeCodePayload(region);
     codePayloadTypeSelect.value = region.payload.type;
-    codeFieldSelect.value = region.payload.type === 'field' ? String(region.payload.field || '') : '';
+    const codeFieldKey = region.payload.type === 'field' ? String(region.payload.field || '') : '';
+    syncInactiveCurrentFieldOption(codeFieldSelect, codeFieldKey);
+    codeFieldSelect.value = codeFieldKey;
     codeStaticInput.value = region.payload.type === 'static' ? String(region.payload.value || '') : '';
     codeCaseSelect.value = getPayloadFormat(region.payload);
     updateCodePayloadVisibility(region);
@@ -1486,7 +1516,11 @@
     }
 
     if (region.type === 'static_text') staticTextInput.value = String(region.text || '');
-    if (region.type === 'dynamic_text') dynamicFieldSelect.value = String(region.source?.field || '');
+    if (region.type === 'dynamic_text') {
+      const dynamicFieldKey = String(region.source?.field || '');
+      syncInactiveCurrentFieldOption(dynamicFieldSelect, dynamicFieldKey);
+      dynamicFieldSelect.value = dynamicFieldKey;
+    }
     if (TEXT_TYPES.has(region.type)) {
       fontFamilySelect.value = region.style.fontFamily;
       fontSizeInput.max = '300';

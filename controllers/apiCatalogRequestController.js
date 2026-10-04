@@ -17,7 +17,7 @@ async function createModel(req, res, next) {
     const result = await apiCatalogRequest.createModel({
       body: req.body || {},
       userId: req.apiUser.user_id,
-      roleCodes: req.apiUser.roles || [],
+      permissions: req.apiPermissions,
       toolSource: req.apiToolSource
     });
     return res.status(result.existing_request || result.status === 'available' ? 200 : 201).json(result);
@@ -32,7 +32,7 @@ async function createProcessor(req, res, next) {
     const result = await apiCatalogRequest.createProcessor({
       body: req.body || {},
       userId: req.apiUser.user_id,
-      roleCodes: req.apiUser.roles || [],
+      permissions: req.apiPermissions,
       toolSource: req.apiToolSource
     });
     return res.status(result.existing_request ? 200 : 201).json(result);

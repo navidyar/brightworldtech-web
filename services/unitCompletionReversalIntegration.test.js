@@ -9,12 +9,11 @@ function read(relativePath) {
   return fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
 }
 
-test('completion reversal routes require Tech Lead or higher roles', () => {
+test('completion reversal routes require the effective reversal permission', () => {
   const routes = read('routes/management.js');
 
-  assert.match(routes, /const completionReversalRoles = \['admin', 'management', 'tech_lead'\]/);
-  assert.match(routes, /completions\/:completionId\/reverse\/modal[\s\S]*?requireRole\(completionReversalRoles\)/);
-  assert.match(routes, /completions\/:completionId\/reverse'[\s\S]*?requireRole\(completionReversalRoles\)/);
+  assert.match(routes, /completions\/:completionId\/reverse\/modal[\s\S]*?requirePermission\('units\.reverse_completion'\)/);
+  assert.match(routes, /completions\/:completionId\/reverse'[\s\S]*?requirePermission\('units\.reverse_completion'\)/);
 });
 
 test('completion reversal is durable, reasoned, and written to Unit audit history', () => {

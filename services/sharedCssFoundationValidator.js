@@ -50,6 +50,7 @@ function validateThemeCss(content) {
   const errors = [];
   const requiredTokens = [
     '--ui-blue',
+    '--ui-font-weight-strong',
     '--ui-modal-radius',
     '--ui-on-action',
     '--ui-space-sm',
@@ -139,6 +140,24 @@ function validateSharedVisualCss(content) {
     }
   });
 
+  return errors;
+}
+
+function validateTypographyWeightContract(themeContent, appContent) {
+  const errors = [];
+  if (!/--ui-font-weight-strong:\s*650\s*;/.test(themeContent)) {
+    errors.push('The shared strong/emphasis font weight must remain 650.');
+  }
+  if (!/body :is\(\.content-shell, \.modal-panel\) :is\(strong, b\),[\s\S]*?font-weight:\s*var\(--ui-font-weight-strong\)/.test(appContent)) {
+    errors.push('app.css must apply the shared strong/emphasis token to normal application content.');
+  }
+  const printerMatch = appContent.match(/\.label-printer-registry-name\s*\{([\s\S]*?)\}/);
+  if (!printerMatch || !/font-weight:\s*var\(--ui-font-weight-strong\)/.test(printerMatch[1])) {
+    errors.push('Printer record names must use the shared strong/emphasis font weight token.');
+  }
+  if (printerMatch && /font-weight:\s*(?:7\d\d|8\d\d|9\d\d)/.test(printerMatch[1])) {
+    errors.push('Printer record names must not use the retired heavy bold weight.');
+  }
   return errors;
 }
 
@@ -591,6 +610,7 @@ function validateSharedCssFoundation(projectRoot) {
   const appCss = read('public/css/app.css');
   const featuresCss = read('public/css/features.css');
   errors.push(...validateSharedVisualCss(appCss));
+  errors.push(...validateTypographyWeightContract(read('public/css/theme.css'), appCss));
   errors.push(...validateFeatureSafetyCss(featuresCss));
   errors.push(...validateCanonicalTokenUsage(appCss, featuresCss));
   const cssDirectory = path.join(projectRoot, 'public/css');
@@ -624,6 +644,7 @@ module.exports = {
   validateHeadTemplate,
   validateThemeCss,
   validateSharedVisualCss,
+  validateTypographyWeightContract,
   validateFeatureSafetyCss,
   validateCanonicalTokenUsage,
   validateStylesheetReferenceContract,

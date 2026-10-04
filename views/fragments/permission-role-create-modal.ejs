@@ -1,0 +1,33 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeFormData = formData || {};
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal permission-role-modal" role="dialog" aria-modal="true" aria-labelledby="permission-role-create-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Roles & Permissions</p>
+        <h2 id="permission-role-create-title">Create Role</h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <% if (safeErrors.length) { %><div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div><% } %>
+      <p class="configuration-form-note">The new role starts with no default permissions. After creation, select the permissions that should be approved by default for users assigned this role.</p>
+      <form class="app-form app-form-clean" method="post" action="/management/roles-permissions/new/modal" hx-post="/management/roles-permissions/new/modal" hx-target="#modal-root" hx-swap="innerHTML">
+        <label class="form-field">
+          <span>Role Name</span>
+          <input type="text" name="name" maxlength="150" value="<%= safeFormData.name || '' %>" required autofocus />
+        </label>
+        <label class="form-field">
+          <span>Description (optional)</span>
+          <textarea name="description" maxlength="500" rows="4"><%= safeFormData.description || '' %></textarea>
+        </label>
+        <div class="form-actions">
+          <button class="primary-button" type="submit">Create Role</button>
+          <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

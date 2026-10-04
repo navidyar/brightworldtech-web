@@ -1,9 +1,9 @@
 const overrideRequestModel = require('../models/overrideRequestModel');
 const techUnitModel = require('../models/techUnitModel');
 const lotModel = require('../models/lotModel');
+const { canApproveOverrideRequest } = require('../services/requestPermissionScope');
 
 const VALID_STATUS_FILTERS = new Set(['pending', 'approved', 'denied', 'cancelled', 'all']);
-const ELEVATED_UNIT_MANAGEMENT_ROLES = new Set(['admin', 'management', 'tech_lead']);
 
 function getCurrentRoleCodes(req) {
   return req && req.currentUser && Array.isArray(req.currentUser.roles)
@@ -78,12 +78,6 @@ async function hasVerifiedDuplicateIntakeContext(req, unitId, modalContext) {
   return candidates.some((candidate) => Number(candidate.unitId) === Number(unitId));
 }
 
-function isRegularTechOverrideRequester(req) {
-  const roleCodes = getCurrentRoleCodes(req);
-
-  return roleCodes.includes('tech') && !roleCodes.some((roleCode) => ELEVATED_UNIT_MANAGEMENT_ROLES.has(roleCode));
-}
-
 function getEffectiveAssignedUserId(unit) {
   if (!unit) {
     return null;
@@ -110,15 +104,6 @@ function getTechOverrideRequestEligibility(req, unit, {
   requestedDestinationLotId = null
 } = {}) {
   const fromDuplicateIntake = requestContext === 'duplicate_intake';
-
-  if (!isRegularTechOverrideRequester(req)) {
-    return {
-      allowed: false,
-      message: fromDuplicateIntake
-        ? 'Move / Takeover requests are available only to regular Tech users during Create Unit intake. Tech Leads, Management, and Admin can manage the existing Unit directly.'
-        : 'Override requests are available only to regular Tech users for units assigned to another Tech. Tech Leads, Management, and Admin manage assignments directly.'
-    };
-  }
 
   const isParkedTakeoverRequest = techUnitModel.isUnitParked(unit);
   const currentUserId = normalizePositiveInteger(req && req.currentUser ? req.currentUser.user_id : null);
@@ -278,6 +263,10 @@ async function approveOverrideRequest(req, res, next) {
       });
     }
 
+    const request = await overrideRequestModel.getOverrideRequestById(overrideRequestId);
+    if (!request) return res.redirect(getUnifiedReturnUrl(req, overrideRequestId, { skipped: 'not-pending' }));
+    if (!canApproveOverrideRequest(req, request)) return res.sendStatus(403);
+
     const priorTechCreditGranted = priorTechCreditRequested(req);
 
     const wasApproved = await overrideRequestModel.approveOverrideRequest({
@@ -339,6 +328,10 @@ async function denyOverrideRequest(req, res, next) {
         error: null
       });
     }
+
+    const request = await overrideRequestModel.getOverrideRequestById(overrideRequestId);
+    if (!request) return res.redirect(getUnifiedReturnUrl(req, overrideRequestId, { skipped: 'not-pending' }));
+    if (!canApproveOverrideRequest(req, request)) return res.sendStatus(403);
 
     const wasDenied = await overrideRequestModel.denyOverrideRequest({
       overrideRequestId,

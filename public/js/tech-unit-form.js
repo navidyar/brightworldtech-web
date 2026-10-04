@@ -25,15 +25,37 @@
   const LOT_REQUIREMENT_WORKFLOW_SUBMIT_VERIFICATION_MAX_AGE_MS = 5000;
   const LOT_REQUIREMENT_WORKFLOW_STORAGE_KEY = 'bwt-lot-requirements-updated';
   const LOT_REQUIREMENT_WRAPPER_KEYS = Object.freeze({
+    unit_serial_number: 'unit_serial_number',
+    bios_serial_number: 'bios_serial_number',
     unit_type: 'unit_category',
     manufacturer: 'manufacturer',
     model: 'unit_model',
+    screen_size: 'screen_size',
+    model_year: 'model_year',
     processor: 'processor_model',
+    processor_family: 'processor_model',
+    processor_speed_ghz: 'processor_speed_ghz',
     ram_gb: 'memory_modules',
     ram_type: 'memory_modules',
+    memory_install_type: 'memory_modules',
     storage_gb: 'storage_devices',
-    storage_type: 'storage_devices'
+    storage_type: 'storage_devices',
+    storage_wipe_status: 'storage_devices',
+    operating_system: 'operating_system',
+    os_build: 'os_build',
+    bios_version: 'bios_version',
+    battery_health: 'battery_health',
+    absolute_status: 'absolute_status',
+    touchscreen_status: 'touchscreen_status',
+    keyboard_language: 'keyboard_language',
+    complete_diagnostics: 'complete_diagnostics',
+    virus_check: 'virus_check',
+    driver_check: 'driver_check',
+    skinned_status: 'skinned_status',
+    overall_grade: 'overall_grade',
+    unit_outcome: 'unit_outcome'
   });
+  const LOT_REQUIREMENT_FORM_FIELD_KEYS = new Set(Object.values(LOT_REQUIREMENT_WRAPPER_KEYS));
   const UNIT_FORM_SEQUENTIAL_FOCUS_SELECTOR = [
     'input:not([type="hidden"]):not([type="button"]):not([type="submit"]):not([type="reset"]):not([type="image"])',
     'select',
@@ -726,7 +748,7 @@
       const fieldKey = errorElement.getAttribute('data-field-key') || '';
       const message = errorElement.getAttribute('data-error-message') || 'Complete this field.';
       const wrapper = fieldKey
-        ? form.querySelector(`[data-unit-form-field-key="${fieldKey}"]`)
+        ? form.querySelector(`[data-unit-form-field-key="${fieldKey}"], [data-unit-form-protected-field-key="${fieldKey}"]`)
         : null;
 
       if (!wrapper || wrapper.hidden || wrapper.closest('[hidden]')) {
@@ -762,6 +784,12 @@
       return null;
     }
 
+    const explicitTarget = wrapper.querySelector('[data-unit-form-required-label]');
+
+    if (explicitTarget) {
+      return explicitTarget;
+    }
+
     if (wrapper.matches('.form-section')) {
       return wrapper.querySelector('.form-section-header h3');
     }
@@ -794,6 +822,19 @@
 
     if (!required && indicator) {
       indicator.remove();
+    }
+  }
+
+  function updateRequiredAwareLabelText(label, text) {
+    if (!label) {
+      return;
+    }
+
+    const indicator = label.querySelector('[data-unit-form-required-indicator]');
+    label.textContent = text;
+
+    if (indicator) {
+      label.appendChild(indicator);
     }
   }
 
@@ -1094,14 +1135,15 @@
     const wrappers = form
       ? Array.from(form.querySelectorAll('[data-unit-form-repeatable-type]'))
       : [];
+    let valid = true;
 
-    for (const wrapper of wrappers) {
+    wrappers.forEach((wrapper) => {
       if (!validateRequiredRepeatableSection(wrapper, reportValidity)) {
-        return false;
+        valid = false;
       }
-    }
+    });
 
-    return true;
+    return valid;
   }
 
   function updateProfileManagedSubmissionState(form, scope, visible) {
@@ -1391,14 +1433,14 @@
     const biosVersionLabel = form.querySelector('[data-bios-version-label]');
     const biosVersionInput = form.querySelector('[data-bios-version-input]');
 
-    if (biosSerialLabel) biosSerialLabel.textContent = isApple ? 'Recovery Number' : 'BIOS Serial Number';
+    updateRequiredAwareLabelText(biosSerialLabel, isApple ? 'Recovery Number' : 'BIOS Serial Number');
     if (biosSerialHint) biosSerialHint.textContent = isApple
       ? 'Recovery Number is checked against both stored serial types after you leave this field.'
       : 'BIOS serial is checked against both stored serial types after you leave this field.';
     if (biosSerialInput) biosSerialInput.placeholder = isApple ? 'Recovery Number' : 'Serial reported by BIOS or ScanTool';
-    if (osBuildLabel) osBuildLabel.textContent = isApple ? 'OS Version' : 'OS Build';
+    updateRequiredAwareLabelText(osBuildLabel, isApple ? 'OS Version' : 'OS Build');
     if (osBuildInput) osBuildInput.placeholder = isApple ? 'Example: Tahoe 26.0' : 'Example: 23H2 / 22631';
-    if (biosVersionLabel) biosVersionLabel.textContent = isApple ? 'Firmware Version' : 'BIOS Version';
+    updateRequiredAwareLabelText(biosVersionLabel, isApple ? 'Firmware Version' : 'BIOS Version');
     if (biosVersionInput) biosVersionInput.placeholder = isApple ? 'Example: firmware version' : 'Example: 1.18.0';
 
     const displayTypeSelect = form.querySelector('[data-display-type-select]');
@@ -1699,7 +1741,8 @@
       policyCode: workflow.getAttribute('data-policy-code') || '',
       issues: Array.from(workflow.querySelectorAll('[data-lot-requirement-issue]')).map((issue) => ({
         requirementKey: issue.getAttribute('data-requirement-key') || '',
-        status: issue.getAttribute('data-requirement-status') || ''
+        status: issue.getAttribute('data-requirement-status') || '',
+        actualValueState: issue.getAttribute('data-requirement-actual-value-state') || ''
       }))
     };
   }
@@ -1714,9 +1757,13 @@
     const strictBlocked = !result.saveAllowed && result.policyCode === 'strict';
 
     result.issues.forEach((issue) => {
+      if (issue.status !== 'rejected' || issue.actualValueState !== 'provided') {
+        return;
+      }
+
       const wrapperKey = LOT_REQUIREMENT_WRAPPER_KEYS[issue.requirementKey];
       const wrapper = wrapperKey
-        ? form.querySelector(`[data-unit-form-field-key="${wrapperKey}"]`)
+        ? form.querySelector(`[data-unit-form-field-key="${wrapperKey}"], [data-unit-form-protected-field-key="${wrapperKey}"]`)
         : null;
 
       if (!wrapper || wrapper.hidden) {
@@ -1837,12 +1884,16 @@
   }
 
   function cancelScheduledLotRequirementWorkflowRefresh(form) {
-    if (!form || !form._lotRequirementWorkflowRefreshTimer) {
+    if (!form) {
       return;
     }
 
-    window.clearTimeout(form._lotRequirementWorkflowRefreshTimer);
-    delete form._lotRequirementWorkflowRefreshTimer;
+    if (form._lotRequirementWorkflowRefreshTimer) {
+      window.clearTimeout(form._lotRequirementWorkflowRefreshTimer);
+      delete form._lotRequirementWorkflowRefreshTimer;
+    }
+
+    delete form._lotRequirementWorkflowRefreshImmediate;
   }
 
   function scheduleLotRequirementWorkflowRefresh(form, options = {}) {
@@ -1854,10 +1905,14 @@
     delete form.dataset.lotRequirementWorkflowVerifiedLotId;
     delete form.dataset.lotRequirementWorkflowVerifiedFingerprint;
 
+    const immediate = Boolean(options.immediate || form._lotRequirementWorkflowRefreshImmediate);
+
     cancelScheduledLotRequirementWorkflowRefresh(form);
+    form._lotRequirementWorkflowRefreshImmediate = immediate;
 
     form._lotRequirementWorkflowRefreshTimer = window.setTimeout(() => {
       delete form._lotRequirementWorkflowRefreshTimer;
+      delete form._lotRequirementWorkflowRefreshImmediate;
 
       // A pending save performs its own authoritative requirement check. A
       // delayed background refresh must never abort that one-click preflight.
@@ -1866,7 +1921,7 @@
       }
 
       refreshLotRequirementWorkflow(form, { background: Boolean(options.background) });
-    }, options.immediate ? 0 : LOT_REQUIREMENT_WORKFLOW_REFRESH_DELAY_MS);
+    }, immediate ? 0 : LOT_REQUIREMENT_WORKFLOW_REFRESH_DELAY_MS);
   }
 
   function refreshOpenLotRequirementWorkflows(options = {}) {
@@ -1888,21 +1943,18 @@
   }
 
   function isLotRequirementWorkflowControl(control) {
-    const name = control ? String(control.name || '') : '';
+    if (!control) {
+      return false;
+    }
 
-    return Boolean(
-      name === 'lotId'
-      || name === 'unitCategoryConfigValueId'
-      || name === 'manufacturerId'
-      || name === 'unitModelId'
-      || name === 'processorModelId'
-      || name === 'ramGb'
-      || name === 'ramTypeConfigValueId'
-      || name === 'storageGb'
-      || name === 'storageTypeConfigValueId'
-      || /^memoryModules\[\d+\]\[(sizeGb|ramTypeConfigValueId)\]$/.test(name)
-      || /^storageDevices\[\d+\]\[(sizeGb|storageTypeConfigValueId)\]$/.test(name)
-    );
+    if (String(control.name || '') === 'lotId') {
+      return true;
+    }
+
+    const wrapper = control.closest('[data-unit-form-field-key]');
+    const fieldKey = wrapper ? wrapper.getAttribute('data-unit-form-field-key') || '' : '';
+
+    return LOT_REQUIREMENT_FORM_FIELD_KEYS.has(fieldKey);
   }
 
   function revealLotRequirementWorkflowIssue(form) {
@@ -2881,7 +2933,7 @@
 
     setUnitModelInputValidity(form, '');
     updateCatalogRequestControls(form);
-    scheduleLotRequirementWorkflowRefresh(form);
+    scheduleLotRequirementWorkflowRefresh(form, { immediate: true });
   }
 
   function getVisibleUnitModelOptions(form, includeSelectedOption, ignoreSearch) {
@@ -3039,7 +3091,7 @@
     applySelectedModelMetadata(form);
     updateCatalogRequestControls(form);
     closeUnitModelOptions(form);
-    scheduleLotRequirementWorkflowRefresh(form);
+    scheduleLotRequirementWorkflowRefresh(form, { immediate: true });
   }
 
   function resolveExactUnitModelMatch(form) {
@@ -3239,7 +3291,7 @@
     }
 
     setProcessorInputValidity(form, '');
-    scheduleLotRequirementWorkflowRefresh(form);
+    scheduleLotRequirementWorkflowRefresh(form, { immediate: true });
   }
 
   function syncProcessorBrandChoices(form, preserveSelection) {
@@ -3429,7 +3481,7 @@
     applyManufacturerFieldApplicability(form);
     closeProcessorOptions(form);
     updateCatalogRequestControls(form);
-    scheduleLotRequirementWorkflowRefresh(form);
+    scheduleLotRequirementWorkflowRefresh(form, { immediate: true });
   }
 
   function resolveExactProcessorMatch(form) {
@@ -3647,18 +3699,19 @@
 
   function validateAllCapacityInputs(form, reportValidity) {
     const inputs = form ? Array.from(form.querySelectorAll('[data-capacity-input]')) : [];
+    let valid = true;
 
-    for (const input of inputs) {
+    inputs.forEach((input) => {
       if (input.disabled) {
-        continue;
+        return;
       }
 
       if (!validateCapacityInput(input, reportValidity)) {
-        return false;
+        valid = false;
       }
-    }
+    });
 
-    return true;
+    return valid;
   }
 
 
@@ -4556,7 +4609,7 @@
       clearResolvedValidationError(validationControl);
 
       if (isLotRequirementWorkflowControl(validationControl)) {
-        scheduleLotRequirementWorkflowRefresh(getFormFromElement(validationControl));
+        scheduleLotRequirementWorkflowRefresh(getFormFromElement(validationControl), { immediate: true });
       }
     }
 
@@ -5116,18 +5169,24 @@
   }
 
   function validateTechUnitFormForSubmission(form) {
-    if (!validateAllCapacityInputs(form, true) || !validateHardwareRowSelections(form, true)) {
-      return false;
+    let valid = true;
+
+    if (!validateAllCapacityInputs(form, true)) {
+      valid = false;
+    }
+
+    if (!validateHardwareRowSelections(form, true)) {
+      valid = false;
     }
 
     updateModuleTotals(form);
 
     if (!validateAllRequiredRepeatableSections(form, true)) {
-      return false;
+      valid = false;
     }
 
     if (!ensureAssignableLotSelectionForSubmit(form, true)) {
-      return false;
+      valid = false;
     }
 
     const comboboxInput = getUnitModelComboboxInput(form);
@@ -5136,7 +5195,7 @@
     if (comboboxInput && selectionInput && comboboxInput.value.trim() && !selectionInput.value && !resolveExactUnitModelMatch(form)) {
       setUnitModelInputValidity(form, 'Choose a Unit Model from the catalog.');
       comboboxInput.reportValidity();
-      return false;
+      valid = false;
     }
 
     const processorInput = getProcessorComboboxInput(form);
@@ -5145,20 +5204,23 @@
     if (processorInput && processorSelection && processorInput.value.trim() && !processorSelection.value && !resolveExactProcessorMatch(form)) {
       setProcessorInputValidity(form, 'Choose a compatible processor from the catalog.');
       processorInput.reportValidity();
-      return false;
+      valid = false;
     }
 
     if (!form.checkValidity()) {
+      valid = false;
+    }
+
+    if (!valid) {
       const invalidControl = findFirstInvalidControl(form);
 
       if (invalidControl) {
         showValidationError(invalidControl);
         scheduleInvalidControlFocus(form, invalidControl);
       }
-      return false;
     }
 
-    return true;
+    return valid;
   }
 
   async function runTechUnitSubmitPreflight(form, selectedLotId) {
@@ -5179,13 +5241,10 @@
       form.dataset.lotProfileSubmitVerifiedLotId = selectedLotId;
     }
 
-    // Validate profile-controlled hardware only after the selected Lot's latest
-    // visibility/requirement contract has been applied. This prevents the first
-    // click from being rejected by stale required/visible states.
-    if (!validateAllCapacityInputs(form, true) || !validateHardwareRowSelections(form, true)) {
-      return false;
-    }
-    updateModuleTotals(form);
+    // Validate the complete form only after the selected Lot's latest profile has
+    // been applied. Keep going through the Lot requirement preview so one save
+    // attempt can mark every local required field and every failed Lot rule.
+    const localFormValid = validateTechUnitFormForSubmission(form);
 
     if (!hasCurrentLotRequirementSubmitVerification(form, selectedLotId)) {
       cancelScheduledLotRequirementWorkflowRefresh(form);
@@ -5207,6 +5266,10 @@
         revealLotRequirementWorkflowIssue(form);
         return false;
       }
+    }
+
+    if (!localFormValid) {
+      return false;
     }
 
     if (form.querySelector('[data-duplicate-assumption-nonce]')) {

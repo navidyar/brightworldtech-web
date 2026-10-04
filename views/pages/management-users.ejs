@@ -8,6 +8,11 @@
   <body class="css-scope-management css-scope-copy-link">
     <%
       const userListBasePath = isInactiveView ? '/management/users/inactive' : '/management/users';
+      const canCreateUsers = typeof hasPermission === 'function' && hasPermission('users.create');
+      const canDeleteUsers = typeof hasPermission === 'function' && hasPermission('users.delete');
+      const canManageUserStatus = typeof hasPermission === 'function' && hasPermission('users.status.manage');
+      const canManageUserSetupLinks = typeof hasPermission === 'function' && hasPermission('users.setup_links.manage');
+      const canViewUserManagementAudit = typeof hasPermission === 'function' && hasPermission('audit.user_management.view');
       const normalizedActiveSort = activeSort || 'user_az';
       const nextUserSort = (forward, reverse) => normalizedActiveSort === forward ? reverse : forward;
       const userSortClass = (forward, reverse) => `table-sort-link${[forward, reverse].includes(normalizedActiveSort) ? ' is-active' : ''}`;
@@ -17,6 +22,18 @@
         return '';
       };
       const userSortHref = (forward, reverse) => `${userListBasePath}?sort=${encodeURIComponent(nextUserSort(forward, reverse))}`;
+      const userRoleFilterMap = new Map();
+      users.forEach((user) => {
+        const roleNames = String(user.role_names || '').split(', ').filter(Boolean);
+        (Array.isArray(user.roles) ? user.roles : []).forEach((roleCode, index) => {
+          if (roleCode && !userRoleFilterMap.has(roleCode)) userRoleFilterMap.set(roleCode, roleNames[index] || roleCode);
+        });
+      });
+      const loginInactivityOverdueCount = users.filter((user) => user.login_inactivity_overdue).length;
+      const loginInactivityMonitoredCount = users.filter((user) => user.monitor_login_inactivity).length;
+      const userRoleFilterOptions = Array.from(userRoleFilterMap.entries())
+        .map(([code, name]) => ({ code, name }))
+        .sort((left, right) => left.name.localeCompare(right.name));
     %>
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
@@ -25,42 +42,58 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell">
-          <section class="dashboard-hero">
+          <section class="page-heading site-work-page-heading management-users-page-heading">
             <div>
-              <p class="eyebrow">Step 5c</p>
-              <h2><%= isInactiveView ? 'Inactive Users' : 'User Management' %></h2>
+              <p class="eyebrow">User Administration</p>
+              <h1><%= isInactiveView ? 'Inactive Users' : 'User Management' %></h1>
               <p>
                 <%= isInactiveView
                   ? 'Review inactive users and reactivate returning employees without losing their work history.'
-                  : 'Create users, assign one primary access role, issue BWT usernames and setup links, and deactivate employees without deleting their history.' %>
+                  : (canCreateUsers
+                    ? 'Create users, assign one or more access roles, issue BWT usernames and initial setup links.'
+                    : 'Review active users, assigned roles, account state, and recent login information.') %>
               </p>
             </div>
 
-            <div class="hero-badge">
-              <span>Access</span>
-              <strong>Admin / Management</strong>
+            <div class="site-clean-actions site-inline-actions management-user-actions">
+              <% if (canViewUserManagementAudit) { %>
+                <a class="secondary-button" href="/management/users/history" hx-get="/management/users/history" hx-target="#modal-root" hx-swap="innerHTML">Account History</a>
+              <% } %>
+              <% if (isInactiveView) { %>
+                <a class="secondary-button" href="/management/users">Active Users (<%= userCounts.activeCount %>)</a>
+              <% } else { %>
+                <a class="secondary-button" href="/management/users/inactive">Inactive Users (<%= userCounts.inactiveCount %>)</a>
+                <% if (canCreateUsers) { %>
+                  <a class="primary-button" href="/management/users/new" hx-get="/management/users/new" hx-target="#modal-root" hx-swap="innerHTML">Create User</a>
+                <% } %>
+              <% } %>
             </div>
           </section>
 
-          <section class="management-user-summary-grid">
-            <article class="management-user-summary-card">
-              <p class="eyebrow">Active Users</p>
-              <strong><%= formatNumber(userCounts.activeCount) %></strong>
-              <span>Visible in normal user management.</span>
-            </article>
-
-            <article class="management-user-summary-card">
-              <p class="eyebrow">Inactive Users</p>
-              <strong><%= formatNumber(userCounts.inactiveCount) %></strong>
-              <span>Hidden from normal lists and blocked from sign-in.</span>
-            </article>
-
-            <article class="management-user-summary-card">
-              <p class="eyebrow">Role Rule</p>
-              <strong>Single Primary Role</strong>
-              <span>Account roles control app access only; production activity is handled separately.</span>
-            </article>
+          <section class="site-summary-panel site-summary-panel--expanded management-users-summary-panel" aria-label="User management summary">
+            <div class="site-summary-primary">
+              <span><%= isInactiveView ? 'Inactive users' : 'Active users' %></span>
+              <strong><%= formatNumber(isInactiveView ? userCounts.inactiveCount : userCounts.activeCount) %></strong>
+              <small><%= isInactiveView ? 'Accounts currently disabled from sign-in' : 'Accounts currently active in BWTDallas' %></small>
+            </div>
+            <div class="site-summary-stats">
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">#</span>
+                <span><small><%= isInactiveView ? 'Active Users' : 'Inactive Users' %></small><strong><%= formatNumber(isInactiveView ? userCounts.activeCount : userCounts.inactiveCount) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">!</span>
+                <span><small>Login Inactivity Alerts</small><strong><%= loginInactivityOverdueCount %></strong><small><%= loginInactivityMonitoredCount %> monitored</small></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">+</span>
+                <span><small>Access Model</small><strong>Multiple Roles</strong><small>Approved grants combine</small></span>
+              </article>
+            </div>
           </section>
+          <% if (!isInactiveView) { %>
+            <p class="management-user-monitoring-note"><strong>Login inactivity monitoring:</strong> grant <em>Monitor Login Inactivity</em> on a role, or choose Inherit / Monitor / Do not monitor in Edit User. Monitored active users are flagged after more than 5 business days without a login.</p>
+          <% } %>
 
           <section class="content-card">
             <div class="content-header management-user-header">
@@ -69,14 +102,6 @@
                 <h2><%= isInactiveView ? 'Inactive Application Users' : 'Application Users' %></h2>
               </div>
 
-              <div class="management-user-actions site-inline-actions">
-                <% if (isInactiveView) { %>
-                  <a class="secondary-button" href="/management/users">Active Users (<%= userCounts.activeCount %>)</a>
-                <% } else { %>
-                  <a class="secondary-button" href="/management/users/inactive">List Inactive Users (<%= userCounts.inactiveCount %>)</a>
-                  <a class="primary-button" href="/management/users/new" hx-get="/management/users/new" hx-target="#modal-root" hx-swap="innerHTML">Create User</a>
-                <% } %>
-              </div>
             </div>
 
             <% if (successMessage) { %>
@@ -98,11 +123,28 @@
             <% } %>
 
             <div class="message management-user-note">
-              <p><strong>Role assignment rule:</strong> each user receives one primary access role. Admin users can assign Admin to other users, but cannot demote their own Admin account. Management users can assign Management, Tech Lead, QC, or Tech to other users, but cannot change their own Management role. QC is a restricted review role; packing and task activity remain operational records rather than account roles.</p>
+              <p><strong>Role assignment rule:</strong> users may receive multiple roles. Approved default permissions from every assigned role combine; a role that does not approve a permission does not cancel another role's grant. Protected administrator safeguards remain in place.</p>
             </div>
 
-            <div class="table-card management-users-table-card site-space-top-lg">
-              <table>
+            <div class="management-live-filter-scope site-space-top-lg" data-live-filter>
+              <div class="management-live-filter-bar" aria-label="User filters">
+                <label class="form-field management-live-filter-search">
+                  <span>Search Users</span>
+                  <input type="search" autocomplete="off" placeholder="Name, username, email, role..." data-live-filter-control="search" />
+                </label>
+                <label class="form-field">
+                  <span>Role</span>
+                  <select data-live-filter-control="role">
+                    <option value="">All roles</option>
+                    <% userRoleFilterOptions.forEach((role) => { %><option value="<%= role.code %>"><%= role.name %></option><% }) %>
+                  </select>
+                </label>
+                <button type="button" class="secondary-button button-small management-live-filter-clear" data-live-filter-clear>Clear</button>
+                <span class="management-live-filter-count"><strong data-live-filter-count><%= users.length %></strong> shown</span>
+              </div>
+
+              <div class="table-card management-users-table-card">
+                <table>
                 <thead>
                   <tr>
                     <th>
@@ -113,7 +155,7 @@
                     </th>
                     <th>
                       <a class="<%= userSortClass('role_az', 'role_za') %>" href="<%= userSortHref('role_az', 'role_za') %>">
-                        Primary Role
+                        Roles
                         <% if (userSortIndicator('role_az', 'role_za')) { %><span aria-hidden="true"><%= userSortIndicator('role_az', 'role_za') %></span><% } %>
                       </a>
                     </th>
@@ -147,8 +189,9 @@
                   <% } %>
 
                   <% users.forEach((user) => { %>
-                    <% const roleLabel = user.primary_role_name || user.role_names || 'No role assigned'; %>
-                    <tr>
+                    <% const roleLabel = user.role_names || user.primary_role_name || 'No role assigned'; %>
+                    <% const userSearchText = [user.first_name, user.last_name, user.username, user.email, user.personal_email, user.phone, roleLabel, user.account_status_label].filter(Boolean).join(' '); %>
+                    <tr data-live-filter-row data-live-filter-search="<%= userSearchText %>" data-live-filter-role="<%= Array.isArray(user.roles) ? user.roles.join('|') : '' %>">
                       <td>
                         <div class="management-user-identity">
                           <strong><%= user.first_name %> <%= user.last_name %></strong>
@@ -162,12 +205,10 @@
                         </div>
                       </td>
                       <td>
-                        <% if (user.primary_role_code) { %>
+                        <% if (user.role_count > 0) { %>
                           <div class="management-user-role-stack">
                             <span class="pill slate"><%= roleLabel %></span>
-                            <% if (user.role_count > 1) { %>
-                              <small>Legacy multiple roles detected. Editing will save one primary role.</small>
-                            <% } %>
+                            <small><%= user.role_count %> role<%= user.role_count === 1 ? '' : 's' %> assigned</small>
                           </div>
                         <% } else { %>
                           <span class="pill bad">No role</span>
@@ -215,85 +256,78 @@
                           <% } %>
                         </div>
                       </td>
-                      <td><%= formatDateTime(user.last_login_at) %></td>
+                      <td>
+                        <%= formatDateTime(user.last_login_at) %>
+                        <% if (user.monitor_login_inactivity) { %>
+                          <% if (user.login_inactivity_overdue) { %><br/><span class="pill bad">Inactive <%= user.login_inactivity_business_days %> business days</span>
+                          <% } else if (user.login_inactivity_business_days !== null) { %><br/><small>Monitored · <%= user.login_inactivity_business_days %> business days</small>
+                          <% } else { %><br/><small>Monitored</small><% } %>
+                        <% } %>
+                      </td>
                       <td>
                         <div class="management-user-row-actions site-inline-actions">
+                          <% if (canViewUserManagementAudit) { %>
+                            <a class="secondary-button" href="/management/users/history?userId=<%= user.user_id %>" hx-get="/management/users/history?userId=<%= user.user_id %>" hx-target="#modal-root" hx-swap="innerHTML">History</a>
+                          <% } %>
+                          <% if (typeof hasPermission === 'function' && hasPermission('users.tool_pin.manage')) { %>
+                            <a class="secondary-button" href="/management/users/<%= user.user_id %>/tool-pin/modal?returnPath=<%= isInactiveView ? 'inactive' : 'active' %>" hx-get="/management/users/<%= user.user_id %>/tool-pin/modal?returnPath=<%= isInactiveView ? 'inactive' : 'active' %>" hx-target="#modal-root" hx-swap="innerHTML">Tool PIN</a>
+                          <% } %>
+                          <% if (typeof hasPermission === 'function' && hasPermission('users.edit')) { %>
+                            <% if (Number(user.user_id) !== Number(protectedAdminUserId) || Number(currentUserId) === Number(protectedAdminUserId)) { %>
                           <a class="secondary-button" href="/management/users/<%= user.user_id %>/edit/modal?returnPath=<%= isInactiveView ? 'inactive' : 'active' %>" hx-get="/management/users/<%= user.user_id %>/edit/modal?returnPath=<%= isInactiveView ? 'inactive' : 'active' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                            <% } else { %>
+                              <span class="pill">Protected Admin</span>
+                            <% } %>
+                          <% } %>
+                          <% if (Number(user.user_id) !== Number(protectedAdminUserId) || Number(currentUserId) === Number(protectedAdminUserId)) { %>
+                            <% if (typeof hasPermission === 'function' && hasPermission('roles.view')) { %>
+                              <a class="secondary-button" href="/management/users/<%= user.user_id %>/permissions/modal" hx-get="/management/users/<%= user.user_id %>/permissions/modal" hx-target="#modal-root" hx-swap="innerHTML">Permissions</a>
+                            <% } %>
+                            <% if (canDeleteUsers) { %>
+                              <% if (isInactiveView) { %>
+                                <% if (user.can_delete_pending_setup) { %>
+                                  <a class="secondary-button danger-button" href="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=inactive" hx-get="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=inactive" hx-target="#modal-root" hx-swap="innerHTML">Delete Pending User</a>
+                                <% } %>
+                              <% } else { %>
+                                <% if (Number(user.user_id) !== Number(currentUserId) && user.can_delete_pending_setup) { %>
+                                  <a class="secondary-button danger-button" href="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=active" hx-get="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=active" hx-target="#modal-root" hx-swap="innerHTML">Delete Pending User</a>
+                                <% } %>
+                              <% } %>
+                            <% } %>
 
-                          <% if (isInactiveView) { %>
-                            <a class="secondary-button" href="/management/users/<%= user.user_id %>/reactivate/modal?returnPath=inactive" hx-get="/management/users/<%= user.user_id %>/reactivate/modal?returnPath=inactive" hx-target="#modal-root" hx-swap="innerHTML">Reactivate</a>
+                            <% if (!isInactiveView && canManageUserSetupLinks) { %>
+                              <a
+                                class="secondary-button"
+                                href="/management/users/<%= user.user_id %>/setup-link/modal?returnPath=active"
+                                hx-get="/management/users/<%= user.user_id %>/setup-link/modal?returnPath=active"
+                                hx-target="#modal-root"
+                                hx-swap="innerHTML"
+                              >
+                                <%= user.has_password ? 'Generate Reset Link' : 'Generate Setup Link' %>
+                              </a>
+                            <% } %>
 
-                            <% if (user.can_delete_pending_setup) { %>
-                              <a class="secondary-button danger-button" href="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=inactive" hx-get="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=inactive" hx-target="#modal-root" hx-swap="innerHTML">Delete Pending User</a>
+                            <% if (canManageUserStatus) { %>
+                              <% if (isInactiveView) { %>
+                                <a class="secondary-button" href="/management/users/<%= user.user_id %>/reactivate/modal?returnPath=inactive" hx-get="/management/users/<%= user.user_id %>/reactivate/modal?returnPath=inactive" hx-target="#modal-root" hx-swap="innerHTML">Reactivate</a>
+                              <% } else if (Number(user.user_id) !== Number(currentUserId)) { %>
+                                <a class="secondary-button danger-button" href="/management/users/<%= user.user_id %>/deactivate/modal?returnPath=active" hx-get="/management/users/<%= user.user_id %>/deactivate/modal?returnPath=active" hx-target="#modal-root" hx-swap="innerHTML">Deactivate</a>
+                              <% } %>
                             <% } %>
                           <% } else { %>
-                            <a
-                              class="secondary-button"
-                              href="/management/users/<%= user.user_id %>/setup-link/modal?returnPath=active"
-                              hx-get="/management/users/<%= user.user_id %>/setup-link/modal?returnPath=active"
-                              hx-target="#modal-root"
-                              hx-swap="innerHTML"
-                            >
-                              <%= user.has_password ? 'Generate Reset Link' : 'Generate Setup Link' %>
-                            </a>
-
-                            <% if (Number(user.user_id) !== Number(currentUserId)) { %>
-                              <% if (user.can_delete_pending_setup) { %>
-                                <a class="secondary-button danger-button" href="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=active" hx-get="/management/users/<%= user.user_id %>/delete-pending/modal?returnPath=active" hx-target="#modal-root" hx-swap="innerHTML">Delete Pending User</a>
-                              <% } %>
-
-                              <a class="secondary-button danger-button" href="/management/users/<%= user.user_id %>/deactivate/modal?returnPath=active" hx-get="/management/users/<%= user.user_id %>/deactivate/modal?returnPath=active" hx-target="#modal-root" hx-swap="innerHTML">Deactivate</a>
-                            <% } %>
+                            <span class="pill">Protected Admin</span>
                           <% } %>
                         </div>
                       </td>
                     </tr>
                   <% }) %>
+                  <tr data-live-filter-empty hidden><td colspan="6">No users match the current search and role filter.</td></tr>
                 </tbody>
               </table>
-            </div>
-          </section>
-
-          <section class="content-card">
-            <div class="content-header">
-              <div>
-                <p class="eyebrow">Employee History</p>
-                <h2>How Deactivation Works</h2>
-              </div>
-            </div>
-
-            <div class="workflow-list">
-              <div class="workflow-item active">
-                <span></span>
-                <div>
-                  <strong>Deactivate instead of deleting</strong>
-                  <p>
-                    Deactivated users are hidden from the normal users list and cannot sign in, but their work history stays attached to the same user record.
-                  </p>
-                </div>
-              </div>
-
-              <div class="workflow-item slate">
-                <span></span>
-                <div>
-                  <strong>Reactivate returning employees</strong>
-                  <p>
-                    Reactivating a user keeps the same account, primary role, unit associations, comments, grades, and historical audit trail intact.
-                  </p>
-                </div>
-              </div>
-
-              <div class="workflow-item slate">
-                <span></span>
-                <div>
-                  <strong>Delete only unused pending setup accounts</strong>
-                  <p>
-                    Pending setup users with no password and no login history can be deleted when they were created by mistake. Any user with work history should be deactivated instead.
-                  </p>
-                </div>
               </div>
             </div>
           </section>
+
         </main>
 
         <div id="modal-root"></div>

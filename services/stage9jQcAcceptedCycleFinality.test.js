@@ -97,6 +97,9 @@ Module._load = function loadWithMysqlStub(request, parent, isMain) {
       })
     };
   }
+  if (request === './lotQcRequirementModel') {
+    return { assertUnitQcRequired: async () => ({ qcRequired: true }) };
+  }
 
   return originalModuleLoad(request, parent, isMain);
 };

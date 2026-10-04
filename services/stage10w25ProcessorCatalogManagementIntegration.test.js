@@ -17,12 +17,12 @@ test('Processor Catalog is an Admin-only configuration surface while request-sco
   const page = read('views/pages/management-processors.ejs');
 
   assert.doesNotMatch(routes, /processorCatalogRoles/);
-  assert.match(routes, /\/management\/config\/processors'[\s\S]*?requireRole\(configRoles\)/);
-  assert.match(routes, /processors\/:processorModelId\/edit\/modal'[\s\S]*?requireRole\(configRoles\)/);
-  assert.match(routes, /processors\/:processorModelId\/families'[\s\S]*?requireRole\(configRoles\)/);
-  assert.match(routes, /processors\/:processorModelId\/delete'[\s\S]*?requireRole\(configRoles\)/);
+  assert.match(routes, /\/management\/config\/processors'[\s\S]*?requirePermission\('configuration\.processors\.manage'\)/);
+  assert.match(routes, /processors\/:processorModelId\/edit\/modal'[\s\S]*?requirePermission\('configuration\.processors\.manage'\)/);
+  assert.match(routes, /processors\/:processorModelId\/families'[\s\S]*?requirePermission\('configuration\.processors\.manage'\)/);
+  assert.match(routes, /processors\/:processorModelId\/delete'[\s\S]*?requirePermission\('configuration\.processors\.manage'\)/);
   assert.match(nav, /label: 'Processor Catalog'/);
-  assert.match(nav, /label: 'Processor Catalog'[\s\S]*?allowed: isAdminConfigurationUser/);
+  assert.match(nav, /label: 'Processor Catalog'[\s\S]*?allowed: canViewConfiguration && hasPermission\('configuration\.processors\.manage'\)/);
   assert.doesNotMatch(nav, /isManagementConfigurationUser/);
   assert.match(nav, /configurationItems\.filter\(\(item\) => item\.allowed\)/);
   assert.doesNotMatch(sidebar, /!canAccessMenuArea\('admin'\)[\s\S]*?\/management\/config\/processors/);
@@ -87,12 +87,12 @@ test('Processor request review can reuse an existing canonical processor and war
 
   assert.match(controller, /processorCatalogModel\.findLikelyProcessorMatches/);
   assert.match(controller, /approvedExistingProcessorModelId: req\.body\.approvedExistingProcessorModelId/);
-  assert.match(page, /Existing Canonical Processor/);
+  assert.match(page, /Existing Catalog Processor/);
   assert.match(page, /name="approvedExistingProcessorModelId"/);
   assert.match(page, /data-processor-similarity-warning/);
   assert.match(page, /Open Processor Catalog/);
-  assert.match(page, /<% if \(isAdminCatalogReviewer\) \{ %>[\s\S]*?Open Processor Catalog/);
-  assert.match(page, /Admin Catalog Review/);
+  assert.match(page, /if \(hasPermission\('configuration\.view'\) && hasPermission\('configuration\.processors\.manage'\)\)[\s\S]*?Open Processor Catalog/);
+  assert.match(page, /Processor Catalog Review/);
   assert.doesNotMatch(page, /Management Request Boundary|confirmedProcessorNamingWithAdmin/);
   assert.match(model, /safeExistingProcessorModelId/);
   assert.match(model, /Existing processor mapped/);

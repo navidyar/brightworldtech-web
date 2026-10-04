@@ -14,15 +14,6 @@ test('every QC Reporting table header is exposed as a sortable link', () => {
     .map((match) => match[1].trim());
 
   assert.deepEqual(headers, [
-    'Technician',
-    'Reviewed Units',
-    'First-Pass Accepted',
-    'Currently Accepted',
-    'Rejected First Pass',
-    'Corrected After Rejection',
-    'Pending Correction',
-    'Ready for Recheck',
-    'Rechecked Units',
     'Reviewer',
     'Reviews',
     'Accepted',
@@ -31,7 +22,20 @@ test('every QC Reporting table header is exposed as a sortable link', () => {
     'First-pass Reviews',
     'Rechecks',
     'Technicians Reviewed',
-    'Most Recent'
+    'Median Review Time',
+    'Audited',
+    'Audit Agreement',
+    'Audit Exceptions',
+    'Most Recent',
+    'Technician',
+    'Reviewed Units',
+    'First-Pass Accepted',
+    'Currently Accepted',
+    'Rejected First Pass',
+    'Corrected After Rejection',
+    'Pending Correction',
+    'Ready for Recheck',
+    'Rechecked Units'
   ]);
 });
 

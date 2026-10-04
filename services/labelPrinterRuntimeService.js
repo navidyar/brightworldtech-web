@@ -3,6 +3,7 @@
 const { spawn } = require('node:child_process');
 const labelPrinterModel = require('../models/labelPrinterModel');
 const { canUsePrinter, probeTcpPort } = require('./labelPrinterPolicy');
+const { canManageAnySoloPrinter } = require('./managedPrinterPermissions');
 const {
   rankPrinterRouteCandidates,
   parseCupsPrinterNames,
@@ -58,13 +59,27 @@ function buildPrinterLabel(name, location) {
   const safeLocation = String(location || '').trim();
   return safeLocation ? `${safeName} · ${safeLocation}` : safeName;
 }
+
+function buildOwnerLabel(row) {
+  const full = `${row.owner_first_name || ''} ${row.owner_last_name || ''}`.trim();
+  return full || String(row.owner_username || '').trim() || (row.owner_user_id ? `User ${row.owner_user_id}` : '');
+}
+
+function buildRegistryDisplayName(row) {
+  const alias = String(row.alias_label || '').trim();
+  const registered = String(row.display_name || '').trim() || 'Label Printer';
+  if (String(row.scope_code || '') !== 'solo') return alias || registered;
+  const owner = buildOwnerLabel(row);
+  const visible = alias || registered;
+  return owner ? `${visible} — ${owner}` : visible;
+}
 function mapRegistryPrinterToPrintOption(row) {
   const registryPrinterId = Number(row.label_printer_id);
   return Object.freeze({
     id: buildRegistryPrinterId(registryPrinterId),
     registryPrinterId,
-    label: buildPrinterLabel(row.display_name, row.location_label),
-    name: String(row.display_name || 'Label Printer'),
+    label: buildPrinterLabel(buildRegistryDisplayName(row), row.location_label),
+    name: buildRegistryDisplayName(row),
     location: String(row.location_label || ''),
     host: String(row.host_address || ''),
     port: Number(row.port) || 9100,
@@ -93,22 +108,22 @@ function isRegistryRowPrintCapable(row) {
   return String(row.protocol_code || '') === 'raw_9100';
 }
 
-async function listPrintPrintersForUser({ userId, roleCodes = [] }) {
+async function listPrintPrintersForUser({ userId, permissions = new Set() }) {
   try {
-    const rows = await labelPrinterModel.listAvailablePrintersForUser({ userId, roleCodes });
-    return Object.freeze(rows.filter(isRegistryRowPrintCapable).map(mapRegistryPrinterToPrintOption));
+    const rows = await labelPrinterModel.listAvailablePrintersForUser({ userId, canAccessPrivateSoloPrinters: canManageAnySoloPrinter(permissions) });
+    return Object.freeze(rows.filter(isRegistryRowPrintCapable).filter((row) => canUsePrinter(row, userId, permissions)).map(mapRegistryPrinterToPrintOption));
   } catch (error) {
     console.warn('Label printer registry unavailable:', error.message);
     return Object.freeze([]);
   }
 }
 
-async function listPrintDestinationsForUser({ userId, roleCodes = [] }) {
-  const printers = await listPrintPrintersForUser({ userId, roleCodes });
+async function listPrintDestinationsForUser({ userId, permissions = new Set() }) {
+  const printers = await listPrintPrintersForUser({ userId, permissions });
   const rows = await labelPrinterModel.listRoutingGroupRows();
   const groups = new Map();
   for (const row of rows) {
-    if (!canUsePrinter(row, userId, roleCodes)) continue;
+    if (!canUsePrinter(row, userId, permissions)) continue;
     const groupId = Number(row.label_printer_group_id);
     if (!groups.has(groupId)) {
       groups.set(groupId, {
@@ -130,21 +145,21 @@ async function listPrintDestinationsForUser({ userId, roleCodes = [] }) {
   ]);
 }
 
-async function resolvePrintDestinationForUser({ destinationId, userId, roleCodes = [] }) {
+async function resolvePrintDestinationForUser({ destinationId, userId, permissions = new Set() }) {
   const safeId = String(destinationId || '').trim();
   const groupId = parsePrinterGroupId(safeId);
   if (groupId) {
-    const destinations = await listPrintDestinationsForUser({ userId, roleCodes });
+    const destinations = await listPrintDestinationsForUser({ userId, permissions });
     return destinations.find((destination) => destination.kind === 'group' && destination.registryGroupId === groupId) || null;
   }
-  return resolvePrintPrinterForUser({ printerId: safeId, userId, roleCodes });
+  return resolvePrintPrinterForUser({ printerId: safeId, userId, permissions });
 }
 
-async function resolvePrintPrinterForUser({ printerId, userId, roleCodes = [] }) {
+async function resolvePrintPrinterForUser({ printerId, userId, permissions = new Set() }) {
   const registryPrinterId = parseRegistryPrinterId(printerId);
   if (registryPrinterId) {
     const row = await labelPrinterModel.getPrinterById(registryPrinterId);
-    if (!row || !canUsePrinter(row, userId, roleCodes) || !isRegistryRowPrintCapable(row)) return null;
+    if (!row || !canUsePrinter(row, userId, permissions) || !isRegistryRowPrintCapable(row)) return null;
     return mapRegistryPrinterToPrintOption(row);
   }
 

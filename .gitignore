@@ -1,4 +1,6 @@
-backup/
+backup/*
+!backup/scripts/
+!backup/scripts/**
 handoff/
 sql/
 
@@ -6,7 +8,6 @@ sql/
 node_modules/
 
 # MyFiles
-package-lock.json
 DEV-NOTES.md
 TEST-CHECKLIST.md
 

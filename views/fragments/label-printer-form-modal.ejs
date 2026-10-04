@@ -15,23 +15,33 @@
       <% if (duplicatePrinter) { %><div class="message warning"><p><strong>This printer has already been added to BWTDallas.</strong></p><p>No duplicate registry entry will be created.</p></div><% } %>
       <% if (probeResult) { %><div class="message <%= probeResult.reachable ? 'success' : 'warning' %>"><p><%= probeResult.reachable ? 'Printer endpoint detected.' : (onlineRequired ? 'No supported printer port responded. Tech Users cannot add this solo printer while it is offline.' : 'No supported printer port responded. You can still save it, but it will be marked offline.') %></p><p>RAW 9100: <%= probeResult.protocols.find((p) => p.code === 'raw_9100')?.reachable ? 'reachable' : 'not detected' %> · LPD 515: <%= probeResult.protocols.find((p) => p.code === 'lpd')?.reachable ? 'reachable' : 'not detected' %> · IPP 631: <%= probeResult.protocols.find((p) => p.code === 'ipp')?.reachable ? 'reachable' : 'not detected' %><% if (probeResult.reverseName) { %> · Hostname: <%= probeResult.reverseName %><% } %></p></div><% } %>
 
-      <form class="app-form" method="post" action="<%= submitPath %>" hx-post="<%= submitPath %>" hx-target="#modal-root" hx-swap="innerHTML">
-        <div class="form-grid">
+      <form class="app-form label-printer-form" method="post" action="<%= submitPath %>" hx-post="<%= submitPath %>" hx-target="#modal-root" hx-swap="innerHTML">
+        <div class="label-printer-form-grid">
           <label class="form-field"><span>Printer Name</span><input name="displayName" maxlength="120" required value="<%= formData.displayName %>" data-modal-initial-focus /></label>
+          <label class="form-field"><span>Alias <em class="label-printer-optional">optional</em></span><input name="aliasLabel" maxlength="120" value="<%= formData.aliasLabel || '' %>" placeholder="Macho Man" /></label>
+          <p class="label-printer-grid-note">Alias is a friendly name shown with the owner. It never changes ownership or the registered printer name.</p>
+
           <label class="form-field"><span>Location</span><input name="locationLabel" maxlength="160" value="<%= formData.locationLabel %>" placeholder="Tech Area 1" /></label>
           <label class="form-field"><span>Printer IP</span><input name="hostAddress" maxlength="255" required value="<%= formData.hostAddress %>" placeholder="10.0.2.210" /></label>
+
           <label class="form-field"><span>Protocol</span><select name="protocolCode"><% protocols.forEach((protocol) => { %><option value="<%= protocol.code %>" <%= formData.protocolCode === protocol.code ? 'selected' : '' %>><%= protocol.label %></option><% }) %></select></label>
           <label class="form-field"><span>Port</span><input type="number" name="port" min="1" max="65535" value="<%= formData.port %>" /></label>
-          <label class="form-field"><span>CUPS Queue <small>(optional)</small></span><input name="cupsQueueName" maxlength="128" value="<%= formData.cupsQueueName %>" /></label>
+
+          <label class="form-field label-printer-field-wide"><span>CUPS Queue <em class="label-printer-optional">optional</em></span><input name="cupsQueueName" maxlength="128" value="<%= formData.cupsQueueName %>" /></label>
+
           <label class="form-field"><span>Manufacturer</span><input name="manufacturer" maxlength="80" value="<%= formData.manufacturer %>" /></label>
           <label class="form-field"><span>Model</span><input name="model" maxlength="120" value="<%= formData.model %>" /></label>
-          <label class="form-field"><span>Printer Profile</span><select name="printerProfileCode"><option value="">Not configured / Other</option><% printerProfiles.forEach((profile) => { %><option value="<%= profile.code %>" <%= formData.printerProfileCode === profile.code ? 'selected' : '' %>><%= profile.label %></option><% }) %></select><small>Select the matching supported printer so BWTDallas can safely render the label for it. Printers without a supported profile remain registered but do not appear in print destinations.</small></label>
-          <label class="form-field"><span>Loaded Roll Width</span><select name="mediaCode"><option value="">Not configured</option><% continuousMediaWidths.forEach((media) => { %><option value="<%= media.code %>" <%= formData.mediaCode === media.code ? 'selected' : '' %>><%= media.label %> continuous</option><% }) %></select><small>Update this when the physical continuous roll width changes so BWTDallas routes only compatible labels.</small></label>
+
+          <label class="form-field"><span>Printer Profile</span><select name="printerProfileCode"><option value="">Not configured / Other</option><% printerProfiles.forEach((profile) => { %><option value="<%= profile.code %>" <%= formData.printerProfileCode === profile.code ? 'selected' : '' %>><%= profile.label %></option><% }) %></select></label>
+          <label class="form-field"><span>Loaded Roll Width</span><select name="mediaCode"><option value="">Not configured</option><% continuousMediaWidths.forEach((media) => { %><option value="<%= media.code %>" <%= formData.mediaCode === media.code ? 'selected' : '' %>><%= media.label %> continuous</option><% }) %></select></label>
+          <p class="label-printer-grid-note">Select the supported printer profile and the continuous roll currently loaded so BWTDallas can route only compatible labels. Printers without a supported profile remain registered but do not appear in print destinations.</p>
+
           <label class="form-field"><span>DPI</span><input type="number" name="dpi" min="100" max="2400" value="<%= formData.dpi %>" /></label>
         </div>
+
         <input type="hidden" name="detectedDescription" value="<%= formData.detectedDescription %>" />
-        <div class="form-grid">
-          <% if (!isManaged) { %><label class="checkbox-row"><input type="checkbox" name="isShared" value="1" <%= formData.isShared ? 'checked' : '' %> /><span><strong>Share this printer</strong><small>Off by default. When enabled, ordinary Tech Users may use it too. Management+ can override this setting.</small></span></label><% } %>
+        <div class="label-printer-toggle-row">
+          <% if (!isManaged) { %><label class="checkbox-row"><input type="checkbox" name="isShared" value="1" <%= formData.isShared ? 'checked' : '' %> /><span><strong>Share this printer</strong><small>Off by default. When enabled, ordinary Tech Users may use it too. Printer managers can override this setting.</small></span></label><% } %>
           <label class="checkbox-row"><input type="checkbox" name="isEnabled" value="1" <%= formData.isEnabled ? 'checked' : '' %> /><span><strong>Enabled</strong><small>Disabled printers remain registered but are not eligible for future printing.</small></span></label>
         </div>
         <div class="form-actions">

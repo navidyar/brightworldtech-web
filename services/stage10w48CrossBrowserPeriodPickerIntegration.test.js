@@ -54,6 +54,17 @@ test('the entire visible period field is the shared clickable trigger while nati
   assert.doesNotMatch(appCss, /\.site-date-picker-native\s*\{/);
 });
 
+test('shared period picker clamps open calendars into the visible viewport', () => {
+  const js = read('public/js/date-picker-only.js');
+  const css = read('public/css/app.css');
+
+  assert.match(js, /function positionSiteDatePicker\(picker, popover\)/);
+  assert.match(js, /window\.innerWidth - popoverRect\.width - viewportGap/);
+  assert.match(js, /--site-date-picker-shift-x/);
+  assert.match(js, /window\.addEventListener\('resize'/);
+  assert.match(css, /\.site-date-picker-calendar\s*\{[\s\S]*?transform:\s*translateX\(var\(--site-date-picker-shift-x, 0px\)\)/);
+});
+
 test('reporting week/month inputs on management dashboards are covered by the shared picker', () => {
   const management = read('views/fragments/management-dashboard-completion-foundation.ejs');
   const tech = read('views/fragments/tech-dashboard-productivity.ejs');
@@ -64,7 +75,7 @@ test('reporting week/month inputs on management dashboards are covered by the sh
     assert.match(view, /type="week"[^>]*data-date-picker-only/);
     assert.match(view, /type="month"[^>]*data-date-picker-only/);
   });
-  assert.match(head, /date-picker-only\.js\?v=20260921-cleanup-stage2c/);
+  assert.match(head, /date-picker-only\.js\?v=20260925-date-picker-viewport-clamp/);
 });
 
 test('shared period picker JavaScript has valid syntax', () => {

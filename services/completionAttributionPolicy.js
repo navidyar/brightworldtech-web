@@ -3,12 +3,15 @@
 const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const ELEVATED_COMPLETION_ROLES = new Set(['admin', 'management', 'tech_lead']);
 
-function canChooseCompletionAttribution(roleCodes = []) {
+function canChooseCompletionAttribution(roleCodes = [], permissions = null) {
+  if (permissions instanceof Set || Array.isArray(permissions)) {
+    return new Set(permissions).has('units.completion_attribution.change');
+  }
   return (Array.isArray(roleCodes) ? roleCodes : [])
     .some((roleCode) => ELEVATED_COMPLETION_ROLES.has(String(roleCode || '').trim()));
 }
 
-function getAllowedCompletionUserIds({ currentUserId, assignedUserId, roleCodes = [] } = {}) {
+function getAllowedCompletionUserIds({ currentUserId, assignedUserId, roleCodes = [], permissions = null } = {}) {
   const safeCurrentUserId = normalizePositiveInteger(currentUserId);
   const safeAssignedUserId = normalizePositiveInteger(assignedUserId);
 
@@ -19,7 +22,7 @@ function getAllowedCompletionUserIds({ currentUserId, assignedUserId, roleCodes 
   const allowedUserIds = [safeCurrentUserId];
 
   if (
-    canChooseCompletionAttribution(roleCodes)
+    canChooseCompletionAttribution(roleCodes, permissions)
     && safeAssignedUserId
     && safeAssignedUserId !== safeCurrentUserId
   ) {
@@ -29,8 +32,8 @@ function getAllowedCompletionUserIds({ currentUserId, assignedUserId, roleCodes 
   return allowedUserIds;
 }
 
-function resolveCompletionUserId({ currentUserId, assignedUserId, roleCodes = [], requestedUserId = null } = {}) {
-  const allowedUserIds = getAllowedCompletionUserIds({ currentUserId, assignedUserId, roleCodes });
+function resolveCompletionUserId({ currentUserId, assignedUserId, roleCodes = [], permissions = null, requestedUserId = null } = {}) {
+  const allowedUserIds = getAllowedCompletionUserIds({ currentUserId, assignedUserId, roleCodes, permissions });
 
   if (allowedUserIds.length === 0) {
     throw new Error('A valid current user is required to record Unit completion.');

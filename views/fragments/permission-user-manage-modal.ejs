@@ -1,0 +1,180 @@
+<%
+  const safeUser = user || null;
+  const safeRoles = Array.isArray(roles) ? roles : [];
+  const safeGroups = Array.isArray(permissionGroups) ? permissionGroups : [];
+  const safePermissions = Array.isArray(permissions) ? permissions : [];
+  const effectiveCount = safePermissions.filter((permission) => permission.effectiveAllowed).length;
+  const inheritedCount = safePermissions.filter((permission) => permission.inheritedAllowed).length;
+  const overrideCount = safePermissions.filter((permission) => permission.overrideEffect).length;
+  const displayName = safeUser ? ([safeUser.first_name, safeUser.last_name].filter(Boolean).join(' ').trim() || safeUser.email || `User #${safeUser.user_id}`) : 'Manage User Permissions';
+%>
+<div class="modal-backdrop permission-user-manage-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal permission-user-manage-modal" role="dialog" aria-modal="true" aria-labelledby="permission-user-manage-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">User Permissions</p>
+        <h2 id="permission-user-manage-title"><%= displayName %></h2>
+        <% if (safeUser) { %>
+          <p>Assigned roles provide the default access. User overrides apply afterward and affect only this user.</p>
+        <% } %>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body permission-user-manage-body">
+      <% if (noticeMessage) { %><div class="message success" data-auto-dismiss-success><p><%= noticeMessage %></p></div><% } %>
+      <% if (errorMessage) { %><div class="message error"><p><%= errorMessage %></p></div><% } %>
+
+      <% if (!safeUser) { %>
+        <div class="action-row"><button type="button" class="secondary-button" data-modal-close>Close</button></div>
+      <% } else { %>
+        <div class="permission-role-manage-summary">
+          <span class="pill"><%= safeRoles.length %> role<%= safeRoles.length === 1 ? '' : 's' %></span>
+          <span class="pill"><%= inheritedCount %> inherited</span>
+          <span class="pill"><%= overrideCount %> override<%= overrideCount === 1 ? '' : 's' %></span>
+          <span class="pill good"><%= effectiveCount %> / <%= safePermissions.length %> effective</span>
+          <% if (isSuperAdmin) { %><span class="pill warning">Permanent Super Admin</span><% } %>
+        </div>
+
+        <div class="permission-user-context-strip">
+          <div class="permission-user-context-label">
+            <strong>Assigned Roles</strong>
+            <small>Role grants combine; user Deny overrides take precedence.</small>
+          </div>
+          <div class="site-inline-actions permission-user-role-pills">
+            <% if (safeRoles.length === 0) { %>
+              <span class="pill muted">No roles assigned</span>
+            <% } else { %>
+              <% safeRoles.forEach((role) => { %>
+                <span class="pill slate"><%= role.name %></span>
+              <% }) %>
+            <% } %>
+          </div>
+        </div>
+
+        <% if (isSuperAdmin) { %>
+          <div class="message warning"><p>Super Admin users retain all role-assignable authority permissions. Authority overrides remain locked; user-only reporting eligibility can still be changed.</p></div>
+        <% } else if (!canManageOverrides) { %>
+          <div class="message"><p>You may review this user's effective permissions, but your account does not have permission to change user-level overrides.</p></div>
+        <% } %>
+
+        <form
+          id="permission-user-overrides-form-<%= safeUser.user_id %>"
+          class="permission-user-overrides-form"
+          method="post"
+          data-live-filter
+          data-live-filter-open-groups="search"
+          action="/management/users/<%= safeUser.user_id %>/permissions/modal"
+          hx-post="/management/users/<%= safeUser.user_id %>/permissions/modal"
+          hx-target="#modal-root"
+          hx-swap="innerHTML"
+        >
+          <div class="management-live-filter-bar permission-user-modal-filter" aria-label="User permission filters">
+            <label class="form-field management-live-filter-search">
+              <span>Search Permissions</span>
+              <input type="search" autocomplete="off" placeholder="Permission name, description, key..." data-live-filter-control="search" />
+            </label>
+            <button type="button" class="secondary-button button-small management-live-filter-clear" data-live-filter-clear>Clear</button>
+            <div class="site-inline-actions permission-category-toggle-actions" aria-label="Permission category display controls">
+              <button type="button" class="secondary-button button-small" data-permission-groups-expand>Expand All</button>
+              <button type="button" class="secondary-button button-small" data-permission-groups-collapse>Collapse All</button>
+            </div>
+            <span class="management-live-filter-count"><strong data-live-filter-count><%= safePermissions.length %></strong> shown</span>
+          </div>
+          <div class="message" data-live-filter-empty hidden><p>No permissions match the current search.</p></div>
+
+          <% safeGroups.forEach((group) => { %>
+            <% const effectiveGroupCount = group.permissions.filter((permission) => permission.effectiveAllowed).length; %>
+            <% const overrideGroupCount = group.permissions.filter((permission) => permission.overrideEffect).length; %>
+            <details class="permission-role-permission-group permission-user-permission-group" data-permission-override-group data-live-filter-group data-permission-group-key="<%= group.name %>">
+              <summary>
+                <span>
+                  <strong><%= group.name %></strong>
+                  <small><%= effectiveGroupCount %> of <%= group.permissions.length %> effective<% if (overrideGroupCount) { %> · <%= overrideGroupCount %> overridden<% } %></small>
+                </span>
+              </summary>
+
+              <% if (canManageOverrides && !isSuperAdmin) { %>
+                <div class="permission-user-category-override">
+                  <label class="form-field">
+                    <span>Set Entire Category</span>
+                    <select data-permission-category-override>
+                      <option value="">Choose state...</option>
+                      <option value="inherit">Inherit</option>
+                      <option value="allow">Allow</option>
+                      <option value="deny">Deny</option>
+                    </select>
+                  </label>
+                  <small>Applies the selected state to every editable permission in this category. Individual permissions can still be changed afterward.</small>
+                </div>
+              <% } %>
+
+              <div class="permission-role-permission-list permission-user-permission-list">
+                <% group.permissions.forEach((permission) => { %>
+                  <% const userOnly = permission.permission_key === 'dashboards.productivity.count'; %>
+                  <% const securityLocked = permission.permission_key === 'security.super_admin.manage' && !(typeof hasPermission === 'function' && hasPermission('security.super_admin.manage')); %>
+                  <% const readOnly = (isSuperAdmin && !userOnly) || !canManageOverrides || securityLocked; %>
+                  <% const currentEffect = permission.overrideEffect || 'inherit'; %>
+                  <div
+                    class="permission-user-permission-row"
+                    data-live-filter-row
+                    data-live-filter-search="<%= [permission.name, permission.description, permission.permission_key, group.name].filter(Boolean).join(' ') %>"
+                  >
+                    <div class="permission-user-permission-copy">
+                      <div class="permission-user-permission-title"><%= permission.name %></div>
+                      <div class="permission-user-permission-description"><%= permission.description %></div>
+                      <code class="permission-user-permission-key"><%= permission.permission_key %></code>
+                    </div>
+                    <div class="permission-user-permission-state">
+                      <div class="permission-user-state-item">
+                        <span class="permission-user-state-label">Role Default</span>
+                        <% if (userOnly) { %>
+                          <span class="pill slate">User Only</span>
+                        <% } else if (permission.inheritedAllowed) { %>
+                          <div class="permission-user-role-sources">
+                            <% permission.roleSources.forEach((source) => { %><span class="pill slate"><%= source.name %></span><% }) %>
+                          </div>
+                        <% } else { %>
+                          <span class="pill muted">Not Approved</span>
+                        <% } %>
+                      </div>
+                      <div class="permission-user-state-item">
+                        <span class="permission-user-state-label">Effective</span>
+                        <span class="pill <%= permission.effectiveAllowed ? 'good' : 'muted' %>"><%= permission.effectiveAllowed ? 'Allowed' : 'Not Allowed' %></span>
+                      </div>
+                    </div>
+                    <% if (readOnly) { %>
+                      <input type="hidden" name="overrideEffects[<%= permission.permission_key %>]" value="<%= currentEffect %>" />
+                    <% } %>
+                    <label class="form-field permission-user-override-field">
+                      <span>User Override</span>
+                      <select aria-label="Override for <%= permission.name %>" name="overrideEffects[<%= permission.permission_key %>]" data-permission-override-select <%= readOnly ? 'disabled' : '' %>>
+                        <option value="inherit" <%= currentEffect === 'inherit' ? 'selected' : '' %>>Inherit</option>
+                        <option value="allow" <%= currentEffect === 'allow' ? 'selected' : '' %>>Allow</option>
+                        <option value="deny" <%= currentEffect === 'deny' ? 'selected' : '' %>>Deny</option>
+                      </select>
+                    </label>
+                    <% if (userOnly) { %><small class="permission-user-override-note">User-only eligibility. Role permissions cannot enable this setting.</small><% } %>
+                    <% if (securityLocked) { %><small class="permission-user-override-note">Requires Super Admin management authority.</small><% } %>
+                  </div>
+                <% }) %>
+              </div>
+            </details>
+          <% }) %>
+
+        </form>
+
+        <div class="site-clean-actions permission-role-manage-footer">
+          <% if (canManageOverrides && !isSuperAdmin) { %>
+            <button
+              class="primary-button"
+              type="submit"
+              form="permission-user-overrides-form-<%= safeUser.user_id %>"
+            >Save User Overrides</button>
+          <% } %>
+          <button type="button" class="secondary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

@@ -24,7 +24,7 @@
       <% } %>
 
       <div class="message info">
-        <p><strong>Merge direction:</strong> the processor below is the duplicate being removed. Every Unit and catalog reference that points to it will be changed to the canonical processor you select.</p>
+        <p><strong>Merge direction:</strong> the processor below is the duplicate being removed. Every Unit and catalog reference that points to it will be changed to the Catalog Processor you select.</p>
       </div>
 
       <dl class="site-detail-list">
@@ -36,10 +36,10 @@
       </dl>
 
       <% if (mergeTargets.length > 0) { %>
-        <form class="app-form app-form-clean" method="post" action="<%= formAction %>" data-processor-catalog-form data-processor-catalog-confirm="Merge Processor #<%= processor.id %> INTO the selected canonical Processor? All Units and known catalog references will be reassigned, then Processor #<%= processor.id %> will be permanently deleted. This cannot be undone.">
+        <form class="app-form app-form-clean" method="post" action="<%= formAction %>" data-processor-catalog-form data-processor-catalog-confirm="Merge Processor #<%= processor.id %> INTO the selected Catalog Processor? All Units and known catalog references will be reassigned, then Processor #<%= processor.id %> will be permanently deleted. This cannot be undone.">
           <input type="hidden" name="returnTo" value="<%= returnTo %>" />
           <label class="form-field">
-            <span>Canonical Processor that remains</span>
+            <span>Catalog Processor that remains</span>
             <select name="targetProcessorModelId" required>
               <option value="">Choose the processor that should survive</option>
               <% mergeTargets.forEach((target) => { %>
@@ -48,15 +48,15 @@
             </select>
           </label>
 
-          <p class="field-hint"><strong>Result:</strong> Units using Processor #<%= processor.id %> will receive the selected canonical processor ID. Unit Model compatibility, Processor Family memberships, approved Processor requests, and direct processor Lot requirements are transferred and duplicate relationship rows are collapsed. Processor #<%= processor.id %> is then permanently removed.</p>
+          <p class="field-hint"><strong>Result:</strong> Units using Processor #<%= processor.id %> will receive the selected Catalog Processor ID. Unit Model compatibility, Processor Family memberships, approved Processor requests, and direct processor Lot requirements are transferred and duplicate relationship rows are collapsed. Processor #<%= processor.id %> is then permanently removed.</p>
 
           <div class="form-actions">
-            <button class="danger-button" type="submit">Merge #<%= processor.id %> INTO Canonical Processor</button>
+            <button class="danger-button" type="submit">Merge #<%= processor.id %> INTO Catalog Processor</button>
             <button class="secondary-button" type="button" data-modal-close>Cancel</button>
           </div>
         </form>
       <% } else { %>
-        <div class="message"><p>No other active <%= processor.brandName %> processor is available as a canonical target. Correct or create the canonical record first.</p></div>
+        <div class="message"><p>No other active <%= processor.brandName %> processor is available as a Catalog Processor target. Correct or create the Catalog Processor record first.</p></div>
         <div class="form-actions"><button class="secondary-button" type="button" data-modal-close>Close</button></div>
       <% } %>
     </div>

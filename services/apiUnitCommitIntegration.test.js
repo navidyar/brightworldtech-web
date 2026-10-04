@@ -10,7 +10,7 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'u
 
 test('API exposes Commit as the canonical Tool write endpoint and retires direct create/inventory routes', () => {
   const routes = read('routes/api.js');
-  assert.match(routes, /router\.post\('\/units\/commit', requireApiAuth, requireUnitApiAccess, apiUnitController\.commitUnit\)/);
+  assert.match(routes, /router\.post\('\/units\/commit', requireApiAuth, requireUnitApiAccess, requireApiAnyPermission\(\['units\.create', 'units\.edit'\]\), apiUnitController\.commitUnit\)/);
   assert.doesNotMatch(routes, /router\.post\('\/units', requireApiAuth, requireUnitApiAccess, apiUnitController\.createUnit\)/);
   assert.doesNotMatch(routes, /router\.put\('\/units\/:unitId\/inventory\/:reportId'/);
   assert.match(routes, /router\.put\('\/units\/:unitId\/wipe-certificates\/:certificateId'/);
@@ -20,6 +20,8 @@ test('Commit re-runs Resolve + Preflight and refuses blocked or explicit-action 
   const service = read('services/apiUnitCommit.js');
   assert.match(service, /apiUnitIntake\.resolveUnit\(body, \{[\s\S]*preflightContext/);
   assert.match(service, /assertPreflightCanProceed\(resolution\)/);
+  assert.match(service, /intentionalDuplicate \|\| resolution\.status === 'NOT_FOUND' \? 'units\.create' : 'units\.edit'/);
+  assert.match(service, /assertCommitPermission\(permissions, commitPermission\)/);
   assert.match(service, /PREFLIGHT_BLOCKED/);
   assert.match(service, /EXPLICIT_UNIT_ACTION_REQUIRED/);
   assert.match(service, /unit_action\?\.action_required/);

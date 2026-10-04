@@ -80,7 +80,7 @@ test('export columns require deliberate selection and the modal default is empty
 });
 
 test('export row preserves established Unit data while adding optional Specs / Tests columns', () => {
-  const row = buildUnitExportRow(sampleUnit(), sampleDetails());
+  const row = buildUnitExportRow(sampleUnit(), sampleDetails(), { timeZone: 'America/Chicago' });
 
   assert.deepEqual({
     assetTag: row.assetTag,

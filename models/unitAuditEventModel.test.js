@@ -85,6 +85,6 @@ test('loads an honest legacy creation marker with creator and prefixed Asset Tag
   };
 
   const context = await getUnitCreationContext(8, { connection, assetTagPrefix: 'BWT' });
-  assert.equal(context.assetTag, 'BWT2300008');
+  assert.equal(context.assetTag, 'BWT0002300008');
   assert.equal(context.createdByName, 'Jane Tech');
 });

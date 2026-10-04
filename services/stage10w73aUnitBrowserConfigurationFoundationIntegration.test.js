@@ -49,8 +49,8 @@ test('Lot Details exposes Configure Unit Browser only through Management Lot rou
   const detail = read('views/pages/management-lot-detail.ejs');
 
   assert.match(routes, /const lotManagementRoles = \['admin', 'management'\]/);
-  assert.match(routes, /'\/management\/lots\/:lotId\/unit-browser\/modal'[\s\S]*requireRole\(lotManagementRoles\)[\s\S]*renderLotUnitBrowserLayoutModalPage/);
-  assert.match(routes, /'\/management\/lots\/:lotId\/unit-browser\/modal'[\s\S]*requireRole\(lotManagementRoles\)[\s\S]*updateLotUnitBrowserLayout/);
+  assert.match(routes, /'\/management\/lots\/:lotId\/unit-browser\/modal'[\s\S]*requirePermission\('lots\.view'\)[\s\S]*?requirePermission\('lots\.unit_browser\.configure'\)[\s\S]*renderLotUnitBrowserLayoutModalPage/);
+  assert.match(routes, /'\/management\/lots\/:lotId\/unit-browser\/modal'[\s\S]*requirePermission\('lots\.view'\)[\s\S]*?requirePermission\('lots\.unit_browser\.configure'\)[\s\S]*updateLotUnitBrowserLayout/);
   assert.match(detail, /Configure Unit Browser/);
 });
 

@@ -41,7 +41,7 @@ test('ordinary Tech printer lists do not expose IP or connection details', () =>
   const controller = read('controllers/labelPrinterController.js');
   const techLive = read('views/fragments/tech-printers-live.ejs');
   const managementLive = read('views/fragments/management-printers-live.ejs');
-  assert.match(controller, /showNetworkDetails: isTechLeadPlus\(req\.currentUser\.roles\)/);
+  assert.match(controller, /showNetworkDetails: canViewOtherPrinterNetworkDetails\(req\.currentPermissions\)/);
   assert.match(techLive, /if \(showNetworkDetails\)/);
   assert.match(techLive, /printer\.host_address/);
   assert.match(managementLive, /printer\.host_address/);
@@ -79,7 +79,7 @@ test('printer CRUD refreshes visible registry content through an explicit HTMX l
 test('ordinary Tech Users cannot add an offline solo printer', () => {
   const controller = read('controllers/labelPrinterController.js');
   const form = read('views/fragments/label-printer-form-modal.ejs');
-  assert.match(controller, /requireOnlineForCreate = scope === 'solo' && !management && !isTechLeadPlus/);
+  assert.match(controller, /requireOnlineForCreate = scope === 'solo' && !management && !canManageAnySoloPrinter\(req\.currentPermissions\)/);
   assert.match(controller, /Tech Users can only add a solo printer while it is online/);
   assert.match(form, /offlineBlocked/);
   assert.match(form, /Tech Users cannot add this solo printer while it is offline/);

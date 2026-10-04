@@ -30,16 +30,14 @@ test('Barcode human-readable text explicitly uses Liberation Sans with Arial fal
   assert.match(renderer, /fontFamily: 'Liberation Sans'/);
 });
 
-test('asset upload returns authoritative Shared Assets markup and client installs it directly', () => {
+test('asset upload acknowledges the committed asset and opens a fresh Shared Assets page', () => {
   const controller = read('controllers/labelLibraryController.js');
   const client = read('public/js/label-library-assets.js');
   const page = read('views/pages/management-label-library.ejs');
-  assert.match(controller, /ensureUploadedAssetInViewData\(await getAssetListViewData\(\), result\)/);
-  assert.match(controller, /assetsHtml = await renderViewToHtml/);
-  assert.match(controller, /assetsHtml,/);
-  assert.match(client, /replaceAssetSection\(payload\.assetsHtml\)/);
-  assert.match(client, /assetIsVisible\(payload\.assetId\)/);
-  assert.match(page, /assets-authoritative-response/);
+  assert.match(controller, /const asset = result\.asset;[\s\S]*res\.set\('Location', redirectUrl\);[\s\S]*return res\.status\(result\.created \? 201 : 200\)\.json/);
+  assert.match(controller, /assetId: Number\(asset\.asset_id\)/);
+  assert.match(client, /if \(response\.ok\) \{[\s\S]*response\.headers\.get\('Location'\)[\s\S]*window\.location\.assign/);
+  assert.match(page, /label-library-assets-section/);
 });
 
 test('asset upload lets the user rename and classify the selected file immediately before upload', () => {

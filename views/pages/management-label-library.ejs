@@ -8,6 +8,9 @@
 
   <body class="css-scope-management">
     <%
+      const canManageTemplates = typeof hasPermission === 'function' && hasPermission('labels.library.manage');
+      const canManageBuilder = typeof hasPermission === 'function' && hasPermission('labels.builder.manage');
+      const canPrintLabels = typeof hasPermission === 'function' && hasPermission('labels.print');
       const categoryLabelByCode = new Map(categories.map((category) => [category.code, category.label]));
       const statusLabel = (status) => String(status || '').charAt(0).toUpperCase() + String(status || '').slice(1);
       const printScopeLabelByCode = new Map(printScopes.map((scope) => [scope.code, scope.label]));
@@ -22,10 +25,12 @@
           <section class="page-heading label-library-heading">
             <div>
               <h1>Label Template Library</h1>
-              <p>Manage reusable label templates and shared assets. Lot assignments are configured from each Lot.</p>
+              <p>Review reusable label templates and shared assets. Lot assignments are configured from each Lot.</p>
             </div>
             <div class="label-library-heading-actions">
+              <% if (canManageTemplates) { %>
               <a class="primary-button" href="/management/label-library/templates/new/modal" hx-get="/management/label-library/templates/new/modal" hx-target="#modal-root" hx-swap="innerHTML">New Template</a>
+              <% } %>
             </div>
           </section>
 
@@ -77,7 +82,7 @@
                 <p>New templates start as Draft. Drag the order handle to set the shared Library, Lot picker, and multi-label print order.</p>
               </div>
               <div class="label-library-heading-actions">
-                <span data-label-template-order-status><%= canReorderTemplates ? 'Drag to reorder' : 'Clear filters to reorder' %></span>
+                <% if (canManageTemplates) { %><span data-label-template-order-status><%= canReorderTemplates ? 'Drag to reorder' : 'Clear filters to reorder' %></span><% } %>
               </div>
             </div>
 
@@ -131,7 +136,7 @@
                     <th>Actions</th>
                   </tr>
                 </thead>
-                <tbody data-label-template-order-list data-reorder-url="/management/label-library/templates/reorder" data-reorder-enabled="<%= canReorderTemplates ? '1' : '0' %>">
+                <tbody data-label-template-order-list data-reorder-url="/management/label-library/templates/reorder" data-reorder-enabled="<%= canManageTemplates && canReorderTemplates ? '1' : '0' %>">
                   <% if (templates.length === 0) { %>
                     <tr><td colspan="7">No label templates match the selected filters.</td></tr>
                   <% } %>
@@ -144,7 +149,7 @@
                     %>
                     <tr data-label-template-order-row data-template-id="<%= template.label_template_id %>">
                       <td class="label-library-order-column">
-                        <% if (canReorderTemplates) { %>
+                        <% if (canManageTemplates && canReorderTemplates) { %>
                           <button type="button" class="label-library-order-handle" draggable="true" data-label-template-order-handle aria-label="Drag <%= template.name %> to reorder" title="Drag to reorder">⋮⋮</button>
                         <% } else { %><span class="label-library-order-disabled">—</span><% } %>
                       </td>
@@ -186,16 +191,19 @@
                       <td><%= formatDateTime(template.updated_at) %></td>
                       <td>
                         <div class="management-user-row-actions label-library-row-actions site-inline-actions">
-                          <% if (String(template.print_scope || 'lot') === 'standalone' && template.status === 'active' && Number(template.layout_ready || 0) === 1) { %>
+                          <% if (canPrintLabels && String(template.print_scope || 'lot') === 'standalone' && template.status === 'active' && Number(template.layout_ready || 0) === 1) { %>
                             <a class="primary-button" href="/management/label-library/templates/<%= template.label_template_id %>/print/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/print/modal" hx-target="#modal-root" hx-swap="innerHTML">Print</a>
                           <% } %>
+                          <% if (canManageTemplates) { %>
                           <a class="secondary-button" href="/management/label-library/templates/<%= template.label_template_id %>/edit/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
                           <form method="post" action="/management/label-library/templates/<%= template.label_template_id %>/clone">
                             <button class="secondary-button" type="submit">Clone</button>
                           </form>
-                          <% if (template.status !== 'archived') { %>
+                          <% } %>
+                          <% if (canManageBuilder && template.status !== 'archived') { %>
                             <a class="secondary-button" href="/management/label-library/templates/<%= template.label_template_id %>/builder">Layout Builder</a>
                           <% } %>
+                          <% if (canManageTemplates) { %>
                           <% if (template.status === 'draft') { %>
                             <% if (Number(template.layout_ready || 0) === 1) { %>
                               <a class="secondary-button" href="/management/label-library/templates/<%= template.label_template_id %>/activate/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/activate/modal" hx-target="#modal-root" hx-swap="innerHTML">Activate</a>
@@ -209,6 +217,7 @@
                             <a class="secondary-button" href="/management/label-library/templates/<%= template.label_template_id %>/archive/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/archive/modal" hx-target="#modal-root" hx-swap="innerHTML">Archive</a>
                           <% } %>
                           <a class="secondary-button danger-button" href="/management/label-library/templates/<%= template.label_template_id %>/delete/modal" hx-get="/management/label-library/templates/<%= template.label_template_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete</a>
+                          <% } %>
                         </div>
                       </td>
                     </tr>

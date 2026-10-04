@@ -66,8 +66,8 @@ test('request detail pages and browser titles use request context instead of num
   const overrideDetail = read('views/pages/override-request-detail.ejs');
   const controller = read('controllers/unitRequestController.js');
 
-  assert.match(unitDetail, /<h2><%= request\.displaySubject %><\/h2>/);
-  assert.match(overrideDetail, /<h2><%= request\.displaySubject %><\/h2>/);
+  assert.match(unitDetail, /<h1><%= request\.displaySubject %><\/h1>/);
+  assert.match(overrideDetail, /<h1><%= request\.displaySubject %><\/h1>/);
   assert.doesNotMatch(unitDetail, /<h2>Request #/);
   assert.doesNotMatch(overrideDetail, /<h2>Request #/);
   assert.match(controller, /pageTitle: `\$\{request\.requestTypeLabel\} · \$\{request\.displaySubject\}`/);

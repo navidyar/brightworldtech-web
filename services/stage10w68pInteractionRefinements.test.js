@@ -13,7 +13,8 @@ test('unpin immediately overrides sidebar hover and focus-within during the hide
   const css = read('public/css/app.css');
 
   assert.match(script, /sidebar\.classList\.add\('is-desktop-unpinning'\)/);
-  assert.match(script, /document\.activeElement === pinButton[\s\S]*pinButton\.blur\(\)/);
+  assert.match(script, /if \(isPinned\(\)\) \{[\s\S]*setPinned\(false\)/);
+  assert.match(script, /data-sidebar-edge-label/);
   assert.match(script, /window\.setTimeout\([\s\S]*is-desktop-unpinning[\s\S]*220/);
   assert.match(css, /html:not\(\[data-sidebar-pinned="true"\]\) \.sidebar\.is-desktop-unpinning[\s\S]*translateX\(calc\(-100% \+ var\(--sidebar-edge-trigger\)\)\)/);
 });
@@ -84,7 +85,7 @@ test('modified interaction assets are cache-busted at their entry points', () =>
   assert.match(head, /app\.css\?v=/);
   assert.match(head, /features\.css\?v=/);
   assert.doesNotMatch(head, /style\.css|work-area\.css/);
-  assert.match(head, /sidebar\.js\?v=20260819-stage10w68p-interaction-refinements/);
+  assert.match(head, /sidebar\.js\?v=[^"\'\s>]+/);
   assert.match(users, /css-scope-management/);
   assert.doesNotMatch(users, /management\.css/);
   assert.match(users, /modal\.js\?v=20260819-stage10w68p-interaction-refinements/);

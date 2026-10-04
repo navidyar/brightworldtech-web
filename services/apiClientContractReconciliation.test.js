@@ -16,9 +16,9 @@ test('v1 functional diagnostics use only Pass, Fail, and confirmed physical abse
   for (const retired of ['could_not_determine', 'not_tested', 'not_applicable', 'test_not_available', 'not_available']) {
     assert.doesNotMatch(diagnostics, new RegExp(`['\"]${retired}['\"]`));
   }
-  assert.match(diagnostics, /if \(state === 'physically_not_present'\) return \['Physically Not Present'\]/);
-  assert.match(diagnostics, /semantic === 'lock' && state === 'locked'/);
-  assert.match(diagnostics, /semantic === 'lock' && state === 'unlocked'/);
+  assert.match(diagnostics, /\['physically_not_present', 'Physically Not Present'\]/);
+  assert.match(diagnostics, /\['locked', 'Locked'\]/);
+  assert.match(diagnostics, /\['unlocked', 'Unlocked'\]/);
 });
 
 test('Preflight derives unit_type requirements from the canonical top-level Unit Category', () => {
@@ -31,10 +31,13 @@ test('Preflight derives unit_type requirements from the canonical top-level Unit
   assert.match(values, /observations\.set\('unit_type', normalizeObservation\(unitCategory\)\)/);
 });
 
-test('existing-Unit Commit uses canonical top-level system_uuid while retaining the legacy nested UUID only as compatibility input', () => {
+test('existing-Unit Commit uses canonical top-level system_uuid, ignores unusable UUIDs, and retains legacy nested UUID only as compatibility input', () => {
   const inventory = read('services/apiScalarInventory.js');
   assert.match(inventory, /body\.system_uuid \?\? body\.systemUuid \?\? body\.uuid/);
-  assert.match(inventory, /topLevelSystemUuid \|\| legacySecurityUuid/);
+  assert.match(inventory, /getSystemUuidState\(rawTopLevelSystemUuid\)/);
+  assert.match(inventory, /topLevelSystemUuidState\.usable \? rawTopLevelSystemUuid : ''/);
+  assert.match(inventory, /legacySecurityUuidState\.usable \? rawLegacySecurityUuid : ''/);
+  assert.match(inventory, /const usableSystemUuid = topLevelSystemUuid \|\| legacySecurityUuid/);
   assert.match(inventory, /SYSTEM_UUID_PAYLOAD_CONFLICT/);
   assert.match(inventory, /applyToolSystemUuidIdentifier/);
 });

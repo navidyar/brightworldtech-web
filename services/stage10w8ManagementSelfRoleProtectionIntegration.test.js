@@ -24,6 +24,8 @@ require.cache[dbModulePath] = {
 
 const managementController = require('../controllers/managementController');
 const managementModel = require('../models/managementModel');
+const permissionManagementModel = require('../models/permissionManagementModel');
+require('../models/userManagementAuditModel').recordBlocked = async () => {};
 
 function read(relativePath) {
   return fs.readFileSync(path.join(__dirname, '..', relativePath), 'utf8');
@@ -63,6 +65,7 @@ function makeAdminUser(overrides = {}) {
 function makeRequest({ targetUserId = 22, actorUser = makeUser(), roleCodes = 'management' } = {}) {
   return {
     currentUser: actorUser,
+    currentPermissions: new Set(['roles.assign']),
     params: { userId: String(targetUserId) },
     query: { returnPath: 'active' },
     body: {
@@ -129,20 +132,37 @@ async function withManagementModelStubs(stubs, callback) {
   }
 }
 
+
+async function withPermissionModelStubs(stubs, callback) {
+  const originals = {};
+  for (const [name, replacement] of Object.entries(stubs)) {
+    originals[name] = permissionManagementModel[name];
+    permissionManagementModel[name] = replacement;
+  }
+  try {
+    return await callback();
+  } finally {
+    for (const [name, original] of Object.entries(originals)) {
+      permissionManagementModel[name] = original;
+    }
+  }
+}
+
 test('Management self-edit renders the role as locked without loading assignable role choices', async () => {
   let roleListLoaded = false;
   const req = makeRequest();
   const res = makeResponse();
 
-  await withManagementModelStubs({
-    getUserById: async () => makeUser(),
-    listAssignableAccountRoles: async () => {
+  await withPermissionModelStubs({
+    listRoles: async () => {
       roleListLoaded = true;
       return [];
     }
+  }, async () => withManagementModelStubs({
+    getUserById: async () => makeUser()
   }, async () => {
     await managementController.renderEditUserModal(req, res, assert.fail);
-  });
+  }));
 
   assert.equal(roleListLoaded, false);
   assert.equal(res.state.renderView, 'fragments/management-user-edit-modal');
@@ -158,7 +178,6 @@ test('Management self profile save preserves user_roles by using the profile-onl
 
   await withManagementModelStubs({
     getUserById: async () => makeUser(),
-    listAssignableAccountRoles: async () => assert.fail('Self-edit must not load role choices.'),
     updateUserProfile: async (payload) => {
       profileUpdate = payload;
       return makeUser(payload);
@@ -172,6 +191,7 @@ test('Management self profile save preserves user_roles by using the profile-onl
 
   assert.deepEqual(profileUpdate, {
     userId: 22,
+    actorUserId: 22,
     firstName: 'Morgan',
     lastName: 'Manager',
     email: 'morgan.manager@example.com',
@@ -216,15 +236,16 @@ test('Admin self-edit renders the Admin role as locked without loading assignabl
   req.body.email = 'avery.admin@example.com';
   const res = makeResponse();
 
-  await withManagementModelStubs({
-    getUserById: async () => adminUser,
-    listAssignableAccountRoles: async () => {
+  await withPermissionModelStubs({
+    listRoles: async () => {
       roleListLoaded = true;
       return [];
     }
+  }, async () => withManagementModelStubs({
+    getUserById: async () => adminUser
   }, async () => {
     await managementController.renderEditUserModal(req, res, assert.fail);
-  });
+  }));
 
   assert.equal(roleListLoaded, false);
   assert.equal(res.state.renderLocals.roleEditingLocked, true);
@@ -244,7 +265,6 @@ test('Admin self profile save preserves the Admin role through the profile-only 
 
   await withManagementModelStubs({
     getUserById: async () => adminUser,
-    listAssignableAccountRoles: async () => assert.fail('Admin self-edit must not load role choices.'),
     updateUserProfile: async (payload) => {
       profileUpdate = payload;
       return makeAdminUser(payload);
@@ -258,6 +278,7 @@ test('Admin self profile save preserves the Admin role through the profile-only 
 
   assert.deepEqual(profileUpdate, {
     userId: 1,
+    actorUserId: 1,
     firstName: 'Avery',
     lastName: 'Admin',
     email: 'avery.admin@example.com',
@@ -315,14 +336,15 @@ test('Management may still edit another permitted user role through the existing
   req.body.email = 'taylor.tech@example.com';
   const res = makeResponse();
 
-  await withManagementModelStubs({
+  await withPermissionModelStubs({
+    listRoles: async () => [
+      { code: 'management', is_active: true },
+      { code: 'tech_lead', is_active: true },
+      { code: 'qc', is_active: true },
+      { code: 'tech', is_active: true }
+    ]
+  }, async () => withManagementModelStubs({
     getUserById: async () => targetUser,
-    listAssignableAccountRoles: async () => [
-      { code: 'management' },
-      { code: 'tech_lead' },
-      { code: 'qc' },
-      { code: 'tech' }
-    ],
     updateUserProfile: async () => assert.fail('Another-user edit must not use profile-only persistence.'),
     updateUserWithRoles: async (payload) => {
       roleUpdate = payload;
@@ -330,7 +352,7 @@ test('Management may still edit another permitted user role through the existing
     }
   }, async () => {
     await managementController.updateUserModal(req, res, assert.fail);
-  });
+  }));
 
   assert.deepEqual(roleUpdate.roleCodes, ['tech_lead']);
   assert.equal(res.state.redirectUrl, '/management/users?updated=1');
@@ -355,15 +377,16 @@ test('Admin may still assign a role to another user through the existing role-aw
   req.body.email = 'jordan.tech@example.com';
   const res = makeResponse();
 
-  await withManagementModelStubs({
+  await withPermissionModelStubs({
+    listRoles: async () => [
+      { code: 'admin', is_active: true },
+      { code: 'management', is_active: true },
+      { code: 'tech_lead', is_active: true },
+      { code: 'qc', is_active: true },
+      { code: 'tech', is_active: true }
+    ]
+  }, async () => withManagementModelStubs({
     getUserById: async () => targetUser,
-    listAssignableAccountRoles: async () => [
-      { code: 'admin' },
-      { code: 'management' },
-      { code: 'tech_lead' },
-      { code: 'qc' },
-      { code: 'tech' }
-    ],
     updateUserProfile: async () => assert.fail('Another-user Admin edit must not use profile-only persistence.'),
     updateUserWithRoles: async (payload) => {
       roleUpdate = payload;
@@ -371,9 +394,73 @@ test('Admin may still assign a role to another user through the existing role-aw
     }
   }, async () => {
     await managementController.updateUserModal(req, res, assert.fail);
-  });
+  }));
 
   assert.deepEqual(roleUpdate.roleCodes, ['admin']);
+  assert.equal(res.state.redirectUrl, '/management/users?updated=1');
+});
+
+test('a non-Admin with users.edit can open another Admin user profile without roles.assign', async () => {
+  const targetUser = makeAdminUser({ user_id: 24 });
+  const req = makeRequest({ targetUserId: 24 });
+  req.currentPermissions = new Set();
+  const res = makeResponse();
+
+  await withManagementModelStubs({ getUserById: async () => targetUser }, async () => {
+    await managementController.renderEditUserModal(req, res, assert.fail);
+  });
+
+  assert.equal(res.state.renderView, 'fragments/management-user-edit-modal');
+  assert.equal(res.state.renderLocals.canEditRoles, false);
+  assert.deepEqual(res.state.renderLocals.roles, []);
+});
+
+test('a non-Admin with users.edit can save another Admin user profile without changing roles', async () => {
+  const targetUser = makeAdminUser({ user_id: 24 });
+  const req = makeRequest({ targetUserId: 24, roleCodes: 'admin' });
+  req.currentPermissions = new Set();
+  req.body.firstName = 'Updated';
+  req.body.lastName = 'Admin';
+  req.body.email = 'updated.admin@example.com';
+  const res = makeResponse();
+  let profileUpdate = null;
+
+  await withManagementModelStubs({
+    getUserById: async () => targetUser,
+    updateUserProfile: async (payload) => { profileUpdate = payload; return targetUser; },
+    updateUserWithRoles: async () => assert.fail('Profile-only access must not change roles.')
+  }, async () => {
+    await managementController.updateUserModal(req, res, assert.fail);
+  });
+
+  assert.equal(profileUpdate.userId, 24);
+  assert.equal(profileUpdate.firstName, 'Updated');
+  assert.equal(res.state.redirectUrl, '/management/users?updated=1');
+});
+
+test('a non-Admin with roles.assign can update another Admin user role bundle', async () => {
+  const targetUser = makeAdminUser({ user_id: 24 });
+  const req = makeRequest({ targetUserId: 24, roleCodes: ['admin', 'tech'] });
+  req.body.firstName = targetUser.first_name;
+  req.body.lastName = targetUser.last_name;
+  req.body.email = targetUser.email;
+  const res = makeResponse();
+  let roleUpdate = null;
+
+  await withPermissionModelStubs({
+    listRoles: async () => [
+      { code: 'admin', is_active: true },
+      { code: 'tech', is_active: true }
+    ]
+  }, async () => withManagementModelStubs({
+    getUserById: async () => targetUser,
+    updateUserProfile: async () => assert.fail('Role assignment must use the role-aware update.'),
+    updateUserWithRoles: async (payload) => { roleUpdate = payload; return targetUser; }
+  }, async () => {
+    await managementController.updateUserModal(req, res, assert.fail);
+  }));
+
+  assert.deepEqual(roleUpdate.roleCodes, ['admin', 'tech']);
   assert.equal(res.state.redirectUrl, '/management/users?updated=1');
 });
 
@@ -386,12 +473,12 @@ test('locked modal and profile-only model protect both UI and database role pers
   assert.match(modal, /lockedRoleLabel/);
   assert.match(modal, /role editing is unavailable for your own <%= lockedRoleLabel %> account/i);
   assert.match(modal, /type="hidden" name="roleCodes"/);
-  assert.match(modal, /else \{[\s\S]*type="radio" name="roleCodes"/);
+  assert.match(modal, /else \{[\s\S]*type="checkbox" name="roleCodes"/);
 
   const profileFunction = model.match(/async function updateUserProfile[\s\S]*?\n}\n\nasync function updateUserWithRoles/);
   assert.ok(profileFunction, 'Expected a dedicated profile-only update function.');
   assert.match(profileFunction[0], /UPDATE users/);
   assert.doesNotMatch(profileFunction[0], /user_roles/);
-  assert.match(usersPage, /cannot demote their own Admin account/i);
-  assert.match(usersPage, /cannot change their own Management role/i);
+  assert.match(usersPage, /users may receive multiple roles/i);
+  assert.match(usersPage, /permissions from every assigned role combine/i);
 });

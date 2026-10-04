@@ -20,14 +20,15 @@ test('Amazon Unit Form fields and AZ identifier contract are registered', () => 
   assert.match(identities, /amazon_asset_tag/);
 });
 
-test('AZ tags use a global 8-digit sequence and destination-lot policy', () => {
+test('AZ tags use a global 9-digit sequence and destination-lot policy', () => {
   const amazonModel = read('models/unitAmazonModel.js');
+  const assetTag = read('utils/assetTag.js');
   const productionCycle = read('models/productionCycleModel.js');
   const techUnitModel = read('models/techUnitModel.js');
 
-  assert.match(amazonModel, /AMAZON_ASSET_TAG_DIGITS = 8/);
+  assert.match(assetTag, /AMAZON_ASSET_TAG_DIGITS = 9/);
   assert.match(amazonModel, /amazon_asset_tag_sequence/);
-  assert.match(amazonModel, /padStart\(AMAZON_ASSET_TAG_DIGITS, '0'\)/);
+  assert.match(assetTag, /padStart\(AMAZON_ASSET_TAG_DIGITS, '0'\)/);
   assert.match(amazonModel, /bulkGenerateDirectLotAmazonAssetTags/);
   assert.match(productionCycle, /applyDestinationLotAmazonPolicy/);
   assert.match(techUnitModel, /source: 'tech_unit_create'/);

@@ -43,27 +43,41 @@
               <% if (lotRelationships.directChildLots.length > 0) { %>
                 <a class="secondary-button" href="/tech/units?lotId=<%= lot.lot_id %>&amp;lotScope=descendants&amp;perPage=all">Open Lot + Descendants</a>
               <% } %>
-              <button type="button" class="secondary-button" hx-get="/management/lots/<%= lot.lot_id %>/export/preview?scope=direct" hx-target="#modal-root" hx-swap="innerHTML">Export Units</button>
-              <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal?returnTo=lot-detail" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal?returnTo=lot-detail" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
-              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/duplicate/modal" hx-get="/management/lots/<%= lot.lot_id %>/duplicate/modal" hx-target="#modal-root" hx-swap="innerHTML">Duplicate Lot</a>
-              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-target="#modal-root" hx-swap="innerHTML">Requirements</a>
-              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-get="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Unit Form</a>
-              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unit-browser/modal" hx-get="/management/lots/<%= lot.lot_id %>/unit-browser/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Unit Browser</a>
-              <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/labels/modal" hx-get="/management/lots/<%= lot.lot_id %>/labels/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Labels</a>
-              <% if (Number(lot.generate_amazon_asset_tag || 0) === 1) { %>
+              <% if (hasPermission('lots.export')) { %>
+                <button type="button" class="secondary-button" hx-get="/management/lots/<%= lot.lot_id %>/export/preview?scope=direct" hx-target="#modal-root" hx-swap="innerHTML">Export Units</button>
+              <% } %>
+              <% if (hasPermission('lots.edit')) { %>
+                <a class="primary-button" href="/management/lots/<%= lot.lot_id %>/edit/modal?returnTo=lot-detail" hx-get="/management/lots/<%= lot.lot_id %>/edit/modal?returnTo=lot-detail" hx-target="#modal-root" hx-swap="innerHTML">Edit Lot</a>
+              <% } %>
+              <% if (hasPermission('lots.duplicate')) { %>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/duplicate/modal" hx-get="/management/lots/<%= lot.lot_id %>/duplicate/modal" hx-target="#modal-root" hx-swap="innerHTML">Duplicate Lot</a>
+              <% } %>
+              <% if (hasPermission('lots.requirements.manage')) { %>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-get="/management/lots/<%= lot.lot_id %>/requirements/modal" hx-target="#modal-root" hx-swap="innerHTML">Requirements</a>
+              <% } %>
+              <% if (hasPermission('lots.unit_form.configure')) { %>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-get="/management/lots/<%= lot.lot_id %>/unit-form/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Unit Form</a>
+              <% } %>
+              <% if (hasPermission('lots.unit_browser.configure')) { %>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unit-browser/modal" hx-get="/management/lots/<%= lot.lot_id %>/unit-browser/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Unit Browser</a>
+              <% } %>
+              <% if (hasPermission('lots.labels.configure')) { %>
+                <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/labels/modal" hx-get="/management/lots/<%= lot.lot_id %>/labels/modal" hx-target="#modal-root" hx-swap="innerHTML">Configure Labels</a>
+              <% } %>
+              <% if (hasPermission('lots.amazon_tags.generate') && Number(lot.generate_amazon_asset_tag || 0) === 1) { %>
                 <button type="button" class="secondary-button" hx-get="/management/lots/<%= lot.lot_id %>/amazon-asset-tags/modal" hx-target="#modal-root" hx-swap="innerHTML">Generate Missing AZ Tags</button>
               <% } %>
-              <% if (Number(lot.is_closed) === 1) { %>
+              <% if (Number(lot.is_closed) === 1 && hasPermission('lots.reopen')) { %>
                 <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/reopen/modal?returnTo=lot-detail" hx-get="/management/lots/<%= lot.lot_id %>/reopen/modal?returnTo=lot-detail" hx-target="#modal-root" hx-swap="innerHTML">Reopen Lot</a>
-              <% } else { %>
+              <% } else if (Number(lot.is_closed) !== 1 && hasPermission('lots.close')) { %>
                 <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/close/modal?returnTo=lot-detail" hx-get="/management/lots/<%= lot.lot_id %>/close/modal?returnTo=lot-detail" hx-target="#modal-root" hx-swap="innerHTML">Close Lot</a>
               <% } %>
-              <% if (Number(lot.is_active) === 1) { %>
+              <% if (hasPermission('lots.visibility.manage') && Number(lot.is_active) === 1) { %>
                 <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/hide/modal?returnTo=lot-detail" hx-get="/management/lots/<%= lot.lot_id %>/hide/modal?returnTo=lot-detail" hx-target="#modal-root" hx-swap="innerHTML">Hide Lot</a>
-              <% } else { %>
+              <% } else if (hasPermission('lots.visibility.manage') && Number(lot.is_active) !== 1) { %>
                 <a class="secondary-button" href="/management/lots/<%= lot.lot_id %>/unhide/modal?returnTo=lot-detail" hx-get="/management/lots/<%= lot.lot_id %>/unhide/modal?returnTo=lot-detail" hx-target="#modal-root" hx-swap="innerHTML">Unhide Lot</a>
               <% } %>
-              <% if (Number(lot.unitCount || 0) === 0 && lotRelationships.directChildLots.length === 0) { %>
+              <% if (hasPermission('lots.delete') && Number(lot.unitCount || 0) === 0 && lotRelationships.directChildLots.length === 0) { %>
                 <a class="secondary-button danger-button" href="/management/lots/<%= lot.lot_id %>/delete/modal" hx-get="/management/lots/<%= lot.lot_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Lot</a>
               <% } %>
             </div>
@@ -290,6 +304,7 @@
               <div class="unit-validation-list">
                 <% validationReport.units.forEach((unit) => { %>
                   <article class="unit-validation-item unit-validation-row">
+                    <% if (hasPermission('lots.validation.override')) { %>
                     <a
                       class="unit-validation-indicator <%= unit.status %>"
                       href="/management/lots/<%= lot.lot_id %>/units/<%= unit.unitId %>/validation/modal"
@@ -308,6 +323,11 @@
                         <% } %>
                       </small>
                     </a>
+                    <% } else { %>
+                    <div class="unit-validation-indicator <%= unit.status %>" aria-label="Requirement status for <%= unit.label %>">
+                      <span class="validation-badge <%= unit.status %>"><%= unit.statusLabel %></span>
+                    </div>
+                    <% } %>
 
                     <div class="unit-validation-main">
                       <strong>

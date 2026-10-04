@@ -1,0 +1,53 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+%>
+<div class="modal-backdrop" data-account-tool-pin-backdrop>
+  <section class="modal-panel site-clean-modal account-tool-pin-modal" role="dialog" aria-modal="true" aria-labelledby="account-tool-pin-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">ScanTools &amp; TechTools</p>
+        <h2 id="account-tool-pin-title"><%= pinState?.hasToolPin ? 'Change Tool PIN' : 'Set Tool PIN' %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-account-tool-pin-close aria-label="Close Tool PIN modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (successMessage) { %><div class="message success"><p><%= successMessage %></p></div><% } %>
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <div class="account-tool-pin-status">
+        <span class="pill <%= pinState?.hasToolPin ? 'good' : 'muted' %>"><%= pinState?.hasToolPin ? 'PIN Registered' : 'No PIN Yet' %></span>
+        <% if (pinState?.updatedAt) { %><span class="field-hint">Last changed <%= formatDateTime(pinState.updatedAt) %></span><% } %>
+      </div>
+
+      <p class="field-hint">Your Tool PIN is separate from your website password and works only with authorized ScanTools/TechTools access. Confirm your account password before setting a new PIN.</p>
+
+      <form class="app-form app-form-clean" method="post" action="/account/tool-pin" hx-post="/account/tool-pin" hx-target="#account-modal-root" hx-swap="innerHTML" autocomplete="off">
+        <label class="form-field">
+          <span>Current Account Password</span>
+          <input type="password" name="currentPassword" autocomplete="current-password" required data-account-tool-pin-initial-focus />
+        </label>
+
+        <div class="form-grid management-user-tool-pin-grid">
+          <label class="form-field">
+            <span>New Tool PIN (6–10 digits)</span>
+            <input type="password" name="toolPin" inputmode="numeric" pattern="[0-9]{6,10}" minlength="6" maxlength="10" autocomplete="new-password" required />
+          </label>
+          <label class="form-field">
+            <span>Confirm Tool PIN</span>
+            <input type="password" name="confirmToolPin" inputmode="numeric" pattern="[0-9]{6,10}" minlength="6" maxlength="10" autocomplete="new-password" required />
+          </label>
+        </div>
+
+        <p class="field-hint">Avoid repeated digits, sequences of 4 or more digits, repeating 4-digit blocks, and simple grouped patterns such as 112233 or 111222.</p>
+
+        <div class="form-actions">
+          <button type="submit" class="primary-button"><%= pinState?.hasToolPin ? 'Change Tool PIN' : 'Set Tool PIN' %></button>
+          <button type="button" class="secondary-button" data-account-tool-pin-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

@@ -11,18 +11,25 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell">
-          <section class="dashboard-hero">
+          <section class="page-heading site-work-page-heading">
             <div>
-              <p class="eyebrow">Step 2f.1</p>
-              <h2><%= setupLink.linkLabel %> Created</h2>
-              <p>
-                Copy this one-time URL before leaving the page. The full token is only shown here immediately after generation.
-              </p>
+              <p class="eyebrow">User Administration</p>
+              <h1><%= setupLink.linkLabel %> Created</h1>
+              <p>Copy this one-time URL before leaving the page. The full token is only shown here immediately after generation.</p>
             </div>
+            <div class="site-clean-actions site-inline-actions"><a class="secondary-button" href="/management/users">Back to Users</a></div>
+          </section>
 
-            <div class="hero-badge" data-generated-link-expiry data-expires-at="<%= new Date(setupLink.expiresAt).toISOString() %>" data-expiry-display="<%= formatDateTime(setupLink.expiresAt) %>">
+          <section class="site-summary-panel site-summary-panel--expanded" aria-label="Generated link summary">
+            <div class="site-summary-primary" data-generated-link-expiry data-expires-at="<%= new Date(setupLink.expiresAt).toISOString() %>" data-expiry-display="<%= formatDateTime(setupLink.expiresAt) %>">
               <span data-generated-link-expiry-label>Expires</span>
               <strong data-generated-link-expiry-time><%= formatDateTime(setupLink.expiresAt) %></strong>
+              <small><%= setupLink.expiresInHours %> hour<%= Number(setupLink.expiresInHours) === 1 ? '' : 's' %> after generation</small>
+            </div>
+            <div class="site-summary-stats">
+              <article><span class="site-summary-icon" aria-hidden="true">U</span><span><small>User</small><strong><%= user.first_name %> <%= user.last_name %></strong></span></article>
+              <article><span class="site-summary-icon" aria-hidden="true">#</span><span><small>BWT Username</small><strong><%= user.username %></strong></span></article>
+              <article><span class="site-summary-icon" aria-hidden="true">→</span><span><small>Action</small><strong><%= setupLink.actionLabel %></strong></span></article>
             </div>
           </section>
 
@@ -33,7 +40,6 @@
                 <h2><%= user.first_name %> <%= user.last_name %></h2>
               </div>
 
-              <a class="secondary-button" href="/management/users">Back to Users</a>
             </div>
 
             <div class="copy-link-user-card">

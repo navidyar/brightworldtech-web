@@ -427,6 +427,7 @@
     const categories = Array.from(browser.querySelectorAll('[data-configuration-category]'));
     const valueRows = Array.from(browser.querySelectorAll('[data-configuration-value-row]'));
     const reorderLists = Array.from(browser.querySelectorAll('[data-configuration-reorder-list]'));
+    const labelDynamicFieldOrderLists = Array.from(browser.querySelectorAll('[data-label-dynamic-field-order-list]'));
     const expandAllButton = browser.querySelector('[data-configuration-expand-all]');
     const collapseAllButton = browser.querySelector('[data-configuration-collapse-all]');
 
@@ -484,7 +485,7 @@
         group.hidden = !hasVisibleCategory;
       });
 
-      reorderLists.forEach((list) => {
+      [...reorderLists, ...labelDynamicFieldOrderLists].forEach((list) => {
         list.dispatchEvent(new CustomEvent('configuration:searchstate', {
           detail: { active: Boolean(query) }
         }));
@@ -584,6 +585,215 @@
     syncOrderingMode();
   }
 
+
+  function initializeLabelDynamicFieldOrderList(list) {
+    if (!list || list.dataset.labelDynamicFieldOrderReady === '1') return;
+    const section = list.closest('.configuration-category');
+    const status = section ? section.querySelector('[data-label-dynamic-field-order-status]') : null;
+    let draggingRow = null;
+    let draggingHandle = null;
+    let originalOrder = [];
+    let activePointerId = null;
+    let pointerStartX = 0;
+    let pointerStartY = 0;
+    let pointerDragStarted = false;
+    let saveInProgress = false;
+    let searchActive = false;
+    let statusClearTimer = null;
+
+    list.dataset.labelDynamicFieldOrderReady = '1';
+
+    const rows = () => Array.from(list.querySelectorAll(':scope > [data-label-dynamic-field-order-row]'));
+    const getOrderKeys = () => rows().map((row) => String(row.dataset.fieldKey || '').trim()).filter(Boolean);
+    const restoreFieldOrder = (orderedKeys) => {
+      const rowByKey = new Map(rows().map((row) => [String(row.dataset.fieldKey || '').trim(), row]));
+      orderedKeys.forEach((fieldKey) => {
+        const row = rowByKey.get(fieldKey);
+        if (row) list.appendChild(row);
+      });
+    };
+    const setStatus = (message, state = '') => {
+      if (!status) return;
+      if (statusClearTimer) {
+        window.clearTimeout(statusClearTimer);
+        statusClearTimer = null;
+      }
+      status.textContent = message;
+      status.dataset.state = state;
+      if (message && state === 'success') {
+        statusClearTimer = window.setTimeout(() => {
+          status.textContent = '';
+          delete status.dataset.state;
+        }, 3000);
+      }
+    };
+    const syncHandleState = () => {
+      const disabled = searchActive || saveInProgress;
+      rows().forEach((row) => {
+        const handle = row.querySelector('[data-label-dynamic-field-drag-handle]');
+        if (handle) handle.disabled = disabled;
+      });
+      list.classList.toggle('is-ordering-saving', saveInProgress);
+      if (searchActive) setStatus('Clear Configuration Browser search to reorder Dynamic Fields.', 'notice');
+    };
+    const saveOrder = async (previousOrder) => {
+      const orderedFieldKeys = getOrderKeys();
+      if (ordersMatch(previousOrder, orderedFieldKeys)) return;
+
+      saveInProgress = true;
+      syncHandleState();
+      setStatus('Saving order…', 'saving');
+
+      try {
+        const response = await fetch(list.dataset.reorderUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            groupCode: String(list.dataset.groupCode || '').trim(),
+            orderedFieldKeys
+          })
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || payload.ok !== true) {
+          throw new Error(payload.error || 'The Dynamic Field order could not be saved.');
+        }
+        setStatus('Order saved.', 'success');
+      } catch (error) {
+        restoreFieldOrder(previousOrder);
+        setStatus(error && error.message ? error.message : 'The Dynamic Field order could not be saved.', 'error');
+      } finally {
+        saveInProgress = false;
+        syncHandleState();
+      }
+    };
+
+    list.addEventListener('configuration:searchstate', (event) => {
+      searchActive = Boolean(event.detail?.active);
+      if (searchActive && draggingRow) resetPointerState();
+      syncHandleState();
+      if (!searchActive && status?.dataset.state === 'notice') setStatus('');
+    });
+
+    function moveRow(row, direction) {
+      if (searchActive || saveInProgress) return;
+      const currentRows = rows();
+      const previousOrder = getOrderKeys();
+      const index = currentRows.indexOf(row);
+      if (index < 0) return;
+      let target = index;
+      if (direction === 'up') target = Math.max(0, index - 1);
+      if (direction === 'down') target = Math.min(currentRows.length - 1, index + 1);
+      if (direction === 'first') target = 0;
+      if (direction === 'last') target = currentRows.length - 1;
+      if (target === index) return;
+
+      if (target < index) list.insertBefore(row, currentRows[target]);
+      else list.insertBefore(row, currentRows[target].nextSibling);
+      row.querySelector('[data-label-dynamic-field-drag-handle]')?.focus();
+      void saveOrder(previousOrder);
+    }
+
+    function removePointerListeners() {
+      document.removeEventListener('pointermove', handlePointerMove, true);
+      document.removeEventListener('pointerup', handlePointerEnd, true);
+      document.removeEventListener('pointercancel', handlePointerCancel, true);
+    }
+
+    function resetPointerState() {
+      removePointerListeners();
+      draggingRow?.classList.remove('is-dragging', 'is-pointer-dragging');
+      list.classList.remove('is-pointer-dragging');
+      document.documentElement.classList.remove('configuration-pointer-dragging');
+      draggingRow = null;
+      draggingHandle = null;
+      originalOrder = [];
+      activePointerId = null;
+      pointerStartX = 0;
+      pointerStartY = 0;
+      pointerDragStarted = false;
+    }
+
+    function handlePointerMove(event) {
+      if (!draggingRow || event.pointerId !== activePointerId) return;
+      const distance = Math.hypot(event.clientX - pointerStartX, event.clientY - pointerStartY);
+      if (!pointerDragStarted && distance < 4) return;
+      if (!pointerDragStarted) {
+        pointerDragStarted = true;
+        draggingRow.classList.add('is-dragging', 'is-pointer-dragging');
+        list.classList.add('is-pointer-dragging');
+        document.documentElement.classList.add('configuration-pointer-dragging');
+      }
+      event.preventDefault();
+
+      const candidates = rows().filter((row) => row !== draggingRow);
+      let before = null;
+      for (const candidate of candidates) {
+        const bounds = candidate.getBoundingClientRect();
+        if (event.clientY < bounds.top + (bounds.height / 2)) {
+          before = candidate;
+          break;
+        }
+      }
+      if (before) list.insertBefore(draggingRow, before);
+      else list.appendChild(draggingRow);
+    }
+
+    function handlePointerEnd(event) {
+      if (!draggingRow || event.pointerId !== activePointerId) return;
+      if (pointerDragStarted) event.preventDefault();
+      const previousOrder = originalOrder.slice();
+      const changed = !ordersMatch(previousOrder, getOrderKeys());
+      const handle = draggingHandle;
+      resetPointerState();
+      handle?.focus();
+      if (changed) void saveOrder(previousOrder);
+    }
+
+    function handlePointerCancel(event) {
+      if (!draggingRow || event.pointerId !== activePointerId) return;
+      restoreFieldOrder(originalOrder);
+      resetPointerState();
+    }
+
+    rows().forEach((row) => {
+      const handle = row.querySelector('[data-label-dynamic-field-drag-handle]');
+      if (!handle) return;
+
+      handle.addEventListener('pointerdown', (event) => {
+        if (handle.disabled || saveInProgress || searchActive || event.isPrimary === false || (event.pointerType === 'mouse' && event.button !== 0)) return;
+        event.preventDefault();
+        handle.focus();
+        draggingRow = row;
+        draggingHandle = handle;
+        originalOrder = getOrderKeys();
+        activePointerId = event.pointerId;
+        pointerStartX = event.clientX;
+        pointerStartY = event.clientY;
+        pointerDragStarted = false;
+        document.addEventListener('pointermove', handlePointerMove, { passive: false, capture: true });
+        document.addEventListener('pointerup', handlePointerEnd, true);
+        document.addEventListener('pointercancel', handlePointerCancel, true);
+      });
+
+      handle.addEventListener('keydown', (event) => {
+        const direction = { ArrowUp: 'up', ArrowDown: 'down', Home: 'first', End: 'last' }[event.key];
+        if (!direction || searchActive || saveInProgress) return;
+        event.preventDefault();
+        moveRow(row, direction);
+      });
+    });
+
+    syncHandleState();
+  }
+
+  function initializeLabelDynamicFieldConfiguration(root = document) {
+    root.querySelectorAll('[data-label-dynamic-field-order-list]').forEach(initializeLabelDynamicFieldOrderList);
+  }
+
   function initializeAllConfigurationBrowsers(root = document) {
     root.querySelectorAll('[data-configuration-browser]').forEach(initializeConfigurationBrowser);
   }
@@ -605,10 +815,12 @@
   document.addEventListener('DOMContentLoaded', () => {
     initializeAllConfigurationBrowsers();
     initializeAllConfigValueForms();
+    initializeLabelDynamicFieldConfiguration();
   });
 
   document.addEventListener('htmx:afterSwap', (event) => {
     initializeAllConfigurationBrowsers(event.target);
     initializeAllConfigValueForms(event.target);
+    initializeLabelDynamicFieldConfiguration(event.target);
   });
 })();

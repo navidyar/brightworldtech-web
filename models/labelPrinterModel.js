@@ -53,7 +53,8 @@ async function getPrintersByIds(printerIds, connection = pool) {
     .map(Number).filter((id) => Number.isSafeInteger(id) && id > 0))];
   if (!ids.length) return [];
   const [rows] = await connection.query(
-    `SELECT printer.*, owner.username AS owner_username
+    `SELECT printer.*, owner.username AS owner_username,
+            owner.first_name AS owner_first_name, owner.last_name AS owner_last_name
      FROM label_printers printer
      LEFT JOIN users owner ON owner.user_id = printer.owner_user_id
      WHERE printer.label_printer_id IN (${ids.map(() => '?').join(',')})`,
@@ -90,11 +91,11 @@ async function findPrinterRegistrationConflict({ hostAddress, cupsQueueName = nu
   return rows[0] || null;
 }
 
-async function listAvailablePrintersForUser({ userId, roleCodes = [] }, connection = pool) {
+async function listAvailablePrintersForUser({ userId, canAccessPrivateSoloPrinters = false }, connection = pool) {
   const id = positiveInteger(userId, 'User ID');
-  const isLeadPlus = roleCodes.some((role) => ['admin', 'management', 'tech_lead'].includes(String(role)));
   const [rows] = await connection.query(
-    `SELECT printer.*, owner.username AS owner_username
+    `SELECT printer.*, owner.username AS owner_username,
+            owner.first_name AS owner_first_name, owner.last_name AS owner_last_name
      FROM label_printers printer
      LEFT JOIN users owner ON owner.user_id = printer.owner_user_id
      WHERE printer.is_enabled = 1
@@ -107,7 +108,7 @@ async function listAvailablePrintersForUser({ userId, roleCodes = [] }, connecti
      ORDER BY
        CASE WHEN printer.owner_user_id = ? THEN 0 WHEN printer.scope_code = 'managed' THEN 1 ELSE 2 END,
        printer.display_name, printer.label_printer_id`,
-    [id, isLeadPlus ? 1 : 0, id]
+    [id, canAccessPrivateSoloPrinters ? 1 : 0, id]
   );
   return rows;
 }
@@ -115,9 +116,12 @@ async function listAvailablePrintersForUser({ userId, roleCodes = [] }, connecti
 async function listOwnedSoloPrinters(userId, connection = pool) {
   const id = positiveInteger(userId, 'User ID');
   const [rows] = await connection.query(
-    `SELECT * FROM label_printers
-     WHERE scope_code = 'solo' AND owner_user_id = ?
-     ORDER BY display_name, label_printer_id`,
+    `SELECT printer.*, owner.username AS owner_username,
+            owner.first_name AS owner_first_name, owner.last_name AS owner_last_name
+     FROM label_printers printer
+     LEFT JOIN users owner ON owner.user_id = printer.owner_user_id
+     WHERE printer.scope_code = 'solo' AND printer.owner_user_id = ?
+     ORDER BY printer.display_name, printer.label_printer_id`,
     [id]
   );
   return rows;
@@ -131,17 +135,17 @@ async function createPrinter(data, { actorUserId, ownerUserId = null }, connecti
     if (owned) await db.beginTransaction();
     const [result] = await db.query(
       `INSERT INTO label_printers
-        (scope_code, owner_user_id, display_name, location_label, host_address, port,
+        (scope_code, owner_user_id, display_name, alias_label, location_label, host_address, port,
          protocol_code, cups_queue_name, manufacturer, model, detected_description,
          printer_profile_code, media_code, dpi, is_shared, is_enabled,
          last_probe_at, last_probe_status, last_probe_details_json,
          created_by_user_id, updated_by_user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
          CURRENT_TIMESTAMP(6), ?, ?, ?, ?)`,
       [
         data.scope,
         data.scope === 'solo' ? positiveInteger(ownerUserId || actorId, 'Owner user ID') : null,
-        data.displayName, data.locationLabel, data.hostAddress, data.port,
+        data.displayName, data.aliasLabel, data.locationLabel, data.hostAddress, data.port,
         data.protocolCode, data.cupsQueueName, data.manufacturer, data.model,
         data.detectedDescription, data.printerProfileCode, data.mediaCode, data.dpi,
         data.isShared ? 1 : 0, data.isEnabled ? 1 : 0,
@@ -157,7 +161,7 @@ async function createPrinter(data, { actorUserId, ownerUserId = null }, connecti
       entityType: 'label_printer',
       entityId: printerId,
       entityName: data.displayName,
-      details: { scope: data.scope, hostAddress: data.hostAddress, protocolCode: data.protocolCode, isShared: data.isShared }
+      details: { scope: data.scope, aliasLabel: data.aliasLabel, hostAddress: data.hostAddress, protocolCode: data.protocolCode, isShared: data.isShared }
     }, db);
     const created = await getPrinterById(printerId, db);
     if (owned) await db.commit();
@@ -181,14 +185,14 @@ async function updatePrinter(printerId, data, { actorUserId }, connection = null
     if (!existing) return null;
     await db.query(
       `UPDATE label_printers
-       SET display_name = ?, location_label = ?, host_address = ?, port = ?, protocol_code = ?,
+       SET display_name = ?, alias_label = ?, location_label = ?, host_address = ?, port = ?, protocol_code = ?,
            cups_queue_name = ?, manufacturer = ?, model = ?, detected_description = ?,
            printer_profile_code = ?, media_code = ?, dpi = ?, is_shared = ?, is_enabled = ?,
            last_probe_at = CURRENT_TIMESTAMP(6), last_probe_status = ?, last_probe_details_json = ?,
            updated_by_user_id = ?
        WHERE label_printer_id = ?`,
       [
-        data.displayName, data.locationLabel, data.hostAddress, data.port, data.protocolCode,
+        data.displayName, data.aliasLabel, data.locationLabel, data.hostAddress, data.port, data.protocolCode,
         data.cupsQueueName, data.manufacturer, data.model, data.detectedDescription,
         data.printerProfileCode, data.mediaCode, data.dpi,
         data.scope === 'managed' ? 1 : (data.isShared ? 1 : 0), data.isEnabled ? 1 : 0,
@@ -206,7 +210,7 @@ async function updatePrinter(printerId, data, { actorUserId }, connection = null
       entityType: 'label_printer',
       entityId: id,
       entityName: data.displayName,
-      details: { hostAddress: data.hostAddress, protocolCode: data.protocolCode, isShared: data.isShared, isEnabled: data.isEnabled }
+      details: { aliasLabel: data.aliasLabel, hostAddress: data.hostAddress, protocolCode: data.protocolCode, isShared: data.isShared, isEnabled: data.isEnabled }
     }, db);
     const updated = await getPrinterById(id, db);
     if (owned) await db.commit();
@@ -407,7 +411,7 @@ async function listRoutingGroupRows(connection = pool) {
     SELECT
       groupRow.label_printer_group_id, groupRow.name AS group_name,
       groupRow.description AS group_description, member.sort_order AS group_sort_order,
-      printer.*, owner.username AS owner_username
+      printer.*, owner.username AS owner_username, owner.first_name AS owner_first_name, owner.last_name AS owner_last_name
     FROM label_printer_groups groupRow
     INNER JOIN label_printer_group_members member
       ON member.group_id = groupRow.label_printer_group_id AND member.is_active = 1
@@ -526,10 +530,12 @@ async function replaceGroupMembers(groupId, printerIds, actorUserId) {
 async function listGroupMembers(groupId, connection = pool) {
   const id = positiveInteger(groupId, 'Printer group ID');
   const [rows] = await connection.query(
-    `SELECT member.*, printer.display_name, printer.location_label, printer.scope_code,
-            printer.is_shared, printer.is_enabled, printer.host_address, printer.protocol_code
+    `SELECT member.*, printer.display_name, printer.alias_label, printer.location_label, printer.scope_code,
+            printer.is_shared, printer.is_enabled, printer.host_address, printer.protocol_code,
+            owner.username AS owner_username, owner.first_name AS owner_first_name, owner.last_name AS owner_last_name
      FROM label_printer_group_members member
      INNER JOIN label_printers printer ON printer.label_printer_id = member.printer_id
+     LEFT JOIN users owner ON owner.user_id = printer.owner_user_id
      WHERE member.group_id = ?
      ORDER BY member.sort_order, printer.display_name`,
     [id]

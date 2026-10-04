@@ -8,7 +8,8 @@ RUN apt-get update \
 
 COPY package*.json ./
 
-RUN npm install --omit=dev
+RUN npm ci --omit=dev \
+    && npm cache clean --force
 
 COPY . .
 

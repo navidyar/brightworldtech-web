@@ -1525,7 +1525,7 @@ async function renderLotUnitExportPreview(req, res) {
       });
     }
 
-    const fullDataset = await unitExportService.buildLotScopedUnitExportDataset(exportContext.dataScope);
+    const fullDataset = await unitExportService.buildLotScopedUnitExportDataset(exportContext.dataScope, { timeZone: req.timeZone });
     const columnSelection = getLotExportColumnSelection(req);
     const dataset = unitExportService.applyUnitExportColumnSelection(
       fullDataset,
@@ -1575,7 +1575,7 @@ async function downloadLotUnitExport(req, res, next, format) {
       return res.status(404).type('text/plain').send('The selected Lot could not be found.');
     }
 
-    const fullDataset = await unitExportService.buildLotScopedUnitExportDataset(exportContext.dataScope);
+    const fullDataset = await unitExportService.buildLotScopedUnitExportDataset(exportContext.dataScope, { timeZone: req.timeZone });
     const columnSelection = getLotExportColumnSelection(req);
     const dataset = unitExportService.applyUnitExportColumnSelection(
       fullDataset,
@@ -1589,7 +1589,7 @@ async function downloadLotUnitExport(req, res, next, format) {
     const contentType = normalizedFormat === 'csv'
       ? unitExportFileService.CSV_CONTENT_TYPE
       : unitExportFileService.XLSX_CONTENT_TYPE;
-    const filename = unitExportFileService.buildUnitExportFilename(normalizedFormat, dataset.filters);
+    const filename = unitExportFileService.buildUnitExportFilename(normalizedFormat, dataset.filters, new Date(), dataset.timeZone);
 
     res.status(200);
     res.set({

@@ -43,8 +43,11 @@ function asActionError(error) {
   return error;
 }
 
-async function applyUnitAction({ body = {}, userId, roleCodes = [], toolSource }) {
+async function applyUnitAction({ body = {}, userId, roleCodes = [], permissions, toolSource }) {
   try {
+    if (!(permissions instanceof Set) || !permissions.has('units.edit')) {
+      throw new ApiUnitActionError(403, 'UNIT_PERMISSION_DENIED', 'The units.edit permission is required for this Unit action.');
+    }
     if (normalizeBoolean(body.confirm_duplicate_match_creation ?? body.confirmDuplicateMatchCreation)) {
       throw new ApiUnitActionError(
         409,

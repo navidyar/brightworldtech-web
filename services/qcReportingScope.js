@@ -2,7 +2,6 @@
 
 const { normalizePositiveInteger } = require('../utils/positiveInteger');
 const {
-  APP_DISPLAY_TIME_ZONE,
   formatDateKey,
   getDayRangeUtc,
   parseDateKey
@@ -141,8 +140,8 @@ function formatScopeDate(dateKey) {
   }).format(new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day, 12, 0, 0)));
 }
 
-function resolvePeriodFilters(query = {}, { now = new Date() } = {}) {
-  const todayDate = formatDateKey(now, APP_DISPLAY_TIME_ZONE);
+function resolvePeriodFilters(query = {}, { now = new Date(), timeZone = 'UTC' } = {}) {
+  const todayDate = formatDateKey(now, timeZone);
   const requestedPeriod = String(query.period || 'all_time').trim();
   const period = VALID_PERIODS.has(requestedPeriod) ? requestedPeriod : 'all_time';
   const selectedDate = String(query.date || '').trim() || todayDate;
@@ -207,8 +206,8 @@ function resolvePeriodFilters(query = {}, { now = new Date() } = {}) {
       : `${formatScopeDate(startDate)} – ${formatScopeDate(endDate)}`;
   }
 
-  const startRange = startDate ? getDayRangeUtc(startDate, APP_DISPLAY_TIME_ZONE) : null;
-  const endRange = endDate ? getDayRangeUtc(endDate, APP_DISPLAY_TIME_ZONE) : null;
+  const startRange = startDate ? getDayRangeUtc(startDate, timeZone) : null;
+  const endRange = endDate ? getDayRangeUtc(endDate, timeZone) : null;
 
   return {
     period,

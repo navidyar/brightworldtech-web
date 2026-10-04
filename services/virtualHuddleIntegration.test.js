@@ -50,11 +50,12 @@ test('Virtual Huddle uses the existing three shared CSS files with requested Pri
   assert.equal(fs.existsSync(path.join(root, 'public/css/virtual-huddle.css')), false);
 });
 
-test('sidebar exposes personal history to all authenticated users and management administration to Management+', () => {
+test('sidebar exposes personal history through huddle.personal.view and management administration to Management+', () => {
   const sidebar = read('views/partials/sidebar.ejs');
-  assert.match(sidebar, /href="\/my-huddles"/);
+  assert.match(sidebar, /hasPermission\('huddle\.personal\.view'\)/);
+  assert.match(sidebar, /if \(canViewMyHuddles\)[\s\S]*?href="\/my-huddles"/);
   assert.match(sidebar, /href="\/management\/virtual-huddle"/);
-  assert.match(sidebar, /canAccessMenuArea\('management'\)/);
+  assert.match(sidebar, /canViewHuddleAdministration =[^\n]*hasPermission\('huddle\.administration\.view'\)/);
 });
 
 test('recipient dialog enforces the fixed confirmation phrase and keeps optional notes non-question context', () => {
@@ -63,6 +64,11 @@ test('recipient dialog enforces the fixed confirmation phrase and keeps optional
   assert.match(dialog, /Do not post questions here/);
   assert.match(dialog, /Close Without Acknowledging/);
   assert.match(dialog, /data-huddle-dismiss/);
+  assert.match(
+    dialog,
+    /<form[^>]*method="post"[^>]*action="\/virtual-huddle\/recipients\/<%= presentation\.virtual_huddle_recipient_id %>\/acknowledge"[^>]*data-huddle-ack-form/,
+    'acknowledgment form must be an explicit POST so the sitewide GET navigation policy cannot replace the current page before the async Huddle handler runs'
+  );
 });
 
 test('all Virtual Huddle templates are present and use the shared head/fragment structure', () => {
@@ -86,18 +92,24 @@ test('all Virtual Huddle templates are present and use the shared head/fragment 
   }
 });
 
+test('Management Virtual Huddle history renders sender name and role together clearly', () => {
+  const management = read('views/pages/management-virtual-huddle.ejs');
+
+  assert.match(management, /<strong><%= message\.sender_name_snapshot %><\/strong>[\s\S]*<small><%= formatRoleLabel\(message\.sender_role_code_snapshot\) %>/);
+  assert.doesNotMatch(management, /message\.sender_name_snapshot %><span class=\"table-muted-line\"><%= formatRoleLabel\(message\.sender_role_code_snapshot\)/);
+});
+
 test('Notice messages are delivery-only and do not remain in permanent Huddle history', () => {
   const model = read('models/virtualHuddleModel.js');
   const controller = read('controllers/virtualHuddleController.js');
   const preview = read('views/fragments/virtual-huddle-preview-modal.ejs');
   const management = read('views/pages/management-virtual-huddle.ejs');
 
-  assert.match(model, /WHERE message_type_code <> 'notice'/);
-  assert.match(model, /WHERE m\.message_type_code <> 'notice'/);
+  assert.match(model, /m\.message_type_code <> 'notice'/);
   assert.match(model, /ephemeralNotice/);
   assert.match(model, /DELETE FROM virtual_huddle_recipients WHERE virtual_huddle_recipient_id = \?/);
   assert.match(model, /DELETE FROM virtual_huddle_messages[\s\S]*message_type_code = 'notice'/);
   assert.match(controller, /messageTypeCode === 'notice'[\s\S]*notice_sent=1/);
   assert.match(preview, /delivery-only[\s\S]*does not create a permanent Huddle history/i);
-  assert.match(management, /Notices are delivery-only and are not saved to history/i);
+  assert.match(controller, /Notices are delivery-only and are not kept in Huddle history/i);
 });

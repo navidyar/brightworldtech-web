@@ -27,7 +27,7 @@ test('Label Library exposes the visual Layout Builder for Draft and Active templ
   assert.match(view, /Finish the saved layout and resolve any media, asset, field, barcode, or QR validation issues before activation/);
 });
 
-test('Management routes protect builder read and save operations with Management roles', () => {
+test('Builder read and save operations require labels.builder.manage', () => {
   const routes = source('routes/management.js');
   assert.match(routes, /templates\/:labelTemplateId\/builder/);
   assert.match(routes, /labelLibraryController\.renderTemplateBuilder/);

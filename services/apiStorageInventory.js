@@ -1,6 +1,7 @@
 'use strict';
 
 const { TOOL_SOURCES } = require('./apiToolCredential');
+const { listActiveSystemCategoryValues, listActiveSystemCategoryAliases, resolveCandidateFromRows } = require('./apiConfigValueResolver');
 
 const STORAGE_FIELD_KEY = 'storage_devices';
 const STORAGE_INSTALL_TYPES = new Set(['removable_device', 'integrated_soldered', 'unknown']);
@@ -158,54 +159,19 @@ function normalizeStorageObservation(rawStorage) {
   };
 }
 
-function resolveStorageTypeCandidate(submitted, candidates) {
-  if (!submitted) return { status: 'unknown', submitted: null };
-  const key = normalizeKey(submitted);
-  const aliases = new Map([
-    ['solidstatedrive', 'ssd'], ['solidstate', 'ssd'], ['nvme', 'ssd'],
-    ['harddiskdrive', 'hdd'], ['harddrive', 'hdd'], ['rotational', 'hdd']
-  ]);
-  const normalizedSubmitted = aliases.get(key) || key;
-  const matches = candidates.filter((candidate) => {
-    const values = [candidate.label, candidate.value].map((value) => {
-      const candidateKey = normalizeKey(value);
-      return aliases.get(candidateKey) || candidateKey;
-    });
-    return values.includes(normalizedSubmitted);
-  });
-  if (matches.length === 1) {
-    return {
-      status: 'resolved',
-      submitted,
-      resolvedId: Number(matches[0].id),
-      resolvedLabel: normalizeText(matches[0].label || matches[0].value, 160)
-    };
-  }
-  if (matches.length > 1) return { status: 'ambiguous', submitted };
-  return { status: 'unmapped', submitted };
-}
-
-async function loadStorageTypeCandidates(connection) {
-  const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
-  const [rows] = await connection.query(
-    `SELECT cv.config_value_id AS id,
-            COALESCE(NULLIF(cv.label, ''), cv.value) AS label,
-            cv.value
-       FROM system_config_categories scc
-       INNER JOIN config_values cv ON cv.config_category_id = scc.config_category_id
-      WHERE scc.system_config_category_id = ?
-        AND COALESCE(cv.is_active, 1) = 1
-      ORDER BY cv.config_value_id`,
-    [SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_TYPES]
-  );
-  return rows;
+function resolveStorageTypeCandidate(submitted, candidates, aliases = []) {
+  return resolveCandidateFromRows(candidates, submitted, [], aliases);
 }
 
 async function resolveStorageObservation(connection, observation) {
   if (!observation || observation.state !== 'known') return observation;
-  const candidates = await loadStorageTypeCandidates(connection);
+  const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
+  const [candidates, aliases] = await Promise.all([
+    listActiveSystemCategoryValues(connection, SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_TYPES),
+    listActiveSystemCategoryAliases(connection, SYSTEM_CONFIG_CATEGORY_IDS.STORAGE_TYPES)
+  ]);
   const devices = observation.value.devices.map((device) => {
-    const resolution = resolveStorageTypeCandidate(device.storage_type_submitted, candidates);
+    const resolution = resolveStorageTypeCandidate(device.storage_type_submitted, candidates, aliases);
     return {
       ...device,
       storage_type_resolution: resolution,

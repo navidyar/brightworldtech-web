@@ -38,12 +38,11 @@ test('only assigned technicians or Tech Lead and above can mark a rejected Unit 
   const routes = read('routes/management.js');
   const controller = read('controllers/techController.js');
 
-  assert.match(routes, /qcCorrectionRoles = \['admin', 'management', 'tech_lead', 'tech'\]/);
-  assert.match(routes, /\/tech\/units\/:unitId\/qc-correction\/modal[\s\S]*requireRole\(qcCorrectionRoles\)/);
+  assert.match(routes, /\/tech\/units\/:unitId\/qc-correction\/modal[\s\S]*requireAnyPermission\(\['qc\.correction\.submit', 'qc\.correction\.submit_any'\]\)/);
   assert.match(routes, /\/tech\/units\/:unitId\/qc-correction'[\s\S]*submitQcCorrection/);
   assert.match(controller, /Number\(unit\.assignedToUserId\) === Number\(req\.currentUser/);
-  assert.match(controller, /\['admin', 'management', 'tech_lead'\]/);
-  assert.doesNotMatch(routes, /qcCorrectionRoles = \[[^\]]*'qc'/);
+  assert.match(controller, /permissions\.has\('qc\.correction\.submit_any'\)/);
+  assert.doesNotMatch(routes, /qcCorrectionRoles/);
 });
 
 test('QC re-review is blocked until the current rejection has a correction submission', () => {

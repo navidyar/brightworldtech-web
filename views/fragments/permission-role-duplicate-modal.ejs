@@ -1,0 +1,29 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeFormData = formData || {};
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal permission-role-modal" role="dialog" aria-modal="true" aria-labelledby="permission-role-duplicate-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Roles & Permissions</p>
+        <h2 id="permission-role-duplicate-title">Duplicate <%= role.name %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <% if (safeErrors.length) { %><div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div><% } %>
+      <p class="configuration-form-note">The duplicate receives an independent copy of the role's current default permissions. Later changes to either role will not affect the other.</p>
+      <form class="app-form app-form-clean" method="post" action="/management/roles-permissions/<%= role.role_id %>/duplicate/modal" hx-post="/management/roles-permissions/<%= role.role_id %>/duplicate/modal" hx-target="#modal-root" hx-swap="innerHTML">
+        <label class="form-field">
+          <span>New Role Name</span>
+          <input type="text" name="name" maxlength="150" value="<%= safeFormData.name || '' %>" required autofocus />
+        </label>
+        <div class="form-actions">
+          <button class="primary-button" type="submit">Duplicate Role</button>
+          <button class="secondary-button" type="button" data-modal-close>Cancel</button>
+        </div>
+      </form>
+    </div>
+  </section>
+</div>

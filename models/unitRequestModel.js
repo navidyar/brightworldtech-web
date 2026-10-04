@@ -7,6 +7,7 @@ const unitExpandedFormModel = require('./unitExpandedFormModel');
 const unitLotDestinationValidationModel = require('./unitLotDestinationValidationModel');
 const processorFamilyModel = require('./processorFamilyModel');
 const processorCatalogModel = require('./processorCatalogModel');
+const unitModelCatalogModel = require('./unitModelCatalogModel');
 const unitQcCheckModel = require('./unitQcCheckModel');
 const unitAuditEventModel = require('./unitAuditEventModel');
 const { buildUnitFormAuditEvent } = require('../services/unitAuditSnapshot');
@@ -19,6 +20,7 @@ const UNIT_PROCESSOR_CATALOG_REQUESTS_TABLE = 'unit_processor_catalog_requests';
 const UNIT_QC_REVERSION_REQUESTS_TABLE = 'unit_qc_reversion_requests';
 
 const INTENTIONAL_DUPLICATE_REQUEST_TYPE = 'intentional_duplicate';
+const TOOL_UUID_DUPLICATE_AUTHORIZATION_MODE = 'tool_uuid_duplicate_authorization_v1';
 const MODEL_CATALOG_REQUEST_TYPE = 'model_catalog_addition';
 const PROCESSOR_CATALOG_REQUEST_TYPE = 'processor_catalog_addition';
 const QC_REVERSION_REQUEST_TYPE = 'qc_reversion';
@@ -32,6 +34,7 @@ const VALID_STATUS_FILTERS = new Set(['pending', 'approved', 'rejected', 'withdr
 const VALID_REQUEST_TYPE_FILTERS = new Set([
   'all',
   INTENTIONAL_DUPLICATE_REQUEST_TYPE,
+  TOOL_UUID_DUPLICATE_AUTHORIZATION_MODE,
   MODEL_CATALOG_REQUEST_TYPE,
   PROCESSOR_CATALOG_REQUEST_TYPE,
   QC_REVERSION_REQUEST_TYPE
@@ -347,6 +350,7 @@ function mapRequest(row, lotMap = new Map()) {
     requestTypeLabel: getRequestTypeLabel(row.request_type),
     displaySubject,
     isIntentionalDuplicateRequest: isDuplicateRequest,
+    isToolUuidDuplicateAuthorization: isDuplicateRequest && intakeSnapshot.workflowMode === TOOL_UUID_DUPLICATE_AUTHORIZATION_MODE,
     isCatalogRequest: CATALOG_REQUEST_TYPES.has(row.request_type),
     isQcReversionRequest: row.request_type === QC_REVERSION_REQUEST_TYPE,
     catalogContext,
@@ -1216,6 +1220,18 @@ async function createModelCatalogRequest({
     await connection.beginTransaction();
     const context = await assertActiveModelRequestContext(connection, manufacturerId, unitCategoryConfigValueId);
 
+    const existingMapping = await unitModelCatalogModel.findUnitModelIntakeMapping({
+      manufacturerId: context.manufacturerId,
+      unitCategoryConfigValueId: context.unitCategoryConfigValueId,
+      observedModelName: safeRequestedModelName
+    }, connection);
+    if (existingMapping) {
+      const error = new Error(`That incoming model already maps to ${existingMapping.targetModelName} in the active catalog.`);
+      error.code = 'BWT_CATALOG_REQUEST_ALREADY_ACTIVE';
+      error.unitModelId = existingMapping.targetUnitModelId;
+      throw error;
+    }
+
     const [activeModelRows] = await connection.query(
       `
         SELECT unit_model_id
@@ -1538,6 +1554,104 @@ async function getIntentionalDuplicateAuditFormOptions(formData) {
   return { ...formOptions, ...issueFormOptions, ...expandedFormOptions };
 }
 
+async function getToolUuidDuplicateAuthorization({
+  unitRequestId,
+  requestedByUserId,
+  destinationLotId,
+  matchedCandidateIds = [],
+  systemUuid,
+  allowConsumed = false
+} = {}) {
+  const safeRequestId = normalizePositiveInteger(unitRequestId);
+  const safeRequesterId = normalizePositiveInteger(requestedByUserId);
+  const safeDestinationLotId = normalizePositiveInteger(destinationLotId);
+  const normalizedUuid = normalizeUuid(systemUuid);
+  const candidateIds = new Set((Array.isArray(matchedCandidateIds) ? matchedCandidateIds : [])
+    .map(normalizePositiveInteger)
+    .filter(Boolean));
+  if (!safeRequestId || !safeRequesterId || !safeDestinationLotId || !normalizedUuid) {
+    return { authorized: false, reason: 'invalid_context' };
+  }
+
+  const [rows] = await pool.query(
+    `SELECT ur.unit_request_id, ur.status, ur.requested_by_user_id,
+            udr.matched_unit_id, udr.requested_destination_lot_id,
+            udr.created_unit_id, udr.intake_snapshot_json
+       FROM unit_requests ur
+       INNER JOIN unit_duplicate_requests udr ON udr.unit_request_id = ur.unit_request_id
+      WHERE ur.unit_request_id = ? AND ur.request_type = ?
+      LIMIT 1`,
+    [safeRequestId, INTENTIONAL_DUPLICATE_REQUEST_TYPE]
+  );
+  const row = rows[0] || null;
+  if (!row) return { authorized: false, reason: 'not_found' };
+  const snapshot = parseJsonValue(row.intake_snapshot_json, {});
+  if (snapshot.workflowMode !== TOOL_UUID_DUPLICATE_AUTHORIZATION_MODE) {
+    return { authorized: false, reason: 'wrong_workflow' };
+  }
+  if (row.status !== 'approved') return { authorized: false, reason: row.status || 'not_approved' };
+  if (Number(row.requested_by_user_id) !== safeRequesterId) return { authorized: false, reason: 'requester_mismatch' };
+  if (Number(row.requested_destination_lot_id) !== safeDestinationLotId) return { authorized: false, reason: 'destination_mismatch' };
+  if (!candidateIds.has(Number(row.matched_unit_id))) return { authorized: false, reason: 'candidate_mismatch' };
+  const snapshotUuid = normalizeUuid(snapshot.formData?.systemUuid || snapshot.formData?.system_uuid || snapshot.display?.systemUuid);
+  if (!snapshotUuid || snapshotUuid !== normalizedUuid) return { authorized: false, reason: 'uuid_mismatch' };
+  const createdUnitId = normalizePositiveInteger(row.created_unit_id);
+  if (createdUnitId && !allowConsumed) return { authorized: false, reason: 'already_consumed', createdUnitId };
+  return {
+    authorized: true,
+    reason: createdUnitId ? 'consumed' : 'approved',
+    unitRequestId: safeRequestId,
+    matchedUnitId: Number(row.matched_unit_id),
+    createdUnitId: createdUnitId || null,
+    systemUuid: snapshot.formData?.systemUuid || snapshot.display?.systemUuid || ''
+  };
+}
+
+async function consumeToolUuidDuplicateAuthorization(connection, {
+  unitRequestId,
+  requestedByUserId,
+  createdUnitId
+} = {}) {
+  const safeRequestId = normalizePositiveInteger(unitRequestId);
+  const safeRequesterId = normalizePositiveInteger(requestedByUserId);
+  const safeCreatedUnitId = normalizePositiveInteger(createdUnitId);
+  if (!connection || !safeRequestId || !safeRequesterId || !safeCreatedUnitId) {
+    const error = new Error('The approved UUID duplicate authorization could not be consumed.');
+    error.code = 'BWT_UUID_DUPLICATE_AUTHORIZATION_INVALID';
+    throw error;
+  }
+  const [rows] = await connection.query(
+    `SELECT ur.status, ur.requested_by_user_id, udr.created_unit_id, udr.intake_snapshot_json
+       FROM unit_requests ur
+       INNER JOIN unit_duplicate_requests udr ON udr.unit_request_id = ur.unit_request_id
+      WHERE ur.unit_request_id = ? AND ur.request_type = ?
+      LIMIT 1 FOR UPDATE`,
+    [safeRequestId, INTENTIONAL_DUPLICATE_REQUEST_TYPE]
+  );
+  const row = rows[0] || null;
+  const snapshot = parseJsonValue(row?.intake_snapshot_json, {});
+  if (!row || row.status !== 'approved'
+      || Number(row.requested_by_user_id) !== safeRequesterId
+      || snapshot.workflowMode !== TOOL_UUID_DUPLICATE_AUTHORIZATION_MODE
+      || normalizePositiveInteger(row.created_unit_id)) {
+    const error = new Error('The UUID duplicate authorization is missing, not approved, belongs to another user, or was already used.');
+    error.code = 'BWT_UUID_DUPLICATE_AUTHORIZATION_INVALID';
+    throw error;
+  }
+  await connection.query(
+    'UPDATE unit_duplicate_requests SET created_unit_id = ? WHERE unit_request_id = ? AND created_unit_id IS NULL LIMIT 1',
+    [safeCreatedUnitId, safeRequestId]
+  );
+  await recordRequestEvent(connection, {
+    unitRequestId: safeRequestId,
+    eventType: 'completed',
+    performedByUserId: safeRequesterId,
+    eventNote: 'Approved UUID duplicate authorization consumed by Tool Commit.',
+    eventDetails: { createdUnitId: safeCreatedUnitId, toolUuidDuplicateAuthorization: true }
+  });
+  return true;
+}
+
 async function approveIntentionalDuplicateRequest({ unitRequestId, reviewedByUserId, reviewerNote = '' }) {
   const safeRequestId = normalizePositiveInteger(unitRequestId);
   const safeReviewerUserId = normalizePositiveInteger(reviewedByUserId);
@@ -1596,6 +1710,36 @@ async function approveIntentionalDuplicateRequest({ unitRequestId, reviewedByUse
     }
 
     const intakeSnapshot = parseJsonValue(request.intake_snapshot_json, {});
+    if (intakeSnapshot.workflowMode === TOOL_UUID_DUPLICATE_AUTHORIZATION_MODE) {
+      await assertRequestedDestinationLotIsAssignable(request.requested_destination_lot_id);
+      const note = normalizeText(reviewerNote, 1000) || null;
+      await connection.query(
+        `UPDATE unit_requests
+            SET status = 'approved', reviewed_by_user_id = ?, reviewed_at = NOW(), reviewer_note = ?
+          WHERE unit_request_id = ? LIMIT 1`,
+        [safeReviewerUserId, note, safeRequestId]
+      );
+      await recordRequestEvent(connection, {
+        unitRequestId: safeRequestId,
+        eventType: 'approved',
+        performedByUserId: safeReviewerUserId,
+        eventNote: note,
+        eventDetails: {
+          toolUuidDuplicateAuthorization: true,
+          matchedUnitId: Number(request.matched_unit_id),
+          requestedDestinationLotId: Number(request.requested_destination_lot_id)
+        }
+      });
+      await connection.commit();
+      return {
+        approved: true,
+        unitRequestId: safeRequestId,
+        createdUnitId: null,
+        createdAssetTag: '',
+        authorizationOnly: true,
+        resultLabel: 'Approved for Tool Commit'
+      };
+    }
     const formData = normalizeFormDataSnapshot(intakeSnapshot);
     if (!formData) {
       const error = new Error('The saved intake snapshot is incomplete. Reject this request and have the Tech submit a new one.');
@@ -1705,21 +1849,23 @@ async function approveModelCatalogRequest({
   reviewerNote = '',
   approvedModelName,
   approvedUnitCategoryConfigValueId,
+  approvedExistingUnitModelId = null,
   reviewerIsAdmin = false
 }) {
   const safeRequestId = normalizePositiveInteger(unitRequestId);
   const safeReviewerUserId = normalizePositiveInteger(reviewedByUserId);
   const safeApprovedModelName = normalizeText(approvedModelName, 150);
   const safeApprovedCategoryId = normalizePositiveInteger(approvedUnitCategoryConfigValueId);
+  const safeExistingUnitModelId = normalizePositiveInteger(approvedExistingUnitModelId);
 
-  if (!safeRequestId || !safeReviewerUserId || safeApprovedModelName.length < 2 || !safeApprovedCategoryId) {
-    const error = new Error('Enter a canonical Unit Model name and select its Unit Category before approving this request.');
+  if (!safeRequestId || !safeReviewerUserId || !safeApprovedCategoryId || (!safeExistingUnitModelId && safeApprovedModelName.length < 2)) {
+    const error = new Error('Enter a Catalog Model name and select its Unit Category before approving this request.');
     error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
     throw error;
   }
 
   if (!reviewerIsAdmin) {
-    const error = new Error('Only Admin can approve Model Catalog requests.');
+    const error = new Error('Approve Model Catalog Requests permission is required to approve Model Catalog requests.');
     error.code = 'BWT_CATALOG_ADMIN_REQUIRED';
     throw error;
   }
@@ -1742,7 +1888,8 @@ async function approveModelCatalogRequest({
           ur.status,
           ur.requested_by_user_id,
           umcr.manufacturer_id,
-          umcr.unit_category_config_value_id
+          umcr.unit_category_config_value_id,
+          umcr.requested_model_name
         FROM unit_requests ur
         INNER JOIN unit_model_catalog_requests umcr
           ON umcr.unit_request_id = ur.unit_request_id
@@ -1765,8 +1912,78 @@ async function approveModelCatalogRequest({
     const isSelfReview = Number(request.requested_by_user_id) === safeReviewerUserId;
 
     const requestedCategoryId = normalizePositiveInteger(request.unit_category_config_value_id);
-    const context = await assertActiveModelRequestContext(connection, request.manufacturer_id, safeApprovedCategoryId);
-    const [existingRows] = await connection.query(
+    let approvedUnitModelId;
+    let actionLabel;
+    let canonicalModelName = safeApprovedModelName;
+    let canonicalCategoryId = safeApprovedCategoryId;
+
+    if (safeExistingUnitModelId) {
+      const existingTarget = await unitModelCatalogModel.getUnitModelById(safeExistingUnitModelId, connection);
+      if (!existingTarget || existingTarget.manufacturerId !== Number(request.manufacturer_id)) {
+        const error = new Error('Choose an existing Unit Model from the same manufacturer.');
+        error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
+        throw error;
+      }
+
+      const categoryChanged = Number(existingTarget.unitCategoryConfigValueId) !== Number(safeApprovedCategoryId);
+      if (!categoryChanged) {
+        if (!existingTarget.isActive) {
+          const inactiveTargetMatchesRequest = Number(existingTarget.unitCategoryConfigValueId) === requestedCategoryId
+            && normalizeText(existingTarget.modelName, 150).toLowerCase() === normalizeText(request.requested_model_name, 150).toLowerCase();
+          if (!inactiveTargetMatchesRequest) {
+            const error = new Error('Only the exact inactive Unit Model found for this request can be reactivated here.');
+            error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
+            throw error;
+          }
+          await connection.query('UPDATE unit_models SET is_active = 1 WHERE unit_model_id = ? LIMIT 1', [existingTarget.id]);
+        }
+
+        approvedUnitModelId = existingTarget.id;
+        canonicalModelName = existingTarget.modelName;
+        canonicalCategoryId = existingTarget.unitCategoryConfigValueId;
+        actionLabel = existingTarget.isActive ? 'Existing model mapped' : 'Inactive model reactivated';
+      } else {
+        const context = await assertActiveModelRequestContext(connection, request.manufacturer_id, safeApprovedCategoryId);
+        canonicalModelName = existingTarget.modelName;
+        canonicalCategoryId = context.unitCategoryConfigValueId;
+        const [categoryRows] = await connection.query(
+          `SELECT unit_model_id, is_active
+             FROM unit_models
+            WHERE manufacturer_id = ?
+              AND unit_category_config_value_id = ?
+              AND LOWER(TRIM(model_name)) = LOWER(TRIM(?))
+            ORDER BY unit_model_id ASC
+            LIMIT 1
+            FOR UPDATE`,
+          [context.manufacturerId, context.unitCategoryConfigValueId, canonicalModelName]
+        );
+        const categoryModel = categoryRows[0] || null;
+        if (categoryModel) {
+          approvedUnitModelId = Number(categoryModel.unit_model_id);
+          if (Number(categoryModel.is_active) !== 1) {
+            await connection.query('UPDATE unit_models SET is_active = 1 WHERE unit_model_id = ? LIMIT 1', [approvedUnitModelId]);
+          }
+          actionLabel = Number(categoryModel.is_active) === 1
+            ? 'Existing category-specific model mapped'
+            : 'Inactive category-specific model reactivated';
+        } else {
+          const [insertResult] = await connection.query(
+            `INSERT INTO unit_models (
+               manufacturer_id,
+               unit_category_config_value_id,
+               model_name,
+               sort_order,
+               is_active
+             ) VALUES (?, ?, ?, 0, 1)`,
+            [context.manufacturerId, context.unitCategoryConfigValueId, canonicalModelName]
+          );
+          approvedUnitModelId = Number(insertResult.insertId);
+          actionLabel = 'Category-specific model added';
+        }
+      }
+    } else {
+      const context = await assertActiveModelRequestContext(connection, request.manufacturer_id, safeApprovedCategoryId);
+      const [existingRows] = await connection.query(
       `
         SELECT unit_model_id, is_active
         FROM unit_models
@@ -1778,18 +1995,15 @@ async function approveModelCatalogRequest({
         FOR UPDATE
       `,
       [context.manufacturerId, context.unitCategoryConfigValueId, safeApprovedModelName]
-    );
+      );
 
-    const existingModel = existingRows[0] || null;
-    let approvedUnitModelId;
-    let actionLabel;
-
-    if (existingModel) {
-      approvedUnitModelId = Number(existingModel.unit_model_id);
-      await connection.query('UPDATE unit_models SET is_active = 1 WHERE unit_model_id = ? LIMIT 1', [approvedUnitModelId]);
-      actionLabel = Number(existingModel.is_active) === 1 ? 'Existing model mapped' : 'Inactive model reactivated';
-    } else {
-      const [insertResult] = await connection.query(
+      const existingModel = existingRows[0] || null;
+      if (existingModel) {
+        approvedUnitModelId = Number(existingModel.unit_model_id);
+        await connection.query('UPDATE unit_models SET is_active = 1 WHERE unit_model_id = ? LIMIT 1', [approvedUnitModelId]);
+        actionLabel = Number(existingModel.is_active) === 1 ? 'Existing model mapped' : 'Inactive model reactivated';
+      } else {
+        const [insertResult] = await connection.query(
         `
           INSERT INTO unit_models (
             manufacturer_id,
@@ -1800,10 +2014,19 @@ async function approveModelCatalogRequest({
           ) VALUES (?, ?, ?, 0, 1)
         `,
         [context.manufacturerId, context.unitCategoryConfigValueId, safeApprovedModelName]
-      );
-      approvedUnitModelId = Number(insertResult.insertId);
-      actionLabel = 'New model added';
+        );
+        approvedUnitModelId = Number(insertResult.insertId);
+        actionLabel = 'New model added';
+      }
     }
+
+    await unitModelCatalogModel.saveUnitModelIntakeMapping({
+      observedManufacturerId: request.manufacturer_id,
+      observedUnitCategoryConfigValueId: requestedCategoryId,
+      observedModelName: request.requested_model_name,
+      targetUnitModelId: approvedUnitModelId,
+      currentUserId: safeReviewerUserId
+    }, connection);
 
     const note = normalizeText(reviewerNote, 1000) || null;
     await connection.query(
@@ -1813,7 +2036,7 @@ async function approveModelCatalogRequest({
         WHERE unit_request_id = ?
         LIMIT 1
       `,
-      [context.unitCategoryConfigValueId, safeApprovedModelName, approvedUnitModelId, safeRequestId]
+      [canonicalCategoryId, canonicalModelName, approvedUnitModelId, safeRequestId]
     );
 
     await connection.query(
@@ -1833,9 +2056,13 @@ async function approveModelCatalogRequest({
       eventNote: note,
       eventDetails: {
         approvedUnitModelId,
-        approvedModelName: safeApprovedModelName,
+        approvedModelName: canonicalModelName,
         requestedUnitCategoryConfigValueId: requestedCategoryId,
-        approvedUnitCategoryConfigValueId: context.unitCategoryConfigValueId,
+        approvedUnitCategoryConfigValueId: canonicalCategoryId,
+        selectedExistingUnitModelId: safeExistingUnitModelId || null,
+        reusedExistingUnitModel: Boolean(safeExistingUnitModelId && Number(approvedUnitModelId) === Number(safeExistingUnitModelId)),
+        categoryAdjustedFromSelectedModel: Boolean(safeExistingUnitModelId && Number(approvedUnitModelId) !== Number(safeExistingUnitModelId)),
+        intakeMappingCreated: true,
         selfReviewedByAdmin: isSelfReview,
         reviewAuthority: 'admin',
         action: actionLabel
@@ -1846,7 +2073,7 @@ async function approveModelCatalogRequest({
     return {
       approved: true,
       unitRequestId: safeRequestId,
-      resultLabel: safeApprovedModelName,
+      resultLabel: canonicalModelName,
       catalogAction: actionLabel
     };
   } catch (error) {
@@ -1872,7 +2099,7 @@ function normalizeProcessorBrandCode(value) {
 async function assertActiveProcessorBrand(connection, processorBrandId) {
   const safeBrandId = normalizePositiveInteger(processorBrandId);
   if (!safeBrandId) {
-    const error = new Error('Select an existing canonical Processor Type or enter a new Processor Type name.');
+    const error = new Error('Select an existing Processor Type or enter a new Processor Type name.');
     error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
     throw error;
   }
@@ -1883,7 +2110,7 @@ async function assertActiveProcessorBrand(connection, processorBrandId) {
   );
 
   if (!rows[0]) {
-    const error = new Error('The selected canonical Processor Type is not active.');
+    const error = new Error('The selected Processor Type is not active.');
     error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
     throw error;
   }
@@ -1897,7 +2124,7 @@ async function resolveProcessorBrandForApproval(connection, { processorBrandId, 
 
   const safeBrandName = normalizeText(processorBrandName, 100);
   if (safeBrandName.length < 2) {
-    const error = new Error('Select an existing canonical Processor Type or enter a new Processor Type name.');
+    const error = new Error('Select an existing Processor Type or enter a new Processor Type name.');
     error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
     throw error;
   }
@@ -1975,13 +2202,13 @@ async function approveProcessorCatalogRequest({
   const requestedBrandName = normalizeText(approvedProcessorBrandName, 100);
 
   if (!safeRequestId || !safeReviewerUserId || (!safeExistingProcessorModelId && (requestedModelCode.length < 2 || (!normalizePositiveInteger(approvedProcessorBrandId) && requestedBrandName.length < 2)))) {
-    const error = new Error('Choose an existing Processor or complete the canonical Processor Type and Processor values before approving this request.');
+    const error = new Error('Choose an existing Processor or complete the Processor Type and Catalog Processor values before approving this request.');
     error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
     throw error;
   }
 
   if (!reviewerIsAdmin) {
-    const error = new Error('Only Admin can approve Processor Catalog requests.');
+    const error = new Error('Approve Processor Catalog Requests permission is required to approve Processor Catalog requests.');
     error.code = 'BWT_CATALOG_ADMIN_REQUIRED';
     throw error;
   }
@@ -2060,7 +2287,7 @@ async function approveProcessorCatalogRequest({
       );
       const existingProcessor = existingRows[0] || null;
       if (!existingProcessor || Number(existingProcessor.is_active) !== 1 || Number(existingProcessor.brand_is_active) !== 1) {
-        const error = new Error('The selected existing Processor is no longer active. Choose another existing Processor or approve canonical values instead.');
+        const error = new Error('The selected existing Processor is no longer active. Choose another existing Processor or approve new catalog values instead.');
         error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
         throw error;
       }
@@ -2096,7 +2323,7 @@ async function approveProcessorCatalogRequest({
         : (submittedSpeed !== null ? submittedSpeed : interpretation.baseSpeedGhz);
 
       if (safeBaseSpeed === null || safeBaseSpeed < 0.01 || safeBaseSpeed > 99.99) {
-        const error = new Error('Confirm a Processor Base Speed from 0.01 through 99.99 GHz before approving a new canonical Processor.');
+        const error = new Error('Confirm a Processor Base Speed from 0.01 through 99.99 GHz before approving a new Catalog Processor.');
         error.code = 'BWT_CATALOG_REQUEST_APPROVAL_INPUT_REQUIRED';
         throw error;
       }
@@ -2121,7 +2348,7 @@ async function approveProcessorCatalogRequest({
       const duplicateMatch = likelyMatches.find((processor) => processor.identityMatch) || null;
       if (duplicateMatch) {
         const state = duplicateMatch.isActive ? 'active' : 'inactive';
-        const error = new Error(`${duplicateMatch.displayLabel} already exists globally as Processor #${duplicateMatch.id} (${state}). Use that canonical Processor and associate it with this Unit Model instead of creating another processor record.`);
+        const error = new Error(`${duplicateMatch.displayLabel} already exists globally as Processor #${duplicateMatch.id} (${state}). Use that Catalog Processor and associate it with this Unit Model instead of creating another processor record.`);
         error.code = 'BWT_CATALOG_PROCESSOR_DUPLICATE';
         error.processorModelId = duplicateMatch.id;
         throw error;
@@ -2142,7 +2369,7 @@ async function approveProcessorCatalogRequest({
         [processorBrand.id, canonicalModelCode]
       );
       if (processorRows[0]) {
-        const error = new Error(`Processor #${Number(processorRows[0].processor_model_id)} already exists with this canonical Processor Type and Processor name. Select the existing Processor instead.`);
+        const error = new Error(`Processor #${Number(processorRows[0].processor_model_id)} already exists with this Processor Type and Catalog Processor name. Select the existing Processor instead.`);
         error.code = 'BWT_CATALOG_PROCESSOR_DUPLICATE';
         error.processorModelId = Number(processorRows[0].processor_model_id);
         throw error;
@@ -2680,12 +2907,6 @@ async function rejectUnitRequest({ unitRequestId, reviewedByUserId, reviewerNote
     throw error;
   }
 
-  if (safeReviewerNote.length < 3) {
-    const error = new Error('A rejection note is required.');
-    error.code = 'BWT_UNIT_REQUEST_REJECTION_NOTE_REQUIRED';
-    throw error;
-  }
-
   const connection = await pool.getConnection();
 
   try {
@@ -2723,8 +2944,14 @@ async function rejectUnitRequest({ unitRequestId, reviewedByUserId, reviewerNote
 
     if (request.status !== 'pending') return false;
 
+    if (!CATALOG_REQUEST_TYPES.has(request.request_type) && safeReviewerNote.length < 3) {
+      const error = new Error('A rejection note is required.');
+      error.code = 'BWT_UNIT_REQUEST_REJECTION_NOTE_REQUIRED';
+      throw error;
+    }
+
     if (CATALOG_REQUEST_TYPES.has(request.request_type) && !catalogReviewAuthorized) {
-      const error = new Error('Only Admin can reject Model and Processor Catalog requests.');
+      const error = new Error('The matching Model or Processor Catalog approval permission is required to reject this request.');
       error.code = 'BWT_CATALOG_ADMIN_REQUIRED';
       throw error;
     }
@@ -2742,14 +2969,14 @@ async function rejectUnitRequest({ unitRequestId, reviewedByUserId, reviewerNote
         WHERE unit_request_id = ?
         LIMIT 1
       `,
-      [safeReviewerUserId, safeReviewerNote, safeRequestId]
+      [safeReviewerUserId, safeReviewerNote || null, safeRequestId]
     );
 
     await recordRequestEvent(connection, {
       unitRequestId: safeRequestId,
       eventType: 'rejected',
       performedByUserId: safeReviewerUserId,
-      eventNote: safeReviewerNote
+      eventNote: safeReviewerNote || null
     });
 
     if (request.request_type === QC_REVERSION_REQUEST_TYPE) {
@@ -2853,6 +3080,8 @@ module.exports = {
   listActiveProcessorBrands,
   getUnitRequestById,
   createIntentionalDuplicateRequest,
+  getToolUuidDuplicateAuthorization,
+  consumeToolUuidDuplicateAuthorization,
   createModelCatalogRequest,
   createProcessorCatalogRequest,
   revertQcReviewDirectlyWithRequestGuard,

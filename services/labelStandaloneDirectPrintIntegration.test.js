@@ -13,14 +13,14 @@ test('Label Library exposes Print only for ready Active Standalone templates', (
   assert.match(view, /template\.print_scope[\s\S]*?=== 'standalone'[\s\S]*?template\.status === 'active'[\s\S]*?template\.layout_ready[\s\S]*?\/print\/modal/);
 });
 
-test('Standalone direct print routes are management-only and precede generic template actions', () => {
+test('Standalone direct print routes require labels.print and precede generic template actions', () => {
   const routes = read('routes/management.js');
   const printModal = routes.indexOf("'/management/label-library/templates/:labelTemplateId/print/modal'");
   const printPost = routes.indexOf("'/management/label-library/templates/:labelTemplateId/print'");
   const genericAction = routes.indexOf("'/management/label-library/templates/:labelTemplateId/:action/modal'");
   assert.ok(printModal >= 0 && printPost >= 0 && genericAction >= 0);
   assert.ok(printModal < genericAction && printPost < genericAction);
-  assert.match(routes.slice(printModal, genericAction), /requireRole\(managementRoles\)/);
+  assert.match(routes.slice(printModal, genericAction), /requirePermission\('labels\.print'\)/);
   assert.match(routes.slice(printModal, genericAction), /renderStandaloneDirectPrintModal/);
   assert.match(routes.slice(printModal, genericAction), /printStandaloneTemplate/);
 });

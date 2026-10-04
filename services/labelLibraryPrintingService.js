@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const labelLibraryModel = require('../models/labelLibraryModel');
 const labelPrintingService = require('./labelPrintingService');
 const labelPrinterRuntimeService = require('./labelPrinterRuntimeService');
+const unitSpecsTestsModel = require('../models/unitSpecsTestsModel');
 const { resolveAssetAbsolutePath } = require('./labelAssetStorage');
 const { renderLayout } = require('./labelTemplateLayoutRenderer');
 const { INITIAL_STANDARD_LABEL_TEMPLATE } = require('../config/labelLibrary');
@@ -28,11 +29,20 @@ function formatProcessorLongLabel(unit = {}) {
 }
 
 function formatProcessorShortLabel(unit = {}) {
+  const brand = String(unit.processorBrandName || '').trim();
+  const model = String(unit.processorModelCode || '').trim();
+  const configuredShortForm = String(unit.processorLabelShortForm || '').trim();
+  if (configuredShortForm) return configuredShortForm;
+
+  if (/^apple$/i.test(brand)) {
+    const appleSiliconMatch = model.match(/^apple\s+(M\d+(?:\s+(?:Pro|Max|Ultra))?)$/i);
+    if (appleSiliconMatch) return appleSiliconMatch[1];
+  }
+
   const rawShortForm = String(unit.processorShortForm || '').trim();
   if (!rawShortForm) return '';
 
   const shortForm = rawShortForm.replace(/-S(\d+)\b/gi, ' Series $1');
-  const brand = String(unit.processorBrandName || '').trim();
   const family = String(unit.processorFamily || '').trim();
   if (/^intel$/i.test(brand) && /^core$/i.test(family) && /^(?:i[3579]|m[357])-/i.test(shortForm)) {
     return `Intel Core ${shortForm}`;
@@ -68,15 +78,23 @@ function buildFieldValues(unit = {}, lot = null) {
     'unit.manufacturer': String(unit.manufacturerName || '').trim(),
     'unit.model': String(unit.modelName || '').trim(),
     'unit.model_display': content.model,
+    'unit.apple_model_number': String(unit.appleModelNumber || '').trim(),
     'unit.processor': processor || String(unit.processorModelCode || '').trim(),
     'unit.processor_short': processorShort,
     'unit.ram': formatCapacityLabel(unit.ramGb),
     'unit.storage': formatCapacityLabel(unit.storageGb),
     'unit.operating_system': operatingSystem,
     'unit.operating_system_short': formatOperatingSystemShortLabel(operatingSystem),
+    'unit.cosmetic_grade': String(unit.cosmeticGradeLabel || '').trim(),
     'unit.spec_line': content.specLine || 'Specifications recorded in BWTDallas',
     'lot.name': content.lotName
   });
+}
+
+async function hydrateLabelUnitFieldSources(unit = null) {
+  if (!unit || !Number.isSafeInteger(Number(unit.unitId)) || Number(unit.unitId) < 1) return unit;
+  const appleModelNumber = await unitSpecsTestsModel.getAppleModelNumberByUnitId(unit.unitId);
+  return Object.freeze({ ...unit, appleModelNumber });
 }
 
 function toDataUri(buffer, mimeType) {
@@ -477,6 +495,7 @@ async function printDescriptor({ descriptor, unit = null, lot = null, fieldValue
 
 module.exports = {
   buildFieldValues,
+  hydrateLabelUnitFieldSources,
   loadTemplateRuntime,
   layoutRequiresUnitContext,
   getStandalonePrintDescriptor,

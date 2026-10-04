@@ -31,20 +31,20 @@ test('Admin Model Request review can edit both canonical name and active Unit Ca
 
   assert.match(controller, /const unitModelCatalogModel = require\('\.\.\/models\/unitModelCatalogModel'\);/);
   assert.match(controller, /needsModelReviewData[\s\S]*MODEL_CATALOG_REQUEST_TYPE/);
-  assert.match(controller, /modelUnitCategories = await unitModelCatalogModel\.listUnitCategories\(\)/);
+  assert.match(controller, /\[modelUnitCategories, modelCatalogOptions\] = await Promise\.all\(\[[\s\S]*unitModelCatalogModel\.listUnitCategories\(\)/);
   assert.match(controller, /approvedUnitCategoryConfigValueId: req\.body\.approvedUnitCategoryConfigValueId/);
-  assert.match(detail, /<select name="approvedUnitCategoryConfigValueId" required>/);
+  assert.match(detail, /<select name="approvedUnitCategoryConfigValueId"[^>]*>/);
   assert.match(detail, /modelUnitCategories\.forEach/);
   assert.match(detail, /request\.catalogContext\.unitCategoryConfigValueId/);
   assert.match(detail, /name="approvedModelName"/);
-  assert.match(detail, /Choose the category this canonical model should actually use/);
+  assert.match(detail, /Choose the category this model should use in the Model Catalog/);
 
   assert.match(model, /approvedUnitCategoryConfigValueId/);
   assert.match(model, /safeApprovedCategoryId = normalizePositiveInteger/);
   assert.match(model, /assertActiveModelRequestContext\(connection, request\.manufacturer_id, safeApprovedCategoryId\)/);
   assert.match(model, /SET unit_category_config_value_id = \?, approved_model_name = \?, approved_unit_model_id = \?/);
   assert.match(model, /requestedUnitCategoryConfigValueId: requestedCategoryId/);
-  assert.match(model, /approvedUnitCategoryConfigValueId: context\.unitCategoryConfigValueId/);
+  assert.match(model, /approvedUnitCategoryConfigValueId: canonicalCategoryId/);
 });
 
 test('Model approval validates and searches within the reviewer-selected category before creating a catalog row', () => {

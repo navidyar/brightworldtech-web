@@ -1,6 +1,12 @@
 'use strict';
 
 const { normalizePositiveInteger } = require('../utils/positiveInteger');
+const {
+  AMAZON_ASSET_TAG_DIGITS,
+  AMAZON_ASSET_TAG_PREFIX,
+  formatAmazonAssetTag,
+  normalizeAmazonAssetTag
+} = require('../utils/assetTag');
 const { pool } = require('./db');
 const { getConfigValueIdBySystemId } = require('./configLookupModel');
 const lotUnitFormProfileModel = require('./lotUnitFormProfileModel');
@@ -8,8 +14,6 @@ const unitAuditEventModel = require('./unitAuditEventModel');
 const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 const { isUnitFormFieldManaged } = require('../services/unitFormSubmissionPolicy');
 
-const AMAZON_ASSET_TAG_PREFIX = 'AZ';
-const AMAZON_ASSET_TAG_DIGITS = 8;
 const AMAZON_DETAIL_FIELDS = Object.freeze([
   ['fnsku', 'fnsku', 100],
   ['asin', 'asin', 100],
@@ -22,19 +26,6 @@ function normalizeText(value, maxLength) {
   const normalized = String(value == null ? '' : value).trim();
   if (!normalized) return null;
   return maxLength ? normalized.slice(0, maxLength) : normalized;
-}
-
-function formatAmazonAssetTag(sequenceNumber) {
-  const safeNumber = normalizePositiveInteger(sequenceNumber);
-  if (!safeNumber || safeNumber > 99999999) {
-    throw new Error('Amazon Asset Tag sequence is outside the supported AZ00000001-AZ99999999 range.');
-  }
-  return `${AMAZON_ASSET_TAG_PREFIX}${String(safeNumber).padStart(AMAZON_ASSET_TAG_DIGITS, '0')}`;
-}
-
-function normalizeAmazonAssetTag(value) {
-  const normalized = String(value || '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, '');
-  return /^AZ\d{8}$/.test(normalized) ? normalized : '';
 }
 
 async function tableExists(connection, tableName) {

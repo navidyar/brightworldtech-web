@@ -25,8 +25,8 @@ function defaultRequesterNote(kind, toolSource) {
     : `${toolLabel} observed a Unit Model that is not available in the BWTDallas catalog.`;
 }
 
-function assertSubmitAccess(roleCodes) {
-  if (!catalogRequestAccessPolicy.canSubmitCatalogRequest(roleCodes)) {
+function assertSubmitAccess(permissions) {
+  if (!catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest({ currentPermissions: permissions })) {
     throw new ApiCatalogRequestError(403, 'CATALOG_REQUEST_ACCESS_DENIED', 'This BWTDallas user cannot submit Model or Processor Catalog requests.');
   }
 }
@@ -144,8 +144,8 @@ function mapProcessorInput(body = {}) {
   };
 }
 
-async function createModel({ body = {}, userId, roleCodes = [], toolSource }) {
-  assertSubmitAccess(roleCodes);
+async function createModel({ body = {}, userId, permissions = new Set(), toolSource }) {
+  assertSubmitAccess(permissions);
   const input = mapModelInput(body);
   const requesterNote = normalizeText(body.requester_note ?? body.requesterNote) || defaultRequesterNote('model', toolSource);
   try {
@@ -175,8 +175,8 @@ async function createModel({ body = {}, userId, roleCodes = [], toolSource }) {
   }
 }
 
-async function createProcessor({ body = {}, userId, roleCodes = [], toolSource }) {
-  assertSubmitAccess(roleCodes);
+async function createProcessor({ body = {}, userId, permissions = new Set(), toolSource }) {
+  assertSubmitAccess(permissions);
   const input = mapProcessorInput(body);
   const requesterNote = normalizeText(body.requester_note ?? body.requesterNote) || defaultRequesterNote('processor', toolSource);
   try {

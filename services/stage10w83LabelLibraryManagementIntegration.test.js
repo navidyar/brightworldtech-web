@@ -10,13 +10,13 @@ function read(relativePath) {
   return fs.readFileSync(path.join(root, relativePath), 'utf8');
 }
 
-test('Management gets Label Library navigation and Management-only routes', () => {
+test('Label Library keeps its navigation and grants the page through labels.library.view', () => {
   const sidebar = read('views/partials/sidebar.ejs');
   const routes = read('routes/management.js');
   assert.match(sidebar, /Label Library/);
   assert.match(sidebar, /management-label-library/);
   assert.match(routes, /\/management\/label-library/);
-  assert.match(routes, /requireRole\(managementRoles\)/);
+  assert.match(routes, /'\/management\/label-library'[\s\S]*?requirePermission\('labels\.library\.view'\)/);
   assert.match(routes, /labelLibraryController\.renderLabelLibraryPage/);
 });
 

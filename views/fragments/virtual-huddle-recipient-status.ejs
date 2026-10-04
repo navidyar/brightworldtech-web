@@ -1,0 +1,45 @@
+<section class="virtual-huddle-detail-section" aria-labelledby="virtual-huddle-recipient-status-title" data-huddle-live-recipient-status hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/status" hx-trigger="every 2s" hx-target="this" hx-swap="outerHTML">
+  <div class="content-header">
+    <div><p class="eyebrow">Recipients</p><h3 id="virtual-huddle-recipient-status-title">Acknowledgment Status</h3></div>
+    <% if (canRevokeRecipients && recipients.some((recipient) => recipient.acknowledgment_mode_code === 'required_ack' && recipient.recipient_state_code === 'awaiting_confirmation')) { %>
+      <a class="secondary-button danger-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/revoke-all/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/revoke-all/modal" hx-target="#modal-root" hx-swap="innerHTML">Revoke All Awaiting</a>
+    <% } %>
+  </div>
+  <div class="table-card virtual-huddle-detail-table">
+    <table>
+      <thead><tr><th>Employee</th><th>Role at Send</th><th>Requirement</th><th>Status</th><th>Confirmed</th><th>Optional Note / Revocation</th><th></th></tr></thead>
+      <tbody>
+        <% recipients.forEach((recipient) => { %>
+          <tr>
+            <td><strong><%= recipient.user_name_snapshot %></strong></td>
+            <td><%= formatRoleLabel(recipient.role_code_snapshot) %></td>
+            <td><%= recipient.acknowledgment_mode_code === 'required_ack' ? 'Required' : recipient.acknowledgment_mode_code === 'optional_ack' ? 'Optional' : 'Informational' %></td>
+            <td>
+              <% if (recipient.recipient_state_code === 'acknowledged') { %><span class="pill good">Acknowledged</span>
+              <% } else if (recipient.recipient_state_code === 'awaiting_confirmation') { %><span class="pill warning">Awaiting Confirmation</span>
+              <% } else if (recipient.recipient_state_code === 'revoked') { %><span class="pill muted">Revoked</span>
+              <% } else if (recipient.acknowledgment_mode_code === 'optional_ack') { %><span class="pill muted">Optional / Not Tracked</span>
+              <% } else { %><span class="pill muted">Informational / Not Tracked</span><% } %>
+            </td>
+            <td><%= recipient.acknowledged_at ? formatDateTime(recipient.acknowledged_at) : '—' %></td>
+            <td>
+              <% if (recipient.acknowledgment_note) { %><%= recipient.acknowledgment_note %>
+              <% } else if (recipient.revocation_reason) { %><%= recipient.revocation_reason %><span class="table-muted-line">Revoked <%= recipient.revoked_at ? formatDateTime(recipient.revoked_at) : '' %><% if (recipient.revoked_by_first_name || recipient.revoked_by_last_name) { %> by <%= `${recipient.revoked_by_first_name || ''} ${recipient.revoked_by_last_name || ''}`.trim() %><% } %></span>
+              <% } else { %>—<% } %>
+            </td>
+            <td>
+              <% if (canRevokeRecipients && recipient.acknowledgment_mode_code === 'required_ack' && recipient.recipient_state_code === 'awaiting_confirmation') { %>
+                <a class="secondary-button button-small danger-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/<%= recipient.virtual_huddle_recipient_id %>/revoke/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/<%= recipient.virtual_huddle_recipient_id %>/revoke/modal" hx-target="#modal-root" hx-swap="innerHTML">Revoke</a>
+              <% } %>
+              <% if (canRequireRecipients && recipient.acknowledgment_mode_code === 'required_ack' && recipient.recipient_state_code === 'revoked') { %>
+                <form method="post" action="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/<%= recipient.virtual_huddle_recipient_id %>/require-again" hx-post="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/<%= recipient.virtual_huddle_recipient_id %>/require-again" hx-target="#modal-root" hx-swap="innerHTML" class="inline-form">
+                  <button type="submit" class="secondary-button button-small">Require Again</button>
+                </form>
+              <% } %>
+            </td>
+          </tr>
+        <% }) %>
+      </tbody>
+    </table>
+  </div>
+</section>

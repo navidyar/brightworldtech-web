@@ -5,8 +5,8 @@ const LABEL_FIELD_GROUPS = Object.freeze([
     code: 'identity',
     label: 'Unit identity',
     fields: Object.freeze([
-      Object.freeze({ key: 'unit.asset_tag', label: 'Asset Tag', sampleValue: 'BWT123456' }),
-      Object.freeze({ key: 'unit.primary_label', label: 'Primary Label (Asset Tag / Unit #)', sampleValue: 'BWT123456' }),
+      Object.freeze({ key: 'unit.asset_tag', label: 'Asset Tag', sampleValue: 'BWT0000001111' }),
+      Object.freeze({ key: 'unit.primary_label', label: 'Primary Label (Asset Tag / Unit #)', sampleValue: 'BWT0000001111' }),
       Object.freeze({ key: 'unit.unit_id', label: 'Unit ID', sampleValue: '12345' }),
       Object.freeze({ key: 'unit.primary_serial', label: 'Primary Serial', sampleValue: 'MXL20357DP' }),
       Object.freeze({ key: 'unit.unit_serial', label: 'Unit Serial', sampleValue: '5CG1234ABC' }),
@@ -22,12 +22,14 @@ const LABEL_FIELD_GROUPS = Object.freeze([
       Object.freeze({ key: 'unit.manufacturer', label: 'Manufacturer', sampleValue: 'HP' }),
       Object.freeze({ key: 'unit.model', label: 'Model', sampleValue: 'EliteDesk 800 G6' }),
       Object.freeze({ key: 'unit.model_display', label: 'Manufacturer + Model', sampleValue: 'HP EliteDesk 800 G6' }),
+      Object.freeze({ key: 'unit.apple_model_number', label: 'Apple Model Number', sampleValue: 'A2141' }),
       Object.freeze({ key: 'unit.processor', label: 'Processor (Long Form)', sampleValue: 'Intel Core i7-10200U' }),
       Object.freeze({ key: 'unit.processor_short', label: 'Processor (Short Form)', sampleValue: 'Intel Core i7-10th' }),
       Object.freeze({ key: 'unit.ram', label: 'Memory / RAM', sampleValue: '16GB' }),
       Object.freeze({ key: 'unit.storage', label: 'Storage Capacity', sampleValue: '256GB' }),
       Object.freeze({ key: 'unit.operating_system', label: 'Operating System (Long Form)', sampleValue: 'Windows 11 Pro' }),
       Object.freeze({ key: 'unit.operating_system_short', label: 'Operating System (Short Form)', sampleValue: 'Win 11 Pro' }),
+      Object.freeze({ key: 'unit.cosmetic_grade', label: 'Cosmetic Grade', sampleValue: 'A' }),
       Object.freeze({ key: 'unit.spec_line', label: 'Standard Specification Line', sampleValue: '16GB | 256GB | WIN 11 PRO' })
     ])
   }),

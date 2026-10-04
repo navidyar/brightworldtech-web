@@ -137,15 +137,15 @@
   --qc-neutral-border: #d5dee8;
 
   /* Shared dashboard chart palette. */
-  --chart-orange: #9a7248;
-  --chart-blue: #567da8;
-  --chart-purple: #71658f;
-  --chart-red: #9a5f68;
-  --chart-teal: #578581;
-  --chart-slate: #718096;
-  --chart-green: #64866c;
-  --chart-brown: #8b6d55;
-  --chart-empty: #e5eaf0;
+  --chart-orange: #bd7938;
+  --chart-blue: #3f78ad;
+  --chart-purple: #7965a6;
+  --chart-red: #b55664;
+  --chart-teal: #3f8b86;
+  --chart-slate: #66798d;
+  --chart-green: #5d8d69;
+  --chart-brown: #956b4d;
+  --chart-empty: #e3e9ef;
 
   /* Navigation theme control tokens. */
   --theme-toggle-bg: #ffffff;

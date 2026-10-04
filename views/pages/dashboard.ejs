@@ -2,7 +2,7 @@
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
 
-  <body>
+  <body class="css-scope-admin-dashboard">
     <div class="app-shell">
       <%- include('../partials/sidebar', { currentNav }) %>
 
@@ -10,46 +10,36 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell">
-          <section class="dashboard-hero accent-blue">
+          <section class="page-heading admin-dashboard-heading">
             <div>
               <p class="eyebrow">Operations Dashboard</p>
-              <h2>Dashboard</h2>
-              <p>
-                Review the current operational snapshot, live chart summaries, and available dashboard areas. Filters and drilldowns connect dashboard metrics back to the Unit Browser.
-              </p>
-            </div>
-
-            <div class="hero-badge">
-              <span>Available</span>
-              <strong><%= formatNumber(dashboards.length) %></strong>
+              <h1>Dashboard</h1>
+              <p>Review the current operational snapshot and drill into the areas available to your account.</p>
             </div>
           </section>
 
           <%- include('../fragments/dashboard-live-region', { dashboardData, dashboardFilters, dashboardFilterOptions, dashboardFilterConfig, dashboardKey: null }) %>
 
-          <section class="content-card">
-            <div class="content-header">
+          <section class="admin-dashboard-access" aria-labelledby="admin-dashboard-access-title">
+            <div class="site-clean-section-heading">
               <div>
                 <p class="eyebrow">Available Dashboards</p>
-                <h2>Dashboard Access</h2>
+                <h2 id="admin-dashboard-access-title">Dashboard Access</h2>
               </div>
+              <span class="admin-dashboard-access-count"><strong><%= formatNumber(dashboards.length) %></strong> available</span>
             </div>
 
             <% if (dashboards.length === 0) { %>
-              <div class="message error">
-                <p>No dashboards are currently available for your user account.</p>
-                <p>Ask an Admin or Management user to review your roles.</p>
-              </div>
+              <div class="message error"><p>No dashboards are currently available for your user account.</p></div>
             <% } else { %>
-              <div class="dashboard-access-grid">
+              <nav class="admin-dashboard-access-list" aria-label="Available dashboards">
                 <% dashboards.forEach((dashboard) => { %>
-                  <a class="role-dashboard-card accent-<%= dashboard.accent %>" href="/dashboards/<%= dashboard.key %>">
-                    <p><%= dashboard.menuLabel || dashboard.title %></p>
-                    <h3><%= dashboard.title %></h3>
-                    <span><%= dashboard.description %></span>
+                  <a href="/dashboards/<%= dashboard.key %>">
+                    <span><strong><%= dashboard.title %></strong><small><%= dashboard.description %></small></span>
+                    <span aria-hidden="true">→</span>
                   </a>
                 <% }) %>
-              </div>
+              </nav>
             <% } %>
           </section>
         </main>

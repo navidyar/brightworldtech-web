@@ -62,9 +62,11 @@ test('Tool receipts receive a server-owned production cycle key and report_id re
   assert.doesNotMatch(inventory, /body\.production_cycle_key/);
 });
 
-test('Tool UUID ingestion is conservative and does not silently overwrite established identity', () => {
+test('Tool UUID ingestion ignores unusable UUID observations and remains conservative for valid established identity', () => {
   const unitModel = read('models/techUnitModel.js');
   const inventory = read('services/apiScalarInventory.js');
+  assert.match(inventory, /getSystemUuidState\(rawTopLevelSystemUuid\)/);
+  assert.match(inventory, /const usableSystemUuid = topLevelSystemUuid \|\| legacySecurityUuid/);
   assert.match(unitModel, /applyToolSystemUuidIdentifier/);
   assert.match(unitModel, /BWT_SYSTEM_UUID_IDENTITY_CONFLICT/);
   assert.match(inventory, /SYSTEM_UUID_IDENTITY_CONFLICT/);

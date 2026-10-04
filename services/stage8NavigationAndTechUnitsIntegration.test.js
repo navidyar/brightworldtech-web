@@ -14,11 +14,11 @@ test('all shared Configuration routes are grouped under the Admin-only config ro
   const lotRoutes = read('routes/lots.js');
   const systemRoutes = read('routes/system.js');
 
-  assert.match(configRoutes, /const configRoles = \['admin'\]/);
+  assert.match(configRoutes, /router\.use\('\/management\/config', requireAuth, requirePermission\('configuration\.view'\)\)/);
   assert.match(configRoutes, /\/management\/config\/processor-families/);
   assert.match(configRoutes, /\/management\/config\/models/);
   assert.match(configRoutes, /\/management\/config\/database/);
-  assert.match(configRoutes, /requireRole\(configRoles\)/);
+  assert.match(configRoutes, /requirePermission\('configuration\.processor_families\.manage'\)/);
   assert.doesNotMatch(lotRoutes, /processorFamilyController|processor-families/);
   assert.doesNotMatch(systemRoutes, /router\.get\([\s\S]*['"]\/database['"]/);
 });

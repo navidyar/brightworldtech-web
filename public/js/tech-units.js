@@ -186,7 +186,7 @@
   }
 
   function normalizePanelName(panelName) {
-    return ['history', 'my-weight'].includes(panelName) ? panelName : 'details';
+    return panelName === 'history' ? 'history' : 'details';
   }
 
   function setPanel(detailRow, panelName) {
@@ -229,6 +229,7 @@
       if (row !== currentRow) {
         row.hidden = true;
         setPanel(row, 'details');
+        refreshDeferredUnitRecordIfAvailable(row);
       }
     });
 
@@ -260,6 +261,7 @@
     detailRow.hidden = true;
     setSummaryToggleExpanded(detailRow.id, false);
     setPanel(detailRow, 'details');
+    refreshDeferredUnitRecordIfAvailable(detailRow);
   }
 
   function showDetailRow(detailRow, panelName) {
@@ -271,6 +273,7 @@
     detailRow.hidden = false;
     setSummaryToggleExpanded(detailRow.id, true);
     setPanel(detailRow, panelName || 'details');
+    refreshDeferredUnitRecordIfAvailable(detailRow);
   }
 
   function toggleDetailRow(toggle) {
@@ -291,6 +294,7 @@
       targetRow.hidden = true;
       toggle.setAttribute('aria-expanded', 'false');
       setPanel(targetRow, 'details');
+      refreshDeferredUnitRecordIfAvailable(targetRow);
       return;
     }
 
@@ -826,6 +830,31 @@
     };
   }
 
+  function isProtectedUnitBrowserRecord(record) {
+    if (!record || !record.closest('[data-tech-units-refresh-url]')) {
+      return false;
+    }
+
+    return getUnitRecordState(record).expanded;
+  }
+
+  function markDeferredUnitRefresh(record) {
+    if (record) {
+      record.setAttribute('data-unit-refresh-pending', 'true');
+    }
+  }
+
+  function refreshDeferredUnitRecordIfAvailable(detailRow) {
+    const record = detailRow ? detailRow.closest('[data-unit-record]') : null;
+
+    if (!record || record.getAttribute('data-unit-refresh-pending') !== 'true' || isProtectedUnitBrowserRecord(record)) {
+      return;
+    }
+
+    record.removeAttribute('data-unit-refresh-pending');
+    queueVisibleTechUnitRefresh();
+  }
+
   function processHtmxContent(element) {
     if (element && window.htmx && typeof window.htmx.process === 'function') {
       window.htmx.process(element);
@@ -909,6 +938,13 @@
     const incomingIds = incomingRecords.map((record) => record.getAttribute('data-unit-id')).filter(Boolean);
 
     if (incomingRecords.length === 0) {
+      const protectedRecords = currentRecords.filter(isProtectedUnitBrowserRecord);
+
+      if (protectedRecords.length > 0) {
+        protectedRecords.forEach(markDeferredUnitRefresh);
+        return;
+      }
+
       currentRecords.forEach((record) => record.remove());
       const currentEmptyState = currentTable.querySelector('tbody[data-unit-empty-state]');
       const incomingEmptyState = incomingTable.querySelector('tbody[data-unit-empty-state]');
@@ -944,20 +980,38 @@
       currentById.delete(unitId);
 
       if (currentRecord.getAttribute('data-unit-version') !== incomingRecord.getAttribute('data-unit-version')) {
+        if (isProtectedUnitBrowserRecord(currentRecord)) {
+          markDeferredUnitRefresh(currentRecord);
+          return currentRecord;
+        }
+
         return replaceUnitRecord(currentRecord, incomingRecord);
       }
 
       return currentRecord;
     });
 
-    currentById.forEach((record) => record.remove());
+    currentById.forEach((record) => {
+      if (isProtectedUnitBrowserRecord(record)) {
+        markDeferredUnitRefresh(record);
+      } else {
+        record.remove();
+      }
+    });
 
     const currentOrder = Array.from(currentTable.querySelectorAll('tbody[data-unit-record]'))
       .map((record) => record.getAttribute('data-unit-id'))
       .filter(Boolean);
 
     if (currentOrder.join(',') !== incomingIds.join(',')) {
-      orderedRecords.forEach((record) => currentTable.appendChild(record));
+      const protectedRecords = Array.from(currentTable.querySelectorAll('tbody[data-unit-record]'))
+        .filter(isProtectedUnitBrowserRecord);
+
+      if (protectedRecords.length > 0) {
+        protectedRecords.forEach(markDeferredUnitRefresh);
+      } else {
+        orderedRecords.forEach((record) => currentTable.appendChild(record));
+      }
     }
   }
 
@@ -1044,9 +1098,16 @@
     }
 
     if (currentTable.getAttribute('data-unit-browser-layout-signature') !== incomingTable.getAttribute('data-unit-browser-layout-signature')) {
-      const replacement = document.importNode(incomingTable, true);
-      currentTable.replaceWith(replacement);
-      processHtmxContent(replacement);
+      const protectedRecords = Array.from(currentTable.querySelectorAll('tbody[data-unit-record]'))
+        .filter(isProtectedUnitBrowserRecord);
+
+      if (protectedRecords.length > 0) {
+        protectedRecords.forEach(markDeferredUnitRefresh);
+      } else {
+        const replacement = document.importNode(incomingTable, true);
+        currentTable.replaceWith(replacement);
+        processHtmxContent(replacement);
+      }
     } else {
       reconcileTechUnitRecords(currentTable, incomingTable);
     }

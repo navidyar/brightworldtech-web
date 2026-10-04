@@ -1,42 +1,41 @@
 <%
-  const assignedRoles = Array.isArray(currentRoles) ? currentRoles : [];
-  const isAdminConfigurationUser = assignedRoles.includes('admin');
+  const canViewConfiguration = typeof hasPermission === 'function' && hasPermission('configuration.view');
   const configurationItems = [
     {
       key: 'admin-config-values',
       label: 'Config Values',
       href: '/management/config',
-      allowed: isAdminConfigurationUser
+      allowed: canViewConfiguration
     },
     {
       key: 'admin-config-processor-families',
       label: 'Processor Families',
       href: '/management/config/processor-families',
-      allowed: isAdminConfigurationUser
+      allowed: canViewConfiguration && hasPermission('configuration.processor_families.manage')
     },
     {
       key: 'admin-config-processors',
       label: 'Processor Catalog',
       href: '/management/config/processors',
-      allowed: isAdminConfigurationUser
+      allowed: canViewConfiguration && hasPermission('configuration.processors.manage')
     },
     {
       key: 'admin-config-models',
       label: 'Model Catalog',
       href: '/management/config/models',
-      allowed: isAdminConfigurationUser
+      allowed: canViewConfiguration && hasPermission('configuration.models.manage')
     },
     {
       key: 'admin-config-printing',
       label: 'Printing',
       href: '/management/config/printing',
-      allowed: isAdminConfigurationUser
+      allowed: canViewConfiguration && hasPermission('configuration.printing.manage')
     },
     {
       key: 'admin-config-database',
       label: 'Database Check',
       href: '/management/config/database',
-      allowed: isAdminConfigurationUser
+      allowed: canViewConfiguration && hasPermission('configuration.database.view')
     }
   ];
 %>

@@ -3,7 +3,7 @@
   const noticeMessages = {
     created: 'Processor added.',
     updated: 'Processor updated.',
-    merged: 'Duplicate processor merged into the selected canonical processor. The duplicate record was permanently removed.',
+    merged: 'Duplicate processor merged into the selected Catalog Processor. The duplicate record was permanently removed.',
     'families-updated': 'Processor Family memberships updated.',
     'models-updated': 'Exact Unit Model associations updated.',
     deleted: 'Processor permanently deleted.',
@@ -122,7 +122,7 @@
             <div class="site-clean-section-heading">
               <div>
                 <h2>Processor Catalog</h2>
-                <p><%= formatNumber(processors.length) %> processor<%= processors.length === 1 ? '' : 's' %> match the current filters. Model associations control which processors appear for each exact Unit Model. Admin duplicate resolution moves all references into one canonical record and permanently removes the duplicate.</p>
+                <p><%= formatNumber(processors.length) %> processor<%= processors.length === 1 ? '' : 's' %> match the current filters. Model associations control which processors appear for each exact Unit Model. Admin duplicate resolution moves all references into one Catalog Processor record and permanently removes the duplicate.</p>
               </div>
             </div>
 
@@ -134,6 +134,7 @@
                       <th>Processor</th>
                       <th>Type</th>
                       <th>Metadata</th>
+                      <th>Label Short Form</th>
                       <th>Processor Families</th>
                       <th>Models</th>
                       <th>Units</th>
@@ -144,7 +145,7 @@
                   </thead>
                   <tbody>
                     <% if (processors.length === 0) { %>
-                      <tr><td colspan="9">No processors match the current filters.</td></tr>
+                      <tr><td colspan="10">No processors match the current filters.</td></tr>
                     <% } %>
 
                     <% processors.forEach((processor) => { %>
@@ -156,6 +157,7 @@
                           <% if (processor.generation) { %><br /><span class="table-muted-line"><%= processor.generation %></span><% } %>
                           <% if (processor.baseSpeedGhz) { %><br /><span class="table-muted-line"><%= Number(processor.baseSpeedGhz).toFixed(2) %> GHz</span><% } %>
                         </td>
+                        <td><%= processor.labelShortForm || '—' %></td>
                         <td>
                           <% if (processor.processorFamilyLabels.length) { %>
                             <%= processor.processorFamilyLabels.join(', ') %>
@@ -171,10 +173,8 @@
                           <div class="model-catalog-row-actions">
                             <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>">Edit</a>
                             <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/families/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/families/modal<%= queryString ? `?${queryString}` : '' %>">Families</a>
-                            <% if (isAdmin) { %>
-                              <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/models/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/models/modal<%= queryString ? `?${queryString}` : '' %>">Models</a>
-                              <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/merge/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/merge/modal<%= queryString ? `?${queryString}` : '' %>">Resolve Duplicate</a>
-                            <% } %>
+                            <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/models/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/models/modal<%= queryString ? `?${queryString}` : '' %>">Models</a>
+                            <a class="secondary-button button-small" href="/management/config/processors/<%= processor.id %>/merge/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/merge/modal<%= queryString ? `?${queryString}` : '' %>">Resolve Duplicate</a>
                             <a class="danger-button button-small" href="/management/config/processors/<%= processor.id %>/delete/modal<%= queryString ? `?${queryString}` : '' %>" data-processor-catalog-modal-url="/management/config/processors/<%= processor.id %>/delete/modal<%= queryString ? `?${queryString}` : '' %>">Delete</a>
                           </div>
                         </td>

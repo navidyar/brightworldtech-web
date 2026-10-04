@@ -10,7 +10,7 @@ const read = (relativePath) => fs.readFileSync(path.join(ROOT, relativePath), 'u
 
 test('API exposes an authenticated explicit Unit action endpoint separate from Commit', () => {
   const routes = read('routes/api.js');
-  assert.match(routes, /router\.post\('\/units\/action', requireApiAuth, requireUnitApiAccess, apiUnitController\.applyUnitAction\)/);
+  assert.match(routes, /router\.post\('\/units\/action', requireApiAuth, requireUnitApiAccess, requireApiAnyPermission\('units\.edit'\), apiUnitController\.applyUnitAction\)/);
   assert.match(routes, /router\.post\('\/units\/commit'/);
 });
 

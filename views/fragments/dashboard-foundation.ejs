@@ -161,7 +161,7 @@
   </section>
 <% } %>
 
-<% if (dashboardKey !== 'admin') { %>
+<% if (dashboardKey !== 'admin' && dashboardKey !== null) { %>
   <section class="dashboard-metric-grid" aria-label="Dashboard metrics">
     <a class="dashboard-metric-card dashboard-metric-card--blue dashboard-drilldown-card" href="<%= buildTechUnitsHref() %>">
       <p class="card-label">Units Loaded</p>

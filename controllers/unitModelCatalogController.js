@@ -271,6 +271,68 @@ async function updateUnitModelProcessors(req, res, next) {
   }
 }
 
+async function getUnitModelMappingsViewData(unitModelId, filters, errorMessages = []) {
+  const [unitModel, unitCategories, mappings] = await Promise.all([
+    unitModelCatalogModel.getUnitModelById(unitModelId),
+    unitModelCatalogModel.listUnitCategories(),
+    unitModelCatalogModel.listUnitModelIntakeMappings(unitModelId)
+  ]);
+  return { unitModel, unitCategories, mappings, filters, errorMessages };
+}
+
+async function renderUnitModelMappingsModal(req, res, next) {
+  try {
+    const unitModelId = parsePositiveInteger(req.params.unitModelId);
+    const filters = getFilters(req);
+    const viewData = await getUnitModelMappingsViewData(unitModelId, filters);
+    if (!viewData.unitModel) {
+      return res.status(404).render('fragments/unit-model-status-modal', {
+        actionType: 'error', unitModel: null, filters, errorMessages: ['The selected model could not be found.']
+      });
+    }
+    return res.render('fragments/unit-model-mappings-modal', viewData);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function createUnitModelMapping(req, res, next) {
+  const unitModelId = parsePositiveInteger(req.params.unitModelId);
+  const filters = getFilters(req);
+  try {
+    const unitModel = await unitModelCatalogModel.getUnitModelById(unitModelId);
+    if (!unitModel) return sendRedirect(req, res, buildReturnUrl(filters, 'not-found'));
+    await unitModelCatalogModel.saveUnitModelIntakeMapping({
+      observedManufacturerId: unitModel.manufacturerId,
+      observedUnitCategoryConfigValueId: req.body.observedUnitCategoryConfigValueId,
+      observedModelName: req.body.observedModelName,
+      targetUnitModelId: unitModel.id,
+      currentUserId: req.currentUser?.user_id
+    });
+    return sendRedirect(req, res, buildReturnUrl(filters, 'mapping-updated'));
+  } catch (error) {
+    if (String(error?.code || '').startsWith('BWT_UNIT_MODEL_MAPPING_')) {
+      const viewData = await getUnitModelMappingsViewData(unitModelId, filters, [error.message]);
+      return res.status(400).render('fragments/unit-model-mappings-modal', viewData);
+    }
+    next(error);
+  }
+}
+
+async function deactivateUnitModelMapping(req, res, next) {
+  try {
+    const unitModelId = parsePositiveInteger(req.params.unitModelId);
+    const filters = getFilters(req);
+    await unitModelCatalogModel.deactivateUnitModelIntakeMapping({
+      unitModelId,
+      mappingId: req.params.mappingId
+    });
+    return sendRedirect(req, res, buildReturnUrl(filters, 'mapping-removed'));
+  } catch (error) {
+    next(error);
+  }
+}
+
 async function renderDeleteUnitModelModal(req, res, next) {
   try {
     const unitModelId = parsePositiveInteger(req.params.unitModelId);
@@ -349,6 +411,9 @@ module.exports = {
   updateUnitModel,
   renderUnitModelProcessorsModal,
   updateUnitModelProcessors,
+  renderUnitModelMappingsModal,
+  createUnitModelMapping,
+  deactivateUnitModelMapping,
   renderDeleteUnitModelModal,
   deleteUnitModel,
   renderUnitModelStatusModal,

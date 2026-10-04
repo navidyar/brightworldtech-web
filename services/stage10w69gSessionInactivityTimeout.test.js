@@ -44,7 +44,7 @@ test('session middleware uses configured timeout and server fallback is 120 minu
   const navigationPolicy = read('middleware/navigationPolicyMiddleware.js');
 
   assert.match(server, /maxAge: 1000 \* 60 \* DEFAULT_SESSION_INACTIVITY_TIMEOUT_MINUTES/);
-  assert.match(server, /app\.use\(applyConfiguredSessionTimeout\);\s*app\.use\(loadCurrentUser\);/);
+  assert.match(server, /app\.use\(applyConfiguredSessionTimeout\);[\s\S]*?app\.use\(loadCurrentUser\);/);
   assert.match(middleware, /req\.session\.cookie\.maxAge = timeoutMs/);
   assert.match(middleware, /req\.sessionInactivityTimeoutMs = timeoutMs/);
   assert.match(navigationPolicy, /req\.session\?\.cookie\?\.originalMaxAge/);
@@ -67,7 +67,7 @@ test('Admin configuration validates and immediately caches Session inactivity ti
   assert.match(modal, /Session inactivity timeout \(minutes\)/);
   assert.match(modal, /min="5" max="1440"/);
   assert.match(modal, /120 minutes \(2 hours\)/);
-  assert.match(routes, /const configRoles = \['admin'\]/);
+  assert.match(routes, /router\.use\('\/management\/config', requireAuth, requirePermission\('configuration\.view'\)\)/);
 });
 
 test('migration is audit-first, creates the 120-minute protected setting, and binds system ID 122', () => {

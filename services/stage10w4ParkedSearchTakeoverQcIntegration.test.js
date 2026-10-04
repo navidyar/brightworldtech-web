@@ -82,10 +82,10 @@ test('QC action availability is attached after live completion, review, and corr
   assert.match(controller, /qcReviewActionAvailability/);
 });
 
-test('Unit Browser keeps Accept and Reject visible and renders unavailable current decisions as disabled buttons', () => {
+test('QC Review keeps Accept and Reject available while the regular Unit Browser suppresses those controls', () => {
   const table = read('views/fragments/tech-units-table.ejs');
 
-  assert.match(table, /canShowQcReviewActions/);
+  assert.match(table, /canShowQcReviewActions = Boolean\(\s*isQcPortalMode\s*&& canRecordQcReview/);
   assert.match(table, /qcReviewActionAvailability\.acceptEnabled/);
   assert.match(table, /qcReviewActionAvailability\.rejectEnabled/);
   assert.match(table, /tech-action-button--qc-accept decision-action-disabled/);

@@ -49,6 +49,8 @@ const {
   buildUnitBrowserLayoutPresentation
 } = require('../services/unitBrowserLayoutPresentation');
 const catalogRequestAccessPolicy = require('../services/catalogRequestAccessPolicy');
+const intentionalDuplicateRequestPolicy = require('../services/intentionalDuplicateRequestPolicy');
+const { normalizeUuid } = require('../services/apiUnitIdentity');
 const {
   parseHardwareCapacityToGb,
   normalizeHardwareCapacityForStorage
@@ -82,8 +84,8 @@ const VALID_MEMORY_INSTALL_TYPE_CODES = new Set([
 
 
 function canViewCrossTechnicianQcSummary(req) {
-  return getCurrentRoleCodes(req)
-    .some((roleCode) => ['admin', 'management', 'tech_lead', 'qc'].includes(roleCode));
+  return req?.currentPermissions instanceof Set
+    && req.currentPermissions.has('qc.summary.cross_technician');
 }
 
 function resolveQcSummaryTechnicianUserId(req) {
@@ -195,16 +197,15 @@ function getCurrentRoleCodes(req) {
 }
 
 function userCanViewProductionWeight(req) {
-  return getCurrentRoleCodes(req)
-    .some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  return req?.currentPermissions instanceof Set && req.currentPermissions.has('units.production_weight.view');
 }
 
 function userCanOverrideProductionWeight(req) {
-  return userCanViewProductionWeight(req);
+  return req?.currentPermissions instanceof Set && req.currentPermissions.has('units.production_weight.override');
 }
 
 function canRequestCatalogException(req) {
-  return catalogRequestAccessPolicy.canSubmitCatalogRequest(getCurrentRoleCodes(req));
+  return catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(req);
 }
 
 function markProductionWeightPermission(formData, formOptions, { allowOverrideInput = true } = {}) {
@@ -299,7 +300,8 @@ function buildCompleteWorkModalView({
   const allowedUserIds = getAllowedCompletionUserIds({
     currentUserId,
     assignedUserId,
-    roleCodes
+    roleCodes,
+    permissions: req.currentPermissions || new Set()
   });
   const defaultCompletedByUserId = allowedUserIds[0] || currentUserId;
   const normalizedSelectedUserId = normalizePositiveInteger(selectedCompletedByUserId);
@@ -323,13 +325,13 @@ function buildCompleteWorkModalView({
     creditedToName: selectedOption ? selectedOption.name : currentUserName,
     currentUserName,
     completionAttributionOptions,
-    canChooseCompletionAttribution: canChooseCompletionAttribution(roleCodes) && completionAttributionOptions.length > 1,
+    canChooseCompletionAttribution: canChooseCompletionAttribution(roleCodes, req.currentPermissions || new Set()) && completionAttributionOptions.length > 1,
     selectedCompletedByUserId: effectiveCompletedByUserId,
     canViewProductionWeight: userCanViewProductionWeight(req),
     completionToolRequirements,
     missingCompletionToolRequirements,
     canOverrideCompletionToolRequirements: missingCompletionToolRequirements.length > 0
-      && canOverrideMissingToolRequirements(roleCodes),
+      && canOverrideMissingToolRequirements(roleCodes, req.currentPermissions || new Set()),
     completionRequirementOverrideReason: String(completionRequirementOverrideReason || ''),
     successMessage,
     errorMessages: Array.isArray(errorMessages) ? errorMessages : []
@@ -361,8 +363,7 @@ function buildReverseCompletionModalView({
 }
 
 function canViewParkedUnits(req) {
-  return getCurrentRoleCodes(req)
-    .some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  return Boolean(req?.currentPermissions?.has('units.return_to_active'));
 }
 
 function canSearchParkedUnits(req) {
@@ -376,8 +377,7 @@ function canViewAnyLotFilter(req) {
 }
 
 function canExportTechUnits(req) {
-  return getCurrentRoleCodes(req)
-    .some((roleCode) => ['admin', 'management'].includes(roleCode));
+  return req?.currentPermissions instanceof Set && req.currentPermissions.has('units.export');
 }
 
 function getUnitExportColumnSelection(req) {
@@ -413,6 +413,7 @@ function getFiltersFromRequest(req) {
     createdStartDate: String(req.query.createdStartDate || '').trim(),
     createdEndDate: String(req.query.createdEndDate || '').trim(),
     createdWindow: String(req.query.createdWindow || '').trim(),
+    timeZone: req.timeZone,
     unitState: String(req.query.unitState || 'active').trim(),
     sort: String(req.query.sort || '').trim(),
     page: String(req.query.page || '').trim(),
@@ -1660,10 +1661,7 @@ function buildDuplicateAssumeModalView({ candidate = null, formData = {}, errorM
 }
 
 function isRegularTechIntentionalDuplicateRequester(req) {
-  const roleCodes = getCurrentRoleCodes(req).map((roleCode) => String(roleCode || '').trim());
-
-  return roleCodes.includes('tech')
-    && !roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  return intentionalDuplicateRequestPolicy.canRequestIntentionalDuplicate(req);
 }
 
 function getOptionLabel(options, selectedId) {
@@ -1741,6 +1739,15 @@ function buildIntentionalDuplicateRequestSnapshot({ formData, formOptions, candi
   const requestedModelLabel = selectedModel ? selectedModel.modelName : '—';
   const existingManufacturerLabel = candidate && candidate.manufacturerLabel ? candidate.manufacturerLabel : '—';
   const existingModelLabel = candidate && candidate.modelLabel ? candidate.modelLabel : '—';
+  const requestedSystemUuid = String(formData.systemUuid || '').trim();
+  const existingSystemUuid = String(candidate && candidate.systemUuid || '').trim();
+  const normalizedRequestedSystemUuid = normalizeUuid(requestedSystemUuid);
+  const normalizedExistingSystemUuid = normalizeUuid(existingSystemUuid);
+  const systemUuidMatchesExisting = Boolean(
+    normalizedRequestedSystemUuid
+    && normalizedExistingSystemUuid
+    && normalizedRequestedSystemUuid === normalizedExistingSystemUuid
+  );
 
   return {
     version: 2,
@@ -1753,6 +1760,9 @@ function buildIntentionalDuplicateRequestSnapshot({ formData, formOptions, candi
       processorLabel: selectedProcessor ? selectedProcessor.label : '—',
       operatingSystemLabel: getOptionLabel(formOptions.operatingSystems, formData.operatingSystemConfigValueId) || '—',
       serialSummary: `Unit Serial: ${formData.unitSerialNumber || '—'}; BIOS Serial: ${formData.biosSerialNumber || '—'}`,
+      systemUuid: requestedSystemUuid || '—',
+      existingSystemUuid: existingSystemUuid || '—',
+      systemUuidMatchesExisting,
       existingManufacturerLabel,
       existingModelLabel,
       manufacturerDiffers: existingManufacturerLabel !== '—' && requestedManufacturerLabel !== '—' && existingManufacturerLabel !== requestedManufacturerLabel,
@@ -1775,6 +1785,7 @@ function buildMatchedUnitSnapshot(candidate) {
     lotName: candidate && candidate.lotName ? candidate.lotName : '',
     unitSerialNumber: candidate && candidate.unitSerialNumber ? candidate.unitSerialNumber : '',
     biosSerialNumber: candidate && candidate.biosSerialNumber ? candidate.biosSerialNumber : '',
+    systemUuid: candidate && candidate.systemUuid ? candidate.systemUuid : '',
     manufacturerLabel: candidate && candidate.manufacturerLabel ? candidate.manufacturerLabel : '',
     modelLabel: candidate && candidate.modelLabel ? candidate.modelLabel : '',
     modelSummary: candidate && candidate.modelSummary ? candidate.modelSummary : '',
@@ -1967,7 +1978,7 @@ async function renderIntentionalDuplicateRequestModal(req, res, next) {
 
     if (!isRegularTechIntentionalDuplicateRequester(req)) {
       return res.status(403).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
-        errorMessages: ['Intentional Duplicate requests are available only to regular Tech users during Create Unit intake.']
+        errorMessages: ['Intentional Duplicate submission permission is required during Create Unit intake.']
       }));
     }
 
@@ -2039,7 +2050,7 @@ async function createIntentionalDuplicateRequest(req, res, next) {
     if (!isRegularTechIntentionalDuplicateRequester(req)) {
       return res.status(intentionalDuplicateModalResponseStatus(req, 403)).render('fragments/tech-unit-intentional-duplicate-request-modal', buildIntentionalDuplicateRequestModalView({
         formData: requestData,
-        errorMessages: ['Intentional Duplicate requests are available only to regular Tech users during Create Unit intake.']
+        errorMessages: ['Intentional Duplicate submission permission is required during Create Unit intake.']
       }));
     }
 
@@ -2154,9 +2165,11 @@ async function createIntentionalDuplicateRequest(req, res, next) {
 }
 
 async function getTechUnitFormOptionsWithIssues(req = null, options = {}) {
-  const formOptions = await techUnitModel.getTechUnitFormOptions(options);
-  const issueFormOptions = await unitIssueEntryModel.getIssueFormOptions();
-  const expandedFormOptions = await unitExpandedFormModel.getExpandedFormOptions();
+  const [formOptions, issueFormOptions, expandedFormOptions] = await Promise.all([
+    techUnitModel.getTechUnitFormOptions(options),
+    unitIssueEntryModel.getIssueFormOptions(),
+    unitExpandedFormModel.getExpandedFormOptions()
+  ]);
 
   return {
     ...formOptions,
@@ -2727,7 +2740,7 @@ async function renderTechUnitsExportPreview(req, res) {
 
   try {
     const filters = getFiltersFromRequest(req);
-    const fullDataset = await unitExportService.buildFilteredUnitExportDataset(filters);
+    const fullDataset = await unitExportService.buildFilteredUnitExportDataset(filters, { timeZone: req.timeZone });
     const columnSelection = getUnitExportColumnSelection(req);
     const dataset = unitExportService.applyUnitExportColumnSelection(fullDataset, columnSelection.value, columnSelection);
 
@@ -2762,7 +2775,7 @@ async function downloadTechUnitsExport(req, res, next, format) {
 
   try {
     const filters = getFiltersFromRequest(req);
-    const fullDataset = await unitExportService.buildFilteredUnitExportDataset(filters);
+    const fullDataset = await unitExportService.buildFilteredUnitExportDataset(filters, { timeZone: req.timeZone });
     const columnSelection = getUnitExportColumnSelection(req);
     const dataset = unitExportService.applyUnitExportColumnSelection(fullDataset, columnSelection.value, columnSelection);
     const normalizedFormat = String(format || '').trim().toLowerCase();
@@ -2772,7 +2785,7 @@ async function downloadTechUnitsExport(req, res, next, format) {
     const contentType = normalizedFormat === 'csv'
       ? unitExportFileService.CSV_CONTENT_TYPE
       : unitExportFileService.XLSX_CONTENT_TYPE;
-    const filename = unitExportFileService.buildUnitExportFilename(normalizedFormat, dataset.filters);
+    const filename = unitExportFileService.buildUnitExportFilename(normalizedFormat, dataset.filters, new Date(), dataset.timeZone);
 
     res.status(200);
     res.set({
@@ -2859,7 +2872,7 @@ async function renderTechUnitsQcSummary(req, res) {
 }
 
 function buildBulkLabelPrintAction(result, filters, req) {
-  const canPrintLabels = getCurrentRoleCodes(req).some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
+  const canPrintLabels = req?.currentPermissions instanceof Set && req.currentPermissions.has('units.labels.print');
   if (!canPrintLabels || !canOfferBulkLabelPrint(filters) || !result || !Array.isArray(result.units)) {
     return Object.freeze({ available: false, eligibleCount: 0, modalUrl: '' });
   }
@@ -3186,13 +3199,11 @@ async function recordQcReview(req, res, next) {
 
 function canSubmitQcCorrection(req, unit) {
   if (!unit || unit.isParked) return false;
-  const roleCodes = getCurrentRoleCodes(req);
-
-  if (roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode))) {
+  const permissions = req.currentPermissions instanceof Set ? req.currentPermissions : new Set();
+  if (permissions.has('qc.correction.submit_any')) {
     return true;
   }
-
-  return roleCodes.includes('tech')
+  return permissions.has('qc.correction.submit')
     && Number(unit.assignedToUserId) === Number(req.currentUser && req.currentUser.user_id);
 }
 
@@ -3276,6 +3287,7 @@ async function submitQcCorrection(req, res, next) {
       rejectedQcCheckId: context.latestQcReview.qcCheckId,
       submittedByUserId: req.currentUser.user_id,
       submittedByRoleCodes: getCurrentRoleCodes(req),
+      submittedByPermissions: req.currentPermissions,
       correctionNotes
     });
 
@@ -3344,9 +3356,9 @@ async function renderQcReviewDetailsModal(req, res, next) {
       errors.push('No Quality Control decision has been recorded for this unit.');
     }
 
-    const roleCodes = getCurrentRoleCodes(req);
     const qcPortalRequestMode = isQcPortalRequestContext(req);
-    const isQcRequester = canRequestQcReviewReversion(req);
+    const isQcRequester = canRequestQcReviewReversion(req)
+      && (qcPortalRequestMode || !canDirectlyRevertQcReview(req));
     const qcReversionAvailable = Boolean(context.latestQcReview) && !context.latestQcCorrection;
     const pendingQcReversionRequest = qcReversionAvailable
       ? await unitRequestModel.getPendingQcReversionRequestForQcCheck({ qcCheckId: context.latestQcReview.qcCheckId })
@@ -3359,7 +3371,7 @@ async function renderQcReviewDetailsModal(req, res, next) {
       && context.qcRequired
       && !pendingQcReversionRequest
       && !isQcRequester
-      && roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+      && canDirectlyRevertQcReview(req);
 
     return res.status(errors.length > 0 ? 404 : 200).render('fragments/tech-unit-qc-review-details-modal', {
       ...context,
@@ -3385,11 +3397,7 @@ function isQcPortalRequestContext(req) {
 }
 
 function canRequestQcReviewReversion(req) {
-  const roleCodes = getCurrentRoleCodes(req);
-  if (!roleCodes.includes('qc')) return false;
-  if (isQcPortalRequestContext(req)) return true;
-
-  return !roleCodes.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  return req.currentPermissions instanceof Set && req.currentPermissions.has('qc.reversion.request');
 }
 
 function buildQcReversionRequestModalView({
@@ -3421,7 +3429,7 @@ async function renderQcReviewReversionRequestModal(req, res, next) {
     if (!unitId || !qcCheckId) {
       errors.push('The selected Quality Control decision is invalid.');
     } else if (!canRequestQcReviewReversion(req)) {
-      errors.push('Only a QC user can request reversion of a current Quality Control decision.');
+      errors.push('QC Reversion Request permission is required to request reversion of a current Quality Control decision.');
     } else if (!context.unit || !context.latestCompletion) {
       errors.push('The selected completed Unit could not be found.');
     } else if (!context.qcRequired) {
@@ -3522,7 +3530,7 @@ async function requestQcReviewReversion(req, res, next) {
 }
 
 function canDirectlyRevertQcReview(req) {
-  return getCurrentRoleCodes(req).some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  return req.currentPermissions instanceof Set && req.currentPermissions.has('qc.reversion.perform');
 }
 
 function buildQcReversionModalView({
@@ -3549,7 +3557,7 @@ async function renderQcReviewReversionModal(req, res, next) {
     if (!Number.isSafeInteger(unitId) || unitId <= 0 || !Number.isSafeInteger(qcCheckId) || qcCheckId <= 0) {
       errors.push('The selected Quality Control decision is invalid.');
     } else if (!canDirectlyRevertQcReview(req)) {
-      errors.push('Tech Lead+ authority is required to revert a Quality Control decision.');
+      errors.push('QC Reversion Perform permission is required to revert a Quality Control decision.');
     } else if (!context.unit || !context.latestCompletion) {
       errors.push('The selected completed Unit could not be found.');
     } else if (!context.qcRequired) {
@@ -3696,39 +3704,6 @@ async function renderTechUnitHistoryPanel(req, res, next) {
 }
 
 
-async function renderMyUnitWeightPanel(req, res, next) {
-  try {
-    const unitId = Number(req.params.unitId);
-    const currentUserId = req && req.currentUser ? Number(req.currentUser.user_id) : NaN;
-
-    if (!Number.isInteger(unitId) || unitId <= 0 || !Number.isInteger(currentUserId) || currentUserId <= 0) {
-      return res.status(400).render('fragments/tech-unit-my-weight-panel', {
-        completions: [],
-        errorMessages: ['Your earned weight could not be loaded for the selected unit.']
-      });
-    }
-
-    const lifecycleUnit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
-
-    if (!lifecycleUnit || (lifecycleUnit.isParked && !canViewParkedUnits(req))) {
-      return res.status(404).render('fragments/tech-unit-my-weight-panel', {
-        completions: [],
-        errorMessages: ['Your earned weight could not be loaded for the selected unit.']
-      });
-    }
-
-    const completions = await techUnitModel.getUnitWorkCompletionsForUser(unitId, currentUserId);
-
-    return res.render('fragments/tech-unit-my-weight-panel', {
-      completions,
-      errorMessages: []
-    });
-  } catch (error) {
-    next(error);
-  }
-}
-
-
 
 function buildLabelPrintSelectionState(body = {}, options = []) {
   const rawSelected = Array.isArray(body.templateKey)
@@ -3754,10 +3729,11 @@ async function getTechUnitPrintLabelContext(req, unitId) {
     return { unit: null, lot: null, latestCompletion: null, errorMessages: ['The selected Unit ID is invalid.'] };
   }
 
-  const [unit, latestCompletionMap] = await Promise.all([
+  const [baseUnit, latestCompletionMap] = await Promise.all([
     techUnitModel.getTechUnitLifecycleSummaryById(safeUnitId),
     techUnitModel.getLatestWorkCompletionMapForUnits([safeUnitId])
   ]);
+  const unit = await labelLibraryPrintingService.hydrateLabelUnitFieldSources(baseUnit);
   const latestCompletion = latestCompletionMap.get(safeUnitId) || null;
   const lot = unit && unit.lotId ? await lotModel.getLotById(unit.lotId) : null;
 
@@ -3859,6 +3835,7 @@ function selectPreferredPrintDestination(printers, requestedPrinterId, currentUs
 }
 
 async function buildTechUnitPrintLabelModalView({
+  permissions = new Set(),
   context,
   currentUser = null,
   printerId = '',
@@ -3869,7 +3846,7 @@ async function buildTechUnitPrintLabelModalView({
   retryableError = false
 } = {}) {
   const availablePrinters = currentUser
-    ? await labelPrinterRuntimeService.listPrintDestinationsForUser({ userId: currentUser.user_id, roleCodes: currentUser.roles })
+    ? await labelPrinterRuntimeService.listPrintDestinationsForUser({ userId: currentUser.user_id, permissions })
     : [];
   const resolvedTemplateSet = templateSet || (context && context.unit
     ? await labelLibraryPrintingService.getUnitPrintTemplateSet(context.unit.lotId)
@@ -3914,7 +3891,7 @@ async function buildTechUnitPrintLabelModalView({
 async function renderTechUnitPrintLabelModal(req, res, next) {
   try {
     const context = await getTechUnitPrintLabelContext(req, req.params.unitId);
-    return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({ context, currentUser: req.currentUser }));
+    return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({ context, currentUser: req.currentUser, permissions: req.currentPermissions }));
   } catch (error) {
     next(error);
   }
@@ -4107,7 +4084,7 @@ async function printTechUnitLabel(req, res, next) {
     let printer = await labelPrinterRuntimeService.resolvePrintDestinationForUser({
       destinationId: printerId,
       userId: req.currentUser.user_id,
-      roleCodes: req.currentUser.roles
+      permissions: req.currentPermissions
     });
     if (!printer) errors.push('Select an available label printer or printer group.');
 
@@ -4137,6 +4114,7 @@ async function printTechUnitLabel(req, res, next) {
       return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({
         context,
         currentUser: req.currentUser,
+        permissions: req.currentPermissions,
         printerId,
         templateSet,
         selectionState,
@@ -4184,6 +4162,7 @@ async function printTechUnitLabel(req, res, next) {
     return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({
       context,
       currentUser: req.currentUser,
+      permissions: req.currentPermissions,
       printerId,
       templateSet,
       selectionState,
@@ -4212,6 +4191,7 @@ async function printTechUnitLabel(req, res, next) {
       return res.render('fragments/tech-unit-print-label-modal', await buildTechUnitPrintLabelModalView({
         context,
         currentUser: req.currentUser,
+        permissions: req.currentPermissions,
         printerId,
         templateSet,
         selectionState: buildLabelPrintSelectionState(req.body || {}, templateSet.templates),
@@ -4279,6 +4259,7 @@ async function getTechUnitsBulkPrintLabelContext(req) {
 }
 
 async function buildTechUnitsBulkPrintLabelModalView({
+  permissions = new Set(),
   context,
   currentUser = null,
   printerId = '',
@@ -4291,7 +4272,7 @@ async function buildTechUnitsBulkPrintLabelModalView({
   printResults = []
 } = {}) {
   const availablePrinters = currentUser
-    ? await labelPrinterRuntimeService.listPrintDestinationsForUser({ userId: currentUser.user_id, roleCodes: currentUser.roles })
+    ? await labelPrinterRuntimeService.listPrintDestinationsForUser({ userId: currentUser.user_id, permissions })
     : [];
   const resolvedTemplateSet = templateSet || (context?.lot
     ? await labelLibraryPrintingService.getUnitPrintTemplateSet(context.lot.lot_id || context.lot.lotId)
@@ -4361,7 +4342,7 @@ async function buildTechUnitsBulkPrintLabelModalView({
 async function renderTechUnitsBulkPrintLabelModal(req, res, next) {
   try {
     const context = await getTechUnitsBulkPrintLabelContext(req);
-    return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({ context, currentUser: req.currentUser }));
+    return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({ context, currentUser: req.currentUser, permissions: req.currentPermissions }));
   } catch (error) {
     next(error);
   }
@@ -4385,7 +4366,7 @@ async function printTechUnitsBulkLabels(req, res, next) {
     let printer = await labelPrinterRuntimeService.resolvePrintDestinationForUser({
       destinationId: printerId,
       userId: req.currentUser.user_id,
-      roleCodes: req.currentUser.roles
+      permissions: req.currentPermissions
     });
     let batchPrinter = printer;
     if (!printer) errors.push('Select an available label printer or printer group.');
@@ -4443,6 +4424,7 @@ async function printTechUnitsBulkLabels(req, res, next) {
       return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({
         context,
         currentUser: req.currentUser,
+        permissions: req.currentPermissions,
         printerId,
         templateSet,
         selectionState,
@@ -4512,6 +4494,7 @@ async function printTechUnitsBulkLabels(req, res, next) {
     return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({
       context,
       currentUser: req.currentUser,
+      permissions: req.currentPermissions,
       printerId,
       templateSet,
       selectionState,
@@ -4543,6 +4526,7 @@ async function printTechUnitsBulkLabels(req, res, next) {
       return res.render('fragments/tech-units-bulk-print-label-modal', await buildTechUnitsBulkPrintLabelModalView({
         context,
         currentUser: req.currentUser,
+        permissions: req.currentPermissions,
         printerId,
         templateSet,
         selectionState: buildLabelPrintSelectionState(req.body || {}, templateSet.templates),
@@ -4594,6 +4578,7 @@ async function completeTechUnitWork(req, res, next) {
       currentUserId: req.currentUser ? req.currentUser.user_id : null,
       assignedUserId: preview.assignedToUserId,
       roleCodes: getCurrentRoleCodes(req),
+      permissions: req.currentPermissions || new Set(),
       requestedUserId: req.body ? req.body.completedByUserId : null
     });
 
@@ -4604,8 +4589,9 @@ async function completeTechUnitWork(req, res, next) {
       creditSource: 'manual_completion',
       notes: selectedCompletedByUserId === Number(req.currentUser.user_id)
         ? 'Unit completion recorded from the Tech Unit Browser.'
-        : 'Unit completion recorded by Tech Lead+ for the technician assigned to the Unit.',
+        : 'Unit completion recorded for the technician assigned to the Unit.',
       actorRoleCodes: getCurrentRoleCodes(req),
+      actorPermissions: req.currentPermissions || new Set(),
       actorUserId: req.currentUser ? req.currentUser.user_id : null,
       completionRequirementOverrideReason: req.body ? req.body.completionRequirementOverrideReason : ''
     });
@@ -4697,6 +4683,7 @@ async function reverseTechUnitCompletion(req, res, next) {
       reversedByUserId: req.currentUser.user_id,
       reason,
       actorRoleCodes: getCurrentRoleCodes(req),
+      actorPermissions: req.currentPermissions || new Set(),
       actorUserId: req.currentUser ? req.currentUser.user_id : null
     });
 
@@ -4812,6 +4799,7 @@ async function parkTechUnit(req, res, next) {
       unitId,
       parkedByUserId: req.currentUser.user_id,
       actorRoleCodes: getCurrentRoleCodes(req),
+      actorPermissions: req.currentPermissions || new Set(),
       actorUserId: req.currentUser ? req.currentUser.user_id : null
     });
 
@@ -4912,6 +4900,7 @@ async function returnTechUnitToActive(req, res, next) {
       assignedToUserId: formData.assignedToUserId,
       returnedByUserId: req.currentUser.user_id,
       actorRoleCodes: getCurrentRoleCodes(req),
+      actorPermissions: req.currentPermissions || new Set(),
       actorUserId: req.currentUser ? req.currentUser.user_id : null
     });
 
@@ -5739,7 +5728,6 @@ module.exports = {
   renderQcReviewReversionModal,
   revertQcReviewDirectly,
   renderTechUnitHistoryPanel,
-  renderMyUnitWeightPanel,
   renderTechUnitPrintLabelModal,
   printTechUnitLabel,
   renderTechUnitsBulkPrintLabelModal,

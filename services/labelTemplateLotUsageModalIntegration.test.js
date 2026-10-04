@@ -16,12 +16,12 @@ test('Label Library Lot count opens a compact Lot usage modal', () => {
   assert.match(library, /> Lot<%= Number\(template\.attached_lot_count\) === 1 \? '' : 's' %><\/a>/);
 });
 
-test('Lot usage route is management-only and precedes generic action modal', () => {
+test('Lot usage route uses labels.library.view and precedes generic action modal', () => {
   const routes = read('routes/management.js');
   const usageRoute = routes.indexOf("'/management/label-library/templates/:labelTemplateId/lots/modal'");
   const genericAction = routes.indexOf("'/management/label-library/templates/:labelTemplateId/:action/modal'");
   assert.ok(usageRoute >= 0 && genericAction >= 0 && usageRoute < genericAction);
-  assert.match(routes.slice(usageRoute, genericAction), /requireRole\(managementRoles\)/);
+  assert.match(routes.slice(usageRoute, genericAction), /requirePermission\('labels\.library\.view'\)/);
   assert.match(routes.slice(usageRoute, genericAction), /renderTemplateLotUsageModal/);
 });
 

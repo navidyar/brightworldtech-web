@@ -110,15 +110,37 @@ test('confirmed zero storage can clear current storage while unknown cannot', ()
   assert.deepEqual(plan.observation.value.devices, []);
 });
 
-test('storage type resolution accepts common SSD and HDD aliases without fuzzy substring matching', () => {
+test('storage type resolution does not guess generic SSD/HDD without configured aliases', () => {
   const candidates = [
     { id: 10, label: 'SSD', value: 'SSD' },
     { id: 11, label: 'HDD', value: 'HDD' }
   ];
-  assert.equal(resolveStorageTypeCandidate('Solid State Drive', candidates).resolvedId, 10);
-  assert.equal(resolveStorageTypeCandidate('NVMe', candidates).resolvedId, 10);
-  assert.equal(resolveStorageTypeCandidate('Hard Disk Drive', candidates).resolvedId, 11);
+  assert.equal(resolveStorageTypeCandidate('Solid State Drive', candidates).status, 'unmapped');
+  assert.equal(resolveStorageTypeCandidate('Hard Disk Drive', candidates).status, 'unmapped');
+  assert.equal(resolveStorageTypeCandidate('NVMe', candidates).status, 'unmapped');
   assert.equal(resolveStorageTypeCandidate('mystery disk', candidates).status, 'unmapped');
+});
+
+test('storage type resolution uses configured aliases to collapse SATA form factors while keeping NVMe distinct', () => {
+  const candidates = [
+    { id: 58, label: 'SATA', value: 'sata' },
+    { id: 60, label: 'NVMe', value: 'nvme' }
+  ];
+  const aliases = [
+    ...['2.5 SATA', '2.5" SATA', 'M.2 SATA', 'M2 SATA', 'SATA SSD'].map((aliasValue) => ({ aliasValue, targetId: 58 })),
+    ...['M.2 NVMe', 'M2 NVMe', 'NVM Express', 'NVMe SSD'].map((aliasValue) => ({ aliasValue, targetId: 60 }))
+  ];
+  for (const submitted of ['SATA', '2.5 SATA', '2.5" SATA', 'M.2 SATA', 'M2 SATA', 'SATA SSD']) {
+    const result = resolveStorageTypeCandidate(submitted, candidates, aliases);
+    assert.equal(result.status, 'resolved', submitted);
+    assert.equal(result.resolvedId, 58, submitted);
+  }
+  for (const submitted of ['NVMe', 'M.2 NVMe', 'M2 NVMe', 'NVM Express', 'NVMe SSD']) {
+    const result = resolveStorageTypeCandidate(submitted, candidates, aliases);
+    assert.equal(result.status, 'resolved', submitted);
+    assert.equal(result.resolvedId, 60, submitted);
+  }
+  assert.equal(resolveStorageTypeCandidate('SSD', candidates, aliases).status, 'unmapped');
 });
 
 test('matching manual storage configuration can still accept Tool-only detail refreshes', () => {

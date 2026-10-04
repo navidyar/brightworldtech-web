@@ -75,7 +75,8 @@ function makeResponse() {
 
 function makeRequest(roleCode, { query = {}, body = {}, htmx = true } = {}) {
   return {
-    currentUser: { user_id: 91, roles: [roleCode] },
+    currentUser: { user_id: 91, roles: roleCode ? [roleCode] : [] },
+    currentPermissions: new Set(['catalog_requests.submit']),
     query,
     body,
     get(name) {
@@ -88,26 +89,32 @@ function failNext(error) {
   throw error;
 }
 
-test('every role that can open Add/Edit Unit can submit catalog requests', () => {
+test('Catalog request submission uses effective permission, including user DENY', () => {
   for (const roleCode of ADD_EDIT_ROLE_CODES) {
-    assert.equal(catalogRequestAccessPolicy.canSubmitCatalogRequest([roleCode]), true, roleCode);
+    const req = makeRequest(roleCode);
+    assert.equal(catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(req), true, roleCode);
+    req.currentPermissions.clear();
+    assert.equal(catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(req), false, `${roleCode} denied`);
   }
-
-  assert.equal(catalogRequestAccessPolicy.canSubmitCatalogRequest(['qc']), false);
-  assert.equal(catalogRequestAccessPolicy.canSubmitCatalogRequest([]), false);
+  assert.equal(catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest(makeRequest('')), true);
+  assert.equal(catalogRequestAccessPolicy.canSubmitCatalogRequestFromRequest({ currentPermissions: null }), false);
+  assert.match(read('services/apiCatalogRequest.js'), /catalogRequestAccessPolicy\.canSubmitCatalogRequestFromRequest/);
 });
 
-test('Add/Edit Unit and catalog endpoints share the same role policy', () => {
+test('Add/Edit Unit and catalog endpoints share the same permission policy', () => {
   const techController = read('controllers/techController.js');
   const catalogController = read('controllers/catalogRequestController.js');
   const routes = read('routes/management.js');
 
-  assert.match(techController, /catalogRequestAccessPolicy\.canSubmitCatalogRequest\(getCurrentRoleCodes\(req\)\)/);
+  assert.match(techController, /catalogRequestAccessPolicy\.canSubmitCatalogRequestFromRequest\(req\)/);
   assert.match(catalogController, /catalogRequestAccessPolicy\.canSubmitCatalogRequestFromRequest\(req\)/);
   assert.doesNotMatch(catalogController, /Only regular Tech users/);
-  assert.match(routes, /const techRoles = \['admin', 'management', 'tech_lead', 'tech'\]/);
-  assert.match(routes, /\/tech\/unit-catalog-requests\/model\/modal[\s\S]*?requireRole\(techRoles\)/);
-  assert.match(routes, /\/tech\/unit-catalog-requests\/processor\/modal[\s\S]*?requireRole\(techRoles\)/);
+  assert.match(routes, /router\.use\('\/tech\/unit-catalog-requests', requireAuth, requirePermission\('catalog_requests\.submit'\)\)/);
+  for (const route of ['/tech/unit-catalog-requests/model/modal', '/tech/unit-catalog-requests/model', '/tech/unit-catalog-requests/processor/modal', '/tech/unit-catalog-requests/processor']) {
+    const block = routes.match(new RegExp(`router\\.(?:get|post)\\(\\s*'${route}'[\\s\\S]*?\\);`))?.[0];
+    assert.ok(block, route);
+    assert.doesNotMatch(block, /requireRole\(techRoles\)/);
+  }
 });
 
 test('model and processor request modals open for Admin, Management, Tech Lead, and Tech', async (t) => {
@@ -115,12 +122,14 @@ test('model and processor request modals open for Admin, Management, Tech Lead, 
     listManufacturers: unitModelCatalogModel.listManufacturers,
     listUnitCategories: unitModelCatalogModel.listUnitCategories,
     listUnitModels: unitModelCatalogModel.listUnitModels,
+    findUnitModelIntakeMapping: unitModelCatalogModel.findUnitModelIntakeMapping,
     getUnitModelById: unitModelCatalogModel.getUnitModelById
   };
 
   unitModelCatalogModel.listManufacturers = async () => [{ id: 11, label: 'Dell' }];
   unitModelCatalogModel.listUnitCategories = async () => [{ id: 22, label: 'Desktop' }];
   unitModelCatalogModel.listUnitModels = async () => [];
+  unitModelCatalogModel.findUnitModelIntakeMapping = async () => null;
   unitModelCatalogModel.getUnitModelById = async () => ({
     id: 33,
     modelName: 'OptiPlex 7090',
@@ -176,6 +185,7 @@ test('model and processor requests submit for every Add/Edit Unit role', async (
     listManufacturers: unitModelCatalogModel.listManufacturers,
     listUnitCategories: unitModelCatalogModel.listUnitCategories,
     listUnitModels: unitModelCatalogModel.listUnitModels,
+    findUnitModelIntakeMapping: unitModelCatalogModel.findUnitModelIntakeMapping,
     getUnitModelById: unitModelCatalogModel.getUnitModelById,
     createModelCatalogRequest: unitRequestModel.createModelCatalogRequest,
     createProcessorCatalogRequest: unitRequestModel.createProcessorCatalogRequest
@@ -186,6 +196,7 @@ test('model and processor requests submit for every Add/Edit Unit role', async (
   unitModelCatalogModel.listManufacturers = async () => [{ id: 11, label: 'Dell' }];
   unitModelCatalogModel.listUnitCategories = async () => [{ id: 22, label: 'Desktop' }];
   unitModelCatalogModel.listUnitModels = async () => [];
+  unitModelCatalogModel.findUnitModelIntakeMapping = async () => null;
   unitModelCatalogModel.getUnitModelById = async () => ({
     id: 33,
     modelName: 'OptiPlex 7090',
@@ -207,6 +218,7 @@ test('model and processor requests submit for every Add/Edit Unit role', async (
       listManufacturers: originals.listManufacturers,
       listUnitCategories: originals.listUnitCategories,
       listUnitModels: originals.listUnitModels,
+      findUnitModelIntakeMapping: originals.findUnitModelIntakeMapping,
       getUnitModelById: originals.getUnitModelById
     });
     Object.assign(unitRequestModel, {

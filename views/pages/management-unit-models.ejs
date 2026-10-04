@@ -8,6 +8,8 @@
     deleted: 'Unit model permanently deleted.',
     retired: 'Unit model removed from the active catalog because existing references must be preserved.',
     'processors-updated': 'Exact Processor associations updated.',
+    'mapping-updated': 'Incoming Tool model mapping saved.',
+    'mapping-removed': 'Incoming Tool model mapping deactivated.',
     'not-found': 'The selected model was not found.'
   };
   const activeModelCount = models.filter((model) => model.isActive).length;
@@ -20,6 +22,10 @@
   if (filters.includeInactive) query.set('includeInactive', '1');
   if (filters.search) query.set('search', filters.search);
   const queryString = query.toString();
+  const inactiveQuery = new URLSearchParams(query);
+  inactiveQuery.set('includeInactive', '1');
+  const activeOnlyQuery = new URLSearchParams(query);
+  activeOnlyQuery.delete('includeInactive');
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -38,10 +44,15 @@
           <section class="page-heading configuration-page-heading">
             <div>
               <h1>Unit Model Catalog</h1>
-              <p>Maintain exact Unit Models and the canonical processors offered for each model during Unit intake. Inactive models remain attached to historical Units but are hidden from new selection.</p>
+              <p>Maintain exact Unit Models and the Catalog Processors offered for each model during Unit intake. Inactive models remain attached to historical Units but are hidden from new selection.</p>
             </div>
 
             <div class="site-clean-actions">
+              <% if (filters.includeInactive) { %>
+                <a class="secondary-button" href="/management/config/models<%= activeOnlyQuery.toString() ? `?${activeOnlyQuery.toString()}` : '' %>">Active Models Only</a>
+              <% } else { %>
+                <a class="secondary-button" href="/management/config/models?<%= inactiveQuery.toString() %>">Show Inactive Models</a>
+              <% } %>
               <a class="primary-button" href="/management/config/models/new/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/new/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Add Unit Model</a>
             </div>
           </section>
@@ -113,6 +124,7 @@
                   <option value="0" <%= !filters.includeInactive ? 'selected' : '' %>>Active only</option>
                   <option value="1" <%= filters.includeInactive ? 'selected' : '' %>>Active and inactive</option>
                 </select>
+                <small class="field-hint">Show inactive models to reactivate or permanently delete retired catalog records.</small>
               </label>
 
               <div class="model-catalog-filter-actions">
@@ -158,6 +170,7 @@
                           <div class="model-catalog-row-actions">
                             <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/edit/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
                             <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/processors/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/processors/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Processors</a>
+                            <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/mappings/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/mappings/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Aliases</a>
                             <a class="secondary-button button-small" href="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/<%= model.isActive ? 'deactivate' : 'activate' %>/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML"><%= model.isActive ? 'Deactivate' : 'Activate' %></a>
                             <a class="danger-button button-small" href="/management/config/models/<%= model.id %>/delete/modal<%= queryString ? `?${queryString}` : '' %>" hx-get="/management/config/models/<%= model.id %>/delete/modal<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">Delete</a>
                           </div>

@@ -56,14 +56,14 @@ test('Processor Families provide the authoritative export Short Form', () => {
   assert.match(unitModel, /processorShortForm:/);
 });
 
-test('Lot Details owns the current export entry point and remains limited to Admin and Management', () => {
+test('Lot Details export entry point requires the granular Lot export permission', () => {
   const routes = read('routes/lots.js');
   const controller = read('controllers/lotController.js');
   const page = read('views/pages/management-lot-detail.ejs');
   const techPage = read('views/pages/tech-units.ejs');
 
-  assert.match(routes, /'\/management\/lots\/:lotId\/export\/preview'[\s\S]*?requireRole\(lotManagementRoles\)[\s\S]*?renderLotUnitExportPreview/);
-  assert.match(controller, /buildLotScopedUnitExportDataset\(exportContext\.dataScope\)/);
+  assert.match(routes, /'\/management\/lots\/:lotId\/export\/preview'[\s\S]*?requirePermission\('lots\.view'\)[\s\S]*?requirePermission\('lots\.export'\)[\s\S]*?renderLotUnitExportPreview/);
+  assert.match(controller, /unitExportService\.buildLotScopedUnitExportDataset\(exportContext\.dataScope/);
   assert.match(page, />Export Units<\/button>/);
   assert.doesNotMatch(page, />Export Direct Units<\/button>/);
   assert.doesNotMatch(page, />Export Lot \+ Descendants<\/button>/);

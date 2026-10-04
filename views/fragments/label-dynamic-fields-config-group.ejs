@@ -1,0 +1,140 @@
+<%
+  const fieldCount = labelDynamicFieldGroups.reduce((total, group) => total + group.fields.length, 0);
+  const activeFieldCount = labelDynamicFieldGroups.reduce((total, group) => (
+    total + group.fields.filter((field) => field.isActive).length
+  ), 0);
+  const inactiveFieldCount = fieldCount - activeFieldCount;
+  const categorySearchText = [
+    'label printing',
+    'label builder dynamic fields',
+    'dynamic text',
+    'barcode',
+    'qr code',
+    'composed values'
+  ].join(' ');
+%>
+<section class="configuration-group" data-configuration-group>
+  <header class="configuration-group-heading">
+    <div>
+      <h2>Label Printing</h2>
+      <p>Configuration that controls reusable Label Builder and printing behavior.</p>
+    </div>
+    <div class="configuration-group-counts" aria-label="Group totals">
+      <span><strong>1</strong> category</span>
+      <span><strong><%= formatNumber(activeFieldCount) %></strong> active</span>
+      <% if (inactiveFieldCount > 0) { %><span><strong><%= formatNumber(inactiveFieldCount) %></strong> inactive</span><% } %>
+    </div>
+  </header>
+
+  <div class="configuration-category-list">
+    <details class="configuration-category" data-configuration-category data-search-text="<%= categorySearchText %>">
+      <summary class="configuration-category-summary">
+        <span class="configuration-category-summary-title">
+          <strong>Label Builder Dynamic Fields</strong>
+          <code>label_dynamic_field_config</code>
+        </span>
+        <span class="configuration-category-summary-meta">
+          <span><%= formatNumber(fieldCount) %> supported</span>
+          <span><%= formatNumber(activeFieldCount) %> active</span>
+          <% if (inactiveFieldCount > 0) { %><span><%= formatNumber(inactiveFieldCount) %> inactive</span><% } %>
+          <span class="pill neutral">System-used</span>
+          <span class="pill neutral">Drag order</span>
+        </span>
+      </summary>
+
+      <div class="configuration-category-body">
+        <div class="configuration-category-toolbar-copy">
+          <p>Choose which supported BWTDallas data fields appear in the Layout Builder, rename their display labels, and control their order. Field keys remain application-managed.</p>
+          <p class="configuration-ordering-help">Inactive fields remain valid for existing saved templates, but are hidden from new Layout Builder selections. Existing templates that already use an inactive field continue to show it as Inactive while being edited.</p>
+        </div>
+
+        <% if (labelDynamicFieldsSaved) { %>
+          <div class="notice success">Label Builder dynamic fields saved.</div>
+        <% } else if (labelDynamicFieldError) { %>
+          <div class="notice error"><%= labelDynamicFieldError %></div>
+        <% } %>
+
+        <form method="post" action="/management/config/label-dynamic-fields" data-label-dynamic-fields-form>
+          <% labelDynamicFieldGroups.forEach((group) => { %>
+            <% const groupActiveCount = group.fields.filter((field) => field.isActive).length; %>
+            <div class="configuration-category-toolbar-copy">
+              <h3><%= group.label %></h3>
+              <p><%= formatNumber(group.fields.length) %> supported · <%= formatNumber(groupActiveCount) %> active<% if (groupActiveCount !== group.fields.length) { %> · <%= formatNumber(group.fields.length - groupActiveCount) %> inactive<% } %></p>
+              <p class="configuration-ordering-help">Drag the grip to reorder fields within this group, or focus the grip and use Arrow Up/Down, Home, and End. Order saves automatically. Display Label and Active changes still require Save Dynamic Fields. Clear Configuration Browser search before reordering.</p>
+              <p class="configuration-ordering-status" data-label-dynamic-field-order-status aria-live="polite"></p>
+            </div>
+
+            <div class="table-card configuration-values-table configuration-editable-table" data-reorderable="1">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th class="configuration-order-column">Order</th>
+                      <th>Display Label</th>
+                      <th>Field Key</th>
+                      <th>Active</th>
+                    </tr>
+                  </thead>
+                  <tbody data-label-dynamic-field-order-list data-group-code="<%= group.code %>" data-reorder-url="/management/config/label-dynamic-fields/order">
+                    <% group.fields.forEach((field) => { %>
+                      <%
+                        const fieldSearchText = [
+                          'label printing',
+                          'label builder dynamic fields',
+                          group.label,
+                          field.label,
+                          field.defaultLabel,
+                          field.key,
+                          field.isActive ? 'active' : 'inactive'
+                        ].filter(Boolean).join(' ').toLowerCase();
+                      %>
+                      <tr
+                        class="<%= field.isActive ? '' : 'configuration-value-row--inactive' %>"
+                        data-configuration-value-row
+                        data-search-text="<%= fieldSearchText %>"
+                        data-label-dynamic-field-order-row
+                        data-field-key="<%= field.key %>">
+                        <td class="configuration-order-cell">
+                          <button
+                            class="configuration-drag-handle"
+                            type="button"
+                            data-label-dynamic-field-drag-handle
+                            aria-label="Reorder <%= field.label %>. Drag with a mouse or touch, or use the arrow keys.">
+                            <svg viewBox="0 0 18 18" aria-hidden="true" focusable="false">
+                              <circle cx="6" cy="4" r="1.2"></circle>
+                              <circle cx="12" cy="4" r="1.2"></circle>
+                              <circle cx="6" cy="9" r="1.2"></circle>
+                              <circle cx="12" cy="9" r="1.2"></circle>
+                              <circle cx="6" cy="14" r="1.2"></circle>
+                              <circle cx="12" cy="14" r="1.2"></circle>
+                            </svg>
+                          </button>
+                        </td>
+                        <td>
+                          <input type="hidden" name="fieldKey" value="<%= field.key %>" />
+                          <input class="configuration-table-text-input" type="text" name="displayLabel" value="<%= field.label %>" maxlength="120" required aria-label="Display label for <%= field.key %>" />
+                          <% if (field.label !== field.defaultLabel) { %><small class="table-muted-line">Default: <%= field.defaultLabel %></small><% } %>
+                        </td>
+                        <td><code><%= field.key %></code></td>
+                        <td>
+                          <label class="configuration-table-toggle">
+                            <input type="checkbox" name="activeFieldKey" value="<%= field.key %>" <%= field.isActive ? 'checked' : '' %> />
+                            <span><%= field.isActive ? 'Active' : 'Inactive' %></span>
+                          </label>
+                        </td>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          <% }) %>
+
+          <div class="site-clean-actions">
+            <button class="primary-button" type="submit">Save Dynamic Fields</button>
+          </div>
+        </form>
+      </div>
+    </details>
+  </div>
+</section>

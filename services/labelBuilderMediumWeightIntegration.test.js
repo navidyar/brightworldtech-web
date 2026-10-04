@@ -16,7 +16,7 @@ test('Medium text uses a distinct synthetic weight in Builder preview and produc
   assert.match(builder, /-webkit-text-stroke/);
   assert.match(builder, /content\.style\.fontWeight = '400'/);
 
-  assert.match(renderer, /style\.fontWeight === 500/);
-  assert.match(renderer, /const renderWeight = mediumWeight \? 400 : style\.fontWeight/);
+  assert.match(renderer, /effectiveStyle\.fontWeight === 500/);
+  assert.match(renderer, /const renderWeight = mediumWeight \? 400 : effectiveStyle\.fontWeight/);
   assert.match(renderer, /paint-order="stroke fill"/);
 });

@@ -15,7 +15,7 @@ const {
 const ROOT = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
 
-test('solo printers are private by default while Tech Lead+ retains access', () => {
+test('solo printers are private by default while effective manage-any permission permits private access', () => {
   const input = normalizePrinterInput({
     displayName: 'Bench Printer',
     hostAddress: '10.0.2.211',
@@ -25,15 +25,12 @@ test('solo printers are private by default while Tech Lead+ retains access', () 
   assert.equal(input.isShared, false);
 
   const printer = { scope_code: 'solo', owner_user_id: 10, is_shared: 0, is_enabled: 1 };
-  assert.equal(canUsePrinter(printer, 10, ['tech']), true);
-  assert.equal(canUsePrinter(printer, 20, ['tech']), false);
-  assert.equal(canUsePrinter(printer, 20, ['tech_lead']), true);
-  assert.equal(canUsePrinter(printer, 20, ['management']), true);
-  assert.equal(canUsePrinter(printer, 20, ['admin']), true);
-  assert.equal(canEditSoloPrinter(printer, 20, ['tech_lead']), false);
-  assert.equal(canEditSoloPrinter(printer, 20, ['management']), true);
+  assert.equal(canUsePrinter(printer, 10, new Set()), true);
+  assert.equal(canUsePrinter(printer, 20, new Set()), false);
+  assert.equal(canUsePrinter(printer, 20, new Set(['printers.solo.manage_any'])), true);
+  assert.equal(canEditSoloPrinter(printer, 20, new Set()), false);
+  assert.equal(canEditSoloPrinter(printer, 20, new Set(['printers.solo.manage_any'])), true);
 });
-
 
 test('explicit loaded media width overrides the printer profile default', () => {
   const input = normalizePrinterInput({
@@ -83,9 +80,10 @@ test('Admin receives registry/group controls and Tech users receive owner-scoped
   const controller = read('controllers/labelPrinterController.js');
   assert.match(routes, /\/management\/printers/);
   assert.match(routes, /\/management\/printer-groups/);
-  assert.match(routes, /requireFeature\('managedPrinters'\)/);
+  assert.match(routes, /requirePermission\('printers\.managed\.manage'\)/);
+  assert.match(routes, /requirePermission\('printers\.groups\.manage'\)/);
   assert.match(routes, /\/tech\/printers/);
-  assert.match(routes, /requireRole\(techRoles\)/);
+  assert.match(routes, /router\.use\('\/tech\/printers', requireAuth, requirePermission\('printers\.solo\.manage'\)\)/);
   assert.match(controller, /listOwnedSoloPrinters\(req\.currentUser\.user_id\)/);
   assert.match(controller, /canEditSoloPrinter/);
 });
@@ -104,10 +102,11 @@ test('printer registration supports probe-and-review without switching productio
   assert.match(labelConfig, /findLabelPrinter/);
 });
 
-test('sidebar exposes managed Printers through the Admin feature guard and My Printers for Tech without exposing QC-only access', () => {
+test('sidebar exposes managed Printers by view permission and My Printers by solo permission', () => {
   const sidebar = read('views/partials/sidebar.ejs');
-  assert.match(sidebar, /canAccessFeature\('managedPrinters'\)[\s\S]*?href="\/management\/printers"[\s\S]*?>Printer Management</);
+  assert.match(sidebar, /if \(canViewManagedPrinters\)[\s\S]*?href="\/management\/printers"[\s\S]*?>Printer Management/);
   assert.match(sidebar, /href="\/tech\/printers"/);
   assert.match(sidebar, />My Printers</);
-  assert.match(sidebar, /canAccessMenuArea\('tech'\) && !isQcOnlyNavigationUser/);
+  assert.match(sidebar, /const showRequestsInQcSection = canViewQcPortal && canViewRequests && !canViewUnits && !canManageOwnPrinters/);
+  assert.match(sidebar, /const showTechSection = canViewUnits \|\| canManageOwnPrinters \|\| \(canViewRequests && !showRequestsInQcSection\)/);
 });

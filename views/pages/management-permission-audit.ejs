@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <body class="css-scope-management">
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+
+        <main class="content-shell">
+          <section class="page-heading site-work-page-heading">
+            <div>
+              <p class="eyebrow">Security Audit</p>
+              <h1>Permission Audit</h1>
+              <p>Review role, role-permission, user-role, and user permission-override changes. Visibility is controlled independently by the Permission Audit permission.</p>
+            </div>
+          </section>
+
+          <section class="content-card">
+            <div class="content-header">
+              <div>
+                <p class="eyebrow">Security Change History</p>
+                <h2>Permission Events</h2>
+              </div>
+            </div>
+
+            <form
+              class="management-login-filter-form management-permission-audit-filter-form"
+              method="get"
+              action="/management/permission-audit"
+              data-auto-submit-filter-form
+              data-auto-submit-delay="300"
+              data-auto-submit-filter-target=".management-permission-audit-results-section"
+            >
+              <label class="form-field">
+                <span>Event Type</span>
+                <select name="eventType" data-auto-submit-filter="immediate">
+                  <option value="">All event types</option>
+                  <% Object.entries(eventTypeLabels).forEach(([value, label]) => { %>
+                    <option value="<%= value %>" <%= eventType === value ? 'selected' : '' %>><%= label %></option>
+                  <% }) %>
+                </select>
+              </label>
+
+              <label class="form-field">
+                <span>Search</span>
+                <input type="search" name="search" value="<%= search %>" maxlength="150" placeholder="Actor, role, user, permission..." autocomplete="off" data-auto-submit-filter="debounced" />
+              </label>
+
+              <div class="management-login-filter-actions">
+                <% if (eventType || search) { %><a class="secondary-button" href="/management/permission-audit">Clear</a><% } %>
+              </div>
+            </form>
+
+            <section class="management-permission-audit-results-section">
+            <div class="table-card management-permission-audit-table-card site-space-top-lg">
+              <div class="table-scroll">
+              <table>
+                <thead>
+                  <tr>
+                    <th>When</th>
+                    <th>Event</th>
+                    <th>Target</th>
+                    <th>Permission</th>
+                    <th>Performed By</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <% if (events.length === 0) { %>
+                    <tr><td colspan="6">No permission audit events match the current filters.</td></tr>
+                  <% } %>
+                  <% events.forEach((event) => { %>
+                    <tr>
+                      <td><%= formatDateTime(event.created_at) %></td>
+                      <td><strong><%= event.eventLabel %></strong></td>
+                      <td><%= event.targetLabel %></td>
+                      <td><%= event.permission_key_snapshot || '—' %></td>
+                      <td><%= event.actorLabel %></td>
+                      <td>
+                        <a
+                          class="secondary-button button-small"
+                          href="/management/permission-audit/<%= event.permission_audit_event_id %>/modal"
+                          hx-get="/management/permission-audit/<%= event.permission_audit_event_id %>/modal"
+                          hx-target="#modal-root"
+                          hx-swap="innerHTML"
+                        >View</a>
+                      </td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+              </div>
+            </div>
+
+            <%
+              const buildAuditPageUrl = (targetPage) => {
+                const params = new URLSearchParams();
+                if (eventType) params.set('eventType', eventType);
+                if (search) params.set('search', search);
+                params.set('page', String(targetPage));
+                return `/management/permission-audit?${params.toString()}`;
+              };
+            %>
+            <div class="site-inline-actions site-space-top-lg">
+              <% if (page > 1) { %><a class="secondary-button" href="<%= buildAuditPageUrl(page - 1) %>">Previous</a><% } %>
+              <% if (hasNext) { %><a class="secondary-button" href="<%= buildAuditPageUrl(page + 1) %>">Next</a><% } %>
+            </div>
+            </section>
+          </section>
+        </main>
+      </div>
+    </div>
+
+    <div id="modal-root"></div>
+    <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+  </body>
+</html>

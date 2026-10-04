@@ -1,0 +1,76 @@
+<%
+  const safeCategory = category || null;
+  const safeValues = Array.isArray(values) ? values : [];
+  const safeAliases = Array.isArray(aliases) ? aliases : [];
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const categoryId = safeCategory ? Number(safeCategory.config_category_id) : 0;
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal configuration-value-modal" role="dialog" aria-modal="true" aria-labelledby="tool-config-alias-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Tool Configuration</p>
+        <h2 id="tool-config-alias-title">Tool Aliases<% if (safeCategory) { %> · <%= safeCategory.name %><% } %></h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <% if (safeErrors.length) { %>
+        <div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+      <% if (successMessage) { %><div class="message success"><p><%= successMessage %></p></div><% } %>
+
+      <% if (safeCategory) { %>
+        <p class="configuration-form-note">Exact active Configuration values resolve automatically. Add an alias only when hardware or an operating system reports a different raw value that should map to one of your canonical values.</p>
+
+        <form class="app-form" method="post" action="/management/config/categories/<%= categoryId %>/tool-aliases" hx-post="/management/config/categories/<%= categoryId %>/tool-aliases" hx-target="#modal-root" hx-swap="innerHTML" autocomplete="off">
+          <div class="configuration-value-form-grid">
+            <label class="form-field">
+              <span>Raw Tool Value</span>
+              <input type="text" name="aliasValue" maxlength="255" placeholder="Example: LPDDR4X" required />
+              <small class="field-hint">The exact value a collector may report. Matching is punctuation/case insensitive.</small>
+            </label>
+            <label class="form-field">
+              <span>Map To</span>
+              <select name="targetConfigValueId" required>
+                <option value="">Choose active value</option>
+                <% safeValues.forEach((value) => { %>
+                  <option value="<%= value.config_value_id %>"><%= value.label %><% if (value.value && value.value !== value.label) { %> · <%= value.value %><% } %></option>
+                <% }) %>
+              </select>
+              <small class="field-hint">Aliases can target active values only.</small>
+            </label>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="primary-button">Add Alias</button>
+            <button type="button" class="secondary-button" data-modal-close>Close</button>
+          </div>
+        </form>
+
+        <div class="table-card configuration-values-table">
+          <div class="table-scroll">
+            <table>
+              <thead><tr><th>Raw Tool Value</th><th>Maps To</th><th>Actions</th></tr></thead>
+              <tbody>
+                <% if (!safeAliases.length) { %><tr><td colspan="3">No Tool aliases are configured for this category.</td></tr><% } %>
+                <% safeAliases.forEach((alias) => { %>
+                  <tr>
+                    <td><strong><%= alias.alias_value %></strong></td>
+                    <td><%= alias.target_label %><% if (!alias.target_is_active) { %> <span class="pill neutral">Inactive target</span><% } %></td>
+                    <td>
+                      <form method="post" action="/management/config/categories/<%= categoryId %>/tool-aliases/<%= alias.tool_config_value_alias_id %>/delete" hx-post="/management/config/categories/<%= categoryId %>/tool-aliases/<%= alias.tool_config_value_alias_id %>/delete" hx-target="#modal-root" hx-swap="innerHTML">
+                        <button type="submit" class="danger-button button-small">Delete</button>
+                      </form>
+                    </td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      <% } else { %>
+        <div class="form-actions"><button type="button" class="secondary-button" data-modal-close>Close</button></div>
+      <% } %>
+    </div>
+  </section>
+</div>

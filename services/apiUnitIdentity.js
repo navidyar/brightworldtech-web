@@ -15,7 +15,41 @@ function normalizeSerial(value) {
 }
 
 function normalizeUuid(value) {
-  return normalizeIdentifier(value);
+  const raw = String(value || '').trim().toUpperCase();
+  if (!raw) return '';
+  const unwrapped = raw.startsWith('{') && raw.endsWith('}') ? raw.slice(1, -1) : raw;
+  const compact = unwrapped.replace(/-/g, '');
+  return /^[0-9A-F]{32}$/.test(compact) ? compact : '';
+}
+
+function getSystemUuidState(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return { supplied: false, usable: false, normalized: '', reason: 'not_supplied' };
+  const normalized = normalizeUuid(raw);
+  if (!normalized) return { supplied: true, usable: false, normalized: '', reason: 'malformed' };
+  if (normalized === '00000000000000000000000000000000' || normalized === 'FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF') {
+    return { supplied: true, usable: false, normalized, reason: 'placeholder' };
+  }
+  return { supplied: true, usable: true, normalized, reason: 'usable' };
+}
+
+function applySelectedCandidate(resolution, selectedUnitId) {
+  const safeSelectedUnitId = Number(selectedUnitId);
+  if (!resolution || resolution.status !== 'AMBIGUOUS' || !Number.isSafeInteger(safeSelectedUnitId) || safeSelectedUnitId <= 0) {
+    return resolution;
+  }
+  const selectedCandidate = (Array.isArray(resolution.candidates) ? resolution.candidates : [])
+    .find((candidate) => Number(candidate.unitId) === safeSelectedUnitId) || null;
+  if (!selectedCandidate) return resolution;
+  return {
+    ...resolution,
+    status: 'MATCHED',
+    matchMode: `${resolution.matchMode || 'ambiguous'}_selected_unit`,
+    candidate: selectedCandidate,
+    evidence: selectedCandidate.evidence || null,
+    matchedUnitId: safeSelectedUnitId,
+    selectedCandidateConfirmed: true
+  };
 }
 
 function groupMatches(matches = []) {
@@ -219,16 +253,14 @@ function resolveWithUuidTieBreak({ candidateSet, uuidSet, groupedCandidates, ide
   return null;
 }
 
-function resolveUuidFallback({ uuidSet, groupedCandidates, identity, sets }) {
+function resolveSecondaryUuidConflict({ uuidSet, groupedCandidates, identity, sets, matchMode }) {
   if (uuidSet.size === 0) {
     return finalize({ status: 'NOT_FOUND', matchMode: 'none', candidates: [], identity, sets });
   }
-  const candidates = filterCandidates(groupedCandidates, uuidSet);
   return finalize({
-    status: uuidSet.size === 1 ? 'MATCHED' : 'AMBIGUOUS',
-    matchMode: 'uuid_fallback',
-    candidates,
-    matchedUnitId: uuidSet.size === 1 ? [...uuidSet][0] : null,
+    status: 'CONFLICT',
+    matchMode: matchMode || 'serial_not_found_uuid_conflict',
+    candidates: filterCandidates(groupedCandidates, uuidSet),
     identity,
     sets
   });
@@ -309,7 +341,13 @@ function resolveUnitIdentity({ assetNumber = null, unitSerialNumber = '', biosSe
       });
     }
 
-    return resolveUuidFallback({ uuidSet, groupedCandidates, identity, sets });
+    return resolveSecondaryUuidConflict({
+      uuidSet,
+      groupedCandidates,
+      identity,
+      sets,
+      matchMode: 'serial_and_not_found_uuid_conflict'
+    });
   }
 
   const hasSingleSerial = hasUnitSerial || hasBiosSerial;
@@ -339,12 +377,20 @@ function resolveUnitIdentity({ assetNumber = null, unitSerialNumber = '', biosSe
     }
   }
 
-  return resolveUuidFallback({ uuidSet, groupedCandidates, identity, sets });
+  return resolveSecondaryUuidConflict({
+    uuidSet,
+    groupedCandidates,
+    identity,
+    sets,
+    matchMode: 'serial_not_found_uuid_conflict'
+  });
 }
 
 module.exports = {
   normalizeSerial,
   normalizeUuid,
+  getSystemUuidState,
+  applySelectedCandidate,
   groupMatches,
   resolveUnitIdentity
 };

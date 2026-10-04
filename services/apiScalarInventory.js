@@ -10,6 +10,7 @@ const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry
 const { buildUnitFormAuditEvent } = require('./unitAuditSnapshot');
 const { effectiveSourceCode } = require('./unitFieldAuthority');
 const { resolveSystemConfigValue } = require('./apiConfigValueResolver');
+const { getSystemUuidState } = require('./apiUnitIdentity');
 const {
   SUPPORTED_SCALAR_FIELDS,
   normalizeScalarObservations,
@@ -135,20 +136,25 @@ function normalizeIdentifierComparableValue(value) {
 async function applyToolIdentityEnrichment(connection, unitId, body, resolvedSecurity) {
   const unitSerialNumber = normalizeText(body.unit_serial_number ?? body.unitSerialNumber ?? body.unit_serial, 120);
   const biosSerialNumber = normalizeText(body.bios_serial_number ?? body.biosSerialNumber ?? body.bios_serial, 120);
-  const topLevelSystemUuid = normalizeText(body.system_uuid ?? body.systemUuid ?? body.uuid, 64);
-  const legacySecurityUuid = resolvedSecurity?.state === 'known'
+  const rawTopLevelSystemUuid = normalizeText(body.system_uuid ?? body.systemUuid ?? body.uuid, 64);
+  const rawLegacySecurityUuid = resolvedSecurity?.state === 'known'
     ? normalizeText(resolvedSecurity.value?.system_uuid, 64)
     : '';
+  const topLevelSystemUuidState = getSystemUuidState(rawTopLevelSystemUuid);
+  const legacySecurityUuidState = getSystemUuidState(rawLegacySecurityUuid);
+  const topLevelSystemUuid = topLevelSystemUuidState.usable ? rawTopLevelSystemUuid : '';
+  const legacySecurityUuid = legacySecurityUuidState.usable ? rawLegacySecurityUuid : '';
 
   if (topLevelSystemUuid && legacySecurityUuid
     && normalizeIdentifierComparableValue(topLevelSystemUuid) !== normalizeIdentifierComparableValue(legacySecurityUuid)) {
     throw new ApiScalarInventoryError(422, 'SYSTEM_UUID_PAYLOAD_CONFLICT', 'Top-level system_uuid conflicts with the legacy security.system_uuid value. Submit System UUID only at the top level.');
   }
 
+  const usableSystemUuid = topLevelSystemUuid || legacySecurityUuid;
   const submissions = [
     ['unit_serial_number', unitSerialNumber, () => techUnitModel.applyToolSerialIdentifier(connection, unitId, 'unit_serial_number', unitSerialNumber)],
     ['bios_serial_number', biosSerialNumber, () => techUnitModel.applyToolSerialIdentifier(connection, unitId, 'bios_serial_number', biosSerialNumber)],
-    ['system_uuid', topLevelSystemUuid || legacySecurityUuid, () => techUnitModel.applyToolSystemUuidIdentifier(connection, unitId, topLevelSystemUuid || legacySecurityUuid)]
+    ['system_uuid', usableSystemUuid, () => techUnitModel.applyToolSystemUuidIdentifier(connection, unitId, usableSystemUuid)]
   ].filter(([, value]) => value);
 
   const results = [];
@@ -202,17 +208,6 @@ async function tableColumnExists(connection, tableName, columnName) {
     [tableName, columnName]
   );
   return Number(rows[0]?.row_count || 0) === 1;
-}
-
-function keyboardLanguageAliases(value) {
-  const submitted = String(value || '').trim();
-  const normalized = submitted.toLowerCase().replace(/[^a-z0-9]+/g, '');
-  const usEnglishAliases = new Set([
-    'usen', 'enus', 'usenglish', 'englishus', 'englishunitedstates', 'unitedstatesenglish'
-  ]);
-  return usEnglishAliases.has(normalized)
-    ? ['US English', 'English US', 'English (US)', 'English (United States)', 'en-US']
-    : [];
 }
 
 function parseStoredJson(value) {
@@ -686,8 +681,7 @@ async function buildApplicationPlans(connection, observations, unitState, manual
     const resolution = keyboardLanguageObservation.state === 'known'
       ? await resolveSystemConfigValue(connection, {
         systemConfigCategoryId: SYSTEM_CONFIG_CATEGORY_IDS.KEYBOARD_LANGUAGES,
-        submitted: keyboardLanguageObservation.value,
-        candidates: keyboardLanguageAliases(keyboardLanguageObservation.value)
+        submitted: keyboardLanguageObservation.value
       })
       : { status: 'not_required', submitted: null };
     plans.set('keyboard_language', catalogPlan(keyboardLanguageObservation, resolution, unitState, manualSources, latestToolValues));
@@ -1130,6 +1124,15 @@ async function ingestScalarInventory({
       if (plan.decision.status === 'applied') {
         await applyCurrentValue(connection, safeUnitId, observation.fieldKey, plan.decision.desiredValue);
         setAuditFormValue(afterFormData, observation.fieldKey, plan.decision.desiredValue);
+        if (observation.fieldKey === 'unit_model'
+          && plan.resolution?.matchBasis === 'intake_mapping'
+          && plan.resolution.resolvedUnitCategoryConfigValueId) {
+          await connection.query(
+            'UPDATE units SET unit_category_config_value_id = ? WHERE unit_id = ? LIMIT 1',
+            [plan.resolution.resolvedUnitCategoryConfigValueId, safeUnitId]
+          );
+          afterFormData.unitCategoryConfigValueId = String(plan.resolution.resolvedUnitCategoryConfigValueId);
+        }
         changedCount += 1;
       }
 

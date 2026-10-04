@@ -16,13 +16,14 @@ test('Stage 10W70D gives QC request-history access without granting review autho
   const sidebar = read('views/partials/sidebar.ejs');
 
   assert.equal(accessPolicy.canAccessUnitRequests(['qc']), true);
-  assert.match(routes, /const unitRequestRoles = \['admin', 'management', 'tech_lead', 'qc', 'tech'\]/);
-  assert.match(routes, /'\/unit-requests',[\s\S]*requireRole\(unitRequestRoles\)/);
-  assert.match(routes, /'\/unit-requests\/:unitRequestId',[\s\S]*requireRole\(unitRequestRoles\)/);
-  assert.match(routes, /'\/unit-requests\/:unitRequestId\/approve',[\s\S]*requireRole\(overrideReviewRoles\)/);
-  assert.match(controller, /const REVIEW_ROLE_CODES = new Set\(\['admin', 'management', 'tech_lead'\]\)/);
-  assert.match(controller, /const requesterUserId = reviewer \? null : req\.currentUser\.user_id/);
-  assert.match(sidebar, /isQcOnlyNavigationUser[\s\S]*href="\/unit-requests"/);
+  assert.match(routes, /router\.use\('\/unit-requests', requireAuth, requirePermission\('requests\.view'\)\)/);
+  assert.doesNotMatch(routes.split("  '/unit-requests',")[1]?.split('\n);')[0] || '', /requireRole\(/);
+  assert.doesNotMatch(routes.split("  '/unit-requests/:unitRequestId',")[1]?.split('\n);')[0] || '', /requireRole\(/);
+  assert.match(routes, /'\/unit-requests\/:unitRequestId\/approve',[\s\S]*?requireAnyPermission\(\['requests\.review', 'qc\.reversion\.perform', 'catalog_requests\.model\.review', 'catalog_requests\.processor\.review'\]\)/);
+  assert.match(controller, /canReviewAnyUnitRequests\(req\)/);
+  assert.match(controller, /const requesterUserId = canReviewAnyUnitRequests\(req\) \? null : req\.currentUser\.user_id/);
+  assert.match(sidebar, /const showRequestsInQcSection = canViewQcPortal && canViewRequests && !canViewUnits && !canManageOwnPrinters/);
+  assert.match(sidebar, /if \(showRequestsInQcSection\)[\s\S]*?href="\/unit-requests"/);
 });
 
 test('Stage 10W70D separates QC request authority from Tech Lead+ direct reversion authority', () => {
@@ -31,9 +32,9 @@ test('Stage 10W70D separates QC request authority from Tech Lead+ direct reversi
   const details = read('views/fragments/tech-unit-qc-review-details-modal.ejs');
   const history = read('views/fragments/tech-unit-history-panel.ejs');
 
-  assert.match(routes, /qc-review\/:qcCheckId\/reversion-request\/modal'[\s\S]*requireRole\(\['qc'\]\)/);
-  assert.match(routes, /qc-review\/:qcCheckId\/reversion-request'[\s\S]*requireRole\(\['qc'\]\)/);
-  assert.match(routes, /qc-review\/:qcCheckId\/revert\/modal'[\s\S]*requireRole\(overrideReviewRoles\)/);
+  assert.match(routes, /qc-review\/:qcCheckId\/reversion-request\/modal'[\s\S]*requirePermission\('qc\.reversion\.request'\)/);
+  assert.match(routes, /qc-review\/:qcCheckId\/reversion-request'[\s\S]*requirePermission\('qc\.reversion\.request'\)/);
+  assert.match(routes, /qc-review\/:qcCheckId\/revert\/modal'[\s\S]*requirePermission\('qc\.reversion\.perform'\)/);
   assert.doesNotMatch(controller, /ownsLatestQcReview|reviewedByUserId\) === currentUserId/);
   assert.match(controller, /qcReversionAvailable = Boolean\(context\.latestQcReview\) && !context\.latestQcCorrection/);
   assert.match(controller, /canRequestQcReversion = qcReversionAvailable[\s\S]*?isQcRequester[\s\S]*?!pendingQcReversionRequest/);
@@ -155,7 +156,7 @@ test('Stage 10W70D migration is additive and rollback refuses to discard QC requ
 
 test('QC reversion request workflow does not grant QC Model or Processor catalog authority', () => {
   const controller = read('controllers/unitRequestController.js');
-  assert.match(controller, /const CATALOG_MANAGER_ROLE_CODES = new Set\(\['admin'\]\)/);
-  assert.doesNotMatch(controller, /CATALOG_MANAGER_ROLE_CODES = new Set\([^)]*qc/);
+  assert.match(controller, /return request \? canApproveCatalogRequest\(req, request\) : canApproveAnyCatalogRequests\(req\)/);
+  assert.match(read('services/requestPermissionScope.js'), /catalog_requests\.model\.review[\s\S]*catalog_requests\.processor\.review/);
   assert.match(controller, /const canSelfReviewCatalogRequest = catalogManager && isCatalogRequest\(request\)/);
 });

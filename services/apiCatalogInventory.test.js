@@ -7,7 +7,8 @@ const {
   resolveManufacturerCandidate,
   resolveModelCandidate,
   resolveProcessorCandidate,
-  resolveOperatingSystemCandidate
+  resolveOperatingSystemCandidate,
+  resolveModel
 } = require('./apiCatalogInventory');
 
 test('manufacturer normalization accepts common OEM corporate names without fuzzy guessing', () => {
@@ -59,4 +60,32 @@ test('ambiguous normalized catalog matches are never guessed', () => {
   ]);
   assert.equal(result.status, 'ambiguous');
   assert.equal(result.candidates.length, 2);
+});
+
+test('model intake alias resolves to its canonical model and cross-category target', async () => {
+  const connection = {
+    async query(sql, params) {
+      assert.match(sql, /unit_model_intake_mappings/);
+      assert.deepEqual(params, [7, 10, 'micro7010']);
+      return [[{
+        id: 42,
+        label: '7010',
+        manufacturerId: 7,
+        unitCategoryConfigValueId: 11,
+        manufacturerLabel: 'Lenovo'
+      }]];
+    }
+  };
+  const result = await resolveModel(connection, 'Micro 7010', {
+    manufacturerId: 7,
+    unitCategoryConfigValueId: 10
+  });
+  assert.deepEqual(result, {
+    status: 'resolved',
+    submitted: 'Micro 7010',
+    resolvedId: 42,
+    resolvedLabel: '7010',
+    resolvedUnitCategoryConfigValueId: 11,
+    matchBasis: 'intake_mapping'
+  });
 });

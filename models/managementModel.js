@@ -1,7 +1,25 @@
 const { pool } = require('./db');
 const accessPolicy = require('../config/accessPolicy');
+const { assertProtectedAdminInvariant } = require('../config/protectedAdmin');
+const userManagementAudit = require('./userManagementAuditModel');
+const permissionManagementModel = require('./permissionManagementModel');
 const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 const { normalizeUserListSort, sortUserRows } = require('../utils/managementUserSort');
+const { formatUtcSqlDateTime } = require('../utils/timeZone');
+const { getLoginInactivityState } = require('../services/loginInactivityPolicy');
+
+function roleAssignmentAuditState(userId, roles) {
+  const safeRoles = Array.isArray(roles) ? roles : [];
+  return {
+    userId: Number(userId),
+    roleIds: safeRoles.map((role) => Number(role.role_id)).sort((a, b) => a - b),
+    roles: safeRoles.map((role) => ({
+      roleId: Number(role.role_id),
+      name: role.name,
+      systemKey: role.system_key || null
+    })).sort((a, b) => a.roleId - b.roleId)
+  };
+}
 
 function getPasswordLinkStatus(row) {
   if (!row || !row.latest_password_link_expires_at) {
@@ -40,7 +58,7 @@ function mapUserRow(row) {
     ? 'password_reset'
     : linkTypeSystemId === SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_SETUP ? 'password_setup' : '';
 
-  return {
+  const mapped = {
     ...row,
     roles,
     account_status_code: accountStatusCode,
@@ -53,8 +71,18 @@ function mapUserRow(row) {
     can_delete_pending_setup: accountStatusSystemId === SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_PENDING_SETUP
       && Number(row.has_password || 0) !== 1
       && !row.last_login_at,
-    latest_password_link_status: getPasswordLinkStatus(row)
+    latest_password_link_status: getPasswordLinkStatus(row),
+    monitor_login_inactivity: row.login_inactivity_override === 'allow' || (row.login_inactivity_override !== 'deny' && Number(row.login_inactivity_role_grant || 0) === 1)
   };
+  const inactivity = getLoginInactivityState({
+    monitored: mapped.monitor_login_inactivity,
+    isActive: mapped.is_active,
+    accountStatusCode: mapped.account_status_code,
+    lastLoginAt: mapped.last_login_at,
+    startDate: mapped.start_date,
+    createdAt: mapped.created_at
+  });
+  return { ...mapped, login_inactivity_business_days: inactivity.businessDays, login_inactivity_overdue: inactivity.overdue };
 }
 
 function getRoleOrderSql(alias = 'r') {
@@ -111,6 +139,18 @@ async function listUsers(options = {}) {
         u.password_hash IS NOT NULL AS has_password,
         u.is_active,
         u.last_login_at,
+        (SELECT upo.effect
+         FROM user_permission_overrides upo
+         INNER JOIN permissions monitor_p ON monitor_p.permission_id = upo.permission_id
+         WHERE upo.user_id = u.user_id AND monitor_p.permission_key = 'users.login_inactivity.monitor'
+         LIMIT 1) AS login_inactivity_override,
+        EXISTS(
+          SELECT 1 FROM user_roles monitor_ur
+          INNER JOIN roles monitor_r ON monitor_r.role_id = monitor_ur.role_id AND monitor_r.is_active = 1
+          INNER JOIN role_permissions monitor_rp ON monitor_rp.role_id = monitor_r.role_id
+          INNER JOIN permissions monitor_p2 ON monitor_p2.permission_id = monitor_rp.permission_id AND monitor_p2.is_active = 1
+          WHERE monitor_ur.user_id = u.user_id AND monitor_p2.permission_key = 'users.login_inactivity.monitor'
+        ) AS login_inactivity_role_grant,
         latest_upl.expires_at AS latest_password_link_expires_at,
         latest_upl.used_at AS latest_password_link_used_at,
         latest_upl.revoked_at AS latest_password_link_revoked_at,
@@ -277,10 +317,13 @@ async function getUserById(userId) {
   return rows[0] ? mapUserRow(rows[0]) : null;
 }
 
-async function updateUserProfile({ userId, firstName, lastName, email, personalEmail = null, phone = null, startDate = null, endDate = null }) {
+async function updateUserProfile({ userId, firstName, lastName, email, personalEmail = null, phone = null, startDate = null, endDate = null, actorUserId = null }) {
   const safeUserId = Number(userId);
-
-  const [result] = await pool.query(
+  const connection = await pool.getConnection();
+  try {
+    await connection.beginTransaction();
+    const before = await userManagementAudit.getSnapshot(connection, safeUserId);
+    const [result] = await connection.query(
     `
       UPDATE users
       SET
@@ -297,19 +340,38 @@ async function updateUserProfile({ userId, firstName, lastName, email, personalE
     [firstName, lastName, email, personalEmail, phone, startDate, endDate, safeUserId]
   );
 
-  if (result.affectedRows === 0) {
-    return null;
+    if (result.affectedRows === 0) {
+      await connection.rollback();
+      return null;
+    }
+    const after = await userManagementAudit.getSnapshot(connection, safeUserId);
+    await userManagementAudit.writeEvent(connection, {
+      actorUserId, targetUserId: safeUserId, action: 'user_profile_updated', before, after
+    });
+    await connection.commit();
+    return getUserById(safeUserId);
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
   }
-
-  return getUserById(safeUserId);
 }
 
-async function updateUserWithRoles({ userId, firstName, lastName, email, personalEmail = null, phone = null, startDate = null, endDate = null, roleCodes }) {
+async function updateUserWithRoles({ userId, firstName, lastName, email, personalEmail = null, phone = null, startDate = null, endDate = null, roleCodes, actorUserId = null }) {
   const safeUserId = Number(userId);
+  try {
+    assertProtectedAdminInvariant({ userId: safeUserId, roleCodes });
+  } catch (error) {
+    await userManagementAudit.recordBlocked({ actorUserId, targetUserId: safeUserId, action: 'user_role_change_blocked', reason: error.message });
+    throw error;
+  }
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
+    const before = await userManagementAudit.getSnapshot(connection, safeUserId);
+    const beforePermissionRoles = await permissionManagementModel.getUserRoles(safeUserId, connection);
 
     const [result] = await connection.query(
       `
@@ -353,6 +415,23 @@ async function updateUserWithRoles({ userId, firstName, lastName, email, persona
       );
     }
 
+    const after = await userManagementAudit.getSnapshot(connection, safeUserId);
+    const changes = userManagementAudit.diffSnapshots(before, after);
+    await userManagementAudit.writeEvent(connection, {
+      actorUserId, targetUserId: safeUserId,
+      action: changes.roles ? 'user_roles_updated' : 'user_profile_updated', before, after
+    });
+    if (changes.roles) {
+      const afterPermissionRoles = await permissionManagementModel.getUserRoles(safeUserId, connection);
+      await permissionManagementModel.writeAuditEvent(connection, {
+        actorUserId,
+        eventType: 'user_roles_replaced',
+        targetUserId: safeUserId,
+        beforeState: roleAssignmentAuditState(safeUserId, beforePermissionRoles),
+        afterState: roleAssignmentAuditState(safeUserId, afterPermissionRoles)
+      });
+    }
+
     await connection.commit();
 
     return getUserById(safeUserId);
@@ -364,13 +443,20 @@ async function updateUserWithRoles({ userId, firstName, lastName, email, persona
   }
 }
 
-async function setUserActiveStatus({ userId, isActive }) {
+async function setUserActiveStatus({ userId, isActive, actorUserId = null }) {
   const safeUserId = Number(userId);
+  try {
+    assertProtectedAdminInvariant({ userId: safeUserId, isActive });
+  } catch (error) {
+    await userManagementAudit.recordBlocked({ actorUserId, targetUserId: safeUserId, action: 'user_deactivation_blocked', reason: error.message });
+    throw error;
+  }
   const activeValue = isActive ? 1 : 0;
   const connection = await pool.getConnection();
 
   try {
     await connection.beginTransaction();
+    const before = await userManagementAudit.getSnapshot(connection, safeUserId);
 
     const [result] = await connection.query(
       `
@@ -396,6 +482,14 @@ async function setUserActiveStatus({ userId, isActive }) {
       );
     }
 
+    if (result.affectedRows > 0) {
+      const after = await userManagementAudit.getSnapshot(connection, safeUserId);
+      await userManagementAudit.writeEvent(connection, {
+        actorUserId, targetUserId: safeUserId,
+        action: isActive ? 'user_activated' : 'user_deactivated', before, after
+      });
+    }
+
     await connection.commit();
 
     return result.affectedRows > 0;
@@ -407,16 +501,22 @@ async function setUserActiveStatus({ userId, isActive }) {
   }
 }
 
-async function deactivateUser(userId) {
-  return setUserActiveStatus({ userId, isActive: false });
+async function deactivateUser(userId, actorUserId = null) {
+  return setUserActiveStatus({ userId, isActive: false, actorUserId });
 }
 
-async function reactivateUser(userId) {
-  return setUserActiveStatus({ userId, isActive: true });
+async function reactivateUser(userId, actorUserId = null) {
+  return setUserActiveStatus({ userId, isActive: true, actorUserId });
 }
 
-async function deletePendingSetupUser(userId) {
+async function deletePendingSetupUser(userId, actorUserId = null) {
   const safeUserId = Number(userId);
+  try {
+    assertProtectedAdminInvariant({ userId: safeUserId, deleting: true });
+  } catch (error) {
+    await userManagementAudit.recordBlocked({ actorUserId, targetUserId: safeUserId, action: 'user_deletion_blocked', reason: error.message });
+    throw error;
+  }
   const connection = await pool.getConnection();
 
   try {
@@ -457,6 +557,8 @@ async function deletePendingSetupUser(userId) {
       return { deleted: false, reason: 'not_allowed' };
     }
 
+    const before = await userManagementAudit.getSnapshot(connection, safeUserId);
+
     await connection.query(
       `
         DELETE FROM user_password_links
@@ -481,6 +583,12 @@ async function deletePendingSetupUser(userId) {
       `,
       [safeUserId]
     );
+
+    if (deleteResult.affectedRows > 0) {
+      await userManagementAudit.writeEvent(connection, {
+        actorUserId, targetUserId: safeUserId, action: 'user_deleted', before
+      });
+    }
 
     await connection.commit();
 
@@ -519,6 +627,9 @@ function formatRoleLabel(roleCode) {
 }
 
 async function listLoginActivityForDay({ startAt, endAt }) {
+  const startAtUtc = formatUtcSqlDateTime(startAt);
+  const endAtUtc = formatUtcSqlDateTime(endAt);
+
   const [rows] = await pool.query(
     `
       SELECT
@@ -536,8 +647,8 @@ async function listLoginActivityForDay({ startAt, endAt }) {
           ',',
           1
         ) AS first_login_role_code,
-        MIN(ula.logged_in_at) AS first_login_at,
-        MAX(ula.logged_in_at) AS last_login_at,
+        DATE_FORMAT(MIN(ula.logged_in_at), '%Y-%m-%dT%H:%i:%s.000Z') AS first_login_at,
+        DATE_FORMAT(MAX(ula.logged_in_at), '%Y-%m-%dT%H:%i:%s.000Z') AS last_login_at,
         COUNT(*) AS successful_login_count
       FROM user_login_activity ula
       INNER JOIN users u
@@ -556,13 +667,41 @@ async function listLoginActivityForDay({ startAt, endAt }) {
         u.first_name ASC,
         u.email ASC
     `,
-    [startAt, endAt]
+    [startAtUtc, endAtUtc]
   );
 
   return rows.map((row) => ({
     ...row,
     first_login_role_label: formatRoleLabel(row.first_login_role_code),
     successful_login_count: Number(row.successful_login_count || 0)
+  }));
+}
+
+async function listUserLoginActivityForDay({ userId, startAt, endAt }) {
+  const startAtUtc = formatUtcSqlDateTime(startAt);
+  const endAtUtc = formatUtcSqlDateTime(endAt);
+
+  const [rows] = await pool.query(
+    `
+      SELECT
+        ula.user_login_activity_id,
+        ula.user_id,
+        ula.primary_role_code,
+        DATE_FORMAT(ula.logged_in_at, '%Y-%m-%dT%H:%i:%s.000Z') AS logged_in_at
+      FROM user_login_activity ula
+      WHERE ula.user_id = ?
+        AND ula.logged_in_at >= ?
+        AND ula.logged_in_at < ?
+      ORDER BY
+        ula.logged_in_at ASC,
+        ula.user_login_activity_id ASC
+    `,
+    [userId, startAtUtc, endAtUtc]
+  );
+
+  return rows.map((row) => ({
+    ...row,
+    role_label: formatRoleLabel(row.primary_role_code)
   }));
 }
 
@@ -576,5 +715,6 @@ module.exports = {
   deactivateUser,
   reactivateUser,
   deletePendingSetupUser,
-  listLoginActivityForDay
+  listLoginActivityForDay,
+  listUserLoginActivityForDay
 };

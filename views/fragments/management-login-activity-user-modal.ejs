@@ -1,0 +1,55 @@
+<%
+  const safeUser = user || null;
+  const safeActivity = Array.isArray(activity) ? activity : [];
+  const displayName = safeUser ? ([safeUser.first_name, safeUser.last_name].filter(Boolean).join(' ').trim() || safeUser.username || safeUser.email || `User #${safeUser.user_id}`) : 'Login Activity';
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal" role="dialog" aria-modal="true" aria-labelledby="login-activity-user-modal-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Daily Login Detail</p>
+        <h2 id="login-activity-user-modal-title"><%= displayName %></h2>
+        <p><%= formatDateKeyLabel(selectedDate) %> · every recorded successful sign-in for this user on the selected day.</p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <div class="management-summary-inline" aria-label="User login activity summary">
+        <span><strong><%= formatNumber(safeActivity.length) %></strong><small>Successful Sign-ins</small></span>
+        <span><strong><%= safeActivity.length ? formatTimeWithZone(safeActivity[0].logged_in_at) : '—' %></strong><small>First Sign-in</small></span>
+        <span><strong><%= safeActivity.length ? formatTimeWithZone(safeActivity[safeActivity.length - 1].logged_in_at) : '—' %></strong><small>Most Recent</small></span>
+      </div>
+
+      <div class="table-card site-space-top-lg">
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Sign-in Time</th>
+                <th>Role at Sign-in</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% if (safeActivity.length === 0) { %>
+                <tr><td colspan="3">No successful sign-ins were recorded for this user on the selected date.</td></tr>
+              <% } %>
+              <% safeActivity.forEach((entry, index) => { %>
+                <tr>
+                  <td><%= index + 1 %></td>
+                  <td><%= formatTimeWithZone(entry.logged_in_at) %></td>
+                  <td><span class="pill slate"><%= entry.role_label %></span></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="site-clean-actions site-space-top-lg">
+        <button type="button" class="secondary-button" data-modal-close>Close</button>
+      </div>
+    </div>
+  </section>
+</div>

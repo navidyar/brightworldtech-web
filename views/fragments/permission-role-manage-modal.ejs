@@ -1,0 +1,178 @@
+<%
+  const safeRole = role || null;
+  const safeGroups = Array.isArray(permissionGroups) ? permissionGroups : [];
+  const selectedKeys = selectedPermissionKeys instanceof Set ? selectedPermissionKeys : new Set();
+  const totalPermissions = safeGroups.reduce((count, group) => count + group.permissions.length, 0);
+%>
+<div class="modal-backdrop permission-role-manage-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal permission-role-manage-modal" role="dialog" aria-modal="true" aria-labelledby="permission-role-manage-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Role Management</p>
+        <h2 id="permission-role-manage-title"><%= safeRole ? safeRole.name : 'Manage Role' %></h2>
+        <% if (safeRole) { %>
+          <p>Role names are organizational only. Effective access comes from the approved default permissions below.</p>
+        <% } %>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body permission-role-manage-body">
+      <% if (noticeMessage) { %><div class="message success" data-auto-dismiss-success><p><%= noticeMessage %></p></div><% } %>
+      <% if (errorMessage) { %><div class="message error"><p><%= errorMessage %></p></div><% } %>
+
+      <% if (!safeRole) { %>
+        <div class="action-row"><button type="button" class="secondary-button" data-modal-close>Close</button></div>
+      <% } else { %>
+        <div class="permission-role-manage-summary">
+          <span class="pill <%= safeRole.is_active ? 'good' : 'muted' %>"><%= safeRole.is_active ? 'Active' : 'Inactive' %></span>
+          <span class="pill" data-role-approved-summary data-approved-count="<%= safeRole.permissionKeys.length %>"><%= safeRole.permissionKeys.length %> / <%= totalPermissions %> approved</span>
+          <span class="pill"><%= safeRole.assignment_count %> assigned</span>
+          <% if (safeRole.system_key === 'super_admin') { %><span class="pill warning">Permanent Super Admin</span><% } %>
+          <% if (transitionallyProtected) { %><span class="pill muted">Legacy Gate Protected</span><% } %>
+        </div>
+
+        <% if (transitionallyProtected) { %>
+          <div class="message warning"><p>This compatibility role may be renamed and its default permissions may be changed, but deactivation and deletion stay blocked until the remaining legacy role gates are retired.</p></div>
+        <% } %>
+
+        <div class="permission-role-manage-layout">
+          <aside class="permission-role-manage-details">
+            <div class="site-clean-section-heading permission-role-subheading">
+              <div><h3>Role Details</h3><p>Changing the display name does not change the role's internal code used by limited role-specific workflows.</p></div>
+            </div>
+
+            <% if (typeof hasPermission === 'function' && hasPermission('roles.edit')) { %>
+              <form
+                class="app-form app-form-clean permission-role-details-form"
+                method="post"
+                action="/management/roles-permissions/<%= safeRole.role_id %>/details"
+                hx-post="/management/roles-permissions/<%= safeRole.role_id %>/details"
+                hx-target="#modal-root"
+                hx-swap="innerHTML"
+              >
+                <label class="form-field">
+                  <span>Role Name</span>
+                  <input type="text" name="name" maxlength="150" value="<%= safeRole.name %>" required />
+                </label>
+                <label class="form-field">
+                  <span>Description (optional)</span>
+                  <textarea name="description" maxlength="500" rows="4"><%= safeRole.description || '' %></textarea>
+                </label>
+
+                <% if (safeRole.system_key === 'super_admin' || transitionallyProtected) { %>
+                  <input type="hidden" name="isActive" value="1" />
+                  <label class="configuration-inline-checkbox is-disabled">
+                    <input type="checkbox" checked disabled />
+                    <span><strong>Active</strong><small><%= safeRole.system_key === 'super_admin' ? 'Super Admin must remain active.' : 'Deactivation is temporarily unavailable.' %></small></span>
+                  </label>
+                <% } else { %>
+                  <label class="configuration-inline-checkbox">
+                    <input type="checkbox" name="isActive" value="1" <%= safeRole.is_active ? 'checked' : '' %> />
+                    <span><strong>Active</strong><small>Inactive roles remain in history but cannot be newly assigned.</small></span>
+                  </label>
+                <% } %>
+
+                <div class="form-actions"><button class="primary-button" type="submit">Save Role Details</button></div>
+              </form>
+            <% } else { %>
+              <dl class="permission-role-readonly-details">
+                <div><dt>Name</dt><dd><%= safeRole.name %></dd></div>
+                <div><dt>Description</dt><dd><%= safeRole.description || '—' %></dd></div>
+              </dl>
+            <% } %>
+
+            <div class="permission-role-manage-actions">
+              <% if (typeof hasAllPermissions === 'function' && hasAllPermissions(['roles.create', 'role_permissions.manage'])) { %>
+                <a class="secondary-button" href="/management/roles-permissions/<%= safeRole.role_id %>/duplicate/modal" hx-get="/management/roles-permissions/<%= safeRole.role_id %>/duplicate/modal" hx-target="#modal-root" hx-swap="innerHTML">Duplicate Role</a>
+              <% } %>
+              <% if (typeof hasPermission === 'function' && hasPermission('roles.delete') && safeRole.system_key !== 'super_admin' && !transitionallyProtected) { %>
+                <a class="danger-button" href="/management/roles-permissions/<%= safeRole.role_id %>/delete/modal" hx-get="/management/roles-permissions/<%= safeRole.role_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Role</a>
+              <% } %>
+            </div>
+          </aside>
+
+          <section class="permission-role-manage-permissions">
+            <div class="site-clean-section-heading permission-role-subheading">
+              <div><h3>Default Permissions</h3><p>Checked means Approved. Unchecked means Not Approved. Grants from multiple assigned roles combine.</p></div>
+              <div class="site-inline-actions permission-category-toggle-actions" aria-label="Permission category display controls">
+                <button type="button" class="secondary-button button-small" data-permission-groups-expand>Expand All</button>
+                <button type="button" class="secondary-button button-small" data-permission-groups-collapse>Collapse All</button>
+              </div>
+            </div>
+
+            <% if (safeRole.system_key === 'super_admin') { %>
+              <div class="message warning"><p>Super Admin permanently retains every active permission. Its grants are shown for reference and cannot be removed.</p></div>
+            <% } %>
+
+            <form
+              class="permission-role-permissions-form"
+              method="post"
+              data-live-filter
+              action="/management/roles-permissions/<%= safeRole.role_id %>/permissions"
+              hx-post="/management/roles-permissions/<%= safeRole.role_id %>/permissions"
+              hx-target="#modal-root"
+              hx-swap="innerHTML"
+            >
+              <div class="management-live-filter-bar permission-role-modal-filter" aria-label="Permission filters">
+                <label class="form-field management-live-filter-search">
+                  <span>Search Permissions</span>
+                  <input type="search" autocomplete="off" placeholder="Permission name, description, key..." data-live-filter-control="search" />
+                </label>
+                <label class="form-field">
+                  <span>Approval</span>
+                  <select data-live-filter-control="state">
+                    <option value="">All permissions</option>
+                    <option value="approved">Approved</option>
+                    <option value="not-approved">Not Approved</option>
+                  </select>
+                </label>
+                <button type="button" class="secondary-button button-small management-live-filter-clear" data-live-filter-clear>Clear</button>
+                <span class="management-live-filter-count"><strong data-live-filter-count><%= totalPermissions %></strong> shown</span>
+              </div>
+              <div class="message" data-live-filter-empty hidden><p>No permissions match the current filters.</p></div>
+
+              <% safeGroups.forEach((group, groupIndex) => { %>
+                <% const approvedCount = group.permissions.filter((permission) => selectedKeys.has(permission.permission_key)).length; %>
+                <details class="permission-role-permission-group" data-live-filter-group data-permission-group-key="<%= group.name %>">
+                  <summary>
+                    <span><strong><%= group.name %></strong><small><%= approvedCount %> of <%= group.permissions.length %> approved</small></span>
+                  </summary>
+                  <div class="permission-role-permission-list">
+                    <% group.permissions.forEach((permission) => { %>
+                      <% const approved = selectedKeys.has(permission.permission_key); %>
+                      <% const securityLocked = permission.permission_key === 'security.super_admin.manage' && !(typeof hasPermission === 'function' && hasPermission('security.super_admin.manage')); %>
+                      <% const readOnly = safeRole.system_key === 'super_admin' || !(typeof hasPermission === 'function' && hasPermission('role_permissions.manage')) || securityLocked; %>
+                      <label
+                        class="permission-role-permission-row <%= readOnly ? 'is-readonly' : '' %>"
+                        data-live-filter-row
+                        data-live-filter-search="<%= [permission.name, permission.description, permission.permission_key, group.name].filter(Boolean).join(' ') %>"
+                        data-live-filter-state="<%= approved ? 'approved' : 'not-approved' %>"
+                      >
+                        <input type="checkbox" name="permissionKeys" value="<%= permission.permission_key %>" <%= approved ? 'checked' : '' %> <%= readOnly ? 'disabled' : '' %> />
+                        <% if (readOnly && approved) { %><input type="hidden" name="permissionKeys" value="<%= permission.permission_key %>" /><% } %>
+                        <span>
+                          <strong><%= permission.name %></strong>
+                          <small><%= permission.description %></small>
+                          <code><%= permission.permission_key %></code>
+                        </span>
+                      </label>
+                    <% }) %>
+                  </div>
+                </details>
+              <% }) %>
+
+              <% if (safeRole.system_key !== 'super_admin' && typeof hasPermission === 'function' && hasPermission('role_permissions.manage')) { %>
+                <div class="form-actions"><button class="primary-button" type="submit">Save Default Permissions</button></div>
+              <% } %>
+            </form>
+          </section>
+        </div>
+
+        <div class="permission-role-manage-footer">
+          <button type="button" class="secondary-button" data-modal-close>Close</button>
+        </div>
+      <% } %>
+    </div>
+  </section>
+</div>

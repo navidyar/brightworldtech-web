@@ -36,9 +36,11 @@
       <% } %>
 
       <% if (safeLot) { %>
-        <div class="lot-requirements-modal-toolbar site-clean-actions">
-          <a class="primary-button" href="/management/lots/<%= safeLot.lot_id %>/requirements/new/modal" hx-get="/management/lots/<%= safeLot.lot_id %>/requirements/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Add Requirement</a>
-        </div>
+        <% if (hasPermission('lots.requirements.manage')) { %>
+          <div class="lot-requirements-modal-toolbar site-clean-actions">
+            <a class="primary-button" href="/management/lots/<%= safeLot.lot_id %>/requirements/new/modal" hx-get="/management/lots/<%= safeLot.lot_id %>/requirements/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Add Requirement</a>
+          </div>
+        <% } %>
       <% } %>
 
       <div class="table-card lot-requirements-table-card lot-requirements-modal-table-card">

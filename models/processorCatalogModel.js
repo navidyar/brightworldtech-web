@@ -8,6 +8,7 @@ const { getIntelCoreGeneration, ordinal } = require('../services/processorFamily
 const MAX_PROCESSOR_MODEL_LENGTH = 150;
 const MAX_PROCESSOR_FAMILY_LENGTH = 100;
 const MAX_PROCESSOR_GENERATION_LENGTH = 80;
+const MAX_PROCESSOR_SHORT_FORM_LENGTH = 80;
 
 function normalizePositiveInteger(value) {
   const parsed = Number.parseInt(String(value || '').trim(), 10);
@@ -398,12 +399,13 @@ async function listProcessorModels(filters = {}, connection = pool) {
     where.push(`(
       pm.model_code LIKE ?
       OR pm.processor_family LIKE ?
+      OR pm.label_short_form LIKE ?
       OR pm.generation LIKE ?
       OR pb.name LIKE ?
       OR pf.name LIKE ?
       OR CAST(pm.base_speed_ghz AS CHAR) LIKE ?
     )`);
-    values.push(like, like, like, like, like, like);
+    values.push(like, like, like, like, like, like, like);
   }
 
   const [rows] = await connection.query(
@@ -412,6 +414,7 @@ async function listProcessorModels(filters = {}, connection = pool) {
         pm.processor_model_id,
         pm.processor_brand_id,
         pm.model_code,
+        pm.label_short_form,
         pm.processor_family,
         pm.generation,
         pm.base_speed_ghz,
@@ -440,6 +443,7 @@ async function listProcessorModels(filters = {}, connection = pool) {
         pm.processor_model_id,
         pm.processor_brand_id,
         pm.model_code,
+        pm.label_short_form,
         pm.processor_family,
         pm.generation,
         pm.base_speed_ghz,
@@ -455,6 +459,7 @@ async function listProcessorModels(filters = {}, connection = pool) {
     processorBrandId: Number(row.processor_brand_id),
     brandName: row.brand_name,
     modelCode: row.model_code,
+    labelShortForm: row.label_short_form || '',
     legacyFamily: row.processor_family || '',
     generation: row.generation || '',
     baseSpeedGhz: row.base_speed_ghz,
@@ -477,6 +482,7 @@ async function getProcessorById(processorModelId, connection = pool) {
         pm.processor_model_id,
         pm.processor_brand_id,
         pm.model_code,
+        pm.label_short_form,
         pm.processor_family,
         pm.generation,
         pm.base_speed_ghz,
@@ -505,6 +511,7 @@ async function getProcessorById(processorModelId, connection = pool) {
         pm.processor_model_id,
         pm.processor_brand_id,
         pm.model_code,
+        pm.label_short_form,
         pm.processor_family,
         pm.generation,
         pm.base_speed_ghz,
@@ -522,6 +529,7 @@ async function getProcessorById(processorModelId, connection = pool) {
     processorBrandId: Number(row.processor_brand_id),
     brandName: row.brand_name,
     modelCode: row.model_code,
+    labelShortForm: row.label_short_form || '',
     legacyFamily: row.processor_family || '',
     generation: row.generation || '',
     baseSpeedGhz: row.base_speed_ghz,
@@ -559,6 +567,7 @@ async function createProcessorModel(input = {}, currentUserId = null) {
   let modelCode = normalizeText(input.modelCode, MAX_PROCESSOR_MODEL_LENGTH);
   let legacyFamily = normalizeText(input.legacyFamily, MAX_PROCESSOR_FAMILY_LENGTH);
   let generation = normalizeText(input.generation, MAX_PROCESSOR_GENERATION_LENGTH);
+  const labelShortForm = normalizeText(input.labelShortForm, MAX_PROCESSOR_SHORT_FORM_LENGTH);
   let baseSpeedGhz = normalizeOptionalDecimal(input.baseSpeedGhz);
   const isActive = input.isActive === true || input.isActive === '1';
 
@@ -606,7 +615,7 @@ async function createProcessorModel(input = {}, currentUserId = null) {
     }
 
     if (await processorExists({ processorBrandId, modelCode }, connection)) {
-      const error = new Error('A processor with that Processor Type and canonical Processor name already exists. Use the existing record or Resolve Duplicate instead.');
+      const error = new Error('A processor with that Processor Type and Catalog Processor name already exists. Use the existing record or Resolve Duplicate instead.');
       error.code = 'BWT_PROCESSOR_CATALOG_DUPLICATE';
       throw error;
     }
@@ -617,12 +626,13 @@ async function createProcessorModel(input = {}, currentUserId = null) {
           processor_brand_id,
           processor_family,
           model_code,
+          label_short_form,
           base_speed_ghz,
           generation,
           is_active
-        ) VALUES (?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
-      [processorBrandId, legacyFamily || null, modelCode, baseSpeedGhz, generation || null, isActive ? 1 : 0]
+      [processorBrandId, legacyFamily || null, modelCode, labelShortForm || null, baseSpeedGhz, generation || null, isActive ? 1 : 0]
     );
     const processorModelId = Number(result.insertId);
 
@@ -639,7 +649,7 @@ async function createProcessorModel(input = {}, currentUserId = null) {
     await connection.rollback();
     if (error && error.code === 'ER_DUP_ENTRY') {
       error.code = 'BWT_PROCESSOR_CATALOG_DUPLICATE';
-      error.message = 'A processor with that Processor Type and canonical Processor name already exists. Use the existing record or Resolve Duplicate instead.';
+      error.message = 'A processor with that Processor Type and Catalog Processor name already exists. Use the existing record or Resolve Duplicate instead.';
     }
     throw error;
   } finally {
@@ -653,6 +663,7 @@ async function updateProcessorModel(processorModelId, input = {}, currentUserId 
   let modelCode = normalizeText(input.modelCode, MAX_PROCESSOR_MODEL_LENGTH);
   let legacyFamily = normalizeText(input.legacyFamily, MAX_PROCESSOR_FAMILY_LENGTH);
   let generation = normalizeText(input.generation, MAX_PROCESSOR_GENERATION_LENGTH);
+  const labelShortForm = normalizeText(input.labelShortForm, MAX_PROCESSOR_SHORT_FORM_LENGTH);
   let baseSpeedGhz = normalizeOptionalDecimal(input.baseSpeedGhz);
   const isActive = input.isActive === true || input.isActive === '1';
 
@@ -712,7 +723,7 @@ async function updateProcessorModel(processorModelId, input = {}, currentUserId 
     }
 
     if (await processorExists({ processorBrandId, modelCode, excludeProcessorModelId: safeId }, connection)) {
-      const error = new Error('A processor with that Processor Type and canonical Processor name already exists. Ask an Admin to use Resolve Duplicate instead of creating another duplicate.');
+      const error = new Error('A processor with that Processor Type and Catalog Processor name already exists. Ask an Admin to use Resolve Duplicate instead of creating another duplicate.');
       error.code = 'BWT_PROCESSOR_CATALOG_DUPLICATE';
       throw error;
     }
@@ -722,6 +733,7 @@ async function updateProcessorModel(processorModelId, input = {}, currentUserId 
         UPDATE processor_models
         SET processor_brand_id = ?,
             model_code = ?,
+            label_short_form = ?,
             processor_family = ?,
             generation = ?,
             base_speed_ghz = ?,
@@ -729,7 +741,7 @@ async function updateProcessorModel(processorModelId, input = {}, currentUserId 
         WHERE processor_model_id = ?
         LIMIT 1
       `,
-      [processorBrandId, modelCode, legacyFamily || null, generation || null, baseSpeedGhz, isActive ? 1 : 0, safeId]
+      [processorBrandId, modelCode, labelShortForm || null, legacyFamily || null, generation || null, baseSpeedGhz, isActive ? 1 : 0, safeId]
     );
 
     const brandChanged = Number(existing.processor_brand_id) !== processorBrandId;
@@ -775,7 +787,7 @@ async function updateProcessorModel(processorModelId, input = {}, currentUserId 
     await connection.rollback();
     if (error && error.code === 'ER_DUP_ENTRY') {
       error.code = 'BWT_PROCESSOR_CATALOG_DUPLICATE';
-      error.message = 'A processor with that Processor Type and canonical Processor name already exists. Ask an Admin to use Resolve Duplicate instead.';
+      error.message = 'A processor with that Processor Type and Catalog Processor name already exists. Ask an Admin to use Resolve Duplicate instead.';
     }
     throw error;
   } finally {
@@ -1221,7 +1233,7 @@ async function mergeProcessorModels({ sourceProcessorModelId, targetProcessorMod
   const sourceId = normalizePositiveInteger(sourceProcessorModelId);
   const targetId = normalizePositiveInteger(targetProcessorModelId);
   if (!sourceId || !targetId || sourceId === targetId) {
-    const error = new Error('Choose a different canonical processor to receive this duplicate.');
+    const error = new Error('Choose a different Catalog Processor to receive this duplicate.');
     error.code = 'BWT_PROCESSOR_MERGE_INPUT_INVALID';
     throw error;
   }
@@ -1248,7 +1260,7 @@ async function mergeProcessorModels({ sourceProcessorModelId, targetProcessorMod
     const source = rows.find((row) => Number(row.processor_model_id) === sourceId);
     const target = rows.find((row) => Number(row.processor_model_id) === targetId);
     if (!source || !target) {
-      const error = new Error('The duplicate processor or canonical processor could not be found.');
+      const error = new Error('The duplicate processor or Catalog Processor could not be found.');
       error.code = 'BWT_PROCESSOR_MERGE_NOT_FOUND';
       throw error;
     }
@@ -1345,6 +1357,15 @@ async function mergeProcessorModels({ sourceProcessorModelId, targetProcessorMod
     }
 
     await connection.query('UPDATE processor_models SET is_active = 1 WHERE processor_model_id = ? LIMIT 1', [targetId]);
+    if (await tableHasColumn(connection, 'processor_models', 'label_short_form')) {
+      await connection.query(
+        `UPDATE processor_models target
+         INNER JOIN processor_models source ON source.processor_model_id = ?
+         SET target.label_short_form = COALESCE(NULLIF(TRIM(target.label_short_form), ''), NULLIF(TRIM(source.label_short_form), ''))
+         WHERE target.processor_model_id = ?`,
+        [sourceId, targetId]
+      );
+    }
     await connection.query('DELETE FROM processor_models WHERE processor_model_id = ? LIMIT 1', [sourceId]);
 
     await connection.commit();
@@ -1372,6 +1393,7 @@ module.exports = {
   MAX_PROCESSOR_MODEL_LENGTH,
   MAX_PROCESSOR_FAMILY_LENGTH,
   MAX_PROCESSOR_GENERATION_LENGTH,
+  MAX_PROCESSOR_SHORT_FORM_LENGTH,
   buildProcessorDisplayLabel,
   createProcessorModel,
   getCatalogFilters,

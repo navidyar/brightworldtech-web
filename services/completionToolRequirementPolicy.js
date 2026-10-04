@@ -19,7 +19,10 @@ function normalizeOverrideReason(value, maxLength = 1000) {
   return String(value == null ? '' : value).trim().slice(0, maxLength);
 }
 
-function canOverrideMissingToolRequirements(roleCodes = []) {
+function canOverrideMissingToolRequirements(roleCodes = [], permissions = null) {
+  if (permissions instanceof Set || Array.isArray(permissions)) {
+    return new Set(permissions).has('units.tool_requirements.override');
+  }
   return (Array.isArray(roleCodes) ? roleCodes : [])
     .some((roleCode) => COMPLETION_OVERRIDE_ROLES.has(String(roleCode || '').trim()));
 }
@@ -53,6 +56,7 @@ function buildCompletionToolRequirementStatus({
 function evaluateCompletionToolRequirementEnforcement({
   status,
   roleCodes = [],
+  permissions = null,
   overrideReason = ''
 } = {}) {
   const safeStatus = status || { required: false, satisfied: true, missing: [] };
@@ -69,7 +73,7 @@ function evaluateCompletionToolRequirementEnforcement({
     };
   }
 
-  const canOverride = canOverrideMissingToolRequirements(roleCodes);
+  const canOverride = canOverrideMissingToolRequirements(roleCodes, permissions);
   if (!canOverride) {
     return {
       allowed: false,

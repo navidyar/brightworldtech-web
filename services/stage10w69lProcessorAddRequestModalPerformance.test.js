@@ -22,8 +22,8 @@ test('Admin Processor Catalog exposes direct Add Processor through the existing 
   const page = read('views/pages/management-processors.ejs');
   const modal = read('views/fragments/processor-catalog-edit-modal.ejs');
 
-  assert.match(routes, /\/management\/config\/processors\/new\/modal[\s\S]*requireRole\(configRoles\)[\s\S]*renderNewProcessorModal/);
-  assert.match(routes, /\/management\/config\/processors\/new\/modal[\s\S]*requireRole\(configRoles\)[\s\S]*createProcessor/);
+  assert.match(routes, /\/management\/config\/processors\/new\/modal[\s\S]*requirePermission\('configuration\.processors\.manage'\)[\s\S]*renderNewProcessorModal/);
+  assert.match(routes, /\/management\/config\/processors\/new\/modal[\s\S]*requirePermission\('configuration\.processors\.manage'\)[\s\S]*createProcessor/);
   assert.match(controller, /async function createProcessor/);
   assert.match(model, /async function createProcessorModel[\s\S]*INSERT INTO processor_models[\s\S]*autoAssignProcessorFamilyMembershipWithConnection/);
   assert.match(page, />Add Processor</);

@@ -144,16 +144,31 @@ test('System UUID disambiguates duplicate serial candidates', () => {
   assert.equal(result.matchedUnitId, 71);
 });
 
-test('System UUID is a strong fallback when serial matching is inconclusive', () => {
+test('System UUID never identifies a Unit by itself when serial identity is absent', () => {
   const result = resolveUnitIdentity({
     systemUuid: '550e8400-e29b-41d4-a716-446655440003',
     matches: [
       match({ unitId: 73, type: 'system_uuid', value: '550e8400-e29b-41d4-a716-446655440003', systemUuid: '550e8400-e29b-41d4-a716-446655440003' })
     ]
   });
-  assert.equal(result.status, 'MATCHED');
-  assert.equal(result.matchMode, 'uuid_fallback');
-  assert.equal(result.matchedUnitId, 73);
+  assert.equal(result.status, 'CONFLICT');
+  assert.equal(result.matchMode, 'serial_not_found_uuid_conflict');
+  assert.equal(result.matchedUnitId, null);
+  assert.deepEqual(result.candidates.map((candidate) => candidate.unitId), [73]);
+});
+
+
+test('System UUID is only a secondary warning when submitted serial identity does not match', () => {
+  const result = resolveUnitIdentity({
+    unitSerialNumber: 'NEW-SERIAL-999',
+    systemUuid: '550e8400-e29b-41d4-a716-446655440003',
+    matches: [
+      match({ unitId: 73, type: 'system_uuid', value: '550e8400-e29b-41d4-a716-446655440003', unitSerialNumber: 'OLD-SERIAL-111', systemUuid: '550e8400-e29b-41d4-a716-446655440003' })
+    ]
+  });
+  assert.equal(result.status, 'CONFLICT');
+  assert.equal(result.matchMode, 'serial_not_found_uuid_conflict');
+  assert.equal(result.matchedUnitId, null);
 });
 
 test('System UUID conflict does not override an authoritative Asset Tag match', () => {

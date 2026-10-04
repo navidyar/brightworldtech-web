@@ -1,0 +1,67 @@
+<%
+  const query = new URLSearchParams();
+  if (filters.manufacturerId) query.set('manufacturerId', String(filters.manufacturerId));
+  if (filters.unitCategoryConfigValueId) query.set('unitCategoryConfigValueId', String(filters.unitCategoryConfigValueId));
+  if (filters.includeInactive) query.set('includeInactive', '1');
+  if (filters.search) query.set('search', filters.search);
+  const queryString = query.toString();
+  const action = `/management/config/models/${unitModel.id}/mappings${queryString ? `?${queryString}` : ''}`;
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal processor-association-modal" role="dialog" aria-modal="true" aria-labelledby="unit-model-mappings-title">
+    <header class="modal-header">
+      <div>
+        <h2 id="unit-model-mappings-title">Incoming Model Aliases</h2>
+        <p><strong><%= unitModel.manufacturerName %> · <%= unitModel.unitCategoryLabel %> · <%= unitModel.modelName %></strong></p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <% if (errorMessages.length) { %><div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div><% } %>
+      <p class="field-hint">Add the category and model spelling supplied by Tools. Future matching units will use this Catalog Model and its saved catalog category automatically.</p>
+
+      <form class="app-form app-form-clean" method="post" action="<%= action %>" hx-post="<%= action %>" hx-target="#modal-root" hx-swap="innerHTML">
+        <div class="form-grid">
+          <label class="form-field">
+            <span>Incoming Unit Category</span>
+            <select name="observedUnitCategoryConfigValueId" required>
+              <option value="">Choose category</option>
+              <% unitCategories.forEach((category) => { %><option value="<%= category.id %>"><%= category.label %></option><% }) %>
+            </select>
+          </label>
+          <label class="form-field">
+            <span>Incoming Model</span>
+            <input type="text" name="observedModelName" maxlength="150" required placeholder="Example: Micro 7010" />
+          </label>
+        </div>
+        <div class="form-actions"><button class="primary-button" type="submit">Save Alias</button></div>
+      </form>
+
+      <div class="table-card model-catalog-table">
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Incoming Category</th><th>Incoming Model</th><th>Status</th><th>Action</th></tr></thead>
+            <tbody>
+              <% if (!mappings.length) { %><tr><td colspan="4">No incoming aliases have been saved for this model.</td></tr><% } %>
+              <% mappings.forEach((mapping) => { %>
+                <tr class="<%= mapping.isActive ? '' : 'configuration-value-row--inactive' %>">
+                  <td><%= mapping.observedCategoryLabel %></td>
+                  <td><strong><%= mapping.observedModelName %></strong></td>
+                  <td><span class="pill <%= mapping.isActive ? 'good' : 'neutral' %>"><%= mapping.isActive ? 'Active' : 'Inactive' %></span></td>
+                  <td>
+                    <% if (mapping.isActive) { %>
+                      <form method="post" action="/management/config/models/<%= unitModel.id %>/mappings/<%= mapping.id %>/deactivate<%= queryString ? `?${queryString}` : '' %>" hx-post="/management/config/models/<%= unitModel.id %>/mappings/<%= mapping.id %>/deactivate<%= queryString ? `?${queryString}` : '' %>" hx-target="#modal-root" hx-swap="innerHTML">
+                        <button class="danger-button button-small" type="submit">Remove</button>
+                      </form>
+                    <% } else { %>—<% } %>
+                  </td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="form-actions"><button class="secondary-button" type="button" data-modal-close>Close</button></div>
+    </div>
+  </section>
+</div>

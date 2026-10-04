@@ -4,32 +4,16 @@ const unifiedRequestQueue = require('../services/unifiedRequestQueue');
 const processorCatalogModel = require('../models/processorCatalogModel');
 const unitModelCatalogModel = require('../models/unitModelCatalogModel');
 const { publishUnitBrowserChange } = require('../services/unitBrowserRealtime');
+const { canReviewAnyUnitRequests, canReviewAnyOverrideRequests, canApproveAnyCatalogRequests, canApproveCatalogRequest, canReviewAnyRequests, canApproveUnitRequest, canApproveOverrideRequest, canViewUnitRequest, canViewOverrideRequest, canViewQueueItem } = require('../services/requestPermissionScope');
 
-const REVIEW_ROLE_CODES = new Set(['admin', 'management', 'tech_lead']);
-const CATALOG_MANAGER_ROLE_CODES = new Set(['admin']);
 const MAX_QUEUE_SEARCH_LENGTH = 150;
 
-function getCurrentRoleCodes(req) {
-  return req && req.currentUser && Array.isArray(req.currentUser.roles)
-    ? req.currentUser.roles.map((roleCode) => String(roleCode || '').trim())
-    : [];
+function canManageCatalogRequests(req, request = null) {
+  return request ? canApproveCatalogRequest(req, request) : canApproveAnyCatalogRequests(req);
 }
 
-function isUnitRequestReviewer(req) {
-  return getCurrentRoleCodes(req).some((roleCode) => REVIEW_ROLE_CODES.has(roleCode));
-}
-
-function canManageCatalogRequests(req) {
-  return getCurrentRoleCodes(req).some((roleCode) => CATALOG_MANAGER_ROLE_CODES.has(roleCode));
-}
-
-function isAdminCatalogReviewer(req) {
-  return getCurrentRoleCodes(req).includes('admin');
-}
-
-function isRegularTechRequester(req) {
-  const roleCodes = getCurrentRoleCodes(req);
-  return roleCodes.includes('tech') && !roleCodes.some((roleCode) => REVIEW_ROLE_CODES.has(roleCode));
+function isAdminCatalogReviewer(req, request) {
+  return canApproveCatalogRequest(req, request);
 }
 
 function getStatusFilter(req) {
@@ -113,6 +97,7 @@ function getSuccessMessage(query) {
     if (query.catalog === 'processor') return query.result
       ? `Processor Catalog request approved. ${query.result} is now available for the requested Unit Model.`
       : 'Processor Catalog request approved.';
+    if (query.toolAuthorization === '1') return 'Intentional Duplicate request approved. TechTools may now commit this one approved UUID duplicate.';
     return query.assetTag
       ? `Intentional Duplicate request approved. ${query.assetTag} was created.`
       : 'Intentional Duplicate request approved.';
@@ -130,15 +115,15 @@ function getErrorMessages(query) {
   if (query.error === 'qc-reversion-stale') return ['That QC decision is no longer the current decision for this Unit work cycle. No reversion was recorded. Refresh the Unit before taking action.'];
   if (query.error === 'qc-reversion-workflow-advanced') return ['That QC rejection can no longer be reverted because the technician already submitted a correction and returned the Unit for QC recheck. No reversion was recorded.'];
   if (query.error === 'not-owner') return ['You can withdraw only your own pending requests.'];
-  if (query.error === 'catalog-permission') return ['Only Admin can approve or reject Model and Processor Catalog requests.'];
-  if (query.error === 'catalog-input') return ['Complete the canonical catalog values before approving this request.'];
+  if (query.error === 'catalog-permission') return ['The matching Model or Processor Catalog approval permission is required to approve or reject this request.'];
+  if (query.error === 'catalog-input') return ['Complete the catalog values before approving this request.'];
   if (query.error === 'processor-duplicate') {
     const detail = String(query.detail || '').trim().slice(0, 1000);
-    return [detail || 'A matching processor already exists globally. Select the existing canonical Processor instead of creating a duplicate.'];
+    return [detail || 'A matching processor already exists globally. Select the existing Catalog Processor instead of creating a duplicate.'];
   }
   if (query.error === 'processor-format') {
     const detail = String(query.detail || '').trim().slice(0, 1000);
-    return [detail || 'Correct the canonical Processor name. Keep Processor Type, generation, and GHz in their separate fields.'];
+    return [detail || 'Correct the Catalog Processor name. Keep Processor Type, generation, and GHz in their separate fields.'];
   }
   if (query.skipped === 'invalid-prior-credit') return ['Enter a prior-technician credit weight from 0.10 through 10.00.'];
   if (query.skipped === 'destination-lot-required') return ['Select an open destination Lot before approving this request.'];
@@ -160,7 +145,7 @@ function getErrorMessages(query) {
 
 function canViewRequest(req, request) {
   if (!request) return false;
-  return isUnitRequestReviewer(req) || Number(request.requestedByUserId) === Number(req.currentUser?.user_id);
+  return canViewUnitRequest(req, request);
 }
 
 function isCatalogRequest(request) {
@@ -176,16 +161,17 @@ function getOverrideQueueStatusFilter(statusFilter) {
 async function renderUnitRequestsPage(req, res, next) {
   try {
     const queueFilters = getQueueFilters(req);
-    const reviewer = isUnitRequestReviewer(req);
-    const requesterUserId = reviewer ? null : req.currentUser.user_id;
+    const reviewer = canReviewAnyRequests(req);
+    const requesterUserId = canReviewAnyUnitRequests(req) ? null : req.currentUser.user_id;
+    const overrideRequesterUserId = canReviewAnyOverrideRequests(req) ? null : req.currentUser.user_id;
     // Search and Request Type are live client-side filters on the queue. Load
-    // the full role-scoped data set for the selected status tab so typing never
+    // the full permission-scoped data set for the selected status tab so typing never
     // causes another request, SQL search, or focus/caret interruption.
     const overrideResultPromise = queueFilters.statusFilter === 'archived'
       ? Promise.resolve({ supported: true, message: '', requests: [] })
       : overrideRequestModel.listOverrideRequestSummaries({
         statusFilter: getOverrideQueueStatusFilter(queueFilters.statusFilter),
-        requestedByUserId: requesterUserId,
+        requestedByUserId: overrideRequesterUserId,
         includeAssignableLots: false,
         limit: 250
       });
@@ -204,6 +190,7 @@ async function renderUnitRequestsPage(req, res, next) {
       statusFilter: queueFilters.statusFilter,
       requestTypeFilter: 'all'
     });
+    result.requests = result.requests.filter((request) => canViewQueueItem(req, request));
 
     res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
@@ -216,7 +203,6 @@ async function renderUnitRequestsPage(req, res, next) {
       searchTerm: queueFilters.searchTerm,
       canReviewRequests: reviewer,
       canManageCatalogRequests: canManageCatalogRequests(req),
-      isRegularTechRequester: isRegularTechRequester(req),
       currentUserId: req.currentUser.user_id,
       successMessage: getSuccessMessage(req.query),
       errorMessages: getErrorMessages(req.query)
@@ -239,12 +225,11 @@ async function renderUnitRequestDetail(req, res, next) {
     }
 
     const queueFilters = getQueueFilters(req);
-    const catalogManager = canManageCatalogRequests(req);
+    const catalogManager = canManageCatalogRequests(req, request);
     const isOwnRequest = Number(request.requestedByUserId) === Number(req.currentUser.user_id);
     const canSelfReviewCatalogRequest = catalogManager && isCatalogRequest(request);
-    const canReviewThisRequest = isUnitRequestReviewer(req)
-      && (!isOwnRequest || canSelfReviewCatalogRequest)
-      && (!isCatalogRequest(request) || catalogManager);
+    const canReviewThisRequest = canApproveUnitRequest(req, request)
+      && (!isOwnRequest || canSelfReviewCatalogRequest);
     const needsModelReviewData = request.requestType === unitRequestModel.MODEL_CATALOG_REQUEST_TYPE
       && catalogManager
       && request.isPending
@@ -254,6 +239,10 @@ async function renderUnitRequestDetail(req, res, next) {
       && request.isPending
       && canReviewThisRequest;
     let modelUnitCategories = [];
+    let modelCatalogOptions = [];
+    let modelCatalogMatches = [];
+    let inactiveModelCatalogMatch = null;
+    let recommendedModelCatalogMatch = null;
     let processorBrands = [];
     let processorCatalogOptions = [];
     let processorCatalogMatches = [];
@@ -261,7 +250,37 @@ async function renderUnitRequestDetail(req, res, next) {
     let processorSuggestedBrandId = null;
 
     if (needsModelReviewData) {
-      modelUnitCategories = await unitModelCatalogModel.listUnitCategories();
+      [modelUnitCategories, modelCatalogOptions] = await Promise.all([
+        unitModelCatalogModel.listUnitCategories(),
+        unitModelCatalogModel.listUnitModels({
+          manufacturerId: request.catalogContext?.manufacturerId,
+          includeInactive: false
+        })
+      ]);
+      modelCatalogMatches = await unitModelCatalogModel.findLikelyUnitModelMatches({
+        manufacturerId: request.catalogContext?.manufacturerId,
+        unitCategoryConfigValueId: request.catalogContext?.unitCategoryConfigValueId,
+        modelName: request.catalogContext?.requestedModelName,
+        limit: 5,
+        includeInactive: false
+      });
+
+      const requestedModelName = String(request.catalogContext?.requestedModelName || '').trim().toLowerCase();
+      if (requestedModelName) {
+        const inactiveCandidates = await unitModelCatalogModel.listUnitModels({
+          manufacturerId: request.catalogContext?.manufacturerId,
+          unitCategoryConfigValueId: request.catalogContext?.unitCategoryConfigValueId,
+          includeInactive: true,
+          search: request.catalogContext?.requestedModelName
+        });
+        inactiveModelCatalogMatch = inactiveCandidates.find((model) => (
+          !model.isActive && String(model.modelName || '').trim().toLowerCase() === requestedModelName
+        )) || null;
+      }
+
+      recommendedModelCatalogMatch = inactiveModelCatalogMatch
+        || modelCatalogMatches.find((model) => model.identityMatch)
+        || null;
     }
 
     if (needsProcessorReviewData) {
@@ -299,12 +318,16 @@ async function renderUnitRequestDetail(req, res, next) {
       requestTypeFilter: queueFilters.requestTypeFilter,
       searchTerm: queueFilters.searchTerm,
       unitRequestQueueUrl: getReturnUrl(null, queueFilters),
-      canReviewRequests: isUnitRequestReviewer(req),
+      canReviewRequests: canReviewAnyRequests(req),
       canManageCatalogRequests: catalogManager,
       isAdminCatalogReviewer: isAdminCatalogReviewer(req),
       canReviewThisRequest,
       canWithdrawRequest: request.isPending && Number(request.requestedByUserId) === Number(req.currentUser.user_id),
       modelUnitCategories,
+      modelCatalogOptions,
+      modelCatalogMatches,
+      inactiveModelCatalogMatch,
+      recommendedModelCatalogMatch,
       processorBrands,
       processorCatalogOptions,
       processorCatalogMatches,
@@ -346,7 +369,7 @@ async function renderOverrideRequestDetail(req, res, next) {
     }
 
     const rawRequest = await overrideRequestModel.getOverrideRequestById(overrideRequestId);
-    if (!rawRequest || (!isUnitRequestReviewer(req) && Number(rawRequest.requestedByUserId) !== Number(req.currentUser?.user_id))) {
+    if (!canViewOverrideRequest(req, rawRequest)) {
       return res.status(404).render('pages/not-found', { pageTitle: 'Request Not Found', requestedPath: req.originalUrl });
     }
     const presentation = unifiedRequestQueue.mapOverrideRequest(rawRequest);
@@ -359,7 +382,7 @@ async function renderOverrideRequestDetail(req, res, next) {
     };
 
     const queueFilters = getQueueFilters(req);
-    const canReviewRequest = isUnitRequestReviewer(req) && Number(request.requestedByUserId) !== Number(req.currentUser?.user_id);
+    const canReviewRequest = canApproveOverrideRequest(req, request) && Number(request.requestedByUserId) !== Number(req.currentUser?.user_id);
     const needsAssignableLots = canReviewRequest
       && request.isPending
       && request.requestType === 'manual_tech_override_request';
@@ -424,8 +447,9 @@ async function approveUnitRequest(req, res, next) {
 
     const request = await unitRequestModel.getUnitRequestById(unitRequestId);
     if (!request) return res.redirect(getReturnUrl(null, queueFilters));
+    if (!canApproveUnitRequest(req, request)) return res.sendStatus(403);
 
-    if (isCatalogRequest(request) && !canManageCatalogRequests(req)) {
+    if (isCatalogRequest(request) && !canManageCatalogRequests(req, request)) {
       return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'catalog-permission' }));
     }
 
@@ -440,7 +464,8 @@ async function approveUnitRequest(req, res, next) {
         reviewerNote: req.body.reviewerNote,
         approvedModelName: req.body.approvedModelName,
         approvedUnitCategoryConfigValueId: req.body.approvedUnitCategoryConfigValueId,
-        reviewerIsAdmin: isAdminCatalogReviewer(req)
+        approvedExistingUnitModelId: req.body.approvedExistingUnitModelId,
+        reviewerIsAdmin: isAdminCatalogReviewer(req, request)
       });
     } else if (request.requestType === unitRequestModel.PROCESSOR_CATALOG_REQUEST_TYPE) {
       catalogType = 'processor';
@@ -455,7 +480,7 @@ async function approveUnitRequest(req, res, next) {
         approvedProcessorFamily: req.body.approvedProcessorFamily,
         approvedProcessorGeneration: req.body.approvedProcessorGeneration,
         approvedProcessorBaseSpeedGhz: req.body.approvedProcessorBaseSpeedGhz,
-        reviewerIsAdmin: isAdminCatalogReviewer(req)
+        reviewerIsAdmin: isAdminCatalogReviewer(req, request)
       });
     } else if (request.requestType === unitRequestModel.QC_REVERSION_REQUEST_TYPE) {
       result = await unitRequestModel.approveQcReversionRequest({
@@ -480,7 +505,9 @@ async function approveUnitRequest(req, res, next) {
 
     return res.redirect(getReturnUrl(unitRequestId, queueFilters, catalogType
       ? { approved: '1', catalog: catalogType, result: result.resultLabel || '' }
-      : { approved: '1', assetTag: result.createdAssetTag || '' }
+      : result.authorizationOnly
+        ? { approved: '1', toolAuthorization: '1' }
+        : { approved: '1', assetTag: result.createdAssetTag || '' }
     ));
   } catch (error) {
     const unitRequestId = getUnitRequestId(req);
@@ -514,7 +541,8 @@ async function rejectUnitRequest(req, res, next) {
 
     const request = await unitRequestModel.getUnitRequestById(unitRequestId);
     if (!request) return res.redirect(getReturnUrl(null, queueFilters));
-    if (isCatalogRequest(request) && !canManageCatalogRequests(req)) {
+    if (!canApproveUnitRequest(req, request)) return res.sendStatus(403);
+    if (isCatalogRequest(request) && !canManageCatalogRequests(req, request)) {
       return res.redirect(getReturnUrl(unitRequestId, queueFilters, { error: 'catalog-permission' }));
     }
 
@@ -522,7 +550,7 @@ async function rejectUnitRequest(req, res, next) {
       unitRequestId,
       reviewedByUserId: req.currentUser.user_id,
       reviewerNote: req.body.reviewerNote,
-      catalogReviewAuthorized: canManageCatalogRequests(req)
+      catalogReviewAuthorized: canManageCatalogRequests(req, request)
     });
 
     if (!rejected) return res.redirect(getReturnUrl(unitRequestId, queueFilters, { skipped: 'not-pending' }));
@@ -538,8 +566,6 @@ async function rejectUnitRequest(req, res, next) {
 }
 
 module.exports = {
-  isRegularTechRequester,
-  isUnitRequestReviewer,
   canManageCatalogRequests,
   renderUnitRequestsPage,
   renderUnitRequestDetail,

@@ -19,7 +19,7 @@ const technicianOptions = [
 ];
 
 test('QC reporting defaults to all-time and all reviewed technicians', () => {
-  const scope = buildQcReportingScope({}, technicianOptions, { now: fixedNow });
+  const scope = buildQcReportingScope({}, technicianOptions, { now: fixedNow, timeZone: 'America/Chicago' });
 
   assert.equal(scope.period, 'all_time');
   assert.equal(scope.startAt, null);
@@ -28,9 +28,10 @@ test('QC reporting defaults to all-time and all reviewed technicians', () => {
   assert.equal(scope.scopeLabel, 'All Time · All reviewed technicians');
 });
 
-test('QC reporting day scope uses Chicago day boundaries and completion dates', () => {
+test('QC reporting day scope uses the supplied local day boundaries and completion dates', () => {
   const scope = buildQcReportingScope({ period: 'day', date: '2026-07-29' }, technicianOptions, {
-    now: fixedNow
+    now: fixedNow,
+    timeZone: 'America/Chicago'
   });
 
   assert.equal(scope.startDate, '2026-07-29');
@@ -47,18 +48,18 @@ test('QC reporting resolves ISO week and month scopes consistently', () => {
     endDate: '2026-08-02'
   });
 
-  const week = resolvePeriodFilters({ period: 'work_week', week: '2026-W31' }, { now: fixedNow });
+  const week = resolvePeriodFilters({ period: 'work_week', week: '2026-W31' }, { now: fixedNow, timeZone: 'America/Chicago' });
   assert.equal(week.startDate, '2026-07-27');
   assert.equal(week.endDate, '2026-08-02');
 
-  const month = resolvePeriodFilters({ period: 'month', month: '2026-07' }, { now: fixedNow });
+  const month = resolvePeriodFilters({ period: 'month', month: '2026-07' }, { now: fixedNow, timeZone: 'America/Chicago' });
   assert.equal(month.startDate, '2026-07-01');
   assert.equal(month.endDate, '2026-07-31');
   assert.equal(month.label, 'July 2026');
 });
 
-test('month-to-date ends on the current BWTDallas display date', () => {
-  const scope = resolvePeriodFilters({ period: 'month_to_date' }, { now: fixedNow });
+test('month-to-date ends on the current supplied display date', () => {
+  const scope = resolvePeriodFilters({ period: 'month_to_date' }, { now: fixedNow, timeZone: 'America/Chicago' });
 
   assert.equal(scope.startDate, '2026-07-01');
   assert.equal(scope.endDate, '2026-07-29');
@@ -72,7 +73,7 @@ test('custom ranges require two valid ordered dates', () => {
       period: 'custom_range',
       startDate: '2026-07-20',
       endDate: ''
-    }, { now: fixedNow }),
+    }, { now: fixedNow, timeZone: 'America/Chicago' }),
     (error) => error instanceof QcReportingScopeError && /both a valid Start date and End date/.test(error.message)
   );
 
@@ -81,7 +82,7 @@ test('custom ranges require two valid ordered dates', () => {
       period: 'custom_range',
       startDate: '2026-07-30',
       endDate: '2026-07-20'
-    }, { now: fixedNow }),
+    }, { now: fixedNow, timeZone: 'America/Chicago' }),
     /Start date cannot be after the End date/
   );
 });
@@ -89,7 +90,7 @@ test('custom ranges require two valid ordered dates', () => {
 test('technician selections create an ad hoc reporting team and ignore unknown IDs', () => {
   const scope = buildQcReportingScope({
     technicianId: ['30', '10', '999', '30']
-  }, technicianOptions, { now: fixedNow });
+  }, technicianOptions, { now: fixedNow, timeZone: 'America/Chicago' });
 
   assert.deepEqual(scope.selectedTechnicianIds, [10, 30]);
   assert.equal(scope.teamLabel, 'Alice Tech, Casey Tech');
@@ -99,7 +100,7 @@ test('technician selections create an ad hoc reporting team and ignore unknown I
 test('larger technician selections use a compact team label', () => {
   const scope = buildQcReportingScope({
     technicianId: ['10', '20', '30', '40']
-  }, technicianOptions, { now: fixedNow });
+  }, technicianOptions, { now: fixedNow, timeZone: 'America/Chicago' });
 
   assert.equal(scope.teamLabel, '4 selected technicians');
 });

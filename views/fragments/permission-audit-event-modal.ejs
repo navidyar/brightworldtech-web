@@ -1,0 +1,65 @@
+<%
+  const beforeState = event.before_state && typeof event.before_state === 'object' ? event.before_state : null;
+  const afterState = event.after_state && typeof event.after_state === 'object' ? event.after_state : null;
+  const stateKeys = [...new Set([
+    ...Object.keys(beforeState || {}),
+    ...Object.keys(afterState || {})
+  ])];
+  const displayValue = (value) => {
+    if (value === null || value === undefined) return '—';
+    if (Array.isArray(value)) return value.length ? value.join(', ') : '—';
+    if (typeof value === 'object') return JSON.stringify(value);
+    if (typeof value === 'boolean') return value ? 'Yes' : 'No';
+    return String(value);
+  };
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal management-user-history-modal" role="dialog" aria-modal="true" aria-labelledby="permission-audit-event-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Permission Audit</p>
+        <h2 id="permission-audit-event-title"><%= event.eventLabel %></h2>
+        <p><%= formatDateTime(event.created_at) %> · <%= event.actorLabel %></p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <div class="table-card">
+        <table>
+          <tbody>
+            <tr><th>Target</th><td><%= event.targetLabel %></td></tr>
+            <tr><th>Permission</th><td><%= event.permission_key_snapshot || '—' %></td></tr>
+            <tr><th>Actor</th><td><%= event.actorLabel %></td></tr>
+            <tr><th>Event ID</th><td><%= event.permission_audit_event_id %></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="site-space-top-lg">
+        <h3>Before / After</h3>
+        <div class="table-card site-space-top-sm">
+          <table>
+            <thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead>
+            <tbody>
+              <% if (stateKeys.length === 0) { %>
+                <tr><td colspan="3">No structured before/after state was stored for this event.</td></tr>
+              <% } %>
+              <% stateKeys.forEach((key) => { %>
+                <tr>
+                  <td><strong><%= key %></strong></td>
+                  <td><%= displayValue(beforeState ? beforeState[key] : null) %></td>
+                  <td><%= displayValue(afterState ? afterState[key] : null) %></td>
+                </tr>
+              <% }) %>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="form-actions site-space-top-lg">
+        <button class="secondary-button" type="button" data-modal-close>Close</button>
+      </div>
+    </div>
+  </section>
+</div>

@@ -43,16 +43,26 @@
     return Date.now() < mutationSettlesAt;
   }
 
+  function hasActiveUnitBrowserView() {
+    return Boolean(document.querySelector(
+      '[data-tech-units-refresh-url] .tech-detail-row:not([hidden])'
+    ));
+  }
+
   function hasProtectedInteraction() {
     const modalRoot = document.getElementById('modal-root');
+    const accountModalRoot = document.getElementById('account-modal-root');
     const hasOpenModal = Boolean(
       (modalRoot && modalRoot.childElementCount > 0)
+      || (accountModalRoot && accountModalRoot.childElementCount > 0)
       || document.querySelector('[data-modal-backdrop]')
+      || document.querySelector('[data-account-tool-pin-backdrop]')
     );
 
     return hasOpenModal
       || Boolean(document.querySelector('[data-virtual-huddle-layer]'))
-      || Boolean(document.querySelector('[data-application-unsaved-work="true"]'));
+      || Boolean(document.querySelector('[data-application-unsaved-work="true"]'))
+      || hasActiveUnitBrowserView();
   }
 
   function canRefreshNow() {

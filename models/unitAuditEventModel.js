@@ -2,6 +2,7 @@
 
 const crypto = require('node:crypto');
 const { pool } = require('./db');
+const { formatAssetTagNumber } = require('../utils/assetTag');
 const lotModel = require('./lotModel');
 const { snapshotLotPath } = require('../services/lotHierarchyPresentation');
 
@@ -208,12 +209,11 @@ async function getUnitCreationContext(unitId, { connection = pool, assetTagPrefi
   const row = rows[0];
   if (!row) return null;
 
-  const compactPrefix = String(assetTagPrefix || 'BWT').trim().toUpperCase() || 'BWT';
-  const assetNumber = row.asset_number == null ? '' : String(row.asset_number).trim();
+  const assetTag = formatAssetTagNumber(row.asset_number, { prefix: assetTagPrefix });
 
   return {
     unitId: Number(row.unit_id),
-    assetTag: assetNumber ? `${compactPrefix}${assetNumber}` : `Unit ${Number(row.unit_id)}`,
+    assetTag: assetTag || `Unit ${Number(row.unit_id)}`,
     createdByUserId: normalizeNullablePositiveInteger(row.created_by_user_id),
     createdByName: String(row.created_by_name || '').trim() || (row.created_by_user_id ? 'User not recorded' : 'System'),
     createdAt: row.created_at || null

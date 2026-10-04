@@ -1,0 +1,15 @@
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal management-user-history-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-history-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">User Management</p>
+        <h2 id="management-user-history-title"><%= targetUserId ? `History for User #${targetUserId}` : 'Account History' %></h2>
+        <p>Account changes and blocked management attempts. Times are shown in your effective application time zone.</p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+    <div class="modal-body">
+      <%- include('management-user-history-content') %>
+    </div>
+  </section>
+</div>

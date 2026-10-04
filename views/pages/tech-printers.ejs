@@ -10,7 +10,7 @@
         <%- include('../partials/topbar', { pageTitle }) %>
         <main class="content-shell">
           <section class="page-heading">
-            <div><h1>My Label Printers</h1><p>Add a personal solo printer. Solo printers are private by default; Tech Lead+ can still use private solo printers.</p></div>
+            <div><h1>My Label Printers</h1><p>Add a personal solo printer. Solo printers are private by default; Users with Manage Any Solo Printer permission can also use private solo printers.</p></div>
             <a class="primary-button" href="/tech/printers/new/modal" hx-get="/tech/printers/new/modal" hx-target="#modal-root" hx-swap="innerHTML">Add Solo Printer</a>
           </section>
           <%- include('../fragments/tech-printers-live', { ownedPrinters, availablePrinters, showNetworkDetails, successMessage, errorMessages, oob: false }) %>

@@ -1,5 +1,8 @@
 'use strict';
 
+const { normalizeModelText: normalizeModelMappingKey } = require('../utils/catalogText');
+const { listActiveSystemCategoryValues, listActiveSystemCategoryAliases, resolveCandidateFromRows } = require('./apiConfigValueResolver');
+
 function normalizeText(value) {
   return String(value ?? '')
     .normalize('NFKD')
@@ -139,6 +142,35 @@ async function resolveManufacturer(connection, submitted) {
 
 async function resolveModel(connection, submitted, { manufacturerId, unitCategoryConfigValueId }) {
   if (!manufacturerId || !unitCategoryConfigValueId) return { status: 'unmapped', submitted, reason: 'model_context_missing' };
+  const [mappingRows] = await connection.query(
+    `SELECT target.unit_model_id AS id,
+            target.model_name AS label,
+            target.manufacturer_id AS manufacturerId,
+            target.unit_category_config_value_id AS unitCategoryConfigValueId,
+            manufacturer.name AS manufacturerLabel
+       FROM unit_model_intake_mappings mapping
+       INNER JOIN unit_models target
+         ON target.unit_model_id = mapping.target_unit_model_id
+        AND target.is_active = 1
+       INNER JOIN manufacturers manufacturer
+         ON manufacturer.manufacturer_id = target.manufacturer_id
+      WHERE mapping.observed_manufacturer_id = ?
+        AND mapping.observed_unit_category_config_value_id = ?
+        AND mapping.observed_model_key = ?
+        AND mapping.is_active = 1
+      LIMIT 1`,
+    [manufacturerId, unitCategoryConfigValueId, normalizeModelMappingKey(submitted)]
+  );
+  if (mappingRows[0]) {
+    return {
+      status: 'resolved',
+      submitted,
+      resolvedId: Number(mappingRows[0].id),
+      resolvedLabel: String(mappingRows[0].label || '').trim(),
+      resolvedUnitCategoryConfigValueId: Number(mappingRows[0].unitCategoryConfigValueId),
+      matchBasis: 'intake_mapping'
+    };
+  }
   const [rows] = await connection.query(
     `SELECT um.unit_model_id AS id, um.model_name AS label,
             um.manufacturer_id AS manufacturerId,
@@ -177,18 +209,13 @@ async function resolveProcessor(connection, submitted, { unitModelId }) {
 
 async function resolveOperatingSystem(connection, submitted) {
   const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
-  const [rows] = await connection.query(
-    `SELECT cv.config_value_id AS id,
-            COALESCE(NULLIF(cv.label, ''), cv.value) AS label,
-            cv.value
-       FROM system_config_categories scc
-       INNER JOIN config_values cv ON cv.config_category_id = scc.config_category_id
-      WHERE scc.system_config_category_id = ?
-        AND COALESCE(cv.is_active, 1) = 1
-      ORDER BY cv.config_value_id`,
-    [SYSTEM_CONFIG_CATEGORY_IDS.OPERATING_SYSTEMS]
-  );
-  return resolveOperatingSystemCandidate(submitted, rows);
+  const [rows, aliases] = await Promise.all([
+    listActiveSystemCategoryValues(connection, SYSTEM_CONFIG_CATEGORY_IDS.OPERATING_SYSTEMS),
+    listActiveSystemCategoryAliases(connection, SYSTEM_CONFIG_CATEGORY_IDS.OPERATING_SYSTEMS)
+  ]);
+  const normalizedMatch = resolveOperatingSystemCandidate(submitted, rows);
+  if (normalizedMatch.status !== 'unmapped') return normalizedMatch;
+  return resolveCandidateFromRows(rows, submitted, [], aliases);
 }
 
 function storedResolutionValue(resolution) {
@@ -196,6 +223,8 @@ function storedResolutionValue(resolution) {
   if (resolution.status === 'resolved') {
     value.resolved_id = resolution.resolvedId;
     value.resolved_label = resolution.resolvedLabel;
+    if (resolution.resolvedUnitCategoryConfigValueId) value.resolved_unit_category_config_value_id = resolution.resolvedUnitCategoryConfigValueId;
+    if (resolution.matchBasis) value.match_basis = resolution.matchBasis;
   } else if (resolution.reason) {
     value.reason = resolution.reason;
   }

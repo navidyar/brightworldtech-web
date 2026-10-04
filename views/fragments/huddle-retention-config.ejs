@@ -1,0 +1,43 @@
+<%
+  const archiveDays = Number(applicationSettings?.huddleArchiveDays || 30);
+%>
+<details
+  class="configuration-category"
+  data-configuration-category
+  data-search-text="application settings virtual huddle retention archive archived acknowledged pending days message history <%= archiveDays %>">
+  <summary class="configuration-category-summary">
+    <span class="configuration-category-summary-title">
+      <strong>Virtual Huddle Retention</strong>
+      <code>huddle_archive_days</code>
+    </span>
+    <span class="configuration-category-summary-meta">
+      <span><%= archiveDays %> days</span>
+      <span class="pill neutral">Application setting</span>
+    </span>
+  </summary>
+
+  <div class="configuration-category-body">
+    <div class="configuration-category-toolbar-copy">
+      <p>Resolved Huddles remain in Acknowledged for this many days after the final required acknowledgment or revocation. Pending Huddles never archive.</p>
+    </div>
+
+    <% if (huddleRetentionSaved) { %><div class="message success"><p>Virtual Huddle retention saved.</p></div><% } %>
+    <% if (huddleRetentionError) { %><div class="message error"><p><%= huddleRetentionError %></p></div><% } %>
+
+    <form
+      class="app-form"
+      method="post"
+      action="/management/config/huddle-retention"
+      data-configuration-value-row
+      data-search-text="virtual huddle retention archive acknowledged pending days <%= archiveDays %>">
+      <div class="site-inline-actions">
+        <label class="form-field site-search-field">
+          <span>Archive resolved Huddles after</span>
+          <input type="number" name="huddleArchiveDays" min="1" max="3650" step="1" value="<%= archiveDays %>" required />
+          <small class="field-hint">1–3650 days. The default is 30 days.</small>
+        </label>
+        <button type="submit" class="primary-button">Save Retention</button>
+      </div>
+    </form>
+  </div>
+</details>

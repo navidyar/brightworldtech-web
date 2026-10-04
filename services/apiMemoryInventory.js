@@ -1,6 +1,7 @@
 'use strict';
 
 const { TOOL_SOURCES } = require('./apiToolCredential');
+const { listActiveSystemCategoryValues, listActiveSystemCategoryAliases, resolveCandidateFromRows } = require('./apiConfigValueResolver');
 
 const MEMORY_FIELD_KEY = 'memory_modules';
 const MEMORY_INSTALL_TYPES = new Set(['removable_module', 'integrated_soldered', 'unknown']);
@@ -122,45 +123,19 @@ function normalizeMemoryObservation(rawMemory) {
   };
 }
 
-function resolveRamTypeCandidate(submitted, candidates) {
-  if (!submitted) return { status: 'unknown', submitted: null };
-  const key = normalizeKey(submitted);
-  const matches = candidates.filter((candidate) => {
-    return [candidate.label, candidate.value].some((value) => normalizeKey(value) === key);
-  });
-  if (matches.length === 1) {
-    return {
-      status: 'resolved',
-      submitted,
-      resolvedId: Number(matches[0].id),
-      resolvedLabel: normalizeText(matches[0].label || matches[0].value, 160)
-    };
-  }
-  if (matches.length > 1) return { status: 'ambiguous', submitted };
-  return { status: 'unmapped', submitted };
-}
-
-async function loadRamTypeCandidates(connection) {
-  const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
-  const [rows] = await connection.query(
-    `SELECT cv.config_value_id AS id,
-            COALESCE(NULLIF(cv.label, ''), cv.value) AS label,
-            cv.value
-       FROM system_config_categories scc
-       INNER JOIN config_values cv ON cv.config_category_id = scc.config_category_id
-      WHERE scc.system_config_category_id = ?
-        AND COALESCE(cv.is_active, 1) = 1
-      ORDER BY cv.config_value_id`,
-    [SYSTEM_CONFIG_CATEGORY_IDS.RAM_TYPES]
-  );
-  return rows;
+function resolveRamTypeCandidate(submitted, candidates, aliases = []) {
+  return resolveCandidateFromRows(candidates, submitted, [], aliases);
 }
 
 async function resolveMemoryObservation(connection, observation) {
   if (!observation || observation.state !== 'known') return observation;
-  const candidates = await loadRamTypeCandidates(connection);
+  const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
+  const [candidates, aliases] = await Promise.all([
+    listActiveSystemCategoryValues(connection, SYSTEM_CONFIG_CATEGORY_IDS.RAM_TYPES),
+    listActiveSystemCategoryAliases(connection, SYSTEM_CONFIG_CATEGORY_IDS.RAM_TYPES)
+  ]);
   const modules = observation.value.modules.map((module) => {
-    const resolution = resolveRamTypeCandidate(module.ram_type_submitted, candidates);
+    const resolution = resolveRamTypeCandidate(module.ram_type_submitted, candidates, aliases);
     return {
       ...module,
       ram_type_resolution: resolution,

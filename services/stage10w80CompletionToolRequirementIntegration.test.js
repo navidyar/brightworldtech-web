@@ -39,7 +39,7 @@ test('Tool test outcomes do not determine whether the required Tool run occurred
 test('completion modal blocks regular Techs and exposes an audited reason field only to Tech Lead+', () => {
   const controller = read('controllers/techController.js');
   const fragment = read('views/fragments/tech-unit-complete-work-modal.ejs');
-  assert.match(controller, /canOverrideMissingToolRequirements\(roleCodes\)/);
+  assert.match(controller, /canOverrideMissingToolRequirements\(roleCodes, req\.currentPermissions \|\| new Set\(\)\)/);
   assert.match(fragment, /completionRequirementsBlocking/);
   assert.match(fragment, /Completion is blocked until the missing required Tool run is completed/);
   assert.match(fragment, /name="completionRequirementOverrideReason"/);

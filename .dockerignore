@@ -5,3 +5,6 @@ npm-debug.log
 mysql/data
 .env
 storage/label-library/
+backup/
+.reverts/
+handoff/

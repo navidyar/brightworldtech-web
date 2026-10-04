@@ -8,6 +8,13 @@ const productionCycleModel = require('./productionCycleModel');
 const unitAmazonModel = require('./unitAmazonModel');
 const lotQcRequirementModel = require('./lotQcRequirementModel');
 const operationalOptionRankingModel = require('./operationalOptionRankingModel');
+const { normalizeModelText } = require('../utils/catalogText');
+const { formatUtcSqlDateTime, getDayRangeUtc, normalizeTimeZone } = require('../utils/timeZone');
+const {
+  ASSET_NUMBER_START,
+  formatAssetTagNumber,
+  getAssetTagPrefix: getConfiguredAssetTagPrefix
+} = require('../utils/assetTag');
 const {
   attachContextScores,
   serializeUsageScoresByContext,
@@ -77,7 +84,6 @@ const UNIT_SORT_OPTIONS = new Set([
   'az_desc'
 ]);
 const MAX_SEARCH_TERMS = 100;
-const ASSET_NUMBER_START = 2300000;
 const MEMORY_INSTALL_TYPE_OPTIONS = [
   { code: 'removable_module', label: 'Removable Module' },
   { code: 'integrated_soldered', label: 'Integrated / Soldered' },
@@ -94,9 +100,7 @@ function escapeIdentifier(identifier) {
 }
 
 function getAssetTagPrefix() {
-  const prefix = String(process.env.ASSET_TAG_PREFIX || 'BWT').trim();
-
-  return prefix ? prefix.toUpperCase() : 'BWT';
+  return getConfiguredAssetTagPrefix();
 }
 
 function compactAssetTagValue(value) {
@@ -159,7 +163,7 @@ function getDisplayAssetTag(assetNumber) {
     return '';
   }
 
-  return `${getAssetTagPrefix()}${String(assetNumber)}`;
+  return formatAssetTagNumber(assetNumber, { prefix: getAssetTagPrefix() });
 }
 
 async function tableExists(tableName) {
@@ -183,6 +187,7 @@ async function getTableColumns(tableName) {
     'config_values',
     'manufacturers',
     'unit_models',
+    'unit_model_intake_mappings',
     'processor_brands',
     'processor_models',
     'processor_families',
@@ -367,6 +372,30 @@ async function listUnitModels(options = {}) {
   });
 }
 
+async function listUnitModelIntakeMappings() {
+  const columns = await getTableColumns('unit_model_intake_mappings');
+  if (!hasColumn(columns, 'unit_model_intake_mapping_id')) return [];
+  const [rows] = await pool.query(
+    `SELECT mapping.observed_manufacturer_id,
+            mapping.observed_unit_category_config_value_id,
+            mapping.observed_model_key,
+            mapping.target_unit_model_id,
+            target.unit_category_config_value_id AS target_unit_category_config_value_id
+       FROM unit_model_intake_mappings mapping
+       INNER JOIN unit_models target
+         ON target.unit_model_id = mapping.target_unit_model_id
+        AND target.is_active = 1
+      WHERE mapping.is_active = 1`
+  );
+  return rows.map((row) => ({
+    observedManufacturerId: Number(row.observed_manufacturer_id),
+    observedUnitCategoryConfigValueId: Number(row.observed_unit_category_config_value_id),
+    observedModelKey: row.observed_model_key,
+    targetUnitModelId: Number(row.target_unit_model_id),
+    targetUnitCategoryConfigValueId: Number(row.target_unit_category_config_value_id)
+  }));
+}
+
 async function listProcessorBrands() {
   const columns = await getTableColumns('processor_brands');
 
@@ -436,6 +465,7 @@ async function listProcessorModels(options = {}) {
     ? "GROUP_CONCAT(DISTINCT umpo.unit_model_id ORDER BY umpo.unit_model_id SEPARATOR ',') AS compatible_unit_model_ids"
     : 'NULL AS compatible_unit_model_ids';
   const hasProcessorExportShortForm = hasColumn(processorFamilyColumns, 'export_short_form');
+  const hasProcessorLabelShortForm = hasColumn(columns, 'label_short_form');
   const processorShortFormSelect = hasProcessorExportShortForm
     ? "GROUP_CONCAT(DISTINCT NULLIF(TRIM(pf.export_short_form), '') ORDER BY pf.sort_order, pf.processor_family_id SEPARATOR '||') AS processor_export_short_forms"
     : 'NULL AS processor_export_short_forms';
@@ -446,7 +476,7 @@ async function listProcessorModels(options = {}) {
       ON pf.processor_family_id = pfm.processor_family_id
      AND pf.is_active = 1
   `;
-  const groupBy = `GROUP BY pm.processor_model_id, ${brandIdColumn ? `pm.${escapeIdentifier(brandIdColumn)},` : ''} ${familyColumn ? `pm.${escapeIdentifier(familyColumn)},` : ''} pm.${escapeIdentifier(modelColumn)}, ${speedColumn ? `pm.${escapeIdentifier(speedColumn)},` : ''} ${generationColumn ? `pm.${escapeIdentifier(generationColumn)}` : 'pm.processor_model_id'}`;
+  const groupBy = `GROUP BY pm.processor_model_id, ${brandIdColumn ? `pm.${escapeIdentifier(brandIdColumn)},` : ''} ${familyColumn ? `pm.${escapeIdentifier(familyColumn)},` : ''} pm.${escapeIdentifier(modelColumn)}, ${hasProcessorLabelShortForm ? 'pm.label_short_form,' : ''} ${speedColumn ? `pm.${escapeIdentifier(speedColumn)},` : ''} ${generationColumn ? `pm.${escapeIdentifier(generationColumn)}` : 'pm.processor_model_id'}`;
 
   const [rows] = await pool.query(
     `
@@ -455,6 +485,7 @@ async function listProcessorModels(options = {}) {
         ${brandIdColumn ? `pm.${escapeIdentifier(brandIdColumn)}` : 'NULL'} AS processor_brand_id,
         ${familyColumn ? `pm.${escapeIdentifier(familyColumn)}` : 'NULL'} AS processor_family,
         pm.${escapeIdentifier(modelColumn)} AS model_code,
+        ${hasProcessorLabelShortForm ? 'pm.label_short_form' : 'NULL'} AS label_short_form,
         ${speedColumn ? `pm.${escapeIdentifier(speedColumn)}` : 'NULL'} AS base_speed_ghz,
         ${generationColumn ? `pm.${escapeIdentifier(generationColumn)}` : 'NULL'} AS generation,
         ${compatibilitySelect},
@@ -483,6 +514,7 @@ async function listProcessorModels(options = {}) {
       processorBrandId: row.processor_brand_id ? Number(row.processor_brand_id) : null,
       label: details.length > 0 ? `${row.model_code} (${details.join(' · ')})` : row.model_code,
       shortLabel: row.model_code,
+      labelShortForm: row.label_short_form || '',
       baseSpeedGhz: row.base_speed_ghz,
       compatibleUnitModelIds: String(row.compatible_unit_model_ids || '')
         .split(',')
@@ -500,7 +532,7 @@ async function listProcessorModels(options = {}) {
         .split('||')
         .map((value) => value.trim())
         .filter(Boolean),
-      exportShortForm: String(row.processor_export_short_forms || '')
+      exportShortForm: String(row.label_short_form || '').trim() || String(row.processor_export_short_forms || '')
         .split('||')
         .map((value) => value.trim())
         .find(Boolean) || ''
@@ -1090,6 +1122,7 @@ async function getTechUnitFormOptions(options = {}) {
     screenSizes,
     manufacturers,
     unitModels,
+    unitModelIntakeMappings,
     processorBrands,
     processorModels,
     productionWeightOptions,
@@ -1104,6 +1137,7 @@ async function getTechUnitFormOptions(options = {}) {
     listConfigValuesBySystemCategory(SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_SIZES),
     listManufacturers(),
     listUnitModels({ includeUnitModelId: includeCurrentUnitModelId }),
+    listUnitModelIntakeMappings(),
     listProcessorBrands(),
     listProcessorModels({ includeProcessorModelId: includeCurrentProcessorModelId }),
     productionWeightModel.listProductionWeightOptions(),
@@ -1216,6 +1250,7 @@ async function getTechUnitFormOptions(options = {}) {
     screenSizes,
     manufacturers: rankedManufacturers,
     unitModels: rankedUnitModels,
+    unitModelIntakeMappings,
     processorBrands: rankedProcessorBrands,
     processorModels: rankedProcessorModels,
     productionWeightOptions,
@@ -2260,6 +2295,9 @@ async function listTechUnits(filters = {}) {
   const techUserFilterId = normalizePositiveFilterId(filters.techUserId);
   const createdStartDate = normalizeDashboardDrilldownDate(filters.createdStartDate);
   const createdEndDate = normalizeDashboardDrilldownDate(filters.createdEndDate);
+  const createdTimeZone = normalizeTimeZone(filters.timeZone, 'UTC');
+  const createdStartRange = createdStartDate ? getDayRangeUtc(createdStartDate, createdTimeZone) : null;
+  const createdEndRange = createdEndDate ? getDayRangeUtc(createdEndDate, createdTimeZone) : null;
   const createdWindow = String(filters.createdWindow || '').trim();
   const gradeFilter = String(filters.gradeFilter || '').trim();
   const requestedCompletionFilter = String(filters.completionFilter || '').trim();
@@ -2360,14 +2398,14 @@ async function listTechUnits(filters = {}) {
     params.push(currentUserId);
   }
 
-  if (!isParkedUnitState && createdStartDate) {
+  if (!isParkedUnitState && createdStartRange) {
     where.push('u.created_at >= ?');
-    params.push(`${createdStartDate} 00:00:00`);
+    params.push(formatUtcSqlDateTime(createdStartRange.startAt));
   }
 
-  if (!isParkedUnitState && createdEndDate) {
-    where.push('u.created_at < DATE_ADD(?, INTERVAL 1 DAY)');
-    params.push(`${createdEndDate} 00:00:00`);
+  if (!isParkedUnitState && createdEndRange) {
+    where.push('u.created_at < ?');
+    params.push(formatUtcSqlDateTime(createdEndRange.endAt));
   }
 
   if (!isParkedUnitState && createdWindow === '24h') {
@@ -2779,7 +2817,10 @@ async function listTechUnits(filters = {}) {
       screenSizeLabel: screenSizeLabel || '—',
       modelYear: row.model_year !== null && row.model_year !== undefined ? Number(row.model_year) : null,
       processorLabel: processorLabel || '—',
-      processorShortForm: processorOption ? String(processorOption.exportShortForm || '') : '',
+      processorLabelShortForm: processorOption ? String(processorOption.labelShortForm || '') : '',
+      processorShortForm: processorOption && Array.isArray(processorOption.processorExportShortForms)
+        ? String(processorOption.processorExportShortForms[0] || '')
+        : '',
       processorSpeedGhz: row.processor_speed_ghz !== null && row.processor_speed_ghz !== undefined ? row.processor_speed_ghz : '',
       previousRamGb: row.previous_ram_gb !== null && row.previous_ram_gb !== undefined ? row.previous_ram_gb : '',
       ramGb: row.ram_gb !== null && row.ram_gb !== undefined ? row.ram_gb : '',
@@ -3152,6 +3193,7 @@ function buildDuplicateCandidateSummary(row) {
     isClosedLot: Number(row.lot_is_closed || 0) === 1,
     unitSerialNumber: normalizeIdentifierText(row.unit_serial_number) || '',
     biosSerialNumber: normalizeIdentifierText(row.bios_serial_number) || '',
+    systemUuid: normalizeIdentifierText(row.system_uuid) || '',
     manufacturerLabel: row.manufacturer_label || '',
     modelLabel: row.model_label || '',
     modelSummary: modelParts.length > 0 ? modelParts.join(' · ') : '',
@@ -3189,6 +3231,7 @@ async function findSerialDuplicateCandidates({
     .filter(Boolean);
   const unitSerialTypeId = Number(typeMap.get('unit_serial_number') || 0);
   const biosSerialTypeId = Number(typeMap.get('bios_serial_number') || 0);
+  const systemUuidTypeId = Number(typeMap.get('system_uuid') || 0);
 
   if (serialTypeIds.length === 0) {
     return [];
@@ -3226,6 +3269,14 @@ async function findSerialDuplicateCandidates({
           ORDER BY ui_bios_serial.unit_identifier_id DESC
           LIMIT 1
         ) AS bios_serial_number,
+        ${systemUuidTypeId > 0 ? `(
+          SELECT ui_system_uuid.identifier_value
+          FROM unit_identifiers ui_system_uuid
+          WHERE ui_system_uuid.unit_id = u.unit_id
+            AND ui_system_uuid.identifier_type_config_value_id = ${systemUuidTypeId}
+          ORDER BY ui_system_uuid.unit_identifier_id DESC
+          LIMIT 1
+        )` : 'NULL'} AS system_uuid,
         m.name AS manufacturer_label,
         um.model_name AS model_label,
         pb.name AS processor_brand_label,
@@ -4081,15 +4132,15 @@ async function saveUnitIdentifiers(connection, unitId, formData, assetNumber, { 
 
 async function assertIntentionalDuplicateIdentifiersSaved(connection, unitId, formData) {
   const typeMap = await getIdentifierTypeMap(connection);
-  const expectedSerials = buildIdentifierEntries(formData)
-    .filter((entry) => ['unit_serial_number', 'bios_serial_number'].includes(entry.typeCode))
+  const expectedIdentifiers = buildIdentifierEntries(formData)
+    .filter((entry) => ['unit_serial_number', 'bios_serial_number', 'system_uuid'].includes(entry.typeCode))
     .map((entry) => ({
       ...entry,
       identifierTypeId: typeMap.get(entry.typeCode)
     }))
     .filter((entry) => entry.identifierTypeId);
 
-  if (expectedSerials.length === 0) {
+  if (expectedIdentifiers.length === 0) {
     return;
   }
 
@@ -4098,15 +4149,15 @@ async function assertIntentionalDuplicateIdentifiersSaved(connection, unitId, fo
       SELECT identifier_type_config_value_id, normalized_value
       FROM unit_identifiers
       WHERE unit_id = ?
-        AND identifier_type_config_value_id IN (${expectedSerials.map(() => '?').join(', ')})
+        AND identifier_type_config_value_id IN (${expectedIdentifiers.map(() => '?').join(', ')})
     `,
-    [unitId, ...expectedSerials.map((entry) => entry.identifierTypeId)]
+    [unitId, ...expectedIdentifiers.map((entry) => entry.identifierTypeId)]
   );
   const storedKeys = new Set(rows.map((row) => `${Number(row.identifier_type_config_value_id)}:${String(row.normalized_value || '')}`));
-  const missing = expectedSerials.filter((entry) => !storedKeys.has(`${Number(entry.identifierTypeId)}:${entry.normalizedValue}`));
+  const missing = expectedIdentifiers.filter((entry) => !storedKeys.has(`${Number(entry.identifierTypeId)}:${entry.normalizedValue}`));
 
   if (missing.length > 0) {
-    const error = new Error('The approved Intentional Duplicate could not store its duplicate serial identifiers. Apply the Stage 7D identifier-index correction before approving this request.');
+    const error = new Error('The approved Intentional Duplicate could not store all approved duplicate identity identifiers, including System UUID when supplied. Verify the identifier index supports approved duplicates before retrying.');
     error.code = 'BWT_INTENTIONAL_DUPLICATE_IDENTIFIER_STORAGE_BLOCKED';
     throw error;
   }
@@ -5476,6 +5527,10 @@ async function getTechUnitLifecycleSummaryById(unitId) {
   }
 
   const state = await getUnitTableState();
+  const processorModelColumns = await getTableColumns('processor_models');
+  const processorLabelShortFormSql = hasColumn(processorModelColumns, 'label_short_form')
+    ? "NULLIF(TRIM(pm.label_short_form), '')"
+    : 'NULL';
 
   if (!state.exists || !state.primaryKeyColumn) {
     return null;
@@ -5498,6 +5553,7 @@ async function getTechUnitLifecycleSummaryById(unitId) {
         um.model_name,
         pm.model_code AS processor_model_code,
         pm.processor_family,
+        ${processorLabelShortFormSql} AS processor_label_short_form,
         (
           SELECT NULLIF(TRIM(pf_preview.export_short_form), '')
           FROM processor_family_members pfm_preview
@@ -5512,6 +5568,7 @@ async function getTechUnitLifecycleSummaryById(unitId) {
         u.ram_gb,
         u.storage_gb,
         COALESCE(cv_os.label, cv_os.value, '') AS operating_system_label,
+        COALESCE(cv_lifecycle_grade.label, cv_lifecycle_grade.value, '') AS cosmetic_grade_label,
         ${parkedSql} AS is_parked,
         ${state.parkingCapabilities.hasParkedAt ? 'u.parked_at' : (state.legacyArchiveCapabilities.hasArchivedAt ? 'u.archived_at' : 'NULL')} AS parked_at
       FROM units u
@@ -5523,6 +5580,17 @@ async function getTechUnitLifecycleSummaryById(unitId) {
       LEFT JOIN processor_models pm ON pm.processor_model_id = u.processor_model_id
       LEFT JOIN processor_brands pb ON pb.processor_brand_id = pm.processor_brand_id
       LEFT JOIN config_values cv_os ON cv_os.config_value_id = u.operating_system_config_value_id
+      LEFT JOIN unit_grade_assessments lifecycle_grade
+        ON lifecycle_grade.unit_grade_assessment_id = (
+          SELECT grade_lookup.unit_grade_assessment_id
+          FROM unit_grade_assessments grade_lookup
+          WHERE grade_lookup.unit_id = u.unit_id
+            AND grade_lookup.is_current = 1
+          ORDER BY grade_lookup.assessed_at DESC, grade_lookup.unit_grade_assessment_id DESC
+          LIMIT 1
+        )
+      LEFT JOIN config_values cv_lifecycle_grade
+        ON cv_lifecycle_grade.config_value_id = lifecycle_grade.overall_grade_config_value_id
       WHERE u.${escapeIdentifier(state.primaryKeyColumn)} = ?
       LIMIT 1
     `,
@@ -5566,8 +5634,10 @@ async function getTechUnitLifecycleSummaryById(unitId) {
     processorModelCode: row.processor_model_code || '',
     processorBrandName: row.processor_brand_name || '',
     processorFamily: row.processor_family || '',
+    processorLabelShortForm: row.processor_label_short_form || '',
     processorShortForm: row.processor_short_form || '',
     operatingSystemLabel: row.operating_system_label || '',
+    cosmeticGradeLabel: row.cosmetic_grade_label || '',
     ramGb: row.ram_gb,
     storageGb: row.storage_gb,
     specSummary: specParts.length > 0 ? specParts.join(' · ') : 'No specs entered yet',
@@ -5624,11 +5694,12 @@ async function recordUnitParkHistory(connection, {
   );
 }
 
-function assertUnitLifecycleAuthority(actorRoleCodes) {
-  if (!hasElevatedLotMoveAuthority(actorRoleCodes)) {
+function assertUnitLifecycleAuthority(actorPermissions, permissionKey) {
+  if (!(actorPermissions instanceof Set || Array.isArray(actorPermissions))
+      || !new Set(actorPermissions).has(permissionKey)) {
     throw createUnitLifecycleError(
       'BWT_UNIT_LIFECYCLE_FORBIDDEN',
-      'Only a Tech Lead, Management user, or Admin can park or return a unit to Active.'
+      'Permission to perform this Unit lifecycle action is required.'
     );
   }
 }
@@ -5675,7 +5746,8 @@ async function assertReturnAssigneeIsEligible(assignedToUserId) {
   return normalizedAssignedToUserId;
 }
 
-async function parkTechUnit({ unitId, parkedByUserId, actorRoleCodes }) {
+async function parkTechUnit({ unitId, parkedByUserId, actorPermissions = [] }) {
+  assertUnitLifecycleAuthority(actorPermissions, 'units.park');
   const safeUnitId = normalizeRequiredInteger(unitId);
   const safeParkedByUserId = normalizeRequiredInteger(parkedByUserId);
   const state = await getUnitTableState();
@@ -5687,7 +5759,6 @@ async function parkTechUnit({ unitId, parkedByUserId, actorRoleCodes }) {
     );
   }
 
-  assertUnitLifecycleAuthority(actorRoleCodes);
 
   const unit = await getUnitById(safeUnitId);
 
@@ -5798,8 +5869,9 @@ async function returnTechUnitToActive({
   destinationLotId,
   assignedToUserId = null,
   returnedByUserId,
-  actorRoleCodes
+  actorPermissions = []
 }) {
+  assertUnitLifecycleAuthority(actorPermissions, 'units.return_to_active');
   const safeUnitId = normalizeRequiredInteger(unitId);
   const safeDestinationLotId = normalizeRequiredInteger(destinationLotId);
   const safeReturnedByUserId = normalizeRequiredInteger(returnedByUserId);
@@ -5812,7 +5884,6 @@ async function returnTechUnitToActive({
     );
   }
 
-  assertUnitLifecycleAuthority(actorRoleCodes);
 
   const unit = await getUnitById(safeUnitId);
 
@@ -6282,7 +6353,7 @@ async function getResolvedProductionWeightForUnit(unit) {
   return productionWeightModel.normalizeWeightValue(details.effectiveWeight);
 }
 
-async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByUserId, creditSource = 'manual_completion', overrideRequestId = null, weightValue = null, notes = null, actorRoleCodes = [], completionRequirementOverrideReason = '' }) {
+async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByUserId, creditSource = 'manual_completion', overrideRequestId = null, weightValue = null, notes = null, actorRoleCodes = [], actorPermissions = null, completionRequirementOverrideReason = '' }) {
   if (!await tableExists('unit_work_completions')) {
     throw new Error('The unit_work_completions table is not ready yet. Run the required completion migration first.');
   }
@@ -6378,6 +6449,7 @@ async function recordUnitWorkCompletion({ unitId, completedByUserId, recordedByU
     const completionToolRequirementDecision = evaluateCompletionToolRequirementEnforcement({
       status: completionToolRequirements,
       roleCodes: actorRoleCodes,
+      permissions: actorPermissions,
       overrideReason: completionRequirementOverrideReason
     });
 
@@ -6635,9 +6707,10 @@ async function reverseUnitWorkCompletion({
   unitWorkCompletionId,
   reversedByUserId,
   reason,
-  actorRoleCodes = []
+  actorRoleCodes = [],
+  actorPermissions = []
 }) {
-  assertCanReverseUnitCompletion(actorRoleCodes);
+  assertCanReverseUnitCompletion(actorRoleCodes, actorPermissions);
   const safeUnitId = normalizeRequiredInteger(unitId);
   const safeCompletionId = normalizeRequiredInteger(unitWorkCompletionId);
   const safeReversedByUserId = normalizeRequiredInteger(reversedByUserId);
@@ -7269,53 +7342,6 @@ async function getLatestWorkCompletionMapForUnits(unitIds) {
   return result;
 }
 
-async function getUnitWorkCompletionsForUser(unitId, userId) {
-  const safeUnitId = normalizeRequiredInteger(unitId);
-  const safeUserId = normalizeRequiredInteger(userId);
-
-  if (!safeUnitId || !safeUserId || !await tableExists('unit_work_completions')) {
-    return [];
-  }
-
-  const completionColumns = await getTableColumns('unit_work_completions');
-  const productionCreditFilter = hasColumn(completionColumns, 'grants_production_credit')
-    ? 'AND c.grants_production_credit = 1'
-    : '';
-
-  const [rows] = await pool.query(
-    `
-      SELECT
-        c.unit_work_completion_id,
-        c.lot_id,
-        c.completed_at,
-        c.production_weight_value,
-        c.credit_source,
-        c.notes,
-        l.name AS lot_name
-      FROM unit_work_completions c
-      LEFT JOIN lots l
-        ON l.lot_id = c.lot_id
-      WHERE c.unit_id = ?
-        AND c.completed_by_user_id = ?
-        AND c.reversed_at IS NULL
-        ${productionCreditFilter}
-      ORDER BY c.completed_at DESC, c.unit_work_completion_id DESC
-      LIMIT 100
-    `,
-    [safeUnitId, safeUserId]
-  );
-
-  return rows.map((row) => ({
-    unitWorkCompletionId: Number(row.unit_work_completion_id),
-    lotName: row.lot_name || 'No active lot',
-    completedAt: row.completed_at,
-    formattedProductionWeight: row.production_weight_value !== null && row.production_weight_value !== undefined
-      ? Number(row.production_weight_value).toFixed(2)
-      : '—',
-    creditSourceLabel: getWorkCreditSourceLabel(row.credit_source),
-    notes: row.notes || ''
-  }));
-}
 
 async function getUnitOperationalHistory(unitId) {
   const safeUnitId = normalizeRequiredInteger(unitId);
@@ -7707,7 +7733,6 @@ module.exports = {
   assignTechUnit,
   getLatestWorkCompletionMapForUnits,
   getUnitOperationalHistory,
-  getUnitWorkCompletionsForUser,
   getUnitWorkCompletionPreview,
   getCurrentHardwareFormAuthorityStatus,
   getCompletionToolRequirementStatus,

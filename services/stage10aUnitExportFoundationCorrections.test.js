@@ -45,8 +45,8 @@ test('Lot Unit export is exposed only on Management Lot Details while legacy end
   const techPage = read('views/pages/tech-units.ejs');
   const lotPage = read('views/pages/management-lot-detail.ejs');
 
-  assert.match(managementRoutes, /'\/tech\/units\/export\/preview'[\s\S]*?requireRole\(managementRoles\)/);
-  assert.match(lotRoutes, /'\/management\/lots\/:lotId\/export\/preview'[\s\S]*?requireRole\(lotManagementRoles\)/);
+  assert.match(managementRoutes, /'\/tech\/units\/export\/preview'[\s\S]*?requirePermission\('units\.export'\)/);
+  assert.match(lotRoutes, /'\/management\/lots\/:lotId\/export\/preview'[\s\S]*?requirePermission\('lots\.view'\)[\s\S]*?requirePermission\('lots\.export'\)/);
   assert.doesNotMatch(techPage, /Export Preview/);
   assert.match(lotPage, />Export Units<\/button>/);
   assert.doesNotMatch(lotPage, />Export Direct Units<\/button>/);

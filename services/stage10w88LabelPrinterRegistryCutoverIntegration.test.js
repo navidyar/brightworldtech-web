@@ -15,15 +15,15 @@ test('Print Label printer choices now come from the per-user registry instead of
   assert.doesNotMatch(controller, /LABEL_PRINTERS\.find\(\(candidate\) => candidate\.id === printerId\)/);
 });
 
-test('registry cutover reuses the existing authorization policy for managed, shared, owner, and Tech Lead+ printers', () => {
+test('registry cutover uses effective permission for private solo printers', () => {
   const runtime = read('services/labelPrinterRuntimeService.js');
   const policy = read('services/labelPrinterPolicy.js');
   const model = read('models/labelPrinterModel.js');
-  assert.match(runtime, /canUsePrinter\(row, userId, roleCodes\)/);
+  assert.match(runtime, /canUsePrinter\(row, userId, permissions\)/);
   assert.match(policy, /printer\.scope_code\) === 'managed'/);
   assert.match(policy, /printer\.is_shared\) === 1/);
   assert.match(policy, /printer\.owner_user_id\) === Number\(userId\)/);
-  assert.match(policy, /return isTechLeadPlus\(roleCodes\)/);
+  assert.match(policy, /return canManageAnySoloPrinter\(permissions\)/);
   assert.match(model, /listAvailablePrintersForUser/);
 });
 

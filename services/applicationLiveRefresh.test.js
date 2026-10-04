@@ -72,7 +72,7 @@ test('authenticated pages load one global SSE client and the server publishes su
   const browser = read('public/js/application-live-refresh.js');
   const events = read('services/applicationLiveRefreshEvents.js');
 
-  assert.match(head, /application-live-refresh\.js\?v=20260924-preserve-active-work/);
+  assert.match(head, /application-live-refresh\.js\?v=20260925-preserve-unit-browser-view/);
   assert.match(head, /isAuthenticated/);
   assert.match(server, /publishSuccessfulApplicationMutations/);
   assert.match(server, /app\.use\(publishSuccessfulApplicationMutations\)/);
@@ -100,6 +100,9 @@ test('sitewide refresh script protects active edits, overlays, and mutation roun
   assert.match(browser, /data-modal-backdrop/);
   assert.match(browser, /data-virtual-huddle-layer/);
   assert.match(browser, /data-application-unsaved-work=\"true\"/);
+  assert.match(browser, /hasActiveUnitBrowserView/);
+  assert.match(browser, /data-tech-units-refresh-url/);
+  assert.match(browser, /tech-detail-row:not/);
   assert.match(browser, /document\.visibilityState === 'hidden'/);
   assert.match(browser, /htmx:beforeRequest/);
   assert.match(browser, /pagehide/);
@@ -124,6 +127,6 @@ test('existing Unit Browser realtime client ignores unrelated Unit detail events
   assert.match(browser, /detailContainer/);
   assert.match(browser, /currentUnitId !== eventUnitId/);
   assert.match(browser, /return;[\s\S]*?queueVisibleTechUnitRefresh\(\)/);
-  assert.match(listPage, /tech-units\.js\?v=20260922-unit-scoped-realtime/);
-  assert.match(detailPage, /tech-units\.js\?v=20260922-unit-scoped-realtime/);
+  assert.match(listPage, /tech-units\.js\?v=20260925-preserve-expanded-unit-view/);
+  assert.match(detailPage, /tech-units\.js\?v=20260925-preserve-expanded-unit-view/);
 });

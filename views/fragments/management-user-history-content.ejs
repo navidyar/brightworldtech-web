@@ -1,0 +1,43 @@
+  <%
+    const displayChangeValue = (field, value) => {
+      if (value === null || value === undefined) return '—';
+      if (field === 'roles') return Array.isArray(value) && value.length ? value.map(formatRoleLabel).join(', ') : '—';
+      if (field === 'is_active') return value === true ? 'Active' : 'Inactive';
+      return String(value);
+    };
+  %>
+            <div class="table-card management-user-history-table-card">
+              <table class="management-user-history-table">
+                <thead><tr><th>When</th><th>Account</th><th>Action</th><th>Details</th><th>Performed by</th></tr></thead>
+                <tbody>
+                  <% if (events.length === 0) { %>
+                    <tr><td colspan="5">No account history found.</td></tr>
+                  <% } %>
+                  <% events.forEach((event) => { %>
+                    <tr>
+                      <td><%= formatDateTime(event.created_at) %></td>
+                      <td><%= event.target_name || `User #${event.target_user_id}` %></td>
+                      <td><strong><%= actionLabels[event.action] || event.action %></strong><% if (event.result !== 'success') { %><br /><span class="pill bad"><%= event.result.charAt(0).toUpperCase() + event.result.slice(1) %></span><% } %></td>
+                      <td>
+                        <% const entries = Object.entries(event.changes || {}); %>
+                        <% if (entries.length > 0) { %>
+                          <% entries.forEach(([field, values]) => { %>
+                            <div><strong><%= fieldLabels[field] || field %>:</strong> <%= displayChangeValue(field, values.old) %> → <%= displayChangeValue(field, values.new) %></div>
+                          <% }) %>
+                        <% } else if (event.reason) { %>
+                          <%= event.reason %>
+                        <% } else { %>
+                          —
+                        <% } %>
+                      </td>
+                      <td><%= event.actor_name || (event.actor_user_id ? `User #${event.actor_user_id}` : 'System') %></td>
+                    </tr>
+                  <% }) %>
+                </tbody>
+              </table>
+            </div>
+            <div class="site-inline-actions site-space-top-lg">
+              <% const filter = targetUserId ? `userId=${targetUserId}&` : ''; %>
+              <% if (page > 1) { %><a class="secondary-button" href="/management/users/history?<%= filter %>page=<%= page - 1 %>"<% if (historyModal) { %> hx-get="/management/users/history?<%= filter %>page=<%= page - 1 %>" hx-target="#modal-root" hx-swap="innerHTML"<% } %>>Previous</a><% } %>
+              <% if (hasNext) { %><a class="secondary-button" href="/management/users/history?<%= filter %>page=<%= page + 1 %>"<% if (historyModal) { %> hx-get="/management/users/history?<%= filter %>page=<%= page + 1 %>" hx-target="#modal-root" hx-swap="innerHTML"<% } %>>Next</a><% } %>
+            </div>

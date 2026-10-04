@@ -9,16 +9,16 @@ const root = path.join(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
 test('topbar renders the QC role as Quality Control', () => {
-  assert.match(read('views/partials/topbar.ejs'), /currentRoles\.map\(formatRoleLabel\)/);
+  assert.match(read('views/partials/topbar.ejs'), /currentPermissionContext\?\.roles/);
+  assert.match(read('views/partials/topbar.ejs'), /role\.name/);
   assert.match(read('views/partials/helpers.js'), /qc: 'Quality Control'/);
 });
 
 test('QC Portal reviewer roles receive the accept and reject routes', () => {
   const routes = read('routes/management.js');
-  assert.match(routes, /QC_REVIEW_ROLE_CODES/);
-  assert.match(routes, /qc-review\/:decisionCode\/modal[\s\S]*?requireRole\(QC_REVIEW_ROLE_CODES\)/);
-  assert.match(routes, /qc-review'[\s\S]*?requireRole\(QC_REVIEW_ROLE_CODES\)/);
-  assert.match(routes, /qc-review\/details\/modal[\s\S]*?requireRole\(unitBrowserRoles\)/);
+  assert.match(routes, /qc-review\/:decisionCode\/modal[\s\S]*?requirePermission\('qc\.review\.perform'\)/);
+  assert.match(routes, /qc-review'[\s\S]*?requirePermission\('qc\.review\.perform'\)/);
+  assert.match(routes, /qc-review\/details\/modal[\s\S]*?requirePermission\('units\.view'\)/);
 });
 
 test('QC review modal requires rejection notes and keeps acceptance notes optional', () => {
@@ -31,7 +31,7 @@ test('QC review modal requires rejection notes and keeps acceptance notes option
 
 test('unit table shows compact clickable QC indicators and QC Portal review controls', () => {
   const table = read('views/fragments/tech-units-table.ejs');
-  assert.match(table, /const canRecordQcReview = isQcPortalMode \|\| currentUserRoles\.includes\('qc'\)/);
+  assert.match(table, /const canRecordQcReview = hasPermission\('qc\.review\.perform'\)/);
   assert.match(table, /include\('tech-unit-qc-status-icon', \{ statusCode: unit\.qcReviewStateCode, decisionCode: latestQcReview\.decisionCode \}\)/);
   assert.match(read('views/fragments/tech-unit-qc-status-icon.ejs'), /tech-qc-status-indicator--<%= qcStatusCode %>/);
   assert.match(table, /qc-review\/details\/modal/);

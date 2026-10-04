@@ -20,6 +20,22 @@ test('resolver can use explicit semantic aliases without guessing arbitrary valu
   assert.equal(resolveCandidateFromRows(ROWS, 'not available', ['Fail']).resolvedId, 2);
 });
 
+
+test('resolver uses category-scoped Tool aliases only after direct active-value matching', () => {
+  const aliases = [
+    { aliasValue: 'Legacy Pass Name', normalizedAlias: 'legacypassname', targetId: 1 },
+    { aliasValue: 'Old Failure', normalizedAlias: 'oldfailure', targetId: 2 }
+  ];
+  const direct = resolveCandidateFromRows(ROWS, 'Pass', [], aliases);
+  assert.equal(direct.resolvedId, 1);
+  assert.equal(direct.resolutionSource, 'configured_value');
+
+  const mapped = resolveCandidateFromRows(ROWS, 'Legacy Pass Name', [], aliases);
+  assert.equal(mapped.resolvedId, 1);
+  assert.equal(mapped.resolutionSource, 'tool_alias');
+  assert.equal(mapped.matchedAlias, 'Legacy Pass Name');
+});
+
 test('resolver keeps unmapped and ambiguous outcomes explicit', () => {
   assert.equal(resolveCandidateFromRows(ROWS, 'Warning').status, 'unmapped');
   const duplicated = [...ROWS, { id: 4, label: 'Pass', code: 'ok', value: 'OK' }];

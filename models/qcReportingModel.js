@@ -3,6 +3,7 @@
 const { pool } = require('./db');
 const unitQcCheckModel = require('./unitQcCheckModel');
 const unitQcCorrectionModel = require('./unitQcCorrectionModel');
+const qcReviewerAuditModel = require('./qcReviewerAuditModel');
 const { getQcTechnicianAttributionCapabilities } = require('./qcTechnicianAttributionModel');
 const { buildQcTechnicianAttributionSql } = require('../services/qcTechnicianAttribution');
 
@@ -43,6 +44,7 @@ function buildManagementQcReportingFilters(filters = {}, technicianExpression) {
 
 function buildManagementQcReportingQuery({
   correctionSchemaIsReady = false,
+  reviewerAuditSchemaIsReady = false,
   technicianAttributionCapabilities = {},
   filters = {}
 } = {}) {
@@ -74,6 +76,9 @@ function buildManagementQcReportingQuery({
         reviewer.first_name AS reviewer_first_name,
         reviewer.last_name AS reviewer_last_name,
         reviewer.email AS reviewer_email,
+        ${reviewerAuditSchemaIsReady ? 'reviewer_audit.audit_outcome' : 'NULL'} AS reviewer_audit_outcome,
+        ${reviewerAuditSchemaIsReady ? 'reviewer_audit.audited_at' : 'NULL'} AS reviewer_audited_at,
+        ${reviewerAuditSchemaIsReady ? 'reviewer_audit.audited_by_user_id' : 'NULL'} AS reviewer_audited_by_user_id,
         ${correctionSchemaIsReady ? 'CASE WHEN correction.unit_qc_correction_id IS NULL THEN 0 ELSE 1 END' : '0'} AS has_correction_submission
       FROM unit_qc_checks qc
       INNER JOIN unit_work_completions completion
@@ -88,6 +93,8 @@ function buildManagementQcReportingQuery({
         ON reviewer.user_id = qc.reviewed_by_user_id
       ${correctionSchemaIsReady ? `LEFT JOIN unit_qc_corrections correction
         ON correction.rejected_qc_check_id = qc.unit_qc_check_id` : ''}
+      ${reviewerAuditSchemaIsReady ? `LEFT JOIN qc_reviewer_audits reviewer_audit
+        ON reviewer_audit.unit_qc_check_id = qc.unit_qc_check_id` : ''}
       ${reportingFilters.whereSql || 'WHERE 1 = 1'}
         AND qc.reverted_at IS NULL
       ORDER BY qc.unit_qc_check_id
@@ -162,12 +169,14 @@ async function listManagementQcReportingTechnicianOptions(connection = pool) {
 async function listManagementQcReportingRows(filters = {}, connection = pool) {
   await assertQcReportingStorageReady(connection);
 
-  const [correctionSchemaIsReady, technicianAttributionCapabilities] = await Promise.all([
+  const [correctionSchemaIsReady, reviewerAuditSchemaIsReady, technicianAttributionCapabilities] = await Promise.all([
     unitQcCorrectionModel.isQcCorrectionSchemaReady(connection),
+    qcReviewerAuditModel.isQcReviewerAuditSchemaReady(connection),
     getQcTechnicianAttributionCapabilities(connection)
   ]);
   const query = buildManagementQcReportingQuery({
     correctionSchemaIsReady,
+    reviewerAuditSchemaIsReady,
     technicianAttributionCapabilities,
     filters
   });

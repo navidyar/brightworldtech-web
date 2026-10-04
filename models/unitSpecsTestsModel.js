@@ -187,6 +187,19 @@ async function getSimpleData(unitId) {
   return data;
 }
 
+async function getAppleModelNumberByUnitId(unitId) {
+  const safeUnitId = Number(unitId);
+  if (!Number.isInteger(safeUnitId) || safeUnitId <= 0) return '';
+  if (!await tableExists('unit_specifications')) return '';
+  const columns = await getColumnSet('unit_specifications');
+  if (!columns.has('apple_model_number')) return '';
+  const [rows] = await pool.query(
+    'SELECT apple_model_number FROM unit_specifications WHERE unit_id = ? LIMIT 1',
+    [safeUnitId]
+  );
+  return String(rows[0]?.apple_model_number || '').trim();
+}
+
 async function getRepeatableRows(unitId, tableName, columns, mapper) {
   if (!await tableExists(tableName)) return [];
   const [rows] = await pool.query(
@@ -519,6 +532,7 @@ async function saveSpecsTestsForUnitWithConnection(connection, { unitId, formDat
 
 module.exports = {
   getBlankSpecsTestsData,
+  getAppleModelNumberByUnitId,
   getSpecsTestsDataByUnitId,
   getSpecsTestsDetailsByUnitIds,
   getSpecsTestsOptions,

@@ -9,7 +9,10 @@ function normalizeRoleCodes(roleCodes) {
     : [];
 }
 
-function canReverseUnitCompletion(roleCodes) {
+function canReverseUnitCompletion(roleCodes, permissions = null) {
+  if (permissions instanceof Set || Array.isArray(permissions)) {
+    return new Set(permissions).has('units.reverse_completion');
+  }
   const roles = normalizeRoleCodes(roleCodes);
   return roles.some((roleCode) => REVERSAL_ROLE_CODES.includes(roleCode));
 }
@@ -28,9 +31,9 @@ function normalizeCompletionReversalReason(value) {
   return reason;
 }
 
-function assertCanReverseUnitCompletion(roleCodes) {
-  if (!canReverseUnitCompletion(roleCodes)) {
-    const error = new Error('Only a Tech Lead, Management user, or Admin may undo Unit completion.');
+function assertCanReverseUnitCompletion(roleCodes, permissions = null) {
+  if (!canReverseUnitCompletion(roleCodes, permissions)) {
+    const error = new Error('Permission to undo Unit completion is required.');
     error.code = 'BWT_COMPLETION_REVERSAL_FORBIDDEN';
     throw error;
   }

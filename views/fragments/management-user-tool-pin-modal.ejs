@@ -1,0 +1,67 @@
+<%
+  const safeErrors = Array.isArray(errorMessages) ? errorMessages : [];
+  const safeReturnPath = returnPath === 'inactive' ? 'inactive' : 'active';
+  const userName = user ? `${user.first_name || ''} ${user.last_name || ''}`.trim() : 'Selected User';
+%>
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal management-user-modal management-user-tool-pin-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-tool-pin-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">User Security</p>
+        <h2 id="management-user-tool-pin-title">Manage Tool PIN</h2>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
+    </header>
+
+    <div class="modal-body">
+      <% if (safeErrors.length > 0) { %>
+        <div class="message error"><% safeErrors.forEach((message) => { %><p><%= message %></p><% }) %></div>
+      <% } %>
+
+      <% if (user) { %>
+        <div class="management-user-modal-summary">
+          <div>
+            <p class="eyebrow">User</p>
+            <strong><%= userName %></strong>
+            <p><%= user.username || user.email %></p>
+          </div>
+          <div class="management-user-modal-pills site-inline-actions">
+            <span class="pill <%= pinState?.hasToolPin ? 'good' : 'muted' %>"><%= pinState?.hasToolPin ? 'PIN Registered' : 'No PIN' %></span>
+          </div>
+        </div>
+
+        <p class="management-user-role-help">Registering a new PIN immediately replaces the previous Tool PIN. The PIN is Tool-only and cannot be used to sign into the BWTDallas website. Avoid repeated digits, 4+ digit sequences, and repeating or grouped patterns.</p>
+        <% if (pinState?.updatedAt) { %><p class="field-hint">Last changed <%= formatDateTime(pinState.updatedAt) %>.</p><% } %>
+
+        <form class="auth-form" method="post" action="/management/users/<%= user.user_id %>/tool-pin" hx-post="/management/users/<%= user.user_id %>/tool-pin" hx-target="#modal-root" hx-swap="innerHTML" autocomplete="off">
+          <input type="hidden" name="returnPath" value="<%= safeReturnPath %>" />
+          <input type="hidden" name="toolPinAction" value="set" />
+          <div class="form-grid management-user-tool-pin-grid">
+            <label class="form-field">
+              <span>New Tool PIN (6–10 digits)</span>
+              <input type="password" name="toolPin" inputmode="numeric" pattern="[0-9]{6,10}" minlength="6" maxlength="10" autocomplete="new-password" required />
+            </label>
+            <label class="form-field">
+              <span>Confirm Tool PIN</span>
+              <input type="password" name="confirmToolPin" inputmode="numeric" pattern="[0-9]{6,10}" minlength="6" maxlength="10" autocomplete="new-password" required />
+            </label>
+          </div>
+          <div class="action-row">
+            <button type="submit" class="primary-button"><%= pinState?.hasToolPin ? 'Reset Tool PIN' : 'Register Tool PIN' %></button>
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          </div>
+        </form>
+
+        <% if (pinState?.hasToolPin) { %>
+          <form method="post" action="/management/users/<%= user.user_id %>/tool-pin" hx-post="/management/users/<%= user.user_id %>/tool-pin" hx-target="#modal-root" hx-swap="innerHTML">
+            <input type="hidden" name="returnPath" value="<%= safeReturnPath %>" />
+            <input type="hidden" name="toolPinAction" value="remove" />
+            <div class="form-actions"><button type="submit" class="secondary-button danger-button">Remove Tool PIN</button></div>
+          </form>
+        <% } %>
+      <% } else { %>
+        <button type="button" class="secondary-button" data-modal-close>Close</button>
+      <% } %>
+    </div>
+  </section>
+</div>

@@ -90,7 +90,8 @@
     <% if (techData.canViewAllTechs) { %>
       <label class="form-field dashboard-period-main-field">
         <span>Tech User</span>
-        <select name="techDashboardUserId">
+        <select name="techDashboardUserId" required data-tech-dashboard-user-select>
+          <option value="" <%= techData.selectedTechId ? '' : 'selected' %>>Select a Tech</option>
           <% techUsers.forEach((tech) => { %>
             <option value="<%= tech.userId %>" <%= Number(techData.selectedTechId) === Number(tech.userId) ? 'selected' : '' %>><%= tech.name %></option>
           <% }) %>
@@ -118,18 +119,22 @@
     <button class="primary-button" type="submit">Show Metrics</button>
   </form>
 
-  <div class="dashboard-selected-period-note">
-    <strong>Currently showing:</strong>
-    <span><%= selectedTech ? selectedTech.name : 'Selected Tech' %> · <%= activeWindow ? `${activeWindow.label} · ${dateLabel(activeWindow)}` : 'No reporting period selected' %></span>
-    <span><%= formatNumber(summary.completed || 0) %> completed · <%= formatNumber(Number(summary.weighted || 0).toFixed(2)) %> weighted</span>
-  </div>
+  <% if (selectedTech) { %>
+    <div class="dashboard-selected-period-note">
+      <strong>Currently showing:</strong>
+      <span><%= selectedTech.name %> · <%= activeWindow ? `${activeWindow.label} · ${dateLabel(activeWindow)}` : 'No reporting period selected' %></span>
+      <span><%= formatNumber(summary.completed || 0) %> completed · <%= formatNumber(Number(summary.weighted || 0).toFixed(2)) %> weighted</span>
+    </div>
 
-  <div class="dashboard-pie-grid dashboard-pie-grid--two">
-    <% renderPie('My Total Units by Category', categoryBreakdown, 'completed', 'completed units'); %>
-    <% renderPie('My Weighted Units by Category', categoryBreakdown, 'weighted', 'weighted units'); %>
-    <% renderPie('My Total Units by Lot', lotBreakdown, 'completed', 'completed units'); %>
-    <% renderPie('My Weighted Units by Lot', lotBreakdown, 'weighted', 'weighted units'); %>
-  </div>
+    <div class="dashboard-pie-grid dashboard-pie-grid--two">
+      <% renderPie('My Total Units by Category', categoryBreakdown, 'completed', 'completed units'); %>
+      <% renderPie('My Weighted Units by Category', categoryBreakdown, 'weighted', 'weighted units'); %>
+      <% renderPie('My Total Units by Lot', lotBreakdown, 'completed', 'completed units'); %>
+      <% renderPie('My Weighted Units by Lot', lotBreakdown, 'weighted', 'weighted units'); %>
+    </div>
+  <% } else if (techData.canViewAllTechs) { %>
+    <div class="dashboard-empty-state">Select a Tech User to view individual productivity metrics.</div>
+  <% } %>
 
   <div class="tech-team-average-grid">
     <article class="tech-team-average-panel">

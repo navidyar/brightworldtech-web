@@ -116,9 +116,9 @@ test('Admin-only duplicate resolution is directional, transfers all live referen
   const page = read('views/pages/management-processors.ejs');
   const modal = read('views/fragments/processor-catalog-merge-modal.ejs');
 
-  assert.match(routes, /processors\/:processorModelId\/merge\/modal'[\s\S]*?requireRole\(configRoles\)/);
-  assert.match(routes, /processors\/:processorModelId\/merge'[\s\S]*?requireRole\(configRoles\)/);
-  assert.match(page, /<% if \(isAdmin\) \{ %>[\s\S]*?Resolve Duplicate/);
+  assert.match(routes, /processors\/:processorModelId\/merge\/modal'[\s\S]*?requirePermission\('configuration\.processors\.manage'\)/);
+  assert.match(routes, /processors\/:processorModelId\/merge'[\s\S]*?requirePermission\('configuration\.processors\.manage'\)/);
+  assert.match(page, /Resolve Duplicate/);
   assert.match(model, /UPDATE units SET processor_model_id = \? WHERE processor_model_id = \?/);
   assert.match(model, /UPDATE unit_processor_catalog_requests SET approved_processor_model_id = \?, approved_processor_brand_id = \? WHERE approved_processor_model_id = \?/);
   assert.match(model, /UPDATE lot_requirements SET processor_model_id = \? WHERE processor_model_id = \?/);
@@ -126,8 +126,8 @@ test('Admin-only duplicate resolution is directional, transfers all live referen
   assert.match(model, /DELETE FROM processor_family_members WHERE processor_model_id = \?/);
   assert.match(model, /DELETE FROM processor_models WHERE processor_model_id = \? LIMIT 1/);
   assert.match(modal, /Duplicate being removed/);
-  assert.match(modal, /Canonical Processor that remains/);
-  assert.match(modal, /Merge #<%= processor\.id %> INTO Canonical Processor/);
+  assert.match(modal, /Catalog Processor that remains/);
+  assert.match(modal, /Merge #<%= processor\.id %> INTO Catalog Processor/);
   assert.match(modal, /permanently deleted/i);
 });
 
@@ -140,8 +140,8 @@ test('Admin can maintain exact Processor-to-Model and Model-to-Processor associa
   const processorModelsModal = read('views/fragments/processor-catalog-models-modal.ejs');
   const modelProcessorsModal = read('views/fragments/unit-model-processors-modal.ejs');
 
-  assert.match(routes, /processors\/:processorModelId\/models\/modal'[\s\S]*?requireRole\(configRoles\)/);
-  assert.match(routes, /models\/:unitModelId\/processors\/modal'[\s\S]*?requireRole\(configRoles\)/);
+  assert.match(routes, /processors\/:processorModelId\/models\/modal'[\s\S]*?requirePermission\('configuration\.processors\.manage'\)/);
+  assert.match(routes, /models\/:unitModelId\/processors\/modal'[\s\S]*?requirePermission\('configuration\.models\.manage'\)/);
   assert.match(processorModel, /async function replaceProcessorUnitModelAssociations/);
   assert.match(processorModel, /INSERT INTO unit_model_processor_options \(unit_model_id, processor_model_id, is_active\)[\s\S]*?ON DUPLICATE KEY UPDATE is_active = 1/);
   assert.match(unitModel, /async function replaceUnitModelProcessorAssociations/);
@@ -163,15 +163,15 @@ test('Admin processor request approval reuses global processors and blocks stron
 
   assert.match(controller, /processorCatalogModel\.findLikelyProcessorMatches/);
   assert.doesNotMatch(controller, /confirmedProcessorNamingWithAdmin/);
-  assert.match(controller, /reviewerIsAdmin: isAdminCatalogReviewer\(req\)/);
+  assert.match(controller, /reviewerIsAdmin: isAdminCatalogReviewer\(req, request\)/);
   assert.match(model, /safeExistingProcessorModelId/);
   assert.match(model, /BWT_CATALOG_PROCESSOR_DUPLICATE/);
-  assert.match(model, /Only Admin can approve Processor Catalog requests/);
+  assert.match(model, /Approve Processor Catalog Requests permission is required to approve Processor Catalog requests/);
   assert.match(model, /BWT_CATALOG_PROCESSOR_CANONICAL_FORMAT/);
   assert.match(model, /INSERT INTO unit_model_processor_options[\s\S]*?ON DUPLICATE KEY UPDATE is_active = 1/);
   assert.match(page, /Reuse an Existing Processor whenever possible/);
   assert.match(page, /Searches the entire Processor Catalog, not only processors already associated with this Unit Model/);
-  assert.match(page, /Admin Catalog Review/);
+  assert.match(page, /Processor Catalog Review/);
   assert.doesNotMatch(page, /Management Request Boundary|confirmedProcessorNamingWithAdmin/);
   assert.match(script, /Associate Existing Processor/);
   assert.match(script, /Create and Associate Processor/);
@@ -199,7 +199,7 @@ test('Admin processor approval fields use an aligned two-column grid with paired
   const css = read('public/css/app.css');
 
   assert.match(page, /class="processor-request-approval-grid"/);
-  for (const label of ['Processor Type', 'Canonical Processor Type Name', 'Canonical Processor', 'Processor Family', 'Generation', 'Base Speed GHz']) {
+  for (const label of ['Processor Type', 'Processor Type Name', 'Catalog Processor', 'Processor Family', 'Generation', 'Base Speed GHz']) {
     assert.match(page, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
   assert.match(css, /\.processor-request-approval-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);

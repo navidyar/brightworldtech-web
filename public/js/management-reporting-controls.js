@@ -164,6 +164,11 @@
   document.addEventListener('keydown', closeTeamPickerOnEscape);
 
   document.addEventListener('change', (event) => {
+    if (event.target.matches('[data-tech-dashboard-user-select]')) {
+      const form = event.target.closest('[data-reporting-controls]');
+      if (form && event.target.value) form.requestSubmit();
+      return;
+    }
     if (!event.target.matches('[data-reporting-period-select]')) return;
     const form = event.target.closest('[data-reporting-controls]');
     if (form) updateForm(form);

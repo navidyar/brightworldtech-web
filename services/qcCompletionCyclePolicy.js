@@ -83,12 +83,18 @@ function assertCurrentQcCompletionCycle(row, {
 function canSubmitQcCorrectionForCurrentAssignment({
   submitterUserId,
   assignedToUserId,
-  roleCodes = []
+  roleCodes = [],
+  permissions = null
 } = {}) {
-  const normalizedRoles = normalizeRoleCodes(roleCodes);
-
-  if (normalizedRoles.some((roleCode) => PRIVILEGED_CORRECTION_ROLE_CODES.has(roleCode))) {
-    return true;
+  if (permissions instanceof Set || Array.isArray(permissions)) {
+    const effectivePermissions = permissions instanceof Set ? permissions : new Set(permissions);
+    if (effectivePermissions.has('qc.correction.submit_any')) return true;
+    if (!effectivePermissions.has('qc.correction.submit')) return false;
+  } else {
+    const normalizedRoles = normalizeRoleCodes(roleCodes);
+    if (normalizedRoles.some((roleCode) => PRIVILEGED_CORRECTION_ROLE_CODES.has(roleCode))) {
+      return true;
+    }
   }
 
   const safeSubmitterUserId = normalizePositiveInteger(submitterUserId);

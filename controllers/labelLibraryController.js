@@ -10,6 +10,7 @@ const labelLibraryPrintingService = require('../services/labelLibraryPrintingSer
 const labelPrinterRuntimeService = require('../services/labelPrinterRuntimeService');
 const labelPrintingService = require('../services/labelPrintingService');
 const labelPrintHistoryModel = require('../models/labelPrintHistoryModel');
+const labelDynamicFieldConfigModel = require('../models/labelDynamicFieldConfigModel');
 const { isHtmxRequest } = require('../utils/htmxRequest');
 const {
   LABEL_TEMPLATE_CATEGORIES,
@@ -30,7 +31,6 @@ const {
   inferLabelBuilderLengthMm,
   buildLabelBuilderGeometry
 } = require('../config/labelBuilder');
-const { LABEL_FIELD_GROUPS } = require('../config/labelFieldRegistry');
 const {
   LabelTemplateInputError,
   normalizeTemplateInput
@@ -53,6 +53,10 @@ const {
 } = require('../services/labelAssetUploadPolicy');
 const { buildComposedValuePresets } = require('../services/labelComposedValuePresets');
 const { buildRepresentativeFieldValues, inspectTemplateReadiness } = require('../services/labelTemplateReadinessService');
+const {
+  buildConfiguredLabelFieldGroups,
+  configureComposedValuePresets
+} = require('../services/labelDynamicFieldConfiguration');
 
 const LABEL_LIBRARY_FILE_ASSET_KINDS = new Set(['logo', 'image', 'background']);
 const LABEL_BUILDER_IMAGE_MIME_TYPES = new Set(['image/png', 'image/svg+xml']);
@@ -268,8 +272,9 @@ async function resolveStandaloneTemplateContext(labelTemplateId, requestedUnitId
       unit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
       if (!unit) {
         errors.push('The selected Unit could not be found.');
-      } else if (unit.lotId) {
-        lot = await lotModel.getLotById(unit.lotId);
+      } else {
+        unit = await labelLibraryPrintingService.hydrateLabelUnitFieldSources(unit);
+        if (unit.lotId) lot = await lotModel.getLotById(unit.lotId);
       }
     }
   }
@@ -287,6 +292,7 @@ async function resolveStandaloneTemplateContext(labelTemplateId, requestedUnitId
 }
 
 async function buildStandaloneDirectPrintModalView({
+  permissions = new Set(),
   labelTemplateId,
   currentUser,
   requestedUnitId = '',
@@ -322,7 +328,7 @@ async function buildStandaloneDirectPrintModalView({
 
   const allDestinations = await labelPrinterRuntimeService.listPrintDestinationsForUser({
     userId: currentUser?.user_id,
-    roleCodes: currentUser?.roles
+    permissions
   });
   const printers = allDestinations.filter((destination) => (
     labelLibraryPrintingService.destinationSupportsTemplates(destination, [context.descriptor])
@@ -365,6 +371,7 @@ async function renderStandaloneDirectPrintModal(req, res, next) {
     const view = await buildStandaloneDirectPrintModalView({
       labelTemplateId: req.params.labelTemplateId,
       currentUser: req.currentUser,
+      permissions: req.currentPermissions,
       requestedUnitId: req.query?.unitId,
       search: req.query?.q,
       requestedDestinationId: req.query?.printerId,
@@ -556,7 +563,7 @@ async function printStandaloneTemplate(req, res, next) {
     let destination = await labelPrinterRuntimeService.resolvePrintDestinationForUser({
       destinationId: requestedDestinationId,
       userId: req.currentUser?.user_id,
-      roleCodes: req.currentUser?.roles
+      permissions: req.currentPermissions
     });
     if (!destination) errors.push('Select an available label printer or printer group.');
 
@@ -572,6 +579,7 @@ async function printStandaloneTemplate(req, res, next) {
       const view = await buildStandaloneDirectPrintModalView({
         labelTemplateId,
         currentUser: req.currentUser,
+        permissions: req.currentPermissions,
         requestedUnitId,
         requestedDestinationId,
         copies: requestedCopies,
@@ -617,6 +625,7 @@ async function printStandaloneTemplate(req, res, next) {
     const view = await buildStandaloneDirectPrintModalView({
       labelTemplateId,
       currentUser: req.currentUser,
+      permissions: req.currentPermissions,
       requestedUnitId,
       requestedDestinationId,
       copies,
@@ -640,6 +649,7 @@ async function printStandaloneTemplate(req, res, next) {
       const view = await buildStandaloneDirectPrintModalView({
         labelTemplateId,
         currentUser: req.currentUser,
+        permissions: req.currentPermissions,
         requestedUnitId,
         requestedDestinationId,
         copies: requestedCopies,
@@ -683,11 +693,14 @@ async function resolveBuilderTestPrintContext(labelTemplateId, requestedUnitId =
       unit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
       if (!unit) {
         errors.push('The selected Unit could not be found.');
-      } else if (unit.lotId) {
-        lot = await lotModel.getLotById(unit.lotId);
-        if (!lot) errors.push('The selected Unit’s current Lot could not be found.');
-      } else if (String(descriptor.template?.print_scope || 'lot') === 'lot') {
-        errors.push('The selected Unit has no current Lot. Use Representative Data or choose another Unit.');
+      } else {
+        unit = await labelLibraryPrintingService.hydrateLabelUnitFieldSources(unit);
+        if (unit.lotId) {
+          lot = await lotModel.getLotById(unit.lotId);
+          if (!lot) errors.push('The selected Unit’s current Lot could not be found.');
+        } else if (String(descriptor.template?.print_scope || 'lot') === 'lot') {
+          errors.push('The selected Unit has no current Lot. Use Representative Data or choose another Unit.');
+        }
       }
     }
   }
@@ -705,6 +718,7 @@ async function resolveBuilderTestPrintContext(labelTemplateId, requestedUnitId =
 }
 
 async function buildBuilderTestPrintModalView({
+  permissions = new Set(),
   labelTemplateId,
   currentUser,
   requestedUnitId = '',
@@ -744,7 +758,7 @@ async function buildBuilderTestPrintModalView({
 
   const allDestinations = await labelPrinterRuntimeService.listPrintDestinationsForUser({
     userId: currentUser?.user_id,
-    roleCodes: currentUser?.roles
+    permissions
   });
   const printers = allDestinations.filter((destination) => (
     labelLibraryPrintingService.destinationSupportsTemplates(destination, [context.descriptor])
@@ -781,6 +795,7 @@ async function renderBuilderTestPrintModal(req, res, next) {
     const view = await buildBuilderTestPrintModalView({
       labelTemplateId: req.params.labelTemplateId,
       currentUser: req.currentUser,
+      permissions: req.currentPermissions,
       requestedUnitId: req.query?.unitId,
       search: req.query?.q,
       requestedDestinationId: req.query?.printerId
@@ -806,7 +821,7 @@ async function printBuilderTestTemplate(req, res, next) {
     let destination = await labelPrinterRuntimeService.resolvePrintDestinationForUser({
       destinationId: requestedDestinationId,
       userId: req.currentUser?.user_id,
-      roleCodes: req.currentUser?.roles
+      permissions: req.currentPermissions
     });
     if (!destination) errors.push('Select an available label printer or printer group.');
 
@@ -822,6 +837,7 @@ async function printBuilderTestTemplate(req, res, next) {
       const view = await buildBuilderTestPrintModalView({
         labelTemplateId,
         currentUser: req.currentUser,
+        permissions: req.currentPermissions,
         requestedUnitId,
         requestedDestinationId,
         errorMessages: errors.filter((message) => !context.errors.includes(message))
@@ -874,6 +890,7 @@ async function printBuilderTestTemplate(req, res, next) {
     const view = await buildBuilderTestPrintModalView({
       labelTemplateId,
       currentUser: req.currentUser,
+      permissions: req.currentPermissions,
       requestedUnitId,
       requestedDestinationId,
       successMessage,
@@ -896,6 +913,7 @@ async function printBuilderTestTemplate(req, res, next) {
       const view = await buildBuilderTestPrintModalView({
         labelTemplateId,
         currentUser: req.currentUser,
+        permissions: req.currentPermissions,
         requestedUnitId,
         requestedDestinationId,
         errorMessages: [error.message || 'The test label could not be queued.']
@@ -1242,8 +1260,9 @@ async function getBuilderUnitPreview(req, res, next) {
       return res.status(400).json({ ok: false, errors: ['The selected Unit ID is invalid.'] });
     }
 
-    const unit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
+    let unit = await techUnitModel.getTechUnitLifecycleSummaryById(unitId);
     if (!unit) return res.status(404).json({ ok: false, errors: ['The selected Unit could not be found.'] });
+    unit = await labelLibraryPrintingService.hydrateLabelUnitFieldSources(unit);
     const lot = unit.lotId ? await lotModel.getLotById(unit.lotId) : null;
     const fieldValues = labelLibraryPrintingService.buildFieldValues(unit, lot);
 
@@ -1275,9 +1294,16 @@ async function renderTemplateBuilder(req, res, next) {
 
     const configAsset = await labelLibraryModel.getTemplateAssetByRole(template.label_template_id, 'config_json');
     let layout = null;
+    let layoutRecoveryWarning = '';
     if (configAsset) {
-      const raw = await fs.promises.readFile(resolveAssetAbsolutePath(configAsset.storage_relative_path), 'utf8');
-      layout = JSON.parse(raw);
+      try {
+        const raw = await fs.promises.readFile(resolveAssetAbsolutePath(configAsset.storage_relative_path), 'utf8');
+        layout = JSON.parse(raw);
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+        layoutRecoveryWarning = 'The saved layout file is missing from storage. This blank canvas is for recovery; the previous regions cannot be shown. Restore the layout file from backup to recover them.';
+        console.warn(`Label Builder layout file is missing for template ${template.label_template_id}: ${configAsset.storage_relative_path}`);
+      }
     }
     const media = inferLabelBuilderMediaWidth(template)
       || findLabelBuilderMediaWidth(layout?.mediaWidthCode)
@@ -1289,12 +1315,16 @@ async function renderTemplateBuilder(req, res, next) {
     } else if (!layout.mediaWidthCode || !layout.lengthMm) {
       layout = { ...layout, builderVersion: 2, mediaWidthCode: media.code, lengthMm };
     }
-    const [sharedImageAssets, composedValuePresets, effectiveLotUsage] = await Promise.all([
+    const [sharedImageAssets, rawComposedValuePresets, effectiveLotUsage, dynamicFieldSettings] = await Promise.all([
       labelLibraryModel.listLabelAssets({ includeArchived: false })
         .then((assets) => assets.filter(isReusableBuilderImageAsset).map(toBuilderImageAsset)),
       loadComposedValuePresets(),
-      labelLibraryModel.listEffectiveTemplateLotUsage(template.label_template_id)
+      labelLibraryModel.listEffectiveTemplateLotUsage(template.label_template_id),
+      labelDynamicFieldConfigModel.listLabelDynamicFieldSettings()
     ]);
+    const configuredFieldGroups = buildConfiguredLabelFieldGroups(dynamicFieldSettings, { includeInactive: true });
+    const fieldGroups = buildConfiguredLabelFieldGroups(dynamicFieldSettings, { includeInactive: false });
+    const composedValuePresets = configureComposedValuePresets(rawComposedValuePresets, configuredFieldGroups);
     const affectedActiveLotCount = effectiveLotUsage.filter((row) => Number(row.is_active) === 1).length;
     const layoutReadiness = inspectLayoutReadiness(layout);
     const storedReadiness = configAsset ? await getTemplateLayoutState(template) : { ready: false };
@@ -1307,13 +1337,15 @@ async function renderTemplateBuilder(req, res, next) {
       currentNav: 'management-label-library',
       template,
       layout,
+      layoutRecoveryWarning,
       mediaWidths: LABEL_BUILDER_MEDIA_WIDTHS,
       fontFamilies: LABEL_BUILDER_FONT_FAMILIES,
       fontWeights: LABEL_BUILDER_FONT_WEIGHTS,
       textAligns: LABEL_BUILDER_TEXT_ALIGNS,
       textCases: LABEL_BUILDER_TEXT_CASES,
       rotations: LABEL_BUILDER_ROTATIONS,
-      fieldGroups: LABEL_FIELD_GROUPS,
+      fieldGroups,
+      allFieldGroups: configuredFieldGroups,
       sharedImageAssets,
       composedValuePresets,
       activeMedia: media,

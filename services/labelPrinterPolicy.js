@@ -5,29 +5,15 @@ const dns = require('node:dns').promises;
 const { findLabelPrinterProfile, inferLabelPrinterProfile } = require('../config/labelPrinting');
 
 const { findQl810wContinuousMedia } = require('../config/labelMedia');
+const { canManageAnySoloPrinter } = require('./managedPrinterPermissions');
 const LABEL_PRINTER_SCOPES = Object.freeze(['managed', 'solo']);
 const LABEL_PRINTER_PROTOCOLS = Object.freeze([
   Object.freeze({ code: 'raw_9100', label: 'RAW 9100', defaultPort: 9100 }),
   Object.freeze({ code: 'lpd', label: 'LPD', defaultPort: 515 }),
   Object.freeze({ code: 'ipp', label: 'IPP', defaultPort: 631 })
 ]);
-const TECH_LEAD_PLUS_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead']);
-const MANAGEMENT_PLUS_ROLE_CODES = Object.freeze(['admin', 'management']);
 
 class LabelPrinterInputError extends Error {}
-
-function hasAnyRole(roleCodes, allowed) {
-  const roles = Array.isArray(roleCodes) ? roleCodes : [];
-  return roles.some((role) => allowed.includes(String(role)));
-}
-
-function isTechLeadPlus(roleCodes) {
-  return hasAnyRole(roleCodes, TECH_LEAD_PLUS_ROLE_CODES);
-}
-
-function isManagementPlus(roleCodes) {
-  return hasAnyRole(roleCodes, MANAGEMENT_PLUS_ROLE_CODES);
-}
 
 function isPrivateIpv4(host) {
   if (net.isIP(host) !== 4) return false;
@@ -77,6 +63,7 @@ function normalizePrinterInput(input = {}, { scope = 'solo' } = {}) {
   return Object.freeze({
     scope,
     displayName,
+    aliasLabel: String(input.aliasLabel || '').trim().slice(0, 120) || null,
     locationLabel: String(input.locationLabel || '').trim().slice(0, 160) || null,
     hostAddress,
     port,
@@ -93,17 +80,17 @@ function normalizePrinterInput(input = {}, { scope = 'solo' } = {}) {
   });
 }
 
-function canUsePrinter(printer, userId, roleCodes) {
+function canUsePrinter(printer, userId, permissions) {
   if (!printer || Number(printer.is_enabled) !== 1) return false;
   if (String(printer.scope_code) === 'managed') return true;
   if (Number(printer.is_shared) === 1) return true;
   if (Number(printer.owner_user_id) === Number(userId)) return true;
-  return isTechLeadPlus(roleCodes);
+  return canManageAnySoloPrinter(permissions);
 }
 
-function canEditSoloPrinter(printer, userId, roleCodes) {
+function canEditSoloPrinter(printer, userId, permissions) {
   if (!printer || String(printer.scope_code) !== 'solo') return false;
-  return Number(printer.owner_user_id) === Number(userId) || isManagementPlus(roleCodes);
+  return Number(printer.owner_user_id) === Number(userId) || canManageAnySoloPrinter(permissions);
 }
 
 function canJoinPrinterGroup(printer) {
@@ -155,15 +142,11 @@ async function probePrinterHost(hostValue) {
 module.exports = {
   LABEL_PRINTER_SCOPES,
   LABEL_PRINTER_PROTOCOLS,
-  TECH_LEAD_PLUS_ROLE_CODES,
-  MANAGEMENT_PLUS_ROLE_CODES,
   LabelPrinterInputError,
   isPrivateIpv4,
   normalizeHostAddress,
   normalizePrinterInput,
   protocolByCode,
-  isTechLeadPlus,
-  isManagementPlus,
   canUsePrinter,
   canEditSoloPrinter,
   canJoinPrinterGroup,

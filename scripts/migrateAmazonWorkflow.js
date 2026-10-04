@@ -195,11 +195,11 @@ async function syncSequenceToExistingTags(connection, identifierTypeId) {
     `SELECT MAX(CAST(SUBSTRING(identifier_value, 3) AS UNSIGNED)) AS max_number
      FROM unit_identifiers
      WHERE identifier_type_config_value_id = ?
-       AND identifier_value REGEXP '^AZ[0-9]{8}$'`,
+       AND identifier_value REGEXP '^AZ[0-9]{9}$'`,
     [identifierTypeId]
   );
   const maxNumber = Number(rows[0]?.max_number || 0);
-  if (maxNumber > 99999999) throw new Error('An existing AZ identifier exceeds the supported 8-digit range.');
+  if (maxNumber > 999999999) throw new Error('An existing AZ identifier exceeds the supported 9-digit range.');
   await connection.query(
     'UPDATE amazon_asset_tag_sequence SET last_number = GREATEST(last_number, ?) WHERE sequence_id = 1',
     [maxNumber]

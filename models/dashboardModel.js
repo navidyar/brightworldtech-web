@@ -2,11 +2,47 @@ const { pool } = require('./db');
 const { isNotYetGradedToken } = require('../services/cosmeticGradeNormalization');
 const { buildLotHierarchyOptions } = require('../services/lotHierarchyPresentation');
 const { COSMETIC_GRADE_BY_SYSTEM_VALUE_ID, SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
+const { normalizeTimeZone, formatDateKey, getDayRangeUtc, formatUtcSqlDateTime } = require('../utils/timeZone');
 
 const schemaTableCache = new Map();
 const schemaColumnCache = new Map();
 
-const REPORTING_TIME_ZONE = 'America/Chicago';
+const PRODUCTIVITY_METRICS_PERMISSION_KEY = 'dashboards.productivity.count';
+
+function normalizeUserIdList(userIds) {
+  return [...new Set((Array.isArray(userIds) ? userIds : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isInteger(value) && value > 0))];
+}
+
+function buildEligibleUserFilterSql(userExpression, eligibleUserIds, prefix = 'AND') {
+  const ids = normalizeUserIdList(eligibleUserIds);
+  if (!ids.length) return { sql: `${prefix} 1 = 0`, params: [] };
+  return {
+    sql: `${prefix} ${userExpression} IN (${ids.map(() => '?').join(', ')})`,
+    params: ids
+  };
+}
+
+async function getProductivityMetricsEligibleUserIds({ activeOnly = false } = {}) {
+  if (!await tableExists('users') || !await tableExists('permissions')) return [];
+  const [rows] = await pool.query(`
+    SELECT DISTINCT u.user_id
+    FROM users u
+    INNER JOIN user_permission_overrides upo
+      ON upo.user_id = u.user_id
+     AND upo.effect = 'allow'
+    INNER JOIN permissions p
+      ON p.permission_id = upo.permission_id
+     AND p.is_active = 1
+     AND p.permission_key = ?
+    WHERE 1 = 1
+      ${activeOnly ? 'AND u.is_active = 1' : ''}
+    ORDER BY u.user_id
+  `, [PRODUCTIVITY_METRICS_PERMISSION_KEY]);
+  return rows.map((row) => Number(row.user_id)).filter((userId) => Number.isInteger(userId) && userId > 0);
+}
+
 
 function padTwo(value) {
   return String(value).padStart(2, '0');
@@ -44,75 +80,6 @@ function addDaysToDateKey(dateKey, days) {
   );
 }
 
-function getCentralDateKey(date = new Date()) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone: REPORTING_TIME_ZONE,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit'
-  }).formatToParts(date);
-
-  const partMap = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-
-  return `${partMap.year}-${partMap.month}-${partMap.day}`;
-}
-
-function getTimeZoneOffsetMs(timeZone, date) {
-  const parts = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hourCycle: 'h23'
-  }).formatToParts(date);
-
-  const partMap = Object.fromEntries(parts.map((part) => [part.type, part.value]));
-  const hour = partMap.hour === '24' ? '00' : partMap.hour;
-  const localAsUtc = Date.UTC(
-    Number(partMap.year),
-    Number(partMap.month) - 1,
-    Number(partMap.day),
-    Number(hour),
-    Number(partMap.minute),
-    Number(partMap.second)
-  );
-
-  return localAsUtc - date.getTime();
-}
-
-function zonedDateTimeToUtc(dateKey, hour = 0, minute = 0, second = 0) {
-  const parsed = parseDateKey(dateKey);
-
-  if (!parsed) {
-    return null;
-  }
-
-  const localAsUtc = Date.UTC(parsed.year, parsed.month - 1, parsed.day, hour, minute, second);
-  let utcDate = new Date(localAsUtc - getTimeZoneOffsetMs(REPORTING_TIME_ZONE, new Date(localAsUtc)));
-  utcDate = new Date(localAsUtc - getTimeZoneOffsetMs(REPORTING_TIME_ZONE, utcDate));
-
-  return utcDate;
-}
-
-function formatSqlDateTime(date) {
-  if (!(date instanceof Date) || Number.isNaN(date.getTime())) {
-    return null;
-  }
-
-  return [
-    date.getUTCFullYear(),
-    padTwo(date.getUTCMonth() + 1),
-    padTwo(date.getUTCDate())
-  ].join('-') + ' ' + [
-    padTwo(date.getUTCHours()),
-    padTwo(date.getUTCMinutes()),
-    padTwo(date.getUTCSeconds())
-  ].join(':');
-}
-
 function getDateKeyDayOfWeek(dateKey) {
   const parsed = parseDateKey(dateKey);
 
@@ -123,8 +90,8 @@ function getDateKeyDayOfWeek(dateKey) {
   return new Date(Date.UTC(parsed.year, parsed.month - 1, parsed.day)).getUTCDay();
 }
 
-function getWeekdayWorkWindow(dateKey) {
-  const safeDateKey = normalizeDate(dateKey) || getCentralDateKey();
+function getWeekdayWorkWindow(dateKey, timeZone = 'UTC') {
+  const safeDateKey = normalizeDate(dateKey) || formatDateKey(new Date(), timeZone);
   const dayOfWeek = getDateKeyDayOfWeek(safeDateKey);
   const offsetToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
   const startDate = addDaysToDateKey(safeDateKey, offsetToMonday);
@@ -133,11 +100,12 @@ function getWeekdayWorkWindow(dateKey) {
   return { startDate, endDate };
 }
 
-function getMonthWindow(dateKey) {
-  const parsed = parseDateKey(dateKey || getCentralDateKey());
+function getMonthWindow(dateKey, timeZone = 'UTC') {
+  const currentDateKey = formatDateKey(new Date(), timeZone);
+  const parsed = parseDateKey(dateKey || currentDateKey);
 
   if (!parsed) {
-    return getMonthWindow(getCentralDateKey());
+    return getMonthWindow(currentDateKey, timeZone);
   }
 
   const startDate = formatDateKeyFromParts(parsed.year, parsed.month, 1);
@@ -178,11 +146,11 @@ function normalizeManagementPeriod(value) {
   return allowedPeriods.has(normalizedValue) ? normalizedValue : 'day';
 }
 
-function getIsoWeekdayWorkWindow(weekKey) {
+function getIsoWeekdayWorkWindow(weekKey, timeZone = 'UTC') {
   const normalizedWeek = normalizeWeek(weekKey);
 
   if (!normalizedWeek) {
-    return getWeekdayWorkWindow(getCentralDateKey());
+    return getWeekdayWorkWindow(formatDateKey(new Date(), timeZone), timeZone);
   }
 
   const [yearPart, weekPart] = normalizedWeek.split('-W');
@@ -190,7 +158,7 @@ function getIsoWeekdayWorkWindow(weekKey) {
   const week = Number(weekPart);
 
   if (!Number.isInteger(year) || !Number.isInteger(week) || week < 1 || week > 53) {
-    return getWeekdayWorkWindow(getCentralDateKey());
+    return getWeekdayWorkWindow(formatDateKey(new Date(), timeZone), timeZone);
   }
 
   const januaryFourth = new Date(Date.UTC(year, 0, 4));
@@ -241,20 +209,19 @@ function getProductivityWeightSqlExpression(categorySystemAlias = 'category_syst
   `;
 }
 
-function buildReportingWindow({ key, label, startDate = '', endDate = '' }) {
+function buildReportingWindow({ key, label, startDate = '', endDate = '' }, timeZone = 'UTC') {
   const safeStartDate = normalizeDate(startDate);
   const safeEndDate = normalizeDate(endDate || startDate);
-  const startUtcDate = safeStartDate ? zonedDateTimeToUtc(safeStartDate, 0, 0, 0) : null;
-  const exclusiveEndDateKey = safeEndDate ? addDaysToDateKey(safeEndDate, 1) : '';
-  const endUtcDate = exclusiveEndDateKey ? zonedDateTimeToUtc(exclusiveEndDateKey, 0, 0, 0) : null;
+  const startRange = safeStartDate ? getDayRangeUtc(safeStartDate, timeZone) : null;
+  const endRange = safeEndDate ? getDayRangeUtc(safeEndDate, timeZone) : null;
 
   return {
     key,
     label,
     startDate: safeStartDate,
     endDate: safeEndDate,
-    startSql: formatSqlDateTime(startUtcDate),
-    endSql: formatSqlDateTime(endUtcDate)
+    startSql: startRange ? formatUtcSqlDateTime(startRange.startAt) : null,
+    endSql: endRange ? formatUtcSqlDateTime(endRange.endAt) : null
   };
 }
 
@@ -307,15 +274,16 @@ async function buildWorkCompletionWindowWhere(window, alias = 'uwc') {
   };
 }
 
-function buildDashboardReportingWindows(filters = {}) {
+function buildDashboardReportingWindows(filters = {}, timeZone = 'UTC') {
+  const safeTimeZone = normalizeTimeZone(timeZone, 'UTC');
   const safeFilters = normalizeDashboardFilters(filters);
-  const todayDate = getCentralDateKey();
+  const todayDate = formatDateKey(new Date(), safeTimeZone);
   const selectedDate = safeFilters.managementDate || safeFilters.startDate || todayDate;
   const selectedWeek = safeFilters.managementWeek || '';
   const selectedMonth = safeFilters.managementMonth || selectedDate.slice(0, 7);
-  const selectedMonthWindow = getMonthWindow(`${selectedMonth}-01`);
-  const selectedWeekWindow = selectedWeek ? getIsoWeekdayWorkWindow(selectedWeek) : getWeekdayWorkWindow(selectedDate);
-  const currentMonthWindow = getMonthWindow(todayDate);
+  const selectedMonthWindow = getMonthWindow(`${selectedMonth}-01`, safeTimeZone);
+  const selectedWeekWindow = selectedWeek ? getIsoWeekdayWorkWindow(selectedWeek, safeTimeZone) : getWeekdayWorkWindow(selectedDate, safeTimeZone);
+  const currentMonthWindow = getMonthWindow(todayDate, safeTimeZone);
   const customStartDate = safeFilters.managementStartDate || safeFilters.startDate || '';
   const customEndDate = safeFilters.managementEndDate || safeFilters.endDate || customStartDate;
 
@@ -325,25 +293,25 @@ function buildDashboardReportingWindows(filters = {}) {
       label: 'Day',
       startDate: selectedDate,
       endDate: selectedDate
-    }),
+    }, safeTimeZone),
     buildReportingWindow({
       key: 'work_week',
       label: 'Week (Mon-Sun)',
       startDate: selectedWeekWindow.startDate,
       endDate: selectedWeekWindow.endDate
-    }),
+    }, safeTimeZone),
     buildReportingWindow({
       key: 'month',
       label: 'Month',
       startDate: selectedMonthWindow.startDate,
       endDate: selectedMonthWindow.endDate
-    }),
+    }, safeTimeZone),
     buildReportingWindow({
       key: 'month_to_date',
       label: 'Month-to-Date',
       startDate: currentMonthWindow.startDate,
       endDate: todayDate
-    })
+    }, safeTimeZone)
   ];
 
   if (customStartDate || customEndDate) {
@@ -352,7 +320,7 @@ function buildDashboardReportingWindows(filters = {}) {
       label: 'Range of Dates',
       startDate: customStartDate || customEndDate,
       endDate: customEndDate || customStartDate
-    }));
+    }, safeTimeZone));
   }
 
   const requestedWindowKey = safeFilters.managementPeriod === 'custom_range' && !windows.some((window) => window.key === 'custom_range')
@@ -372,9 +340,10 @@ function buildDashboardReportingWindows(filters = {}) {
   };
 }
 
-async function getCompletionSummaryForWindow(window) {
+async function getCompletionSummaryForWindow(window, eligibleUserIds = []) {
   if (await tableExists('unit_work_completions')) {
     const completedFilter = await buildWorkCompletionWindowWhere(window, 'uwc');
+    const eligibleFilter = buildEligibleUserFilterSql('uwc.completed_by_user_id', eligibleUserIds);
     const [rows] = await pool.query(
       `
         SELECT
@@ -382,8 +351,9 @@ async function getCompletionSummaryForWindow(window) {
           COALESCE(ROUND(SUM(uwc.production_weight_value), 2), 0) AS weighted_count
         FROM unit_work_completions uwc
         ${completedFilter.whereSql}
+        ${eligibleFilter.sql}
       `,
-      completedFilter.params
+      [...completedFilter.params, ...eligibleFilter.params]
     );
 
     return {
@@ -398,6 +368,7 @@ async function getCompletionSummaryForWindow(window) {
 
   const weightExpression = getProductivityWeightSqlExpression('category_system');
   const completedFilter = buildCompletedUnitWindowWhere(window, 'uga');
+  const eligibleFilter = buildEligibleUserFilterSql('uga.assessed_by_user_id', eligibleUserIds);
   const [rows] = await pool.query(
     `
       SELECT
@@ -411,8 +382,9 @@ async function getCompletionSummaryForWindow(window) {
       LEFT JOIN system_config_values category_system
         ON category_system.config_value_id = category.config_value_id
       ${completedFilter.whereSql}
+      ${eligibleFilter.sql}
     `,
-    completedFilter.params
+    [...completedFilter.params, ...eligibleFilter.params]
   );
 
   return {
@@ -421,9 +393,10 @@ async function getCompletionSummaryForWindow(window) {
   };
 }
 
-async function getCompletionCategoryBreakdown(window) {
+async function getCompletionCategoryBreakdown(window, eligibleUserIds = []) {
   if (await tableExists('unit_work_completions') && await tableExists('units')) {
     const completedFilter = await buildWorkCompletionWindowWhere(window, 'uwc');
+    const eligibleFilter = buildEligibleUserFilterSql('uwc.completed_by_user_id', eligibleUserIds);
     const [rows] = await pool.query(
       `
         SELECT
@@ -440,11 +413,12 @@ async function getCompletionCategoryBreakdown(window) {
         LEFT JOIN system_config_values category_system
           ON category_system.config_value_id = category.config_value_id
         ${completedFilter.whereSql}
+        ${eligibleFilter.sql}
         GROUP BY category.config_value_id, category.label, category.value, category_system.system_config_value_id
         ORDER BY completed_count DESC, category_label
         LIMIT 12
       `,
-      completedFilter.params
+      [...completedFilter.params, ...eligibleFilter.params]
     );
 
     return rows.map((row) => ({
@@ -460,7 +434,7 @@ async function getCompletionCategoryBreakdown(window) {
   return [];
 }
 
-async function getCompletionLotBreakdown(window) {
+async function getCompletionLotBreakdown(window, eligibleUserIds = []) {
   if (!await tableExists('unit_work_completions') || !await tableExists('lots')) {
     return [];
   }
@@ -470,6 +444,7 @@ async function getCompletionLotBreakdown(window) {
     'l', lotColumns, ['name', 'lot_name', 'title', 'lot_number'], 'lot_name', "CONCAT('Lot #', l.lot_id)"
   );
   const completedFilter = await buildWorkCompletionWindowWhere(window, 'uwc');
+  const eligibleFilter = buildEligibleUserFilterSql('uwc.completed_by_user_id', eligibleUserIds);
   const [rows] = await pool.query(
     `
       SELECT
@@ -481,11 +456,12 @@ async function getCompletionLotBreakdown(window) {
       LEFT JOIN lots l
         ON l.lot_id = uwc.lot_id
       ${completedFilter.whereSql}
+      ${eligibleFilter.sql}
       GROUP BY l.lot_id, lot_name
       ORDER BY completed_count DESC, lot_name
       LIMIT 12
     `,
-    completedFilter.params
+    [...completedFilter.params, ...eligibleFilter.params]
   );
 
   return rows.map((row) => ({
@@ -496,20 +472,21 @@ async function getCompletionLotBreakdown(window) {
   }));
 }
 
-async function getManagementCompletionData(filters = {}) {
-  const reporting = buildDashboardReportingWindows(filters);
+async function getManagementCompletionData(filters = {}, context = {}, eligibleUserIds = []) {
+  const safeTimeZone = normalizeTimeZone(context.timeZone, 'UTC');
+  const reporting = buildDashboardReportingWindows(filters, safeTimeZone);
   const summaries = await Promise.all(reporting.windows.map(async (window) => ({
     ...window,
-    summary: await getCompletionSummaryForWindow(window)
+    summary: await getCompletionSummaryForWindow(window, eligibleUserIds)
   })));
   const activeWindow = summaries.find((window) => window.key === reporting.activeWindow.key) || summaries[0];
   const [categoryBreakdown, lotBreakdown] = await Promise.all([
-    getCompletionCategoryBreakdown(activeWindow),
-    getCompletionLotBreakdown(activeWindow)
+    getCompletionCategoryBreakdown(activeWindow, eligibleUserIds),
+    getCompletionLotBreakdown(activeWindow, eligibleUserIds)
   ]);
 
   return {
-    timeZone: REPORTING_TIME_ZONE,
+    timeZone: safeTimeZone,
     selectedPeriod: activeWindow ? activeWindow.key : reporting.selectedPeriod,
     selectedDate: reporting.selectedDate,
     selectedWeek: reporting.selectedWeek,
@@ -524,9 +501,11 @@ async function getManagementCompletionData(filters = {}) {
   };
 }
 function isElevatedTechDashboardViewer(context = {}) {
-  const roles = Array.isArray(context.currentRoles) ? context.currentRoles : [];
+  const permissions = context.currentPermissions instanceof Set
+    ? context.currentPermissions
+    : new Set(Array.isArray(context.currentPermissions) ? context.currentPermissions : []);
 
-  return roles.includes('admin') || roles.includes('management') || roles.includes('tech_lead');
+  return permissions.has('dashboards.tech.team_metrics.view');
 }
 
 function getCurrentUserIdFromContext(context = {}) {
@@ -535,12 +514,13 @@ function getCurrentUserIdFromContext(context = {}) {
   return Number.isInteger(userId) && userId > 0 ? userId : null;
 }
 
-async function getTechDashboardUserOptions() {
+async function getTechDashboardUserOptions(eligibleUserIds = []) {
   if (await tableExists('unit_work_completions')) {
     const completionColumns = await getColumnSet('unit_work_completions');
     const productionCreditFilter = completionColumns.has('grants_production_credit')
       ? 'AND uwc.grants_production_credit = 1'
       : '';
+    const eligibleFilter = buildEligibleUserFilterSql('users.user_id', eligibleUserIds);
     const [rows] = await pool.query(
       `
         SELECT
@@ -549,15 +529,17 @@ async function getTechDashboardUserOptions() {
           users.last_name,
           users.email,
           COUNT(*) AS completed_count
-        FROM unit_work_completions uwc
-        INNER JOIN users
-          ON users.user_id = uwc.completed_by_user_id
-        WHERE uwc.reversed_at IS NULL
-          ${productionCreditFilter}
-          AND users.is_active = 1
+        FROM users
+        LEFT JOIN unit_work_completions uwc
+          ON uwc.completed_by_user_id = users.user_id
+         AND uwc.reversed_at IS NULL
+         ${productionCreditFilter}
+        WHERE users.is_active = 1
+          ${eligibleFilter.sql}
         GROUP BY users.user_id, users.first_name, users.last_name, users.email
         ORDER BY users.first_name, users.last_name, users.email
-      `
+      `,
+      eligibleFilter.params
     );
 
     return rows.map((row) => ({
@@ -570,8 +552,8 @@ async function getTechDashboardUserOptions() {
   return [];
 }
 
-async function getProductivitySummaryForUser(window, userId = null) {
-  if (!await tableExists('unit_work_completions')) {
+async function getProductivitySummaryForUser(window, userId = null, eligibleUserIds = []) {
+  if (!await tableExists('unit_work_completions') || !normalizeUserIdList(eligibleUserIds).includes(Number(userId))) {
     return { completed: 0, weighted: 0 };
   }
 
@@ -601,8 +583,8 @@ async function getProductivitySummaryForUser(window, userId = null) {
   };
 }
 
-async function getProductivityCategoryBreakdownForUser(window, userId = null) {
-  if (!await tableExists('unit_work_completions') || !await tableExists('units')) {
+async function getProductivityCategoryBreakdownForUser(window, userId = null, eligibleUserIds = []) {
+  if (!await tableExists('unit_work_completions') || !await tableExists('units') || !normalizeUserIdList(eligibleUserIds).includes(Number(userId))) {
     return [];
   }
 
@@ -647,8 +629,8 @@ async function getProductivityCategoryBreakdownForUser(window, userId = null) {
   }));
 }
 
-async function getProductivityLotBreakdownForUser(window, userId = null) {
-  if (!await tableExists('unit_work_completions') || !await tableExists('lots')) {
+async function getProductivityLotBreakdownForUser(window, userId = null, eligibleUserIds = []) {
+  if (!await tableExists('unit_work_completions') || !await tableExists('lots') || !normalizeUserIdList(eligibleUserIds).includes(Number(userId))) {
     return [];
   }
 
@@ -759,31 +741,45 @@ function buildCurrentUserTechOption(context = {}) {
 }
 
 
-async function getTechDashboardData(filters = {}, context = {}) {
+async function getTechDashboardData(filters = {}, context = {}, eligibleUserIds = []) {
   const safeFilters = normalizeDashboardFilters(filters);
-  const reporting = buildDashboardReportingWindows(safeFilters);
+  const safeTimeZone = normalizeTimeZone(context.timeZone, 'UTC');
+  const reporting = buildDashboardReportingWindows(safeFilters, safeTimeZone);
   const activeWindow = reporting.activeWindow;
   const canViewAllTechs = isElevatedTechDashboardViewer(context);
   const currentUserId = getCurrentUserIdFromContext(context);
-  const activityTechUsers = await getTechDashboardUserOptions();
-  const currentUserTechOption = buildCurrentUserTechOption(context);
+  const activityTechUsers = await getTechDashboardUserOptions(eligibleUserIds);
+  const currentUserEligible = normalizeUserIdList(eligibleUserIds).includes(Number(currentUserId));
+  const currentUserTechOption = currentUserEligible ? buildCurrentUserTechOption(context) : null;
   const techUsers = currentUserTechOption && !activityTechUsers.some((tech) => tech.userId === currentUserTechOption.userId)
     ? [currentUserTechOption, ...activityTechUsers]
     : activityTechUsers;
+  const requestedTechId = safeFilters.techDashboardUserId || null;
+  const requestedTech = requestedTechId
+    ? techUsers.find((tech) => tech.userId === requestedTechId) || null
+    : null;
   const selectedTechId = canViewAllTechs
-    ? (safeFilters.techDashboardUserId || techUsers[0]?.userId || currentUserId)
-    : currentUserId;
-  const selectedTech = techUsers.find((tech) => tech.userId === selectedTechId) || currentUserTechOption || null;
+    ? (requestedTech ? requestedTech.userId : null)
+    : (currentUserEligible ? currentUserId : null);
+  const selectedTech = canViewAllTechs
+    ? requestedTech
+    : (techUsers.find((tech) => tech.userId === selectedTechId) || currentUserTechOption || null);
 
-  const [summary, categoryBreakdown, lotBreakdown, allTechRows] = await Promise.all([
-    getProductivitySummaryForUser(activeWindow, selectedTechId),
-    getProductivityCategoryBreakdownForUser(activeWindow, selectedTechId),
-    getProductivityLotBreakdownForUser(activeWindow, selectedTechId),
+  const individualMetricsPromise = selectedTechId
+    ? Promise.all([
+      getProductivitySummaryForUser(activeWindow, selectedTechId, eligibleUserIds),
+      getProductivityCategoryBreakdownForUser(activeWindow, selectedTechId, eligibleUserIds),
+      getProductivityLotBreakdownForUser(activeWindow, selectedTechId, eligibleUserIds)
+    ])
+    : Promise.resolve([{ completed: 0, weighted: 0 }, [], []]);
+
+  const [[summary, categoryBreakdown, lotBreakdown], allTechRows] = await Promise.all([
+    individualMetricsPromise,
     getAllTechSummaryRows(activeWindow, techUsers)
   ]);
 
   return {
-    timeZone: REPORTING_TIME_ZONE,
+    timeZone: safeTimeZone,
     selectedPeriod: reporting.selectedPeriod,
     selectedDate: reporting.selectedDate,
     selectedWeek: reporting.selectedWeek,
@@ -953,19 +949,28 @@ function hasDateDashboardFilter(filters = {}) {
   return Boolean(filters.startDate || filters.endDate);
 }
 
-function buildUnitFilterWhere(filters = {}, alias = 'u') {
+function buildUnitFilterWhere(filters = {}, alias = 'u', timeZone = 'UTC') {
   const safeFilters = normalizeDashboardFilters(filters);
+  const safeTimeZone = normalizeTimeZone(timeZone, 'UTC');
   const whereParts = [];
   const params = [];
 
   if (safeFilters.startDate) {
-    whereParts.push(`${alias}.created_at >= ?`);
-    params.push(`${safeFilters.startDate} 00:00:00`);
+    const startRange = getDayRangeUtc(safeFilters.startDate, safeTimeZone);
+
+    if (startRange) {
+      whereParts.push(`${alias}.created_at >= ?`);
+      params.push(formatUtcSqlDateTime(startRange.startAt));
+    }
   }
 
   if (safeFilters.endDate) {
-    whereParts.push(`${alias}.created_at < DATE_ADD(?, INTERVAL 1 DAY)`);
-    params.push(`${safeFilters.endDate} 00:00:00`);
+    const endRange = getDayRangeUtc(safeFilters.endDate, safeTimeZone);
+
+    if (endRange) {
+      whereParts.push(`${alias}.created_at < ?`);
+      params.push(formatUtcSqlDateTime(endRange.endAt));
+    }
   }
 
   if (safeFilters.categoryId) {
@@ -991,7 +996,7 @@ function buildUnitFilterWhere(filters = {}, alias = 'u') {
   };
 }
 
-async function getUnitStats(filters = {}) {
+async function getUnitStats(filters = {}, timeZone = 'UTC') {
   if (!await tableExists('units')) {
     return {
       totalUnits: 0,
@@ -1001,7 +1006,7 @@ async function getUnitStats(filters = {}) {
     };
   }
 
-  const unitFilter = buildUnitFilterWhere(filters, 'u');
+  const unitFilter = buildUnitFilterWhere(filters, 'u', timeZone);
   const hasGradeAssessments = await tableExists('unit_grade_assessments');
 
   if (!hasGradeAssessments) {
@@ -1174,12 +1179,12 @@ function normalizeGradeLabel(label, code) {
   return rawValue || 'Unknown Grade';
 }
 
-async function getGradeBreakdown(filters = {}) {
+async function getGradeBreakdown(filters = {}, timeZone = 'UTC') {
   if (!await tableExists('unit_grade_assessments') || !await tableExists('units')) {
     return [];
   }
 
-  const unitFilter = buildUnitFilterWhere(filters, 'u');
+  const unitFilter = buildUnitFilterWhere(filters, 'u', timeZone);
 
   const [rows] = await pool.query(
     `
@@ -1212,12 +1217,12 @@ async function getGradeBreakdown(filters = {}) {
   }));
 }
 
-async function getCategoryBreakdown(filters = {}) {
+async function getCategoryBreakdown(filters = {}, timeZone = 'UTC') {
   if (!await tableExists('units')) {
     return [];
   }
 
-  const unitFilter = buildUnitFilterWhere(filters, 'u');
+  const unitFilter = buildUnitFilterWhere(filters, 'u', timeZone);
 
   const [rows] = await pool.query(
     `
@@ -1244,7 +1249,7 @@ async function getCategoryBreakdown(filters = {}) {
   }));
 }
 
-async function getLotBreakdown(filters = {}) {
+async function getLotBreakdown(filters = {}, timeZone = 'UTC') {
   if (!await tableExists('units') || !await tableExists('lots')) {
     return [];
   }
@@ -1257,7 +1262,7 @@ async function getLotBreakdown(filters = {}) {
     'lot_name',
     "CONCAT('Lot #', l.lot_id)"
   );
-  const unitFilter = buildUnitFilterWhere(filters, 'u');
+  const unitFilter = buildUnitFilterWhere(filters, 'u', timeZone);
 
   const [rows] = await pool.query(
     `
@@ -1284,7 +1289,7 @@ async function getLotBreakdown(filters = {}) {
   }));
 }
 
-async function getTechActivitySummary(filters = {}) {
+async function getTechActivitySummary(filters = {}, timeZone = 'UTC', eligibleUserIds = []) {
   if (!await tableExists('units') || !await tableExists('users')) {
     return [];
   }
@@ -1296,7 +1301,8 @@ async function getTechActivitySummary(filters = {}) {
   }
 
   const safeFilters = normalizeDashboardFilters(filters);
-  const unitFilter = buildUnitFilterWhere(safeFilters, 'u');
+  const unitFilter = buildUnitFilterWhere(safeFilters, 'u', timeZone);
+  const eligibleFilter = buildEligibleUserFilterSql('u.created_by_user_id', eligibleUserIds);
   const useSelectedDateRange = hasDateDashboardFilter(safeFilters);
   const dateCondition = useSelectedDateRange ? '' : 'AND u.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)';
 
@@ -1314,11 +1320,12 @@ async function getTechActivitySummary(filters = {}) {
       WHERE u.created_by_user_id IS NOT NULL
         ${dateCondition}
         ${unitFilter.andSql}
+        ${eligibleFilter.sql}
       GROUP BY u.created_by_user_id, users.first_name, users.last_name, users.email
       ORDER BY unit_count DESC, users.first_name, users.last_name
       LIMIT 8
     `,
-    unitFilter.params
+    [...unitFilter.params, ...eligibleFilter.params]
   );
 
   return rows.map((row) => {
@@ -1406,11 +1413,12 @@ async function getLotFilterOptions() {
   }));
 }
 
-async function getTechUserFilterOptions() {
+async function getTechUserFilterOptions(eligibleUserIds = []) {
   if (!await tableExists('units') || !await tableExists('users')) {
     return [];
   }
 
+  const eligibleFilter = buildEligibleUserFilterSql('users.user_id', eligibleUserIds);
   const [rows] = await pool.query(
     `
       SELECT
@@ -1423,9 +1431,11 @@ async function getTechUserFilterOptions() {
       INNER JOIN users
         ON users.user_id = u.created_by_user_id
       WHERE u.created_by_user_id IS NOT NULL
+        ${eligibleFilter.sql}
       GROUP BY users.user_id, users.first_name, users.last_name, users.email
       ORDER BY users.first_name, users.last_name, users.email
-    `
+    `,
+    eligibleFilter.params
   );
 
   return rows.map((row) => {
@@ -1440,10 +1450,11 @@ async function getTechUserFilterOptions() {
 }
 
 async function getDashboardFilterOptions() {
+  const eligibleUserIds = await getProductivityMetricsEligibleUserIds({ activeOnly: true });
   const [categories, lots, techUsers] = await Promise.all([
     getCategoryFilterOptions(),
     getLotFilterOptions(),
-    getTechUserFilterOptions()
+    getTechUserFilterOptions(eligibleUserIds)
   ]);
 
   return {
@@ -1455,6 +1466,8 @@ async function getDashboardFilterOptions() {
 
 async function getDashboardData(filters = {}, context = {}) {
   const safeFilters = normalizeDashboardFilters(filters);
+  const safeTimeZone = normalizeTimeZone(context.timeZone, 'UTC');
+  const eligibleUserIds = await getProductivityMetricsEligibleUserIds();
 
   const [
     unitStats,
@@ -1468,16 +1481,16 @@ async function getDashboardData(filters = {}, context = {}) {
     managementCompletionData,
     techDashboardData
   ] = await Promise.all([
-    getUnitStats(safeFilters),
+    getUnitStats(safeFilters, safeTimeZone),
     getLotStats(safeFilters),
     getUserStats(),
     getOverrideStats(),
-    getGradeBreakdown(safeFilters),
-    getCategoryBreakdown(safeFilters),
-    getLotBreakdown(safeFilters),
-    getTechActivitySummary(safeFilters),
-    getManagementCompletionData(safeFilters),
-    getTechDashboardData(safeFilters, context)
+    getGradeBreakdown(safeFilters, safeTimeZone),
+    getCategoryBreakdown(safeFilters, safeTimeZone),
+    getLotBreakdown(safeFilters, safeTimeZone),
+    getTechActivitySummary(safeFilters, safeTimeZone, eligibleUserIds),
+    getManagementCompletionData(safeFilters, context, eligibleUserIds),
+    getTechDashboardData(safeFilters, context, eligibleUserIds)
   ]);
 
   return {
@@ -1498,6 +1511,8 @@ async function getDashboardData(filters = {}, context = {}) {
 }
 
 module.exports = {
+  PRODUCTIVITY_METRICS_PERMISSION_KEY,
+  getProductivityMetricsEligibleUserIds,
   normalizeDashboardFilters,
   getDashboardFilterOptions,
   getDashboardData

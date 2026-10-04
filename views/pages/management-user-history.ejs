@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+  <%- include('../partials/head', { pageTitle }) %>
+  <body class="css-scope-management">
+    <div class="app-shell">
+      <%- include('../partials/sidebar', { currentNav }) %>
+      <div class="app-main">
+        <%- include('../partials/topbar', { pageTitle }) %>
+        <main class="content-shell">
+          <section class="page-heading site-work-page-heading">
+            <div>
+              <p class="eyebrow">User Administration</p>
+              <h1>Account History</h1>
+              <p>Account changes and blocked management attempts. Times are shown in your effective application time zone.</p>
+            </div>
+            <% if (typeof hasPermission === 'function' && hasPermission('users.view')) { %>
+              <div class="site-clean-actions site-inline-actions"><a class="secondary-button" href="/management/users">Back to Users</a></div>
+            <% } %>
+          </section>
+          <section class="content-card">
+            <div class="content-header">
+              <h2><%= targetUserId ? `History for User #${targetUserId}` : 'Recent Account Activity' %></h2>
+            </div>
+            <%- include('../fragments/management-user-history-content') %>
+          </section>
+        </main>
+      </div>
+    </div>
+  </body>
+</html>

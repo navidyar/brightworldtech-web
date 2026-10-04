@@ -9,7 +9,10 @@
     sectionTotal + section.categories.reduce((categoryTotal, category) => categoryTotal + category.values.length, 0)
   ), 0);
   const processorTypeRows = Array.isArray(locals.processorTypes) ? locals.processorTypes : [];
+  const canManageConfigurationValues = hasPermission('configuration.values.manage');
+  const canManageProcessorTypes = hasPermission('configuration.processors.manage');
   let processorTypesRendered = false;
+  let labelPrintingRendered = false;
 %>
 <!DOCTYPE html>
 <html lang="en">
@@ -32,7 +35,7 @@
             </div>
 
             <div class="site-clean-actions">
-              <a class="primary-button" href="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Create Config Value</a>
+              <% if (canManageConfigurationValues) { %><a class="primary-button" href="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Create Config Value</a><% } %>
               <% if (includeInactiveValues) { %>
                 <a class="secondary-button" href="/management/config">Hide Inactive</a>
               <% } else { %>
@@ -64,13 +67,13 @@
             </div>
           </section>
 
-          <%- include('../fragments/operational-option-ranking-administration', { rankingAdministration }) %>
+          <% if (hasPermission('configuration.operational_rankings.manage')) { %><%- include('../fragments/operational-option-ranking-administration', { rankingAdministration }) %><% } %>
 
           <section class="site-clean-section site-clean-surface configuration-browser-section" data-configuration-browser>
             <div class="site-clean-section-heading configuration-browser-heading">
               <div>
                 <h2>Configuration Browser</h2>
-                <p>Search by category, label, stored value, or description. Categories stay collapsed until you need them.</p>
+                <p>Search all configuration settings, categories, labels, stored values, or descriptions available to your permissions. Categories stay collapsed until you need them.</p>
               </div>
 
               <div class="configuration-browser-heading-actions">
@@ -82,21 +85,49 @@
             <div class="configuration-browser-toolbar">
               <label class="form-field configuration-browser-search">
                 <span>Search Configuration</span>
-                <input type="search" placeholder="Category, label, value, or description" autocomplete="off" data-configuration-search />
+                <input type="search" placeholder="Setting, category, label, value, or description" autocomplete="off" data-configuration-search />
               </label>
               <p class="configuration-browser-status" data-configuration-status aria-live="polite"><%= formatNumber(visibleValueCount) %> values across <%= formatNumber(summary.categoryCount) %> categories.</p>
             </div>
 
             <div class="configuration-empty-state" data-configuration-empty hidden>
-              No configuration values match that search.
+              No configuration settings or values match that search.
             </div>
 
             <div class="configuration-group-list" data-configuration-groups>
-              <% if (categorySections.length === 0) { %>
+              <% if (categorySections.length === 0 && processorTypeRows.length === 0 && labelDynamicFieldGroups.every((group) => group.fields.length === 0) && !canManageConfigurationValues) { %>
                 <div class="configuration-empty-state">No configuration categories were returned.</div>
               <% } %>
 
+              <% if (canManageConfigurationValues) { %>
+                <section class="configuration-group" data-configuration-group>
+                  <header class="configuration-group-heading">
+                    <div>
+                      <h2>Application Settings</h2>
+                      <p>Application-wide settings that control shared BWTDallas behavior.</p>
+                    </div>
+                    <div class="configuration-group-counts" aria-label="Application Settings totals">
+                      <span><strong>2</strong> settings</span>
+                    </div>
+                  </header>
+                  <div class="configuration-category-list">
+                    <%- include('../fragments/application-time-zone-config', { applicationSettings, supportedTimeZones, timeZoneSaved, timeZoneError }) %>
+                    <%- include('../fragments/huddle-retention-config', { applicationSettings, huddleRetentionSaved, huddleRetentionError }) %>
+                  </div>
+                </section>
+              <% } %>
+
               <% categorySections.forEach((section) => { %>
+                <% if (hasPermission('configuration.label_fields.manage') && !labelPrintingRendered && Number(section.sortOrder || 0) >= 30) { %>
+                  <%- include('../fragments/label-dynamic-fields-config-group', {
+                    labelDynamicFieldGroups,
+                    labelDynamicFieldsSaved,
+                    labelDynamicFieldError,
+                    formatNumber
+                  }) %>
+                  <% labelPrintingRendered = true; %>
+                <% } %>
+
                 <section class="configuration-group" data-configuration-group>
                   <header class="configuration-group-heading">
                     <div>
@@ -121,7 +152,7 @@
                           category.label,
                           category.description
                         ].filter(Boolean).join(' ').toLowerCase();
-                        const supportsDragOrdering = Boolean(category.supportsDragOrdering && category.values.length >= 3);
+                        const supportsDragOrdering = Boolean(canManageConfigurationValues && category.supportsDragOrdering && category.values.length >= 3);
                         const tableColumnCount = supportsDragOrdering ? 6 : 5;
                       %>
                       <details class="configuration-category" data-configuration-category data-search-text="<%= categorySearchText %>">
@@ -158,7 +189,12 @@
                                 <p class="configuration-ordering-help">Operational dropdowns use the cached popularity order. This table keeps the configured fallback order.</p>
                               <% } %>
                             </div>
-                            <a class="secondary-button button-small" href="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Add Value</a>
+                            <% if (canManageConfigurationValues) { %>
+                              <div class="site-clean-actions">
+                                <% if (isSystemUsedCategory(category)) { %><a class="secondary-button button-small" href="/management/config/categories/<%= category.config_category_id %>/tool-aliases/modal" hx-get="/management/config/categories/<%= category.config_category_id %>/tool-aliases/modal" hx-target="#modal-root" hx-swap="innerHTML">Tool Aliases</a><% } %>
+                                <a class="secondary-button button-small" href="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/new/modal?categoryId=<%= category.config_category_id %>&includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Add Value</a>
+                              </div>
+                            <% } %>
                           </div>
 
                           <div class="table-card configuration-values-table" data-reorderable="<%= supportsDragOrdering ? '1' : '0' %>">
@@ -234,6 +270,7 @@
                                       <td><span class="pill <%= value.isActive ? 'good' : 'neutral' %>"><%= value.isActive ? 'Active' : 'Inactive' %></span></td>
                                       <td><%= value.description || '—' %></td>
                                       <td>
+                                        <% if (canManageConfigurationValues) { %>
                                         <div class="configuration-value-actions">
                                           <a class="secondary-button button-small" href="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/edit/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
 
@@ -245,6 +282,7 @@
                                             <a class="secondary-button button-small" href="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-get="/management/config/values/<%= value.config_value_id %>/activate/modal?includeInactive=<%= includeInactiveValues ? '1' : '0' %>" hx-target="#modal-root" hx-swap="innerHTML">Activate</a>
                                           <% } %>
                                         </div>
+                                        <% } else { %>—<% } %>
                                       </td>
                                     </tr>
                                   <% }) %>
@@ -256,7 +294,7 @@
                       </details>
                     <% }) %>
 
-                    <% if (section.key === 'unit-workflow') { %>
+                    <% if (canManageProcessorTypes && section.key === 'unit-workflow') { %>
                       <%- include('../fragments/processor-types-config-category', { processorTypeRows, includeInactiveValues, formatNumber }) %>
                       <% processorTypesRendered = true; %>
                     <% } %>
@@ -264,7 +302,17 @@
                 </section>
               <% }) %>
 
-              <% if (!processorTypesRendered) { %>
+              <% if (hasPermission('configuration.label_fields.manage') && !labelPrintingRendered) { %>
+                <%- include('../fragments/label-dynamic-fields-config-group', {
+                  labelDynamicFieldGroups,
+                  labelDynamicFieldsSaved,
+                  labelDynamicFieldError,
+                  formatNumber
+                }) %>
+                <% labelPrintingRendered = true; %>
+              <% } %>
+
+              <% if (canManageProcessorTypes && !processorTypesRendered) { %>
                 <section class="configuration-group" data-configuration-group>
                   <header class="configuration-group-heading">
                     <div>
@@ -286,6 +334,6 @@
     </div>
 
     <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
-    <script defer src="/js/config-values.js?v=20260804-stage10w-ranking-administration"></script>
+    <script defer src="/js/config-values.js?v=20261002-application-settings-search"></script>
   </body>
 </html>

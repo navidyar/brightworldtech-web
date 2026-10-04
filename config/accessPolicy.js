@@ -29,8 +29,6 @@ const QC_REPORTING_ROLE_CODES = Object.freeze(['admin']);
 
 const FEATURE_ROLE_CODES = Object.freeze({
   operationsDashboard: Object.freeze(['admin']),
-  userAdministration: Object.freeze(['admin']),
-  managedPrinters: Object.freeze(['admin']),
   qcReporting: QC_REPORTING_ROLE_CODES
 });
 const UNIT_REQUEST_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead', 'qc', 'tech']);
@@ -38,6 +36,7 @@ const UNIT_REQUEST_ROLE_CODES = Object.freeze(['admin', 'management', 'tech_lead
 const DASHBOARD_DEFINITIONS = [
   {
     key: 'admin',
+    permissionKey: 'dashboards.admin.view',
     title: 'Admin Dashboard',
     menuLabel: 'Admin',
     kicker: 'System Administration',
@@ -48,6 +47,7 @@ const DASHBOARD_DEFINITIONS = [
   },
   {
     key: 'management',
+    permissionKey: 'dashboards.management.view',
     title: 'Management Dashboard',
     menuLabel: 'Management',
     kicker: 'Management Overview',
@@ -58,6 +58,7 @@ const DASHBOARD_DEFINITIONS = [
   },
   {
     key: 'tech',
+    permissionKey: 'dashboards.tech.view',
     title: 'Tech Dashboard',
     menuLabel: 'Tech',
     kicker: 'Tech Portal',

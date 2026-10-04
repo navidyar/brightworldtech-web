@@ -68,7 +68,7 @@
     }
 
     const expiresAtRaw = expiryPanel.getAttribute('data-expires-at');
-    const expiryDisplay = expiryPanel.getAttribute('data-expiry-display') || '';
+    const expiryDisplay = expiryPanel.getAttribute('data-expiry-display') || expiresAtRaw || '';
     const expiresAt = expiresAtRaw ? new Date(expiresAtRaw) : null;
 
     if (!expiresAt || Number.isNaN(expiresAt.getTime()) || Date.now() < expiresAt.getTime()) {
@@ -86,7 +86,7 @@
     }
 
     if (note) {
-      note.innerHTML = `This link expired at <strong>${expiryDisplay || expiresAt.toLocaleString()}</strong>. Generate a new link before sharing it.`;
+      note.innerHTML = `This link expired at <strong>${expiryDisplay}</strong>. Generate a new link before sharing it.`;
     }
 
     if (copyButton) {

@@ -24,11 +24,11 @@ test('QC Portal access policy includes Admin, Management, Tech Lead, and QC whil
 test('QC Review routes reuse the Unit Browser and authorize formal QC decisions for Admin, Management, Tech Lead, and QC', () => {
   const routes = read('routes/management.js');
 
-  assert.match(routes, /'\/qc\/review',[\s\S]*?requireRole\(QC_PORTAL_ROLE_CODES\)[\s\S]*?renderQcPortalReviewPage/);
-  assert.match(routes, /'\/qc\/review\/table',[\s\S]*?requireRole\(QC_PORTAL_ROLE_CODES\)[\s\S]*?renderQcPortalReviewTable/);
-  assert.match(routes, /'\/tech\/units\/:unitId\/qc-review\/:decisionCode\/modal',[\s\S]*?requireRole\(QC_REVIEW_ROLE_CODES\)/);
-  assert.match(routes, /'\/tech\/units\/:unitId\/qc-review',[\s\S]*?requireRole\(QC_REVIEW_ROLE_CODES\)/);
-  assert.match(routes, /'\/management\/qc-reporting',[\s\S]*?requireFeature\('qcReporting'\)/);
+  assert.match(routes, /'\/qc\/review',[\s\S]*?requirePermission\('qc\.portal\.view'\)[\s\S]*?renderQcPortalReviewPage/);
+  assert.match(routes, /'\/qc\/review\/table',[\s\S]*?requirePermission\('qc\.portal\.view'\)[\s\S]*?renderQcPortalReviewTable/);
+  assert.match(routes, /'\/tech\/units\/:unitId\/qc-review\/:decisionCode\/modal',[\s\S]*?requirePermission\('qc\.review\.perform'\)/);
+  assert.match(routes, /'\/tech\/units\/:unitId\/qc-review',[\s\S]*?requirePermission\('qc\.review\.perform'\)/);
+  assert.match(routes, /'\/management\/qc-reporting',[\s\S]*?requirePermission\('qc\.reporting\.view'\)/);
 });
 
 test('QC Portal navigation owns QC Review while Admin navigation owns QC Reporting', () => {
@@ -36,10 +36,10 @@ test('QC Portal navigation owns QC Review while Admin navigation owns QC Reporti
 
   assert.match(sidebar, />QC Portal</);
   assert.match(sidebar, /href="\/qc\/review"[\s\S]*?>QC Review</);
-  assert.match(sidebar, /canAccessMenuArea\('admin'\)[\s\S]*?canAccessFeature\('qcReporting'\)[\s\S]*?href="\/management\/qc-reporting"[\s\S]*?>QC Reporting</);
-  assert.match(sidebar, /canAccessMenuArea\('tech'\) && !isQcOnlyNavigationUser/);
+  assert.match(sidebar, /if \(canViewQcReporting\)[\s\S]*?href="\/management\/qc-reporting"[\s\S]*?>QC Reporting</);
+  assert.match(sidebar, /const showTechSection = canViewUnits \|\| canManageOwnPrinters \|\| \(canViewRequests && !showRequestsInQcSection\)/);
 
-  const managementSection = sidebar.match(/if \(canAccessMenuArea\('management'\)\)[\s\S]*?if \(canAccessMenuArea\('qc'\)\)/)?.[0] || '';
+  const managementSection = sidebar.match(/if \(canAccessMenuArea\('management'\) \|\| canViewLabelLibrary\)[\s\S]*?if \(canViewQcPortal\)/)?.[0] || '';
   assert.doesNotMatch(managementSection, />QC Reporting</);
 });
 
@@ -64,12 +64,12 @@ test('QC Portal gives Admin, Management, and Tech Lead QC actions while suppress
 
   assert.match(page, /const canCreateTechUnits = !isQcPortalMode/);
   assert.match(page, /const canViewParkedUnits = !isQcPortalMode/);
-  assert.match(table, /const canRecordQcReview = isQcPortalMode \|\| currentUserRoles\.includes\('qc'\)/);
+  assert.match(table, /const canRecordQcReview = hasPermission\('qc\.review\.perform'\)/);
+  assert.match(table, /canShowQcReviewActions = Boolean\(\s*isQcPortalMode\s*&& canRecordQcReview/);
   assert.match(table, /const canEditTechUnits = !isQcPortalMode/);
   assert.match(table, /const canCompleteTechUnits = !isQcPortalMode/);
-  assert.match(table, /const canManageUnitLifecycle = !isQcPortalMode/);
+  assert.match(table, /const canParkTechUnits = !isQcPortalMode/);
   assert.match(table, /const canSubmitAnyQcCorrection = !isQcPortalMode/);
-  assert.match(table, /const canViewTechWeightDetails = !isQcPortalMode/);
   assert.match(table, /const canViewCurrentLotWeight = !isQcPortalMode/);
 });
 

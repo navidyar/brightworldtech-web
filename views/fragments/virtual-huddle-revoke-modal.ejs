@@ -11,9 +11,9 @@
       <div class="message warning"><p>This keeps the Huddle in history but removes the acknowledgment requirement<%= revokeAll ? ` for ${awaitingCount} waiting recipient${awaitingCount === 1 ? '' : 's'}` : ` for ${recipient.user_name_snapshot}` %>.</p></div>
       <form class="app-form app-form-clean" method="post" action="<%= revokeAll ? `/management/virtual-huddle/${message.virtual_huddle_message_id}/revoke-all` : `/management/virtual-huddle/${message.virtual_huddle_message_id}/recipients/${recipient.virtual_huddle_recipient_id}/revoke` %>" hx-post="<%= revokeAll ? `/management/virtual-huddle/${message.virtual_huddle_message_id}/revoke-all` : `/management/virtual-huddle/${message.virtual_huddle_message_id}/recipients/${recipient.virtual_huddle_recipient_id}/revoke` %>" hx-target="#modal-root" hx-swap="innerHTML">
         <section class="form-section">
-          <div class="form-section-header"><h3>Revocation Reason</h3></div>
+          <div class="form-section-header"><h3>Revocation Note <small>(optional)</small></h3></div>
           <div class="form-grid single-column">
-            <label class="form-field"><span>Reason</span><textarea name="reason" rows="3" maxlength="1000" required autofocus></textarea></label>
+            <label class="form-field"><span>Note</span><textarea name="reason" rows="3" maxlength="1000" autofocus placeholder="Optional context for this revocation"></textarea></label>
           </div>
         </section>
         <div class="form-actions">

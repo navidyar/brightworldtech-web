@@ -92,6 +92,6 @@ test('shared UI assets remain cache-busted without pinning later visual revision
   assert.match(head, /app\.css\?v=/);
   assert.match(head, /features\.css\?v=/);
   assert.doesNotMatch(head, /work-area\.css/);
-  assert.match(head, /date-picker-only\.js\?v=20260921-cleanup-stage2c/);
+  assert.match(head, /date-picker-only\.js\?v=20260925-date-picker-viewport-clamp/);
   assert.match(techUnits, /tech-units-date-picker\.js\?v=20260921-cleanup-stage2c/);
 });

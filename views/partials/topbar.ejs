@@ -1,7 +1,5 @@
 <header class="topbar">
   <div class="topbar-left">
-    <button type="button" class="menu-button" data-sidebar-toggle aria-controls="app-sidebar" aria-expanded="false" aria-label="Open navigation">☰</button>
-
     <div>
       <p class="topbar-kicker">Bright World Technologies</p>
       <h1><%= pageTitle %></h1>
@@ -10,6 +8,22 @@
 
   <div class="topbar-right">
     <% if (currentUser) { %>
+      <% if (typeof hasPermission === 'function' && hasPermission('users.tool_pin.self_manage') && hasPermission('tools.unit_api.use')) { %>
+        <a
+          class="tool-pin-topbar-button"
+          href="/account/tool-pin/modal"
+          hx-get="/account/tool-pin/modal"
+          hx-target="#account-modal-root"
+          hx-swap="innerHTML"
+          data-account-tool-pin-trigger
+          title="Set or change your ScanTools/TechTools PIN"
+          aria-label="Manage your Tool PIN"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 10V8a5 5 0 0 1 10 0v2M6 10h12v10H6z"/><path d="M12 14v2"/></svg>
+          <span class="tool-pin-topbar-label">Tool PIN</span>
+        </a>
+      <% } %>
+
       <div class="user-chip">
         <span class="user-avatar">
           <%= currentUser.first_name.charAt(0) %><%= currentUser.last_name.charAt(0) %>
@@ -17,9 +31,11 @@
 
         <div>
           <strong><%= currentUser.first_name %> <%= currentUser.last_name %></strong>
-          <p><%= currentRoles.map(formatRoleLabel).join(', ') || 'User' %></p>
+          <% const topbarRoleNames = Array.isArray(currentPermissionContext?.roles) ? currentPermissionContext.roles.map((role) => role && role.name).filter(Boolean) : []; %>
+          <p><%= topbarRoleNames.join(', ') || currentRoles.map(formatRoleLabel).join(', ') || 'User' %></p>
         </div>
       </div>
+
 
       <form method="post" action="/logout">
         <button type="submit" class="logout-button">Sign Out</button>
@@ -27,3 +43,4 @@
     <% } %>
   </div>
 </header>
+<% if (currentUser) { %><div id="account-modal-root"></div><% } %>

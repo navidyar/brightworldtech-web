@@ -8,11 +8,14 @@ const path = require('node:path');
 const ROOT = path.resolve(__dirname, '..');
 const read = (file) => fs.readFileSync(path.join(ROOT, file), 'utf8');
 
-test('printer registry exposes one authenticated SSE stream to Tech operational roles', () => {
+test('printer registry SSE stream admits managed viewers or solo managers', () => {
   const routes = read('routes/management.js');
   const events = read('services/labelPrinterRegistryEvents.js');
   assert.match(routes, /'\/label-printers\/events'/);
-  assert.match(routes, /requireRole\(techRoles\)/);
+  const eventRoute = routes.split("  '/label-printers/events',")[1]?.split('\n);')[0] || '';
+  assert.match(eventRoute, /requireAuth/);
+  assert.match(eventRoute, /requireAnyPermission\(\['printers\.solo\.manage', 'printers\.managed\.view'\]\)/);
+  assert.doesNotMatch(eventRoute, /requireRole\(/);
   assert.match(routes, /labelPrinterController\.streamPrinterRegistryEvents/);
   assert.match(events, /Content-Type': 'text\/event-stream'/);
   assert.match(events, /X-Accel-Buffering': 'no'/);

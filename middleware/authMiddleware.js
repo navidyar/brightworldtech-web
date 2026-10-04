@@ -45,6 +45,44 @@ function requireGuest(req, res, next) {
   return next();
 }
 
+function requirePermission(permissionKey) {
+  return (req, res, next) => {
+    if (!req.currentUser) {
+      return res.redirect('/login');
+    }
+
+    const permissions = req.currentPermissions instanceof Set ? req.currentPermissions : new Set();
+    if (!permissions.has(permissionKey)) {
+      return res.status(403).render('pages/error', {
+        pageTitle: 'Access Denied',
+        message: 'You do not have permission to access this page.',
+        error: null
+      });
+    }
+
+    return next();
+  };
+}
+
+function requireAnyPermission(permissionKeys) {
+  return (req, res, next) => {
+    if (!req.currentUser) {
+      return res.redirect('/login');
+    }
+
+    const permissions = req.currentPermissions instanceof Set ? req.currentPermissions : new Set();
+    if (!permissionKeys.some((permissionKey) => permissions.has(permissionKey))) {
+      return res.status(403).render('pages/error', {
+        pageTitle: 'Access Denied',
+        message: 'You do not have permission to access this page.',
+        error: null
+      });
+    }
+
+    return next();
+  };
+}
+
 function requireFeature(featureKey) {
   return (req, res, next) => {
     if (!req.currentUser) {
@@ -89,6 +127,8 @@ module.exports = {
   loadCurrentUser,
   requireAuth,
   requireGuest,
+  requirePermission,
+  requireAnyPermission,
   requireRole,
   requireFeature
 };

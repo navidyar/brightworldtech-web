@@ -8,10 +8,10 @@ const path = require('node:path');
 const root = path.join(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-function stageSection(css) {
-  const marker = '/* Stage 10W45 — application-wide visual consistency consolidation.';
+function sharedConsistencySection(css) {
+  const marker = 'Application-wide visual consistency. Shared presentation lives in app.css';
   const index = css.indexOf(marker);
-  assert.notEqual(index, -1, 'Stage 10W45 shared CSS section should exist');
+  assert.notEqual(index, -1, 'Application-wide shared CSS consistency section should exist');
   return css.slice(index);
 }
 
@@ -42,7 +42,7 @@ test('all action-modal close icons use the shared close-button class', () => {
 
 test('shared modal visual contract normalizes corners and typography without taking over scrolling', () => {
   const theme = read('public/css/theme.css');
-  const css = stageSection(read('public/css/app.css'));
+  const css = sharedConsistencySection(read('public/css/app.css'));
 
   assert.match(theme, /--ui-modal-radius:\s*12px/);
   assert.match(css, /\.modal-panel\s*\{[\s\S]*?border-radius:\s*var\(--ui-modal-radius\)/);
@@ -59,7 +59,7 @@ test('shared modal visual contract normalizes corners and typography without tak
 });
 
 test('dashboard surfaces and forms use the shared restrained presentation contract', () => {
-  const css = stageSection(read('public/css/app.css'));
+  const css = sharedConsistencySection(read('public/css/app.css'));
 
   assert.match(css, /\.dashboard-hero\s*\{[\s\S]*?border:\s*1px solid #c8d8ea[\s\S]*?border-radius:\s*var\(--ui-radius-panel\)/);
   assert.match(css, /\.dashboard-metric-card\s*\{[\s\S]*?border-top-width:\s*1px[\s\S]*?border-left:\s*3px solid/);
@@ -67,7 +67,7 @@ test('dashboard surfaces and forms use the shared restrained presentation contra
   assert.match(css, /\.dashboard-filter-form,\s*\n\.dashboard-period-form\s*\{[\s\S]*?align-items:\s*end;/);
   assert.match(css, /\.dashboard-period-form[\s\S]*?border-radius:\s*var\(--ui-radius-panel\)/);
   assert.match(css, /\.dashboard-period-form\s*>\s*:is\(\.primary-button, button\.primary-button\)[\s\S]*?margin-top:\s*0;/);
-  const dashboardFormStart = css.indexOf('/* Dashboard forms previously accumulated multiple one-off alignment patches.');
+  const dashboardFormStart = css.indexOf('/* Dashboard forms use one alignment contract for visible controls and actions while preserving dynamic');
   const managementSupportStart = css.indexOf('/* Management and supporting pages that still carry older high-weight rules.');
   const dashboardFormContract = css.slice(dashboardFormStart, managementSupportStart);
   assert.doesNotMatch(dashboardFormContract, /!important/,
@@ -92,8 +92,8 @@ test('historical dashboard alignment override chain and retired reporting select
   }
 });
 
-test('Stage 10W45 visual layer does not style protected Lot or Unit workflow mechanics', () => {
-  const css = stageSection(read('public/css/app.css'));
+test('application-wide visual layer does not style protected Lot or Unit workflow mechanics', () => {
+  const css = sharedConsistencySection(read('public/css/app.css'));
   const protectedTokens = [
     'lot-tree-toggle',
     'lot-tree-row-hidden',
@@ -103,6 +103,6 @@ test('Stage 10W45 visual layer does not style protected Lot or Unit workflow mec
   ];
 
   protectedTokens.forEach((token) => {
-    assert.equal(css.includes(token), false, `Stage 10W45 must not style protected feature token ${token}`);
+    assert.equal(css.includes(token), false, `Application-wide visual layer must not style protected feature token ${token}`);
   });
 });

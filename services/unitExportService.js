@@ -2,7 +2,7 @@
 
 const { UNIT_EXPORT_COLUMNS, resolveUnitExportColumns } = require('../config/unitExportContract');
 const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
-const { APP_DISPLAY_TIME_ZONE } = require('../utils/timeZone');
+const { normalizeTimeZone } = require('../utils/timeZone');
 const { formatHardwareCapacityGb } = require('./hardwareCapacity');
 const {
   buildHardwareComponentComparisons,
@@ -48,7 +48,7 @@ function normalizeDateTime(value) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-function formatExportDate(value) {
+function formatExportDate(value, timeZone = 'UTC') {
   const date = normalizeDateTime(value);
   if (!date) return '';
 
@@ -56,11 +56,11 @@ function formatExportDate(value) {
     month: '2-digit',
     day: '2-digit',
     year: 'numeric',
-    timeZone: APP_DISPLAY_TIME_ZONE
+    timeZone: normalizeTimeZone(timeZone, 'UTC')
   }).format(date);
 }
 
-function formatExportTime(value) {
+function formatExportTime(value, timeZone = 'UTC') {
   const date = normalizeDateTime(value);
   if (!date) return '';
 
@@ -68,7 +68,7 @@ function formatExportTime(value) {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
-    timeZone: APP_DISPLAY_TIME_ZONE
+    timeZone: normalizeTimeZone(timeZone, 'UTC')
   }).format(date);
 }
 
@@ -190,7 +190,8 @@ function getSpecsTestsLabel(specsTests, propertyName) {
   return normalizeText(specsTests && specsTests.labels ? specsTests.labels[propertyName] : '');
 }
 
-function buildUnitExportRow(unit, details = null) {
+function buildUnitExportRow(unit, details = null, options = {}) {
+  const timeZone = normalizeTimeZone(options.timeZone, 'UTC');
   const previousMemoryModules = details && Array.isArray(details.previousMemoryModules)
     ? details.previousMemoryModules
     : [];
@@ -283,10 +284,10 @@ function buildUnitExportRow(unit, details = null) {
     currentStorageDevices: formatHardwareComponentList(storageDevices, { kind: 'storage' }),
     storageDeviceChanges: formatHardwareComparisonList(storageComparisons),
     techName,
-    createdDate: formatExportDate(unit.createdAt),
-    createdTime: formatExportTime(unit.createdAt),
-    completedDate: formatExportDate(unit.completedAt),
-    completedTime: formatExportTime(unit.completedAt),
+    createdDate: formatExportDate(unit.createdAt, timeZone),
+    createdTime: formatExportTime(unit.createdAt, timeZone),
+    completedDate: formatExportDate(unit.completedAt, timeZone),
+    completedTime: formatExportTime(unit.completedAt, timeZone),
     batteryHealth: Number.isFinite(Number(unit.batteryHealthPercent)) && unit.batteryHealthPercent !== null
       ? `${Number(unit.batteryHealthPercent).toFixed(1)}%`
       : '',
@@ -386,7 +387,8 @@ async function loadExpandedDetails(unitIds, detailModel = null) {
   return detailsByUnitId;
 }
 
-async function buildUnitExportDatasetFromListResult(result, exportFilters, detailModel, scope) {
+async function buildUnitExportDatasetFromListResult(result, exportFilters, detailModel, scope, options = {}) {
+  const timeZone = normalizeTimeZone(options.timeZone, 'UTC');
   if (!result || !result.supported) {
     const error = new Error(result && result.message ? result.message : 'Unit export is unavailable.');
     error.code = 'BWT_UNIT_EXPORT_UNAVAILABLE';
@@ -410,7 +412,8 @@ async function buildUnitExportDatasetFromListResult(result, exportFilters, detai
     : new Map();
   const rows = units.map((unit) => buildUnitExportRow(
     unit,
-    detailsByUnitId.get(Number(unit.unitId)) || null
+    detailsByUnitId.get(Number(unit.unitId)) || null,
+    { timeZone }
   ));
   const capacityTotals = buildCapacityTotals(units, detailsByUnitId);
 
@@ -421,6 +424,7 @@ async function buildUnitExportDatasetFromListResult(result, exportFilters, detai
     filters: result.filters || exportFilters,
     browserTotalRows: Number.isFinite(expectedRows) ? expectedRows : rows.length,
     capacityTotals,
+    timeZone,
     scope: Array.isArray(scope) ? scope : buildUnitExportScope(result)
   };
 }
@@ -435,7 +439,7 @@ async function buildFilteredUnitExportDataset(filters = {}, dependencies = {}) {
   };
   const result = await unitModel.listTechUnits(exportFilters);
 
-  return buildUnitExportDatasetFromListResult(result, exportFilters, detailModel);
+  return buildUnitExportDatasetFromListResult(result, exportFilters, detailModel, null, { timeZone: dependencies.timeZone });
 }
 
 function buildLotUnitExportScope(lotScope = {}) {
@@ -502,7 +506,8 @@ async function buildLotScopedUnitExportDataset(lotScope = {}, dependencies = {})
     result,
     exportFilters,
     detailModel,
-    buildLotUnitExportScope(lotScope)
+    buildLotUnitExportScope(lotScope),
+    { timeZone: dependencies.timeZone }
   );
 }
 

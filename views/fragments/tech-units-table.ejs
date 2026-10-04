@@ -91,25 +91,20 @@
   const browserPresentation = unitBrowserPresentation || {};
   const browserColumns = Array.isArray(browserPresentation.columns) ? browserPresentation.columns : [];
   const browserColumnCount = Number(browserPresentation.renderedColumnCount) || browserColumns.length;
-  const canDeleteTechUnits = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canManageUnitLifecycle = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canApproveUnitOutcomes = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canEditTechUnits = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
-  const canCompleteTechUnits = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'tech'].includes(roleCode));
-  const canReverseTechUnitCompletion = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'qc', 'tech'].includes(roleCode));
-  const canRecordQcReview = isQcPortalMode || currentUserRoles.includes('qc');
-  const canSubmitAnyQcCorrection = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canViewTechWeightDetails = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const canViewCurrentLotWeight = !isQcPortalMode && currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
+  const canDeleteTechUnits = !isQcPortalMode && hasPermission('units.delete');
+  const canParkTechUnits = !isQcPortalMode && hasPermission('units.park');
+  const canReturnTechUnitsToActive = !isQcPortalMode && hasPermission('units.return_to_active');
+  const canApproveUnitOutcomes = !isQcPortalMode && hasPermission('units.outcome.approve');
+  const canEditTechUnits = !isQcPortalMode && hasPermission('units.edit');
+  const canCompleteTechUnits = !isQcPortalMode && hasPermission('units.complete');
+  const canReverseTechUnitCompletion = !isQcPortalMode && hasPermission('units.reverse_completion');
+  const canViewUnitHistory = hasPermission('units.history.view');
+  const canRecordQcReview = hasPermission('qc.review.perform');
+  const canSubmitAnyQcCorrection = !isQcPortalMode && hasPermission('qc.correction.submit_any');
+  const canViewCurrentLotWeight = !isQcPortalMode && hasPermission('units.production_weight.view');
   const currentUserId = currentUser && Number.isInteger(Number(currentUser.user_id))
     ? Number(currentUser.user_id)
     : null;
-  const isRegularTechUser = currentUserRoles.includes('tech')
-    && !currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead'].includes(roleCode));
-  const isRegularTechOverrideRequester = isRegularTechUser;
-
-
 
   const activeSort = String((filters && filters.sort) || 'date_desc');
   const sortQueryKeys = [
@@ -173,7 +168,7 @@
     return '';
   }
 
-  const appDisplayTimeZone = 'America/Chicago';
+  const appDisplayTimeZone = typeof timeZone === 'string' && timeZone ? timeZone : 'UTC';
 
   function formatUnitCreatedDate(value) {
     if (!value) {
@@ -378,7 +373,7 @@
           const isReadOnlySearchResult = Boolean(unit.isReadOnlyForCurrentUser);
           const isAssignedToCurrentUser = Boolean(currentUserId && Number(unit.assignedToUserId) === currentUserId);
           const canRequestUnitOverride = Boolean(
-            isRegularTechOverrideRequester
+            hasPermission('units.override.request')
             && currentUserId
             && (unit.isParked || !isAssignedToCurrentUser)
           );
@@ -392,11 +387,12 @@
             && latestQcReview.decisionCode === 'rejected'
             && !latestQcCorrection
             && !unit.isParked
-            && (canSubmitAnyQcCorrection || (isRegularTechUser && isAssignedToCurrentUser))
+            && (canSubmitAnyQcCorrection || (hasPermission('qc.correction.submit') && isAssignedToCurrentUser))
           );
           const qcReviewActionAvailability = unit.qcReviewActionAvailability || {};
           const canShowQcReviewActions = Boolean(
-            canRecordQcReview
+            isQcPortalMode
+            && canRecordQcReview
             && qcReviewActionAvailability.visible
           );
           const canRecordCurrentQcReview = Boolean(
@@ -792,7 +788,7 @@
                   <% } %>
                   <% if (unit.isParked) { %>
                     <span class="tech-chip">Parked</span>
-                    <% if (canManageUnitLifecycle) { %>
+                    <% if (canReturnTechUnitsToActive) { %>
                       <a
                         class="secondary-button tech-action-button tech-action-button--return"
                         href="/tech/units/<%= unit.unitId %>/return-to-active/modal"
@@ -802,7 +798,7 @@
                         Return to Active
                       </a>
                     <% } %>
-                  <% } else if (canManageUnitLifecycle) { %>
+                  <% } else if (canParkTechUnits) { %>
                     <a
                       class="secondary-button tech-action-button tech-action-button--park tech-delete-action-button"
                       href="/tech/units/<%= unit.unitId %>/park/modal"
@@ -813,21 +809,23 @@
                     </a>
                   <% } %>
                 </div>
-                <% if (canCompleteTechUnits && !unit.isParked && !isReadOnlySearchResult) { %>
+                <% if ((canCompleteTechUnits || (hasPermission('units.labels.print') && unit.latestWorkCompletion)) && !unit.isParked && !isReadOnlySearchResult) { %>
                   <div class="tech-summary-actions__secondary">
                     <% if (unit.latestWorkCompletion) { %>
-                      <a
-                        class="secondary-button tech-action-button tech-action-button--print tech-print-label-action-button"
-                        href="/tech/units/<%= unit.unitId %>/print-label/modal"
-                        hx-get="/tech/units/<%= unit.unitId %>/print-label/modal"
-                        hx-target="#modal-root"
-                        hx-swap="innerHTML"
-                        data-tech-modal-trigger
-                        data-no-row-toggle
-                      >
-                        Print Label
-                      </a>
-                      <% if (canReverseTechUnitCompletion && unit.latestWorkCompletion.creditSource === 'manual_completion') { %>
+                      <% if (hasPermission('units.labels.print')) { %>
+                        <a
+                          class="secondary-button tech-action-button tech-action-button--print tech-print-label-action-button"
+                          href="/tech/units/<%= unit.unitId %>/print-label/modal"
+                          hx-get="/tech/units/<%= unit.unitId %>/print-label/modal"
+                          hx-target="#modal-root"
+                          hx-swap="innerHTML"
+                          data-tech-modal-trigger
+                          data-no-row-toggle
+                        >
+                          Print Label
+                        </a>
+                      <% } %>
+                      <% if (canCompleteTechUnits && canReverseTechUnitCompletion && unit.latestWorkCompletion.creditSource === 'manual_completion') { %>
                         <a
                           class="secondary-button tech-action-button tech-action-button--undo tech-delete-action-button"
                           href="/tech/units/<%= unit.unitId %>/completions/<%= unit.latestWorkCompletion.unitWorkCompletionId %>/reverse/modal"
@@ -837,7 +835,7 @@
                           Undo Completion
                         </a>
                       <% } %>
-                    <% } else { %>
+                    <% } else if (canCompleteTechUnits) { %>
                       <a
                         class="secondary-button tech-action-button tech-action-button--complete"
                         href="/tech/units/<%= unit.unitId %>/complete-work/modal"
@@ -872,13 +870,15 @@
                     <% } %>
                   </div>
 
-                  <div
-                    class="tech-tool-details-slot"
-                    hx-get="/tech/units/<%= unit.unitId %>/tool-details"
-                    hx-trigger="revealed once"
-                    hx-swap="innerHTML"
-                    hx-on::after-swap="const row = this.closest('tr'); const sections = row ? Array.from(row.querySelectorAll('.tech-detail-section:not(.tech-tool-observed-details)')) : []; const anchor = sections.length > 0 ? sections[sections.length - 1] : null; if (anchor) anchor.insertAdjacentElement('afterend', this);"
-                  ></div>
+                  <% if (hasPermission('units.tool_details.view')) { %>
+                    <div
+                      class="tech-tool-details-slot"
+                      hx-get="/tech/units/<%= unit.unitId %>/tool-details"
+                      hx-trigger="revealed once"
+                      hx-swap="innerHTML"
+                      hx-on::after-swap="const row = this.closest('tr'); const sections = row ? Array.from(row.querySelectorAll('.tech-detail-section:not(.tech-tool-observed-details)')) : []; const anchor = sections.length > 0 ? sections[sections.length - 1] : null; if (anchor) anchor.insertAdjacentElement('afterend', this);"
+                    ></div>
+                  <% } %>
 
                   <div class="tech-detail-actions">
                     <div class="tech-detail-status">
@@ -947,21 +947,6 @@
                         >
                           Mark Corrected
                         </a>
-                      <% } %>
-
-                      <% if (canViewTechWeightDetails) { %>
-                        <button
-                          type="button"
-                          class="secondary-button tech-action-button tech-action-button--info tech-personal-credit-action-button"
-                          data-unit-panel-button
-                          data-panel="my-weight"
-                          data-no-row-toggle
-                          hx-get="/tech/units/<%= unit.unitId %>/my-weight-earned"
-                          hx-target="#tech-unit-my-weight-content-<%= unit.unitId %>"
-                          hx-swap="innerHTML"
-                        >
-                          My Weight Earned
-                        </button>
                       <% } %>
 
                       <% if (canViewUnitHistory) { %>
@@ -1531,14 +1516,6 @@
                   </section>
                 <% } %>
                   </div>
-
-                  <% if (canViewTechWeightDetails) { %>
-                    <div id="tech-unit-my-weight-panel-<%= unit.unitId %>" class="tech-unit-panel-view" data-unit-panel-content="my-weight" hidden>
-                      <div id="tech-unit-my-weight-content-<%= unit.unitId %>" class="tech-history-panel-placeholder">
-                        <p>Select My Weight Earned to load your recorded work credit.</p>
-                      </div>
-                    </div>
-                  <% } %>
 
                   <% if (canViewUnitHistory) { %>
                     <div id="tech-unit-history-panel-<%= unit.unitId %>" class="tech-unit-panel-view" data-unit-panel-content="history" hidden>

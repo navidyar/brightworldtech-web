@@ -35,7 +35,7 @@ test('Processor Type create edit activate deactivate and delete routes remain Ad
   ]) {
     const index = routes.indexOf(fragment);
     assert.notEqual(index, -1, `missing route ${fragment}`);
-    assert.match(routes.slice(index, index + 220), /requireRole\(configRoles\)/);
+    assert.match(routes.slice(index, index + 220), /requirePermission\('configuration\.processors\.manage'\)/);
   }
 });
 

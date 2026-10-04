@@ -1,6 +1,9 @@
 const { pool } = require('./db');
 const { getConfigValueIdBySystemId, getConfigValueBySystemId } = require('./configLookupModel');
 const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
+const { canManageUser, assertProtectedAdminInvariant } = require('../config/protectedAdmin');
+const userManagementAudit = require('./userManagementAuditModel');
+const permissionManagementModel = require('./permissionManagementModel');
 const { buildUsernameStem, nextAvailableUsername, normalizeUsername } = require('../services/userUsernamePolicy');
 const {
   DEFAULT_PASSWORD_LINK_EXPIRY_HOURS,
@@ -8,6 +11,19 @@ const {
   MAX_PASSWORD_LINK_EXPIRY_HOURS,
   normalizePasswordLinkExpiryHours
 } = require('../services/passwordLinkExpiryPolicy');
+
+function roleAssignmentAuditState(userId, roles) {
+  const safeRoles = Array.isArray(roles) ? roles : [];
+  return {
+    userId: Number(userId),
+    roleIds: safeRoles.map((role) => Number(role.role_id)).sort((a, b) => a - b),
+    roles: safeRoles.map((role) => ({
+      roleId: Number(role.role_id),
+      name: role.name,
+      systemKey: role.system_key || null
+    })).sort((a, b) => a.roleId - b.roleId)
+  };
+}
 
 const ACCOUNT_STATUS_CODE_BY_SYSTEM_ID = Object.freeze({
   [SYSTEM_CONFIG_VALUE_IDS.ACCOUNT_ACTIVE]: 'active',
@@ -97,6 +113,10 @@ async function getUserByLoginIdentifier(identifier, connection = pool) {
         u.username,
         u.email,
         u.password_hash,
+        u.tool_pin_hash,
+        u.tool_pin_updated_at,
+        u.tool_pin_failed_count,
+        u.tool_pin_locked_until,
         u.failed_login_count,
         u.locked_until,
         u.last_login_at,
@@ -116,6 +136,17 @@ async function getUserByLoginIdentifier(identifier, connection = pool) {
   return normalizeAuthUser(rows[0]);
 }
 
+
+async function getUserCredentialById(userId, connection = pool) {
+  const [rows] = await connection.query(
+    `SELECT user_id, password_hash, is_active
+     FROM users
+     WHERE user_id = ?
+     LIMIT 1`,
+    [Number(userId)]
+  );
+  return rows[0] || null;
+}
 
 async function getUserByIdWithRoles(userId) {
   const [rows] = await pool.query(
@@ -225,7 +256,7 @@ async function recordSuccessfulLogin(userId) {
             ),
             'unknown'
           ) AS primary_role_code,
-          NOW()
+          UTC_TIMESTAMP()
         FROM users u
         WHERE u.user_id = ?
       `,
@@ -257,6 +288,60 @@ async function recordFailedLogin(identifier, connection = pool) {
   );
 }
 
+async function getUserToolPinState(userId, connection = pool) {
+  const [rows] = await connection.query(
+    `SELECT tool_pin_hash IS NOT NULL AS has_tool_pin, tool_pin_updated_at, tool_pin_locked_until
+     FROM users WHERE user_id = ? LIMIT 1`,
+    [Number(userId)]
+  );
+  const row = rows[0];
+  return row ? {
+    hasToolPin: Number(row.has_tool_pin) === 1,
+    updatedAt: row.tool_pin_updated_at || null,
+    lockedUntil: row.tool_pin_locked_until || null
+  } : null;
+}
+
+async function setUserToolPin({ userId, toolPinHash }, connection = pool) {
+  const [result] = await connection.query(
+    `UPDATE users
+     SET tool_pin_hash = ?, tool_pin_updated_at = NOW(), tool_pin_failed_count = 0, tool_pin_locked_until = NULL
+     WHERE user_id = ?`,
+    [toolPinHash, Number(userId)]
+  );
+  return Number(result.affectedRows || 0) > 0;
+}
+
+async function clearUserToolPin(userId, connection = pool) {
+  const [result] = await connection.query(
+    `UPDATE users
+     SET tool_pin_hash = NULL, tool_pin_updated_at = NULL, tool_pin_failed_count = 0, tool_pin_locked_until = NULL
+     WHERE user_id = ?`,
+    [Number(userId)]
+  );
+  return Number(result.affectedRows || 0) > 0;
+}
+
+async function recordFailedToolPin(userId, connection = pool) {
+  await connection.query(
+    `UPDATE users
+     SET tool_pin_failed_count = tool_pin_failed_count + 1,
+         tool_pin_locked_until = CASE
+           WHEN tool_pin_failed_count + 1 >= 5 THEN DATE_ADD(NOW(), INTERVAL 15 MINUTE)
+           ELSE tool_pin_locked_until
+         END
+     WHERE user_id = ?`,
+    [Number(userId)]
+  );
+}
+
+async function resetToolPinFailures(userId, connection = pool) {
+  await connection.query(
+    `UPDATE users SET tool_pin_failed_count = 0, tool_pin_locked_until = NULL WHERE user_id = ?`,
+    [Number(userId)]
+  );
+}
+
 async function allocateUsernameWithConnection({ firstName, lastName }, connection) {
   const stem = buildUsernameStem(firstName, lastName);
   const [rows] = await connection.query(
@@ -273,9 +358,9 @@ async function allocateUsernameWithConnection({ firstName, lastName }, connectio
   return nextAvailableUsername(stem, rows.map((row) => row.username));
 }
 
-async function createUserWithRoles({ firstName, lastName, email, personalEmail = null, phone = null, startDate = null, endDate = null, roleCodes }) {
+async function createUserWithRoles({ firstName, lastName, email, personalEmail = null, phone = null, startDate = null, endDate = null, roleCodes, toolPinHash = null, actorUserId = null }) {
   const normalizedEmail = normalizeEmail(email);
-  const primaryRoleCodes = Array.isArray(roleCodes) ? roleCodes.slice(0, 1) : [];
+  const assignedRoleCodes = Array.isArray(roleCodes) ? [...new Set(roleCodes.map((roleCode) => String(roleCode || '').trim()).filter(Boolean))] : [];
   const connection = await pool.getConnection();
 
   try {
@@ -294,9 +379,19 @@ async function createUserWithRoles({ firstName, lastName, email, personalEmail =
     );
 
     let userId;
+    let before = null;
+    let beforePermissionRoles = [];
 
     if (existingRows[0]) {
       userId = Number(existingRows[0].user_id);
+      if (!canManageUser(actorUserId, userId)) {
+        const error = new Error('Only the account owner can manage this protected Admin account.');
+        error.code = 'PROTECTED_ADMIN_USER';
+        throw error;
+      }
+      assertProtectedAdminInvariant({ userId, roleCodes: assignedRoleCodes });
+      before = await userManagementAudit.getSnapshot(connection, userId);
+      beforePermissionRoles = await permissionManagementModel.getUserRoles(userId, connection);
       const username = existingRows[0].username
         ? normalizeUsername(existingRows[0].username)
         : await allocateUsernameWithConnection({ firstName, lastName }, connection);
@@ -339,6 +434,7 @@ async function createUserWithRoles({ firstName, lastName, email, personalEmail =
       );
 
       userId = Number(userResult.insertId);
+      assertProtectedAdminInvariant({ userId, roleCodes: assignedRoleCodes });
     }
 
     await connection.query(
@@ -349,7 +445,7 @@ async function createUserWithRoles({ firstName, lastName, email, personalEmail =
       [userId]
     );
 
-    for (const roleCode of primaryRoleCodes) {
+    for (const roleCode of assignedRoleCodes) {
       const roleId = await getRoleId(roleCode, connection);
 
       await connection.query(
@@ -361,11 +457,45 @@ async function createUserWithRoles({ firstName, lastName, email, personalEmail =
       );
     }
 
+    if (toolPinHash) {
+      await connection.query(
+        `UPDATE users
+         SET tool_pin_hash = ?, tool_pin_updated_at = NOW(), tool_pin_failed_count = 0, tool_pin_locked_until = NULL
+         WHERE user_id = ?`,
+        [toolPinHash, userId]
+      );
+    }
+
+    const after = await userManagementAudit.getSnapshot(connection, userId);
+    const changes = userManagementAudit.diffSnapshots(before, after);
+    await userManagementAudit.writeEvent(connection, {
+      actorUserId, targetUserId: userId,
+      action: before ? (changes.roles ? 'user_roles_updated' : 'user_profile_updated') : 'user_created',
+      before, after
+    });
+    if (!before || changes.roles) {
+      const afterPermissionRoles = await permissionManagementModel.getUserRoles(userId, connection);
+      await permissionManagementModel.writeAuditEvent(connection, {
+        actorUserId,
+        eventType: 'user_roles_replaced',
+        targetUserId: userId,
+        beforeState: roleAssignmentAuditState(userId, beforePermissionRoles),
+        afterState: roleAssignmentAuditState(userId, afterPermissionRoles)
+      });
+    }
+
     await connection.commit();
 
     return getUserByIdWithRoles(userId);
   } catch (error) {
     await connection.rollback();
+    if (error && error.code === 'PROTECTED_ADMIN_USER') {
+      await userManagementAudit.recordBlocked({
+        actorUserId, targetUserId: 1,
+        action: assignedRoleCodes.includes('admin') ? 'user_update_blocked' : 'user_role_change_blocked',
+        reason: error.message
+      });
+    }
     throw error;
   } finally {
     connection.release();
@@ -405,6 +535,11 @@ async function createPasswordLink({ userId, linkTypeCode, tokenHash, expiresAt, 
       `,
       [userId, linkTypeId, tokenHash, expiresAt, createdByUserId]
     );
+
+    await userManagementAudit.writeEvent(connection, {
+      actorUserId: createdByUserId, targetUserId: userId,
+      action: linkTypeCode === 'password_reset' ? 'password_reset_initiated' : 'password_setup_initiated'
+    });
 
     await connection.commit();
   } catch (error) {
@@ -505,9 +640,15 @@ module.exports = {
   normalizeEmail,
   normalizeLoginIdentifier,
   getUserByLoginIdentifier,
+  getUserCredentialById,
   getUserByIdWithRoles,
   recordSuccessfulLogin,
   recordFailedLogin,
+  getUserToolPinState,
+  setUserToolPin,
+  clearUserToolPin,
+  recordFailedToolPin,
+  resetToolPinFailures,
   allocateUsernameWithConnection,
   createUserWithRoles,
   createPasswordLink,

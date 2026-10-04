@@ -29,8 +29,8 @@ test('Configuration exposes Admin-only ranking refresh and interval endpoints', 
 
   assert.match(routes, /\/management\/config\/operational-rankings\/refresh/);
   assert.match(routes, /\/management\/config\/operational-rankings\/interval/);
-  assert.match(routes, /requireRole\(configRoles\)[\s\S]*configController\.refreshOperationalOptionRankings/);
-  assert.match(routes, /requireRole\(configRoles\)[\s\S]*configController\.updateOperationalOptionRankingInterval/);
+  assert.match(routes, /requirePermission\('configuration\.operational_rankings\.manage'\)[\s\S]*configController\.refreshOperationalOptionRankings/);
+  assert.match(routes, /requirePermission\('configuration\.operational_rankings\.manage'\)[\s\S]*configController\.updateOperationalOptionRankingInterval/);
   assert.match(controller, /loadOperationalRankingAdministration/);
   assert.match(controller, /renderOperationalRankingAdministration/);
   assert.match(controller, /previous successful rankings remain active/i);

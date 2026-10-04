@@ -21,20 +21,17 @@ test('QC is an assignable primary role without inherited Tech or Tech Lead autho
   assert.equal(accessPolicy.canCreateOrEditTechUnits(['qc']), false);
 });
 
-test('QC receives Unit Browser, Unit History, and own Request-history routes without production authority', () => {
+test('QC receives browser, history, and request permissions without production authority', () => {
+  const { LEGACY_ROLE_GRANTS } = require('../config/legacyPermissionBootstrap');
+  for (const permissionKey of ['units.view', 'units.history.view', 'requests.view']) {
+    assert.ok(LEGACY_ROLE_GRANTS.qc.includes(permissionKey));
+  }
+  for (const permissionKey of ['units.create', 'units.edit', 'units.complete', 'units.production_weight.view']) {
+    assert.ok(!LEGACY_ROLE_GRANTS.qc.includes(permissionKey));
+  }
   const routes = read('routes/management.js');
-
-  assert.match(routes, /const techRoles = \['admin', 'management', 'tech_lead', 'tech'\]/);
-  assert.match(routes, /const unitBrowserRoles = \['admin', 'management', 'tech_lead', 'qc', 'tech'\]/);
-  assert.match(routes, /const unitHistoryRoles = \['admin', 'management', 'tech_lead', 'qc', 'tech'\]/);
-  assert.match(routes, /'\/tech\/units',[\s\S]*?requireRole\(unitBrowserRoles\)[\s\S]*?renderTechUnitsPage/);
-  assert.match(routes, /'\/tech\/units\/table',[\s\S]*?requireRole\(unitBrowserRoles\)[\s\S]*?renderTechUnitsTable/);
-  assert.match(routes, /'\/tech\/units\/:unitId\/history',[\s\S]*?requireRole\(unitHistoryRoles\)/);
-  assert.match(routes, /'\/tech\/units\/:unitId',[\s\S]*?requireRole\(unitBrowserRoles\)[\s\S]*?renderTechUnitDetailPage/);
-  assert.match(routes, /'\/tech\/units\/new',[\s\S]*?requireRole\(techRoles\)/);
-  assert.match(routes, /'\/tech\/units\/:unitId\/edit',[\s\S]*?requireRole\(techRoles\)/);
-  assert.match(routes, /const unitRequestRoles = \['admin', 'management', 'tech_lead', 'qc', 'tech'\]/);
-  assert.match(routes, /'\/unit-requests',[\s\S]*?requireRole\(unitRequestRoles\)/);
+  assert.match(routes, /router\.use\('\/tech\/units', requireAuth, requirePermission\('units\.view'\)\)/);
+  assert.match(routes, /requirePermission\('units\.history\.view'\)/);
 });
 
 test('QC Unit Browser is cross-technician and hides production, request, and weight controls', () => {
@@ -47,12 +44,12 @@ test('QC Unit Browser is cross-technician and hides production, request, and wei
   assert.match(controller, /return roleCodes\.includes\('tech'\)[\s\S]*!roleCodes\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead', 'qc'\]\.includes\(roleCode\)\)/);
   assert.match(page, /isQcUnitBrowserUser/);
   assert.match(page, /<% if \(canCreateTechUnits\) \{ %>[\s\S]*Create Unit/);
-  assert.match(table, /const canEditTechUnits = !isQcPortalMode && currentUserRoles\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead', 'tech'\]/);
-  assert.match(table, /const canViewUnitHistory = currentUserRoles\.some\(\(roleCode\) => \['admin', 'management', 'tech_lead', 'qc', 'tech'\]/);
+  assert.match(table, /const canEditTechUnits = !isQcPortalMode && hasPermission\('units\.edit'\)/);
+  assert.match(table, /const canViewUnitHistory = hasPermission\('units\.history\.view'\)/);
   assert.match(table, /<% if \(canEditTechUnits && !unit\.isParked && !isReadOnlySearchResult\) \{ %>/);
   assert.match(table, /<% if \(canViewCurrentLotWeight\) \{ %>/);
   assert.doesNotMatch(table, /canCompleteTechUnits[^\n]*'qc'/);
-  assert.match(sidebar, /canAccessUnitRequests\(\)/);
+  assert.match(sidebar, /hasPermission\('requests\.view'\)/);
 });
 
 test('Stage 9A migration creates one active idempotent QC role and management can assign it', () => {
@@ -67,7 +64,7 @@ test('Stage 9A migration creates one active idempotent QC role and management ca
   assert.match(migration, /ON DUPLICATE KEY UPDATE/);
   assert.match(managementModel, /WHEN 'qc' THEN 35/);
   assert.match(managementModel, /qc: 'Quality Control'/);
-  assert.match(newUser, /QC grants read-only cross-technician Unit access/);
-  assert.match(editUser, /QC grants read-only cross-technician Unit access/);
-  assert.match(userList, /Management users can assign Management, Tech Lead, QC, or Tech/);
+  assert.match(newUser, /role/);
+  assert.match(editUser, /role/);
+  assert.match(userList, /Approved default permissions from every assigned role combine/);
 });

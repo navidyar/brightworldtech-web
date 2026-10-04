@@ -15,20 +15,21 @@ test('QC Review status links preserve QC Portal context into the decision-detail
   assert.equal(matches.length, 2);
 });
 
-test('QC users acting inside QC Review can request reversion of any current decision', () => {
+test('Users with QC Reversion Request permission can request reversion of any current decision', () => {
   const controller = read('controllers/techController.js');
 
   assert.match(controller, /function isQcPortalRequestContext\(req\)[\s\S]*?query\.qcPortal[\s\S]*?=== '1'/);
-  assert.match(controller, /function canRequestQcReviewReversion\(req\)[\s\S]*?if \(!roleCodes\.includes\('qc'\)\) return false;[\s\S]*?if \(isQcPortalRequestContext\(req\)\) return true;/);
+  assert.match(controller, /function canRequestQcReviewReversion\(req\)[\s\S]*?currentPermissions\.has\('qc\.reversion\.request'\)/);
   assert.doesNotMatch(controller, /ownsLatestQcReview|reviewedByUserId\) === currentUserId/);
-  assert.match(controller, /canRequestQcReversion = Boolean\(context\.latestQcReview\)[\s\S]*?isQcRequester[\s\S]*?!pendingQcReversionRequest/);
+  assert.match(controller, /qcReversionAvailable = Boolean\(context\.latestQcReview\) && !context\.latestQcCorrection/);
+  assert.match(controller, /canRequestQcReversion = qcReversionAvailable\s*&& context\.qcRequired\s*&& isQcRequester\s*&& !pendingQcReversionRequest/);
   assert.match(controller, /getPendingQcReversionRequestForQcCheck\(\{ qcCheckId \}\)/);
 });
 
 test('QC Portal requester mode does not also expose Tech Lead+ direct reversion for the same interaction', () => {
   const controller = read('controllers/techController.js');
 
-  assert.match(controller, /const canDirectlyRevertQc = Boolean\(context\.latestQcReview\)[\s\S]*?&& !isQcRequester[\s\S]*?\['admin', 'management', 'tech_lead'\]/);
+  assert.match(controller, /const isQcRequester = canRequestQcReviewReversion\(req\)[\s\S]*?qcPortalRequestMode[\s\S]*?const canDirectlyRevertQc = qcReversionAvailable[\s\S]*?!isQcRequester[\s\S]*?canDirectlyRevertQcReview\(req\)/);
 });
 
 test('QC Portal context is preserved through the Request Reversion modal POST', () => {
@@ -41,13 +42,13 @@ test('QC Portal context is preserved through the Request Reversion modal POST', 
   assert.match(controller, /qcPortalMode: isQcPortalRequestContext\(req\)/);
 });
 
-test('QC reversion request endpoints remain QC-only and the action stays in QC status details', () => {
+test('QC reversion request endpoints require their permission and the action stays in QC status details', () => {
   const routes = read('routes/management.js');
   const details = read('views/fragments/tech-unit-qc-review-details-modal.ejs');
   const history = read('views/fragments/tech-unit-history-panel.ejs');
 
-  assert.match(routes, /qc-review\/:qcCheckId\/reversion-request\/modal'[\s\S]*?requireRole\(\['qc'\]\)/);
-  assert.match(routes, /qc-review\/:qcCheckId\/reversion-request'[\s\S]*?requireRole\(\['qc'\]\)/);
+  assert.match(routes, /qc-review\/:qcCheckId\/reversion-request\/modal'[\s\S]*?requirePermission\('qc\.reversion\.request'\)/);
+  assert.match(routes, /qc-review\/:qcCheckId\/reversion-request'[\s\S]*?requirePermission\('qc\.reversion\.request'\)/);
   assert.match(details, /Request Reversion/);
   assert.doesNotMatch(history, /Request Reversion|reversion-request\/modal/);
 });

@@ -1,0 +1,52 @@
+<div class="modal-backdrop" data-modal-backdrop>
+  <section class="modal-panel site-clean-modal virtual-huddle-detail-modal" data-huddle-personal-detail-modal data-recipient-id="<%= recipient.virtual_huddle_recipient_id %>" role="dialog" aria-modal="true" aria-labelledby="personal-huddle-detail-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow"><%= messageTypeLabel(recipient.message_type_code) %> Huddle</p>
+        <h2 id="personal-huddle-detail-title"><%= recipient.subject %></h2>
+        <p class="field-hint">Sent <%= formatDateTime(recipient.sent_at) %> by <%= recipient.sender_name_snapshot %> (<%= formatRoleLabel(recipient.sender_role_code_snapshot) %>).</p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close Huddle details">×</button>
+    </header>
+
+    <div class="modal-body virtual-huddle-detail-body">
+      <% if (successMessage) { %><div class="message success"><p><%= successMessage %></p></div><% } %>
+      <% if (Array.isArray(errorMessages) && errorMessages.length > 0) { %><div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div><% } %>
+
+      <section class="virtual-huddle-detail-section" aria-labelledby="personal-huddle-message-title">
+        <div class="content-header"><div><p class="eyebrow">Message</p><h3 id="personal-huddle-message-title">Original Message</h3></div></div>
+        <% if (recipient.parent_subject) { %><div class="message info"><p><strong>Related to:</strong> <%= recipient.parent_subject %></p></div><% } %>
+        <div class="virtual-huddle-message-copy"><%= recipient.message_body %></div>
+      </section>
+
+      <% if (recipient.recipient_state_code === 'acknowledged') { %>
+        <section class="virtual-huddle-detail-section" aria-labelledby="personal-huddle-ack-title">
+          <div class="content-header"><div><p class="eyebrow">Acknowledgment</p><h3 id="personal-huddle-ack-title">Your Saved Record</h3></div></div>
+          <dl class="virtual-huddle-message-meta">
+            <div><dt>Confirmed</dt><dd><%= formatDateTime(recipient.acknowledged_at) %></dd></div>
+            <div><dt>Confirmation</dt><dd><%= recipient.acknowledgment_phrase_snapshot || '—' %></dd></div>
+          </dl>
+          <% if (recipient.acknowledgment_note) { %><div class="message info"><p><strong>Your optional context:</strong> <%= recipient.acknowledgment_note %></p></div><% } %>
+        </section>
+      <% } else if ((recipient.acknowledgment_mode_code === 'required_ack' && recipient.recipient_state_code === 'awaiting_confirmation') || (recipient.acknowledgment_mode_code === 'optional_ack' && recipient.recipient_state_code === 'available' && isAdminUser)) { %>
+        <section class="virtual-huddle-detail-section" aria-labelledby="personal-huddle-acknowledge-title">
+          <div class="content-header"><div><p class="eyebrow"><%= recipient.acknowledgment_mode_code === 'required_ack' ? 'Required' : 'Optional' %></p><h3 id="personal-huddle-acknowledge-title">Acknowledge Huddle</h3></div></div>
+          <form class="app-form app-form-clean" method="post" action="/virtual-huddle/recipients/<%= recipient.virtual_huddle_recipient_id %>/acknowledge" hx-post="/virtual-huddle/recipients/<%= recipient.virtual_huddle_recipient_id %>/acknowledge" hx-target="#modal-root" hx-swap="innerHTML" autocomplete="off">
+            <div class="form-grid single-column">
+              <label class="form-field"><span>Type <strong><%= confirmationPhrase %></strong></span><input type="text" name="confirmationPhrase" autocomplete="off" spellcheck="false" required /></label>
+              <label class="form-field"><span>Optional context</span><textarea name="note" rows="3" maxlength="2000"></textarea><small class="field-hint">Optional context only. Do not post questions here; contact Management directly so any clarification can be issued as a related Huddle.</small></label>
+            </div>
+            <div class="form-actions"><button type="submit" class="primary-button"><%= recipient.acknowledgment_mode_code === 'required_ack' ? 'Confirm Read' : 'Acknowledge & Save' %></button></div>
+          </form>
+          <% if (isAdminUser && recipient.acknowledgment_mode_code === 'optional_ack') { %>
+            <div class="form-actions">
+              <a class="danger-button" href="/my-huddles/inbox/<%= recipient.virtual_huddle_recipient_id %>/delete/modal" hx-get="/my-huddles/inbox/<%= recipient.virtual_huddle_recipient_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete My Inbox Copy</a>
+            </div>
+          <% } %>
+        </section>
+      <% } else { %>
+        <div class="message info"><p>This Huddle is not awaiting an action from you.</p></div>
+      <% } %>
+    </div>
+  </section>
+</div>

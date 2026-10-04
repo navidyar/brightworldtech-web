@@ -235,8 +235,7 @@ async function resolveYesNo(connection, presence) {
   const submitted = presence === 'present' ? 'Yes' : 'No';
   return resolveSystemConfigValue(connection, {
     systemConfigCategoryId: SYSTEM_CONFIG_CATEGORY_IDS.YES_NO_OPTIONS,
-    submitted,
-    candidates: presence === 'present' ? ['Present', 'True'] : ['Absent', 'False']
+    submitted
   });
 }
 

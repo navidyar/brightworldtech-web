@@ -13,7 +13,7 @@ test('Units Browser exposes Lot-scoped bulk Print Labels only through the table 
   const page = read('views/pages/tech-units.ejs');
   const table = read('views/fragments/tech-units-table.ejs');
   assert.match(controller, /buildBulkLabelPrintAction/);
-  assert.match(controller, /canPrintLabels/);
+  assert.match(controller, /currentPermissions instanceof Set && req\.currentPermissions\.has\('units\.labels\.print'\)/);
   assert.match(controller, /canOfferBulkLabelPrint\(filters\)/);
   assert.match(controller, /unit\.latestWorkCompletion/);
   assert.match(page, /id="tech-units-bulk-label-actions"/);
@@ -21,13 +21,13 @@ test('Units Browser exposes Lot-scoped bulk Print Labels only through the table 
   assert.match(table, />Print Labels \(<%= safeBulkLabelAction\.eligibleCount %>\)</);
 });
 
-test('bulk routes are static, Tech-authorized, and placed before parameterized Unit routes', () => {
+test('bulk routes use the granular Unit label permission and precede parameterized Unit routes', () => {
   const routes = read('routes/management.js');
   const modalIndex = routes.indexOf("'/tech/units/print-labels/modal'");
   const parameterIndex = routes.indexOf("'/tech/units/:unitId/print-label/modal'");
   assert.ok(modalIndex >= 0 && parameterIndex > modalIndex);
-  assert.match(routes, /'\/tech\/units\/print-labels\/modal'[\s\S]*?requireRole\(techRoles\)[\s\S]*?renderTechUnitsBulkPrintLabelModal/);
-  assert.match(routes, /'\/tech\/units\/print-labels'[\s\S]*?requireRole\(techRoles\)[\s\S]*?printTechUnitsBulkLabels/);
+  assert.match(routes, /'\/tech\/units\/print-labels\/modal'[\s\S]*?requirePermission\('units\.labels\.print'\)[\s\S]*?renderTechUnitsBulkPrintLabelModal/);
+  assert.match(routes, /'\/tech\/units\/print-labels'[\s\S]*?requirePermission\('units\.labels\.print'\)[\s\S]*?printTechUnitsBulkLabels/);
 });
 
 test('bulk modal supports deselect, reselect, Select All, Clear All, and shared template quantities', () => {

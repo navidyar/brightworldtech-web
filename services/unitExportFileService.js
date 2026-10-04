@@ -1,7 +1,7 @@
 'use strict';
 
 const zlib = require('node:zlib');
-const { APP_DISPLAY_TIME_ZONE, formatDateKey } = require('../utils/timeZone');
+const { normalizeTimeZone, formatDateKey } = require('../utils/timeZone');
 const { formatHardwareCapacityGb } = require('./hardwareCapacity');
 
 const CSV_CONTENT_TYPE = 'text/csv; charset=utf-8';
@@ -119,7 +119,7 @@ function buildCsvBuffer(dataset) {
   return Buffer.from(`\ufeff${lines.join('\r\n')}\r\n`, 'utf8');
 }
 
-function buildUnitExportFilename(format, filters = {}, now = new Date()) {
+function buildUnitExportFilename(format, filters = {}, now = new Date(), timeZone = 'UTC') {
   const normalizedFormat = String(format || '').trim().toLowerCase();
 
   if (!['csv', 'xlsx'].includes(normalizedFormat)) {
@@ -130,7 +130,7 @@ function buildUnitExportFilename(format, filters = {}, now = new Date()) {
     ? '-parked'
     : '';
 
-  return `${EXPORT_FILE_PREFIX}${stateSuffix}-${formatDateKey(now)}.${normalizedFormat}`;
+  return `${EXPORT_FILE_PREFIX}${stateSuffix}-${formatDateKey(now, normalizeTimeZone(timeZone, 'UTC'))}.${normalizedFormat}`;
 }
 
 function escapeXml(value) {
@@ -235,9 +235,9 @@ function buildUnitsWorksheetXml(dataset) {
 </worksheet>`;
 }
 
-function formatExportedAt(date) {
+function formatExportedAt(date, timeZone = 'UTC') {
   return new Intl.DateTimeFormat('en-US', {
-    timeZone: APP_DISPLAY_TIME_ZONE,
+    timeZone: normalizeTimeZone(timeZone, 'UTC'),
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -251,7 +251,7 @@ function buildScopeWorksheetXml(dataset, exportedAt = new Date()) {
   const normalizedDataset = normalizeDataset(dataset);
   const totals = normalizedDataset.capacityTotals || {};
   const scopeRows = [
-    { label: 'Exported At', value: formatExportedAt(exportedAt) },
+    { label: 'Exported At', value: formatExportedAt(exportedAt, normalizedDataset.timeZone) },
     { label: 'Matching Units', value: String(normalizedDataset.totalRows) },
     { label: 'Previous Memory Total', value: `${formatHardwareCapacityGb(totals.previousMemoryGb) || '0GB'} across ${Number(totals.previousMemoryRecordedUnits || 0)} recorded Unit(s)` },
     { label: 'Current Memory Total', value: `${formatHardwareCapacityGb(totals.currentMemoryGb) || '0GB'} across ${Number(totals.currentMemoryRecordedUnits || 0)} recorded Unit(s)` },

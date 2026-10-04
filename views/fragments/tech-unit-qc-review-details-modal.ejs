@@ -12,29 +12,29 @@
     ? presentation.workflowSteps
     : [];
   const currentUserRoles = typeof currentRoles !== 'undefined' && Array.isArray(currentRoles) ? currentRoles : [];
-  const canViewUnitHistory = currentUserRoles.some((roleCode) => ['admin', 'management', 'tech_lead', 'qc', 'tech'].includes(roleCode));
+  const canViewUnitHistory = hasPermission('units.history.view');
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
   <section
-    class="modal-panel site-clean-modal tech-qc-review-modal tech-qc-status-modal"
+    class="modal-panel site-clean-modal record-detail-modal tech-qc-review-modal tech-qc-status-modal"
     role="dialog"
     aria-modal="true"
     aria-labelledby="tech-qc-review-details-title"
     aria-describedby="tech-qc-review-details-description"
     tabindex="-1"
   >
-    <header class="modal-header tech-qc-status-modal__header">
-      <div class="tech-qc-modal-heading">
+    <header class="modal-header informational-modal-header tech-qc-status-modal__header">
+      <div class="informational-modal-heading tech-qc-modal-heading">
         <% if (presentation) { %>
           <span class="tech-qc-modal-heading__icon" aria-hidden="true">
             <%- include('tech-unit-qc-status-icon', { statusCode: statusIconCode, decisionCode: review ? review.decisionCode : '' }) %>
           </span>
         <% } %>
-        <div class="tech-qc-modal-heading__copy">
+        <div class="informational-modal-heading__copy tech-qc-modal-heading__copy">
           <p class="eyebrow">Quality Control</p>
           <h2 id="tech-qc-review-details-title"><%= presentation ? presentation.title : 'QC Review Details' %></h2>
-          <p id="tech-qc-review-details-description" class="modal-description"><%= unitLabel %></p>
+          <p id="tech-qc-review-details-description" class="modal-description informational-modal-heading__meta"><%= unitLabel %></p>
         </div>
       </div>
 
@@ -43,7 +43,7 @@
       </button>
     </header>
 
-    <div class="modal-body tech-qc-status-modal__body">
+    <div class="modal-body record-detail-body tech-qc-status-modal__body">
       <% if (safeErrors.length > 0) { %>
         <div class="message error" role="alert" aria-live="assertive">
           <% safeErrors.forEach((errorMessage) => { %>
@@ -53,13 +53,13 @@
       <% } %>
 
       <% if (unit && review && presentation) { %>
-        <section class="tech-qc-status-banner tech-qc-status-banner--<%= statusCode.replace('_', '-') %>" aria-label="Current Quality Control status">
+        <section class="tech-qc-status-banner record-detail-alert tech-qc-status-banner--<%= statusCode.replace('_', '-') %>" aria-label="Current Quality Control status">
           <span class="tech-qc-status-banner__label"><%= presentation.statusLabel %></span>
           <p><%= presentation.description %></p>
         </section>
 
         <% if (workflowSteps.length > 1) { %>
-          <section class="tech-qc-workflow" aria-labelledby="tech-qc-workflow-title">
+          <section class="tech-qc-workflow record-detail-section" aria-labelledby="tech-qc-workflow-title">
             <h3 id="tech-qc-workflow-title">QC Progress</h3>
             <ol class="tech-qc-workflow__steps">
               <% workflowSteps.forEach((step, index) => { %>
@@ -83,7 +83,7 @@
           </div>
         </dl>
 
-        <section class="tech-qc-note-panel tech-qc-note-panel--<%= review.decisionCode %>" aria-labelledby="tech-qc-review-note-title">
+        <section class="tech-qc-note-panel record-detail-section record-detail-user-section tech-qc-note-panel--<%= review.decisionCode %>" aria-labelledby="tech-qc-review-note-title">
           <h3 id="tech-qc-review-note-title"><%= presentation.notesHeading %></h3>
           <% if (review.notes) { %>
             <p class="tech-qc-note-panel__text"><%= review.notes %></p>
@@ -93,7 +93,7 @@
         </section>
 
         <% if (review.isReverted) { %>
-          <section class="tech-qc-correction-detail" aria-labelledby="tech-qc-reversion-detail-title">
+          <section class="tech-qc-correction-detail record-detail-section" aria-labelledby="tech-qc-reversion-detail-title">
             <div class="tech-qc-correction-detail__heading">
               <h3 id="tech-qc-reversion-detail-title">Decision Reverted</h3>
               <span>Awaiting QC</span>
@@ -116,7 +116,7 @@
         <% } %>
 
         <% if (correction) { %>
-          <section class="tech-qc-correction-detail" aria-labelledby="tech-qc-correction-detail-title">
+          <section class="tech-qc-correction-detail record-detail-section" aria-labelledby="tech-qc-correction-detail-title">
             <div class="tech-qc-correction-detail__heading">
               <h3 id="tech-qc-correction-detail-title">Correction Handoff</h3>
               <span>Ready for recheck</span>

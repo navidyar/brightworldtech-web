@@ -31,7 +31,7 @@ test('Processor Families are Admin-managed configuration and selectable from Lot
   const registry = read('config/lotRequirementRegistry.js');
 
   assert.match(configRoutes, /\/management\/config\/processor-families/);
-  assert.match(configRoutes, /const configRoles = \['admin'\]/);
+  assert.match(configRoutes, /requirePermission\('configuration\.processor_families\.manage'\)/);
   assert.doesNotMatch(lotRoutes, /processor-families/);
   assert.match(familyPage, /Family Catalog/);
   assert.match(familyPage, /Processors Needing Review/);

@@ -94,10 +94,29 @@ test('Label Builder exposes separate long and short processor and OS fields', ()
   const processorShortStart = printing.indexOf('function formatProcessorShortLabel');
   const processorShortEnd = printing.indexOf('\n\nfunction formatOperatingSystemShortLabel', processorShortStart);
   const processorShortFormatter = printing.slice(processorShortStart, processorShortEnd);
+  assert.match(processorShortFormatter, /\^apple\$\/i/);
+  assert.match(processorShortFormatter, /appleSiliconMatch = model\.match/);
+  assert.match(processorShortFormatter, /Pro\|Max\|Ultra/);
+  assert.match(processorShortFormatter, /return appleSiliconMatch\[1\]/);
   assert.match(processorShortFormatter, /rawShortForm\.replace\(\/-S\(\\d\+\)\\b\/gi, ' Series \$1'\)/);
   assert.ok(processorShortFormatter.includes('/^core ultra$/i'));
   assert.match(processorShortFormatter, /Intel Core/);
+  assert.match(processorShortFormatter, /processorLabelShortForm/);
+  assert.match(processorShortFormatter, /if \(configuredShortForm\) return configuredShortForm/);
   assert.match(model, /pf_preview\.export_short_form/);
+  assert.match(model, /processorLabelShortForm: row\.processor_label_short_form/);
   assert.match(model, /processorShortForm: row\.processor_short_form/);
 });
 
+test('Label Builder Cosmetic Grade uses the current configured Unit Grade label across preview and print field mapping', () => {
+  const fields = read('config/labelFieldRegistry.js');
+  const printing = read('services/labelLibraryPrintingService.js');
+  const model = read('models/techUnitModel.js');
+
+  assert.match(fields, /unit\.cosmetic_grade'.*Cosmetic Grade.*sampleValue: 'A'/);
+  assert.match(printing, /'unit\.cosmetic_grade': String\(unit\.cosmeticGradeLabel \|\| ''\)\.trim\(\)/);
+  assert.match(model, /COALESCE\(cv_lifecycle_grade\.label, cv_lifecycle_grade\.value, ''\) AS cosmetic_grade_label/);
+  assert.match(model, /grade_lookup\.is_current = 1/);
+  assert.match(model, /ORDER BY grade_lookup\.assessed_at DESC, grade_lookup\.unit_grade_assessment_id DESC/);
+  assert.match(model, /cosmeticGradeLabel: row\.cosmetic_grade_label \|\| ''/);
+});

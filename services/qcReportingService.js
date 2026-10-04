@@ -42,7 +42,12 @@ function normalizeReportingRow(row = {}) {
       row.reviewerEmail ?? row.reviewer_email,
       safeReviewerUserId ? `Reviewer #${safeReviewerUserId}` : 'Quality Control'
     ),
-    reviewNotes: notes
+    reviewNotes: notes,
+    reviewerAuditOutcome: ['agree', 'missed_defect', 'false_rejection'].includes(String(row.reviewerAuditOutcome ?? row.reviewer_audit_outcome ?? '').trim().toLowerCase())
+      ? String(row.reviewerAuditOutcome ?? row.reviewer_audit_outcome).trim().toLowerCase()
+      : null,
+    reviewerAuditedAt: row.reviewerAuditedAt ?? row.reviewer_audited_at ?? null,
+    reviewerAuditedByUserId: Number(row.reviewerAuditedByUserId ?? row.reviewer_audited_by_user_id) || null
   };
 }
 
@@ -52,6 +57,33 @@ function compareNullableDatesDescending(left, right) {
   return rightTime - leftTime;
 }
 
+function reviewTurnaroundMinutes(row) {
+  if (!row || !row.completedAt || !row.reviewedAt) return null;
+  const completed = new Date(row.completedAt).getTime();
+  const reviewed = new Date(row.reviewedAt).getTime();
+  if (!Number.isFinite(completed) || !Number.isFinite(reviewed) || reviewed < completed) return null;
+  return Math.round((reviewed - completed) / 60000);
+}
+
+function median(values = []) {
+  const safe = values.map(Number).filter(Number.isFinite).sort((left, right) => left - right);
+  if (!safe.length) return null;
+  const middle = Math.floor(safe.length / 2);
+  if (safe.length % 2) return safe[middle];
+  return Number(((safe[middle - 1] + safe[middle]) / 2).toFixed(1));
+}
+
+function emptyReviewerOversightSummary() {
+  return {
+    auditedReviews: 0,
+    auditAgreements: 0,
+    missedDefects: 0,
+    falseRejections: 0,
+    auditAgreementRate: null,
+    auditCoverageRate: null
+  };
+}
+
 function createEmptyManagementQcReport() {
   return {
     summary: calculateQcGradeSummary([]),
@@ -59,7 +91,8 @@ function createEmptyManagementQcReport() {
     activeReviewers: 0,
     rejectionActions: 0,
     technicianComparisons: [],
-    reviewerActivity: []
+    reviewerActivity: [],
+    reviewerOversight: emptyReviewerOversightSummary()
   };
 }
 
@@ -102,7 +135,14 @@ function buildManagementQcReport(sourceRows = []) {
         firstPassReviews: 0,
         rechecks: 0,
         technicianIds: new Set(),
-        latestReviewedAt: null
+        turnaroundMinutes: [],
+        auditedReviews: 0,
+        auditAgreements: 0,
+        missedDefects: 0,
+        falseRejections: 0,
+        unauditedQcCheckIds: [],
+        latestReviewedAt: null,
+        latestAuditedAt: null
       });
     }
 
@@ -113,6 +153,19 @@ function buildManagementQcReport(sourceRows = []) {
     reviewer.firstPassReviews += firstReviewIds.has(row.unitQcCheckId) ? 1 : 0;
     reviewer.rechecks += firstReviewIds.has(row.unitQcCheckId) ? 0 : 1;
     reviewer.technicianIds.add(row.technicianUserId);
+    const turnaround = reviewTurnaroundMinutes(row);
+    if (turnaround !== null) reviewer.turnaroundMinutes.push(turnaround);
+    if (row.reviewerAuditOutcome) {
+      reviewer.auditedReviews += 1;
+      reviewer.auditAgreements += row.reviewerAuditOutcome === 'agree' ? 1 : 0;
+      reviewer.missedDefects += row.reviewerAuditOutcome === 'missed_defect' ? 1 : 0;
+      reviewer.falseRejections += row.reviewerAuditOutcome === 'false_rejection' ? 1 : 0;
+      if (!reviewer.latestAuditedAt || compareNullableDatesDescending(row.reviewerAuditedAt, reviewer.latestAuditedAt) < 0) {
+        reviewer.latestAuditedAt = row.reviewerAuditedAt;
+      }
+    } else {
+      reviewer.unauditedQcCheckIds.push(row.unitQcCheckId);
+    }
     if (!reviewer.latestReviewedAt || compareNullableDatesDescending(row.reviewedAt, reviewer.latestReviewedAt) < 0) {
       reviewer.latestReviewedAt = row.reviewedAt;
     }
@@ -142,7 +195,18 @@ function buildManagementQcReport(sourceRows = []) {
       firstPassReviews: reviewer.firstPassReviews,
       rechecks: reviewer.rechecks,
       techniciansReviewed: reviewer.technicianIds.size,
-      latestReviewedAt: reviewer.latestReviewedAt
+      medianReviewMinutes: median(reviewer.turnaroundMinutes),
+      auditedReviews: reviewer.auditedReviews,
+      auditAgreements: reviewer.auditAgreements,
+      missedDefects: reviewer.missedDefects,
+      falseRejections: reviewer.falseRejections,
+      auditAgreementRate: roundPercentage(reviewer.auditAgreements, reviewer.auditedReviews),
+      auditCoverageRate: roundPercentage(reviewer.auditedReviews, reviewer.reviews),
+      auditSampleQcCheckId: reviewer.unauditedQcCheckIds.length
+        ? reviewer.unauditedQcCheckIds[Math.floor(Math.random() * reviewer.unauditedQcCheckIds.length)]
+        : null,
+      latestReviewedAt: reviewer.latestReviewedAt,
+      latestAuditedAt: reviewer.latestAuditedAt
     }))
     .sort((left, right) => (
       right.reviews - left.reviews
@@ -151,13 +215,25 @@ function buildManagementQcReport(sourceRows = []) {
     ));
 
 
+  const reviewerOversight = reviewerActivity.reduce((summary, reviewer) => {
+    summary.auditedReviews += Number(reviewer.auditedReviews || 0);
+    summary.auditAgreements += Number(reviewer.auditAgreements || 0);
+    summary.missedDefects += Number(reviewer.missedDefects || 0);
+    summary.falseRejections += Number(reviewer.falseRejections || 0);
+    return summary;
+  }, emptyReviewerOversightSummary());
+  reviewerOversight.auditAgreementRate = roundPercentage(reviewerOversight.auditAgreements, reviewerOversight.auditedReviews);
+  reviewerOversight.auditCoverageRate = roundPercentage(reviewerOversight.auditedReviews, rows.length);
+
+
   const report = {
     summary,
     reviewedTechnicians: technicianComparisons.length,
     activeReviewers: reviewerActivity.length,
     rejectionActions: rows.filter((row) => row.decisionCode === 'rejected').length,
     technicianComparisons,
-    reviewerActivity
+    reviewerActivity,
+    reviewerOversight
   };
 
   assertValidManagementQcReport(report);
@@ -219,6 +295,16 @@ function assertValidManagementQcReport(report) {
     throw new Error('Management QC rejection actions do not reconcile to reviewer activity.');
   }
 
+  const oversight = report.reviewerOversight || emptyReviewerOversightSummary();
+  const auditedFromReviewers = report.reviewerActivity.reduce((total, reviewer) => total + Number(reviewer.auditedReviews || 0), 0);
+  const exceptionsFromReviewers = report.reviewerActivity.reduce((total, reviewer) => total + Number(reviewer.missedDefects || 0) + Number(reviewer.falseRejections || 0), 0);
+  if (Number(oversight.auditedReviews || 0) !== auditedFromReviewers) {
+    throw new Error('Management QC audit coverage does not reconcile to reviewer activity.');
+  }
+  if (Number(oversight.missedDefects || 0) + Number(oversight.falseRejections || 0) !== exceptionsFromReviewers) {
+    throw new Error('Management QC audit exceptions do not reconcile to reviewer activity.');
+  }
+
   return true;
 }
 
@@ -226,5 +312,6 @@ module.exports = {
   assertValidManagementQcReport,
   buildManagementQcReport,
   createEmptyManagementQcReport,
-  normalizeReportingRow
+  normalizeReportingRow,
+  reviewTurnaroundMinutes
 };

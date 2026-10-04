@@ -12,7 +12,7 @@
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel tech-complete-work-modal" role="dialog" aria-modal="true" aria-labelledby="tech-complete-work-title">
+  <section class="modal-panel site-clean-modal workflow-detail-modal tech-complete-work-modal" role="dialog" aria-modal="true" aria-labelledby="tech-complete-work-title">
     <div class="modal-header">
       <div>
         <p class="eyebrow">Unit Completion</p>
@@ -22,13 +22,13 @@
       <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
     </div>
 
-    <div class="modal-body">
+    <div class="modal-body workflow-detail-body">
       <% if (successMessage) { %>
         <div class="message success">
           <p><%= successMessage %></p>
         </div>
 
-        <div class="tech-override-summary">
+        <div class="tech-override-summary workflow-detail-summary">
           <dl>
             <div>
               <dt>Unit</dt>
@@ -85,7 +85,7 @@
           </div>
         <% } %>
 
-        <div class="tech-override-summary">
+        <div class="tech-override-summary workflow-detail-summary">
           <dl>
             <div>
               <dt>Unit</dt>
@@ -114,7 +114,7 @@
           </dl>
         </div>
 
-        <p class="field-hint">
+        <p class="field-hint workflow-detail-note">
           This records the Unit as completed for the current Lot.
           <% if (grantsProductionCredit) { %>
             This production cycle will earn one Unit of production credit at the current effective weight.
@@ -126,7 +126,7 @@
 
         <% if (canSubmit) { %>
           <form
-            class="app-form"
+            class="app-form workflow-detail-form"
             method="post"
             action="/tech/units/<%= safePreview.unitId %>/complete-work"
             hx-post="/tech/units/<%= safePreview.unitId %>/complete-work"
@@ -134,7 +134,7 @@
             hx-swap="innerHTML"
           >
             <% if (canChooseCompletionAttribution) { %>
-              <div class="form-section">
+              <div class="form-section workflow-detail-section">
                 <div class="form-section-header">
                   <div>
                     <h3>Record Completion For</h3>
@@ -143,7 +143,7 @@
                 </div>
                 <div class="form-grid single-column">
                   <% completionAttributionOptions.forEach((option) => { %>
-                    <label class="checkbox-card">
+                    <label class="checkbox-card workflow-detail-choice">
                       <input
                         type="radio"
                         name="completedByUserId"
@@ -168,7 +168,7 @@
             <% } %>
 
             <% if (safeMissingToolRequirements.length > 0 && canOverrideMissingTools) { %>
-              <div class="form-section">
+              <div class="form-section workflow-detail-section">
                 <div class="form-section-header">
                   <div>
                     <h3>Required Tool Run Override</h3>

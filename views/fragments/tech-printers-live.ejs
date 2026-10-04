@@ -11,7 +11,7 @@
           <% if (!ownedPrinters.length) { %><tr><td colspan="<%= showNetworkDetails ? 5 : 4 %>">You have not added a solo printer.</td></tr><% } %>
           <% ownedPrinters.forEach((printer) => { %>
             <tr>
-              <td><strong><%= printer.display_name %></strong><br/><small><%= printer.location_label || 'No location label' %></small><br/><small><%= printer.printer_profile_code ? 'Print profile configured' : 'Print profile not configured' %></small></td>
+              <td><strong class="label-printer-registry-name"><%= printer.display_name %></strong><% if (printer.aliasLabel) { %><br/><small class="label-printer-registry-alias">Alias: “<%= printer.aliasLabel %>”</small><% } %><br/><small>Owner: <%= printer.ownerLabel %></small><br/><small><%= printer.location_label || 'No location label' %></small><br/><small><%= printer.printer_profile_code ? 'Print profile configured' : 'Print profile not configured' %></small></td>
               <% if (showNetworkDetails) { %><td><%= printer.host_address %>:<%= printer.port %><br/><small><%= printer.protocol_code %></small></td><% } %>
               <td><span class="pill <%= Number(printer.is_shared) === 1 ? 'good' : 'slate' %>"><%= Number(printer.is_shared) === 1 ? 'Shared' : 'Private' %></span></td>
               <td><span class="pill <%= Number(printer.is_enabled) === 1 ? 'good' : 'bad' %>"><%= Number(printer.is_enabled) === 1 ? 'Enabled' : 'Disabled' %></span><br/><small><%= printer.last_probe_status || 'Not probed' %></small></td>
@@ -24,10 +24,10 @@
   </section>
 
   <section class="site-clean-section">
-    <div class="site-clean-section-heading"><div><h2>Available to Me</h2><p>This includes managed printers, shared solo printers, your own printers, and private solo printers available through Tech Lead+ access.</p></div></div>
+    <div class="site-clean-section-heading"><div><h2>Available to Me</h2><p>This includes managed printers, shared solo printers, your own printers, and private solo printers available through Manage Any Solo Printer permission.</p></div></div>
     <div class="table-card"><table><thead><tr><th>Printer</th><th>Type</th><th>Location</th><% if (showNetworkDetails) { %><th>Connection</th><% } %></tr></thead><tbody>
       <% if (!availablePrinters.length) { %><tr><td colspan="<%= showNetworkDetails ? 4 : 3 %>">No printers are currently available.</td></tr><% } %>
-      <% availablePrinters.forEach((printer) => { %><tr><td><strong><%= printer.display_name %></strong></td><td><%= printer.scope_code === 'managed' ? 'Managed' : (Number(printer.is_shared) === 1 ? 'Shared Solo' : 'Private Solo') %></td><td><%= printer.location_label || '—' %></td><% if (showNetworkDetails) { %><td><%= printer.host_address %>:<%= printer.port %> · <%= printer.protocol_code %></td><% } %></tr><% }) %>
+      <% availablePrinters.forEach((printer) => { %><tr><td><strong class="label-printer-registry-name"><%= printer.display_name %></strong><% if (printer.aliasLabel) { %><br/><small class="label-printer-registry-alias">Alias: “<%= printer.aliasLabel %>”</small><% } %><% if (printer.scope_code === 'solo') { %><br/><small>Owner: <%= printer.ownerLabel %></small><% } %></td><td><%= printer.scope_code === 'managed' ? 'Managed' : (Number(printer.is_shared) === 1 ? 'Shared Solo' : 'Private Solo') %></td><td><%= printer.location_label || '—' %></td><% if (showNetworkDetails) { %><td><%= printer.host_address %>:<%= printer.port %> · <%= printer.protocol_code %></td><% } %></tr><% }) %>
     </tbody></table></div>
   </section>
 </div>

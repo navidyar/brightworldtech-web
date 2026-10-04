@@ -10,16 +10,11 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell">
-          <section class="dashboard-hero accent-<%= dashboard.accent %>">
+          <section class="page-heading site-work-page-heading role-dashboard-page-heading">
             <div>
               <p class="eyebrow"><%= dashboard.kicker || 'Dashboard' %></p>
-              <h2><%= dashboard.title %></h2>
+              <h1><%= dashboard.title %></h1>
               <p><%= dashboard.description %></p>
-            </div>
-
-            <div class="hero-badge">
-              <span>Area</span>
-              <strong><%= dashboard.menuLabel || dashboard.key %></strong>
             </div>
           </section>
 

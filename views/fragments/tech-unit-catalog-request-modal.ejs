@@ -91,7 +91,7 @@
             <div class="message info">
               <p><strong>Existing global Processor found:</strong> #<%= safeContext.existingGlobalMatch.id %> · <%= safeContext.existingGlobalMatch.displayLabel %> (<%= safeContext.existingGlobalMatch.isActive ? 'Active' : 'Inactive' %>).</p>
               <p><%= safeContext.existingGlobalMatch.unitModelLabels.length ? `It is already associated with ${safeContext.existingGlobalMatch.unitModelLabels.slice(0, 4).join(', ')}${safeContext.existingGlobalMatch.unitModelLabels.length > 4 ? ` +${safeContext.existingGlobalMatch.unitModelLabels.length - 4} more` : ''}.` : 'It currently has no active Unit Model associations.' %></p>
-              <p>Management should reuse this canonical Processor and associate it with <strong><%= safeContext.unitModelName %></strong> rather than create a duplicate.</p>
+              <p>Management should reuse this Catalog Processor and associate it with <strong><%= safeContext.unitModelName %></strong> rather than create a duplicate.</p>
             </div>
           <% } %>
 

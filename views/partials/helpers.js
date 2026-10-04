@@ -1,7 +1,7 @@
+const { FALLBACK_TIME_ZONE, normalizeTimeZone } = require('../../utils/timeZone');
+
 function escapeHtml(value) {
-  if (value === null || value === undefined) {
-    return '';
-  }
+  if (value === null || value === undefined) return '';
 
   return String(value)
     .replaceAll('&', '&amp;')
@@ -11,76 +11,82 @@ function escapeHtml(value) {
     .replaceAll("'", '&#039;');
 }
 
-const APP_DISPLAY_TIME_ZONE = 'America/Chicago';
-
-function formatDateTime(value) {
-  if (!value) {
-    return '—';
-  }
-
+function normalizeDate(value) {
+  if (!value) return null;
   const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
 
-  if (Number.isNaN(date.getTime())) {
-    return '—';
-  }
+function formatDateTime(value, timeZone = FALLBACK_TIME_ZONE) {
+  const date = normalizeDate(value);
+  if (!date) return '—';
 
   return new Intl.DateTimeFormat('en-US', {
     dateStyle: 'medium',
     timeStyle: 'short',
-    timeZone: APP_DISPLAY_TIME_ZONE
+    timeZone: normalizeTimeZone(timeZone, FALLBACK_TIME_ZONE)
   }).format(date);
 }
 
-
-function formatDate(value) {
-  if (!value) {
-    return '—';
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return '—';
-  }
+function formatDate(value, timeZone = FALLBACK_TIME_ZONE) {
+  const date = normalizeDate(value);
+  if (!date) return '—';
 
   return new Intl.DateTimeFormat('en-US', {
     month: '2-digit',
     day: '2-digit',
     year: 'numeric',
-    timeZone: APP_DISPLAY_TIME_ZONE
+    timeZone: normalizeTimeZone(timeZone, FALLBACK_TIME_ZONE)
   }).format(date);
 }
 
-function formatTime(value) {
-  if (!value) {
-    return '—';
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return '—';
-  }
+function formatTime(value, timeZone = FALLBACK_TIME_ZONE) {
+  const date = normalizeDate(value);
+  if (!date) return '—';
 
   return new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
-    timeZone: APP_DISPLAY_TIME_ZONE
+    timeZone: normalizeTimeZone(timeZone, FALLBACK_TIME_ZONE)
   }).format(date);
+}
+
+function formatTimeWithZone(value, timeZone = FALLBACK_TIME_ZONE) {
+  const date = normalizeDate(value);
+  if (!date) return '—';
+
+  return new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+    timeZone: normalizeTimeZone(timeZone, FALLBACK_TIME_ZONE),
+    timeZoneName: 'short'
+  }).format(date);
+}
+
+function createDateTimeHelpers(timeZone) {
+  const safeTimeZone = normalizeTimeZone(timeZone, FALLBACK_TIME_ZONE);
+  return {
+    formatDateTime: (value) => formatDateTime(value, safeTimeZone),
+    formatDate: (value) => formatDate(value, safeTimeZone),
+    formatTime: (value) => formatTime(value, safeTimeZone),
+    formatTimeWithZone: (value) => formatTimeWithZone(value, safeTimeZone),
+    formatDateKeyLabel
+  };
+}
+
+function formatDateKeyLabel(value) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '').trim());
+  if (!match) return '—';
+  return `${match[2]}/${match[3]}/${match[1]}`;
 }
 
 function formatNumber(value) {
   const number = Number(value);
-
-  if (!Number.isFinite(number)) {
-    return '0';
-  }
-
+  if (!Number.isFinite(number)) return '0';
   return new Intl.NumberFormat('en-US').format(number);
 }
-
-
 
 function formatBytes(value) {
   const bytes = Number(value);
@@ -110,16 +116,9 @@ function formatRoleLabel(roleCode) {
 }
 
 function formatWeight(value) {
-  if (value === null || value === undefined || value === '') {
-    return '—';
-  }
-
+  if (value === null || value === undefined || value === '') return '—';
   const number = Number(value);
-
-  if (!Number.isFinite(number)) {
-    return '—';
-  }
-
+  if (!Number.isFinite(number)) return '—';
   return number.toFixed(2);
 }
 
@@ -128,6 +127,9 @@ module.exports = {
   formatDateTime,
   formatDate,
   formatTime,
+  formatTimeWithZone,
+  formatDateKeyLabel,
+  createDateTimeHelpers,
   formatNumber,
   formatBytes,
   formatRoleLabel,

@@ -1,5 +1,7 @@
 'use strict';
 
+const { listActiveSystemCategoryValues, listActiveSystemCategoryAliases, resolveCandidateFromRows } = require('./apiConfigValueResolver');
+
 const GRAPHICS_FIELD_KEY = 'graphics_adapters';
 const DISPLAY_FIELD_KEY = 'display_hardware';
 const SCREEN_SIZE_FIELD_KEY = 'screen_size';
@@ -164,39 +166,23 @@ function extractScreenSize(value) {
   return match ? Number(match[1]) : null;
 }
 
-async function loadConfigCandidates(connection, systemCategoryId) {
-  const [rows] = await connection.query(
-    `SELECT cv.config_value_id AS id,
-            COALESCE(NULLIF(cv.label, ''), cv.value) AS label,
-            cv.value
-       FROM system_config_categories scc
-       INNER JOIN config_values cv ON cv.config_category_id = scc.config_category_id
-      WHERE scc.system_config_category_id = ?
-        AND COALESCE(cv.is_active, 1) = 1
-      ORDER BY cv.config_value_id`,
-    [systemCategoryId]
-  );
-  return rows;
-}
-
-function resolveGpuTypeCandidate(role, candidates) {
+function resolveGpuTypeCandidate(role, candidates, aliases = []) {
   if (!role || role === 'unknown') return { status: 'unknown', submitted: role || 'unknown' };
-  const aliases = role === 'integrated' ? ['integrated', 'onboard', 'shared'] : ['dedicated', 'discrete'];
-  const matches = candidates.filter((candidate) => aliases.includes(normalizeKey(candidate.label || candidate.value)));
-  if (matches.length === 1) return { status: 'resolved', resolvedId: Number(matches[0].id), resolvedLabel: matches[0].label, submitted: role };
-  if (matches.length > 1) return { status: 'ambiguous', submitted: role };
-  return { status: 'unmapped', submitted: role };
+  return resolveCandidateFromRows(candidates, role, [], aliases);
 }
 
 async function resolveGraphicsObservation(connection, observation) {
   if (!observation || observation.state !== 'known') return observation;
   const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
-  const candidates = await loadConfigCandidates(connection, SYSTEM_CONFIG_CATEGORY_IDS.GPU_TYPES);
+  const [candidates, aliases] = await Promise.all([
+    listActiveSystemCategoryValues(connection, SYSTEM_CONFIG_CATEGORY_IDS.GPU_TYPES),
+    listActiveSystemCategoryAliases(connection, SYSTEM_CONFIG_CATEGORY_IDS.GPU_TYPES)
+  ]);
   return {
     ...observation,
     value: {
       adapters: observation.value.adapters.map((adapter) => {
-        const resolution = resolveGpuTypeCandidate(adapter.gpu_role_code, candidates);
+        const resolution = resolveGpuTypeCandidate(adapter.gpu_role_code, candidates, aliases);
         return {
           ...adapter,
           gpu_type_resolution: resolution,
@@ -207,36 +193,38 @@ async function resolveGraphicsObservation(connection, observation) {
   };
 }
 
-function resolveScreenSizeCandidate(size, candidates) {
+function resolveScreenSizeCandidate(size, candidates, aliases = []) {
   if (size === null || size === undefined) return { status: 'unknown', submitted: null };
   const matches = candidates.filter((candidate) => {
     const candidateSize = extractScreenSize(candidate.label ?? candidate.value);
     return candidateSize !== null && Math.abs(candidateSize - Number(size)) <= 0.11;
   });
-  if (matches.length === 1) return { status: 'resolved', submitted: size, resolvedId: Number(matches[0].id), resolvedLabel: matches[0].label };
+  if (matches.length === 1) return { status: 'resolved', submitted: size, resolvedId: Number(matches[0].id), resolvedLabel: matches[0].label, resolutionSource: 'numeric_match' };
   if (matches.length > 1) return { status: 'ambiguous', submitted: size };
-  return { status: 'unmapped', submitted: size };
+  return resolveCandidateFromRows(candidates, String(size), [], aliases);
 }
 
-function resolveNativeResolutionCandidate(submitted, candidates) {
+function resolveNativeResolutionCandidate(submitted, candidates, aliases = []) {
   if (!submitted) return { status: 'unknown', submitted: null };
   const key = normalizeResolution(submitted);
   const matches = candidates.filter((candidate) => [candidate.label, candidate.value].some((value) => normalizeResolution(value) === key));
-  if (matches.length === 1) return { status: 'resolved', submitted, resolvedId: Number(matches[0].id), resolvedLabel: matches[0].label };
+  if (matches.length === 1) return { status: 'resolved', submitted, resolvedId: Number(matches[0].id), resolvedLabel: matches[0].label, resolutionSource: 'normalized_resolution' };
   if (matches.length > 1) return { status: 'ambiguous', submitted };
-  return { status: 'unmapped', submitted };
+  return resolveCandidateFromRows(candidates, submitted, [], aliases);
 }
 
 async function resolveDisplayObservation(connection, observation) {
   if (!observation || observation.state !== 'known' || !observation.value.built_in_panel) return observation;
   const { SYSTEM_CONFIG_CATEGORY_IDS } = require('../config/configIdentityRegistry');
-  const [screenCandidates, resolutionCandidates] = await Promise.all([
-    loadConfigCandidates(connection, SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_SIZES),
-    loadConfigCandidates(connection, SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_RESOLUTIONS)
+  const [screenCandidates, screenAliases, resolutionCandidates, resolutionAliases] = await Promise.all([
+    listActiveSystemCategoryValues(connection, SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_SIZES),
+    listActiveSystemCategoryAliases(connection, SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_SIZES),
+    listActiveSystemCategoryValues(connection, SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_RESOLUTIONS),
+    listActiveSystemCategoryAliases(connection, SYSTEM_CONFIG_CATEGORY_IDS.SCREEN_RESOLUTIONS)
   ]);
   const panel = observation.value.built_in_panel;
-  const screenResolution = resolveScreenSizeCandidate(panel.screen_size_submitted, screenCandidates);
-  const nativeResolution = resolveNativeResolutionCandidate(panel.native_resolution_submitted, resolutionCandidates);
+  const screenResolution = resolveScreenSizeCandidate(panel.screen_size_submitted, screenCandidates, screenAliases);
+  const nativeResolution = resolveNativeResolutionCandidate(panel.native_resolution_submitted, resolutionCandidates, resolutionAliases);
   return {
     ...observation,
     value: {

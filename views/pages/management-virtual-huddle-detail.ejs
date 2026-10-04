@@ -13,8 +13,9 @@
             <div><h1><%= message.subject %></h1><p>Sent <%= formatDateTime(message.sent_at) %> by <%= message.sender_name_snapshot %> (<%= formatRoleLabel(message.sender_role_code_snapshot) %>).</p></div>
             <div class="action-row">
               <a class="secondary-button" href="/management/virtual-huddle">Back to History</a>
-              <a class="secondary-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/related/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/related/modal" hx-target="#modal-root" hx-swap="innerHTML">Send Related Huddle</a>
-              <% if (isAdminUser) { %><a class="danger-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/delete/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Permanently</a><% } %>
+              <% if (canSendHuddles) { %><a class="secondary-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/related/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/related/modal" hx-target="#modal-root" hx-swap="innerHTML">Send Related Huddle</a><% } %>
+              <% if (canAddRecipients) { %><a class="secondary-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/add/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/add/modal" hx-target="#modal-root" hx-swap="innerHTML">Add Recipients</a><% } %>
+              <% if (canDeleteMessages) { %><a class="danger-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/delete/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Permanently</a><% } %>
             </div>
           </section>
 
@@ -30,7 +31,7 @@
           <section class="content-card">
             <div class="content-header">
               <div><p class="eyebrow">Recipients</p><h2>Acknowledgment Status</h2></div>
-              <% if (recipients.some((recipient) => recipient.acknowledgment_mode_code === 'required_ack' && recipient.recipient_state_code === 'awaiting_confirmation')) { %>
+              <% if (canRevokeRecipients && recipients.some((recipient) => recipient.acknowledgment_mode_code === 'required_ack' && recipient.recipient_state_code === 'awaiting_confirmation')) { %>
                 <a class="secondary-button danger-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/revoke-all/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/revoke-all/modal" hx-target="#modal-root" hx-swap="innerHTML">Revoke All Awaiting</a>
               <% } %>
             </div>
@@ -57,7 +58,7 @@
                         <% } else { %>—<% } %>
                       </td>
                       <td>
-                        <% if (recipient.acknowledgment_mode_code === 'required_ack' && recipient.recipient_state_code === 'awaiting_confirmation') { %>
+                        <% if (canRevokeRecipients && recipient.acknowledgment_mode_code === 'required_ack' && recipient.recipient_state_code === 'awaiting_confirmation') { %>
                           <a class="secondary-button button-small danger-button" href="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/<%= recipient.virtual_huddle_recipient_id %>/revoke/modal" hx-get="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/<%= recipient.virtual_huddle_recipient_id %>/revoke/modal" hx-target="#modal-root" hx-swap="innerHTML">Revoke</a>
                         <% } %>
                       </td>

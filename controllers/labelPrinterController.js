@@ -5,6 +5,7 @@ const managementModel = require('../models/managementModel');
 const { LABEL_PRINTER_PROFILES } = require('../config/labelPrinting');
 const { QL810W_CONTINUOUS_MEDIA_WIDTHS } = require('../config/labelMedia');
 const { isHtmxRequest } = require('../utils/htmxRequest');
+const { canManageRegistryPrinter, canConvertPrinterScope, canViewOtherPrinterNetworkDetails, canManageAnySoloPrinter } = require('../services/managedPrinterPermissions');
 const {
   streamPrinterRegistryEvents,
   broadcastPrinterRegistryChange
@@ -14,7 +15,6 @@ const {
   LabelPrinterInputError,
   normalizePrinterInput,
   canEditSoloPrinter,
-  isTechLeadPlus,
   probePrinterHost
 } = require('../services/labelPrinterPolicy');
 
@@ -34,13 +34,27 @@ function ownerLabel(printer) {
   return full || printer.owner_username || (printer.owner_user_id ? `User ${printer.owner_user_id}` : '—');
 }
 
+function decoratePrinter(printer) {
+  const owner = ownerLabel(printer);
+  const alias = String(printer.alias_label || '').trim();
+  return {
+    ...printer,
+    ownerLabel: owner,
+    aliasLabel: alias,
+    userFacingName: alias || printer.display_name,
+    ownerAliasLabel: printer.scope_code === 'solo'
+      ? (alias ? `${owner} · “${alias}”` : owner)
+      : ''
+  };
+}
+
 async function getManagementPageData() {
   const [printers, groups] = await Promise.all([
     labelPrinterModel.listPrinters({ includeDisabled: true }),
     labelPrinterModel.listGroups()
   ]);
   return {
-    printers: printers.map((printer) => ({ ...printer, ownerLabel: ownerLabel(printer) })),
+    printers: printers.map(decoratePrinter),
     groups
   };
 }
@@ -50,13 +64,13 @@ async function getTechPageData(req) {
     labelPrinterModel.listOwnedSoloPrinters(req.currentUser.user_id),
     labelPrinterModel.listAvailablePrintersForUser({
       userId: req.currentUser.user_id,
-      roleCodes: req.currentUser.roles
+      canAccessPrivateSoloPrinters: canManageAnySoloPrinter(req.currentPermissions)
     })
   ]);
   return {
-    ownedPrinters,
-    availablePrinters,
-    showNetworkDetails: isTechLeadPlus(req.currentUser.roles)
+    ownedPrinters: ownedPrinters.map(decoratePrinter),
+    availablePrinters: availablePrinters.map(decoratePrinter),
+    showNetworkDetails: canViewOtherPrinterNetworkDetails(req.currentPermissions)
   };
 }
 
@@ -141,6 +155,7 @@ function defaultFormData(printer = null, scope = 'solo') {
   const defaultProfile = printer ? null : (LABEL_PRINTER_PROFILES[0] || null);
   return {
     displayName: printer?.display_name || '',
+    aliasLabel: printer?.alias_label || '',
     locationLabel: printer?.location_label || '',
     hostAddress: printer?.host_address || '',
     protocolCode: printer?.protocol_code || 'raw_9100',
@@ -192,7 +207,7 @@ async function renderNewSoloPrinterModal(req, res, next) {
     return renderPrinterForm(res, {
       scope: 'solo',
       management: false,
-      requireOnlineForCreate: !isTechLeadPlus(req.currentUser.roles)
+      requireOnlineForCreate: !canManageAnySoloPrinter(req.currentPermissions)
     });
   } catch (error) { next(error); }
 }
@@ -200,6 +215,7 @@ async function renderNewSoloPrinterModal(req, res, next) {
 function requestFormData(req) {
   return {
     displayName: String(req.body.displayName || '').trim(),
+    aliasLabel: String(req.body.aliasLabel || '').trim(),
     locationLabel: String(req.body.locationLabel || '').trim(),
     hostAddress: String(req.body.hostAddress || '').trim(),
     protocolCode: String(req.body.protocolCode || 'raw_9100').trim(),
@@ -235,7 +251,7 @@ async function probeAndRender(req, res, next, scope, management) {
       formData,
       probeResult,
       duplicatePrinter,
-      requireOnlineForCreate: scope === 'solo' && !management && !isTechLeadPlus(req.currentUser.roles)
+      requireOnlineForCreate: scope === 'solo' && !management && !canManageAnySoloPrinter(req.currentPermissions)
     });
   } catch (error) {
     if (error instanceof LabelPrinterInputError) {
@@ -245,7 +261,7 @@ async function probeAndRender(req, res, next, scope, management) {
         formData,
         errorMessages: [error.message],
         statusCode: 400,
-        requireOnlineForCreate: scope === 'solo' && !management && !isTechLeadPlus(req.currentUser.roles)
+        requireOnlineForCreate: scope === 'solo' && !management && !canManageAnySoloPrinter(req.currentPermissions)
       });
     }
     next(error);
@@ -273,7 +289,7 @@ async function createPrinter(req, res, next, scope, management) {
       });
     }
     const probeResult = await probePrinterHost(normalized.hostAddress);
-    const requireOnlineForCreate = scope === 'solo' && !management && !isTechLeadPlus(req.currentUser.roles);
+    const requireOnlineForCreate = scope === 'solo' && !management && !canManageAnySoloPrinter(req.currentPermissions);
     if (requireOnlineForCreate && !probeResult.reachable) {
       return renderPrinterForm(res, {
         scope,
@@ -314,10 +330,10 @@ async function createSoloPrinter(req, res, next) { return createPrinter(req, res
 async function loadEditablePrinter(req, { management = false } = {}) {
   const printer = await labelPrinterModel.getPrinterById(req.params.printerId);
   if (!printer) return { printer: null, allowed: false };
-  if (management) return { printer, allowed: true };
+  if (management) return { printer, allowed: canManageRegistryPrinter(req.currentPermissions, printer) };
   return {
     printer,
-    allowed: canEditSoloPrinter(printer, req.currentUser.user_id, req.currentUser.roles)
+    allowed: canEditSoloPrinter(printer, req.currentUser.user_id, req.currentPermissions)
       && Number(printer.owner_user_id) === Number(req.currentUser.user_id)
   };
 }
@@ -415,6 +431,7 @@ async function listSoloPrinterOwnerOptions() {
 }
 
 async function renderConvertPrinterScopeModal(req, res, next) {
+  if (!canConvertPrinterScope(req.currentPermissions)) return res.sendStatus(403);
   try {
     const printer = await labelPrinterModel.getPrinterById(req.params.printerId);
     if (!printer) return res.sendStatus(404);
@@ -431,6 +448,7 @@ async function renderConvertPrinterScopeModal(req, res, next) {
 }
 
 async function convertPrinterScope(req, res, next) {
+  if (!canConvertPrinterScope(req.currentPermissions)) return res.sendStatus(403);
   try {
     const printer = await labelPrinterModel.getPrinterById(req.params.printerId);
     if (!printer) return res.sendStatus(404);

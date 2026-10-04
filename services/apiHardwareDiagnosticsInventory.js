@@ -137,31 +137,20 @@ function normalizeDiagnosticsObservation(rawDiagnostics) {
   };
 }
 
-function diagnosticCandidates(state, semantic) {
-  if (state === 'pass') {
-    if (semantic === 'driver') return ['Pass', 'Passed', 'No Issues', 'Clear', 'Good'];
-    if (semantic === 'threat') return ['Pass', 'Passed', 'Clean', 'No Threats Found', 'Completed'];
-    return ['Pass', 'Passed', 'Working', 'Good'];
-  }
-  if (state === 'fail') {
-    if (semantic === 'driver') return ['Fail', 'Failed', 'Issues Found', 'Problems Found', 'Attention Required'];
-    if (semantic === 'threat') return ['Fail', 'Failed', 'Threat Found', 'Threats Found'];
-    return ['Fail', 'Failed', 'Not Working'];
-  }
-  if (semantic === 'lock' && state === 'locked') return ['Locked'];
-  if (semantic === 'lock' && state === 'unlocked') return ['Unlocked'];
-  if (state === 'physically_not_present') return ['Physically Not Present'];
-  if (state === 'warning') return ['Warning'];
-  return [];
-}
-
 async function resolveDiagnosticState(connection, item, systemConfigCategoryId, semantic = 'test') {
   if (!item || ['ready', 'running'].includes(item.state)) return { status: 'non_final', submitted: item?.state || null };
-  const candidates = diagnosticCandidates(item.state, semantic);
+  const canonicalByState = new Map([
+    ['pass', 'Pass'],
+    ['fail', 'Fail'],
+    ['locked', 'Locked'],
+    ['unlocked', 'Unlocked'],
+    ['physically_not_present', 'Physically Not Present'],
+    ['warning', 'Warning']
+  ]);
+  const submitted = canonicalByState.get(item.state) || item.state;
   return resolveSystemConfigValue(connection, {
     systemConfigCategoryId,
-    submitted: item.state,
-    candidates
+    submitted
   });
 }
 
@@ -285,8 +274,7 @@ async function insertMinimalRepeatableRow(connection, tableName, unitId, values)
 async function resolveFingerprintHardware(connection) {
   return resolveSystemConfigValue(connection, {
     systemConfigCategoryId: SYSTEM_CONFIG_CATEGORY_IDS.BIOMETRIC_HARDWARE,
-    submitted: 'Fingerprint Reader',
-    candidates: ['Fingerprint', 'Fingerprint Reader', 'Fingerprint Sensor']
+    submitted: 'Fingerprint Reader'
   });
 }
 

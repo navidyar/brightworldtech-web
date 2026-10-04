@@ -47,7 +47,7 @@
               <li>#<%= match.id %> · <%= match.displayLabel %><%= match.isActive ? '' : ' (Inactive)' %></li>
             <% }) %>
           </ul>
-          <p>Reuse the existing canonical record when it represents the same physical processor instead of creating a duplicate.</p>
+          <p>Reuse the existing Processor Catalog record when it represents the same physical processor instead of creating a duplicate.</p>
         </div>
       <% } %>
 
@@ -67,12 +67,18 @@
           <label class="form-field">
             <span>Processor</span>
             <input type="text" name="modelCode" value="<%= formData.modelCode || '' %>" minlength="2" maxlength="150" required placeholder="Example: Intel(R) Core(TM) i9-10885H CPU @ 2.40GHz" />
-            <small class="field-hint">Paste the processor exactly as observed. BWTDallas will separate the brand, canonical model, family, generation, and GHz when it can do so confidently.</small>
+            <small class="field-hint">Paste the processor exactly as observed. BWTDallas will separate the Processor Type, Processor, family, generation, and GHz when it can do so confidently.</small>
           </label>
 
           <label class="form-field">
             <span>Family Metadata <small>(optional)</small></span>
             <input type="text" name="legacyFamily" value="<%= formData.legacyFamily || '' %>" maxlength="100" placeholder="Example: Core" />
+          </label>
+
+          <label class="form-field">
+            <span>Label Builder Short Form <small>(optional)</small></span>
+            <input type="text" name="labelShortForm" value="<%= formData.labelShortForm || '' %>" maxlength="80" placeholder="Example: M2 Pro" />
+            <small class="field-hint">Used by Processor (Short Form). If blank, the managed Processor Family short form and built-in Apple fallback remain available.</small>
           </label>
 
           <label class="form-field">
@@ -91,7 +97,7 @@
           </label>
         </div>
 
-        <p class="field-hint">Natural processor strings are accepted. For example, Intel Core i5-9500T can be pasted as observed. Before saving, BWTDallas normalizes recognized values and checks the global Processor Catalog for the same physical processor. If no match exists, review the interpreted fields and save the new canonical record.</p>
+        <p class="field-hint">Natural processor strings are accepted. For example, Intel Core i5-9500T can be pasted as observed. Before saving, BWTDallas normalizes recognized values and checks the global Processor Catalog for the same physical processor. If no match exists, review the interpreted fields and save the new Processor Catalog record.</p>
 
         <div class="form-actions">
           <button class="primary-button" type="submit"><%= isCreate ? 'Add Processor' : 'Save Processor' %></button>

@@ -5,7 +5,7 @@
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel tech-complete-work-modal" role="dialog" aria-modal="true" aria-labelledby="tech-reverse-completion-title">
+  <section class="modal-panel site-clean-modal workflow-detail-modal tech-complete-work-modal" role="dialog" aria-modal="true" aria-labelledby="tech-reverse-completion-title">
     <div class="modal-header">
       <div>
         <p class="eyebrow">Unit Completion</p>
@@ -15,7 +15,7 @@
       <button type="button" class="modal-close-button" data-modal-close aria-label="Close modal">×</button>
     </div>
 
-    <div class="modal-body">
+    <div class="modal-body workflow-detail-body">
       <% if (successMessage) { %>
         <div class="message success">
           <p><%= successMessage %></p>
@@ -28,7 +28,7 @@
         </div>
       <% } %>
 
-      <div class="tech-override-summary">
+      <div class="tech-override-summary workflow-detail-summary">
         <dl>
           <div><dt>Unit</dt><dd><%= safePreview.unitLabel || '—' %></dd></div>
           <div><dt>Lot</dt><dd><%= safePreview.lotName || '—' %></dd></div>
@@ -39,12 +39,12 @@
       </div>
 
       <% if (canSubmit) { %>
-        <p class="field-hint">
+        <p class="field-hint workflow-detail-note">
           Undoing completion removes this credit from active productivity totals and allows completion to be recorded again. The original record remains in Unit History.
         </p>
 
         <form
-          class="app-form"
+          class="app-form workflow-detail-form workflow-detail-form--simple"
           method="post"
           action="/tech/units/<%= safePreview.unitId %>/completions/<%= safePreview.unitWorkCompletionId %>/reverse"
           hx-post="/tech/units/<%= safePreview.unitId %>/completions/<%= safePreview.unitWorkCompletionId %>/reverse"

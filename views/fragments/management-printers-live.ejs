@@ -9,17 +9,27 @@
         <thead><tr><th>Printer</th><th>Connection</th><th>Ownership</th><th>Status</th><th>Groups</th><th>Actions</th></tr></thead>
         <tbody>
           <% if (!printers.length) { %><tr><td colspan="6">No printers are registered.</td></tr><% } %>
-          <% printers.forEach((printer) => { %>
+          <% printers.forEach((printer) => {
+            const canManagePrinter = printer.scope_code === 'managed'
+              ? hasPermission('printers.managed.manage')
+              : printer.scope_code === 'solo' && hasPermission('printers.solo.manage_any');
+            const canConvertScope = hasPermission('printers.managed.manage') && hasPermission('printers.solo.manage_any');
+          %>
             <tr>
-              <td><strong><%= printer.display_name %></strong><br/><small><%= printer.location_label || 'No location label' %></small><% if (printer.manufacturer || printer.model) { %><br/><small><%= [printer.manufacturer, printer.model].filter(Boolean).join(' ') %></small><% } %><br/><small><%= printer.printer_profile_code ? 'Print profile configured' : 'Print profile not configured' %></small></td>
-              <td><%= printer.host_address %>:<%= printer.port %><br/><small><%= printer.protocol_code %><% if (printer.cups_queue_name) { %> · <%= printer.cups_queue_name %><% } %></small></td>
+              <td><strong class="label-printer-registry-name"><%= printer.display_name %></strong><% if (printer.aliasLabel) { %><br/><small class="label-printer-registry-alias">Alias: “<%= printer.aliasLabel %>”</small><% } %><br/><small><%= printer.location_label || 'No location label' %></small><% if (printer.manufacturer || printer.model) { %><br/><small><%= [printer.manufacturer, printer.model].filter(Boolean).join(' ') %></small><% } %><br/><small><%= printer.printer_profile_code ? 'Print profile configured' : 'Print profile not configured' %></small></td>
+              <td><% if (hasPermission('printers.network_details.view')) { %><%= printer.host_address %>:<%= printer.port %><br/><small><%= printer.protocol_code %><% if (printer.cups_queue_name) { %> · <%= printer.cups_queue_name %><% } %></small><% } else { %><small>Network details hidden</small><% } %></td>
               <td><span class="pill <%= printer.scope_code === 'managed' ? 'good' : 'slate' %>"><%= printer.scope_code === 'managed' ? 'Managed' : 'Solo' %></span><% if (printer.scope_code === 'solo') { %><br/><small><%= printer.ownerLabel %> · <%= Number(printer.is_shared) === 1 ? 'Shared' : 'Private' %></small><% } %></td>
               <td><span class="pill <%= Number(printer.is_enabled) === 1 ? 'good' : 'bad' %>"><%= Number(printer.is_enabled) === 1 ? 'Enabled' : 'Disabled' %></span><br/><small>Last probe: <%= printer.last_probe_status || '—' %></small></td>
               <td><%= formatNumber(printer.group_count) %></td>
               <td>
+                <% if (canManagePrinter) { %>
                 <div class="management-user-row-actions site-inline-actions">
+                  <% if (hasPermission('printers.network_details.view')) { %>
                   <a class="secondary-button" href="/management/printers/<%= printer.label_printer_id %>/edit/modal" hx-get="/management/printers/<%= printer.label_printer_id %>/edit/modal" hx-target="#modal-root" hx-swap="innerHTML">Edit</a>
+                  <% } %>
+                  <% if (canConvertScope) { %>
                   <a class="secondary-button" href="/management/printers/<%= printer.label_printer_id %>/scope/modal" hx-get="/management/printers/<%= printer.label_printer_id %>/scope/modal" hx-target="#modal-root" hx-swap="innerHTML"><%= printer.scope_code === 'solo' ? 'Convert to Managed' : 'Convert to Solo' %></a>
+                  <% } %>
                   <a class="secondary-button danger-button" href="/management/printers/<%= printer.label_printer_id %>/delete/modal" hx-get="/management/printers/<%= printer.label_printer_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Remove</a>
                   <% if (printer.scope_code === 'solo') { %>
                     <form method="post" action="/management/printers/<%= printer.label_printer_id %>/sharing" hx-post="/management/printers/<%= printer.label_printer_id %>/sharing" hx-target="#modal-root" hx-swap="innerHTML">
@@ -28,6 +38,7 @@
                     </form>
                   <% } %>
                 </div>
+                <% } %>
               </td>
             </tr>
           <% }) %>
@@ -49,10 +60,12 @@
               <td><%= formatNumber(group.member_count) %></td>
               <td><span class="pill <%= Number(group.is_active) === 1 ? 'good' : 'slate' %>"><%= Number(group.is_active) === 1 ? 'Active' : 'Inactive' %></span></td>
               <td>
+                <% if (hasPermission('printers.groups.manage')) { %>
                 <div class="management-user-row-actions site-inline-actions">
                   <a class="secondary-button" href="/management/printer-groups/<%= group.label_printer_group_id %>/members/modal" hx-get="/management/printer-groups/<%= group.label_printer_group_id %>/members/modal" hx-target="#modal-root" hx-swap="innerHTML">Manage Members</a>
                   <a class="secondary-button danger-button" href="/management/printer-groups/<%= group.label_printer_group_id %>/delete/modal" hx-get="/management/printer-groups/<%= group.label_printer_group_id %>/delete/modal" hx-target="#modal-root" hx-swap="innerHTML">Delete Group</a>
                 </div>
+                <% } %>
               </td>
             </tr>
           <% }) %>

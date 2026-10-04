@@ -3,6 +3,23 @@
     ? 'Not graded'
     : `${Number(value).toFixed(1)}%`;
   const summary = report && report.summary ? report.summary : {};
+  const reviewerOversight = report && report.reviewerOversight ? report.reviewerOversight : {
+    auditedReviews: 0,
+    auditAgreements: 0,
+    missedDefects: 0,
+    falseRejections: 0,
+    auditAgreementRate: null,
+    auditCoverageRate: null
+  };
+  const signedInUserId = Number(typeof currentUser !== 'undefined' && currentUser ? currentUser.user_id : 0);
+  const reviewerColumnCount = 10 + (canViewQcTeamOversight ? 3 : 0) + (canPerformQcReviewerAudit ? 1 : 0);
+  const formatReviewMinutes = (value) => {
+    if (value === null || value === undefined || !Number.isFinite(Number(value))) return '—';
+    const minutes = Number(value);
+    if (minutes < 60) return `${Math.round(minutes)}m`;
+    const hours = minutes / 60;
+    return `${hours.toFixed(hours >= 10 ? 0 : 1)}h`;
+  };
   const selectedTechnicianIds = new Set(
     Array.isArray(scope && scope.selectedTechnicianIds) ? scope.selectedTechnicianIds.map(Number) : []
   );
@@ -33,9 +50,9 @@
           <section class="page-heading site-work-page-heading">
             <div>
               <h1>Quality Control Reporting</h1>
-              <p>Compare reviewed technician work, identify repeated rejection notes, and review Quality Control activity by completion-date and technician-team scope.</p>
+              <p>Review technician QC outcomes, reviewer activity, and second-level QC audit results by completion-date and technician-team scope.</p>
             </div>
-            <span class="pill neutral">Admin / Management</span>
+            <span class="pill neutral">QC Reporting</span>
           </section>
 
           <% if (!reportAvailable) { %>
@@ -179,6 +196,106 @@
             </div>
           </section>
 
+          <% if (canViewQcTeamOversight) { %>
+            <section class="site-summary-panel qc-reviewer-oversight-summary" aria-label="QC team oversight summary">
+              <div class="site-summary-primary">
+                <span>QC Reviewer Audit Agreement</span>
+                <strong><%= formatQcPercent(reviewerOversight.auditAgreementRate) %></strong>
+                <small><%= formatNumber(reviewerOversight.auditedReviews || 0) %> of <%= formatNumber(summary.reviewActions || 0) %> QC decision<%= Number(summary.reviewActions || 0) === 1 ? '' : 's' %> in this reporting scope have received an independent reviewer audit.</small>
+              </div>
+              <div class="site-summary-stats">
+                <article>
+                  <span class="site-summary-icon" aria-hidden="true">✓</span>
+                  <span><small>Audit coverage</small><strong><%= formatQcPercent(reviewerOversight.auditCoverageRate) %></strong></span>
+                </article>
+                <article>
+                  <span class="site-summary-icon" aria-hidden="true">!</span>
+                  <span><small>Missed defects</small><strong><%= formatNumber(reviewerOversight.missedDefects || 0) %></strong></span>
+                </article>
+                <article>
+                  <span class="site-summary-icon" aria-hidden="true">↩</span>
+                  <span><small>False rejections</small><strong><%= formatNumber(reviewerOversight.falseRejections || 0) %></strong></span>
+                </article>
+              </div>
+            </section>
+            <% if (!reviewerAuditAvailable) { %>
+              <div class="message warning"><p>QC Team Oversight is enabled for your account, but reviewer-audit storage has not been initialized yet.</p></div>
+            <% } %>
+          <% } %>
+
+          <section class="site-clean-section site-clean-surface">
+            <div class="site-clean-section-heading">
+              <div>
+                <h2>Reviewer Activity</h2>
+                <p class="site-section-description">Review volume includes first-pass decisions and rechecks. Median review time measures completion-to-QC turnaround. Reviewer audits independently verify whether the QC decision itself was sound.</p>
+              </div>
+              <span class="pill neutral"><%= formatNumber(report.activeReviewers) %> active reviewer<%= report.activeReviewers === 1 ? '' : 's' %></span>
+            </div>
+
+            <div class="table-card">
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="text" data-sort-initial="asc">Reviewer<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Reviews<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Accepted<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Rejected<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Acceptance Rate<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">First-pass Reviews<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Rechecks<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Technicians Reviewed<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="asc">Median Review Time<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <% if (canViewQcTeamOversight) { %>
+                        <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Audited<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                        <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Audit Agreement<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                        <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Audit Exceptions<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <% } %>
+                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="date" data-sort-initial="desc">Most Recent<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
+                      <% if (canPerformQcReviewerAudit) { %><th>Spot Check</th><% } %>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <% if (!report.reviewerActivity.length) { %>
+                      <tr><td colspan="<%= reviewerColumnCount %>">No Quality Control reviewer activity matches the selected reporting scope.</td></tr>
+                    <% } %>
+
+                    <% report.reviewerActivity.forEach((reviewer) => { %>
+                      <tr data-qc-report-sort-row>
+                        <td data-sort-value="<%= String(reviewer.reviewerName || '').toLocaleLowerCase('en-US') %>"><strong><%= reviewer.reviewerName %></strong></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.reviews) %>"><%= formatNumber(reviewer.reviews) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.acceptedReviews) %>"><%= formatNumber(reviewer.acceptedReviews) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.rejectedReviews) %>"><%= formatNumber(reviewer.rejectedReviews) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.acceptanceRate) %>"><%= formatQcPercent(reviewer.acceptanceRate) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.firstPassReviews) %>"><%= formatNumber(reviewer.firstPassReviews) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.rechecks) %>"><%= formatNumber(reviewer.rechecks) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.techniciansReviewed) %>"><%= formatNumber(reviewer.techniciansReviewed) %></td>
+                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.medianReviewMinutes) %>"><%= formatReviewMinutes(reviewer.medianReviewMinutes) %></td>
+                        <% if (canViewQcTeamOversight) { %>
+                          <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.auditedReviews) %>"><%= formatNumber(reviewer.auditedReviews || 0) %> / <%= formatNumber(reviewer.reviews || 0) %></td>
+                          <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.auditAgreementRate) %>"><%= formatQcPercent(reviewer.auditAgreementRate) %></td>
+                          <td class="table-numeric" data-sort-value="<%= sortableNumber((reviewer.missedDefects || 0) + (reviewer.falseRejections || 0)) %>"><%= formatNumber((reviewer.missedDefects || 0) + (reviewer.falseRejections || 0)) %></td>
+                        <% } %>
+                        <td class="table-numeric" data-sort-value="<%= sortableDate(reviewer.latestReviewedAt) %>"><%= reviewer.latestReviewedAt ? formatDateTime(reviewer.latestReviewedAt) : '—' %></td>
+                        <% if (canPerformQcReviewerAudit) { %>
+                          <td>
+                            <% if (reviewerAuditAvailable && reviewer.auditSampleQcCheckId && Number(reviewer.reviewerUserId) !== signedInUserId) { %>
+                              <a class="secondary-button button-small" href="/management/qc-reporting/reviews/<%= reviewer.auditSampleQcCheckId %>/audit/modal" hx-get="/management/qc-reporting/reviews/<%= reviewer.auditSampleQcCheckId %>/audit/modal" hx-target="#modal-root" hx-swap="innerHTML">Audit Sample</a>
+                            <% } else if (Number(reviewer.reviewerUserId) === signedInUserId) { %>
+                              <span class="table-muted-line">Own reviews</span>
+                            <% } else { %>
+                              <span class="table-muted-line">Fully sampled</span>
+                            <% } %>
+                          </td>
+                        <% } %>
+                      </tr>
+                    <% }) %>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </section>
+
           <section class="site-clean-section site-clean-surface">
             <div class="site-clean-section-heading">
               <div>
@@ -240,56 +357,10 @@
             </div>
           </section>
 
-          <section class="site-clean-section site-clean-surface">
-            <div class="site-clean-section-heading">
-              <div>
-                <h2>Reviewer Activity</h2>
-                <p class="site-section-description">Review volume includes first-pass decisions and rechecks. Acceptance rate reflects review actions, not unique Units.</p>
-              </div>
-              <span class="pill neutral"><%= formatNumber(report.activeReviewers) %> active reviewer<%= report.activeReviewers === 1 ? '' : 's' %></span>
-            </div>
-
-            <div class="table-card">
-              <div class="table-scroll">
-                <table>
-                  <thead>
-                    <tr>
-                      <th><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="text" data-sort-initial="asc">Reviewer<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
-                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Reviews<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
-                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Accepted<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
-                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Rejected<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
-                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Acceptance Rate<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
-                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">First-pass Reviews<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
-                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Rechecks<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
-                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="number" data-sort-initial="desc">Technicians Reviewed<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
-                      <th class="table-numeric"><a class="table-sort-link qc-report-sort-link" href="#" data-qc-report-sort data-sort-type="date" data-sort-initial="desc">Most Recent<span class="qc-reporting-sort-indicator" aria-hidden="true"></span></a></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <% if (!report.reviewerActivity.length) { %>
-                      <tr><td colspan="9">No Quality Control reviewer activity matches the selected reporting scope.</td></tr>
-                    <% } %>
-
-                    <% report.reviewerActivity.forEach((reviewer) => { %>
-                      <tr data-qc-report-sort-row>
-                        <td data-sort-value="<%= String(reviewer.reviewerName || '').toLocaleLowerCase('en-US') %>"><strong><%= reviewer.reviewerName %></strong></td>
-                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.reviews) %>"><%= formatNumber(reviewer.reviews) %></td>
-                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.acceptedReviews) %>"><%= formatNumber(reviewer.acceptedReviews) %></td>
-                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.rejectedReviews) %>"><%= formatNumber(reviewer.rejectedReviews) %></td>
-                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.acceptanceRate) %>"><%= formatQcPercent(reviewer.acceptanceRate) %></td>
-                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.firstPassReviews) %>"><%= formatNumber(reviewer.firstPassReviews) %></td>
-                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.rechecks) %>"><%= formatNumber(reviewer.rechecks) %></td>
-                        <td class="table-numeric" data-sort-value="<%= sortableNumber(reviewer.techniciansReviewed) %>"><%= formatNumber(reviewer.techniciansReviewed) %></td>
-                        <td class="table-numeric" data-sort-value="<%= sortableDate(reviewer.latestReviewedAt) %>"><%= reviewer.latestReviewedAt ? formatDateTime(reviewer.latestReviewedAt) : '—' %></td>
-                      </tr>
-                    <% }) %>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </section>
         </main>
       </div>
     </div>
+    <div id="modal-root"></div>
+    <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   </body>
 </html>

@@ -1,6 +1,9 @@
 const crypto = require('crypto');
 const argon2 = require('argon2');
 const authModel = require('../models/authModel');
+const userManagementAudit = require('../models/userManagementAuditModel');
+const { validateToolPin } = require('../services/toolPinPolicy');
+const { isHtmxRequest } = require('../utils/htmxRequest');
 
 function hashToken(rawToken) {
   return crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -113,6 +116,67 @@ async function login(req, res, next) {
   }
 }
 
+async function renderOwnToolPinModal(req, res, next) {
+  try {
+    const pinState = await authModel.getUserToolPinState(req.currentUser.user_id);
+    if (!pinState) return res.status(404).send('User account not found.');
+    return res.render('fragments/account-tool-pin-modal', {
+      pinState,
+      errorMessages: [],
+      successMessage: null
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
+async function updateOwnToolPin(req, res, next) {
+  try {
+    const currentPassword = String(req.body.currentPassword || '');
+    const toolPin = String(req.body.toolPin || '').trim();
+    const confirmToolPin = String(req.body.confirmToolPin || '').trim();
+    const errorMessages = validateToolPin(toolPin, confirmToolPin);
+
+    const credential = await authModel.getUserCredentialById(req.currentUser.user_id);
+    const passwordIsValid = Boolean(
+      currentPassword
+      && credential?.password_hash
+      && await argon2.verify(credential.password_hash, currentPassword)
+    );
+    if (!passwordIsValid) errorMessages.unshift('Current account password is incorrect.');
+
+    if (errorMessages.length > 0) {
+      const pinState = await authModel.getUserToolPinState(req.currentUser.user_id);
+      return res.status(isHtmxRequest(req) ? 200 : 400).render('fragments/account-tool-pin-modal', {
+        pinState,
+        errorMessages,
+        successMessage: null
+      });
+    }
+
+    const toolPinHash = await argon2.hash(toolPin, { type: argon2.argon2id });
+    await authModel.setUserToolPin({
+      userId: req.currentUser.user_id,
+      toolPinHash
+    });
+    await userManagementAudit.recordEvent({
+      actorUserId: req.currentUser.user_id,
+      targetUserId: req.currentUser.user_id,
+      action: 'user_tool_pin_updated',
+      reason: 'User changed own Tool PIN.'
+    });
+
+    const pinState = await authModel.getUserToolPinState(req.currentUser.user_id);
+    return res.render('fragments/account-tool-pin-modal', {
+      pinState,
+      errorMessages: [],
+      successMessage: 'Tool PIN updated successfully.'
+    });
+  } catch (error) {
+    return next(error);
+  }
+}
+
 function logout(req, res, next) {
   req.session.destroy((error) => {
     if (error) {
@@ -196,6 +260,8 @@ async function setupPassword(req, res, next) {
 module.exports = {
   renderLogin,
   login,
+  renderOwnToolPinModal,
+  updateOwnToolPin,
   logout,
   renderSetupPassword,
   setupPassword,

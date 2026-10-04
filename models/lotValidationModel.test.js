@@ -102,7 +102,7 @@ test('normalized reader loads identifiers, current memory, and current storage i
   const snapshots = await listUnitSnapshotsForLot(7, connection);
 
   assert.equal(snapshots.length, 1);
-  assert.equal(snapshots[0].label, 'BWT1234');
+  assert.equal(snapshots[0].label, 'BWT0000001234');
   assert.equal(snapshots[0].valuesByKey.ram_gb.numberValue, 16);
   assert.equal(snapshots[0].valuesByKey.storage_gb.numberValue, 512);
   assert.equal(snapshots[0].technicianSummary, 'Taylor Tech');

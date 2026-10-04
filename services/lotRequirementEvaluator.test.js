@@ -65,7 +65,7 @@ function requirement(overrides = {}) {
 test('asset number provides a stable primary display even without identifier rows', () => {
   const snapshot = buildSampleSnapshot();
 
-  assert.equal(snapshot.label, 'BWT1234');
+  assert.equal(snapshot.label, 'BWT0000001234');
   assert.match(snapshot.subLabel, /Unit Serial: ABC123/);
   assert.equal(formatAssetTag(99, 'TAG-'), 'TAG-99');
 });
@@ -91,9 +91,9 @@ test('asset tag identifiers always display with one BWT prefix', () => {
     }]
   });
 
-  assert.equal(numericIdentifier.label, 'BWT2300006');
-  assert.equal(alreadyPrefixed.label, 'BWT2300007');
-  assert.equal(ensureAssetTagPrefix('BWT-2300008'), 'BWT2300008');
+  assert.equal(numericIdentifier.label, 'BWT0002300006');
+  assert.equal(alreadyPrefixed.label, 'BWT0002300007');
+  assert.equal(ensureAssetTagPrefix('BWT-2300008'), 'BWT0002300008');
 });
 
 test('technician activity combines completion and work-session records by technician', () => {
@@ -244,7 +244,19 @@ test('missing catalog values reject the unit instead of becoming an unsupported 
   );
 
   assert.equal(check.status, 'rejected');
+  assert.equal(check.actualValueState, 'missing');
   assert.match(check.message, /no recorded manufacturer/i);
+});
+
+test('nonconforming catalog values are distinguished from missing values', () => {
+  const check = evaluateRequirement(
+    buildSampleSnapshot({ manufacturer_id: 2, manufacturer_name: 'Lenovo' }),
+    requirement()
+  );
+
+  assert.equal(check.status, 'rejected');
+  assert.equal(check.actualValueState, 'provided');
+  assert.match(check.message, /expected dell; found lenovo/i);
 });
 
 test('incomplete legacy requirements are marked needs review', () => {

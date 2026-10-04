@@ -7,7 +7,7 @@
 %>
 
 <div class="modal-backdrop" data-modal-backdrop>
-  <section class="modal-panel management-user-modal management-user-form-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-create-title">
+  <section class="modal-panel management-user-modal management-user-form-modal flat-form-modal" role="dialog" aria-modal="true" aria-labelledby="management-user-create-title">
     <header class="modal-header">
       <div>
         <p class="eyebrow">Management</p>
@@ -92,22 +92,52 @@
           <small class="field-hint">Choose <%= safePolicy.minHours %>–<%= safePolicy.maxHours %> hours before the initial setup link is generated. Default: <%= safePolicy.defaultHours %> hour.</small>
         </label>
 
-        <div>
-          <p class="eyebrow management-user-modal-roles-label">Primary Access Role</p>
-          <p class="management-user-role-help">Choose one primary account access role. QC grants read-only cross-technician Unit access; production work, packing, and task activity remain separate operational records.</p>
+        <% if (canManageLoginInactivityOnCreate) { %>
+          <label class="form-field">
+            <span>Login Inactivity Monitoring</span>
+            <select name="loginInactivityMode">
+              <option value="inherit" <%= (safeFormData.loginInactivityMode || 'inherit') === 'inherit' ? 'selected' : '' %>>Inherit from assigned role(s)</option>
+              <option value="allow" <%= safeFormData.loginInactivityMode === 'allow' ? 'selected' : '' %>>Monitor this user</option>
+              <option value="deny" <%= safeFormData.loginInactivityMode === 'deny' ? 'selected' : '' %>>Do not monitor this user</option>
+            </select>
+            <small class="field-hint">Monitored active users are flagged after more than 5 business days without a login. Role defaults can be set through Roles &amp; Permissions.</small>
+          </label>
+        <% } %>
 
-          <div class="workflow-list management-user-modal-roles">
-            <% safeRoles.forEach((role) => { %>
-              <label class="workflow-item <%= selectedRoles.includes(role.code) ? 'active' : '' %>">
-                <input type="radio" name="roleCodes" value="<%= role.code %>" <%= selectedRoles.includes(role.code) ? 'checked' : '' %> />
-                <div>
-                  <strong><%= role.name %></strong>
-                  <p><%= role.description || role.code %></p>
-                </div>
-              </label>
-            <% }) %>
-          </div>
+        <% if (canManageToolPinsOnCreate) { %>
+        <div class="form-grid management-user-tool-pin-grid">
+          <label class="form-field">
+            <span>Tool PIN (6–10 digits) (optional)</span>
+            <input type="password" name="toolPin" inputmode="numeric" pattern="[0-9]{6,10}" minlength="6" maxlength="10" autocomplete="new-password" />
+          </label>
+          <label class="form-field">
+            <span>Confirm Tool PIN</span>
+            <input type="password" name="confirmToolPin" inputmode="numeric" pattern="[0-9]{6,10}" minlength="6" maxlength="10" autocomplete="new-password" />
+          </label>
         </div>
+        <p class="management-user-role-help">The Tool PIN is separate from the account password and cannot be used to sign into the BWTDallas website. It becomes useful only for accounts authorized to use ScanTools/TechTools. Avoid repeated digits, 4+ digit sequences, and repeating or grouped patterns.</p>
+        <% } %>
+
+        <% if (canAssignRolesOnCreate) { %>
+          <div>
+            <p class="eyebrow management-user-modal-roles-label">Access Roles</p>
+            <p class="management-user-role-help">Select one or more roles. Approved default permissions from all selected roles combine for the user.</p>
+
+            <div class="workflow-list management-user-modal-roles">
+              <% safeRoles.forEach((role) => { %>
+                <label class="workflow-item <%= selectedRoles.includes(role.code) ? 'active' : '' %>">
+                  <input type="checkbox" name="roleCodes" value="<%= role.code %>" <%= selectedRoles.includes(role.code) ? 'checked' : '' %> />
+                  <div>
+                    <strong><%= role.name %></strong>
+                    <p><%= role.description || role.code %></p>
+                  </div>
+                </label>
+              <% }) %>
+            </div>
+          </div>
+        <% } else { %>
+          <div class="message info"><p>This account will be created without roles. A user with Assign Roles permission can add roles later.</p></div>
+        <% } %>
 
         <div class="action-row">
           <button type="submit" class="primary-button">Create User &amp; Generate Setup Link</button>

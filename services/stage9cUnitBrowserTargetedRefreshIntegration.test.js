@@ -20,6 +20,10 @@ test('Unit Browser uses one initial HTMX load and record-level background reconc
   assert.match(script, /data-unit-version/);
   assert.match(script, /restoreUnitRecordState/);
   assert.match(script, /loadUnitPanelContent/);
+  assert.match(script, /function isProtectedUnitBrowserRecord\(record\)/);
+  assert.match(script, /data-unit-refresh-pending/);
+  assert.match(script, /markDeferredUnitRefresh\(currentRecord\)/);
+  assert.match(script, /refreshDeferredUnitRecordIfAvailable/);
   assert.doesNotMatch(script, /window\.location\.reload\(\)/);
 });
 
@@ -63,6 +67,6 @@ test('Unit Browser refresh assets are cache-busted together', () => {
 
   [page, detail].forEach((template) => {
     assert.match(template, /<body class="css-scope-tech-units">/);
-    assert.match(template, /tech-units\.js\?v=20260826-stage10w73c-browser-refinement/);
+    assert.match(template, /tech-units\.js\?v=20260925-preserve-expanded-unit-view/);
   });
 });

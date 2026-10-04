@@ -65,12 +65,13 @@ test('XLSX widths follow column keys after optional columns are removed', () => 
   assert.match(fileService, /XLSX_COLUMN_WIDTHS\[column\.key\]/);
 });
 
-test('export modal uses an internal scroll area, a sticky top action bar, and padded footer', () => {
+test('export modal uses an internal scroll area, a normal-flow flat action bar, and padded footer', () => {
   const css = read('public/css/app.css');
 
   assert.match(css, /\.unit-export-preview-modal \{[\s\S]*?max-height: calc\(100dvh - 48px\);[\s\S]*?overflow: hidden;/);
   assert.match(css, /\.unit-export-preview-modal > \.modal-body \{[\s\S]*?overflow-y: auto;/);
-  assert.match(css, /\.unit-export-action-toolbar \{[\s\S]*?position: sticky;[\s\S]*?top: 0;/);
+  assert.match(css, /\.unit-export-action-toolbar \{[\s\S]*?position: static;[\s\S]*?border-radius: 0;[\s\S]*?box-shadow: none;/);
+  assert.doesNotMatch(css, /\.unit-export-action-toolbar \{[\s\S]*?position: sticky;/);
   assert.match(css, /\.unit-export-modal-footer \{[\s\S]*?padding: 14px 18px 18px;/);
 });
 

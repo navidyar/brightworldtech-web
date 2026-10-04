@@ -53,7 +53,7 @@ function currentState(overrides = {}) {
   };
 }
 
-function makeConnection({ stateOverrides = {}, latestOverrides = {}, updateAffectedRows = 1 } = {}) {
+function makeConnection({ stateOverrides = {}, latestOverrides = {}, updateAffectedRows = 1, qcRequired = true } = {}) {
   const calls = [];
   return {
     calls,
@@ -63,6 +63,18 @@ function makeConnection({ stateOverrides = {}, latestOverrides = {}, updateAffec
 
       if (normalized.includes('information_schema.COLUMNS') && normalized.includes("TABLE_NAME = 'unit_qc_checks'")) {
         return [requiredColumns.map((columnName) => ({ column_name: columnName }))];
+      }
+
+      if (normalized.includes('information_schema.COLUMNS') && normalized.includes("TABLE_NAME = 'lots'")) {
+        return [[{ 1: 1 }]];
+      }
+
+      if (normalized === 'SELECT lot_id FROM units WHERE unit_id = ? LIMIT 1') {
+        return [[{ lot_id: 12 }]];
+      }
+
+      if (normalized === 'SELECT lot_id, name, qc_required FROM lots WHERE lot_id = ? LIMIT 1') {
+        return [[{ lot_id: 12, name: 'QC Lot', qc_required: qcRequired ? 1 : 0 }]];
       }
 
       if (normalized.includes('FROM unit_qc_checks qc') && normalized.includes('INNER JOIN unit_work_completions completion') && normalized.includes('FOR UPDATE')) {
@@ -141,6 +153,22 @@ test('direct QC reversion rejects stale completion cycles before mutation', asyn
       reversionReason: 'Old completion.'
     }),
     (error) => error && error.code === 'BWT_QC_REVERSION_COMPLETION_STALE'
+  );
+
+  assert.equal(connection.calls.some((call) => call.sql.startsWith('UPDATE unit_qc_checks')), false);
+});
+
+test('direct QC reversion refuses a Lot that no longer requires QC', async () => {
+  const connection = makeConnection({ qcRequired: false });
+
+  await assert.rejects(
+    unitQcCheckModel.revertQcReviewWithConnection(connection, {
+      unitId: 77,
+      qcCheckId: 900,
+      revertedByUserId: 3,
+      reversionReason: 'QC not required.'
+    }),
+    (error) => error && error.code === 'BWT_QC_NOT_REQUIRED'
   );
 
   assert.equal(connection.calls.some((call) => call.sql.startsWith('UPDATE unit_qc_checks')), false);

@@ -79,7 +79,7 @@ test('own pending Unit Requests stay non-reviewable except the authorized Admin 
   const controller = read('controllers/unitRequestController.js');
   assert.match(controller, /const isOwnRequest = Number\(request\.requestedByUserId\) === Number\(req\.currentUser\.user_id\)/);
   assert.match(controller, /const canSelfReviewCatalogRequest = catalogManager && isCatalogRequest\(request\)/);
-  assert.match(controller, /\(!isOwnRequest \|\| canSelfReviewCatalogRequest\)/);
+  assert.match(controller, /canApproveUnitRequest\(req, request\)[\s\S]*\(!isOwnRequest \|\| canSelfReviewCatalogRequest\)/);
   assert.match(controller, /canWithdrawRequest: request\.isPending && Number\(request\.requestedByUserId\) === Number\(req\.currentUser\.user_id\)/);
 });
 

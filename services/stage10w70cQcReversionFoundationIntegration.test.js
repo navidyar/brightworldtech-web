@@ -8,13 +8,13 @@ const path = require('node:path');
 const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-test('Stage 10W70C grants direct QC reversion only to Tech Lead+ through an exact QC check route', () => {
+test('Stage 10W70C grants direct QC reversion through the perform permission and an exact QC check route', () => {
   const routes = read('routes/management.js');
   const controller = read('controllers/techController.js');
 
-  assert.match(routes, /qc-review\/:qcCheckId\/revert\/modal[\s\S]*requireRole\(overrideReviewRoles\)/);
-  assert.match(routes, /qc-review\/:qcCheckId\/revert'[\s\S]*requireRole\(overrideReviewRoles\)/);
-  assert.match(controller, /\['admin', 'management', 'tech_lead'\]/);
+  assert.match(routes, /qc-review\/:qcCheckId\/revert\/modal[\s\S]*requirePermission\('qc\.reversion\.perform'\)/);
+  assert.match(routes, /qc-review\/:qcCheckId\/revert'[\s\S]*requirePermission\('qc\.reversion\.perform'\)/);
+  assert.match(controller, /function canDirectlyRevertQcReview\(req\)[\s\S]*?currentPermissions\.has\('qc\.reversion\.perform'\)/);
   assert.doesNotMatch(routes, /qc-review\/:qcCheckId\/revert[\s\S]{0,180}requireRole\(\['qc'\]\)/);
 });
 

@@ -2,8 +2,9 @@
 <html lang="en">
   <%- include('../partials/head', { pageTitle }) %>
   <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
+  <script defer src="/js/model-request-review.js?v=20261002-category-correction"></script>
   <script defer src="/js/processor-request-review.js?v=20260923-processor-string-interpretation"></script>
-  <script defer src="/js/unit-requests.js?v=20260820-stage10w69n-request-detail-performance"></script>
+  <script defer src="/js/unit-requests.js?v=20261001-modern-page-headers"></script>
 
   <%
     const buildUnitRequestQueueUrl = (nextStatus = statusFilter, nextRequestType = requestTypeFilter, nextSearchTerm = searchTerm) => {
@@ -43,13 +44,13 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell unit-requests-page unit-request-queue-page">
-          <section class="dashboard-hero accent-green">
+          <section class="page-heading site-work-page-heading unit-requests-page-heading">
             <div>
               <p class="eyebrow">Controlled Requests</p>
-              <h2>Requests</h2>
+              <h1>Requests</h1>
               <p>
                 <% if (canReviewRequests) { %>
-                  Review existing Unit overrides, Intentional Duplicates, outcome confirmations, QC reversion requests, and Catalog requests in one queue.
+                  Review the operational and Catalog requests available to your account in one queue.
                 <% } else { %>
                   Track your own pending and completed requests. Pending requests can be withdrawn before review. A QC decision remains current while its reversion request is pending.
                 <% } %>
@@ -61,7 +62,7 @@
             <div class="unit-request-workspace-heading">
               <h3 id="unit-request-workspace-heading"><%= isArchivedQueue ? 'Archived Requests' : (canReviewRequests ? 'Review Queue' : 'Request History') %></h3>
               <% if (canReviewRequests && !canManageCatalogRequests) { %>
-                <p class="unit-requests-content-summary">Tech Lead+ can review operational requests. Model and Processor Catalog approvals are Admin-only.</p>
+                <p class="unit-requests-content-summary">Each request type has separate approval authority. Model and Processor Catalog approvals can be granted independently.</p>
               <% } %>
             </div>
 

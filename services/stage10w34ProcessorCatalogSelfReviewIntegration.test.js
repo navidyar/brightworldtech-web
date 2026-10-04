@@ -10,20 +10,20 @@ function read(relativePath) {
   return fs.readFileSync(path.join(ROOT, relativePath), 'utf8');
 }
 
-test('Admin can self-approve Model and Processor Catalog requests without opening self-review to non-Admin roles', () => {
+test('Catalog approval permission allows self-review without opening it to other reviewers', () => {
   const controller = read('controllers/unitRequestController.js');
   const model = read('models/unitRequestModel.js');
 
-  assert.match(controller, /const CATALOG_MANAGER_ROLE_CODES = new Set\(\['admin'\]\)/);
+  assert.match(controller, /return request \? canApproveCatalogRequest\(req, request\) : canApproveAnyCatalogRequests\(req\)/);
   assert.match(controller, /const canSelfReviewCatalogRequest = catalogManager && isCatalogRequest\(request\)/);
   assert.match(controller, /\(!isOwnRequest \|\| canSelfReviewCatalogRequest\)/);
-  assert.match(controller, /approvedModelName: req\.body\.approvedModelName,[\s\S]*?reviewerIsAdmin: isAdminCatalogReviewer\(req\)/);
-  assert.match(controller, /approvedProcessorBaseSpeedGhz: req\.body\.approvedProcessorBaseSpeedGhz,[\s\S]*?reviewerIsAdmin: isAdminCatalogReviewer\(req\)/);
+  assert.match(controller, /approvedModelName: req\.body\.approvedModelName,[\s\S]*?reviewerIsAdmin: isAdminCatalogReviewer\(req, request\)/);
+  assert.match(controller, /approvedProcessorBaseSpeedGhz: req\.body\.approvedProcessorBaseSpeedGhz,[\s\S]*?reviewerIsAdmin: isAdminCatalogReviewer\(req, request\)/);
 
   assert.match(model, /async function approveModelCatalogRequest\([\s\S]*?reviewerIsAdmin = false/);
-  assert.match(model, /Only Admin can approve Model Catalog requests/);
+  assert.match(model, /Approve Model Catalog Requests permission is required to approve Model Catalog requests/);
   assert.match(model, /async function approveProcessorCatalogRequest\([\s\S]*?reviewerIsAdmin = false/);
-  assert.match(model, /Only Admin can approve Processor Catalog requests/);
+  assert.match(model, /Approve Processor Catalog Requests permission is required to approve Processor Catalog requests/);
   assert.match(model, /selfReviewedByAdmin: isSelfReview/);
 });
 

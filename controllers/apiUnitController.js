@@ -4,6 +4,7 @@ const apiUnitIntake = require('../services/apiUnitIntake');
 const apiUnitCommit = require('../services/apiUnitCommit');
 const apiUnitAction = require('../services/apiUnitAction');
 const apiWipeCertificate = require('../services/apiWipeCertificate');
+const apiUuidDuplicateRequest = require('../services/apiUuidDuplicateRequest');
 
 function sendIntakeError(res, error) {
   return res.status(error.status).json({
@@ -39,6 +40,7 @@ async function commitUnit(req, res, next) {
       body: req.body || {},
       userId: req.apiUser.user_id,
       roleCodes: req.apiUser.roles || [],
+      permissions: req.apiPermissions,
       toolSource: req.apiToolSource
     });
     return res.status(result.replayed ? 200 : (result.status === 'CREATED' ? 201 : 200)).json(result);
@@ -57,6 +59,7 @@ async function applyUnitAction(req, res, next) {
       body: req.body || {},
       userId: req.apiUser.user_id,
       roleCodes: req.apiUser.roles || [],
+      permissions: req.apiPermissions,
       toolSource: req.apiToolSource
     });
     return res.status(200).json(result);
@@ -64,6 +67,36 @@ async function applyUnitAction(req, res, next) {
     if (error instanceof apiUnitAction.ApiUnitActionError) {
       return sendIntakeError(res, error);
     }
+    return next(error);
+  }
+}
+
+
+async function createUuidDuplicateRequest(req, res, next) {
+  try {
+    const result = await apiUuidDuplicateRequest.create({
+      body: req.body || {},
+      userId: req.apiUser.user_id,
+      roleCodes: req.apiUser.roles || [],
+      permissions: req.apiPermissions,
+      toolSource: req.apiToolSource
+    });
+    return res.status(result.existing_request ? 200 : 201).json(result);
+  } catch (error) {
+    if (error instanceof apiUuidDuplicateRequest.ApiUuidDuplicateRequestError) return sendIntakeError(res, error);
+    return next(error);
+  }
+}
+
+async function getUuidDuplicateRequestStatus(req, res, next) {
+  try {
+    const result = await apiUuidDuplicateRequest.getStatus({
+      requestId: req.params.requestId,
+      userId: req.apiUser.user_id
+    });
+    return res.status(200).json(result);
+  } catch (error) {
+    if (error instanceof apiUuidDuplicateRequest.ApiUuidDuplicateRequestError) return sendIntakeError(res, error);
     return next(error);
   }
 }
@@ -100,5 +133,7 @@ module.exports = {
   listCreationOptions,
   commitUnit,
   applyUnitAction,
+  createUuidDuplicateRequest,
+  getUuidDuplicateRequestStatus,
   recordWipeCertificate
 };

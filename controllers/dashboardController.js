@@ -1,5 +1,4 @@
 const dashboardModel = require('../models/dashboardModel');
-const accessPolicy = require('../config/accessPolicy');
 
 function formatDashboardTitle(key) {
   return String(key || '')
@@ -72,7 +71,9 @@ async function buildDashboardPayload(req, dashboardKey = null) {
     dashboardModel.getDashboardData(dashboardFilters, {
       currentUser: req.currentUser,
       currentRoles: req.currentUser ? req.currentUser.roles : [],
-      dashboardKey
+      currentPermissions: req.currentPermissions instanceof Set ? req.currentPermissions : new Set(),
+      dashboardKey,
+      timeZone: req.timeZone
     }),
     dashboardModel.getDashboardFilterOptions()
   ]);
@@ -89,29 +90,20 @@ async function buildDashboardPayload(req, dashboardKey = null) {
 async function renderDashboardHome(req, res, next) {
   try {
     const dashboards = getAccessibleDashboards(res);
-    const canAccessFeature = res.locals.canAccessFeature;
+    const preferredDashboard = dashboards.find((dashboard) => dashboard.key === 'admin')
+      || dashboards.find((dashboard) => dashboard.key === 'management')
+      || dashboards.find((dashboard) => dashboard.key === 'tech')
+      || dashboards[0]
+      || null;
 
-    if (typeof canAccessFeature !== 'function' || !canAccessFeature('operationsDashboard')) {
-      const primaryRole = accessPolicy.getPrimaryRole(req.currentUser?.roles || []);
-      const preferredDashboardKey = primaryRole === 'management' ? 'management' : 'tech';
-      const preferredDashboard = dashboards.find((dashboard) => dashboard.key === preferredDashboardKey) || dashboards[0] || null;
-
-      if (preferredDashboard) {
-        return res.redirect(`/dashboards/${encodeURIComponent(preferredDashboard.key)}`);
-      }
+    if (preferredDashboard) {
+      return res.redirect(`/dashboards/${encodeURIComponent(preferredDashboard.key)}`);
     }
 
-    if (dashboards.length === 1) {
-      return res.redirect(`/dashboards/${encodeURIComponent(dashboards[0].key)}`);
-    }
-
-    const dashboardPayload = await buildDashboardPayload(req);
-
-    return res.render('pages/dashboard', {
-      pageTitle: 'Dashboard',
-      currentNav: 'dashboard',
-      dashboards,
-      ...dashboardPayload
+    return res.status(403).render('pages/error', {
+      pageTitle: 'Access Denied',
+      message: 'You do not have permission to access a dashboard.',
+      error: null
     });
   } catch (error) {
     next(error);

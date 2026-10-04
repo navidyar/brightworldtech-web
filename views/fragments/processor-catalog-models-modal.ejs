@@ -23,7 +23,7 @@
         <div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div>
       <% } %>
 
-      <p class="field-hint">Checked models are the exact Unit Models where this processor is offered in Add/Edit Unit. One canonical processor can be associated with Dell, HP, Lenovo, or any other compatible model without creating duplicate processor records.</p>
+      <p class="field-hint">Checked models are the exact Unit Models where this processor is offered in Add/Edit Unit. One Catalog Processor can be associated with Dell, HP, Lenovo, or any other compatible model without creating duplicate processor records.</p>
 
       <div class="catalog-association-filters" data-catalog-association-filters>
         <label class="form-field"><span>Manufacturer</span><select data-association-filter="manufacturer"><option value="">All Manufacturers</option><% manufacturers.forEach((manufacturer) => { %><option value="<%= manufacturer.id %>"><%= manufacturer.label %></option><% }) %></select></label>

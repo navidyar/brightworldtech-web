@@ -2,6 +2,7 @@
 
 const { formatHardwareCapacityGb } = require('./hardwareCapacity');
 const { cosmeticGradeLabelsMatch } = require('./cosmeticGradeNormalization');
+const { formatAssetTagNumber } = require('../utils/assetTag');
 
 const {
   getLotRequirementField,
@@ -47,6 +48,11 @@ function ensureAssetTagPrefix(value, prefix = 'BWT') {
   }
 
   const withoutExistingPrefix = normalizedValue.replace(/^bwt[\s_-]*/i, '');
+  const normalizedAssetNumber = asPositiveInteger(withoutExistingPrefix);
+
+  if (normalizedAssetNumber && normalizedPrefix.replace(/[\s_-]+/g, '').toUpperCase() === 'BWT') {
+    return formatAssetTagNumber(normalizedAssetNumber, { prefix: normalizedPrefix });
+  }
 
   return `${normalizedPrefix}${withoutExistingPrefix}`;
 }
@@ -148,6 +154,14 @@ function createUnsupportedActual(message) {
     sourceLabel: '',
     unsupportedMessage: message || 'This requirement cannot be evaluated from the current unit data.'
   };
+}
+
+function getActualValueState(actual) {
+  if (!actual || !actual.isSupported) return 'unsupported';
+  if (actual.kind === 'number') return actual.numberValue === null ? 'missing' : 'provided';
+  if (actual.kind === 'text') return actual.textValues.length === 0 ? 'missing' : 'provided';
+  if (actual.kind === 'catalog') return actual.ids.length === 0 ? 'missing' : 'provided';
+  return 'unsupported';
 }
 
 function groupRowsByUnit(rows) {
@@ -562,6 +576,7 @@ function evaluateRequirement(unitSnapshot, requirement) {
     operatorLabel: requirement.operator_label || operator?.label || operatorCode,
     requiredValue: String(requirement.required_value ?? '').trim(),
     actualValue: actual.displayValue || '—',
+    actualValueState: getActualValueState(actual),
     sourceLabel: actual.sourceLabel || '—'
   };
 

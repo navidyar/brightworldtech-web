@@ -8,11 +8,11 @@ const test = require('node:test');
 const root = path.resolve(__dirname, '..');
 const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-test('any QC-role user can request reversion of the current QC decision regardless of original reviewer', () => {
+test('any user with QC Reversion Request permission can request reversion regardless of original reviewer', () => {
   const controller = read('controllers/techController.js');
   const model = read('models/unitRequestModel.js');
 
-  assert.match(controller, /function canRequestQcReviewReversion\(req\)[\s\S]*?roleCodes\.includes\('qc'\)/);
+  assert.match(controller, /function canRequestQcReviewReversion\(req\)[\s\S]*?currentPermissions\.has\('qc\.reversion\.request'\)/);
   assert.doesNotMatch(controller, /Only the QC user who recorded this current decision/);
   assert.doesNotMatch(controller, /ownsLatestQcReview/);
   assert.doesNotMatch(model, /BWT_QC_REVERSION_REQUEST_OWNER_REQUIRED/);

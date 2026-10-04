@@ -5,8 +5,9 @@ const techUnitModel = require('../models/techUnitModel');
 const unitExpandedFormModel = require('../models/unitExpandedFormModel');
 const unitAuditEventModel = require('../models/unitAuditEventModel');
 const { buildUnitFormAuditEvent } = require('./unitAuditSnapshot');
-const { resolveUnitIdentity } = require('./apiUnitIdentity');
+const { resolveUnitIdentity, getSystemUuidState, applySelectedCandidate } = require('./apiUnitIdentity');
 const apiUnitPreflight = require('./apiUnitPreflight');
+const unitRequestModel = require('../models/unitRequestModel');
 
 class ApiUnitIntakeError extends Error {
   constructor(status, code, message, details = null) {
@@ -140,18 +141,22 @@ function normalizeIdentity(body = {}) {
   const assetTag = normalizeText(body.asset_tag ?? body.assetTag, 80);
   const unitSerialNumber = normalizeText(body.unit_serial_number ?? body.unitSerialNumber ?? body.unit_serial, 120);
   const biosSerialNumber = normalizeText(body.bios_serial_number ?? body.biosSerialNumber ?? body.bios_serial, 120);
-  const systemUuid = normalizeText(body.system_uuid ?? body.systemUuid ?? body.uuid, 64).toUpperCase();
+  const rawSystemUuid = normalizeText(body.system_uuid ?? body.systemUuid ?? body.uuid, 64).toUpperCase();
+  const systemUuidState = getSystemUuidState(rawSystemUuid);
+  // Invalid, placeholder, or otherwise unusable UUID observations are treated as
+  // UUID unavailable. They must never block the rest of Tool identity/data intake.
+  const systemUuid = systemUuidState.usable ? rawSystemUuid : '';
   const assetNumber = assetTag ? techUnitModel.normalizeAssetTagInput(assetTag) : null;
 
   if (assetTag && !assetNumber) {
     throw new ApiUnitIntakeError(422, 'INVALID_ASSET_TAG', 'The supplied BWTDallas Asset Tag format is invalid.');
   }
 
-  if (!assetTag && !unitSerialNumber && !biosSerialNumber && !systemUuid) {
+  if (!unitSerialNumber && !biosSerialNumber) {
     throw new ApiUnitIntakeError(
       400,
-      'UNIT_IDENTITY_REQUIRED',
-      'Provide an Asset Tag, Unit Serial Number, BIOS Serial Number, or System UUID.'
+      'UNIT_SERIAL_REQUIRED',
+      'Provide a Unit Serial Number or BIOS Serial Number. Asset Tag and System UUID are supplemental identity signals and cannot replace serial identity for Tool intake.'
     );
   }
 
@@ -267,6 +272,8 @@ function buildCreationPolicy({ resolution, selectedLot, lotWasSupplied }) {
   const hasMatches = Number(resolution.matchCount || 0) > 0;
   const exactAssetTag = resolution.matchMode === 'asset_tag_exact' && hasMatches;
   const duplicateMatchAllowed = Boolean(selectedLot && Number(selectedLot.allow_duplicate_unit_assumption || 0) === 1);
+  const uuidMatchRequiresApproval = (Array.isArray(resolution.candidates) ? resolution.candidates : [])
+    .some((candidate) => Array.isArray(candidate.matchReasons) && candidate.matchReasons.includes('system_uuid'));
 
   if (exactAssetTag) {
     return {
@@ -304,7 +311,20 @@ function buildCreationPolicy({ resolution, selectedLot, lotWasSupplied }) {
       creation_allowed: true,
       reason: 'no_existing_candidates',
       duplicate_match_creation_allowed: duplicateMatchAllowed,
-      duplicate_creation_requires_confirmation: false
+      duplicate_creation_requires_confirmation: false,
+      uuid_match_requires_approval: false
+    };
+  }
+
+  if (uuidMatchRequiresApproval) {
+    return {
+      evaluated: true,
+      creation_allowed: false,
+      reason: 'matching_system_uuid_requires_intentional_duplicate_approval',
+      duplicate_match_creation_allowed: false,
+      duplicate_creation_requires_confirmation: false,
+      duplicate_creation_requires_approval: true,
+      uuid_match_requires_approval: true
     };
   }
 
@@ -315,7 +335,9 @@ function buildCreationPolicy({ resolution, selectedLot, lotWasSupplied }) {
       ? 'lot_allows_duplicate_match_unit_assumption'
       : 'existing_candidates_require_bwtdallas_review',
     duplicate_match_creation_allowed: duplicateMatchAllowed,
-    duplicate_creation_requires_confirmation: duplicateMatchAllowed
+    duplicate_creation_requires_confirmation: duplicateMatchAllowed,
+    duplicate_creation_requires_approval: !duplicateMatchAllowed,
+    uuid_match_requires_approval: false
   };
 }
 
@@ -327,21 +349,46 @@ async function resolveUnit(body = {}, { formOptions = null, preflightContext = n
     biosSerialNumber: identity.biosSerialNumber,
     systemUuid: identity.systemUuid
   });
-  const resolution = resolveUnitIdentity({
+  const automaticResolution = resolveUnitIdentity({
     assetNumber: identity.assetNumber,
     unitSerialNumber: identity.unitSerialNumber,
     biosSerialNumber: identity.biosSerialNumber,
     systemUuid: identity.systemUuid,
     matches
   });
+  const selectedUnitId = normalizePositiveInteger(body.unit_id ?? body.unitId);
+  const resolution = applySelectedCandidate(automaticResolution, selectedUnitId);
 
   const requestedLotId = body.lot_id ?? body.lotId;
   const lotWasSupplied = requestedLotId !== undefined && requestedLotId !== null && String(requestedLotId).trim() !== '';
   let resolvedFormOptions = formOptions;
   if (lotWasSupplied && !resolvedFormOptions) resolvedFormOptions = await techUnitModel.getTechUnitFormOptions();
   const selectedLot = lotWasSupplied ? findCreationLot(resolvedFormOptions, requestedLotId) : null;
-  const creationPolicy = buildCreationPolicy({ resolution, selectedLot, lotWasSupplied });
+  let creationPolicy = buildCreationPolicy({ resolution, selectedLot, lotWasSupplied });
   const serializedMatches = (resolution.candidates || []).map(serializeCandidate);
+  const duplicateRequestId = normalizePositiveInteger(body.intentional_duplicate_request_id ?? body.intentionalDuplicateRequestId);
+  if (creationPolicy.uuid_match_requires_approval === true && duplicateRequestId && preflightContext?.userId) {
+    const approval = await unitRequestModel.getToolUuidDuplicateAuthorization({
+      unitRequestId: duplicateRequestId,
+      requestedByUserId: preflightContext.userId,
+      destinationLotId: requestedLotId,
+      matchedCandidateIds: serializedMatches.map((candidate) => candidate.unit_id),
+      systemUuid: identity.systemUuid
+    });
+    if (approval.authorized) {
+      creationPolicy = {
+        ...creationPolicy,
+        creation_allowed: true,
+        reason: 'approved_uuid_duplicate_request',
+        duplicate_match_creation_allowed: true,
+        duplicate_creation_requires_confirmation: true,
+        duplicate_creation_requires_approval: false,
+        uuid_match_requires_approval: false,
+        uuid_duplicate_approval_satisfied: true,
+        approved_intentional_duplicate_request_id: duplicateRequestId
+      };
+    }
+  }
 
   const response = {
     status: resolution.status,
@@ -353,7 +400,8 @@ async function resolveUnit(body = {}, { formOptions = null, preflightContext = n
     // Keep the original candidates key for v1 clients built against 10W79B.
     candidates: serializedMatches,
     selected_lot: serializeSelectedLot(selectedLot, lotWasSupplied ? requestedLotId : null),
-    creation_policy: creationPolicy
+    creation_policy: creationPolicy,
+    selected_candidate_confirmed: resolution.selectedCandidateConfirmed === true
   };
 
   if (resolution.status === 'MATCHED' && resolution.matchedUnitId) {
@@ -444,24 +492,19 @@ async function createUnitInternal({ body = {}, userId, toolSource, connection = 
     );
   }
 
-  if (!identity.unitSerialNumber && !identity.biosSerialNumber) {
-    throw new ApiUnitIntakeError(
-      400,
-      'NEW_UNIT_SERIAL_REQUIRED',
-      'A new tool-created Unit requires a Tech-entered Unit Serial Number or a tool-observed BIOS Serial Number so BWTDallas can safely identify it.'
-    );
-  }
-
   const hasDuplicateCandidates = existing.match_count > 0;
   const allowDuplicateCreation = hasDuplicateCandidates
     && existing.creation_policy?.creation_allowed === true
     && existing.creation_policy?.duplicate_match_creation_allowed === true;
 
   if (hasDuplicateCandidates && !allowDuplicateCreation) {
+    const uuidApprovalRequired = existing.creation_policy?.uuid_match_requires_approval === true;
     throw new ApiUnitIntakeError(
       409,
-      'UNIT_DUPLICATE_REVIEW_REQUIRED',
-      'Possible existing BWTDallas Units were found. Review the returned candidates in BWTDallas before creating another Unit.',
+      uuidApprovalRequired ? 'UUID_DUPLICATE_APPROVAL_REQUIRED' : 'UNIT_DUPLICATE_REVIEW_REQUIRED',
+      uuidApprovalRequired
+        ? 'This valid System UUID already belongs to an existing BWTDallas Unit. Direct duplicate creation is blocked even when the Lot allows duplicates; submit an Intentional Duplicate request for authorized review.'
+        : 'Possible existing BWTDallas Units were found. Review the returned candidates in BWTDallas before creating another Unit.',
       existing
     );
   }
@@ -540,7 +583,8 @@ async function createUnitInternal({ body = {}, userId, toolSource, connection = 
             storage: previousStorage.supplied ? 'tech_user_input_via_tool' : 'not_supplied'
           },
           duplicateMatchCreation: allowDuplicateCreation,
-          duplicateMatchCount: hasDuplicateCandidates ? existing.match_count : 0
+          duplicateMatchCount: hasDuplicateCandidates ? existing.match_count : 0,
+          approvedIntentionalDuplicateRequestId: normalizePositiveInteger(body.intentional_duplicate_request_id ?? body.intentionalDuplicateRequestId)
         };
         await unitAuditEventModel.createUnitAuditEvent(event, connection);
       }

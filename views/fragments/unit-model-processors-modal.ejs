@@ -22,7 +22,7 @@
         <div class="message error"><% errorMessages.forEach((message) => { %><p><%= message %></p><% }) %></div>
       <% } %>
 
-      <p class="field-hint">Checked processors are the canonical processors presented when this exact Unit Model is selected. Associate an existing processor here instead of creating a manufacturer-specific duplicate.</p>
+      <p class="field-hint">Checked processors are the Catalog Processors presented when this exact Unit Model is selected. Associate an existing processor here instead of creating a manufacturer-specific duplicate.</p>
 
       <div class="catalog-association-filters catalog-association-filters--processors" data-catalog-association-filters>
         <label class="form-field"><span>Processor Type</span><select data-association-filter="brand"><option value="">All Processor Types</option><% processorBrands.forEach((brand) => { %><option value="<%= brand.id %>"><%= brand.label %></option><% }) %></select></label>

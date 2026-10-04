@@ -1,0 +1,53 @@
+<%
+  const selectedUsers = Array.isArray(selectedUserIds) ? selectedUserIds.map(String) : [];
+%>
+<div class="modal-backdrop" data-modal-backdrop data-modal-explicit-close>
+  <section class="modal-panel site-clean-modal virtual-huddle-compose-modal" role="dialog" aria-modal="true" aria-labelledby="virtual-huddle-add-recipients-title">
+    <header class="modal-header">
+      <div>
+        <p class="eyebrow">Virtual Huddle</p>
+        <h2 id="virtual-huddle-add-recipients-title">Add Recipients</h2>
+        <p class="field-hint"><strong><%= message.subject %></strong></p>
+      </div>
+      <button type="button" class="modal-close-button" data-modal-close aria-label="Close Add Recipients">×</button>
+    </header>
+    <div class="modal-body">
+      <% if (Array.isArray(errorMessages) && errorMessages.length > 0) { %>
+        <div class="message error"><% errorMessages.forEach((messageText) => { %><p><%= messageText %></p><% }) %></div>
+      <% } %>
+
+      <div class="message info"><p>Only active employees who are not already recipients are listed. Newly added recipients receive the same Huddle and acknowledgment rules as if they had been included originally.</p></div>
+
+      <% if (users.length === 0) { %>
+        <div class="message"><p>All eligible active employees are already recipients of this Huddle.</p></div>
+        <div class="form-actions"><button type="button" class="secondary-button" data-modal-close>Close</button></div>
+      <% } else { %>
+        <form class="app-form app-form-clean" method="post" action="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/add" hx-post="/management/virtual-huddle/<%= message.virtual_huddle_message_id %>/recipients/add" hx-target="#modal-root" hx-swap="innerHTML" autocomplete="off" data-huddle-compose-form>
+          <label class="form-field">
+            <span>Search active employees</span>
+            <input type="search" data-huddle-recipient-search placeholder="Search by name, username, or role" autocomplete="off" autofocus />
+          </label>
+          <div class="table-card virtual-huddle-recipient-picker" data-huddle-recipient-picker>
+            <table>
+              <thead><tr><th></th><th>Employee</th><th>Role</th></tr></thead>
+              <tbody>
+                <% users.forEach((user) => { %>
+                  <tr data-huddle-user-row data-search="<%= `${user.display_name} ${user.username || ''} ${formatRoleLabel(user.primary_role_code)}`.toLowerCase() %>" data-user-id="<%= user.user_id %>" data-role-code="<%= user.primary_role_code %>">
+                    <td><input type="checkbox" name="targetUserIds" value="<%= user.user_id %>" data-huddle-user-target aria-label="Add <%= user.display_name %>" <%= selectedUsers.includes(String(user.user_id)) ? 'checked' : '' %> /></td>
+                    <td><strong><%= user.display_name %></strong><% if (user.username) { %><span class="table-muted-line"><%= user.username %></span><% } %></td>
+                    <td><%= formatRoleLabel(user.primary_role_code) %></td>
+                  </tr>
+                <% }) %>
+              </tbody>
+            </table>
+          </div>
+          <p class="field-hint" data-huddle-recipient-count>0 active recipients selected</p>
+          <div class="form-actions">
+            <button type="submit" class="primary-button">Add Selected Recipients</button>
+            <button type="button" class="secondary-button" data-modal-close>Cancel</button>
+          </div>
+        </form>
+      <% } %>
+    </div>
+  </section>
+</div>

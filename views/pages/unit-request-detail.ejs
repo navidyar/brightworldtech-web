@@ -10,47 +10,48 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell unit-requests-page">
-          <section class="dashboard-hero accent-green">
+          <section class="page-heading site-work-page-heading record-detail-intro record-detail-intro--<%= request.statusClass %>">
             <div>
               <p class="eyebrow"><%= request.requestTypeLabel %></p>
-              <h2><%= request.displaySubject %></h2>
+              <h1><%= request.displaySubject %></h1>
               <p>
                 <%= request.isIntentionalDuplicateRequest
                   ? 'Review the matching existing record, immutable requested intake snapshot, and request history.'
                   : request.isQcReversionRequest
                     ? 'Review the exact QC decision being challenged, the QC requester reason, and the immutable audit context.'
-                    : 'Review the original observed catalog value, requester explanation, canonical approval details, and request history.' %>
+                    : 'Review the original observed catalog value, requester explanation, catalog approval details, and request history.' %>
               </p>
             </div>
-
-            <div class="hero-badge"><span>Status</span><strong><%= request.statusLabel %></strong></div>
+            <div class="site-clean-actions site-inline-actions"><a class="secondary-button" href="<%= unitRequestQueueUrl %>">Back to Requests</a></div>
           </section>
 
-          <section class="content-card">
-            <div class="content-header unit-request-detail-header">
-              <div>
-                <p class="eyebrow">Request Summary</p>
-                <h2><%= request.requestTypeLabel %></h2>
-                <p class="unit-request-detail-meta">
-                  Requested by <%= request.requestedByName %> · <%= request.submittedAt ? formatDateTime(request.submittedAt) : '—' %>
-                  <% if (request.isArchived) { %> · Archived <%= request.archivedAt ? formatDateTime(request.archivedAt) : '—' %><% } %>
-                </p>
-              </div>
-              <a class="secondary-button" href="<%= unitRequestQueueUrl %>">Back to Requests</a>
+          <section class="site-summary-panel site-summary-panel--expanded record-detail-summary-panel unit-request-detail-header" aria-label="Request summary">
+            <div class="site-summary-primary record-detail-status record-detail-status--<%= request.statusClass %>">
+              <span>Status</span>
+              <strong><%= request.statusLabel %></strong>
+              <small class="unit-request-detail-meta">Requested by <%= request.requestedByName %> · <%= request.submittedAt ? formatDateTime(request.submittedAt) : '—' %><% if (request.isArchived) { %> · Archived <%= request.archivedAt ? formatDateTime(request.archivedAt) : '—' %><% } %></small>
             </div>
+            <div class="site-summary-stats">
+              <article><span class="site-summary-icon" aria-hidden="true">R</span><span><small>Request Type</small><strong><%= request.requestTypeLabel %></strong></span></article>
+              <article><span class="site-summary-icon" aria-hidden="true">U</span><span><small>Requested By</small><strong><%= request.requestedByName %></strong></span></article>
+              <article><span class="site-summary-icon" aria-hidden="true">↗</span><span><small>Submitted</small><strong><%= request.submittedAt ? formatDateTime(request.submittedAt) : '—' %></strong></span></article>
+            </div>
+          </section>
 
+          <section class="content-card record-detail-shell">
             <% if (successMessage) { %><div class="message success" data-auto-dismiss-success><p><%= successMessage %></p></div><% } %>
             <% if (errorMessages.length > 0) { %><div class="message error"><% errorMessages.forEach((errorMessage) => { %><p><%= errorMessage %></p><% }) %></div><% } %>
 
             <% if (request.isIntentionalDuplicateRequest) { %>
-              <div class="unit-request-detail-grid unit-request-detail-overview">
-                <section class="unit-request-detail-card">
+              <div class="unit-request-detail-grid unit-request-detail-overview record-detail-split">
+                <section class="unit-request-detail-card record-detail-section">
                   <p class="eyebrow">Matching Existing Unit</p>
                   <h3><%= request.matchedUnitLabel %></h3>
                   <dl class="unit-request-detail-list">
                     <div><dt>Current / Last Lot</dt><dd><%= request.matchedUnitCurrentLotName %></dd></div>
                     <div><dt>Unit Serial</dt><dd><%= request.matchedUnitSnapshot.unitSerialNumber || '—' %></dd></div>
                     <div><dt>BIOS Serial</dt><dd><%= request.matchedUnitSnapshot.biosSerialNumber || '—' %></dd></div>
+                    <div><dt>System UUID</dt><dd><%= request.matchedUnitSnapshot.systemUuid || request.snapshotDisplay.existingSystemUuid || '—' %></dd></div>
                     <div><dt>Manufacturer</dt><dd><%= request.matchedUnitSnapshot.manufacturerLabel || '—' %></dd></div>
                     <div><dt>Model</dt><dd><%= request.matchedUnitSnapshot.modelLabel || request.matchedUnitSnapshot.modelSummary || '—' %></dd></div>
                     <div><dt>Processor</dt><dd><%= request.matchedUnitSnapshot.cpuSummary || '—' %></dd></div>
@@ -58,7 +59,7 @@
                   </dl>
                 </section>
 
-                <section class="unit-request-detail-card">
+                <section class="unit-request-detail-card record-detail-section">
                   <p class="eyebrow">Requested New Unit</p>
                   <h3>Immutable Intake Snapshot</h3>
                   <dl class="unit-request-detail-list">
@@ -69,12 +70,23 @@
                     <div><dt>Processor</dt><dd><%= request.snapshotDisplay.processorLabel || '—' %></dd></div>
                     <div><dt>Operating System</dt><dd><%= request.snapshotDisplay.operatingSystemLabel || '—' %></dd></div>
                     <div><dt>Serials</dt><dd><%= request.snapshotDisplay.serialSummary || '—' %></dd></div>
+                    <div><dt>System UUID</dt><dd><%= request.snapshotDisplay.systemUuid || '—' %></dd></div>
                   </dl>
                 </section>
               </div>
 
+
+              <% if (request.snapshotDisplay.systemUuidMatchesExisting) { %>
+                <section class="unit-request-detail-section record-detail-section">
+                  <p class="eyebrow">System UUID Collision</p>
+                  <div class="message warning">
+                    <p><strong>Exact valid UUID match requires manual approval.</strong> The proposed physical Unit reports the same System UUID as the existing BWTDallas Unit. The Lot's duplicate allowance does not bypass this review.</p>
+                  </div>
+                </section>
+              <% } %>
+
               <% if (request.snapshotDisplay.manufacturerDiffers || request.snapshotDisplay.modelDiffers) { %>
-                <section class="unit-request-detail-section">
+                <section class="unit-request-detail-section record-detail-section">
                   <p class="eyebrow">Identity Differences</p>
                   <p>The proposed Unit has different identity details from the matching record. This is permitted for an Intentional Duplicate request and is shown here for explicit review.</p>
                   <dl class="unit-request-detail-list">
@@ -88,8 +100,8 @@
                 </section>
               <% } %>
             <% } else if (request.isQcReversionRequest && request.qcReversionContext) { %>
-              <div class="unit-request-detail-grid unit-request-detail-overview">
-                <section class="unit-request-detail-card">
+              <div class="unit-request-detail-grid unit-request-detail-overview record-detail-split">
+                <section class="unit-request-detail-card record-detail-section">
                   <p class="eyebrow">Quality Control Decision</p>
                   <h3><%= request.qcReversionContext.unitLabel %></h3>
                   <dl class="unit-request-detail-list">
@@ -100,7 +112,7 @@
                     <div><dt>Recorded At</dt><dd><%= request.qcReversionContext.qcReviewedAt ? formatDateTime(request.qcReversionContext.qcReviewedAt) : '—' %></dd></div>
                   </dl>
                 </section>
-                <section class="unit-request-detail-card">
+                <section class="unit-request-detail-card record-detail-section">
                   <p class="eyebrow">Immutable QC Snapshot</p>
                   <h3><%= request.qcReversionContext.detailLabel %></h3>
                   <p><%= request.qcReversionContext.qcReviewNotes || 'No QC review note was recorded.' %></p>
@@ -108,8 +120,8 @@
                 </section>
               </div>
             <% } else if (request.catalogContext && request.catalogContext.kind === 'model') { %>
-              <div class="unit-request-detail-grid unit-request-detail-overview">
-                <section class="unit-request-detail-card">
+              <div class="unit-request-detail-grid unit-request-detail-overview record-detail-split">
+                <section class="unit-request-detail-card record-detail-section">
                   <p class="eyebrow">Observed Model</p>
                   <h3><%= request.catalogContext.requestedModelName %></h3>
                   <dl class="unit-request-detail-list">
@@ -117,8 +129,8 @@
                     <div><dt>Unit Category</dt><dd><%= request.catalogContext.unitCategoryLabel %></dd></div>
                   </dl>
                 </section>
-                <section class="unit-request-detail-card">
-                  <p class="eyebrow">Canonical Approval Result</p>
+                <section class="unit-request-detail-card record-detail-section record-detail-result-section record-detail-result-section--<%= request.statusClass %>">
+                  <p class="eyebrow">Catalog Approval Result</p>
                   <h3><%= request.catalogContext.approvedModelName || 'Pending Review' %></h3>
                   <dl class="unit-request-detail-list">
                     <div><dt>Managed Unit Model</dt><dd><%= request.catalogContext.approvedUnitModelLabel || 'Not added yet' %></dd></div>
@@ -127,8 +139,8 @@
                 </section>
               </div>
             <% } else if (request.catalogContext && request.catalogContext.kind === 'processor') { %>
-              <div class="unit-request-detail-grid unit-request-detail-overview">
-                <section class="unit-request-detail-card">
+              <div class="unit-request-detail-grid unit-request-detail-overview record-detail-split">
+                <section class="unit-request-detail-card record-detail-section">
                   <p class="eyebrow">Observed Processor</p>
                   <h3><%= request.catalogContext.requestedProcessorName %></h3>
                   <dl class="unit-request-detail-list">
@@ -139,8 +151,8 @@
                     <div><dt>Unit Category</dt><dd><%= request.catalogContext.unitCategoryLabel %></dd></div>
                   </dl>
                 </section>
-                <section class="unit-request-detail-card">
-                  <p class="eyebrow">Canonical Approval Result</p>
+                <section class="unit-request-detail-card record-detail-section record-detail-result-section record-detail-result-section--<%= request.statusClass %>">
+                  <p class="eyebrow">Catalog Approval Result</p>
                   <h3><%= request.catalogContext.approvedProcessorModelLabel || 'Pending Review' %></h3>
                   <dl class="unit-request-detail-list">
                     <div><dt>Processor Type</dt><dd><%= request.catalogContext.approvedProcessorBrandName || 'Not selected yet' %></dd></div>
@@ -151,15 +163,22 @@
               </div>
             <% } %>
 
-            <section class="unit-request-detail-section">
+            <section class="unit-request-detail-section record-detail-section record-detail-user-section">
               <p class="eyebrow">Requester Explanation</p>
               <p class="unit-request-requester-note"><%= request.requesterNote || 'No requester note entered.' %></p>
             </section>
 
             <% if (request.isIntentionalDuplicateRequest && request.createdUnitId) { %>
-              <section class="unit-request-detail-section">
+              <section class="unit-request-detail-section record-detail-section">
                 <p class="eyebrow">Approval Result</p>
                 <p>Created Unit: <a href="/tech/units?search=<%= encodeURIComponent(request.createdUnitLabel || '') %>"><%= request.createdUnitLabel || `Unit #${request.createdUnitId}` %></a></p>
+              </section>
+            <% } %>
+
+            <% if (request.isToolUuidDuplicateAuthorization && request.status === 'approved' && !request.createdUnitId) { %>
+              <section class="unit-request-detail-section record-detail-section">
+                <p class="eyebrow">Approval Result</p>
+                <p>Approved for one Tool Commit. The requesting Tool user must rerun Resolve + Preflight with this request ID before creating the duplicate Unit.</p>
               </section>
             <% } %>
 
@@ -170,10 +189,12 @@
                   <h3>Approve or Reject</h3>
                   <p>
                     <%= request.isIntentionalDuplicateRequest
-                      ? 'Approval creates the requested new Unit in the original destination lot only if that lot is still open, visible, and assignable.'
+                      ? (request.isToolUuidDuplicateAuthorization
+                        ? 'Approval authorizes exactly one Tool Commit for this verified System UUID collision. It does not create the Unit from this page.'
+                        : 'Approval creates the requested new Unit in the original destination lot only if that lot is still open, visible, and assignable.')
                       : request.isQcReversionRequest
                         ? 'Approval revalidates and reverts only the exact current QC decision shown here. The QC requester reason becomes the permanent reversion reason; an optional reviewer note remains separate.'
-                        : 'Approval writes only the canonical catalog value or compatibility mapping shown here. It does not create a Unit.' %>
+                        : 'Approval writes only the saved catalog value or compatibility mapping shown here. It does not create a Unit.' %>
                   </p>
                 </div>
 
@@ -201,7 +222,7 @@
                       <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
                       <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
                       <label class="form-field"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional approval context"></textarea></label>
-                      <button class="primary-button" type="submit">Approve and Create New Unit</button>
+                      <button class="primary-button" type="submit"><%= request.isToolUuidDuplicateAuthorization ? 'Approve UUID Duplicate Authorization' : 'Approve and Create New Unit' %></button>
                     </form>
                     <form method="post" action="/unit-requests/<%= request.unitRequestId %>/reject">
                       <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
@@ -213,31 +234,142 @@
                   </div>
                 <% } else if (request.catalogContext && request.catalogContext.kind === 'model') { %>
                   <div class="unit-request-review-actions">
-                    <form method="post" action="/unit-requests/<%= request.unitRequestId %>/approve">
+                    <form method="post" action="/unit-requests/<%= request.unitRequestId %>/approve" data-model-request-approval-form>
                       <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
                       <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
                       <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
-                      <div class="processor-request-approval-grid">
-                        <label class="form-field">
-                          <span>Unit Category</span>
-                          <select name="approvedUnitCategoryConfigValueId" required>
+                      <div class="processor-request-mode-section processor-request-mode-section--existing" data-model-request-existing-section>
+                        <div class="processor-request-mode-heading">
+                          <strong>1. Reuse an Existing Catalog Model whenever possible</strong>
+                          <span>BWTDallas recommends exact matches first. Likely alternatives are shown below, and the full manufacturer catalog is available only through search when needed.</span>
+                        </div>
+                        <div class="message info model-request-observed-category">
+                          <p><strong>Observed Unit Category:</strong> <%= request.catalogContext.unitCategoryLabel || 'Unspecified' %></p>
+                          <p>This is the category reported with the incoming model. The Catalog Unit Category below may be corrected before approval without changing an existing Catalog Model record.</p>
+                        </div>
+
+                        <input
+                          type="hidden"
+                          name="approvedExistingUnitModelId"
+                          value="<%= recommendedModelCatalogMatch?.id || '' %>"
+                          data-existing-model-id
+                        />
+
+                        <% if (inactiveModelCatalogMatch) { %>
+                          <div class="message info">
+                            <p><strong>Inactive catalog record found:</strong> #<%= inactiveModelCatalogMatch.id %> · <%= inactiveModelCatalogMatch.manufacturerName %> <%= inactiveModelCatalogMatch.modelName %> · <%= inactiveModelCatalogMatch.unitCategoryLabel %>.</p>
+                            <p>This record is not currently active. It is already selected as the recommended Catalog Model. Approving this request will reactivate it instead of creating a duplicate. Choose another match only if this recommendation is not correct.</p>
+                            <button
+                              type="button"
+                              class="secondary-button button-small"
+                              data-use-existing-model-id="<%= inactiveModelCatalogMatch.id %>"
+                              data-use-existing-model-label="#<%= inactiveModelCatalogMatch.id %> · <%= inactiveModelCatalogMatch.manufacturerName %> <%= inactiveModelCatalogMatch.modelName %> · <%= inactiveModelCatalogMatch.unitCategoryLabel %> (Inactive — will reactivate)"
+                              data-use-existing-model-category-id="<%= inactiveModelCatalogMatch.unitCategoryConfigValueId %>"
+                              data-use-existing-model-category-label="<%= inactiveModelCatalogMatch.unitCategoryLabel %>"
+                            >Use This Inactive Model</button>
+                          </div>
+                        <% } else if (recommendedModelCatalogMatch) { %>
+                          <div class="processor-request-catalog-matches">
+                            <strong>Recommended Catalog Model</strong>
+                            <div class="processor-request-catalog-match processor-request-catalog-match--strong">
+                              <span><strong>#<%= recommendedModelCatalogMatch.id %> · <%= recommendedModelCatalogMatch.manufacturerName %> <%= recommendedModelCatalogMatch.modelName %></strong> · <%= recommendedModelCatalogMatch.unitCategoryLabel %> <span class="pill good">Selected</span></span>
+                              <small>Exact model match. This existing Catalog Model is preselected for approval.</small>
+                              <button
+                                type="button"
+                                class="secondary-button button-small"
+                                data-use-existing-model-id="<%= recommendedModelCatalogMatch.id %>"
+                                data-use-existing-model-label="#<%= recommendedModelCatalogMatch.id %> · <%= recommendedModelCatalogMatch.manufacturerName %> <%= recommendedModelCatalogMatch.modelName %> · <%= recommendedModelCatalogMatch.unitCategoryLabel %>"
+                                data-use-existing-model-category-id="<%= recommendedModelCatalogMatch.unitCategoryConfigValueId %>"
+                                data-use-existing-model-category-label="<%= recommendedModelCatalogMatch.unitCategoryLabel %>"
+                              >Use Recommended Model</button>
+                            </div>
+                          </div>
+                        <% } %>
+
+                        <% const alternativeModelMatches = modelCatalogMatches.filter((match) => String(match.id) !== String(recommendedModelCatalogMatch?.id || '')); %>
+                        <% if (alternativeModelMatches.length) { %>
+                          <div class="processor-request-catalog-matches">
+                            <strong><%= recommendedModelCatalogMatch ? 'Other likely Catalog Models' : 'Likely Catalog Models' %></strong>
+                            <% alternativeModelMatches.forEach((match) => { %>
+                              <div class="processor-request-catalog-match">
+                                <span><strong>#<%= match.id %> · <%= match.manufacturerName %> <%= match.modelName %></strong> · <%= match.unitCategoryLabel %></span>
+                                <small><%= match.categoryMatch ? 'Same incoming Unit Category.' : 'Different saved Catalog Model category.' %></small>
+                                <button
+                                  type="button"
+                                  class="secondary-button button-small"
+                                  data-use-existing-model-id="<%= match.id %>"
+                                  data-use-existing-model-label="#<%= match.id %> · <%= match.manufacturerName %> <%= match.modelName %> · <%= match.unitCategoryLabel %>"
+                                  data-use-existing-model-category-id="<%= match.unitCategoryConfigValueId %>"
+                                  data-use-existing-model-category-label="<%= match.unitCategoryLabel %>"
+                                >Use This Model</button>
+                              </div>
+                            <% }) %>
+                          </div>
+                        <% } %>
+
+                        <div class="message" data-existing-model-selection-summary>
+                          <p><strong>Selected Catalog Model:</strong> <span data-existing-model-selection-text><%= recommendedModelCatalogMatch ? `#${recommendedModelCatalogMatch.id} · ${recommendedModelCatalogMatch.manufacturerName} ${recommendedModelCatalogMatch.modelName} · ${recommendedModelCatalogMatch.unitCategoryLabel}${recommendedModelCatalogMatch.isActive === false ? ' (Inactive — will reactivate)' : ''}` : 'None selected' %></span></p>
+                        </div>
+
+                        <label class="form-field model-request-catalog-category-field">
+                          <span>Catalog Unit Category</span>
+                          <select name="approvedUnitCategoryConfigValueId" required data-model-category-select>
                             <option value="">Select Unit Category</option>
                             <% modelUnitCategories.forEach((category) => { %>
-                              <option value="<%= category.id %>" <%= String(category.id) === String(request.catalogContext.unitCategoryConfigValueId || '') ? 'selected' : '' %>><%= category.label %></option>
+                              <% const initialCategoryId = recommendedModelCatalogMatch?.unitCategoryConfigValueId || request.catalogContext.unitCategoryConfigValueId || ''; %>
+                              <option value="<%= category.id %>" <%= String(category.id) === String(initialCategoryId) ? 'selected' : '' %>><%= category.label %></option>
                             <% }) %>
                           </select>
-                          <small class="field-hint">Requested as <strong><%= request.catalogContext.unitCategoryLabel || 'Unspecified' %></strong>. Choose the category this canonical model should actually use.</small>
+                          <small class="field-hint" data-model-category-hint>Choose the category this model should use in the Model Catalog. If it differs from the selected model, BWTDallas will create or reuse a separate same-name model in the chosen category.</small>
                         </label>
-                        <label class="form-field"><span>Canonical Unit Model Name</span><input type="text" name="approvedModelName" value="<%= request.catalogContext.requestedModelName %>" minlength="2" maxlength="150" required /></label>
+
+                        <label class="form-field processor-request-existing-field">
+                          <span>Search for a different Catalog Model</span>
+                          <input
+                            type="search"
+                            list="model-catalog-options"
+                            autocomplete="off"
+                            placeholder="Search <%= request.catalogContext.manufacturerName %> Model Catalog"
+                            data-existing-model-search
+                          />
+                          <datalist id="model-catalog-options">
+                            <% if (inactiveModelCatalogMatch) { %>
+                              <option
+                                value="#<%= inactiveModelCatalogMatch.id %> · <%= inactiveModelCatalogMatch.manufacturerName %> <%= inactiveModelCatalogMatch.modelName %> · <%= inactiveModelCatalogMatch.unitCategoryLabel %> (Inactive — will reactivate)"
+                                data-model-id="<%= inactiveModelCatalogMatch.id %>"
+                                data-model-category-id="<%= inactiveModelCatalogMatch.unitCategoryConfigValueId %>"
+                                data-model-category-label="<%= inactiveModelCatalogMatch.unitCategoryLabel %>"
+                              ></option>
+                            <% } %>
+                            <% modelCatalogOptions.forEach((model) => { %>
+                              <option
+                                value="#<%= model.id %> · <%= model.manufacturerName %> <%= model.modelName %> · <%= model.unitCategoryLabel %>"
+                                data-model-id="<%= model.id %>"
+                                data-model-category-id="<%= model.unitCategoryConfigValueId %>"
+                                data-model-category-label="<%= model.unitCategoryLabel %>"
+                              ></option>
+                            <% }) %>
+                          </datalist>
+                          <small class="field-hint" data-existing-model-search-hint>Use this only when the recommendation and likely matches are not correct. Search is limited to this manufacturer's active Model Catalog.</small>
+                        </label>
                       </div>
+                      <div class="processor-request-mode-divider"><span>OR</span></div>
+                      <div class="processor-request-mode-heading" data-new-model-section>
+                        <strong>2. Create a New Catalog Model</strong>
+                        <span>Use these fields only if the catalog does not already contain the physical model.</span>
+                      </div>
+                      <div class="processor-request-approval-grid">
+                        <label class="form-field"><span>Catalog Model Name</span><input type="text" name="approvedModelName" data-new-model-field value="<%= request.catalogContext.requestedModelName %>" minlength="2" maxlength="150" /></label>
+                      </div>
+                      <button type="button" class="secondary-button button-small" data-create-new-model-instead>Create a New Catalog Model Instead</button>
                       <label class="form-field"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional normalization, category, or source note"></textarea></label>
-                      <button class="primary-button" type="submit">Approve Model Request</button>
+                      <button class="primary-button" type="submit" data-model-approve-button>Approve Model Request</button>
                     </form>
                     <form method="post" action="/unit-requests/<%= request.unitRequestId %>/reject">
                       <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
                       <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
                       <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
-                      <label class="form-field"><span>Rejection Note</span><textarea name="reviewerNote" rows="3" minlength="3" maxlength="1000" required placeholder="Explain why this model should not be added or reactivated."></textarea></label>
+                      <label class="form-field"><span>Rejection Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional reason this model should not be added or reactivated."></textarea></label>
                       <button class="secondary-button" type="submit">Reject Request</button>
                     </form>
                   </div>
@@ -252,7 +384,7 @@
                       <div class="processor-request-mode-section processor-request-mode-section--existing">
                         <div class="processor-request-mode-heading">
                           <strong>1. Reuse an Existing Processor whenever possible</strong>
-                          <span>This adds the canonical Processor to <%= request.catalogContext.manufacturerName %> <%= request.catalogContext.unitModelName %>; it does not create a duplicate Processor record.</span>
+                          <span>This adds the Catalog Processor to <%= request.catalogContext.manufacturerName %> <%= request.catalogContext.unitModelName %>; it does not create a duplicate Processor record.</span>
                         </div>
 
                         <% if (processorCatalogMatches.length > 0) { %>
@@ -269,7 +401,7 @@
                         <% } %>
 
                         <label class="form-field processor-request-existing-field">
-                          <span>Existing Canonical Processor</span>
+                          <span>Existing Catalog Processor</span>
                           <input type="search" list="processor-catalog-options" autocomplete="off" placeholder="Search the global catalog, for example i5-9500T" data-existing-processor-search />
                           <datalist id="processor-catalog-options">
                             <% processorCatalogOptions.forEach((processor) => { %>
@@ -284,14 +416,14 @@
 
                       <div class="processor-request-mode-section" data-new-processor-section>
                         <div class="processor-request-mode-heading">
-                          <strong>2. Create a New Canonical Processor only when none exists</strong>
-                          <span>BWTDallas has interpreted the observed string into canonical pieces. Review them before approval.</span>
+                          <strong>2. Create a New Catalog Processor only when none exists</strong>
+                          <span>BWTDallas has interpreted the observed string into catalog fields. Review them before approval.</span>
                         </div>
 
                         <% if (processorInterpretation && processorInterpretation.rawValue && processorInterpretation.changed) { %>
                           <div class="message info">
                             <p><strong>Interpreted from:</strong> <%= processorInterpretation.rawValue %></p>
-                            <p><strong>Suggested canonical values:</strong> <%= [
+                            <p><strong>Suggested catalog values:</strong> <%= [
                               processorInterpretation.brandName,
                               processorInterpretation.modelCode,
                               processorInterpretation.family ? `Family ${processorInterpretation.family}` : '',
@@ -303,7 +435,7 @@
 
                         <div class="message" data-processor-similarity-warning hidden>
                           <p><strong>Possible existing processor:</strong> <span data-processor-similarity-text></span></p>
-                          <p>Select the existing canonical Processor above rather than creating a duplicate.</p>
+                          <p>Select the existing Catalog Processor above rather than creating a duplicate.</p>
                         </div>
                         <div class="message info" data-processor-format-warning hidden>
                           <p><strong>Natural Processor string detected:</strong> <span data-processor-format-text></span>. BWTDallas will normalize recognized pieces when you submit.</p>
@@ -318,11 +450,11 @@
                             </select>
                           </label>
                           <label class="form-field">
-                            <span>Canonical Processor Type Name</span>
+                            <span>Processor Type Name</span>
                             <input type="text" name="approvedProcessorBrandName" value="<%= processorInterpretation?.brandName || request.catalogContext.requestedProcessorType %>" minlength="2" maxlength="100" required data-canonical-processor-brand data-new-processor-field />
                           </label>
                           <label class="form-field">
-                            <span>Canonical Processor</span>
+                            <span>Catalog Processor</span>
                             <input type="text" name="approvedProcessorModelCode" value="<%= processorInterpretation?.modelCode || request.catalogContext.requestedProcessorName %>" minlength="2" maxlength="150" required data-canonical-processor-model data-new-processor-field />
                           </label>
                           <label class="form-field">
@@ -342,14 +474,14 @@
                         <p class="field-hint processor-request-canonical-hint">The original observed Processor string remains part of the request. These fields are the normalized catalog record BWTDallas will create only when an existing Processor is not reused.</p>
 
                         <div class="message info processor-request-admin-confirmation-note">
-                          <p><strong>Admin Catalog Review:</strong> Reuse an existing Processor whenever one already exists. Keep canonical Processor naming and metadata consistent with the global catalog.</p>
+                          <p><strong>Processor Catalog Review:</strong> Reuse an existing Processor whenever one already exists. Keep Processor Catalog naming and metadata consistent with the global catalog.</p>
                         </div>
                       </div>
 
                       <label class="form-field processor-request-approval-note"><span>Approval Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional compatibility or normalization note"></textarea></label>
                       <div class="form-actions">
                         <button class="primary-button" type="submit" data-processor-approve-button>Approve Processor Request</button>
-                        <% if (isAdminCatalogReviewer) { %>
+                        <% if (hasPermission('configuration.view') && hasPermission('configuration.processors.manage')) { %>
                           <a class="secondary-button" href="/management/config/processors?search=<%= encodeURIComponent(request.catalogContext.requestedProcessorName || '') %>">Open Processor Catalog</a>
                         <% } %>
                       </div>
@@ -358,16 +490,16 @@
                       <input type="hidden" name="returnStatus" value="<%= statusFilter %>" />
                       <input type="hidden" name="returnRequestType" value="<%= requestTypeFilter %>" />
                       <input type="hidden" name="returnSearch" value="<%= searchTerm %>" />
-                      <label class="form-field"><span>Rejection Note</span><textarea name="reviewerNote" rows="3" minlength="3" maxlength="1000" required placeholder="Explain why this processor should not be added or mapped."></textarea></label>
+                      <label class="form-field"><span>Rejection Note <small>(optional)</small></span><textarea name="reviewerNote" rows="3" maxlength="1000" placeholder="Optional reason this processor should not be added or mapped."></textarea></label>
                       <button class="secondary-button" type="submit">Reject Request</button>
                     </form>
                   </div>
                 <% } %>
               </section>
-            <% } else if (canReviewRequests && request.isCatalogRequest && request.isPending && !canManageCatalogRequests) { %>
-              <section class="unit-request-detail-section">
+            <% } else if (canReviewRequests && request.isCatalogRequest && request.isPending && !canManageCatalogRequests && !canWithdrawRequest) { %>
+              <section class="unit-request-detail-section record-detail-section">
                 <p class="eyebrow">Catalog Review Access</p>
-                <p>Tech Leads and Management can inspect Model and Processor Catalog requests, but only Admin can approve or reject them.</p>
+                <p>You can inspect this Catalog request. The matching Model or Processor Catalog approval permission is required to approve or reject it.</p>
               </section>
             <% } else if (canWithdrawRequest) { %>
               <section class="unit-request-review-panel">
@@ -381,19 +513,28 @@
                 </form>
               </section>
             <% } else if (!request.isPending && request.reviewerNote) { %>
-              <section class="unit-request-detail-section">
+              <section class="unit-request-detail-section record-detail-section record-detail-user-section">
                 <p class="eyebrow">Reviewer Note</p>
                 <p class="unit-request-requester-note"><%= request.reviewerNote %></p>
                 <p class="table-muted-line"><%= request.reviewedByName || 'Reviewed' %> · <%= request.reviewedAt ? formatDateTime(request.reviewedAt) : '—' %></p>
               </section>
             <% } %>
 
-            <section class="unit-request-detail-section">
+            <section class="unit-request-detail-section record-detail-section record-detail-history-section">
               <p class="eyebrow">Request History</p>
               <ol class="unit-request-event-list">
                 <% if (!request.events || request.events.length === 0) { %><li>No request history was recorded.</li><% } %>
-                <% (request.events || []).forEach((event) => { %>
-                  <li>
+                <% (request.events || []).forEach((event) => {
+                  const eventTypeKey = String(event.eventType || '').toLowerCase();
+                  const eventTone = eventTypeKey.includes('approved')
+                    ? 'success'
+                    : eventTypeKey.includes('rejected')
+                      ? 'danger'
+                      : eventTypeKey.includes('withdrawn')
+                        ? 'slate'
+                        : 'info';
+                %>
+                  <li class="record-detail-event record-detail-event--<%= eventTone %>">
                     <strong><%= event.eventType.charAt(0).toUpperCase() + event.eventType.slice(1) %></strong>
                     <span><%= event.performedByName %> · <%= event.occurredAt ? formatDateTime(event.occurredAt) : '—' %></span>
                     <% if (event.eventNote) { %><p><%= event.eventNote %></p><% } %>
@@ -405,6 +546,7 @@
         </main>
       </div>
     </div>
+    <script defer src="/js/model-request-review.js?v=20261002-category-correction"></script>
     <script defer src="/js/processor-request-review.js?v=20260923-processor-string-interpretation"></script>
   </body>
 </html>

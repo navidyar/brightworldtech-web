@@ -10,37 +10,41 @@
         <%- include('../partials/topbar', { pageTitle }) %>
 
         <main class="content-shell">
-          <section class="dashboard-hero">
+          <section class="page-heading site-work-page-heading management-login-page-heading">
             <div>
-              <p class="eyebrow">Step 7d</p>
-              <h2>Login Activity</h2>
-              <p>Review successful sign-ins by day. Times are shown in Dallas local time.</p>
+              <p class="eyebrow">Security Audit</p>
+              <h1>Login Activity</h1>
+              <p>Review successful sign-ins by day. Times are shown automatically in the browser time zone: <%= timeZone %>.</p>
             </div>
 
-            <div class="hero-badge">
-              <span>Access</span>
-              <strong>Admin / Management</strong>
-            </div>
+            <% if (typeof hasPermission === 'function' && hasPermission('users.view')) { %>
+              <div class="site-clean-actions site-inline-actions">
+                <a class="secondary-button" href="/management/users">Back to Users</a>
+              </div>
+            <% } %>
           </section>
 
-          <section class="management-login-summary-grid" aria-label="Login activity summary">
-            <article class="management-login-summary-card">
-              <p class="eyebrow">Selected Date</p>
-              <strong><%= formatDate(`${selectedDate}T12:00:00.000Z`) %></strong>
-              <span>Dallas local reporting date.</span>
-            </article>
+          <section class="site-summary-panel site-summary-panel--expanded management-login-summary-panel" aria-label="Login activity summary">
+            <div class="site-summary-primary">
+              <span>Selected date</span>
+              <strong><%= formatDateKeyLabel(selectedDate) %></strong>
+              <small>Daily successful sign-in audit</small>
+            </div>
 
-            <article class="management-login-summary-card">
-              <p class="eyebrow">Signed In</p>
-              <strong><%= formatNumber(signedInUserCount) %></strong>
-              <span>Unique users with a successful sign-in.</span>
-            </article>
-
-            <article class="management-login-summary-card">
-              <p class="eyebrow">Successful Sign-ins</p>
-              <strong><%= formatNumber(successfulLoginCount) %></strong>
-              <span>Total successful sessions recorded for the day.</span>
-            </article>
+            <div class="site-summary-stats">
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">#</span>
+                <span><small>Unique Users Signed In</small><strong><%= formatNumber(signedInUserCount) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">✓</span>
+                <span><small>Successful Sign-ins</small><strong><%= formatNumber(successfulLoginCount) %></strong></span>
+              </article>
+              <article>
+                <span class="site-summary-icon" aria-hidden="true">◉</span>
+                <span><small>Permission</small><strong>Login Audit</strong></span>
+              </article>
+            </div>
           </section>
 
           <section class="content-card">
@@ -50,17 +54,15 @@
                 <h2>Successful Login Activity</h2>
               </div>
 
-              <a class="secondary-button" href="/management/users">Back to Users</a>
             </div>
 
-            <form class="management-login-filter-form" method="get" action="/management/login-activity">
+            <form class="management-login-filter-form" method="get" action="/management/login-activity" data-auto-submit-filter-form>
               <div class="form-field">
                 <label for="login-activity-date">Date</label>
-                <input id="login-activity-date" type="date" name="date" value="<%= selectedDate %>" max="<%= todayDate %>" required />
+                <input id="login-activity-date" type="date" name="date" value="<%= selectedDate %>" max="<%= todayDate %>" required data-auto-submit-filter="immediate" />
               </div>
 
               <div class="management-login-filter-actions">
-                <button type="submit" class="primary-button">View Activity</button>
                 <% if (selectedDate !== todayDate) { %>
                   <a class="secondary-button" href="/management/login-activity">Today</a>
                 <% } %>
@@ -68,7 +70,7 @@
             </form>
 
             <p class="management-login-note">
-              This audit begins recording successful sign-ins after Step 7d is deployed. A user appears once per selected day, with their first and most recent successful sign-in shown.
+              A user appears once per selected day; use View Day to review every recorded successful sign-in for that user on the selected date.
             </p>
 
             <div class="table-card management-login-table-card">
@@ -80,13 +82,14 @@
                     <th>First Sign-in</th>
                     <th>Most Recent Sign-in</th>
                     <th>Successful Sign-ins</th>
+                    <th>Action</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   <% if (loginActivity.length === 0) { %>
                     <tr>
-                      <td colspan="5">No successful sign-ins were recorded for this date.</td>
+                      <td colspan="6">No successful sign-ins were recorded for this date.</td>
                     </tr>
                   <% } %>
 
@@ -99,9 +102,18 @@
                         </div>
                       </td>
                       <td><span class="pill slate"><%= activity.first_login_role_label %></span></td>
-                      <td><%= formatTime(activity.first_login_at) %></td>
-                      <td><%= formatTime(activity.last_login_at) %></td>
+                      <td><%= formatTimeWithZone(activity.first_login_at) %></td>
+                      <td><%= formatTimeWithZone(activity.last_login_at) %></td>
                       <td><%= formatNumber(activity.successful_login_count) %></td>
+                      <td>
+                        <a
+                          class="secondary-button button-small"
+                          href="/management/login-activity/<%= activity.user_id %>/modal?date=<%= encodeURIComponent(selectedDate) %>"
+                          hx-get="/management/login-activity/<%= activity.user_id %>/modal?date=<%= encodeURIComponent(selectedDate) %>"
+                          hx-target="#modal-root"
+                          hx-swap="innerHTML"
+                        >View Day</a>
+                      </td>
                     </tr>
                   <% }) %>
                 </tbody>
@@ -111,5 +123,8 @@
         </main>
       </div>
     </div>
+
+    <div id="modal-root"></div>
+    <script defer src="/js/modal.js?v=20260729-stage9k-modal-accessibility"></script>
   </body>
 </html>

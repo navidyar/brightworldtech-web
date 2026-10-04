@@ -19,5 +19,5 @@ test('Tech Lead, Management, and Admin may reverse Unit completion', () => {
 test('completion reversal requires a meaningful reason', () => {
   assert.equal(normalizeCompletionReversalReason('  Completed accidentally  '), 'Completed accidentally');
   assert.throws(() => normalizeCompletionReversalReason(''), /reason is required/i);
-  assert.throws(() => assertCanReverseUnitCompletion(['tech']), /Only a Tech Lead/i);
+  assert.throws(() => assertCanReverseUnitCompletion(['tech']), /Permission.*required/i);
 });

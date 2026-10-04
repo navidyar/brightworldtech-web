@@ -43,7 +43,7 @@
         </dl>
 
         <% if (blocking || optionalAck) { %>
-          <form class="app-form app-form-clean virtual-huddle-ack-form" data-huddle-ack-form data-recipient-id="<%= presentation.virtual_huddle_recipient_id %>" autocomplete="off">
+          <form class="app-form app-form-clean virtual-huddle-ack-form" method="post" action="/virtual-huddle/recipients/<%= presentation.virtual_huddle_recipient_id %>/acknowledge" data-huddle-ack-form data-recipient-id="<%= presentation.virtual_huddle_recipient_id %>" autocomplete="off">
             <section class="form-section">
               <div class="form-section-header"><h3>Acknowledgment</h3></div>
               <div class="form-grid single-column">

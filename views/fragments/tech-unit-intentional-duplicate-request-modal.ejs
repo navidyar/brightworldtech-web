@@ -108,6 +108,10 @@
                 <dd><%= matchedByLabel() || 'Serial match' %></dd>
               </div>
               <div>
+                <dt>System UUID</dt>
+                <dd><%= safeCandidate.systemUuid || '—' %></dd>
+              </div>
+              <div>
                 <dt>Assigned To</dt>
                 <dd><%= safeCandidate.assignedToName || (safeCandidate.isParked ? 'Unassigned while Parked' : 'Unassigned') %></dd>
               </div>
@@ -146,8 +150,19 @@
                   <dt>Serials</dt>
                   <dd><%= display.serialSummary || '—' %></dd>
                 </div>
+                <div>
+                  <dt>System UUID</dt>
+                  <dd><%= display.systemUuid || '—' %></dd>
+                </div>
               </dl>
             </section>
+
+
+            <% if (display.systemUuidMatchesExisting) { %>
+              <div class="message warning">
+                <p><strong>Exact System UUID collision:</strong> the proposed Unit and the matching existing Unit report the same valid System UUID. This exception requires explicit authorized review even when the destination Lot normally allows duplicate serials.</p>
+              </div>
+            <% } %>
 
             <% if (display.manufacturerDiffers || display.modelDiffers) { %>
               <div class="message info">

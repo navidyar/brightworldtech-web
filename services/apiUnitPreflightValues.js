@@ -1,6 +1,7 @@
 'use strict';
 
 const { normalizePositiveInteger } = require('../utils/positiveInteger');
+const { normalizeModelText } = require('../utils/catalogText');
 const {
   getLotRequirementField,
   normalizeRequirementKey
@@ -242,6 +243,15 @@ function resolveKnownCatalogValue(requirementKey, submitted, formOptions, formDa
   if (requirementKey === 'model') {
     const manufacturerId = normalizePositiveInteger(formData.manufacturerId);
     const categoryId = normalizePositiveInteger(formData.unitCategoryConfigValueId);
+    const mappedModel = (formOptions.unitModelIntakeMappings || []).find((mapping) => (
+      Number(mapping.observedManufacturerId) === manufacturerId
+      && Number(mapping.observedUnitCategoryConfigValueId) === categoryId
+      && mapping.observedModelKey === normalizeModelText(submitted)
+    ));
+    if (mappedModel) {
+      formData.unitCategoryConfigValueId = String(mappedModel.targetUnitCategoryConfigValueId);
+      return Number(mappedModel.targetUnitModelId);
+    }
     let options = Array.isArray(formOptions.unitModels) ? formOptions.unitModels : [];
     if (manufacturerId) options = options.filter((option) => Number(option.manufacturerId) === manufacturerId);
     if (categoryId) options = options.filter((option) => Number(option.unitCategoryConfigValueId) === categoryId);

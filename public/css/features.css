@@ -150,8 +150,8 @@
   display: block;
   width: 100%;
   min-width: 0;
-  white-space: pre;
-  overflow-wrap: normal;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
   word-break: normal;
 }
 
@@ -424,10 +424,6 @@
   background: var(--lot-level-marker, #6d28d9);
 }
 
-:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell {
-  padding-left: calc(10px + (var(--lot-level, 0) * 84px)) !important;
-}
-
 :where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
   grid-template-columns: 10px 18px minmax(0, 1fr);
   gap: 8px;
@@ -445,7 +441,6 @@
   --lot-marker-width: 10px;
   --lot-marker-gap: 10px;
   position: relative;
-  padding-left: calc(10px + (var(--lot-level, 0) * var(--lot-indent-step)) + var(--lot-marker-width) + var(--lot-marker-gap)) !important;
   background-image: linear-gradient(var(--lot-level-marker, #6d28d9), var(--lot-level-marker, #6d28d9));
   background-position: calc(10px + (var(--lot-level, 0) * var(--lot-indent-step))) 0;
   background-repeat: no-repeat;
@@ -470,32 +465,19 @@
   --lot-group-rail-gap: 14px;
   --lot-group-rail-color: #7c3aed;
   position: relative;
-  padding-left: calc(var(--lot-group-rail-offset) + var(--lot-group-rail-width) + var(--lot-group-rail-gap) + (var(--lot-level, 0) * var(--lot-indent-step))) !important;
-  background-image: linear-gradient(var(--lot-group-rail-color), var(--lot-group-rail-color)) !important;
-  background-position: var(--lot-group-rail-offset) 0 !important;
-  background-repeat: no-repeat !important;
-  background-size: var(--lot-group-rail-width) 100% !important;
 }
 
 :where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
   grid-template-columns: 18px minmax(0, 1fr);
   gap: 8px;
-  padding-left: 0 !important;
 }
 
 :where(body.css-scope-lots) .management-lots-table .lot-hierarchy-cell {
   --lot-indent-step: 84px;
   --lot-group-rail-color: #15803d;
-  border-left: 6px solid var(--lot-group-rail-color) !important;
-  padding-left: calc(14px + (var(--lot-level, 0) * var(--lot-indent-step))) !important;
-  background-image: none !important;
   background-position: initial !important;
   background-repeat: initial !important;
   background-size: initial !important;
-}
-
-:where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap {
-  padding-left: 0 !important;
 }
 
 :where(body.css-scope-lots) .management-lots-table .lot-hierarchy-wrap::before {
@@ -692,8 +674,6 @@
 }
 
 :where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:hover .lot-tree-toggle-visual {
-  border-color: var(--line-soft) !important;
-  background: var(--surface) !important;
   transform: none !important;
 }
 
@@ -719,18 +699,6 @@
 
 :where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-visual {
   border-color: #1d4ed8 !important;
-  background: #1d4ed8 !important;
-  color: #ffffff !important;
-}
-
-:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:hover .lot-tree-toggle-visual {
-  border-color: #1e40af !important;
-  background: #1e40af !important;
-  color: #ffffff !important;
-}
-
-:where(body.css-scope-lots) .management-lots-table .lot-tree-toggle:focus-visible .lot-tree-toggle-visual {
-  border-color: #1e40af !important;
 }
 
 :where(body.css-scope-lots) .management-lots-table .lot-tree-toggle-visual {
@@ -839,7 +807,11 @@ html.label-library-reordering * {
 
 html.modal-open,
 body.modal-open {
+  /* Keep a hidden fallback for older engines, but prefer clip so desktop
+     position: sticky shell elements keep their viewport geometry while the
+     fixed modal backdrop owns scrolling. */
   overflow: hidden;
+  overflow: clip;
   overscroll-behavior: none;
 }
 
@@ -892,6 +864,51 @@ html.modal-open {
   .tech-unit-modal {
     max-height: calc(100dvh - 36px);
   }
+}
+
+/* Global modal natural-scroll contract. The backdrop owns vertical scrolling so
+   modal headers, bodies, and footers move together like a normal page. Feature
+   rules may still size inner tables/lists, but they must not pin modal chrome. */
+#modal-root .modal-backdrop {
+  align-items: start !important;
+  overflow-y: auto !important;
+}
+
+#modal-root .modal-panel {
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+#modal-root .modal-panel > :is(
+  .modal-header,
+  .modal-body,
+  .modal-footer,
+  .tech-qc-status-modal__body,
+  .tech-qc-modal-footer
+),
+#modal-root .modal-panel :is(.form-actions, .modal-actions) {
+  position: static !important;
+  top: auto !important;
+  bottom: auto !important;
+}
+
+#modal-root .modal-panel > :is(.modal-body, .tech-qc-status-modal__body) {
+  flex: 0 1 auto !important;
+  min-height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  overscroll-behavior: auto !important;
+}
+
+#modal-root .modal-panel > :is(.modal-header, .modal-footer, .tech-qc-modal-footer) {
+  flex: 0 0 auto !important;
+}
+
+/* Table headings inside modals scroll with their table/content instead of
+   remaining pinned while the rest of the modal moves. */
+#modal-root .modal-panel th {
+  position: static !important;
+  top: auto !important;
 }
 
 /* Keep Unit form error summaries visually separate from the first form section. The page/modal scope
@@ -986,19 +1003,9 @@ html.modal-open {
   font-weight: 650;
 }
 
-.tech-unit-form [data-unit-form-field-key].has-lot-requirement-error,
-.tech-unit-form [data-unit-form-field-key].has-lot-requirement-warning {
-  border-radius: 7px;
-  outline: 2px solid transparent;
-  outline-offset: 3px;
-}
-
 .tech-unit-form [data-unit-form-field-key].has-lot-requirement-error {
-  outline-color: rgb(190 47 47 / 32%);
-}
-
-.tech-unit-form [data-unit-form-field-key].has-lot-requirement-warning {
-  outline-color: rgb(191 126 24 / 30%);
+  --form-field-focus-border: #bf3e3e;
+  --form-field-focus-shadow: 0 0 0 3px rgb(191 62 62 / 22%);
 }
 
 .tech-unit-form [data-unit-form-field-key].has-lot-requirement-error :is(input, select, textarea),
@@ -1006,9 +1013,22 @@ html.modal-open {
   border-color: #bf3e3e !important;
 }
 
+.tech-unit-form [data-unit-form-field-key].has-lot-requirement-error input[type="radio"] {
+  box-shadow: 0 0 0 3px rgb(191 62 62 / 18%) !important;
+}
+
+.tech-unit-form [data-unit-form-field-key].has-lot-requirement-warning {
+  --form-field-focus-border: #c78a27;
+  --form-field-focus-shadow: 0 0 0 3px rgb(199 138 39 / 22%);
+}
+
 .tech-unit-form [data-unit-form-field-key].has-lot-requirement-warning :is(input, select, textarea),
 .tech-unit-form [data-unit-form-field-key].has-lot-requirement-warning .searchable-select-input {
   border-color: #c78a27 !important;
+}
+
+.tech-unit-form [data-unit-form-field-key].has-lot-requirement-warning input[type="radio"] {
+  box-shadow: 0 0 0 3px rgb(199 138 39 / 18%) !important;
 }
 
 @media (max-width: 680px) {
@@ -1078,5 +1098,36 @@ body.virtual-huddle-blocked {
 
   .virtual-huddle-layer .virtual-huddle-panel {
     max-height: calc(100vh - 20px);
+  }
+}
+
+/* Account History uses the existing modal backdrop scroll while keeping wide
+   tables contained to their own horizontal scroll area. */
+#modal-root .management-user-history-modal {
+  width: min(1400px, 100%);
+  min-width: 0;
+}
+
+#modal-root .management-user-history-modal .modal-header,
+#modal-root .management-user-history-modal .modal-body {
+  min-width: 0;
+}
+
+#modal-root .management-user-history-table-card {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+#modal-root .management-user-history-table {
+  min-width: 760px;
+}
+
+#modal-root .management-user-history-table td {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  #modal-root .management-user-history-modal {
+    width: 100%;
   }
 }

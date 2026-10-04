@@ -91,7 +91,7 @@ test('model requests remain available from both Add and Edit Unit', () => {
   assert.doesNotMatch(template, /canRequestModelCatalogException = !isEditMode/);
   assert.match(template, /data-catalog-request-action-kind="model"/);
   assert.match(template, />Request Missing Model</);
-  assert.match(controller, /Catalog Exception requests from Add\/Edit Unit/);
+  assert.match(controller, /Catalog request submission permission is required/);
 });
 
 test('catalog-request actions are not hidden by Lot field visibility followers', () => {

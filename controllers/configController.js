@@ -1,7 +1,11 @@
 const configModel = require('../models/configModel');
 const operationalOptionRankingModel = require('../models/operationalOptionRankingModel');
+const labelDynamicFieldConfigModel = require('../models/labelDynamicFieldConfigModel');
+const applicationSettingsModel = require('../models/applicationSettingsModel');
+const toolConfigAliasModel = require('../models/toolConfigAliasModel');
 const { SYSTEM_CONFIG_VALUE_IDS } = require('../config/configIdentityRegistry');
 const { isHtmxRequest } = require('../utils/htmxRequest');
+const { normalizeTimeZone, listSupportedTimeZones } = require('../utils/timeZone');
 const {
   MIN_PASSWORD_LINK_EXPIRY_HOURS,
   MAX_PASSWORD_LINK_EXPIRY_HOURS,
@@ -18,6 +22,12 @@ const {
   formatRefreshIntervalLabel,
   parseAllowedRefreshIntervalMinutes
 } = require('../services/operationalOptionRankingAdministration');
+const {
+  buildConfiguredLabelFieldGroups,
+  buildLabelDynamicFieldUpdateItems,
+  buildLabelDynamicFieldOrderItems,
+  validateLabelDynamicFieldUpdateItems
+} = require('../services/labelDynamicFieldConfiguration');
 
 function isPasswordLinkExpirySetting(configValue) {
   return Number(configValue?.system_config_value_id || 0) === SYSTEM_CONFIG_VALUE_IDS.PASSWORD_LINK_EXPIRY_HOURS;
@@ -295,11 +305,14 @@ async function renderConfigPage(req, res, next) {
     const includeInactiveValues = parseIncludeInactiveFlag(req.query.includeInactive);
     const categories = await configModel.listConfigCategoriesWithValues({ includeInactiveValues });
     const categorySections = configModel.groupConfigCategories(categories);
-    const [summary, rankingAdministration, processorTypes] = await Promise.all([
+    const [summary, rankingAdministration, processorTypes, labelDynamicFieldSettings, applicationSettings] = await Promise.all([
       configModel.getConfigSummary(),
       loadOperationalRankingAdministration(categories),
-      configModel.listProcessorTypes({ includeInactive: includeInactiveValues })
+      configModel.listProcessorTypes({ includeInactive: includeInactiveValues }),
+      labelDynamicFieldConfigModel.listLabelDynamicFieldSettings(),
+      applicationSettingsModel.getApplicationSettings()
     ]);
+    const labelDynamicFieldGroups = buildConfiguredLabelFieldGroups(labelDynamicFieldSettings, { includeInactive: true });
 
     res.render('pages/management-config', {
       pageTitle: 'Configuration',
@@ -309,10 +322,132 @@ async function renderConfigPage(req, res, next) {
       summary,
       rankingAdministration,
       processorTypes,
+      labelDynamicFieldGroups,
+      labelDynamicFieldsSaved: req.query.labelDynamicFieldsSaved === '1',
+      labelDynamicFieldError: String(req.query.labelDynamicFieldError || '').trim(),
+      applicationSettings,
+      supportedTimeZones: listSupportedTimeZones(),
+      timeZoneSaved: req.query.timeZoneSaved === '1',
+      timeZoneError: String(req.query.timeZoneError || '').trim(),
+      huddleRetentionSaved: req.query.huddleRetentionSaved === '1',
+      huddleRetentionError: String(req.query.huddleRetentionError || '').trim(),
       includeInactiveValues
     });
   } catch (error) {
     next(error);
+  }
+}
+
+
+
+async function updateApplicationTimeZone(req, res, next) {
+  try {
+    const submittedTimeZone = String(req.body.defaultTimeZone || '').trim();
+    const normalizedTimeZone = normalizeTimeZone(submittedTimeZone, null);
+
+    if (!normalizedTimeZone) {
+      const params = new URLSearchParams({ timeZoneError: 'Select a valid IANA time zone from the list.' });
+      return sendHtmxRedirect(req, res, `/management/config?${params.toString()}`);
+    }
+
+    await applicationSettingsModel.updateDefaultTimeZone({
+      defaultTimeZone: normalizedTimeZone,
+      updatedByUserId: req.currentUser?.user_id || null
+    });
+
+    return sendHtmxRedirect(req, res, addCacheBuster('/management/config?timeZoneSaved=1'));
+  } catch (error) {
+    if (error?.code === 'ER_NO_SUCH_TABLE' || Number(error?.errno) === 1146) {
+      const params = new URLSearchParams({ timeZoneError: 'Application timezone storage is not ready. Run migrate:application-timezone first.' });
+      return sendHtmxRedirect(req, res, `/management/config?${params.toString()}`);
+    }
+    return next(error);
+  }
+}
+
+async function updateHuddleRetention(req, res, next) {
+  try {
+    const submittedDays = String(req.body.huddleArchiveDays || '').trim();
+    const normalizedDays = applicationSettingsModel.normalizeHuddleArchiveDays(submittedDays, null);
+    if (!normalizedDays) {
+      const params = new URLSearchParams({
+        huddleRetentionError: `Enter a whole number from ${applicationSettingsModel.MIN_HUDDLE_ARCHIVE_DAYS} to ${applicationSettingsModel.MAX_HUDDLE_ARCHIVE_DAYS} days.`
+      });
+      return sendHtmxRedirect(req, res, `/management/config?${params.toString()}`);
+    }
+
+    await applicationSettingsModel.updateHuddleArchiveDays({
+      huddleArchiveDays: normalizedDays,
+      updatedByUserId: req.currentUser?.user_id || null
+    });
+    return sendHtmxRedirect(req, res, addCacheBuster('/management/config?huddleRetentionSaved=1'));
+  } catch (error) {
+    if (error?.code === 'ER_BAD_FIELD_ERROR' || Number(error?.errno) === 1054) {
+      const params = new URLSearchParams({ huddleRetentionError: 'Huddle retention storage is not ready. Run the Huddle retention migration first.' });
+      return sendHtmxRedirect(req, res, `/management/config?${params.toString()}`);
+    }
+    return next(error);
+  }
+}
+
+async function updateLabelDynamicFields(req, res, next) {
+  try {
+    const items = buildLabelDynamicFieldUpdateItems({
+      fieldKeys: req.body.fieldKey,
+      displayLabels: req.body.displayLabel,
+      activeFieldKeys: req.body.activeFieldKey
+    });
+    const errors = validateLabelDynamicFieldUpdateItems(items);
+
+    if (errors.length > 0) {
+      const params = new URLSearchParams({ labelDynamicFieldError: errors[0] });
+      return sendHtmxRedirect(req, res, `/management/config?${params.toString()}`);
+    }
+
+    await labelDynamicFieldConfigModel.saveLabelDynamicFieldSettings(items);
+    return sendHtmxRedirect(req, res, addCacheBuster('/management/config?labelDynamicFieldsSaved=1'));
+  } catch (error) {
+    if (error?.code === 'ER_NO_SUCH_TABLE' || Number(error?.errno) === 1146) {
+      const params = new URLSearchParams({
+        labelDynamicFieldError: 'Label Builder field configuration storage is not ready. Run migrate:label-dynamic-fields first.'
+      });
+      return sendHtmxRedirect(req, res, `/management/config?${params.toString()}`);
+    }
+    return next(error);
+  }
+}
+
+async function reorderLabelDynamicFields(req, res, next) {
+  try {
+    const order = buildLabelDynamicFieldOrderItems({
+      groupCode: req.body.groupCode,
+      fieldKeys: req.body.orderedFieldKeys
+    });
+
+    if (order.errors.length > 0) {
+      return res.status(409).json({
+        ok: false,
+        code: 'LABEL_DYNAMIC_FIELD_ORDER_INVALID',
+        error: order.errors[0]
+      });
+    }
+
+    const result = await labelDynamicFieldConfigModel.saveLabelDynamicFieldOrder(order.items);
+    return res.json({
+      ok: true,
+      groupCode: order.groupCode,
+      orderedFieldKeys: order.items.map((item) => item.fieldKey),
+      updatedCount: result.updatedCount
+    });
+  } catch (error) {
+    if (error?.code === 'ER_NO_SUCH_TABLE' || Number(error?.errno) === 1146) {
+      return res.status(409).json({
+        ok: false,
+        code: 'LABEL_DYNAMIC_FIELD_ORDER_UNAVAILABLE',
+        error: 'Label Builder field configuration storage is not ready. Run migrate:label-dynamic-fields first.'
+      });
+    }
+    return next(error);
   }
 }
 
@@ -545,6 +680,21 @@ async function updateConfigValue(req, res, next) {
       sortOrder,
       isActive: formData.isActive === '1'
     });
+
+    if (sameCategory && formData.isActive === '1') {
+      await toolConfigAliasModel.preserveRenamedValueAliases({
+        configValueId,
+        configCategoryId,
+        previousLabel: configValue.label,
+        previousValue: configValue.value,
+        userId: req.currentUser?.user_id
+      });
+    } else if (!sameCategory) {
+      await toolConfigAliasModel.deleteAliasesForMovedTarget({
+        configValueId,
+        currentCategoryId: configCategoryId
+      });
+    }
 
     if (sessionInactivityTimeoutSetting) {
       const timeoutMinutes = parseSessionInactivityTimeoutMinutes(formData.value);
@@ -817,6 +967,10 @@ module.exports = {
   renderConfigPage,
   refreshOperationalOptionRankings,
   updateOperationalOptionRankingInterval,
+  updateApplicationTimeZone,
+  updateHuddleRetention,
+  updateLabelDynamicFields,
+  reorderLabelDynamicFields,
   renderNewConfigValueModal,
   createConfigValue,
   renderEditConfigValueModal,

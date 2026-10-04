@@ -18,10 +18,10 @@ test('completed Unit Print Label action opens the existing HTMX modal system', (
   assert.doesNotMatch(table, /Label printing will be connected in the label-printing step/);
 });
 
-test('label printing routes retain Tech operational role authorization', () => {
+test('label printing routes require the granular Unit label permission', () => {
   const routes = read('routes/management.js');
-  assert.match(routes, /'\/tech\/units\/:unitId\/print-label\/modal'[\s\S]*?requireRole\(techRoles\)[\s\S]*?renderTechUnitPrintLabelModal/);
-  assert.match(routes, /'\/tech\/units\/:unitId\/print-label'[\s\S]*?requireRole\(techRoles\)[\s\S]*?printTechUnitLabel/);
+  assert.match(routes, /'\/tech\/units\/:unitId\/print-label\/modal'[\s\S]*?requirePermission\('units\.labels\.print'\)[\s\S]*?renderTechUnitPrintLabelModal/);
+  assert.match(routes, /'\/tech\/units\/:unitId\/print-label'[\s\S]*?requirePermission\('units\.labels\.print'\)[\s\S]*?printTechUnitLabel/);
 });
 
 test('controller requires current completion and regular-Tech ownership before printing', () => {
