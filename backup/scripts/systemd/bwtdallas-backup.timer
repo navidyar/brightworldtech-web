@@ -1,0 +1,11 @@
+[Unit]
+Description=Run BWTDallas backup nightly
+
+[Timer]
+OnCalendar=*-*-* 03:00:00 America/Chicago
+Persistent=true
+AccuracySec=5min
+Unit=bwtdallas-backup.service
+
+[Install]
+WantedBy=timers.target
