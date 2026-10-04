@@ -1,0 +1,16 @@
+[Unit]
+Description=BWTDallas verified Full + Purge backup
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/bwtdallas-webserver/app
+Environment=KEEP_BACKUPS=2
+Environment=MIN_FREE_MB=2048
+ExecStart=/usr/bin/flock -n /run/lock/bwtdallas-backup.lock /home/bwtdallas-webserver/app/backup/scripts/bwtdallas-backup.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=6
+TimeoutStartSec=30min
