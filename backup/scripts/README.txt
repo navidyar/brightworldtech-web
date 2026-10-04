@@ -103,3 +103,33 @@ Nightly scheduling
 ------------------
 Not enabled yet. Choose the desired nightly clock time first.
 The script is ready for cron/systemd/GitHub Actions once scheduling and offsite destination are selected.
+
+Nightly systemd automation
+--------------------------
+Portable unit templates are stored under backup/scripts/systemd/.
+
+Install/update the units:
+  cp backup/scripts/systemd/bwtdallas-backup.service /etc/systemd/system/
+  cp backup/scripts/systemd/bwtdallas-backup.timer /etc/systemd/system/
+  systemctl daemon-reload
+
+The supplied timer is intentionally not enabled automatically.
+Its default schedule is 03:00 America/Chicago and follows daylight-saving time.
+
+Review schedule:
+  systemd-analyze calendar '*-*-* 03:00:00 America/Chicago'
+
+Enable when approved:
+  systemctl enable --now bwtdallas-backup.timer
+
+Check schedule/status:
+  systemctl list-timers bwtdallas-backup.timer
+  systemctl status bwtdallas-backup.timer
+
+Run immediately without waiting for the timer:
+  systemctl start bwtdallas-backup.service
+
+Review backup logs:
+  journalctl -u bwtdallas-backup.service
+
+The service uses flock so a second scheduled/manual backup cannot overlap an active run.
