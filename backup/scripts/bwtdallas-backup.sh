@@ -68,7 +68,7 @@ WORK_DIR="$(mktemp -d "$BACKUP_DIR/.backup-work-$STAMP-XXXXXX")"
 COMMON="$WORK_DIR/common"
 FULL_ROOT="$WORK_DIR/$FULL_NAME"
 PURGE_ROOT="$WORK_DIR/$PURGE_NAME"
-mkdir -p "$COMMON" "$FULL_ROOT"/{application,backup-tools,database,docker,manifest} "$PURGE_ROOT"/{application,backup-tools,database,docker,development,manifest}
+mkdir -p "$COMMON" "$FULL_ROOT"/{application,backup-tools/systemd,database,docker,manifest} "$PURGE_ROOT"/{application,backup-tools/systemd,database,docker,development,manifest}
 
 printf '1/8 Creating consistent production database dump...\n'
 docker compose exec -T mysql sh -lc 'exec mysqldump \
@@ -116,6 +116,7 @@ printf '4/8 Building full recovery package...\n'
 cp "$COMMON/full.sql" "$FULL_ROOT/database/bwtdallas-full.sql"
 cp "$COMMON/application-full.tar.gz" "$FULL_ROOT/application/application.tar.gz"
 cp "$APP_DIR/backup/scripts/"*.sh "$APP_DIR/backup/scripts/README.txt" "$FULL_ROOT/backup-tools/"
+cp "$APP_DIR/backup/scripts/systemd/"* "$FULL_ROOT/backup-tools/systemd/"
 ln "$COMMON/app-image.tar" "$FULL_ROOT/docker/app-image.tar"
 {
   printf 'Created: %s\n' "$(date --iso-8601=seconds)"
@@ -260,6 +261,7 @@ docker compose exec -T mysql sh -lc "mysql -uroot -p\"\$MYSQL_ROOT_PASSWORD\" -e
 printf '6/8 Building portable development package...\n'
 cp "$COMMON/application-dev.tar.gz" "$PURGE_ROOT/application/application.tar.gz"
 cp "$APP_DIR/backup/scripts/"*.sh "$APP_DIR/backup/scripts/README.txt" "$PURGE_ROOT/backup-tools/"
+cp "$APP_DIR/backup/scripts/systemd/"* "$PURGE_ROOT/backup-tools/systemd/"
 ln "$COMMON/app-image.tar" "$PURGE_ROOT/docker/app-image.tar"
 cat > "$PURGE_ROOT/development/.env.development.example" <<'EOF'
 NODE_ENV=development
