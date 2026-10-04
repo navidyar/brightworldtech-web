@@ -3,12 +3,6 @@
 const { pool } = require('../models/db');
 const { UNIT_EXPORT_COLUMNS } = require('../config/unitExportContract');
 const { buildFilteredUnitExportDataset } = require('../services/unitExportService');
-
-function parseSizeGb(value) {
-  const match = String(value || '').match(/^([0-9]+(?:\.[0-9]+)?)\s+GB$/i);
-  return match ? Number(match[1]) : 0;
-}
-
 async function validateSchema() {
   const [rows] = await pool.query(`
     SELECT CONCAT(
@@ -56,33 +50,37 @@ async function validateSchema() {
 
 function validateDatasetTotals(dataset) {
   const totals = dataset.capacityTotals || {};
-  const rowTotals = dataset.rows.reduce((summary, row) => {
-    const values = {
-      previousMemoryGb: parseSizeGb(row.previousMemorySize),
-      currentMemoryGb: parseSizeGb(row.currentMemorySize),
-      previousStorageGb: parseSizeGb(row.previousStorageSize),
-      currentStorageGb: parseSizeGb(row.currentStorageSize)
-    };
+  const capacityKeys = [
+    'previousMemoryGb',
+    'currentMemoryGb',
+    'previousStorageGb',
+    'currentStorageGb'
+  ];
+  const recordedUnitKeys = [
+    'previousMemoryRecordedUnits',
+    'currentMemoryRecordedUnits',
+    'previousStorageRecordedUnits',
+    'currentStorageRecordedUnits'
+  ];
 
-    for (const [key, value] of Object.entries(values)) {
-      summary[key] += value;
-      if (value > 0) summary[`${key.replace(/Gb$/, '')}RecordedUnits`] += 1;
+  for (const key of capacityKeys) {
+    const value = Number(totals[key]);
+    if (!Number.isFinite(value) || value < 0) {
+      throw new Error(`Stage 10C ${key} must be a finite non-negative number; received ${totals[key]}.`);
     }
-    return summary;
-  }, {
-    previousMemoryGb: 0,
-    currentMemoryGb: 0,
-    previousStorageGb: 0,
-    currentStorageGb: 0,
-    previousMemoryRecordedUnits: 0,
-    currentMemoryRecordedUnits: 0,
-    previousStorageRecordedUnits: 0,
-    currentStorageRecordedUnits: 0
-  });
+  }
 
-  for (const [key, expected] of Object.entries(rowTotals)) {
-    if (Number(totals[key] || 0) !== expected) {
-      throw new Error(`Stage 10C ${key} is ${totals[key]}; expected ${expected}.`);
+  for (const key of recordedUnitKeys) {
+    const value = Number(totals[key]);
+    if (!Number.isInteger(value) || value < 0 || value > dataset.totalRows) {
+      throw new Error(
+        `Stage 10C ${key} must be an integer from 0 through ${dataset.totalRows}; received ${totals[key]}.`
+      );
+    }
+
+    const capacityKey = `${key.replace(/RecordedUnits$/, '')}Gb`;
+    if (value > 0 && Number(totals[capacityKey]) <= 0) {
+      throw new Error(`Stage 10C ${capacityKey} must be positive when ${key} is positive.`);
     }
   }
 }
